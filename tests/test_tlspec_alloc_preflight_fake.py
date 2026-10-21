@@ -46,7 +46,11 @@ from torchlens._runnable_execution import (
     _new_allocation_bytes,
     _preflight_call_allocation,
 )
-from torchlens.errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
+from torchlens.errors import (
+    PayloadUnavailableError,
+    RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
+)
 from torchlens.runnable import LiteralAtom, LiteralAtomKind, LiteralSequence, LiteralSequenceKind
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
@@ -72,8 +76,8 @@ class _HugeView(nn.Module):
     """A genuinely huge PURE VIEW (``expand`` of a size-1 dim) that allocates nothing.
 
     Its logical numel is enormous, but storage aliases the input, so the alloc
-    preflights must charge it only the bytes it really allocates and never over-refuse
-    it (r51 anti-pattern).
+    preflights must charge it only the bytes the run really allocates and never
+    over-refuse it (r51 anti-pattern).
     """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
@@ -459,9 +463,17 @@ class _HugeMaterialized(nn.Module):
         return wide[0].sum() + x.sum()
 
 
+class _HugeSavedView(nn.Module):
+    """The counter-case for retention: a huge view the capture saves is copied out."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(10**7, 4)  # 4e7 elements; its saved ``Op.out`` copy is 160 MB
+        return wide[0].sum() + x.sum()
+
+
 #: The host allocation budget the huge-view runs see: 64 MiB, fixed so the rows do not
 #: depend on the runner's free memory. It is far below the views' logical sizes (1.6 GB
-#: and 160 MB) and far above what an honest view really allocates (a few bytes).
+#: and 160 MB) and far above what an unsaved honest view really allocates (nothing).
 _HUGE_VIEW_HOST_BUDGET_BYTES = 64 << 20
 
 
@@ -483,8 +495,8 @@ def test_genuinely_huge_view_model_runs_verified(
 ) -> None:
     """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
     VERIFIED under a budget far below the view's 1.6 GB logical size: the op allocates
-    nothing, the run-prep bounds charge the view what it really allocates, and the
-    retained ``Op.out`` snapshot keeps the broadcast dim instead of materializing it."""
+    nothing, the capture did not save the view so the run keeps no copy of it, and the
+    run-prep bounds charge it nothing."""
 
     _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
@@ -495,22 +507,30 @@ def test_genuinely_huge_view_model_runs_verified(
     bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
-    expand_op = next(op for op in result.trace.layer_list if op.label.startswith("expand"))
-    snapshot = expand_op.out
-    assert tuple(snapshot.shape) == (10**8, 4)
-    assert snapshot.untyped_storage().nbytes() <= _HUGE_VIEW_HOST_BUDGET_BYTES
-    assert torch.equal(snapshot[12345], x[0])
+    ops = {op.label.split("_")[0]: op for op in result.trace.layer_list}
+    try:
+        expand_out = ops["expand"].out
+    except PayloadUnavailableError:
+        expand_out = None
+    assert expand_out is None  # unsaved at capture, so the run keeps no copy
+    assert isinstance(ops["sum"].out, torch.Tensor)  # saved ops keep their snapshot
 
 
+@pytest.mark.parametrize(
+    "factory, save",
+    [(_HugeMaterialized, tl.func("sum")), (_HugeSavedView, tl.func("expand"))],
+    ids=["materializing_op", "saved_view"],
+)
 def test_huge_materialized_slot_still_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, factory: type[nn.Module], save: Any
 ) -> None:
-    """A slot that really materializes past the budget (``expand`` then ``* 2.0``, 160 MB)
-    is still refused at run-prep, before any op executes, charged its full size."""
+    """A slot that really materializes past the budget is still refused at run-prep,
+    before any op executes, charged its full 160 MB: a materializing op (``* 2.0``), or
+    a huge view the capture saved, whose ``Op.out`` copy the run makes."""
 
     _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "huge_mat.tlspec", _HugeMaterialized(), x, save=tl.func("sum"))
+    bundle = _build(tmp_path, "huge_mat.tlspec", factory(), x, save=save)
     loaded = tl.load(str(bundle))
     with pytest.raises(RunCapabilityUnavailableError) as caught:
         loaded.run(inputs=x.clone())

@@ -41,7 +41,6 @@ from ._runnable_state import (
     PreparedRunnableState,
     RunResourceCeiling,
     _allocation_budget_bytes,
-    _compact_broadcast_numel,
     _guarded_defensive_materialize,
     _slot_device,
     _torch_dtype,
@@ -573,11 +572,9 @@ _new_allocation_bytes = _rebind_function(_runnable_call_arguments._new_allocatio
 _preflight_call_allocation = _rebind_function(
     _runnable_call_arguments._preflight_call_allocation, globals()
 )
-_view_snapshot_bytes_projector = _rebind_function(
-    _runnable_call_arguments._view_snapshot_bytes_projector, globals()
-)
-_projected_view_snapshot_bytes = _rebind_function(
-    _runnable_call_arguments._projected_view_snapshot_bytes, globals()
+_pure_view_projector = _rebind_function(_runnable_call_arguments._pure_view_projector, globals())
+_projects_as_pure_view = _rebind_function(
+    _runnable_call_arguments._projects_as_pure_view, globals()
 )
 _execute_sparse_call = _rebind_function(_runnable_call_arguments._execute_sparse_call, globals())
 _populate_source_slots = _rebind_function(

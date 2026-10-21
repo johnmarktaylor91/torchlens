@@ -12,7 +12,6 @@ from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
     _allocation_budget_bytes,
-    _compact_broadcast_numel,
     _slot_device,
     _torch_dtype,
 )
@@ -52,8 +51,8 @@ __all__ = (
     "_input_storage_ids",
     "_new_allocation_bytes",
     "_preflight_call_allocation",
-    "_view_snapshot_bytes_projector",
-    "_projected_view_snapshot_bytes",
+    "_pure_view_projector",
+    "_projects_as_pure_view",
     "_execute_sparse_call",
     "_populate_source_slots",
     "_write_argument",
@@ -365,59 +364,52 @@ def _preflight_call_allocation(
             )
 
 
-def _view_snapshot_bytes_projector(
+def _pure_view_projector(
     descriptor: SparseRunDescriptor,
     callables: Mapping[str, Callable[..., Any]],
-) -> Callable[[TensorSlotDescriptor], int | None]:
-    """Build the run-prep lookup of what a pure-view output slot really allocates.
+) -> Callable[[TensorSlotDescriptor], bool]:
+    """Build the run-prep proof that an op-output slot is a pure view of its operands.
 
-    The run-prep bounds charge every recorded op-output slot its logical size, which is
-    what replay allocates for a fresh output. A pure view (``expand``/``broadcast_to``/
-    ``as_strided``) allocates nothing when its op runs, and its retained ``Op.out``
-    snapshot keeps the broadcast dims unexpanded (``keep_broadcast``), so it allocates
-    only the distinct elements. The returned lookup projects the slot's producing call
-    under ``FakeTensorMode`` (zero allocation) on contiguous fake operands built from
-    the recorded slot shapes. If the projected output aliases a fake input storage and
-    matches the recorded shape, it returns the snapshot bytes for the projected layout;
-    any other outcome (fresh output, unresolvable call, projection failure) returns
-    ``None`` so the caller keeps the logical charge. Contiguous operands carry no
-    broadcast dims, so the projected snapshot is never smaller than the real one, and
-    the exact clone guard still charges the real snapshot before it allocates.
+    The run-prep per-slot bound charges every recorded op-output slot its logical size,
+    which is what replay allocates for a fresh output. A pure view (``expand``/
+    ``broadcast_to``/``as_strided``) allocates nothing when its op runs. The returned
+    lookup projects the slot's producing call under the count-bounded ``FakeTensorMode``
+    (zero allocation) on contiguous fake operands built from the recorded slot shapes,
+    and returns True only if the projected output aliases a fake input storage and
+    matches the recorded shape. Any other outcome (fresh output, unresolvable call,
+    projection failure) returns False, so the caller keeps the logical charge. At run
+    time the per-call projection re-checks the real call before it executes.
     """
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
 
-    def project(slot: TensorSlotDescriptor) -> int | None:
-        """Return one slot's projected view-snapshot bytes, or None for the logical charge."""
+    def project(slot: TensorSlotDescriptor) -> bool:
+        """Return whether one slot's producing call projects as a pure view."""
 
-        source_id: str | None = slot.slot_id
-        if source_id not in producers:
-            source_id = slot.producer_slot_id or slot.version_of
-        call = producers.get(source_id) if source_id is not None else None
-        source = slots.get(source_id) if source_id is not None else None
+        call = producers.get(slot.slot_id)
         func = callables.get(call.call_id) if call is not None else None
-        if call is None or source is None or func is None or source.shape != slot.shape:
-            return None
+        if call is None or func is None:
+            return False
         try:
-            return _projected_view_snapshot_bytes(call, func, slots, source)
+            return _projects_as_pure_view(call, func, slots, slot)
         except Exception:  # noqa: BLE001 -- any projection failure keeps the logical charge.
-            return None
+            return False
 
     return project
 
 
-def _projected_view_snapshot_bytes(
+def _projects_as_pure_view(
     call: RunnableCallDescriptor,
     func: Callable[..., Any],
     slots: Mapping[str, TensorSlotDescriptor],
     slot: TensorSlotDescriptor,
-) -> int | None:
-    """Project one call on fake operands; return a pure-view output's snapshot bytes."""
+) -> bool:
+    """Project one call on fake operands; return whether ``slot`` aliases an operand."""
 
     mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
-        return None
+        return False
     args: list[Any] = [None] * call.num_positional_args
     kwargs: dict[str, Any] = {}
     for literal_argument in call.literal_arguments:
@@ -436,13 +428,10 @@ def _projected_view_snapshot_bytes(
         mode._tl_set_baseline()
         value = _value_at_path(func(*args, **kwargs), slot.output_path or ())
         if not isinstance(value, torch.Tensor):
-            return None
+            return False
         storage_id = _fake_tensor_storage_id(value)
         shape = tuple(int(size) for size in value.shape)
-        if storage_id is None or storage_id not in input_storage_ids or shape != slot.shape:
-            return None
-        stride = tuple(int(step) for step in value.stride())
-        return _compact_broadcast_numel(shape, stride) * int(value.element_size())
+        return storage_id is not None and storage_id in input_storage_ids and shape == slot.shape
 
 
 def _execute_sparse_call(

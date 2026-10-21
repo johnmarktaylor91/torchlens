@@ -313,13 +313,14 @@
 
 ### Bug Fixes
 
-- **runnable**: `tl.load(path).run(inputs=...)` no longer refuses (`op_allocation_preflight` or
-  `run_retention_preflight`) a model whose forward makes a huge broadcast view, such as
-  `x.expand(10**8, 4)` of a 4-element `x`, on a host with less free memory than the view's logical
-  size. The run used to copy that view out in full into the result's `Op.out`; it now keeps the
-  broadcast dims unexpanded there (same values, a few bytes of storage, and in-place writes to it
-  raise as they do on any expanded tensor), and the run's memory checks charge it what it really
-  allocates. A slot that really materializes past the memory budget is still refused.
+- **runnable**: `tl.load(path).run(inputs=...)` keeps an `Op.out` copy only for the ops the
+  capture saved (plus the model outputs), as the capture did. It used to copy out every op's
+  output, so a run needed memory for activations the capture never kept, and a huge broadcast view
+  such as `x.expand(10**8, 4)` of a 4-element `x` was refused (`op_allocation_preflight`) on a host
+  with less free memory than its 1.6 GB logical size. Ops the capture did not save now have no
+  `out` on the run's result trace; capture with `save=` covering them to read them. An unsaved
+  view whose logical size exceeds both the memory budget and 2**32 elements is still refused,
+  since every op that reads it touches each element.
 
 - **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
   now compares against the inventory observed on tinygrad's current default device (CPU or

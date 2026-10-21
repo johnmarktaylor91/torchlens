@@ -777,7 +777,6 @@ class _FastSparseSession:
                         call_id=None,
                         slot_id=slot.slot_id,
                         affected_op_labels=(),
-                        keep_broadcast=tuple(value.shape) == slot.shape,
                     ),
                 )
             values.append((slot.output_path or (), value))

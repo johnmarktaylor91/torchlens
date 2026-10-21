@@ -175,11 +175,11 @@ def _bind_call_outputs(
                     affected_op_labels=call.op_labels,
                 )
         op = _op_for_label(fork, op_label)
-        if op is not None:
-            # r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it materializes a
-            # tampered view (r58 free_2) and before the shape-mismatch check below. Only a
-            # view at its recorded shape keeps its broadcast dims unexpanded; a view whose
-            # shape drifted from the record is charged its full logical size, as before.
+        if op is not None and bool(getattr(op, "has_saved_activation", False)):
+            # Snapshot only what the capture saved: the result trace keeps the capture's
+            # saved set, and an unsaved output (a huge ``expand`` view, say) is never
+            # copied out. r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it
+            # materializes a tampered view (r58 free_2) and before the shape check below.
             op._internal_set(
                 "out",
                 ceiling.guarded_clone(
@@ -187,7 +187,6 @@ def _bind_call_outputs(
                     call_id=call.call_id,
                     slot_id=slot_id,
                     affected_op_labels=(op_label,),
-                    keep_broadcast=tuple(value.shape) == slot.shape,
                 ),
             )
         shape_ok = tuple(value.shape) == slot.shape
@@ -402,7 +401,6 @@ def _reconstruct_output(
                     call_id=None,
                     slot_id=slot.slot_id,
                     affected_op_labels=(),
-                    keep_broadcast=tuple(value.shape) == slot.shape,
                 ),
             )
         values.append((slot.output_path or (), value))

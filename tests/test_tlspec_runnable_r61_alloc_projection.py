@@ -402,14 +402,17 @@ class _ExpandSum(nn.Module):
 
 
 def test_e2e_self_consistent_view_extent_tamper_refused(tmp_path: Path) -> None:
-    """Tamper the ``expand`` literal AND its recorded slot shape (64 -> 1e11 rows), so
-    the view is self-consistent and allocates 16 bytes, but the ``sum`` reading it would
-    touch 4e11 elements. View-aware run-prep charging must not admit it: the view's
-    logical extent is over both the host budget and the view work ceiling, so it refuses
-    typed at ``op_allocation_preflight`` before any call executes, as it did before."""
+    """Tamper the ``expand`` literal AND its recorded slot shape (64 -> 1e11 rows) of a
+    capture that did not save the view, so the view is self-consistent and the run would
+    allocate nothing for it, but the ``sum`` reading it would touch 4e11 elements.
+    View-aware run-prep charging must not admit it: the view's logical extent is over
+    both the host budget and the view work ceiling, so it refuses typed at
+    ``op_allocation_preflight`` before any call executes, as it did before."""
 
     x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "view_extent.tlspec", _ExpandSum(), x)
+    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
+    bundle = tmp_path / "view_extent.tlspec"
+    tl.save(trace, str(bundle), level="runnable", include_weights=True)
     assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
     assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
     assert _tamper_slot_shapes(bundle, [64, 4], [10**11, 4]) >= 1

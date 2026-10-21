@@ -1274,10 +1274,14 @@ free_1): before the taken-path DAG executes, every recorded op-output slot (role
 and `output`) is compared **per slot** against the identical never-under-estimating live budget,
 and a single recorded output larger than the whole device budget is refused typed before it can
 allocate. It is compared ADDITIONALLY as a per-device **retention floor** (r59, detection stage
-`run_retention_preflight`): loaded-sparse replay retains a materialized clone of every taken-path
-op output (one `Op.out` clone per `(call, output_slot_id)` at bind, plus one reconstruct clone per
-model-`output` slot) for the life of the returned trace, so the SUM of recorded op-output bytes is
-a guaranteed lower bound on replay memory. A descriptor whose per-device floor exceeds the device
+`run_retention_preflight`): loaded-sparse replay retains a materialized clone of every saved
+taken-path op output (one `Op.out` clone per `(call, output_slot_id)` whose op the capture saved,
+at bind, plus one reconstruct clone per model-`output` slot) for the life of the returned trace,
+so the SUM of those recorded op-output bytes is a guaranteed lower bound on replay memory. An op
+the capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved
+slot whose producing call projects (FakeTensor, contiguous operands from the recorded shapes) as a
+pure view of its operands allocates nothing and is admitted past the budget, but only up to
+`2**32` logical elements, which bounds the work of every op that reads it. A descriptor whose per-device floor exceeds the device
 budget could never complete on this host and is refused typed at `run_retention_preflight` before
 any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
 individually-feasible output slots together exhaust the host, each passing the per-slot bound and

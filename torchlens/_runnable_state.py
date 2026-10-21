@@ -1263,14 +1263,18 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     # r55 free_1: bound every recorded op-output allocation BEFORE the DAG runs, on
     # every state source (staged/embedded/random-init), so a tampered self-consistent
     # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
-    view_snapshot_bytes = _view_snapshot_lookup(trace, descriptor)
-    _preflight_run_allocation((), _recorded_output_slots(descriptor), view_snapshot_bytes)
+    retained_slot_ids = _retained_output_slot_ids(trace, descriptor)
+    _preflight_run_allocation(
+        (),
+        _recorded_output_slots(descriptor),
+        _unretained_view_lookup(trace, descriptor, retained_slot_ids),
+    )
     # r59: aggregate retention floor -- the SUM of guaranteed-retained op-output clone
     # bytes per device provably exceeding the budget is a guaranteed mid-replay OOM the
     # per-slot bound above cannot see (honest, individually-feasible slots that together
     # exhaust the host). Refused typed here, before the DAG runs. Zero false refusals:
     # the floor under-counts true retention and the budget never under-estimates.
-    _preflight_retention_floor(descriptor, view_snapshot_bytes)
+    _preflight_retention_floor(descriptor, retained_slot_ids)
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
@@ -1967,8 +1971,8 @@ single-output call.
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent a recorded pure-view slot may have once it exceeds the budget.
 
-A pure view (``expand``/``broadcast_to``/``as_strided``) allocates almost nothing, so the
-run-prep bounds charge it the bytes it really allocates instead of its logical size.
+A pure view (``expand``/``broadcast_to``/``as_strided``) that the run does not retain
+allocates nothing, so the run-prep per-slot bound admits it past the memory budget.
 Its logical size still bounds WORK: every op that reads the view touches each logical
 element (a ``sum`` over a 4e11-element view of 4 floats takes minutes). Charging the
 logical bytes against the memory budget used to bound that work too, so a view admitted
@@ -2008,29 +2012,6 @@ def _guarded_defensive_materialize() -> Iterator[None]:
         yield
 
 
-def _broadcast_compact_index(
-    shape: Sequence[int], stride: Sequence[int]
-) -> tuple[slice, ...] | None:
-    """Return the index that drops a tensor's broadcast dims, or None when it has none.
-
-    A broadcast dim is one of size > 1 with stride 0 (``expand`` / ``broadcast_to``):
-    every index along it reads the same bytes, so slicing it to length 1 keeps every
-    distinct value. The result is ``None`` when no dim is broadcast.
-    """
-
-    if not any(size > 1 and step == 0 for size, step in zip(shape, stride)):
-        return None
-    return tuple(
-        slice(0, 1) if size > 1 and step == 0 else slice(None) for size, step in zip(shape, stride)
-    )
-
-
-def _compact_broadcast_numel(shape: Sequence[int], stride: Sequence[int]) -> int:
-    """Return the element count a broadcast-preserving snapshot of this layout allocates."""
-
-    return math.prod(1 if size > 1 and step == 0 else size for size, step in zip(shape, stride))
-
-
 def _byte_guarded_clone(
     value: torch.Tensor,
     *,
@@ -2038,7 +2019,6 @@ def _byte_guarded_clone(
     slot_id: str | None = None,
     affected_op_labels: Sequence[str] = (),
     state_dict_name: str | None = None,
-    keep_broadcast: bool = False,
 ) -> torch.Tensor:
     """Byte-guard ONE TorchLens-owned re-materialization clone before it allocates.
 
@@ -2057,29 +2037,9 @@ def _byte_guarded_clone(
     a faithful run is never refused here. The capture-side save-time snapshot is
     deliberately NOT routed: it clones the live model's own values, so no
     artifact-driven amplification exists there.
-
-    ``keep_broadcast=True`` (the retained ``Op.out`` snapshots) keeps a broadcast
-    view's stride-0 dims unexpanded: it clones the length-1 slice along each broadcast
-    dim and re-expands it, so the snapshot holds the same values, stays independent of
-    later in-place writes, and allocates (and is charged) only the distinct elements.
-    A view whose stride cannot be read is cloned in full, as before.
     """
 
-    compact_index = None
-    if keep_broadcast:
-        try:
-            compact_index = _broadcast_compact_index(
-                tuple(int(size) for size in value.shape),
-                tuple(int(step) for step in value.stride()),
-            )
-        except (RuntimeError, TypeError, ValueError, NotImplementedError):
-            compact_index = None
-    if compact_index is not None:
-        source = value.detach()[compact_index]
-        requested = int(source.numel()) * int(source.element_size())
-    else:
-        source = value
-        requested = int(value.numel()) * int(value.element_size())
+    requested = int(value.numel()) * int(value.element_size())
     device = value.device
     available = _allocation_budget_bytes(device)
     if requested > available:
@@ -2107,8 +2067,6 @@ def _byte_guarded_clone(
             affected_op_labels=tuple(affected_op_labels),
             **extra,
         )
-    if compact_index is not None:
-        return source.clone().expand(value.shape)
     return value.detach().clone()
 
 
@@ -2232,7 +2190,6 @@ class RunResourceCeiling:
         slot_id: str | None,
         affected_op_labels: Sequence[str] = (),
         mirror_requires_grad: bool = False,
-        keep_broadcast: bool = False,
     ) -> torch.Tensor:
         """Byte-guard one sparse tensor snapshot clone before it allocates (gate 3).
 
@@ -2249,8 +2206,6 @@ class RunResourceCeiling:
         runtime-mirror rule); state clones keep their recorded-``trainable`` rule at
         the call site instead. An honest clone equals an honest recorded slot that
         already passed the run-prep bound, so a faithful run is never refused here.
-        ``keep_broadcast=True`` is the retained ``Op.out`` snapshot form: a broadcast
-        view keeps its stride-0 dims and is charged only its distinct elements.
         """
 
         clone = _byte_guarded_clone(
@@ -2258,7 +2213,6 @@ class RunResourceCeiling:
             call_id=call_id,
             slot_id=slot_id,
             affected_op_labels=affected_op_labels,
-            keep_broadcast=keep_broadcast,
         )
         if mirror_requires_grad and bool(value.requires_grad) and not clone.requires_grad:
             try:
@@ -2290,7 +2244,7 @@ def _recorded_output_slots(descriptor: SparseRunDescriptor) -> tuple[TensorSlotD
 def _preflight_run_allocation(
     representatives: Sequence[TensorSlotDescriptor],
     output_slots: Iterable[TensorSlotDescriptor] = (),
-    view_snapshot_bytes: Callable[[TensorSlotDescriptor], int | None] | None = None,
+    unretained_view: Callable[[TensorSlotDescriptor], bool] | None = None,
 ) -> None:
     """Refuse an infeasible run allocation BEFORE any op executes (r53 free_1 / r55 free_1).
 
@@ -2313,12 +2267,12 @@ def _preflight_run_allocation(
     the primary op-agnostic projection, this is the run-prep fallback bound.
 
     An output slot over the budget is charged its logical size unless
-    ``view_snapshot_bytes`` proves it a pure view: its op allocates nothing and its
-    retained snapshot keeps broadcast dims unexpanded, so a 4e8-element ``expand`` of a
-    4-element input needs 16 bytes, not 1.6 GB. Such a view is still refused when its
-    logical extent exceeds ``_VIEW_LOGICAL_ELEMENT_CEILING``, which bounds the work of the
-    ops that read it. The lookup runs only for slots that would otherwise refuse, so a
-    run within budget pays nothing for it.
+    ``unretained_view`` proves it a pure view the run does not snapshot: its op allocates
+    nothing and no ``Op.out`` copy is made, so a 4e8-element ``expand`` of a 4-element
+    input needs no new bytes, not 1.6 GB. Such a view is still refused when its logical
+    extent exceeds ``_VIEW_LOGICAL_ELEMENT_CEILING``, which bounds the work of the ops
+    that read it. The lookup runs only for slots that would otherwise refuse, so a run
+    within budget pays nothing for it.
     """
 
     from .errors import RunCapabilityUnavailableError
@@ -2352,11 +2306,9 @@ def _preflight_run_allocation(
         device = _slot_device(slot)
         requested = math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
         available = _allocation_budget_bytes(device)
-        if requested > available and view_snapshot_bytes is not None:
-            view_bytes = view_snapshot_bytes(slot)
-            if view_bytes is not None:
-                _refuse_view_past_logical_ceiling(slot, device, requested, available)
-                requested = view_bytes
+        if requested > available and unretained_view is not None and unretained_view(slot):
+            _refuse_view_past_logical_ceiling(slot, device, requested, available)
+            continue
         if requested > available:
             raise RunCapabilityUnavailableError(
                 f"Recorded op-output slot {slot.slot_id!r} for device {str(device)!r} "
@@ -2371,29 +2323,51 @@ def _preflight_run_allocation(
             )
 
 
-def _view_snapshot_lookup(
-    trace: Any, descriptor: SparseRunDescriptor
-) -> Callable[[TensorSlotDescriptor], int | None] | None:
-    """Return the pure-view snapshot-bytes lookup for this trace's callables, if resolved.
+def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return the op-output slots whose value the run snapshots onto the result trace.
+
+    Loaded-sparse replay keeps an ``Op.out`` snapshot only for ops the capture saved
+    (``has_saved_activation``), as the capture did, plus every model-``output`` slot
+    (the reconstruct clone). Every other op output lives only as long as replay needs it.
+    """
+
+    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    retained = {
+        slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.OUTPUT
+    }
+    for call in descriptor.calls:
+        for slot_id, op_label in zip(call.output_slot_ids, call.op_labels):
+            if bool(getattr(layer_dict.get(op_label), "has_saved_activation", False)):
+                retained.add(slot_id)
+    return frozenset(retained)
+
+
+def _unretained_view_lookup(
+    trace: Any, descriptor: SparseRunDescriptor, retained_slot_ids: frozenset[str]
+) -> Callable[[TensorSlotDescriptor], bool] | None:
+    """Return the lookup proving a slot is an unretained pure view, if callables resolve.
 
     The lookup builds its projector and projects a slot's producing call only when
-    asked, and at most once per slot, so a run within budget pays nothing for it.
+    asked, and at most once per slot, so a run within budget pays nothing for it. A
+    retained slot is never a candidate: its snapshot materializes the full logical size.
     """
 
     callables = getattr(getattr(trace, "_runnable", None), "callables_by_call_id", None)
     if not isinstance(callables, Mapping):
         return None
-    projected: dict[str, int | None] = {}
-    projector: list[Callable[[TensorSlotDescriptor], int | None]] = []
+    projected: dict[str, bool] = {}
+    projector: list[Callable[[TensorSlotDescriptor], bool]] = []
 
-    def lookup(slot: TensorSlotDescriptor) -> int | None:
+    def lookup(slot: TensorSlotDescriptor) -> bool:
         """Project one slot at most once, building the projector on first use."""
 
+        if slot.slot_id in retained_slot_ids:
+            return False
         if slot.slot_id not in projected:
             if not projector:
-                from ._runnable_execution import _view_snapshot_bytes_projector
+                from ._runnable_execution import _pure_view_projector
 
-                projector.append(_view_snapshot_bytes_projector(descriptor, callables))
+                projector.append(_pure_view_projector(descriptor, callables))
             projected[slot.slot_id] = projector[0](slot)
         return projected[slot.slot_id]
 
@@ -2426,13 +2400,14 @@ def _refuse_view_past_logical_ceiling(
 
 def _preflight_retention_floor(
     descriptor: SparseRunDescriptor,
-    view_snapshot_bytes: Callable[[TensorSlotDescriptor], int | None] | None = None,
+    retained_slot_ids: frozenset[str] | None = None,
 ) -> None:
     """Refuse a run whose GUARANTEED retained clone bytes provably exceed the budget (r59).
 
-    Loaded-sparse replay retains a materialized clone of every taken-path op output for
-    the life of the returned trace (one ``Op.out`` clone per ``(call, output_slot_id)``
-    at bind, plus one reconstruct clone per model-``output`` slot). The SUM of those
+    Loaded-sparse replay retains a materialized clone of every SAVED taken-path op output
+    for the life of the returned trace (one ``Op.out`` clone per saved
+    ``(call, output_slot_id)`` at bind, plus one reconstruct clone per model-``output``
+    slot). The SUM of those
     recorded op-output bytes is therefore a guaranteed LOWER BOUND on replay memory --
     a floor. A descriptor whose per-device floor exceeds the never-under-estimating
     live budget could never complete on this host: every honest per-op allocation may
@@ -2448,17 +2423,36 @@ def _preflight_retention_floor(
     run (zero false refusals). A legit deep model whose cumulative retention is within
     budget (a deep-adds chain of small outputs) is untouched.
 
-    A pure-view slot's retained snapshot keeps its broadcast dims unexpanded, so it can
-    retain far less than its logical size. When the logical floor exceeds the budget and
-    ``view_snapshot_bytes`` is given, the floor is recomputed with every slot that lookup
-    proves a pure view charged zero, which keeps the floor a lower bound.
+    ``retained_slot_ids`` names the op-output slots replay snapshots (saved ops plus
+    model outputs, :func:`_retained_output_slot_ids`); when given, only those are charged.
+    Without it every op output is charged, the pre-selection floor.
     """
 
-    floor, devices = _retention_floor_bytes(descriptor, None)
-    if view_snapshot_bytes is not None and any(
-        requested > _allocation_budget_bytes(devices[key]) for key, requested in floor.items()
-    ):
-        floor, devices = _retention_floor_bytes(descriptor, view_snapshot_bytes)
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    floor: dict[str, int] = defaultdict(int)
+    devices: dict[str, torch.device] = {}
+
+    def _charge(slot: TensorSlotDescriptor) -> None:
+        """Add one slot's guaranteed-retained clone bytes to its device's floor."""
+
+        device = _slot_device(slot)
+        key = str(device)
+        devices[key] = device
+        floor[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
+
+    # One retained ``Op.out`` clone per saved taken-path op label (bind): alias/version
+    # slots are NOT in ``output_slot_ids`` so each producing op label charges at most
+    # once, mirroring ``_bind_call_outputs``'s ``output_slot_ids`` zip.
+    for call in descriptor.calls:
+        for slot_id in call.output_slot_ids:
+            slot = slots.get(slot_id)
+            if slot is not None and (retained_slot_ids is None or slot_id in retained_slot_ids):
+                _charge(slot)
+    # One additional retained reconstruct clone per model-output slot.
+    for slot in descriptor.tensor_slots:
+        if slot.role is TensorSlotRole.OUTPUT:
+            _charge(slot)
+
     for key, requested in sorted(floor.items()):
         available = _allocation_budget_bytes(devices[key])
         if requested > available:
@@ -2474,41 +2468,6 @@ def _preflight_retention_floor(
                 required_bytes=requested,
                 available_bytes=available,
             )
-
-
-def _retention_floor_bytes(
-    descriptor: SparseRunDescriptor,
-    view_snapshot_bytes: Callable[[TensorSlotDescriptor], int | None] | None,
-) -> tuple[dict[str, int], dict[str, torch.device]]:
-    """Sum the guaranteed-retained op-output clone bytes per device (r59 floor)."""
-
-    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
-    floor: dict[str, int] = defaultdict(int)
-    devices: dict[str, torch.device] = {}
-
-    def _charge(slot: TensorSlotDescriptor) -> None:
-        """Add one slot's guaranteed-retained clone bytes to its device's floor."""
-
-        device = _slot_device(slot)
-        key = str(device)
-        devices[key] = device
-        if view_snapshot_bytes is not None and view_snapshot_bytes(slot) is not None:
-            return  # a pure view retains at least nothing; the floor stays a lower bound
-        floor[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
-
-    # One retained ``Op.out`` clone per taken-path op label (bind, ``:2957``): alias/
-    # version slots are NOT in ``output_slot_ids`` so each producing op label charges
-    # exactly once, mirroring ``_bind_call_outputs``'s ``output_slot_ids`` zip.
-    for call in descriptor.calls:
-        for slot_id in call.output_slot_ids:
-            slot = slots.get(slot_id)
-            if slot is not None:
-                _charge(slot)
-    # One additional retained reconstruct clone per model-output slot (``:3161``).
-    for slot in descriptor.tensor_slots:
-        if slot.role is TensorSlotRole.OUTPUT:
-            _charge(slot)
-    return floor, devices
 
 
 def _preflight_random_init_allocation(
