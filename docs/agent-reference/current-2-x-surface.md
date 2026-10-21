@@ -8,8 +8,9 @@
   cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
   `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
-  `tl.module(...)` save selector (or a `|` union of them) is live-retained at about the cost of
-  saving everything; mixing it with other terms escrows every op and reports deferred in
+  `tl.module(...)` save selector (or a `|` union of them, or one intersected with any selector by
+  `&`) escrows only the ops inside matching module passes; joining it with a non-module term by
+  `|`, or negating it, escrows every op and reports deferred in
   `torchlens.capture.preflight.address_preflight`. Trace-then-rerun on a module-targeted staged
   spec takes the guarded fast rerun (about 2x a plain hook per generation step, exact, including
   a stock HF forward that returns its KV cache; `last_run["fast_refused"]` names a fallback's

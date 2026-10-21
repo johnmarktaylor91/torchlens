@@ -1,7 +1,8 @@
 """``save=tl.module(...)`` escrows only ops inside matching module passes.
 
-A deferred selector made only of ``tl.module`` terms joined by ``|`` resolves to
-module-output ops and nothing else. Escrowing every op's output for it (and
+A deferred selector made only of ``tl.module`` terms joined by ``|``, or such a
+term intersected with anything by ``&``, resolves to module-output ops and
+nothing else. Escrowing every op's output for it (and
 spilling the escrow to temporary files past the 64 MiB RAM budget) cost a
 sparse trace more than saving everything. The copy point stays the op-time copy
 the per-op escrow takes, because a module output can be mutated before its
@@ -206,7 +207,7 @@ def test_module_exit_path_equals_per_op_escrow_path(name: str, monkeypatch: pyte
     selector = SELECTORS[name]()
     live = tl.trace(model, x, save=selector)
     with monkeypatch.context() as patch:
-        patch.setattr(selector_eval, "module_union_addresses", lambda _selector: None)
+        patch.setattr(selector_eval, "module_exit_bound_addresses", lambda _selector: None)
         escrowed = tl.trace(model, x, save=selector)
 
     assert _snapshot(live) == _snapshot(escrowed)
@@ -289,11 +290,11 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     "selector_factory",
     [
         pytest.param(lambda: tl.module("block") | tl.func("tanh"), id="module_or_func"),
-        pytest.param(lambda: tl.module("block") & tl.func("add"), id="module_and_func"),
+        pytest.param(lambda: ~tl.module("block"), id="not_module"),
     ],
 )
 def test_mixed_module_selectors_keep_per_op_escrow(selector_factory, monkeypatch):
-    """Selectors mixing tl.module with other terms still escrow every op, and stay exact."""
+    """Selectors that can match outside module outputs still escrow every op, and stay exact."""
 
     model, x = _model_and_input()
     selector = selector_factory()
@@ -307,6 +308,81 @@ def test_mixed_module_selectors_keep_per_op_escrow(selector_factory, monkeypatch
     full = _saved(full_log)
     for label, op in saved.items():
         assert torch.equal(op.out, full[label].out)
+
+
+INTERSECTIONS = {
+    "module_and_func": (lambda: tl.module("block") & tl.func("add"), 4),
+    "func_and_module": (lambda: tl.func("linear") & tl.module("shared"), 2),
+    "intersection_or_module": (
+        lambda: (tl.module("block") & tl.func("add")) | tl.module("shared"),
+        6,
+    ),
+    "module_and_pass": (lambda: tl.module("shared") & tl.module("shared:2"), 2),
+}
+
+
+@pytest.mark.parametrize("name", sorted(INTERSECTIONS))
+def test_module_intersections_escrow_only_inside_matching_passes(
+    name: str, monkeypatch: pytest.MonkeyPatch
+):
+    """``tl.module(...) & other`` matches a subset of module outputs: same bounded escrow.
+
+    The covering addresses only decide which passes escrow; post-postprocess
+    resolution still applies the whole selector, so the saved set, values and
+    metadata equal the per-op escrow path's and the save-everything trace's.
+    """
+
+    selector_factory, expected_copies = INTERSECTIONS[name]
+    model, x = _model_and_input()
+    selector = selector_factory()
+    full_log = tl.trace(model, x)
+    expected = {site.layer_label for site in full_log.find_sites(selector)}
+    with _counting(monkeypatch) as counts:
+        log = tl.trace(model, x, save=selector)
+    with monkeypatch.context() as patch:
+        patch.setattr(selector_eval, "module_exit_bound_addresses", lambda _selector: None)
+        escrowed = tl.trace(model, x, save=selector)
+
+    saved = _saved(log)
+    assert set(saved) == expected
+    assert counts == {"copies": expected_copies, "spills": 0}
+    assert _snapshot(log) == _snapshot(escrowed)
+    full = _saved(full_log)
+    escrowed_saved = _saved(escrowed)
+    for label, op in saved.items():
+        assert torch.equal(op.out, full[label].out), f"{name}: {label} vs full trace"
+        assert torch.equal(op.out, escrowed_saved[label].out), f"{name}: {label} vs escrow"
+
+
+@pytest.mark.parametrize(
+    ("selector", "expected"),
+    [
+        (tl.module("a"), ("a",)),
+        (tl.module("a") | tl.module("b:2"), ("a", "b:2")),
+        (tl.module("a") & tl.func("relu"), ("a",)),
+        (tl.func("relu") & (tl.module("a") | tl.module("b")), ("a", "b")),
+        ((tl.module("a") & tl.func("relu")) | tl.module("b"), ("a", "b")),
+        (tl.module("a") | tl.module("a"), ("a",)),
+        (tl.module("a") | tl.func("relu"), None),
+        (tl.module("a") & ~tl.module("b"), ("a",)),
+        (~tl.module("a"), None),
+        (tl.func("relu"), None),
+        (None, None),
+    ],
+)
+def test_module_exit_bound_addresses_classification(selector, expected):
+    """A selector settles at module exit when module outputs cover all its matches."""
+
+    assert selector_eval.module_exit_bound_addresses(selector) == expected
+
+
+def test_module_exit_bound_addresses_survives_deep_trees():
+    """A long ``&`` chain is classified without recursing per nesting level."""
+
+    selector = tl.module("a")
+    for _ in range(5000):
+        selector = selector & tl.func("relu")
+    assert selector_eval.module_exit_bound_addresses(selector) == ("a",)
 
 
 @pytest.mark.parametrize(
@@ -386,7 +462,7 @@ def test_module_output_mutated_before_exit_matches_per_op_escrow(address, monkey
     full_log = tl.trace(model, x)
     live = tl.trace(model, x, save=selector)
     with monkeypatch.context() as patch:
-        patch.setattr(selector_eval, "module_union_addresses", lambda _selector: None)
+        patch.setattr(selector_eval, "module_exit_bound_addresses", lambda _selector: None)
         escrowed = tl.trace(model, x, save=selector)
 
     full = _saved(full_log)

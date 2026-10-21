@@ -209,6 +209,59 @@ def module_union_addresses(selector: Any) -> tuple[str, ...] | None:
     return tuple(addresses) if addresses else None
 
 
+def module_exit_bound_addresses(selector: Any) -> tuple[str, ...] | None:
+    """Return module addresses whose pass outputs contain every op a selector can match.
+
+    A ``tl.module`` term matches only outputs of its module's passes. An ``&``
+    composite matches a subset of any one conjunct, so one bounded conjunct
+    bounds it; an ``|`` composite is bounded only when every disjunct is. A
+    selector bounded this way can keep its deferred escrow to the ops inside
+    matching module passes: post-postprocess resolution still applies the whole
+    selector, so the addresses only need to cover its matches, not equal them.
+    ``~``, non-module kinds, and empty composites are unbounded.
+
+    Parameters
+    ----------
+    selector:
+        Selector tree to inspect.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Covering module addresses (optionally pass-qualified) in tree order, or
+        ``None`` when some match may lie outside every module pass's outputs.
+    """
+
+    if not isinstance(selector, BaseSelector):
+        return None
+    # Iterative post-order: deep nested-binary trees must not hit the
+    # interpreter recursion limit (see ``walk_selector``).
+    bounds: dict[int, tuple[str, ...] | None] = {}
+    stack: list[tuple[Any, bool]] = [(selector, False)]
+    while stack:
+        node, children_done = stack.pop()
+        if isinstance(node, CompositeSelector) and node.selectors:
+            if not children_done:
+                stack.append((node, True))
+                stack.extend((child, False) for child in node.selectors)
+                continue
+            child_bounds = [bounds[id(child)] for child in node.selectors]
+            if node.operator == "and":
+                bound = next((found for found in child_bounds if found is not None), None)
+            elif any(found is None for found in child_bounds):
+                bound = None
+            else:
+                bound = tuple(
+                    dict.fromkeys(address for found in child_bounds for address in found or ())
+                )
+        elif isinstance(node, BaseSelector) and node.selector_kind == "module":
+            bound = (str(node.selector_value),)
+        else:
+            bound = None
+        bounds[id(node)] = bound
+    return bounds[id(selector)]
+
+
 def contains_followed_by(selector: Any, *, unwrap: bool = False) -> bool:
     """Return whether a selector tree contains a ``followed_by`` selector.
 

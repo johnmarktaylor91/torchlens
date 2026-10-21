@@ -291,7 +291,7 @@ class CaptureSession:
             self._warn_for_extreme_gradient_retention()
 
     def _matches_module_exit_selector(self, module_call_label: str) -> bool:
-        """Return whether a module pass matches the pure ``tl.module`` save selector.
+        """Return whether a module pass matches the selector's covering module addresses.
 
         Parameters
         ----------
@@ -314,11 +314,12 @@ class CaptureSession:
         return any(module_address_matches(module_call_label, address) for address in addresses)
 
     def enter_module_pass(self, module_call_label: str) -> None:
-        """Open escrow for one module pass a pure ``tl.module`` selector matches.
+        """Open escrow for one module pass the selector's covering addresses match.
 
-        A deferred selector built only from ``tl.module`` terms joined by
-        ``|`` resolves to module-output ops, and a module pass's outputs are
-        produced while it runs. Escrowing only the ops that run inside a
+        A deferred selector bounded by module addresses (``tl.module`` terms
+        joined by ``|``, or intersected with other terms by ``&``) resolves
+        only to module-output ops, and a module pass's outputs are produced
+        while it runs. Escrowing only the ops that run inside a
         matching pass, and dropping the ones that did not become its outputs
         when it exits, replaces escrowing every op's output.
 
@@ -446,6 +447,7 @@ class CaptureSession:
                 budget
             ):
                 from .._save_budget import SaveBudgetExceededError, format_bytes
+                from .preflight import _escrow_remedy
 
                 raise SaveBudgetExceededError(
                     "Deferred-selector escrow spill crossed its declared bound: "
@@ -453,18 +455,8 @@ class CaptureSession:
                     f"spilled to temporary disk plus {format_bytes(candidate.nbytes)} "
                     f"pending exceeds the {format_bytes(budget)} budget. Escrow "
                     "holds candidate payloads until postprocess resolves the "
-                    "selector. A selector that needs FINAL graph numbering (an "
-                    "op label, a positive ordinal, or an output spelling) or "
-                    "that mixes `tl.module(...)` with other terms escrows every "
-                    "op's output. A selector made only of `tl.module(...)` terms "
-                    "joined by `|` escrows only the ops that run inside a "
-                    "matching module pass and keeps only its outputs, so "
-                    "reaching this bound with one means one pass's internals "
-                    "or the kept outputs exceed it. Address the same sites with a live spelling "
-                    "instead -- `tl.module(path)` on its own or unioned with "
-                    "other module paths, `tl.func(name)`, a bare op-type name, "
-                    "or a `save=` predicate (see torchlens.capture.preflight."
-                    "address_preflight for the equivalent spelling).",
+                    "selector, and the bound is the same on every device. "
+                    + (profile.escrow_remedy or _escrow_remedy(None, None)),
                     code="escrow_budget_exceeded",
                     spilled_bytes=self.activation_escrow_spilled_bytes,
                     pending_bytes=candidate.nbytes,
@@ -972,11 +964,13 @@ def compile_legacy_capture_plan(
         activation_window = None
     if _selector_requires_unwindowed_escrow(grad_layers_to_save):
         gradient_window = None
-    from ..ir.selector_eval import module_union_addresses
+    from ..ir.selector_eval import module_exit_bound_addresses
+    from .preflight import _escrow_remedy
 
-    # A pure ``tl.module`` union resolves only to module-output ops, so the
-    # session retains those at module exit instead of escrowing every op.
-    module_exit_addresses = module_union_addresses(deferred_selector)
+    # A selector whose matches all lie among module-pass outputs (``tl.module``
+    # terms joined by ``|``, or intersected with anything by ``&``) resolves
+    # only to such ops, so the session escrows only inside matching passes.
+    module_exit_addresses = module_exit_bound_addresses(deferred_selector)
     retention_profile = RetentionProfile(
         activation_kind=(
             RetentionKind.ACTIVATION
@@ -993,6 +987,11 @@ def compile_legacy_capture_plan(
         gradient_window=gradient_window if deferred_gradients else 0,
         spillable=deferred_activation and not graph_connected,
         activation_module_exit_addresses=module_exit_addresses,
+        escrow_remedy=(
+            _escrow_remedy(deferred_selector, module_exit_addresses)
+            if deferred_activation
+            else None
+        ),
         activation_attached=(
             deferred_activation
             and not graph_connected

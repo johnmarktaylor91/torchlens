@@ -76,12 +76,16 @@ class RetentionProfile:
         same attached payloads as the save-all path. A payload spilled to
         temporary disk comes back detached and is disclosed by a warning.
     activation_module_exit_addresses
-        Module addresses (optionally pass-qualified) of a deferred selector
-        built only from ``tl.module`` terms joined by ``|``. When set, only
+        Module addresses (optionally pass-qualified) whose pass outputs cover
+        every op the deferred selector can match: ``tl.module`` terms joined
+        by ``|``, or intersected with other terms by ``&``. When set, only
         ops that run inside a matching module pass are escrowed, and the ones
         that did not become a matching pass's output are released when the
-        outermost matching pass exits: module outputs are the only ops such a
-        selector can resolve to. ``None`` keeps per-op candidate escrow.
+        outermost matching pass exits. ``None`` keeps per-op candidate escrow.
+    escrow_remedy
+        Selector-specific explanation and live spelling the
+        ``escrow_budget_exceeded`` refusal names, compiled with the plan so
+        the refusal names the exact components that forced the escrow.
     """
 
     activation_kind: RetentionKind = RetentionKind.NONE
@@ -94,6 +98,7 @@ class RetentionProfile:
     escrow_spill_budget_bytes: int | None = DEFAULT_ESCROW_SPILL_BUDGET_BYTES
     activation_module_exit_addresses: tuple[str, ...] | None = None
     activation_attached: bool = False
+    escrow_remedy: str | None = None
 
 
 def _freeze_intent(value: Any) -> Any:

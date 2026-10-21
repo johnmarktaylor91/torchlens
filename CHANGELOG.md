@@ -430,6 +430,14 @@
 
 ### Performance Improvements
 
+- **capture**: `tl.trace(..., save=tl.module(path))` no longer copies every op's output of the
+  forward into the deferred-selector escrow; it copies only the ops that run inside a matching
+  module pass and keeps that pass's outputs. On a 9B decoder, saving one layer used to cross the
+  16 GB escrow spill bound (`escrow_budget_exceeded`); on a tiny Qwen2 it escrows 58 ops instead
+  of 265. The same bounded escrow now also covers a `tl.module` term intersected with any other
+  selector by `&` (`tl.module(path) & tl.func("add")`). A `tl.module` term joined by `|` with a
+  non-module term, or negated, still escrows every op, and the `escrow_budget_exceeded` refusal
+  now names the components that forced that escrow and the live spelling that avoids it.
 - **rerun**: A rerun no longer copies every model parameter into the refreshed trace: on a 12-layer
   GPT-2 head sweep each rerun clones about 0.7 GB instead of 2.3 GB, and the host RNG monitor's
   profile hook does about 88 % less classifier work with the same verdicts.
