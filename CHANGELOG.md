@@ -478,6 +478,9 @@
 
 ### Changed
 
+- **docs**: the smart-collapse reference gallery (`docs/images/collapse`) is re-rendered with the
+  default skin's Okabe-Ito colours and the bundled Liberation Sans face; it still showed the old
+  palette and the wider system font.
 - **save budget**: the save-budget refusal lists `save='stats'` among its cheaper spellings.
 - **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
   `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`

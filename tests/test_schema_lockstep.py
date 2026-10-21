@@ -841,10 +841,12 @@ def test_generated_directory_artifact_is_current(artifact: GeneratedDirectoryArt
     """The checked-in generated directory matches a fresh regeneration.
 
     Runs the owning script's ``--check`` (regenerate to a temp dir, byte-diff,
-    name the differing files). Rendering is byte-deterministic on one host
-    (verified by double-render before the R53-4 regen), so a diff means the
-    committed gallery drifted from the current rendering code -- exactly the
-    born-stale class this gate exists to end. Heavy tier, not smoke: the
+    name the differing files). Rendering is byte-deterministic across hosts:
+    every Graphviz render measures and draws text with the bundled face, so
+    machines with different Pango releases and system fonts write the same
+    bytes. A diff therefore means the committed gallery drifted from the
+    current rendering code -- exactly the born-stale class this gate exists
+    to end. Heavy tier, not smoke: the
     collapse gallery re-traces four models and renders 14 graphviz SVGs
     (~10s). Byte output ties to the installed graphviz, so a legitimate
     graphviz upgrade shows up here as a reviewed regen, never a silent drift.
