@@ -151,6 +151,13 @@ def test_scripted_static_method_through_self_is_resolved() -> None:
 def test_verdict_fields_equal_with_and_without_the_advisory(
     model_class: type[nn.Module], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # TorchScript's profiling executor runs a scripted function's profiling graph
+    # on its first call and its optimized graph afterwards; the two dispatch
+    # different aten ops (7 against 10 witness events for scripted_gate). Settle
+    # the executor with plain forwards first, so both captures see the same graph
+    # whichever test reached the scripted function first in this process.
+    for _ in range(2):
+        model_class()(torch.randn(2, 4))
     with_advisory, _ = _capture(model_class())
     monkeypatch.setattr(advisory, "advise_opaque_calls", lambda diagnostics: None)
     without_advisory, _ = _capture(model_class())
