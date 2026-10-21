@@ -237,6 +237,31 @@ def test_retention_plan_two_forward_route(r0_models):
     assert dec.identity_receipt["result"] == "bitwise_equal"
 
 
+def test_head_scores_plan_from_a_structure_only_capture(r0_models):
+    """D15: a metadata-only first forward plans the attention interiors and the token ids."""
+
+    torch.manual_seed(3)
+    seq = torch.randint(0, 500, (1, 5))
+    doubled = torch.cat([seq, seq], dim=1)
+    model = r0_models["gpt2"]
+    meta = tl.trace(model, doubled, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    plan = mi.retention_plan(meta, "head_scores")
+    assert plan.module_subtrees and all(a.endswith(".attn") for a in plan.module_subtrees)
+    assert [site.op_label for site in plan.sites] == [str(op.label) for op in meta.input_ops]
+    selective = tl.trace(model, doubled, save=plan.predicate)
+    full = tl.trace(model, doubled, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    assert selective.num_saved_layers < full.num_saved_layers
+    got = mi.head_scores(selective, kind="induction")
+    want = mi.head_scores(full, kind="induction")
+    assert got.scores == want.scores and got.eligible_rows == want.eligible_rows
+
+    # Without the token ids the scores refuse typed instead of failing on the unsaved input.
+    no_ids = tl.trace(model, doubled, save=tl.in_module(plan.module_subtrees[0]))
+    with pytest.raises(MechInterpError) as excinfo:
+        mi.head_scores(no_ids, kind="induction", layers=[0])
+    assert excinfo.value.fields["code"] == "mi_token_ids_unavailable"
+
+
 def test_prompts_and_teacher_forcing(r0_models, gpt2_trace):
     """Section 8: structured inspection, BOS disclosure, forced positions."""
 

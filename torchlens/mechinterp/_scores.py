@@ -31,6 +31,7 @@ from typing import Any
 
 import torch
 
+from .._errors import PayloadUnavailableError
 from ._errors import refuse
 from ._heads import _attention_modules
 
@@ -108,7 +109,10 @@ def _token_ids(trace: Any, seq_len: int) -> torch.Tensor:
 
     for label in getattr(trace, "input_ops", ()) or ():
         op = label if hasattr(label, "out") else trace.ops[str(label)]
-        value = getattr(op, "out", None)
+        try:
+            value = getattr(op, "out", None)
+        except PayloadUnavailableError:  # an unsaved input is no token stream
+            continue
         if (
             isinstance(value, torch.Tensor)
             and not value.is_floating_point()

@@ -186,11 +186,31 @@ def _spine_sites(trace: Any, analysis: str) -> list[PlanSite]:
 
 
 def _attention_subtrees(trace: Any) -> list[str]:
-    """Attention module addresses (whole-subtree saves for head analyses)."""
+    """Attention module addresses (whole-subtree saves for head analyses).
 
-    from ._heads import _attention_modules
+    Planning keys on the head geometry facets, which a structure-only capture
+    carries; the payload facets (``result``, ``pattern``, ...) appear only once
+    the interior is saved, so keying on them planned nothing from the cheap
+    first forward.
+    """
 
-    return [str(getattr(m, "address", "")) for m in _attention_modules(trace)]
+    from ._heads import _facet_keys_or_none
+
+    addresses = []
+    for module in trace.modules:
+        keys = _facet_keys_or_none(module)
+        if keys is not None and {"n_q_heads", "d_head"} <= keys:
+            addresses.append(str(getattr(module, "address", "")))
+    return addresses
+
+
+def _input_sites(trace: Any, analysis: str) -> list[PlanSite]:
+    """Sites for the model inputs (the token ids the head-score masks compare)."""
+
+    return [
+        _site(trace, str(getattr(op, "label", op)), analysis)
+        for op in getattr(trace, "input_ops", ()) or ()
+    ]
 
 
 def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> RetentionPlan:
@@ -229,6 +249,8 @@ def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> Rete
             sites.extend(_spine_sites(trace, name))
         if name in ("heads", "head_scores"):
             subtrees.extend(_attention_subtrees(trace))
+        if name == "head_scores":
+            sites.extend(_input_sites(trace, name))
     deduped: dict[str, PlanSite] = {}
     for site in sites:
         deduped.setdefault(site.op_label, site)

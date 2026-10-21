@@ -324,6 +324,12 @@
   graph reaches, so the pass went unobserved (`backward_status` read `grad_enabled_unobserved`) and
   live gradient edits on it never fired. Seen with two captures in one backward and with a
   `create_graph=True` second-order backward.
+- **mechinterp**: `tl.mechinterp.retention_plan(trace, "head_scores")` (and `"heads"`) now plans
+  the attention interiors from a structure-only first capture (`layers_to_save="none"`), which
+  before planned nothing, and `"head_scores"` also plans the model inputs whose token ids the
+  masks compare, so `save=plan.predicate` gives a capture `head_scores` can read. `head_scores` on
+  a capture whose input was not saved now refuses with `mi_token_ids_unavailable` instead of
+  raising `PayloadUnavailableError`.
 
 - **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
   folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
