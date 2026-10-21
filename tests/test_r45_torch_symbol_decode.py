@@ -19,6 +19,7 @@ through the single shared helper ``torch_attr`` (``torch.__dict__.get``) and pin
 from __future__ import annotations
 
 import ast
+import json
 import subprocess
 import sys
 import textwrap
@@ -241,38 +242,64 @@ def test_module_aliased_and_subscript_torch_flagged() -> None:
     assert flagged_lines == [6, 7, 8], flagged_lines
 
 
-@pytest.mark.parametrize("hazard", ["onnx", "_dynamo", "_inductor", "has_cuda"])
-def test_r49_torch_lazy_import_belt_resolver_key(hazard: str) -> None:
-    """r49 secF_1 BEHAVIORAL belt (PRIMARY, spelling-independent): tampering the intervention
-    function-registry KEY to a hazardous top-level torch qualname refuses WITHOUT firing torch's
-    PEP-562 lazy ``__getattr__`` (no ``torch.onnx`` / ``torch._dynamo`` / ``torch._inductor`` in
-    ``sys.modules``, no deprecation warning) -- in a FRESH subprocess so the module table is
-    pristine. Closes the class by OBSERVABLE SIDE EFFECT: no AST spelling (subscript / alias /
-    param) can bypass it."""
+_RESOLVER_KEY_HAZARDS = ("onnx", "_dynamo", "_inductor", "has_cuda")
+_LAZY_TORCH_SUBMODULES = ("torch.onnx", "torch._dynamo", "torch._inductor")
+
+
+@pytest.fixture(scope="module")
+def resolver_key_hazard_outcomes() -> dict[str, dict[str, object]]:
+    """Resolve every hazardous registry key in ONE fresh interpreter, in turn.
+
+    One interpreter instead of one per hazard: interpreter start-up and the torch
+    import are most of the cost. Attribution stays per hazard: each entry records
+    the lazy torch submodules that appeared in ``sys.modules`` during THAT key's
+    resolution, so a hazard that fires torch's lazy ``__getattr__`` is named even
+    when an earlier one already did.
+    """
 
     code = textwrap.dedent(
         f"""
-        import sys, warnings
+        import json, sys, warnings
         warnings.simplefilter("error", DeprecationWarning)
         import torch
         from torchlens.intervention.resolver import resolve_function_registry_key
         from torchlens.intervention.types import FunctionRegistryKey
-        key = FunctionRegistryKey(namespace="torch", qualname={hazard!r}, dispatch_kind="function")
-        try:
-            resolve_function_registry_key(key)
-            outcome = "no_error"
-        except Exception as exc:
-            outcome = type(exc).__name__
-        assert outcome != "no_error", "hazardous torch key was resolved (should refuse)"
-        assert "torch.onnx" not in sys.modules, "torch.onnx imported (lazy side effect)"
-        assert "torch._dynamo" not in sys.modules, "torch._dynamo imported (lazy side effect)"
-        assert "torch._inductor" not in sys.modules, "torch._inductor imported (lazy side effect)"
-        print("REFUSED", outcome)
+        lazy = {_LAZY_TORCH_SUBMODULES!r}
+        outcomes = {{}}
+        for hazard in {_RESOLVER_KEY_HAZARDS!r}:
+            before = {{name for name in lazy if name in sys.modules}}
+            key = FunctionRegistryKey(namespace="torch", qualname=hazard, dispatch_kind="function")
+            try:
+                resolve_function_registry_key(key)
+                outcome = "no_error"
+            except Exception as exc:
+                outcome = type(exc).__name__
+            imported = sorted(name for name in lazy if name in sys.modules and name not in before)
+            outcomes[hazard] = {{"outcome": outcome, "imported": imported}}
+        print("OUTCOMES", json.dumps(outcomes))
         """
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
     assert proc.returncode == 0, proc.stderr
-    assert "REFUSED" in proc.stdout, proc.stdout
+    line = next(text for text in proc.stdout.splitlines() if text.startswith("OUTCOMES "))
+    return json.loads(line.removeprefix("OUTCOMES "))
+
+
+@pytest.mark.parametrize("hazard", _RESOLVER_KEY_HAZARDS)
+def test_r49_torch_lazy_import_belt_resolver_key(
+    hazard: str, resolver_key_hazard_outcomes: dict[str, dict[str, object]]
+) -> None:
+    """r49 secF_1 BEHAVIORAL belt (PRIMARY, spelling-independent): tampering the intervention
+    function-registry KEY to a hazardous top-level torch qualname refuses WITHOUT firing torch's
+    PEP-562 lazy ``__getattr__`` (no ``torch.onnx`` / ``torch._dynamo`` / ``torch._inductor`` in
+    ``sys.modules``, no deprecation warning) -- in a FRESH subprocess so the module table is
+    pristine (one subprocess for the four hazards, each hazard's new imports recorded
+    separately). Closes the class by OBSERVABLE SIDE EFFECT: no AST spelling (subscript /
+    alias / param) can bypass it."""
+
+    result = resolver_key_hazard_outcomes[hazard]
+    assert result["outcome"] != "no_error", "hazardous torch key was resolved (should refuse)"
+    assert result["imported"] == [], f"lazy side effect imported {result['imported']}"
 
 
 @pytest.mark.parametrize("hazard", ["onnx", "_dynamo"])
