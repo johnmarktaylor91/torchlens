@@ -227,7 +227,7 @@ def test_address_preflight_mixed_module_selector_deferred(selector):
     ids=["module", "module_union", "module_and_func", "func"],
 )
 def test_address_preflight_pure_module_union_and_func_live(selector):
-    """Module-bounded selectors (``|`` unions, ``&`` intersections) and non-module ones stay live."""
+    """Module-bounded selectors (``|`` unions, ``&`` intersections) and plain ones stay live."""
 
     report = address_preflight(selector())
     (verdict,) = report.verdicts

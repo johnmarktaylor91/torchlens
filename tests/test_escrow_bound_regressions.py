@@ -127,7 +127,7 @@ def test_single_module_selector_escrows_one_decoder_layer():
 
 @pytest.mark.heavy
 def test_module_selector_fits_a_bound_the_whole_pass_escrow_crosses():
-    """Under a spill bound sized to one layer, tl.module succeeds and a whole-pass escrow refuses."""
+    """Under a spill bound sized to one layer, tl.module fits and a whole-pass escrow refuses."""
 
     model, ids = _tiny_qwen2()
     reference = _hook_output(model, ids, _LAYER)
