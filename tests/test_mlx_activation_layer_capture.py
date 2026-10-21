@@ -35,11 +35,13 @@ _LAYER_ARGS: dict[str, dict[str, Any]] = {}
 
 
 def _op_kinds(trace: Any) -> list[str]:
-    """The captured ops' kinds in capture order."""
+    """Every captured row's kind in capture order, input rows included.
 
-    ops = trace.ops
-    rows = ops.values() if hasattr(ops, "values") else ops
-    return [str(getattr(op, "func_name", "")) for op in rows]
+    ``trace.ops`` covers only the counted ops (no input or output rows), so
+    this every-row reader walks ``trace.layer_list``.
+    """
+
+    return [str(getattr(op, "func_name", "")) for op in trace.layer_list]
 
 
 def _activation_layer_classes() -> list[tuple[str, type[Any]]]:
