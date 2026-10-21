@@ -52,6 +52,7 @@ class PreparedRunnableState:
     initializer_policy_version: str | None
     seed: int | None
     random_filled_slot_ids: tuple[str, ...]
+    admitted_view_slot_ids: frozenset[str] = frozenset()
 
 
 TORCH_MANUAL_SEED_MIN = -0x8000_0000_0000_0000
@@ -1270,7 +1271,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     )
 
     retained_slot_ids = _retained_output_slot_ids(trace, descriptor)
-    _preflight_run_allocation(
+    admitted_view_slot_ids = _preflight_run_allocation(
         (),
         _recorded_output_slots(descriptor),
         _unretained_view_lookup(trace, descriptor, retained_slot_ids),
@@ -1280,7 +1281,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     # per-slot bound above cannot see (honest, individually-feasible slots that together
     # exhaust the host). Refused typed here, before the DAG runs. Zero false refusals:
     # the floor under-counts true retention and the budget never under-estimates.
-    _preflight_retention_floor(descriptor, retained_slot_ids)
+    _preflight_retention_floor(descriptor, admitted_view_slot_ids)
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
@@ -1289,6 +1290,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         staged = replace(
             prepared,
             slot_values=stage_state_to_slot_devices(descriptor, prepared.slot_values),
+            admitted_view_slot_ids=admitted_view_slot_ids,
         )
         # r65 F-1: reproduce the recorded per-slot ``requires_grad`` bit AFTER device
         # staging, on every state source (user-staged, embedded, random-init) -- the
@@ -2132,11 +2134,24 @@ class RunResourceCeiling:
     :func:`_preflight_retention_floor`, co-located because it shares the same budget.
     """
 
-    __slots__ = ("_expected_output_count", "_realized_output_count")
+    __slots__ = ("_admitted_view_slot_ids", "_expected_output_count", "_realized_output_count")
 
     def __init__(self, descriptor: SparseRunDescriptor) -> None:
         self._expected_output_count = sum(len(call.output_slot_ids) for call in descriptor.calls)
         self._realized_output_count = 0
+        self._admitted_view_slot_ids: frozenset[str] = frozenset()
+
+    def admit_unretained_views(self, slot_ids: frozenset[str]) -> None:
+        """Record the slots run-prep admitted past the budget on their view proof alone."""
+
+        self._admitted_view_slot_ids = frozenset(slot_ids)
+
+    def produces_admitted_view(self, call: Any) -> bool:
+        """Whether ``call`` produces a slot admitted on its view proof (no logical charge)."""
+
+        return not self._admitted_view_slot_ids.isdisjoint(
+            getattr(call, "output_slot_ids", ()) or ()
+        )
 
     def aggregate_output_count_ceiling(self) -> int:
         """Aggregate realized-leaf ceiling ``max(sum recorded * MARGIN, FLOOR)``."""
@@ -2238,7 +2253,7 @@ def _preflight_run_allocation(
     representatives: Sequence[TensorSlotDescriptor],
     output_slots: Iterable[TensorSlotDescriptor] = (),
     unretained_view: Callable[[TensorSlotDescriptor], bool] | None = None,
-) -> None:
+) -> frozenset[str]:
     """Refuse an infeasible run allocation BEFORE any op executes (r53 free_1 / r55 free_1).
 
     Two per-device passes against the never-under-estimating live budget
@@ -2264,7 +2279,8 @@ def _preflight_run_allocation(
     nothing and no ``Op.out`` copy is made, so a 4e8-element ``expand`` of a 4-element
     input needs no new bytes, not 1.6 GB. Such a view is still refused past the logical
     extent ceiling of :mod:`._runnable_retention`, which bounds the work of the ops that
-    read it. The lookup runs only for slots that would otherwise refuse.
+    read it. The lookup runs only for slots that would otherwise refuse. Returns the ids
+    of the slots admitted that way, for the retention floor and the per-call projection.
     """
 
     from .errors import RunCapabilityUnavailableError
@@ -2294,6 +2310,8 @@ def _preflight_run_allocation(
                 available_bytes=available,
             )
 
+    admitted: list[str] = []
+    admitted_elements = 0
     for slot in output_slots:
         device = _slot_device(slot)
         requested = math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
@@ -2301,7 +2319,10 @@ def _preflight_run_allocation(
         if requested > available and unretained_view is not None and unretained_view(slot):
             from ._runnable_retention import _refuse_view_past_logical_ceiling
 
-            _refuse_view_past_logical_ceiling(slot, device, requested, available)
+            admitted_elements = _refuse_view_past_logical_ceiling(
+                slot, device, requested, available, admitted_elements
+            )
+            admitted.append(slot.slot_id)
             continue
         if requested > available:
             raise RunCapabilityUnavailableError(
@@ -2315,6 +2336,7 @@ def _preflight_run_allocation(
                 required_bytes=requested,
                 available_bytes=available,
             )
+    return frozenset(admitted)
 
 
 def _preflight_random_init_allocation(

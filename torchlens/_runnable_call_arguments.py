@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._runnable_retention import _unprovable_admitted_view_error
 from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
@@ -287,10 +288,17 @@ def _preflight_call_allocation(
     """
 
     del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    # A call producing a view run-prep admitted past the budget has no recorded-output
+    # bound behind it, so every fail-open below fails CLOSED for it instead.
+    must_project = ceiling is not None and ceiling.produces_admitted_view(call)
     if not _projection_required_by_arguments(args, kwargs):
+        if must_project:
+            raise _unprovable_admitted_view_error(call)
         return  # provably trivial: no tensor operand and no numeric literal -> no size source
     mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
+        if must_project:
+            raise _unprovable_admitted_view_error(call)
         return  # feature-detect fail-open -> run-prep recorded-output bound
     count_ceiling = (
         ceiling.per_call_output_count_ceiling(call)
@@ -332,6 +340,8 @@ def _preflight_call_allocation(
                 call_id=call.call_id,
                 affected_op_labels=call.op_labels,
             ) from exc
+        if must_project:
+            raise _unprovable_admitted_view_error(call) from exc
         return
     try:
         new_bytes_by_device = _new_allocation_bytes(projected, input_storage_ids)
@@ -417,7 +427,12 @@ def _projects_as_pure_view(
             args, kwargs, literal_argument.argument_path, _decode_literal(literal_argument.value)
         )
     count_ceiling = max(len(call.output_slot_ids) * 8, _OUTPUT_COUNT_FLOOR)
-    with mode_cls(allow_non_fake_inputs=True, ceiling=count_ceiling) as mode:
+    # No real-kernel fallback: an op without a meta kernel would run for real on
+    # zero-filled operands of the recorded (not yet bounded) shapes. It raises instead,
+    # and the slot keeps its logical charge.
+    with mode_cls(
+        allow_non_fake_inputs=True, allow_fallback_kernels=False, ceiling=count_ceiling
+    ) as mode:
         for tensor_argument in call.tensor_arguments:
             operand = slots[tensor_argument.slot_id]
             fake = torch.empty(

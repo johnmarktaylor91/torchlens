@@ -34,7 +34,7 @@ from . import (
     _state,
 )
 from ._io._torch_symbols import torch_attr
-from ._runnable_retention import _check_unretained_extent
+from ._runnable_retention import _check_unretained_extent, _unprovable_admitted_view_error
 from ._runnable_state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
     _OUTPUT_COUNT_FLOOR,

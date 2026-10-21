@@ -1,10 +1,11 @@
 """What a loaded-sparse run retains, and the run-prep and bind bounds that follow from it.
 
 Loaded-sparse replay snapshots ``Op.out`` only for ops the capture saved, plus every
-model output. Those retained clones are summed into the retention floor. Any other op
-output lives only as long as replay needs it, so a pure view among them
-(``expand``/``broadcast_to``/``as_strided``) allocates nothing and is admitted past
-the memory budget, bounded instead by a fixed logical extent.
+model output; every op output also stays alive in the run's slot values until the run
+ends. The retention floor sums them. A pure view the run does not copy
+(``expand``/``broadcast_to``/``as_strided``) owns no storage, so it is admitted past the
+memory budget, bounded instead by a fixed logical extent, but only when its producer is
+a view op and every op that reads it is known not to copy it.
 """
 
 from __future__ import annotations
@@ -25,16 +26,104 @@ from .runnable import (
 )
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
-"""Largest logical extent a pure-view slot the run does not copy may have past the budget.
+"""Largest logical extent the admitted pure-view slots of one run may have, summed.
 
 Such a view allocates nothing, but its logical size still bounds WORK: every op that
 reads it touches each logical element (a ``sum`` over a 4e11-element view of 4 floats
 takes minutes). Charging the logical bytes against the memory budget used to bound
 that work too, so a view admitted past the budget is held to this fixed extent
-instead: 2**32 elements, a few seconds for one pass on a CPU core. A view over both
-the budget and this ceiling is refused, as every such view was before view-aware
+instead: 2**32 elements in total, a few seconds for one pass on a CPU core. A view that
+takes the total past the ceiling is refused, as every such view was before view-aware
 charging.
 """
+
+#: Ops whose output is always a view of their tensor operand, whatever its strides, and
+#: which never copy a stride-0 operand (measured on torch 2.1.2 and 2.13.0). Only such an
+#: op may PRODUCE an admitted view: ``reshape``/``flatten``/``contiguous`` alias on the
+#: contiguous fakes of the run-prep proof but copy a real strided operand.
+_VIEW_OPS: tuple[tuple[str, str], ...] = (
+    ("Tensor", "__getitem__"),
+    ("Tensor", "select"),
+    ("torch", "select"),
+    ("Tensor", "narrow"),
+    ("torch", "narrow"),
+    ("Tensor", "permute"),
+    ("torch", "permute"),
+    ("Tensor", "transpose"),
+    ("torch", "transpose"),
+    ("Tensor", "t"),
+    ("torch", "t"),
+    ("Tensor", "unsqueeze"),
+    ("torch", "unsqueeze"),
+    ("Tensor", "squeeze"),
+    ("torch", "squeeze"),
+    ("Tensor", "expand"),
+    ("torch", "broadcast_to"),
+    ("Tensor", "broadcast_to"),
+    ("Tensor", "diagonal"),
+    ("torch", "diagonal"),
+    ("Tensor", "unbind"),
+    ("torch", "unbind"),
+    ("Tensor", "split"),
+    ("torch", "split"),
+    ("Tensor", "chunk"),
+    ("torch", "chunk"),
+    ("Tensor", "movedim"),
+    ("torch", "movedim"),
+    ("Tensor", "detach"),
+    ("torch", "detach"),
+    ("Tensor", "view"),
+)
+
+#: Ops that read a stride-0 operand without copying it (measured on torch 2.1.2 and
+#: 2.13.0): reductions and elementwise ops whose own output slot is charged normally.
+#: FakeTensor cannot see a kernel's internal temporaries, so a view read by any op outside
+#: this list and ``_VIEW_OPS`` (``median``, ``mm``, ``unique``, ``sort``) keeps its logical
+#: charge. Closed list: add an op only with a measurement on both torch versions.
+_STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
+    ("Tensor", "sum"),
+    ("torch", "sum"),
+    ("Tensor", "mean"),
+    ("torch", "mean"),
+    ("Tensor", "amax"),
+    ("torch", "amax"),
+    ("Tensor", "amin"),
+    ("torch", "amin"),
+    ("Tensor", "prod"),
+    ("torch", "prod"),
+    ("Tensor", "norm"),
+    ("torch", "norm"),
+    ("Tensor", "var"),
+    ("torch", "var"),
+    ("Tensor", "std"),
+    ("torch", "std"),
+    ("Tensor", "__add__"),
+    ("Tensor", "__radd__"),
+    ("Tensor", "add"),
+    ("torch", "add"),
+    ("Tensor", "__mul__"),
+    ("Tensor", "__rmul__"),
+    ("Tensor", "mul"),
+    ("torch", "mul"),
+    ("Tensor", "exp"),
+    ("torch", "exp"),
+    ("Tensor", "relu"),
+    ("torch", "relu"),
+)
+
+
+def _resolved_ops(entries: tuple[tuple[str, str], ...]) -> frozenset[Any]:
+    """Resolve ``(namespace, name)`` entries to the unwrapped callables the resolver binds."""
+
+    from ._io.runnable_load import _unwrap_decorated
+    from .utils._torch_symbols import torch_attr
+
+    resolved: set[Any] = set()
+    for namespace, name in entries:
+        found = torch_attr(name) if namespace == "torch" else getattr(torch.Tensor, name, None)
+        if found is not None:
+            resolved.add(_unwrap_decorated(found))
+    return frozenset(resolved)
 
 
 def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> frozenset[str]:
@@ -45,7 +134,8 @@ def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> fr
     (the reconstruct clone). Every other op output lives only as long as replay needs it.
     """
 
-    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    from ._runnable_verification import _op_for_label
+
     retained = {
         slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.OUTPUT
     }
@@ -53,7 +143,7 @@ def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> fr
         # strict=False: a length mismatch is refused typed at bind; an unpaired slot
         # here is simply not retained.
         for slot_id, op_label in zip(call.output_slot_ids, call.op_labels, strict=False):
-            if bool(getattr(layer_dict.get(op_label), "has_saved_activation", False)):
+            if bool(getattr(_op_for_label(trace, op_label), "has_saved_activation", False)):
                 retained.add(slot_id)
     return frozenset(retained)
 
@@ -63,47 +153,123 @@ def _unretained_view_lookup(
 ) -> Callable[[TensorSlotDescriptor], bool] | None:
     """Return the lookup proving a slot is an unretained pure view, if callables resolve.
 
-    The lookup builds its projector and projects a slot's producing call only when
-    asked, and at most once per slot, so a run within budget pays nothing for it. A
-    retained slot is never a candidate: its snapshot materializes the full logical size.
+    A slot qualifies only if the run does not retain it, its producer is in
+    ``_VIEW_OPS``, every call reading it is in ``_VIEW_OPS`` or ``_STREAMING_READER_OPS``,
+    and the projection proves the producer's output aliases an operand. The lookup
+    builds its projector only when asked, and decides each slot at most once, so a run
+    within budget pays nothing for it.
     """
 
     callables = trace._runnable.callables_by_call_id
     if not isinstance(callables, Mapping):
         return None
-    projected: dict[str, bool] = {}
-    projector: list[Callable[[TensorSlotDescriptor], bool]] = []
+    decided: dict[str, bool] = {}
+    state: dict[str, Any] = {}
 
     def lookup(slot: TensorSlotDescriptor) -> bool:
-        """Project one slot at most once, building the projector on first use."""
+        """Decide one slot at most once, building the projector on first use."""
 
         if slot.slot_id in retained_slot_ids:
             return False
-        if slot.slot_id not in projected:
-            if not projector:
-                from ._runnable_execution import _pure_view_projector
-
-                projector.append(_pure_view_projector(descriptor, callables))
-            projected[slot.slot_id] = projector[0](slot)
-        return projected[slot.slot_id]
+        if slot.slot_id not in decided:
+            if not state:
+                state.update(_view_admission_state(descriptor, callables))
+            decided[slot.slot_id] = _admits_view(slot, callables, state)
+        return decided[slot.slot_id]
 
     return lookup
 
 
-def _refuse_view_past_logical_ceiling(
-    slot: TensorSlotDescriptor, device: torch.device, logical_bytes: int, available: int
-) -> None:
-    """Refuse at run-prep a pure-view slot whose logical extent exceeds the ceiling."""
+def _view_admission_state(
+    descriptor: SparseRunDescriptor, callables: Mapping[str, Callable[..., Any]]
+) -> dict[str, Any]:
+    """Build the producer/reader maps, the op sets and the projector for view admission."""
 
-    logical_elements = math.prod(slot.shape)
+    from ._runnable_execution import _pure_view_projector
+
+    producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
+    readers: dict[str, list[Any]] = defaultdict(list)
+    for call in descriptor.calls:
+        for argument in call.tensor_arguments:
+            readers[argument.slot_id].append(call)
+    view_ops = _resolved_ops(_VIEW_OPS)
+    return {
+        "slots": {slot.slot_id: slot for slot in descriptor.tensor_slots},
+        "producers": producers,
+        "readers": readers,
+        "view_ops": view_ops,
+        "streaming_ops": _resolved_ops(_STREAMING_READER_OPS),
+        "projector": _pure_view_projector(descriptor, callables),
+    }
+
+
+def _admits_view(
+    slot: TensorSlotDescriptor,
+    callables: Mapping[str, Callable[..., Any]],
+    state: Mapping[str, Any],
+) -> bool:
+    """Whether ``slot`` is a view-op output, read only by non-copying ops, proven to alias.
+
+    A reader qualifies if it is a streaming op, or a view op whose every output the
+    projection proves is a view too (basic indexing qualifies, advanced indexing does not).
+    """
+
+    producer = state["producers"].get(slot.slot_id)
+    if producer is None or not _is_listed(callables.get(producer.call_id), state["view_ops"]):
+        return False
+    return bool(state["projector"](slot)) and all(
+        _reader_keeps_view(call, callables, state) for call in state["readers"][slot.slot_id]
+    )
+
+
+def _reader_keeps_view(
+    call: Any, callables: Mapping[str, Callable[..., Any]], state: Mapping[str, Any]
+) -> bool:
+    """Whether one reader of an admitted view is known not to copy it."""
+
+    func = callables.get(call.call_id)
+    if _is_listed(func, state["streaming_ops"]):
+        return True
+    if not _is_listed(func, state["view_ops"]):
+        return False
+    slots = state["slots"]
+    return all(
+        slot_id in slots and bool(state["projector"](slots[slot_id]))
+        for slot_id in call.output_slot_ids
+    )
+
+
+def _is_listed(func: Any, ops: frozenset[Any]) -> bool:
+    """Whether a resolved callable is one of ``ops`` (an unhashable callable never is)."""
+
+    try:
+        return func is not None and func in ops
+    except TypeError:
+        return False
+
+
+def _refuse_view_past_logical_ceiling(
+    slot: TensorSlotDescriptor,
+    device: torch.device,
+    logical_bytes: int,
+    available: int,
+    prior_elements: int = 0,
+) -> int:
+    """Refuse at run-prep a pure view that takes the admitted views past the ceiling.
+
+    Returns the admitted views' logical elements including ``slot``.
+    """
+
+    logical_elements = prior_elements + math.prod(slot.shape)
     if logical_elements <= _VIEW_LOGICAL_ELEMENT_CEILING:
-        return
+        return logical_elements
     raise RunCapabilityUnavailableError(
-        f"Recorded view slot {slot.slot_id!r} for device {str(device)!r} spans "
-        f"{logical_elements} logical elements ({logical_bytes} bytes if materialized, "
-        f"{available} bytes available). Its storage is small, but every op that reads it "
-        f"touches each element, and the view ceiling is {_VIEW_LOGICAL_ELEMENT_CEILING} "
-        "elements; the descriptor may be tampered or the view is too large for this host.",
+        f"Recorded view slot {slot.slot_id!r} for device {str(device)!r} takes the run's "
+        f"admitted views to {logical_elements} logical elements ({logical_bytes} bytes if "
+        f"this one were materialized, {available} bytes available). Views own little "
+        "storage, but every op that reads one touches each element, and the view ceiling "
+        f"is {_VIEW_LOGICAL_ELEMENT_CEILING} elements per run; the descriptor may be "
+        "tampered or the views are too large for this host.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         detection_stage="op_allocation_preflight",
         device=str(device),
@@ -116,16 +282,15 @@ def _refuse_view_past_logical_ceiling(
 
 def _preflight_retention_floor(
     descriptor: SparseRunDescriptor,
-    retained_slot_ids: frozenset[str] | None = None,
+    admitted_view_slot_ids: frozenset[str] = frozenset(),
 ) -> None:
-    """Refuse a run whose GUARANTEED retained clone bytes provably exceed the budget (r59).
+    """Refuse a run whose GUARANTEED retained bytes provably exceed the budget (r59).
 
-    Loaded-sparse replay retains a materialized clone of every SAVED taken-path op output
-    for the life of the returned trace (one ``Op.out`` clone per saved
-    ``(call, output_slot_id)`` at bind, plus one reconstruct clone per model-``output``
-    slot). The SUM of those
-    recorded op-output bytes is therefore a guaranteed LOWER BOUND on replay memory --
-    a floor. A descriptor whose per-device floor exceeds the never-under-estimating
+    Loaded-sparse replay keeps every taken-path op output alive in its slot values until
+    the run ends (plus an ``Op.out`` clone for each saved op), and one reconstruct clone
+    per model-``output`` slot for the life of the returned trace. Charging each op
+    output once, plus each model output once, is therefore a guaranteed LOWER BOUND on
+    replay memory -- a floor. A descriptor whose per-device floor exceeds the never-under-estimating
     live budget could never complete on this host: every honest per-op allocation may
     pass the per-slot bound (``_runnable_state._preflight_run_allocation``) and every clone may pass
     its per-clone byte guard, yet their cumulative retention guarantees a mid-replay
@@ -139,9 +304,8 @@ def _preflight_retention_floor(
     run (zero false refusals). A legit deep model whose cumulative retention is within
     budget (a deep-adds chain of small outputs) is untouched.
 
-    ``retained_slot_ids`` names the op-output slots replay snapshots (saved ops plus
-    model outputs, :func:`_retained_output_slot_ids`); when given, only those are charged.
-    Without it every op output is charged, the pre-selection floor.
+    ``admitted_view_slot_ids`` names the views run-prep admitted past the budget; they
+    own no storage, so they are the only op outputs the floor does not charge.
     """
 
     from ._runnable_state import _allocation_budget_bytes, _slot_device, _torch_dtype
@@ -158,13 +322,12 @@ def _preflight_retention_floor(
         devices[key] = device
         floor[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
 
-    # One retained ``Op.out`` clone per saved taken-path op label (bind): alias/version
-    # slots are NOT in ``output_slot_ids`` so each producing op label charges at most
-    # once, mirroring ``_bind_call_outputs``'s ``output_slot_ids`` zip.
+    # One live value per taken-path op output: alias/version slots are NOT in
+    # ``output_slot_ids`` so each producing op label charges once.
     for call in descriptor.calls:
         for slot_id in call.output_slot_ids:
             slot = slots.get(slot_id)
-            if slot is not None and (retained_slot_ids is None or slot_id in retained_slot_ids):
+            if slot is not None and slot_id not in admitted_view_slot_ids:
                 _charge(slot)
     # One additional retained reconstruct clone per model-output slot.
     for slot in descriptor.tensor_slots:
@@ -175,8 +338,8 @@ def _preflight_retention_floor(
         available = _allocation_budget_bytes(devices[key])
         if requested > available:
             raise RunCapabilityUnavailableError(
-                f"Loaded-sparse replay retains at least {requested} bytes of op-output "
-                f"clones on device {key!r} for the run's lifetime, but only {available} "
+                f"Loaded-sparse replay retains at least {requested} bytes of op outputs "
+                f"on device {key!r} for the run's lifetime, but only {available} "
                 "bytes are available on this host. The cumulative retained state exceeds "
                 "the budget and the run is guaranteed to fail mid-replay; the descriptor "
                 "may be tampered or the host is too small.",
@@ -229,4 +392,24 @@ def _check_unretained_extent(
         logical_elements=numel,
         logical_element_ceiling=_VIEW_LOGICAL_ELEMENT_CEILING,
         affected_op_labels=tuple(affected_op_labels),
+    )
+
+
+def _unprovable_admitted_view_error(call: Any) -> RunCapabilityUnavailableError:
+    """Refusal for a call producing an admitted view whose run-time projection failed.
+
+    Run-prep admitted the call's output past the budget on its view proof alone, so the
+    run-time projection is its only pre-execution check; when that cannot run, the call
+    is refused instead of executed unbounded.
+    """
+
+    return RunCapabilityUnavailableError(
+        f"Sparse call {call.call_id!r} produces a view admitted past the memory budget, "
+        "but its allocation could not be projected before execution; an unprojected "
+        "call cannot be admitted under the fail-closed budget contract. The descriptor "
+        "may be tampered.",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        detection_stage="op_allocation_preflight",
+        call_id=call.call_id,
+        affected_op_labels=tuple(call.op_labels),
     )

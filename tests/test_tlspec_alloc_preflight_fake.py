@@ -471,6 +471,31 @@ class _HugeSavedView(nn.Module):
         return wide[0].sum() + x.sum()
 
 
+class _MedianOfView(nn.Module):
+    """A huge unsaved view read by ``median``, which copies its operand internally."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).median() + x.sum()
+
+
+class _MmOfView(nn.Module):
+    """A huge unsaved view read by ``mm``: BLAS repacks a stride-0 operand."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(4, 1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return torch.mm(x.expand(10**7, 4), self.weight).sum() + x.sum()
+
+
+class _TwoHugeViews(nn.Module):
+    """Two huge unsaved views, each admissible on its own, read by ``sum``."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).sum() + x.expand(10**7, 4).sum() + x.sum()
+
+
 #: The host allocation budget the huge-view runs see: 64 MiB, fixed so the rows do not
 #: depend on the runner's free memory. It is far below the views' logical sizes (1.6 GB
 #: and 160 MB) and far above what an unsaved honest view really allocates (nothing).
@@ -518,15 +543,22 @@ def test_genuinely_huge_view_model_runs_verified(
 
 @pytest.mark.parametrize(
     "factory, save",
-    [(_HugeMaterialized, tl.func("sum")), (_HugeSavedView, tl.func("expand"))],
-    ids=["materializing_op", "saved_view"],
+    [
+        (_HugeMaterialized, tl.func("sum")),
+        (_HugeSavedView, tl.func("expand")),
+        (_MedianOfView, tl.func("sum")),
+        (_MmOfView, tl.func("sum")),
+    ],
+    ids=["materializing_op", "saved_view", "view_read_by_median", "view_read_by_mm"],
 )
 def test_huge_materialized_slot_still_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, factory: type[nn.Module], save: Any
 ) -> None:
     """A slot that really materializes past the budget is still refused at run-prep,
-    before any op executes, charged its full 160 MB: a materializing op (``* 2.0``), or
-    a huge view the capture saved, whose ``Op.out`` copy the run makes."""
+    before any op executes, charged its full 160 MB: a materializing op (``* 2.0``), a
+    huge view the capture saved, whose ``Op.out`` copy the run makes, or an unsaved huge
+    view read by an op that copies it internally (``median``, ``mm``), which FakeTensor
+    cannot see."""
 
     _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
@@ -537,6 +569,77 @@ def test_huge_materialized_slot_still_refused(
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
     assert int(caught.value.fields["available_bytes"]) == _HUGE_VIEW_HOST_BUDGET_BYTES
+
+
+@pytest.mark.parametrize("failure", ["no_size_source", "projection_raises"])
+def test_admitted_view_unprojectable_at_run_time_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """A call producing a view run-prep admitted past the budget has no recorded-output
+    bound behind it, so when its run-time projection cannot run (judged trivial, or the
+    projection raises a non-allocation error) it is refused before it executes, where
+    every other call fails open."""
+
+    _fix_host_budget(monkeypatch)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    loaded = tl.load(str(bundle))
+
+    def _raise_projection(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("no fake implementation")
+
+    if failure == "no_size_source":
+        monkeypatch.setattr(rex, "_projection_required_by_arguments", lambda *_a: False)
+    else:
+        monkeypatch.setattr(rex, "_tree_to_fake", _raise_projection)
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    labels = caught.value.fields.get("affected_op_labels") or ()
+    assert any(str(label).startswith("expand") for label in labels)
+
+
+def test_admitted_views_share_one_logical_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The view work ceiling bounds the admitted views of a run together: two views each
+    under it are refused once their sum passes it."""
+
+    import torchlens._runnable_retention as retention
+
+    _fix_host_budget(monkeypatch)
+    monkeypatch.setattr(retention, "_VIEW_LOGICAL_ELEMENT_CEILING", 6 * 10**7)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "two_views.tlspec", _TwoHugeViews(), x, save=tl.func("sum"))
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(caught.value.fields["logical_elements"]) == 2 * 4 * 10**7
+
+
+def test_view_proof_projection_runs_without_real_kernel_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run-prep view proof never lets FakeTensor fall back to a real kernel on
+    zero-filled operands of recorded, not yet bounded, shapes."""
+
+    _fix_host_budget(monkeypatch)
+    real_mode_class = rex._count_bounded_fake_tensor_mode_class()
+    assert real_mode_class is not None
+    seen: list[Any] = []
+
+    class _Recording(real_mode_class):  # type: ignore[misc,valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            seen.append(kwargs.get("allow_fallback_kernels", True))
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(rex, "_count_bounded_fake_tensor_mode_class", lambda: _Recording)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    result = tl.load(str(bundle)).run(inputs=x.clone())
+    assert result.report.path_faithfulness.value == "verified"
+    assert seen and seen[0] is False  # the first projection is the run-prep view proof
 
 
 def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:
