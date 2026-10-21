@@ -212,28 +212,21 @@ def _view_admission_state(
 def _readers_through_version_aliases(
     descriptor: SparseRunDescriptor, direct_readers: Mapping[str, list[Any]]
 ) -> dict[str, list[Any]]:
-    """Map each slot to the calls reading it directly or through any version alias.
+    """Map each slot to the calls reading it directly or through a version alias of it.
 
-    Bind writes a produced value into every version-alias slot of it (``version_of`` and
-    ``producer_slot_id`` both naming the producer), so a call reading an alias reads the
-    producer's value, whatever shape the alias records.
+    Bind writes a produced value into each DIRECT version-alias slot of it (``version_of``
+    and ``producer_slot_id`` both naming the producer), so a call reading such an alias
+    reads the producer's value, whatever shape the alias records. Bind never writes an
+    alias of an alias (the loader refuses one), so one level is exact, and the map stays
+    linear in the descriptor.
     """
 
-    aliases: dict[str, list[str]] = defaultdict(list)
+    readers: dict[str, list[Any]] = defaultdict(list)
+    for slot_id, calls in direct_readers.items():
+        readers[slot_id].extend(calls)
     for slot in descriptor.tensor_slots:
         if slot.version_of is not None and slot.version_of == slot.producer_slot_id:
-            aliases[slot.version_of].append(slot.slot_id)
-    readers: dict[str, list[Any]] = defaultdict(list)
-    for slot in descriptor.tensor_slots:
-        seen = {slot.slot_id}
-        pending = [slot.slot_id]
-        while pending:
-            current = pending.pop()
-            readers[slot.slot_id].extend(direct_readers.get(current, ()))
-            for alias in aliases.get(current, ()):
-                if alias not in seen:
-                    seen.add(alias)
-                    pending.append(alias)
+            readers[slot.version_of].extend(direct_readers.get(slot.slot_id, ()))
     return readers
 
 
@@ -409,6 +402,7 @@ def _check_unretained_extent(
     call_id: str | None,
     slot_id: str | None,
     affected_op_labels: Sequence[str] = (),
+    admitted_view: bool = False,
 ) -> None:
     """Refuse at bind an op output the run will not copy whose logical extent is unbounded.
 
@@ -417,23 +411,31 @@ def _check_unretained_extent(
     memory budget only up to ``_VIEW_LOGICAL_ELEMENT_CEILING`` elements of its RECORDED
     shape; this holds the REALIZED value to the same bound before any consumer runs, so
     a literal-only tamper (recorded slot honest, size literal inflated) cannot hand a
-    4e11-element view to the next op, even under ``return_diverged``.
+    4e11-element view to the next op, even under ``return_diverged``. A view run-prep
+    admitted past the budget (``admitted_view``) must also really be on CPU, where its
+    readers were measured not to copy it: the recorded device label is the file's claim.
     """
 
     numel = int(value.numel())
-    if numel <= _VIEW_LOGICAL_ELEMENT_CEILING:
+    off_cpu = admitted_view and value.device.type != "cpu"
+    if numel <= _VIEW_LOGICAL_ELEMENT_CEILING and not off_cpu:
         return
     from ._runnable_state import _allocation_budget_bytes
 
     logical_bytes = numel * int(value.element_size())
     available = _allocation_budget_bytes(value.device)
-    if logical_bytes <= available:
+    if logical_bytes <= available and not off_cpu:
         return
+    reason = (
+        "It was admitted past the budget as a CPU view, but it is not on CPU"
+        if off_cpu
+        else "Every op that reads it touches each element"
+    )
     raise RunCapabilityUnavailableError(
-        f"Sparse call {call_id!r} produced output slot {slot_id!r} spanning {numel} "
-        f"logical elements ({logical_bytes} bytes if materialized, {available} bytes "
-        f"available). Every op that reads it touches each element, and the view ceiling "
-        f"is {_VIEW_LOGICAL_ELEMENT_CEILING} elements; the descriptor may be tampered.",
+        f"Sparse call {call_id!r} produced output slot {slot_id!r} on {str(value.device)!r} "
+        f"spanning {numel} logical elements ({logical_bytes} bytes if materialized, "
+        f"{available} bytes available). {reason}, and the view ceiling is "
+        f"{_VIEW_LOGICAL_ELEMENT_CEILING} elements; the descriptor may be tampered.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         detection_stage="op_allocation_execution",
         call_id=call_id,

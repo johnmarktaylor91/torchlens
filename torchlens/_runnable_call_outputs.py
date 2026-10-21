@@ -192,7 +192,11 @@ def _bind_call_outputs(
             )
         else:
             _check_unretained_extent(
-                value, call_id=call.call_id, slot_id=slot_id, affected_op_labels=(op_label,)
+                value,
+                call_id=call.call_id,
+                slot_id=slot_id,
+                affected_op_labels=(op_label,),
+                admitted_view=ceiling.is_admitted_view(slot_id),
             )
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype

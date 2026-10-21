@@ -2146,6 +2146,11 @@ class RunResourceCeiling:
 
         self._admitted_view_slot_ids = frozenset(slot_ids)
 
+    def is_admitted_view(self, slot_id: str) -> bool:
+        """Whether run-prep admitted ``slot_id`` on its view proof (no logical charge)."""
+
+        return slot_id in self._admitted_view_slot_ids
+
     def produces_admitted_view(self, call: Any) -> bool:
         """Whether ``call`` produces a slot admitted on its view proof (no logical charge)."""
 

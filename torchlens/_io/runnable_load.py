@@ -1046,6 +1046,37 @@ def _validate_structural_witness_discharge(
             )
 
 
+def _validate_version_alias_targets(context: _WitnessValidationContext) -> None:
+    """Refuse a version alias of a version alias.
+
+    A version alias (``version_of`` and ``producer_slot_id`` both naming one slot) is
+    the per-consumer version of a produced slot; bind writes the produced value into
+    each direct alias and never into an alias of an alias, and the producer never
+    records one. Refusing it keeps every alias one level deep, so the run's alias maps
+    stay linear in the descriptor.
+
+    Parameters
+    ----------
+    context:
+        Indexed descriptor state for the validation pass.
+    """
+
+    for slot in context.descriptor.tensor_slots:
+        if slot.version_of is None or slot.version_of != slot.producer_slot_id:
+            continue
+        target = context.slot_by_id.get(slot.version_of)
+        if (
+            target is not None
+            and target.version_of is not None
+            and target.version_of == target.producer_slot_id
+        ):
+            raise ContextFieldInvalidError(
+                context.field,
+                f"version alias {slot.slot_id!r} names version alias {target.slot_id!r}; "
+                "aliases are one level deep",
+            )
+
+
 def _validate_terminal_slot_totality(context: _WitnessValidationContext) -> None:
     """Validate structural claims for every terminal call-produced slot.
 
@@ -1417,6 +1448,7 @@ def validate_witness_obligations(
     )
     _validate_witness_identity(context)
     _validate_call_references(context)
+    _validate_version_alias_targets(context)
     _validate_structural_witness_discharge(context, container_members=container_members)
     _validate_terminal_slot_totality(context)
     _validate_conditional_predicate_pairing(context)

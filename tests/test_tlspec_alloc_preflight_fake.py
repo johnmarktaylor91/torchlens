@@ -839,6 +839,97 @@ def test_view_admission_refuses_hidden_copy_routes(
     assert not _admits(monkeypatch, view, extra, reader, reader_op)
 
 
+def _alias_slot(slots: dict[str, dict[str, Any]], target_id: str, slot_id: str) -> dict[str, Any]:
+    """A crafted unread version alias of ``target_id``, recorded at the target's shape."""
+
+    alias = copy.deepcopy(slots[target_id])
+    alias.update(slot_id=slot_id, version_of=target_id, producer_slot_id=target_id, use_sites=[])
+    return alias
+
+
+def _alias_of_alias(manifest: dict[str, Any]) -> None:
+    """Hang a two-level version-alias chain off the ``expand`` view."""
+
+    run = manifest["run"]
+    view_id = _calls_by_op(run)["expand"]["output_slot_ids"][0]
+    slots = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
+    first = _alias_slot(slots, view_id, f"{view_id}:alias")
+    slots[first["slot_id"]] = first
+    run["tensor_slots"] += [first, _alias_slot(slots, first["slot_id"], f"{view_id}:alias2")]
+
+
+def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
+    """Bind writes a produced value only into its direct version aliases, so a file whose
+    alias names another alias is refused at load, which keeps the run's alias maps one
+    level deep (a crafted chain cannot make run-prep quadratic)."""
+
+    from torchlens._io.runnable_load import ContextFieldInvalidError
+
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "alias_chain.tlspec", _HugeView(), x, save=tl.func("sum"))
+    _tamper(bundle, _alias_of_alias)
+    with pytest.raises(ContextFieldInvalidError, match="one level deep"):
+        tl.load(str(bundle))
+
+
+def test_alias_reader_map_is_linear_in_slots() -> None:
+    """The view-admission reader map holds one entry per read and per direct alias read,
+    however long a version-alias chain the descriptor carries."""
+
+    from torchlens._runnable_retention import _readers_through_version_aliases
+
+    chain = 2000
+    slots = [_admission_slot("s:a0")] + [
+        _admission_slot(f"s:a{index}", alias_of=f"s:a{index - 1}") for index in range(1, chain)
+    ]
+    readers = {
+        "s:a0": [_admission_call("c:head", reads=("s:a0",))],
+        f"s:a{chain - 1}": [_admission_call("c:tail", reads=(f"s:a{chain - 1}",))],
+    }
+    descriptor = types.SimpleNamespace(tensor_slots=tuple(slots))
+    mapped = _readers_through_version_aliases(descriptor, readers)
+    assert sum(len(calls) for calls in mapped.values()) <= 2 * len(readers)
+
+
+def test_admitted_view_realized_off_cpu_refused_at_bind() -> None:
+    """A view admitted past the budget as a CPU view whose realized value is on another
+    device (the recorded label lied) is refused at bind, before any reader runs; an
+    unadmitted output there, or an admitted one on CPU, passes."""
+
+    from torchlens._runnable_retention import _check_unretained_extent
+
+    labels = {"call_id": "c:expand", "slot_id": "s:view"}
+    _check_unretained_extent(torch.empty(4, device="meta"), **labels)
+    _check_unretained_extent(torch.empty(4), admitted_view=True, **labels)
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        _check_unretained_extent(torch.empty(4, device="meta"), admitted_view=True, **labels)
+    assert caught.value.fields.get("detection_stage") == "op_allocation_execution"
+    assert caught.value.fields.get("device") == "meta"
+
+
+def test_bind_tells_the_extent_check_which_outputs_are_admitted_views(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bind passes run-prep's admission to the extent check, so the device check above
+    applies to exactly the admitted views."""
+
+    _fix_host_budget(monkeypatch)
+    real_check = rex._check_unretained_extent
+    admitted_by_slot: dict[str, bool] = {}
+
+    def recording_check(value: torch.Tensor, **kwargs: Any) -> None:
+        admitted_by_slot[str(kwargs["slot_id"])] = bool(kwargs.get("admitted_view", False))
+        real_check(value, **kwargs)
+
+    monkeypatch.setattr(rex, "_check_unretained_extent", recording_check)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    result = tl.load(str(bundle)).run(inputs=x.clone())
+    assert result.report.path_faithfulness.value == "verified"
+    admitted = sorted(slot for slot, flag in admitted_by_slot.items() if flag)
+    assert admitted and all("expand" in slot for slot in admitted)
+
+
 def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:
     """A legit ``nonzero`` (fake impl raises ``DynamicOutputShapeException``) FAILS OPEN."""
 

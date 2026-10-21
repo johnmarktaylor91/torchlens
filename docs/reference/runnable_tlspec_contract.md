@@ -1299,6 +1299,10 @@ open (no size source, FakeTensor unavailable, a non-allocation projection error)
 `op_allocation_preflight`. At bind, each realized output the run does not copy is held to the
 `2**32` rule before any consumer runs (detection stage `op_allocation_execution`, same fields), so
 a size literal inflated without its recorded slot cannot hand an unbounded view to the next op. A
+view admitted past the budget whose realized value is not on CPU is refused there too, since the
+recorded device is the file's claim. Loading refuses a version alias whose target is itself a
+version alias (`context_field_invalid`): bind writes only direct aliases, so the run's alias maps
+stay one level deep. A
 descriptor whose per-device floor exceeds the device budget could never complete on this host and is refused typed at `run_retention_preflight` before
 any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
 individually-feasible output slots together exhaust the host, each passing the per-slot bound and
