@@ -5,7 +5,6 @@ plus new API coverage tests.
 """
 
 import os
-import warnings
 from collections.abc import Iterator
 from os.path import join as opj
 
@@ -664,32 +663,6 @@ def test_buffer_rewrite_model():
             show_buffers="never",
         ),
     )
-
-
-def test_buffer_rewrite_verdict_is_false_under_plain_filters() -> None:
-    """Plain python filters: the re-trace mismatch downgrades validation to False."""
-
-    model = example_models.BufferRewriteModel()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("default")
-        assert validate_forward_pass(model, torch.rand(12, 12)) is False
-    assert any(issubclass(w.category, TraceNotReproducibleWarning) for w in caught)
-
-
-def test_buffer_rewrite_promoted_warning_propagates_never_reads_unavailable() -> None:
-    """The suite's error filter must not flip the verdict to True.
-
-    Under ``error::UserWarning:torchlens`` the re-trace warning arrived as an
-    exception inside the check's own ``try`` and was recorded as an
-    "unavailable" re-trace, so the mismatch downgrade never ran and validation
-    returned True. A promoted warning now propagates.
-    """
-
-    model = example_models.BufferRewriteModel()
-    with warnings.catch_warnings():
-        warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
-        with pytest.raises(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
-            validate_forward_pass(model, torch.rand(12, 12))
 
 
 # =============================================================================

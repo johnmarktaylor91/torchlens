@@ -36,9 +36,11 @@ import pytest
 import torch
 import torch.nn as nn
 from _validation_capture import _capture, _quiet_validate
+from example_models import BufferRewriteModel
 
 import torchlens as tl
 from torchlens.backends.torch import rescue
+from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
@@ -1361,6 +1363,32 @@ def test_f3_tuple_out_model_validates() -> None:
             return values + 1.0
 
     assert _quiet_validate(_TupleOut(), torch.randn(3, 4)) is True
+
+
+def test_buffer_rewrite_verdict_is_false_under_plain_filters() -> None:
+    """Plain python filters: the re-trace mismatch downgrades validation to False."""
+
+    model = BufferRewriteModel()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("default")
+        assert validate_forward_pass(model, torch.rand(12, 12)) is False
+    assert any(issubclass(w.category, TraceNotReproducibleWarning) for w in caught)
+
+
+def test_buffer_rewrite_promoted_warning_propagates_never_reads_unavailable() -> None:
+    """The suite's error filter must not flip the verdict to True.
+
+    Under ``error::UserWarning:torchlens`` the re-trace warning arrived as an
+    exception inside the check's own ``try`` and was recorded as an
+    "unavailable" re-trace, so the mismatch downgrade never ran and validation
+    returned True. A promoted warning now propagates.
+    """
+
+    model = BufferRewriteModel()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
+        with pytest.raises(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+            validate_forward_pass(model, torch.rand(12, 12))
 
 
 class _ReluScale(nn.Module):
