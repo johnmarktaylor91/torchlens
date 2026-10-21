@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._runnable_retention import _unprovable_admitted_view_error
+from ._runnable_retention import _fail_open_unless_admitted
 from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
@@ -290,15 +290,12 @@ def _preflight_call_allocation(
     del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
     # A call producing a view run-prep admitted past the budget has no recorded-output
     # bound behind it, so every fail-open below fails CLOSED for it instead.
-    must_project = ceiling is not None and ceiling.produces_admitted_view(call)
     if not _projection_required_by_arguments(args, kwargs):
-        if must_project:
-            raise _unprovable_admitted_view_error(call)
+        _fail_open_unless_admitted(call, ceiling)
         return  # provably trivial: no tensor operand and no numeric literal -> no size source
     mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
-        if must_project:
-            raise _unprovable_admitted_view_error(call)
+        _fail_open_unless_admitted(call, ceiling)
         return  # feature-detect fail-open -> run-prep recorded-output bound
     count_ceiling = (
         ceiling.per_call_output_count_ceiling(call)
@@ -340,8 +337,7 @@ def _preflight_call_allocation(
                 call_id=call.call_id,
                 affected_op_labels=call.op_labels,
             ) from exc
-        if must_project:
-            raise _unprovable_admitted_view_error(call) from exc
+        _fail_open_unless_admitted(call, ceiling, exc)
         return
     try:
         new_bytes_by_device = _new_allocation_bytes(projected, input_storage_ids)

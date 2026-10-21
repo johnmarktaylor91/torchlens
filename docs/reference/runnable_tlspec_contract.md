@@ -1274,19 +1274,28 @@ free_1): before the taken-path DAG executes, every recorded op-output slot (role
 and `output`) is compared **per slot** against the identical never-under-estimating live budget,
 and a single recorded output larger than the whole device budget is refused typed before it can
 allocate. It is compared ADDITIONALLY as a per-device **retention floor** (r59, detection stage
-`run_retention_preflight`): loaded-sparse replay retains a materialized clone of every saved
-taken-path op output (one `Op.out` clone per `(call, output_slot_id)` whose op the capture saved,
-at bind, plus one reconstruct clone per model-`output` slot) for the life of the returned trace,
-so the SUM of those recorded op-output bytes is a guaranteed lower bound on replay memory. An op
-the capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved
-slot whose producing call projects (FakeTensor, contiguous operands from the recorded shapes) as a
-pure view of its operands allocates nothing and is admitted past the budget, but only up to
-`2**32` logical elements, which bounds the work of every op that reads it; past both it refuses at
-`op_allocation_preflight` with fields `logical_elements` and `logical_element_ceiling`. At bind,
-each realized output the run does not copy is held to the same rule before any consumer runs
-(detection stage `op_allocation_execution`, same fields), so a size literal inflated without its
-recorded slot cannot hand an unbounded view to the next op. A descriptor whose per-device floor
-exceeds the device budget could never complete on this host and is refused typed at `run_retention_preflight` before
+`run_retention_preflight`): loaded-sparse replay keeps every taken-path op output alive in its
+slot values until the run ends (plus an `Op.out` clone for each op the capture saved), and one
+reconstruct clone per model-`output` slot for the life of the returned trace, so one charge per
+op output plus one per model output is a guaranteed lower bound on replay memory. An op the
+capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved slot
+is admitted past the budget only when its producer is a view op (indexing, `select`, `narrow`,
+`permute`, `transpose`, `expand`, `broadcast_to`, `split`, `chunk`, `unbind`, `view` and the like),
+the projection (FakeTensor, contiguous operands from the recorded shapes, no real-kernel fallback)
+shows it aliases an operand, and every op that reads it is either such a view op whose outputs are
+proven views too or a reduction or elementwise op measured not to copy a stride-0 operand (`sum`,
+`mean`, `amax`, `amin`, `prod`, `norm`, `var`, `std`, `add`, `mul`, `exp`, `relu`). A view read by
+any other op (`median`, `max`, `argmax`, `mm`, `matmul`, `unique`, `sort`, ...) keeps its full
+logical charge, because those kernels copy their operand where FakeTensor cannot see it. Admitted
+views own no storage, so the retention floor does not charge them, and they share one ceiling of
+`2**32` logical elements per run, which bounds the work of the ops that read them; past it the run
+refuses at `op_allocation_preflight` with fields `logical_elements` and `logical_element_ceiling`.
+A call producing an admitted view must pass its run-time projection: where any other call fails
+open (no size source, FakeTensor unavailable, a non-allocation projection error), it is refused at
+`op_allocation_preflight`. At bind, each realized output the run does not copy is held to the
+`2**32` rule before any consumer runs (detection stage `op_allocation_execution`, same fields), so
+a size literal inflated without its recorded slot cannot hand an unbounded view to the next op. A
+descriptor whose per-device floor exceeds the device budget could never complete on this host and is refused typed at `run_retention_preflight` before
 any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
 individually-feasible output slots together exhaust the host, each passing the per-slot bound and
 each clone passing its per-clone byte guard. A long trace with many small outputs is still never

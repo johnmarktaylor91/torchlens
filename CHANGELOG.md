@@ -321,8 +321,12 @@
   trace, `Op.out` is now `None` for every op the capture did not save, since the capture kept no
   activation for it either (the capture's own `Op.out` raises `PayloadUnavailableError` there).
   Before, such ops showed a value the capture never had. Capture with `save=` covering an op to
-  read its activation from a run. An unsaved view whose logical size exceeds both the memory
-  budget and 2**32 elements is still refused, since every op that reads it touches each element.
+  read its activation from a run. An unsaved view is admitted past the memory budget only when
+  its producer is a view op and every op that reads it does not copy it (indexing, `sum`,
+  `mean`, elementwise ops); a view read by `median`, `max`, `mm`, `unique` and similar ops, which
+  copy their operand internally, is still charged and refused at its full size. A run's
+  admitted views share a ceiling of 2**32 logical elements, and the retention floor still
+  charges every op output the run keeps alive, saved or not.
 
 - **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
   now compares against the inventory observed on tinygrad's current default device (CPU or

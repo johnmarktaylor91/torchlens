@@ -37,10 +37,11 @@ takes the total past the ceiling is refused, as every such view was before view-
 charging.
 """
 
-#: Ops whose output is always a view of their tensor operand, whatever its strides, and
-#: which never copy a stride-0 operand (measured on torch 2.1.2 and 2.13.0). Only such an
-#: op may PRODUCE an admitted view: ``reshape``/``flatten``/``contiguous`` alias on the
-#: contiguous fakes of the run-prep proof but copy a real strided operand.
+#: Ops whose output is a view of a stride-0 operand, measured by peak RSS on a 128 MiB
+#: expanded tensor on torch 2.1.2 and 2.13.0 (function and method forms share one ATen
+#: kernel). Only such an op may PRODUCE an admitted view: ``reshape``/``flatten``/
+#: ``contiguous`` alias on the contiguous fakes of the run-prep proof but copy a real
+#: strided operand, so they are absent.
 _VIEW_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "__getitem__"),
     ("Tensor", "select"),
@@ -75,11 +76,12 @@ _VIEW_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "view"),
 )
 
-#: Ops that read a stride-0 operand without copying it (measured on torch 2.1.2 and
-#: 2.13.0): reductions and elementwise ops whose own output slot is charged normally.
-#: FakeTensor cannot see a kernel's internal temporaries, so a view read by any op outside
-#: this list and ``_VIEW_OPS`` (``median``, ``mm``, ``unique``, ``sort``) keeps its logical
-#: charge. Closed list: add an op only with a measurement on both torch versions.
+#: Ops that read a stride-0 operand without copying it, measured the same way:
+#: reductions, and elementwise ops whose own output slot is charged normally. FakeTensor
+#: cannot see a kernel's internal temporaries, so a view read by any op outside this list
+#: and ``_VIEW_OPS`` keeps its logical charge; ``median``, ``max``, ``argmax``, ``any``,
+#: ``mm``, ``matmul``, ``unique`` and ``sort`` were measured copying the full operand.
+#: Closed list: add an op only with a measurement on both torch versions.
 _STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "sum"),
     ("torch", "sum"),
@@ -395,15 +397,19 @@ def _check_unretained_extent(
     )
 
 
-def _unprovable_admitted_view_error(call: Any) -> RunCapabilityUnavailableError:
-    """Refusal for a call producing an admitted view whose run-time projection failed.
+def _fail_open_unless_admitted(
+    call: Any, ceiling: Any | None, cause: BaseException | None = None
+) -> None:
+    """Let an unprojected call fail open, unless it produces an admitted view.
 
-    Run-prep admitted the call's output past the budget on its view proof alone, so the
-    run-time projection is its only pre-execution check; when that cannot run, the call
-    is refused instead of executed unbounded.
+    Run-prep admitted such a call's output past the budget on its view proof alone, so
+    the run-time projection is its only pre-execution check; when that cannot run, the
+    call is refused at ``op_allocation_preflight`` instead of executed unbounded.
     """
 
-    return RunCapabilityUnavailableError(
+    if ceiling is None or not ceiling.produces_admitted_view(call):
+        return
+    raise RunCapabilityUnavailableError(
         f"Sparse call {call.call_id!r} produces a view admitted past the memory budget, "
         "but its allocation could not be projected before execution; an unprojected "
         "call cannot be admitted under the fail-closed budget contract. The descriptor "
@@ -412,4 +418,4 @@ def _unprovable_admitted_view_error(call: Any) -> RunCapabilityUnavailableError:
         detection_stage="op_allocation_preflight",
         call_id=call.call_id,
         affected_op_labels=tuple(call.op_labels),
-    )
+    ) from cause
