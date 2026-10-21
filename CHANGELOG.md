@@ -319,6 +319,12 @@
   whose remedy names `libgvplugin-neato-layout8` and `vis_node_placement='dot'`, instead of a bare
   `RuntimeError: neato rendering failed`.
 
+- **backward**: on torch builds whose autograd nodes get a fresh Python wrapper per access (torch
+  2.7, for one), a plain `.backward()` or `torch.autograd.grad` could fail to find the captures its
+  graph reaches, so the pass went unobserved (`backward_status` read `grad_enabled_unobserved`) and
+  live gradient edits on it never fired. Seen with two captures in one backward and with a
+  `create_graph=True` second-order backward.
+
 - **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
   folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
   an earlier pass kept its capture-time tensor.
