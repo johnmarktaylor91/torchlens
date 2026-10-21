@@ -170,9 +170,12 @@ def test_escrow_bound_refuses_on_every_device(device: str):
     torch.manual_seed(0)
     model = _Net().to(device).eval()
     x = torch.randn(4, 16, device=device)
-    with _budgets(ram_bytes=1, spill_bytes=256), torch.no_grad():
-        with pytest.raises(SaveBudgetExceededError) as excinfo:
-            tl.trace(model, x, save=tl.module("b") | tl.func("relu"))
+    with (
+        _budgets(ram_bytes=1, spill_bytes=256),
+        torch.no_grad(),
+        pytest.raises(SaveBudgetExceededError) as excinfo,
+    ):
+        tl.trace(model, x, save=tl.module("b") | tl.func("relu"))
     fields = excinfo.value.fields
     assert fields["code"] == "escrow_budget_exceeded"
     assert fields["budget_bytes"] == 256
@@ -187,9 +190,12 @@ def test_bounded_module_escrow_fits_the_same_bound_on_every_device(device: str):
     model = _Net().to(device).eval()
     x = torch.randn(4, 16, device=device)
     full = tl.trace(model, x)
-    with _budgets(ram_bytes=1, spill_bytes=256), torch.no_grad():
-        with pytest.warns(TorchLensWarning):
-            trace = tl.trace(model, x, save=tl.module("b"))
+    with (
+        _budgets(ram_bytes=1, spill_bytes=256),
+        torch.no_grad(),
+        pytest.warns(TorchLensWarning),
+    ):
+        trace = tl.trace(model, x, save=tl.module("b"))
     assert torch.equal(trace.modules["b"].out, full.modules["b"].out)
 
 
