@@ -1557,7 +1557,141 @@ def test_geometric_ladder_scoped_to_value_discretizing_children() -> None:
         "step_down",
         "unit_step_up",
         "unit_step_down",
+        "lift_min_entry",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Saturated softmax: every uniform step is a null probe for a shift-invariant
+# child, so only the random draw could move a one-hot argmax.
+# ---------------------------------------------------------------------------
+
+
+class _SaturatedSoftmax(nn.Module):
+    """``softmax(fc(x) * 1000)`` -- the toy model's one-hot softmax."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.nn.functional.softmax(self.fc(x) * 1000, dim=-1)
+
+
+def _saturated_softmax_case(batch: int = 4) -> tuple[nn.Module, torch.Tensor]:
+    torch.manual_seed(0)
+    model = _SaturatedSoftmax()
+    return model, torch.rand(batch, 4)
+
+
+def test_saturated_softmax_validates_for_the_unlucky_ci_seed() -> None:
+    """PIN: validation seed 2165740343 drew a perturbation that kept every argmax.
+
+    The step retries all shift every entry equally, which leaves softmax
+    unchanged, so the real ``mul -> softmax`` edge false-FAILed
+    ``perturbation_insensitive`` (CI randomly seed 3122933370). The
+    ``lift_min_entry`` retry moves an argmax and proves the edge.
+    """
+
+    model, x = _saturated_softmax_case()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(model, x, random_seed=2165740343) is True
+
+
+def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
+    """The uniform retries cannot move a saturated softmax; the lift always can."""
+
+    from torchlens.validation.core import (
+        _execute_func_with_restored_state,
+        _perturbation_retry_strategies,
+        _prepare_input_args_for_validating_layer,
+    )
+
+    model, x = _saturated_softmax_case()
+    trace, _ = _capture(model, x)
+    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    parent_label = softmax_op.parents[0]
+    assert "lift_min_entry" in _perturbation_retry_strategies(softmax_op, [parent_label])
+    changed = {}
+    for strategy in ("step_up", "step_down", "unit_step_up", "unit_step_down", "lift_min_entry"):
+        args, _ = _prepare_input_args_for_validating_layer(
+            trace, softmax_op, [parent_label], perturb_strategy=strategy
+        )
+        assert args is not None
+        out = _execute_func_with_restored_state(
+            softmax_op, args, [parent_label], softmax_op.label, False
+        )
+        changed[strategy] = not torch.equal(out, softmax_op.out)
+    assert changed == {
+        "step_up": False,
+        "step_down": False,
+        "unit_step_up": False,
+        "unit_step_down": False,
+        "lift_min_entry": True,
+    }
+
+
+def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
+    """The lift changes exactly one entry, to a strict maximum, and keeps dtype."""
+
+    from torchlens.validation.core import _directional_step_perturb
+
+    tensor = torch.tensor([[3.0, -2.0], [5.0, 1.0]], dtype=torch.float16)
+    lifted = _directional_step_perturb(tensor, "lift_min_entry")
+    assert lifted.dtype == torch.float16
+    assert (lifted != tensor).sum().item() == 1
+    assert lifted[0, 1].item() == 5.0 + 7.0
+    constant = torch.zeros(3)
+    assert _directional_step_perturb(constant, "lift_min_entry").tolist() == [1.0, 0.0, 0.0]
+    # Non-floating parents and unrepresentable lifts take the minimal step.
+    integers = torch.tensor([1, 2])
+    assert torch.equal(_directional_step_perturb(integers, "lift_min_entry"), integers + 1)
+    huge = torch.tensor([-3.0e38, 3.0e38])
+    assert torch.equal(
+        _directional_step_perturb(huge, "lift_min_entry"),
+        _directional_step_perturb(huge, "step_up"),
+    )
+
+
+def test_lift_retry_still_fails_a_disconnected_softmax_parent() -> None:
+    """Armed-proof: the lift cannot bless a softmax whose parent is dead.
+
+    Freeze the softmax replay to return its saved out whatever its input:
+    no draw, step or lift can change it, so the tripwire must still fire
+    ``perturbation_insensitive`` for the same unlucky seed's model.
+    """
+
+    from torchlens.validation.core import (
+        _check_whether_func_on_saved_parents_yields_saved_tensor,
+    )
+
+    model, x = _saturated_softmax_case()
+    trace, _ = _capture(model, x)
+    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    saved = softmax_op.out.detach().clone()
+    object.__setattr__(softmax_op, "func", lambda *args, **kwargs: saved.clone())
+
+    result = _check_whether_func_on_saved_parents_yields_saved_tensor(
+        trace, softmax_op.label, perturb=True, layers_to_perturb=[softmax_op.parents[0]]
+    )
+    assert result.decision == "failed"
+    assert result.reason == "perturbation_insensitive"
+
+
+def test_disconnected_softmax_parent_fails_public_validation() -> None:
+    """Armed-proof, full pipeline: a softmax whose replay ignores its parent fails."""
+
+    model, x = _saturated_softmax_case()
+    trace, ground_truth = _capture(model, x)
+    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    saved = softmax_op.out.detach().clone()
+    object.__setattr__(softmax_op, "func", lambda *args, **kwargs: saved.clone())
+    status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+    assert status.state == "failed"
+    assert any(
+        decision.get("reason") == "perturbation_insensitive" for decision in status.decisions
+    )
 
 
 def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None:
