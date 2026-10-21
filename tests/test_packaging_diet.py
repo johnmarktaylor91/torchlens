@@ -724,7 +724,8 @@ def test_graphviz_jobs_run_on_a_fixed_ubuntu_image() -> None:
     into dozens of unrelated test failures.
     """
 
-    yaml = pytest.importorskip("yaml")
+    import yaml
+
     floating = []
     for path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
         jobs = yaml.safe_load(path.read_text()).get("jobs", {})
