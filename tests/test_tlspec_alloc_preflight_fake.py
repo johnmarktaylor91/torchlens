@@ -53,7 +53,13 @@ from torchlens.errors import (
     RunCapabilityUnavailableError,
     RuntimeSignatureDriftError,
 )
-from torchlens.runnable import LiteralAtom, LiteralAtomKind, LiteralSequence, LiteralSequenceKind
+from torchlens.runnable import (
+    LiteralAtom,
+    LiteralAtomKind,
+    LiteralSequence,
+    LiteralSequenceKind,
+    LiteralTorchSymbol,
+)
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
@@ -498,6 +504,13 @@ class _NucNormOfView(nn.Module):
         return x.expand(10**7, 4).norm(p="nuc") + x.sum()
 
 
+class _SumToFloat64OfView(nn.Module):
+    """A huge unsaved view read by ``sum(dtype=torch.float64)``, which casts a full copy."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).sum(dtype=torch.float64) + x.sum()
+
+
 class _SumAndMedianOfView(nn.Module):
     """A huge unsaved view read by ``sum`` and ``median`` (the alias tamper's base)."""
 
@@ -575,6 +588,7 @@ def test_genuinely_huge_view_model_runs_verified(
         (_MedianOfView, tl.func("sum")),
         (_MmOfView, tl.func("sum")),
         (_NucNormOfView, tl.func("sum")),
+        (_SumToFloat64OfView, tl.func("sum")),
     ],
     ids=[
         "materializing_op",
@@ -582,6 +596,7 @@ def test_genuinely_huge_view_model_runs_verified(
         "view_read_by_median",
         "view_read_by_mm",
         "view_read_by_nuc_norm",
+        "view_read_by_sum_to_float64",
     ],
 )
 def test_huge_materialized_slot_still_refused(
@@ -590,8 +605,8 @@ def test_huge_materialized_slot_still_refused(
     """A slot that really materializes past the budget is still refused at run-prep,
     before any op executes, charged its full 160 MB: a materializing op (``* 2.0``), a
     huge view the capture saved, whose ``Op.out`` copy the run makes, or an unsaved huge
-    view read by an op that copies it internally (``median``, ``mm``, ``norm(p="nuc")``),
-    which FakeTensor cannot see."""
+    view read by an op that copies it internally (``median``, ``mm``, ``norm(p="nuc")``,
+    ``sum(dtype=torch.float64)``), which FakeTensor cannot see."""
 
     _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
@@ -759,6 +774,7 @@ def _admission_call(
     writes: tuple[str, ...] = (),
     out: str | None = None,
     inplace: bool = False,
+    dtype: str | None = None,
 ) -> Any:
     arguments = [
         types.SimpleNamespace(slot_id=slot_id, argument_path=("args", index))
@@ -766,9 +782,17 @@ def _admission_call(
     ]
     if out is not None:
         arguments.append(types.SimpleNamespace(slot_id=out, argument_path=("kwargs", "out")))
+    literals = ()
+    if dtype is not None:
+        literals = (
+            types.SimpleNamespace(
+                argument_path=("kwargs", "dtype"), value=LiteralTorchSymbol(dtype)
+            ),
+        )
     return types.SimpleNamespace(
         call_id=call_id,
         tensor_arguments=tuple(arguments),
+        literal_arguments=literals,
         output_slot_ids=writes,
         is_inplace=inplace,
     )
@@ -813,14 +837,23 @@ def test_view_admission_control_streaming_reader_admitted(
 
 
 @pytest.mark.parametrize(
-    "route", ["cuda_view", "reader_through_alias", "out_reader", "inplace_reader", "norm_reader"]
+    "route",
+    [
+        "cuda_view",
+        "reader_through_alias",
+        "out_reader",
+        "inplace_reader",
+        "norm_reader",
+        "dtype_reader",
+    ],
 )
 def test_view_admission_refuses_hidden_copy_routes(
     monkeypatch: pytest.MonkeyPatch, route: str
 ) -> None:
     """Each route that can hide a full-size copy of a view keeps the view charged: a view
     off CPU (the reader lists were measured on CPU), a copying reader of a version alias,
-    a listed reader writing ``out=`` or in place, and ``norm`` (an SVD for ``p="nuc"``)."""
+    a listed reader writing ``out=`` or in place, ``norm`` (an SVD for ``p="nuc"``), and a
+    listed reduction given a dtype (it casts a full-size copy first)."""
 
     view = _admission_slot("s:view", device_type="cuda" if route == "cuda_view" else "cpu")
     extra: tuple[Any, ...] = ()
@@ -836,6 +869,9 @@ def test_view_admission_refuses_hidden_copy_routes(
         reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), inplace=True)
     elif route == "norm_reader":
         reader_op = ("Tensor", "norm")
+    elif route == "dtype_reader":
+        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), dtype="float64")
+        reader_op = ("torch", "sum")
     assert not _admits(monkeypatch, view, extra, reader, reader_op)
 
 

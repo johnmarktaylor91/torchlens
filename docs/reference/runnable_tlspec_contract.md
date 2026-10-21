@@ -1286,7 +1286,8 @@ the projection (FakeTensor, contiguous operands from the recorded shapes, no rea
 shows it aliases an operand, and every op that reads it, directly or through a version alias of it,
 is either such a view op whose outputs are proven views too or a reduction or elementwise op
 measured not to copy a stride-0 operand (`sum`, `mean`, `amax`, `amin`, `prod`, `var`, `std`,
-`add`, `mul`, `exp`, `relu`) that writes a fresh output (no `out=`, not in place). A view read by
+`add`, `mul`, `exp`, `relu`) that writes a fresh output (no `out=`, not in place) and is given no
+dtype (`sum`, `mean` and `prod` with `dtype=` cast a full-size copy of the operand first). A view read by
 any other op (`median`, `max`, `argmax`, `mm`, `matmul`, `norm`, `unique`, `sort`, ...) keeps its
 full logical charge, because those kernels copy their operand where FakeTensor cannot see it; so
 does a view read by an `out=` or in-place op, whose real output is resized to the view's full size

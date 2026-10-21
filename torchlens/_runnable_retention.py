@@ -20,6 +20,7 @@ import torch
 
 from .errors import RunCapabilityUnavailableError
 from .runnable import (
+    LiteralTorchSymbol,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
@@ -84,7 +85,9 @@ _VIEW_OPS: tuple[tuple[str, str], ...] = (
 #: ``mm``, ``matmul``, ``unique`` and ``sort`` were measured copying the full operand.
 #: ``norm`` is absent: a string or matrix order runs an SVD on a copy. A listed op
 #: qualifies only with a fresh output (no ``out=``, not in place): an ``out=`` tensor is
-#: resized to the full broadcast size, which the projection sees as an alias.
+#: resized to the full broadcast size, which the projection sees as an alias. It also
+#: qualifies only without a dtype argument: ``sum``/``mean``/``prod`` with ``dtype=``
+#: were measured casting the whole operand into a full-size copy first.
 #: Closed list: add an op only with a measurement on both torch versions.
 _STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "sum"),
@@ -258,7 +261,7 @@ def _reader_keeps_view(
 ) -> bool:
     """Whether one reader of an admitted view is known not to copy it."""
 
-    if _writes_caller_tensor(call):
+    if _writes_caller_tensor(call) or _names_dtype(call):
         return False
     func = callables.get(call.call_id)
     if _is_listed(func, state["streaming_ops"]):
@@ -281,6 +284,19 @@ def _writes_caller_tensor(call: Any) -> bool:
 
     return bool(call.is_inplace) or any(
         tuple(argument.argument_path[:2]) == ("kwargs", "out") for argument in call.tensor_arguments
+    )
+
+
+def _names_dtype(call: Any) -> bool:
+    """Whether a call passes a dtype (``dtype=``, or any torch-symbol literal).
+
+    A reduction given a dtype casts its whole operand first, a full-size copy of a view.
+    """
+
+    return any(
+        tuple(argument.argument_path[:2]) == ("kwargs", "dtype")
+        or isinstance(argument.value, LiteralTorchSymbol)
+        for argument in call.literal_arguments
     )
 
 
