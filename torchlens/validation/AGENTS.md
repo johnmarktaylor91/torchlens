@@ -23,7 +23,7 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
-| `_shift_probe.py` | `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
+| `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
 | `_live_model_state.py` | Live-model restore that writes only when a validation run changed the state (bit-exact compare against the snapshot), and reattaches the caller's `.grad` objects, so parameter/buffer version counters and a graph held across `tl.validate` survive |
