@@ -58,7 +58,16 @@ def _scores(model, dtype: torch.dtype):
 
     model = copy.deepcopy(model).to(dtype).eval()
     model.set_attn_implementation("eager")
-    trace = tl.trace(model, _tokens(), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    # The taught two-forward route: a metadata capture plans the attention
+    # interiors head_scores reads, then the recapture saves only those.
+    # Saving every activation of this batch crossed the default save budget
+    # on a CI runner.
+    meta = tl.trace(model, _tokens(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    try:
+        plan = tl.mechinterp.retention_plan(meta, "head_scores")
+    finally:
+        meta.cleanup()
+    trace = tl.trace(model, _tokens(), save=plan.predicate)
     try:
         kind = tl.mechinterp.FixedPeriodInduction(period=50)
         return tl.mechinterp.head_scores(trace, kind=kind, measure="mul")
