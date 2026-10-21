@@ -450,10 +450,26 @@ def test_untampered_factory_model_runs_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
-def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
+#: The host allocation budget the huge-view run sees: 4 GiB, a fixed figure above the
+#: 1.6 GB the run-prep output-slot bound charges the view's recorded slot. The live
+#: budget is the host's available memory, which varies run to run on shared runners.
+_HUGE_VIEW_HOST_BUDGET_BYTES = 4 << 30
+
+
+def test_genuinely_huge_view_model_runs_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
     VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
 
+    import torchlens._runnable_call_arguments as call_arguments
+    import torchlens._runnable_state as runnable_state
+
+    def fixed_budget(device: torch.device) -> int:
+        return _HUGE_VIEW_HOST_BUDGET_BYTES
+
+    for module in (runnable_state, rex, call_arguments):
+        monkeypatch.setattr(module, "_allocation_budget_bytes", fixed_budget)
     x = torch.randn(1, 4)
     # Retain only the scalar sums: the runnable save is tensor-value-free, and the default
     # exhaustive capture would materialize a contiguous copy of the 4e8-element view
