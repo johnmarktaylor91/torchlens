@@ -26,7 +26,14 @@ from torchlens.validation.core import (
 )
 
 #: The strategies validation applies to a float running_var parent of a float batch_norm.
-STRATEGIES = ["default", "step_up", "step_down", "unit_step_up", "unit_step_down"]
+STRATEGIES = [
+    "default",
+    "step_up",
+    "step_down",
+    "unit_step_up",
+    "unit_step_down",
+    "lift_min_entry",
+]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:

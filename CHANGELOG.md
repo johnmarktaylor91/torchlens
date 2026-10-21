@@ -313,6 +313,11 @@
 
 ### Bug Fixes
 
+- **validation**: `validate_forward_pass` no longer fails, for some random seeds, on a correct
+  capture of a saturated softmax (for example `softmax(logits * 1000)`, whose output is one-hot).
+  Its retries all shifted every input entry equally, which leaves softmax unchanged, so only the
+  random draw could prove the edge. A new retry lifts one entry above the rest, which moves the
+  argmax; a parent that truly does not feed the op still fails.
 - **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
   folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
   an earlier pass kept its capture-time tensor.

@@ -70,6 +70,7 @@ from ._replay_device import (
     saved_args_on_consumed_devices,
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
+from ._shift_probe import lift_min_entry_values
 from ._source_provenance import check_source_provenance
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
@@ -4008,6 +4009,7 @@ def _op_is_value_discretizing(layer: Op) -> bool:
 
 
 _INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
+_LIFT_MIN_ENTRY_STRATEGY = "lift_min_entry"
 
 
 def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[str, ...]:
@@ -4052,13 +4054,15 @@ def _perturbation_retry_strategies(
     list of str
         Minimal representable steps first (least likely to violate a child
         op's input domain), then the paired up/down unit steps (round-34
-        Finding B). Only when the child is a value-discretizing op does the
-        ladder continue to geometrically growing magnitudes, so any finite
-        TRUNCATION dead zone is eventually crossed while fp-swamped float
-        arithmetic keeps its realistic-step behavior and the
-        ``ulp_swamped_perturbation`` exemption. The retry loop returns on the
-        first strategy that changes the child output, so later rungs only
-        run while the edge still looks non-influential.
+        Finding B), then the non-uniform ``lift_min_entry`` probe for
+        shift-invariant children such as a saturated softmax. Only when the
+        child is a value-discretizing op does the ladder continue to
+        geometrically growing magnitudes, so any finite TRUNCATION dead zone
+        is eventually crossed while fp-swamped float arithmetic keeps its
+        realistic-step behavior and the ``ulp_swamped_perturbation``
+        exemption. The retry loop returns on the first strategy that changes
+        the child output, so later rungs only run while the edge still looks
+        non-influential.
     """
 
     if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb or ()):
@@ -4088,10 +4092,20 @@ def _value_retry_strategies(layer: Op) -> list[str]:
     Returns
     -------
     list of str
-        Minimal steps, unit steps, then the bool or discretizing ladders.
+        Minimal steps, unit steps, the single-entry lift, then the bool or
+        discretizing ladders.
     """
 
-    strategies = ["step_up", "step_down", "unit_step_up", "unit_step_down"]
+    # The four steps shift every entry equally, a null probe for a
+    # shift-invariant child (a saturated softmax); ``lift_min_entry`` is the
+    # non-uniform rung that can move its argmax (``_shift_probe.py``).
+    strategies = [
+        "step_up",
+        "step_down",
+        "unit_step_up",
+        "unit_step_down",
+        _LIFT_MIN_ENTRY_STRATEGY,
+    ]
     if getattr(layer, "dtype", None) == torch.bool:
         # R08: a bool-output child is a THRESHOLD op — small steps routinely
         # fail to cross it, which the blanket ``discrete_bool_output``
@@ -4145,7 +4159,8 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
     strategy:
         ``"step_up"``, ``"step_down"``, ``"unit_step_up"``, or
         ``"unit_step_down"``, the latter two optionally suffixed with
-        ``:<magnitude>`` (e.g. ``"unit_step_up:100"``).
+        ``:<magnitude>`` (e.g. ``"unit_step_up:100"``); or ``"lift_min_entry"``
+        (``_shift_probe.lift_min_entry_values``).
 
     Returns
     -------
@@ -4180,6 +4195,9 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
             return torch.full_like(tensor, float("nan"))
         return _directional_step_perturb(tensor, "step_up")
 
+    if strategy == _LIFT_MIN_ENTRY_STRATEGY:
+        lifted = lift_min_entry_values(tensor)
+        return lifted if lifted is not None else _directional_step_perturb(tensor, "step_up")
     if strategy.startswith(("unit_step_up", "unit_step_down")):
         base_strategy, _, magnitude_text = strategy.partition(":")
         magnitude = float(magnitude_text) if magnitude_text else 1.0
