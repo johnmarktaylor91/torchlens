@@ -202,14 +202,13 @@ def test_address_preflight_output_and_ordinal_deferred():
 @pytest.mark.parametrize(
     "selector",
     [
-        lambda: tl.module("conv1") & tl.func("relu"),
         lambda: ~tl.module("conv1"),
         lambda: tl.module("conv1") | tl.func("relu"),
     ],
-    ids=["module_and_func", "not_module", "module_or_func"],
+    ids=["not_module", "module_or_func"],
 )
 def test_address_preflight_mixed_module_selector_deferred(selector):
-    """A selector mixing ``tl.module`` with other terms escrows every op."""
+    """``tl.module`` joined with a non-module term by ``|``, or negated, escrows every op."""
 
     report = address_preflight(selector())
     (verdict,) = report.verdicts
@@ -222,12 +221,13 @@ def test_address_preflight_mixed_module_selector_deferred(selector):
     [
         lambda: tl.module("conv1"),
         lambda: tl.module("conv1") | tl.module("conv2"),
+        lambda: tl.module("conv1") & tl.func("relu"),
         lambda: tl.func("relu"),
     ],
-    ids=["module", "module_union", "func"],
+    ids=["module", "module_union", "module_and_func", "func"],
 )
 def test_address_preflight_pure_module_union_and_func_live(selector):
-    """A pure ``tl.module`` union and a selector without module terms stay live."""
+    """Module-bounded selectors (``|`` unions, ``&`` intersections) and non-module ones stay live."""
 
     report = address_preflight(selector())
     (verdict,) = report.verdicts
