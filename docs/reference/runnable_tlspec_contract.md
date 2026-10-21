@@ -1279,14 +1279,18 @@ slot values until the run ends (plus an `Op.out` clone for each op the capture s
 reconstruct clone per model-`output` slot for the life of the returned trace, so one charge per
 op output plus one per model output is a guaranteed lower bound on replay memory. An op the
 capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved slot
-is admitted past the budget only when its producer is a view op (indexing, `select`, `narrow`,
+is admitted past the budget only when it lives on CPU (where the reader lists were measured), its
+producer is a view op (indexing, `select`, `narrow`,
 `permute`, `transpose`, `expand`, `broadcast_to`, `split`, `chunk`, `unbind`, `view` and the like),
 the projection (FakeTensor, contiguous operands from the recorded shapes, no real-kernel fallback)
-shows it aliases an operand, and every op that reads it is either such a view op whose outputs are
-proven views too or a reduction or elementwise op measured not to copy a stride-0 operand (`sum`,
-`mean`, `amax`, `amin`, `prod`, `norm`, `var`, `std`, `add`, `mul`, `exp`, `relu`). A view read by
-any other op (`median`, `max`, `argmax`, `mm`, `matmul`, `unique`, `sort`, ...) keeps its full
-logical charge, because those kernels copy their operand where FakeTensor cannot see it. Admitted
+shows it aliases an operand, and every op that reads it, directly or through a version alias of it,
+is either such a view op whose outputs are proven views too or a reduction or elementwise op
+measured not to copy a stride-0 operand (`sum`, `mean`, `amax`, `amin`, `prod`, `var`, `std`,
+`add`, `mul`, `exp`, `relu`) that writes a fresh output (no `out=`, not in place). A view read by
+any other op (`median`, `max`, `argmax`, `mm`, `matmul`, `norm`, `unique`, `sort`, ...) keeps its
+full logical charge, because those kernels copy their operand where FakeTensor cannot see it; so
+does a view read by an `out=` or in-place op, whose real output is resized to the view's full size
+where the projection sees an alias, and every view off CPU. Admitted
 views own no storage, so the retention floor does not charge them, and they share one ceiling of
 `2**32` logical elements per run, which bounds the work of the ops that read them; past it the run
 refuses at `op_allocation_preflight` with fields `logical_elements` and `logical_element_ceiling`.

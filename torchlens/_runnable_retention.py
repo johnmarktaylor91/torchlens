@@ -4,8 +4,9 @@ Loaded-sparse replay snapshots ``Op.out`` only for ops the capture saved, plus e
 model output; every op output also stays alive in the run's slot values until the run
 ends. The retention floor sums them. A pure view the run does not copy
 (``expand``/``broadcast_to``/``as_strided``) owns no storage, so it is admitted past the
-memory budget, bounded instead by a fixed logical extent, but only when its producer is
-a view op and every op that reads it is known not to copy it.
+memory budget, bounded instead by a fixed logical extent, but only on CPU and only when
+its producer is a view op and every op that reads it, directly or through a version
+alias, is known not to copy it.
 """
 
 from __future__ import annotations
@@ -76,11 +77,14 @@ _VIEW_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "view"),
 )
 
-#: Ops that read a stride-0 operand without copying it, measured the same way:
+#: Ops that read a stride-0 operand without copying it, measured the same way on CPU:
 #: reductions, and elementwise ops whose own output slot is charged normally. FakeTensor
 #: cannot see a kernel's internal temporaries, so a view read by any op outside this list
 #: and ``_VIEW_OPS`` keeps its logical charge; ``median``, ``max``, ``argmax``, ``any``,
 #: ``mm``, ``matmul``, ``unique`` and ``sort`` were measured copying the full operand.
+#: ``norm`` is absent: a string or matrix order runs an SVD on a copy. A listed op
+#: qualifies only with a fresh output (no ``out=``, not in place): an ``out=`` tensor is
+#: resized to the full broadcast size, which the projection sees as an alias.
 #: Closed list: add an op only with a measurement on both torch versions.
 _STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "sum"),
@@ -93,8 +97,6 @@ _STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
     ("torch", "amin"),
     ("Tensor", "prod"),
     ("torch", "prod"),
-    ("Tensor", "norm"),
-    ("torch", "norm"),
     ("Tensor", "var"),
     ("torch", "var"),
     ("Tensor", "std"),
@@ -155,9 +157,10 @@ def _unretained_view_lookup(
 ) -> Callable[[TensorSlotDescriptor], bool] | None:
     """Return the lookup proving a slot is an unretained pure view, if callables resolve.
 
-    A slot qualifies only if the run does not retain it, its producer is in
-    ``_VIEW_OPS``, every call reading it is in ``_VIEW_OPS`` or ``_STREAMING_READER_OPS``,
-    and the projection proves the producer's output aliases an operand. The lookup
+    A slot qualifies only if it lives on CPU (the reader lists were measured there), the
+    run does not retain it, its producer is in ``_VIEW_OPS``, every call reading it or a
+    version alias of it is in ``_VIEW_OPS`` or ``_STREAMING_READER_OPS``, and the
+    projection proves the producer's output aliases an operand. The lookup
     builds its projector only when asked, and decides each slot at most once, so a run
     within budget pays nothing for it.
     """
@@ -171,7 +174,7 @@ def _unretained_view_lookup(
     def lookup(slot: TensorSlotDescriptor) -> bool:
         """Decide one slot at most once, building the projector on first use."""
 
-        if slot.slot_id in retained_slot_ids:
+        if slot.device_type != "cpu" or slot.slot_id in retained_slot_ids:
             return False
         if slot.slot_id not in decided:
             if not state:
@@ -190,10 +193,11 @@ def _view_admission_state(
     from ._runnable_execution import _pure_view_projector
 
     producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
-    readers: dict[str, list[Any]] = defaultdict(list)
+    direct_readers: dict[str, list[Any]] = defaultdict(list)
     for call in descriptor.calls:
         for argument in call.tensor_arguments:
-            readers[argument.slot_id].append(call)
+            direct_readers[argument.slot_id].append(call)
+    readers = _readers_through_version_aliases(descriptor, direct_readers)
     view_ops = _resolved_ops(_VIEW_OPS)
     return {
         "slots": {slot.slot_id: slot for slot in descriptor.tensor_slots},
@@ -203,6 +207,34 @@ def _view_admission_state(
         "streaming_ops": _resolved_ops(_STREAMING_READER_OPS),
         "projector": _pure_view_projector(descriptor, callables),
     }
+
+
+def _readers_through_version_aliases(
+    descriptor: SparseRunDescriptor, direct_readers: Mapping[str, list[Any]]
+) -> dict[str, list[Any]]:
+    """Map each slot to the calls reading it directly or through any version alias.
+
+    Bind writes a produced value into every version-alias slot of it (``version_of`` and
+    ``producer_slot_id`` both naming the producer), so a call reading an alias reads the
+    producer's value, whatever shape the alias records.
+    """
+
+    aliases: dict[str, list[str]] = defaultdict(list)
+    for slot in descriptor.tensor_slots:
+        if slot.version_of is not None and slot.version_of == slot.producer_slot_id:
+            aliases[slot.version_of].append(slot.slot_id)
+    readers: dict[str, list[Any]] = defaultdict(list)
+    for slot in descriptor.tensor_slots:
+        seen = {slot.slot_id}
+        pending = [slot.slot_id]
+        while pending:
+            current = pending.pop()
+            readers[slot.slot_id].extend(direct_readers.get(current, ()))
+            for alias in aliases.get(current, ()):
+                if alias not in seen:
+                    seen.add(alias)
+                    pending.append(alias)
+    return readers
 
 
 def _admits_view(
@@ -217,7 +249,11 @@ def _admits_view(
     """
 
     producer = state["producers"].get(slot.slot_id)
-    if producer is None or not _is_listed(callables.get(producer.call_id), state["view_ops"]):
+    if (
+        producer is None
+        or _writes_caller_tensor(producer)
+        or not _is_listed(callables.get(producer.call_id), state["view_ops"])
+    ):
         return False
     return bool(state["projector"](slot)) and all(
         _reader_keeps_view(call, callables, state) for call in state["readers"][slot.slot_id]
@@ -229,6 +265,8 @@ def _reader_keeps_view(
 ) -> bool:
     """Whether one reader of an admitted view is known not to copy it."""
 
+    if _writes_caller_tensor(call):
+        return False
     func = callables.get(call.call_id)
     if _is_listed(func, state["streaming_ops"]):
         return True
@@ -238,6 +276,18 @@ def _reader_keeps_view(
     return all(
         slot_id in slots and bool(state["projector"](slots[slot_id]))
         for slot_id in call.output_slot_ids
+    )
+
+
+def _writes_caller_tensor(call: Any) -> bool:
+    """Whether a call writes into a tensor the caller passed (in place, or ``out=``).
+
+    Such a call's output takes the caller tensor's storage, resized to whatever the op
+    produces, so the projection sees an alias where the real call may allocate in full.
+    """
+
+    return bool(call.is_inplace) or any(
+        tuple(argument.argument_path[:2]) == ("kwargs", "out") for argument in call.tensor_arguments
     )
 
 
@@ -300,10 +350,10 @@ def _preflight_retention_floor(
     slots = 160 GB floor > a 105 GB host budget). This refuses that typed at
     ``run_retention_preflight`` before any call executes.
 
-    The floor UNDER-counts true retention (it ignores live ``slot_values`` entries, raw
-    ``call_outputs``, attestation/witness snapshots) and the budget never under-estimates,
-    so ``floor > budget`` proves a guaranteed OOM -- a refusal can NEVER hit a completable
-    run (zero false refusals). A legit deep model whose cumulative retention is within
+    The floor UNDER-counts true retention (it leaves out the ``Op.out`` clone of each
+    saved op, raw ``call_outputs`` and attestation/witness snapshots) and the budget never
+    under-estimates, so ``floor > budget`` proves a guaranteed OOM -- a refusal can NEVER
+    hit a completable run (zero false refusals). A legit deep model whose cumulative retention is within
     budget (a deep-adds chain of small outputs) is untouched.
 
     ``admitted_view_slot_ids`` names the views run-prep admitted past the budget; they
