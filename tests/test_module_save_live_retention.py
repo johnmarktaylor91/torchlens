@@ -290,7 +290,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     "selector_factory",
     [
         pytest.param(lambda: tl.module("block") | tl.func("tanh"), id="module_or_func"),
-        pytest.param(lambda: ~tl.module("block") & tl.func("linear"), id="not_module_and_func"),
+        pytest.param(lambda: ~tl.module("block") & tl.func("relu"), id="not_module_and_func"),
     ],
 )
 def test_mixed_module_selectors_keep_per_op_escrow(selector_factory, monkeypatch):
