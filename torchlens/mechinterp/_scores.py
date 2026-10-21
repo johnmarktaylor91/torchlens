@@ -108,7 +108,8 @@ def _token_ids(trace: Any, seq_len: int) -> torch.Tensor:
     """Return the captured input token ids matching the pattern's length."""
 
     for label in getattr(trace, "input_ops", ()) or ():
-        op = label if hasattr(label, "out") else trace.ops[str(label)]
+        # ``hasattr(op, "out")`` raises, not False, when the payload was not saved.
+        op = trace.ops[label] if isinstance(label, str) else label
         try:
             value = getattr(op, "out", None)
         except PayloadUnavailableError:  # an unsaved input is no token stream
