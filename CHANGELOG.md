@@ -319,11 +319,12 @@
   whose remedy names `libgvplugin-neato-layout8` and `vis_node_placement='dot'`, instead of a bare
   `RuntimeError: neato rendering failed`.
 
-- **backward**: on torch builds whose autograd nodes get a fresh Python wrapper per access (torch
-  2.7, for one), a plain `.backward()` or `torch.autograd.grad` could fail to find the captures its
-  graph reaches, so the pass went unobserved (`backward_status` read `grad_enabled_unobserved`) and
-  live gradient edits on it never fired. Seen with two captures in one backward and with a
-  `create_graph=True` second-order backward.
+- **backward**: on torch 2.12 and earlier, where an autograd node can get a fresh Python wrapper
+  per access, a plain `.backward()` or `torch.autograd.grad` failed to find the captures its graph
+  reaches (a freed wrapper's address was reused by the next one and skipped as visited). Live
+  gradient edits through `intervene=` then gave wrong parameter gradients, and with two captures
+  in one backward or a `create_graph=True` second-order backward the pass went unobserved
+  (`backward_status` read `grad_enabled_unobserved`). torch 2.13 was not affected.
 - **mechinterp**: `tl.mechinterp.retention_plan(trace, "head_scores")` (and `"heads"`) now plans
   the attention interiors from a structure-only first capture (`layers_to_save="none"`), which
   before planned nothing, and `"head_scores"` also plans the model inputs whose token ids the
