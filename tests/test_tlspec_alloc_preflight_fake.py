@@ -72,7 +72,8 @@ class _HugeView(nn.Module):
     """A genuinely huge PURE VIEW (``expand`` of a size-1 dim) that allocates nothing.
 
     Its logical numel is enormous, but storage aliases the input, so the alloc
-    preflight must charge ZERO new bytes and never over-refuse it (r51 anti-pattern).
+    preflights must charge it only the bytes it really allocates and never over-refuse
+    it (r51 anti-pattern).
     """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
@@ -450,17 +451,22 @@ def test_untampered_factory_model_runs_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
-#: The host allocation budget the huge-view run sees: 4 GiB, a fixed figure above the
-#: 1.6 GB the run-prep output-slot bound charges the view's recorded slot. The live
-#: budget is the host's available memory, which varies run to run on shared runners.
-_HUGE_VIEW_HOST_BUDGET_BYTES = 4 << 30
+class _HugeMaterialized(nn.Module):
+    """The counter-case: the same kind of huge expand, then a real materializing op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(10**7, 4) * 2.0  # 4e7 elements, 160 MB really allocated
+        return wide[0].sum() + x.sum()
 
 
-def test_genuinely_huge_view_model_runs_verified(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
-    VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
+#: The host allocation budget the huge-view runs see: 64 MiB, fixed so the rows do not
+#: depend on the runner's free memory. It is far below the views' logical sizes (1.6 GB
+#: and 160 MB) and far above what an honest view really allocates (a few bytes).
+_HUGE_VIEW_HOST_BUDGET_BYTES = 64 << 20
+
+
+def _fix_host_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every module that reads the host allocation budget see the fixed figure."""
 
     import torchlens._runnable_call_arguments as call_arguments
     import torchlens._runnable_state as runnable_state
@@ -470,6 +476,17 @@ def test_genuinely_huge_view_model_runs_verified(
 
     for module in (runnable_state, rex, call_arguments):
         monkeypatch.setattr(module, "_allocation_budget_bytes", fixed_budget)
+
+
+def test_genuinely_huge_view_model_runs_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
+    VERIFIED under a budget far below the view's 1.6 GB logical size: the op allocates
+    nothing, the run-prep bounds charge the view what it really allocates, and the
+    retained ``Op.out`` snapshot keeps the broadcast dim instead of materializing it."""
+
+    _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
     # Retain only the scalar sums: the runnable save is tensor-value-free, and the default
     # exhaustive capture would materialize a contiguous copy of the 4e8-element view
@@ -478,6 +495,28 @@ def test_genuinely_huge_view_model_runs_verified(
     bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
+    expand_op = next(op for op in result.trace.layer_list if op.label.startswith("expand"))
+    snapshot = expand_op.out
+    assert tuple(snapshot.shape) == (10**8, 4)
+    assert snapshot.untyped_storage().nbytes() <= _HUGE_VIEW_HOST_BUDGET_BYTES
+    assert torch.equal(snapshot[12345], x[0])
+
+
+def test_huge_materialized_slot_still_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A slot that really materializes past the budget (``expand`` then ``* 2.0``, 160 MB)
+    is still refused at run-prep, before any op executes, charged its full size."""
+
+    _fix_host_budget(monkeypatch)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_mat.tlspec", _HugeMaterialized(), x, save=tl.func("sum"))
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
+    assert int(caught.value.fields["available_bytes"]) == _HUGE_VIEW_HOST_BUDGET_BYTES
 
 
 def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:

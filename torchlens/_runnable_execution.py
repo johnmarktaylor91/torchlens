@@ -41,7 +41,10 @@ from ._runnable_state import (
     PreparedRunnableState,
     RunResourceCeiling,
     _allocation_budget_bytes,
+    _compact_broadcast_numel,
     _guarded_defensive_materialize,
+    _slot_device,
+    _torch_dtype,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
     state_metadata_full_violations,
@@ -569,6 +572,12 @@ _input_storage_ids = _rebind_function(_runnable_call_arguments._input_storage_id
 _new_allocation_bytes = _rebind_function(_runnable_call_arguments._new_allocation_bytes, globals())
 _preflight_call_allocation = _rebind_function(
     _runnable_call_arguments._preflight_call_allocation, globals()
+)
+_view_snapshot_bytes_projector = _rebind_function(
+    _runnable_call_arguments._view_snapshot_bytes_projector, globals()
+)
+_projected_view_snapshot_bytes = _rebind_function(
+    _runnable_call_arguments._projected_view_snapshot_bytes, globals()
 )
 _execute_sparse_call = _rebind_function(_runnable_call_arguments._execute_sparse_call, globals())
 _populate_source_slots = _rebind_function(

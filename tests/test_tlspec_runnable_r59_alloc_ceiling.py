@@ -218,10 +218,10 @@ class _Nonzero(nn.Module):
 
 
 class _HugeView(nn.Module):
-    """A genuinely huge honest view whose materialized clone is still within budget."""
+    """A genuinely huge honest view; its retained snapshot keeps the broadcast dim."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
-        wide = x.expand(10**7, 4)  # 4e7 elems ~= 160 MB clone; honest, in-budget
+        wide = x.expand(10**7, 4)  # 4e7 elems ~= 160 MB logical, 16 B snapshot; honest
         return wide[0].sum() + x.sum()
 
 
@@ -411,8 +411,8 @@ def test_legit_many_output_and_decomposing_ops_run_verified(
 
 
 def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
-    """A real huge honest view (4e7-element ``expand``) whose materialized clone is within
-    budget replays VERIFIED -- the clone guard does not over-refuse an in-budget view."""
+    """A real huge honest view (4e7-element ``expand``) replays VERIFIED -- the clone
+    guard charges its broadcast-keeping snapshot, never the 160 MB logical view."""
 
     x = torch.randn(1, 4)
     bundle = _build(tmp_path, "hugeview.tlspec", _HugeView(), x)
