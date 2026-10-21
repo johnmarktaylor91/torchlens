@@ -1404,7 +1404,7 @@ def _replay_status_with_noisy_relu(action: str) -> str:
     original = relu_op.func
 
     def noisy(*args, **kwargs):
-        warnings.warn("replay-only warning", UserWarning)
+        warnings.warn("replay-only warning", UserWarning, stacklevel=2)
         return original(*args, **kwargs)
 
     noisy.__name__ = original.__name__
