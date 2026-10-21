@@ -267,13 +267,36 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
 
         return ConformanceMlp(), Tensor(_INPUT)
 
-    # tinygrad records its lazy-graph decomposition: each matmul is
-    # reshape/expand/mul/reduce, relu is cmplt/where, a bias is add, and the
-    # const/buffer/copy/_mop ops materialize the fixed weights.
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=(
+    # tinygrad records its lazy-graph decomposition, which differs by device, so
+    # each inventory is pinned for the device it was observed on. On CPU each
+    # matmul is reshape/expand/mul/reduce, relu is cmplt/where, a bias is add,
+    # and the const/buffer/copy/_mop ops materialize the fixed weights. On the
+    # PYTHON device (the one the replay and derived-grad oracles require, and
+    # the one CI runs) list data needs no copy, the movement ops arrive through
+    # tinygrad's _mop helper, the reduce through _rop, and mul, add and cmplt
+    # through lambdas, which is the name tinygrad hands the observer.
+    # Without tinygrad no case runs; the CPU lists keep that scorecard's denominator.
+    inventories = _TINYGRAD_INVENTORIES.get(_tinygrad_default_device() or "CPU")
+    fn_ops, module_ops = inventories if inventories is not None else (None, None)
+    return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops)
+
+
+def _tinygrad_default_device() -> str | None:
+    """tinygrad's default device name (``"CPU"``, ``"PYTHON"``, ...), else ``None``."""
+
+    try:
+        from tinygrad import Device
+    except ImportError:
+        return None
+    return str(Device.DEFAULT).split(":", 1)[0].upper()
+
+
+#: Observed tinygrad 0.13 op inventories per default device, as
+#: ``(fn_ops, module_ops)``. A device with no entry declares no inventory, so
+#: C1 does not run there rather than comparing against another device's list.
+_TINYGRAD_INVENTORIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "CPU": (
+        (
             "input",
             "const",
             "_mop",
@@ -297,7 +320,7 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
             "cmplt",
             "where",
         ),
-        module_ops=(
+        (
             "input",
             "const",
             "_mop",
@@ -344,7 +367,76 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
             "_mop",
             "add",
         ),
-    )
+    ),
+    "PYTHON": (
+        (
+            "input",
+            "const",
+            "_mop",
+            "const",
+            "const",
+            "_mop",
+            "buffer",
+            "const",
+            "const",
+            "_mop",
+            "_mop",
+            "buffer",
+            "reshape",
+            "_mop",
+            "_mop",
+            "_mop",
+            "<lambda>",
+            "_rop",
+            "_mop",
+            "<lambda>",
+            "where",
+        ),
+        (
+            "input",
+            "const",
+            "_mop",
+            "const",
+            "const",
+            "_mop",
+            "buffer",
+            "const",
+            "const",
+            "_mop",
+            "_mop",
+            "buffer",
+            "reshape",
+            "_mop",
+            "_mop",
+            "_mop",
+            "_mop",
+            "<lambda>",
+            "_rop",
+            "_mop",
+            "buffer",
+            "_mop",
+            "_mop",
+            "<lambda>",
+            "<lambda>",
+            "where",
+            "_mop",
+            "_mop",
+            "buffer",
+            "reshape",
+            "_mop",
+            "_mop",
+            "_mop",
+            "_mop",
+            "<lambda>",
+            "_rop",
+            "_mop",
+            "buffer",
+            "_mop",
+            "_mop",
+            "<lambda>",
+        ),
+    ),
+}
 
 
 def _roster_paddle() -> tuple[RosterModel, ...]:
@@ -387,8 +479,8 @@ def _rows(
     build_fn: Callable[[], tuple[Any, Any]],
     build_module: Callable[[], tuple[Any, Any]],
     *,
-    fn_ops: tuple[str, ...],
-    module_ops: tuple[str, ...],
+    fn_ops: tuple[str, ...] | None,
+    module_ops: tuple[str, ...] | None,
 ) -> tuple[RosterModel, ...]:
     """The two config-built roster rows every preview pack runs.
 
@@ -396,6 +488,7 @@ def _rows(
     its input ops and the op kinds its definition performs, in capture order,
     in the backend's naming (``Op.func_name``). Each list was checked against
     the model definition; a missing op is a capture defect, never a list edit.
+    ``None`` declares no inventory, so C1 does not run for that row.
     """
 
     return (

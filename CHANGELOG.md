@@ -313,6 +313,11 @@
 
 ### Bug Fixes
 
+- **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
+  now compares against the inventory observed on tinygrad's current default device (CPU or
+  PYTHON), instead of failing on the PYTHON device, which the tinygrad replay oracles require,
+  against the CPU inventory. A device with no observed inventory runs no inventory case.
+
 - **visualization**: a rank-layout render on a Graphviz without its neato layout plugin (Graphviz 14
   packaging on Debian forky and Ubuntu 26.04, where `apt install graphviz` leaves neato out) now
   raises `GraphvizUnavailableError` (code `graphviz_binary_unavailable`, still a `RuntimeError`)
