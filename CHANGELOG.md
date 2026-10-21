@@ -317,10 +317,12 @@
   capture saved (plus the model outputs), as the capture did. It used to copy out every op's
   output, so a run needed memory for activations the capture never kept, and a huge broadcast view
   such as `x.expand(10**8, 4)` of a 4-element `x` was refused (`op_allocation_preflight`) on a host
-  with less free memory than its 1.6 GB logical size. Ops the capture did not save now have no
-  `out` on the run's result trace; capture with `save=` covering them to read them. An unsaved
-  view whose logical size exceeds both the memory budget and 2**32 elements is still refused,
-  since every op that reads it touches each element.
+  with less free memory than its 1.6 GB logical size. Behavior change: on the run's result
+  trace, `Op.out` is now `None` for every op the capture did not save, since the capture kept no
+  activation for it either (the capture's own `Op.out` raises `PayloadUnavailableError` there).
+  Before, such ops showed a value the capture never had. Capture with `save=` covering an op to
+  read its activation from a run. An unsaved view whose logical size exceeds both the memory
+  budget and 2**32 elements is still refused, since every op that reads it touches each element.
 
 - **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
   now compares against the inventory observed on tinygrad's current default device (CPU or
