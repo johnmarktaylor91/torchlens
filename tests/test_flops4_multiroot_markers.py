@@ -55,16 +55,22 @@ def _out(trace: Any) -> torch.Tensor:
     return trace[trace.output_layers[0]].out
 
 
-def _graph_ids(root: torch.Tensor) -> set[int]:
-    """Object ids of every node reachable from ``root`` (raw torch state)."""
+def _graph_nodes(root: torch.Tensor) -> dict[int, Any]:
+    """Every node reachable from ``root`` (raw torch state), by object id.
 
-    seen: set[int] = set()
+    The nodes are held, not just their ids: ``next_functions`` can mint a fresh
+    wrapper per access (torch 2.7), so a wrapper held only by its id can be
+    freed and its address reused by the next one, and the ids would no longer
+    name the wrappers the capture later walks.
+    """
+
+    seen: dict[int, Any] = {}
     queue = [root.grad_fn]
     while queue:
         node = queue.pop()
         if node is None or id(node) in seen:
             continue
-        seen.add(id(node))
+        seen[id(node)] = node
         queue.extend(next_fn for next_fn, _ in node.next_functions)
     return seen
 
@@ -96,15 +102,15 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
     try:
         y1, y2 = _out(trace1), _out(trace2)
         root1, root2 = y1.sum(), y2.sum()
-        graph1, graph2 = _graph_ids(root1), _graph_ids(root2)
+        graph1, graph2 = _graph_nodes(root1), _graph_nodes(root2)
         with _activate_aten_recording_for_tests():
             if entry == "backward":
                 torch.autograd.backward([root1, root2])
             else:
                 params = [*first.parameters(), *second.parameters()]
                 torch.autograd.grad([root1, root2], params)
-        assert set(trace1.grad_fn_logs) == graph1
-        assert set(trace2.grad_fn_logs) == graph2
+        assert set(trace1.grad_fn_logs) == graph1.keys()
+        assert set(trace2.grad_fn_logs) == graph2.keys()
         cases = ((trace1, root1, 2 * 5 * 4 * 3), (trace2, root2, 2 * 5 * 3 * 2))
         for trace, root, closed_form in cases:
             (record,) = trace.backward_passes
@@ -133,9 +139,9 @@ def test_one_capture_with_two_roots_walks_both() -> None:
     try:
         y = _out(trace)
         root1, root2 = y.sum(), (y * 2).sum()
-        expected = _graph_ids(root1) | _graph_ids(root2)
+        expected = _graph_nodes(root1) | _graph_nodes(root2)
         torch.autograd.backward([root1, root2])
-        assert set(trace.grad_fn_logs) == expected
+        assert set(trace.grad_fn_logs) == expected.keys()
         (record,) = trace.backward_passes
         assert list(record.root_grad_fn_ids) == [id(root1.grad_fn), id(root2.grad_fn)]
         assert len(record.root_meta) == 2

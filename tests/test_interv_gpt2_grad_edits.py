@@ -143,13 +143,16 @@ def _hook_autograd_nodes(loss: torch.Tensor, node_type: str, fn: GradFn) -> None
         del grad_outputs
         return tuple(fn(grad) if grad is not None else None for grad in grad_inputs)
 
-    seen: set[int] = set()
+    # Visited nodes are held, not just their ids: ``next_functions`` can mint a
+    # fresh wrapper per access (torch 2.7), and a freed wrapper's address can be
+    # reused by the next one, which an id-only set would skip as visited.
+    seen: dict[int, Any] = {}
     stack = [loss.grad_fn]
     while stack:
         node = stack.pop()
         if node is None or id(node) in seen:
             continue
-        seen.add(id(node))
+        seen[id(node)] = node
         if type(node).__name__ == node_type:
             node.register_hook(_edit)
         stack.extend(child for child, _ in node.next_functions)
