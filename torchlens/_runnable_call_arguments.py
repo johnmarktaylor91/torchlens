@@ -393,7 +393,7 @@ def _pure_view_projector(
             return False
         try:
             return _projects_as_pure_view(call, func, slots, slot)
-        except Exception:  # noqa: BLE001 -- any projection failure keeps the logical charge.
+        except Exception:  # any projection failure keeps the logical charge
             return False
 
     return project

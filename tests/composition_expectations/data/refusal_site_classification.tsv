@@ -6,6 +6,9 @@
 # ratchet IN THE SAME CHANGE. Site keys are line-number-free (module:scope:class:factory:ordinal).
 # classification: CONTRACTED | INTERNAL | KNOWN-GAP
 site_key	classification	code	justification
+torchlens._runnable_retention:_check_unretained_extent:RunCapabilityUnavailableError::1	CONTRACTED	run_capability_unavailable	bind-time bound on a realized op output the run does not copy, past the budget and the 2**32 logical-element ceiling (stage op_allocation_execution); coded, documented in the runnable contract
+torchlens._runnable_retention:_preflight_retention_floor:RunCapabilityUnavailableError::1	CONTRACTED	run_capability_unavailable	r59 retention floor: summed retained clone bytes of saved ops and model outputs exceed the budget (stage run_retention_preflight); coded, documented in the runnable contract
+torchlens._runnable_retention:_refuse_view_past_logical_ceiling:RunCapabilityUnavailableError::1	CONTRACTED	run_capability_unavailable	run-prep per-slot bound on an unsaved pure view past both the memory budget and the 2**32 logical-element ceiling (stage op_allocation_preflight); coded, documented in the runnable contract
 torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported_claim:1	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._audit_claims:_claim_layer:AttributionError:_unsupported_claim:2	CONTRACTED	attribution_audit_claim_unsupported	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._audit_claims:_edit_factory:AttributionError:_setting_error:1	CONTRACTED	attribution_eval_setting_invalid	attribution evaluation battery: the causal audit of internal attributions; coded with a runnable Remedy and a contract-doc row

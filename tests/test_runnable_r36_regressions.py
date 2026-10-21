@@ -1224,6 +1224,7 @@ _COUPLED_WITNESS_EXEC_FILES = (
     "torchlens/_runnable_output_contracts.py",
     "torchlens/_runnable_path_faithfulness.py",
     "torchlens/_runnable_providers.py",
+    "torchlens/_runnable_retention.py",
     "torchlens/_runnable_state_context.py",
     "torchlens/_runnable_transaction.py",
     "torchlens/_runnable_verification.py",

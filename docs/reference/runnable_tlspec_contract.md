@@ -1281,8 +1281,12 @@ so the SUM of those recorded op-output bytes is a guaranteed lower bound on repl
 the capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved
 slot whose producing call projects (FakeTensor, contiguous operands from the recorded shapes) as a
 pure view of its operands allocates nothing and is admitted past the budget, but only up to
-`2**32` logical elements, which bounds the work of every op that reads it. A descriptor whose per-device floor exceeds the device
-budget could never complete on this host and is refused typed at `run_retention_preflight` before
+`2**32` logical elements, which bounds the work of every op that reads it; past both it refuses at
+`op_allocation_preflight` with fields `logical_elements` and `logical_element_ceiling`. At bind,
+each realized output the run does not copy is held to the same rule before any consumer runs
+(detection stage `op_allocation_execution`, same fields), so a size literal inflated without its
+recorded slot cannot hand an unbounded view to the next op. A descriptor whose per-device floor
+exceeds the device budget could never complete on this host and is refused typed at `run_retention_preflight` before
 any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
 individually-feasible output slots together exhaust the host, each passing the per-slot bound and
 each clone passing its per-clone byte guard. A long trace with many small outputs is still never
