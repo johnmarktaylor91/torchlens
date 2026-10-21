@@ -62,9 +62,22 @@ class _NaNModel(nn.Module):
 
 
 class _FrozenError(RuntimeError):
-    """An exception that rejects attribute assignment (partial_log included)."""
+    """An exception that rejects attribute assignment (partial_log included).
+
+    Like a real frozen exception (attrs ``frozen=True``), it still accepts the
+    attributes the interpreter and stdlib write while raising: from Python 3.11
+    ``contextlib`` sets ``__traceback__`` on an exception leaving a generator
+    context manager, and ``add_note`` sets ``__notes__``.
+    """
+
+    _INTERPRETER_ATTRS = frozenset(
+        {"__cause__", "__context__", "__suppress_context__", "__traceback__", "__notes__"}
+    )
 
     def __setattr__(self, name: str, value: Any) -> None:
+        if name in self._INTERPRETER_ATTRS:
+            super().__setattr__(name, value)
+            return
         raise AttributeError(f"{name} is read-only on this exception")
 
 
