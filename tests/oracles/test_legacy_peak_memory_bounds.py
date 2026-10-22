@@ -1,10 +1,10 @@
 """Outside-measurement bounds for ``Trace.forward_peak_memory`` and ``backward_peak_memory``.
 
 Each forward (or backward hook) plants a buffer of known size, writes every
-page, and frees it before returning: ``np.ones(8 * 2**20)`` is 64 MiB of
-float64, above glibc's 32 MiB mmap ceiling, so it is a fresh mapping whose
-resident growth is its full size. The test samples the process's resident set
-itself (``/proc/self/statm``, ``/proc/self/status``), independent of TorchLens.
+page, and frees it before returning: a private anonymous 64 MiB mapping
+(``_fresh_plant.touch_fresh_plant``), so its resident growth is its full size
+whatever earlier tests in the process left in the heap. The test samples the
+process's resident set itself (``/proc/self/statm``, ``/proc/self/status``), independent of TorchLens.
 A peak must include that buffer even though it is gone when the bracket ends.
 
 The margin, registered before these tests first ran, is 1 MiB on every CPU
@@ -20,9 +20,9 @@ import tracemalloc
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
+from _fresh_plant import touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
@@ -67,9 +67,9 @@ class Transient(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         SAMPLES["entry"] = _rss()
-        buffer = np.ones(PLANT)
+        buffer = touch_fresh_plant()
         SAMPLES["alive"] = _rss()
-        del buffer
+        buffer.close()
         return self.fc(x)
 
 
@@ -151,11 +151,12 @@ def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
     def plant(grad: torch.Tensor) -> None:
         if device == "cpu":
             samples["entry"].append(_rss())
-            buffer: Any = np.ones(PLANT)
+            region = touch_fresh_plant()
             samples["alive"].append(_rss())
+            region.close()
         else:
             buffer = torch.ones(2 * PLANT, device=device)  # float32: 64 MiB
-        del buffer
+            del buffer
 
     out.register_hook(plant)
     return trace, out

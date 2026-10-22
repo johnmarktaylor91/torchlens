@@ -5,7 +5,7 @@ Linux keeps the RSS counters per CPU. Where ``/proc`` reports the exact sum
 from the approximate total (``/proc/self/stat``), which leaves out each CPU's
 unfolded residue. These tests build a known residue (44 to 63 pages in each of
 the three RSS counters on every allowed CPU, left after that counter folds),
-pin the measurement to one CPU, plant a 64 MiB buffer and free it. The expected value is
+pin the measurement to one CPU, plant a fresh 64 MiB mapping and free it. The expected value is
 the test's own exact RSS growth around the plant (``statm``), never a TorchLens
 output. Before the lag correction the reported peak was the residue short
 (several MiB on a 32-CPU host). Hosts where the residue cannot be built (an
@@ -20,17 +20,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
+from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
 from torchlens.capture import peak_memory
 
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
-PLANT = 8 * 2**20  # float64 elements: 64 MiB, above glibc's mmap ceiling
-PLANT_BYTES = PLANT * 8
 MARGIN = 2**20
 #: Lag needed before the measurement: the margin plus room for the pinned
 #: CPU's own counter moving during the plant (under 64 pages per counter).
@@ -147,9 +145,9 @@ class Transient(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         SAMPLES["entry"] = _rss()
-        buffer = np.ones(PLANT)
+        buffer = touch_fresh_plant()
         SAMPLES["alive"] = _rss()
-        del buffer
+        buffer.close()
         return self.fc(x)
 
 
@@ -180,9 +178,9 @@ def _planted_trace(samples: dict[str, int]) -> tuple[Any, torch.Tensor]:
 
     def plant(grad: torch.Tensor) -> None:
         samples["entry"] = _rss()
-        buffer = np.ones(PLANT)
+        buffer = touch_fresh_plant()
         samples["alive"] = _rss()
-        del buffer
+        buffer.close()
 
     out.register_hook(plant)
     return trace, out
