@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from collections.abc import Callable, Collection, Mapping, Sequence
+from typing import Any, TypeAlias
 
 import torch
 
@@ -78,59 +78,82 @@ _VIEW_OPS: tuple[tuple[str, str], ...] = (
     ("Tensor", "view"),
 )
 
+_LiteralPosition: TypeAlias = tuple[str, int | str]
+"""A literal argument's top-level position: ``("args", index)`` or ``("kwargs", name)``."""
+
+_REDUCTION_FORMS: frozenset[_LiteralPosition] = frozenset(
+    {("args", 1), ("args", 2), ("kwargs", "dim"), ("kwargs", "keepdim")}
+)
+_VARIANCE_FORMS: frozenset[_LiteralPosition] = frozenset(
+    {("args", 1), ("kwargs", "dim"), ("kwargs", "correction"), ("kwargs", "keepdim")}
+)
+_SCALAR_OTHER_FORMS: frozenset[_LiteralPosition] = frozenset({("args", 1)})
+_ADD_FORMS: frozenset[_LiteralPosition] = frozenset({("args", 1), ("kwargs", "alpha")})
+_NO_LITERAL_FORMS: frozenset[_LiteralPosition] = frozenset()
+
 #: Ops that read a stride-0 operand without copying it, measured the same way on CPU:
 #: reductions, and elementwise ops whose own output slot is charged normally. FakeTensor
 #: cannot see a kernel's internal temporaries, so a view read by any op outside this list
 #: and ``_VIEW_OPS`` keeps its logical charge; ``median``, ``max``, ``argmax``, ``any``,
 #: ``mm``, ``matmul``, ``unique`` and ``sort`` were measured copying the full operand.
-#: ``norm`` is absent: a string or matrix order runs an SVD on a copy. A listed op
-#: qualifies only with a fresh output (no ``out=``, not in place): an ``out=`` tensor is
-#: resized to the full broadcast size, which the projection sees as an alias. It also
-#: qualifies only without a dtype argument: ``sum``/``mean``/``prod`` with ``dtype=``
-#: were measured casting the whole operand into a full-size copy first.
-#: Closed list: add an op only with a measurement on both torch versions.
-_STREAMING_READER_OPS: tuple[tuple[str, str], ...] = (
-    ("Tensor", "sum"),
-    ("torch", "sum"),
-    ("Tensor", "mean"),
-    ("torch", "mean"),
-    ("Tensor", "amax"),
-    ("torch", "amax"),
-    ("Tensor", "amin"),
-    ("torch", "amin"),
-    ("Tensor", "prod"),
-    ("torch", "prod"),
-    ("Tensor", "var"),
-    ("torch", "var"),
-    ("Tensor", "std"),
-    ("torch", "std"),
-    ("Tensor", "__add__"),
-    ("Tensor", "__radd__"),
-    ("Tensor", "add"),
-    ("torch", "add"),
-    ("Tensor", "__mul__"),
-    ("Tensor", "__rmul__"),
-    ("Tensor", "mul"),
-    ("torch", "mul"),
-    ("Tensor", "exp"),
-    ("torch", "exp"),
-    ("Tensor", "relu"),
-    ("torch", "relu"),
-)
+#: ``norm`` is absent: a string or matrix order runs an SVD on a copy. Each op maps to the
+#: literal argument positions it was measured with (``dim``/``keepdim``, ``correction``, a
+#: scalar ``other``, ``alpha``); a call passing a literal anywhere else keeps the charge,
+#: since an argument can turn a streaming read into a copy (``sum``/``mean``/``prod`` with
+#: ``dtype=`` were measured casting the whole operand first). A listed op also qualifies
+#: only with a fresh output (no ``out=``, not in place): an ``out=`` tensor is resized to
+#: the full broadcast size, which the projection sees as an alias.
+#: Closed list: add an op or a form only with a measurement on both torch versions.
+_STREAMING_READER_FORMS: dict[tuple[str, str], frozenset[_LiteralPosition]] = {
+    ("Tensor", "sum"): _REDUCTION_FORMS,
+    ("torch", "sum"): _REDUCTION_FORMS,
+    ("Tensor", "mean"): _REDUCTION_FORMS,
+    ("torch", "mean"): _REDUCTION_FORMS,
+    ("Tensor", "amax"): _REDUCTION_FORMS,
+    ("torch", "amax"): _REDUCTION_FORMS,
+    ("Tensor", "amin"): _REDUCTION_FORMS,
+    ("torch", "amin"): _REDUCTION_FORMS,
+    ("Tensor", "prod"): _REDUCTION_FORMS,
+    ("torch", "prod"): _REDUCTION_FORMS,
+    ("Tensor", "var"): _VARIANCE_FORMS,
+    ("torch", "var"): _VARIANCE_FORMS,
+    ("Tensor", "std"): _VARIANCE_FORMS,
+    ("torch", "std"): _VARIANCE_FORMS,
+    ("Tensor", "__add__"): _SCALAR_OTHER_FORMS,
+    ("Tensor", "__radd__"): _SCALAR_OTHER_FORMS,
+    ("Tensor", "add"): _ADD_FORMS,
+    ("torch", "add"): _ADD_FORMS,
+    ("Tensor", "__mul__"): _SCALAR_OTHER_FORMS,
+    ("Tensor", "__rmul__"): _SCALAR_OTHER_FORMS,
+    ("Tensor", "mul"): _SCALAR_OTHER_FORMS,
+    ("torch", "mul"): _SCALAR_OTHER_FORMS,
+    ("Tensor", "exp"): _NO_LITERAL_FORMS,
+    ("torch", "exp"): _NO_LITERAL_FORMS,
+    ("Tensor", "relu"): _NO_LITERAL_FORMS,
+    ("torch", "relu"): _NO_LITERAL_FORMS,
+}
 
 
 def _resolved_ops(entries: tuple[tuple[str, str], ...]) -> frozenset[Any]:
     """Resolve ``(namespace, name)`` entries to the unwrapped callables the resolver binds."""
 
+    return frozenset(_resolved_forms(dict.fromkeys(entries, _NO_LITERAL_FORMS)))
+
+
+def _resolved_forms(
+    entries: Mapping[tuple[str, str], frozenset[_LiteralPosition]],
+) -> dict[Any, frozenset[_LiteralPosition]]:
+    """Resolve ``(namespace, name)`` keys to unwrapped callables, keeping their forms."""
+
     from ._io.runnable_load import _unwrap_decorated
     from .utils._torch_symbols import torch_attr
 
-    resolved: set[Any] = set()
-    for namespace, name in entries:
+    resolved: dict[Any, frozenset[_LiteralPosition]] = {}
+    for (namespace, name), forms in entries.items():
         found = torch_attr(name) if namespace == "torch" else getattr(torch.Tensor, name, None)
         if found is not None:
-            resolved.add(_unwrap_decorated(found))
-    return frozenset(resolved)
+            resolved[_unwrap_decorated(found)] = forms
+    return resolved
 
 
 def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> frozenset[str]:
@@ -162,7 +185,7 @@ def _unretained_view_lookup(
 
     A slot qualifies only if it lives on CPU (the reader lists were measured there), the
     run does not retain it, its producer is in ``_VIEW_OPS``, every call reading it or a
-    version alias of it is in ``_VIEW_OPS`` or ``_STREAMING_READER_OPS``, and the
+    version alias of it is in ``_VIEW_OPS`` or ``_STREAMING_READER_FORMS``, and the
     projection proves the producer's output aliases an operand. The lookup
     builds its projector only when asked, and decides each slot at most once, so a run
     within budget pays nothing for it.
@@ -207,7 +230,7 @@ def _view_admission_state(
         "producers": producers,
         "readers": readers,
         "view_ops": view_ops,
-        "streaming_ops": _resolved_ops(_STREAMING_READER_OPS),
+        "streaming_ops": _resolved_forms(_STREAMING_READER_FORMS),
         "projector": _pure_view_projector(descriptor, callables),
     }
 
@@ -265,7 +288,10 @@ def _reader_keeps_view(
         return False
     func = callables.get(call.call_id)
     if _is_listed(func, state["streaming_ops"]):
-        return True
+        measured = state["streaming_ops"][func]
+        return all(
+            tuple(argument.argument_path[:2]) in measured for argument in call.literal_arguments
+        )
     if not _is_listed(func, state["view_ops"]):
         return False
     slots = state["slots"]
@@ -300,7 +326,7 @@ def _names_dtype(call: Any) -> bool:
     )
 
 
-def _is_listed(func: Any, ops: frozenset[Any]) -> bool:
+def _is_listed(func: Any, ops: Collection[Any]) -> bool:
     """Whether a resolved callable is one of ``ops`` (an unhashable callable never is)."""
 
     try:

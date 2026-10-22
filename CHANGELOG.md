@@ -325,8 +325,8 @@
   when its producer is a view op and every op that reads it, directly or through a version alias,
   does not copy it (indexing, `sum`, `mean`, elementwise ops with a fresh output); a view read by
   `median`, `max`, `mm`, `norm`, `unique` and similar ops, which copy their operand internally, or
-  by an op writing `out=` or in place or given a `dtype`, is still charged and refused at its
-  full size, as is any view off CPU. A run's admitted views share a ceiling of 2**32 logical
+  by an op writing `out=` or in place or passing an argument it was not measured with (such as
+  `dtype=`), is still charged and refused at its full size, as is any view off CPU. A run's admitted views share a ceiling of 2**32 logical
   elements, and the retention floor still charges every op output the run keeps alive, saved or
   not.
 

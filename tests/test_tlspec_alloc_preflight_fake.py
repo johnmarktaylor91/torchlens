@@ -776,6 +776,7 @@ def _admission_call(
     out: str | None = None,
     inplace: bool = False,
     dtype: str | None = None,
+    literal_paths: tuple[tuple[str, int | str], ...] = (),
 ) -> Any:
     arguments = [
         types.SimpleNamespace(slot_id=slot_id, argument_path=("args", index))
@@ -783,9 +784,12 @@ def _admission_call(
     ]
     if out is not None:
         arguments.append(types.SimpleNamespace(slot_id=out, argument_path=("kwargs", "out")))
-    literals = ()
+    literals = tuple(
+        types.SimpleNamespace(argument_path=path, value=LiteralAtom(LiteralAtomKind.INT, 1))
+        for path in literal_paths
+    )
     if dtype is not None:
-        literals = (
+        literals += (
             types.SimpleNamespace(
                 argument_path=("kwargs", "dtype"), value=LiteralTorchSymbol(dtype)
             ),
@@ -827,6 +831,27 @@ def _admits(
     return lookup(view)
 
 
+def test_view_admission_admits_measured_reader_forms(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A listed reader passing only measured literal forms (``sum(v, dim, keepdim=...)``,
+    ``add(v, 1.0, alpha=...)``) keeps the view admitted."""
+
+    view = _admission_slot("s:view")
+    sum_reader = _admission_call(
+        "c:read",
+        reads=("s:view",),
+        writes=("s:out",),
+        literal_paths=(("args", 1), ("kwargs", "keepdim")),
+    )
+    assert _admits(monkeypatch, view, (), sum_reader, ("torch", "sum"))
+    add_reader = _admission_call(
+        "c:read",
+        reads=("s:view",),
+        writes=("s:out",),
+        literal_paths=(("args", 1), ("kwargs", "alpha")),
+    )
+    assert _admits(monkeypatch, view, (), add_reader, ("torch", "add"))
+
+
 def test_view_admission_control_streaming_reader_admitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -846,6 +871,7 @@ def test_view_admission_control_streaming_reader_admitted(
         "inplace_reader",
         "norm_reader",
         "dtype_reader",
+        "unmeasured_reader_argument",
     ],
 )
 def test_view_admission_refuses_hidden_copy_routes(
@@ -854,7 +880,8 @@ def test_view_admission_refuses_hidden_copy_routes(
     """Each route that can hide a full-size copy of a view keeps the view charged: a view
     off CPU (the reader lists were measured on CPU), a copying reader of a version alias,
     a listed reader writing ``out=`` or in place, ``norm`` (an SVD for ``p="nuc"``), and a
-    listed reduction given a dtype (it casts a full-size copy first)."""
+    listed reduction given a dtype (it casts a full-size copy first), and a listed reader
+    passing any literal argument outside the forms it was measured with."""
 
     view = _admission_slot("s:view", device_type="cuda" if route == "cuda_view" else "cpu")
     extra: tuple[Any, ...] = ()
@@ -870,6 +897,11 @@ def test_view_admission_refuses_hidden_copy_routes(
         reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), inplace=True)
     elif route == "norm_reader":
         reader_op = ("Tensor", "norm")
+    elif route == "unmeasured_reader_argument":
+        reader = _admission_call(
+            "c:read", reads=("s:view",), writes=("s:out",), literal_paths=(("kwargs", "bogus"),)
+        )
+        reader_op = ("torch", "sum")
     elif route == "dtype_reader":
         reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), dtype="float64")
         reader_op = ("torch", "sum")
