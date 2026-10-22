@@ -21,6 +21,7 @@ nesting-depth guard (C4).
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import resource
@@ -37,6 +38,7 @@ import torch.nn.functional as F
 
 import torchlens as tl
 import torchlens._runnable_execution as rex
+from tests.test_tlspec_runnable_alloc_bomb import _tamper
 from torchlens._runnable_execution import (
     _MAX_DECODE_NESTING_DEPTH,
     _decode_literal,
@@ -46,8 +48,19 @@ from torchlens._runnable_execution import (
     _new_allocation_bytes,
     _preflight_call_allocation,
 )
-from torchlens.errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
-from torchlens.runnable import LiteralAtom, LiteralAtomKind, LiteralSequence, LiteralSequenceKind
+from torchlens.errors import (
+    PayloadUnavailableError,
+    RunCapabilityUnavailableError,
+    RunnableTLSPECError,
+    RuntimeSignatureDriftError,
+)
+from torchlens.runnable import (
+    LiteralAtom,
+    LiteralAtomKind,
+    LiteralSequence,
+    LiteralSequenceKind,
+    LiteralTorchSymbol,
+)
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
@@ -72,7 +85,8 @@ class _HugeView(nn.Module):
     """A genuinely huge PURE VIEW (``expand`` of a size-1 dim) that allocates nothing.
 
     Its logical numel is enormous, but storage aliases the input, so the alloc
-    preflight must charge ZERO new bytes and never over-refuse it (r51 anti-pattern).
+    preflights must charge it only the bytes the run really allocates and never
+    over-refuse it (r51 anti-pattern).
     """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
@@ -450,17 +464,86 @@ def test_untampered_factory_model_runs_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
-#: The host allocation budget the huge-view run sees: 4 GiB, a fixed figure above the
-#: 1.6 GB the run-prep output-slot bound charges the view's recorded slot. The live
-#: budget is the host's available memory, which varies run to run on shared runners.
-_HUGE_VIEW_HOST_BUDGET_BYTES = 4 << 30
+class _HugeMaterialized(nn.Module):
+    """The counter-case: the same kind of huge expand, then a real materializing op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(10**7, 4) * 2.0  # 4e7 elements, 160 MB really allocated
+        return wide[0].sum() + x.sum()
 
 
-def test_genuinely_huge_view_model_runs_verified(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
-    VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
+class _HugeSavedView(nn.Module):
+    """The counter-case for retention: a huge view the capture saves is copied out."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(10**7, 4)  # 4e7 elements; its saved ``Op.out`` copy is 160 MB
+        return wide[0].sum() + x.sum()
+
+
+class _MedianOfView(nn.Module):
+    """A huge unsaved view read by ``median``, which copies its operand internally."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).median() + x.sum()
+
+
+class _MmOfView(nn.Module):
+    """A huge unsaved view read by ``mm``: BLAS repacks a stride-0 operand."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(4, 1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return torch.mm(x.expand(10**7, 4), self.weight).sum() + x.sum()
+
+
+class _NucNormOfView(nn.Module):
+    """A huge unsaved view read by ``norm(p="nuc")``, which runs an SVD on a copy."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).norm(p="nuc") + x.sum()
+
+
+class _SumToFloat64OfView(nn.Module):
+    """A huge unsaved view read by ``sum(dtype=torch.float64)``, which casts a full copy."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).sum(dtype=torch.float64) + x.sum()
+
+
+class _SumAndMedianOfView(nn.Module):
+    """A huge unsaved view read by ``sum`` and ``median`` (the alias tamper's base)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(10**7, 4)
+        return wide.sum() + wide.median() + x.sum()
+
+
+class _AddOutOfView(nn.Module):
+    """A huge unsaved view read by ``torch.add(..., out=)``, which resizes ``out`` in full."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        out = torch.empty(0)
+        torch.add(x.expand(10**7, 4), 1.0, out=out)
+        return out[0].sum() + x.sum()
+
+
+class _TwoHugeViews(nn.Module):
+    """Two huge unsaved views, each admissible on its own, read by ``sum``."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        return x.expand(10**7, 4).sum() + x.expand(10**7, 4).sum() + x.sum()
+
+
+#: The host allocation budget the huge-view runs see: 64 MiB, fixed so the rows do not
+#: depend on the runner's free memory. It is far below the views' logical sizes (1.6 GB
+#: and 160 MB) and far above what an unsaved honest view really allocates (nothing).
+_HUGE_VIEW_HOST_BUDGET_BYTES = 64 << 20
+
+
+def _fix_host_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every module that reads the host allocation budget see the fixed figure."""
 
     import torchlens._runnable_call_arguments as call_arguments
     import torchlens._runnable_state as runnable_state
@@ -470,6 +553,17 @@ def test_genuinely_huge_view_model_runs_verified(
 
     for module in (runnable_state, rex, call_arguments):
         monkeypatch.setattr(module, "_allocation_budget_bytes", fixed_budget)
+
+
+def test_genuinely_huge_view_model_runs_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
+    VERIFIED under a budget far below the view's 1.6 GB logical size: the op allocates
+    nothing, the capture did not save the view so the run keeps no copy of it, and the
+    run-prep bounds charge it nothing."""
+
+    _fix_host_budget(monkeypatch)
     x = torch.randn(1, 4)
     # Retain only the scalar sums: the runnable save is tensor-value-free, and the default
     # exhaustive capture would materialize a contiguous copy of the 4e8-element view
@@ -478,6 +572,435 @@ def test_genuinely_huge_view_model_runs_verified(
     bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
+    ops = {op.label.split("_")[0]: op for op in result.trace.layer_list}
+    try:
+        expand_out = ops["expand"].out
+    except PayloadUnavailableError:
+        expand_out = None
+    assert expand_out is None  # unsaved at capture, so the run keeps no copy
+    assert isinstance(ops["sum"].out, torch.Tensor)  # saved ops keep their snapshot
+
+
+@pytest.mark.parametrize(
+    "factory, save",
+    [
+        (_HugeMaterialized, tl.func("sum")),
+        (_HugeSavedView, tl.func("expand")),
+        (_MedianOfView, tl.func("sum")),
+        (_MmOfView, tl.func("sum")),
+        (_NucNormOfView, tl.func("sum")),
+        (_SumToFloat64OfView, tl.func("sum")),
+    ],
+    ids=[
+        "materializing_op",
+        "saved_view",
+        "view_read_by_median",
+        "view_read_by_mm",
+        "view_read_by_nuc_norm",
+        "view_read_by_sum_to_float64",
+    ],
+)
+def test_huge_materialized_slot_still_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, factory: type[nn.Module], save: Any
+) -> None:
+    """A slot that really materializes past the budget is still refused at run-prep,
+    before any op executes, charged its full 160 MB: a materializing op (``* 2.0``), a
+    huge view the capture saved, whose ``Op.out`` copy the run makes, or an unsaved huge
+    view read by an op that copies it internally (``median``, ``mm``, ``norm(p="nuc")``,
+    ``sum(dtype=torch.float64)``), which FakeTensor cannot see."""
+
+    _fix_host_budget(monkeypatch)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_mat.tlspec", factory(), x, save=save)
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
+    assert int(caught.value.fields["available_bytes"]) == _HUGE_VIEW_HOST_BUDGET_BYTES
+
+
+@pytest.mark.parametrize("failure", ["no_size_source", "projection_raises"])
+def test_admitted_view_unprojectable_at_run_time_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """A call producing a view run-prep admitted past the budget has no recorded-output
+    bound behind it, so when its run-time projection cannot run (judged trivial, or the
+    projection raises a non-allocation error) it is refused before it executes, where
+    every other call fails open."""
+
+    _fix_host_budget(monkeypatch)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    loaded = tl.load(str(bundle))
+
+    def _raise_projection(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("no fake implementation")
+
+    if failure == "no_size_source":
+        monkeypatch.setattr(rex, "_projection_required_by_arguments", lambda *_a: False)
+    else:
+        monkeypatch.setattr(rex, "_tree_to_fake", _raise_projection)
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    labels = caught.value.fields.get("affected_op_labels") or ()
+    assert any(str(label).startswith("expand") for label in labels)
+
+
+def test_admitted_views_share_one_logical_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The view work ceiling bounds the admitted views of a run together: two views each
+    under it are refused once their sum passes it."""
+
+    import torchlens._runnable_retention as retention
+
+    _fix_host_budget(monkeypatch)
+    monkeypatch.setattr(retention, "_VIEW_LOGICAL_ELEMENT_CEILING", 6 * 10**7)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "two_views.tlspec", _TwoHugeViews(), x, save=tl.func("sum"))
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(caught.value.fields["logical_elements"]) == 2 * 4 * 10**7
+
+
+def test_view_proof_projection_runs_without_real_kernel_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run-prep view proof never lets FakeTensor fall back to a real kernel on
+    zero-filled operands of recorded, not yet bounded, shapes."""
+
+    _fix_host_budget(monkeypatch)
+    real_mode_class = rex._count_bounded_fake_tensor_mode_class()
+    assert real_mode_class is not None
+    seen: list[Any] = []
+
+    class _Recording(real_mode_class):  # type: ignore[misc,valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            seen.append(kwargs.get("allow_fallback_kernels", True))
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(rex, "_count_bounded_fake_tensor_mode_class", lambda: _Recording)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    result = tl.load(str(bundle)).run(inputs=x.clone())
+    assert result.report.path_faithfulness.value == "verified"
+    assert seen and seen[0] is False  # the first projection is the run-prep view proof
+
+
+def _calls_by_op(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Index a manifest's calls by the op name of their first label."""
+
+    return {call["op_labels"][0].split("_")[0]: call for call in run["calls"]}
+
+
+def _read_median_through_alias(manifest: dict[str, Any]) -> None:
+    """Point ``median`` at a crafted 1-element version alias of the ``expand`` view."""
+
+    run = manifest["run"]
+    calls = _calls_by_op(run)
+    view_id = calls["expand"]["output_slot_ids"][0]
+    median = calls["median"]
+    slots = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
+    alias = copy.deepcopy(slots[view_id])
+    alias.update(
+        slot_id=f"{view_id}:alias",
+        shape=[1],
+        rank=1,
+        version_of=view_id,
+        producer_slot_id=view_id,
+        use_sites=[],
+    )
+    for argument in median["tensor_arguments"]:
+        if argument["slot_id"] == view_id:
+            argument["slot_id"] = alias["slot_id"]
+            alias["use_sites"].append(
+                {"call_id": median["call_id"], "argument_path": argument["argument_path"]}
+            )
+    slots[view_id]["use_sites"] = [
+        site for site in slots[view_id]["use_sites"] if site["call_id"] != median["call_id"]
+    ]
+    run["tensor_slots"].append(alias)
+
+
+def _record_out_add_small(manifest: dict[str, Any]) -> None:
+    """Record every full-size slot but the ``expand`` view at a 4-element shape."""
+
+    run = manifest["run"]
+    view_id = _calls_by_op(run)["expand"]["output_slot_ids"][0]
+    for slot in run["tensor_slots"]:
+        if slot["slot_id"] != view_id and slot["shape"] == [10**7, 4]:
+            slot["shape"] = [1, 4]
+
+
+@pytest.mark.parametrize(
+    "factory, mutate",
+    [
+        (_SumAndMedianOfView, _read_median_through_alias),
+        (_AddOutOfView, _record_out_add_small),
+    ],
+    ids=["copying_reader_through_version_alias", "out_argument_resized_to_view"],
+)
+def test_crafted_hidden_copy_of_view_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, factory: type[nn.Module], mutate: Any
+) -> None:
+    """A crafted file cannot hide a full-size copy of an admitted view from run-prep: a
+    copying reader reached through a version alias of the view, or an ``out=`` reader
+    whose small recorded output the real call resizes to the view's size, keeps the view
+    charged in full and refused before any op executes."""
+
+    _fix_host_budget(monkeypatch)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "crafted.tlspec", factory(), x, save=tl.func("sum"))
+    _tamper(bundle, mutate)
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
+
+
+def _admission_slot(slot_id: str, device_type: str = "cpu", alias_of: str | None = None) -> Any:
+    return types.SimpleNamespace(
+        slot_id=slot_id, device_type=device_type, version_of=alias_of, producer_slot_id=alias_of
+    )
+
+
+def _admission_call(
+    call_id: str,
+    reads: tuple[str, ...] = (),
+    writes: tuple[str, ...] = (),
+    out: str | None = None,
+    inplace: bool = False,
+    dtype: str | None = None,
+    literal_paths: tuple[tuple[str, int | str], ...] = (),
+) -> Any:
+    arguments = [
+        types.SimpleNamespace(slot_id=slot_id, argument_path=("args", index))
+        for index, slot_id in enumerate(reads)
+    ]
+    if out is not None:
+        arguments.append(types.SimpleNamespace(slot_id=out, argument_path=("kwargs", "out")))
+    literals = tuple(
+        types.SimpleNamespace(argument_path=path, value=LiteralAtom(LiteralAtomKind.INT, 1))
+        for path in literal_paths
+    )
+    if dtype is not None:
+        literals += (
+            types.SimpleNamespace(
+                argument_path=("kwargs", "dtype"), value=LiteralTorchSymbol(dtype)
+            ),
+        )
+    return types.SimpleNamespace(
+        call_id=call_id,
+        tensor_arguments=tuple(arguments),
+        literal_arguments=literals,
+        output_slot_ids=writes,
+        is_inplace=inplace,
+    )
+
+
+def _resolved_op(namespace: str, name: str) -> Any:
+    from torchlens._runnable_retention import _resolved_ops
+
+    (func,) = _resolved_ops(((namespace, name),))
+    return func
+
+
+def _admits(
+    monkeypatch: pytest.MonkeyPatch,
+    view: Any,
+    extra_slots: tuple[Any, ...],
+    reader: Any,
+    reader_op: tuple[str, str],
+) -> bool:
+    """Decide ``view`` (produced by ``expand``) with the projection pinned to "is a view"."""
+
+    from torchlens._runnable_retention import _unretained_view_lookup
+
+    monkeypatch.setattr(rex, "_pure_view_projector", lambda _d, _c: lambda _slot: True)
+    producer = _admission_call("c:expand", writes=(view.slot_id,))
+    callables = {"c:expand": _resolved_op("Tensor", "expand"), "c:read": _resolved_op(*reader_op)}
+    trace = types.SimpleNamespace(_runnable=types.SimpleNamespace(callables_by_call_id=callables))
+    descriptor = types.SimpleNamespace(tensor_slots=(view, *extra_slots), calls=(producer, reader))
+    lookup = _unretained_view_lookup(trace, descriptor, frozenset())
+    assert lookup is not None
+    return lookup(view)
+
+
+def test_view_admission_admits_measured_reader_forms(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A listed reader passing only measured literal forms (``sum(v, dim, keepdim=...)``,
+    ``add(v, 1.0, alpha=...)``) keeps the view admitted."""
+
+    view = _admission_slot("s:view")
+    sum_reader = _admission_call(
+        "c:read",
+        reads=("s:view",),
+        writes=("s:out",),
+        literal_paths=(("args", 1), ("kwargs", "keepdim")),
+    )
+    assert _admits(monkeypatch, view, (), sum_reader, ("torch", "sum"))
+    add_reader = _admission_call(
+        "c:read",
+        reads=("s:view",),
+        writes=("s:out",),
+        literal_paths=(("args", 1), ("kwargs", "alpha")),
+    )
+    assert _admits(monkeypatch, view, (), add_reader, ("torch", "add"))
+
+
+def test_view_admission_control_streaming_reader_admitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The control for the routes below: a CPU view read only by ``sum`` is admitted."""
+
+    view = _admission_slot("s:view")
+    reader = _admission_call("c:read", reads=("s:view",), writes=("s:sum",))
+    assert _admits(monkeypatch, view, (), reader, ("torch", "sum"))
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "cuda_view",
+        "reader_through_alias",
+        "out_reader",
+        "inplace_reader",
+        "norm_reader",
+        "dtype_reader",
+        "unmeasured_reader_argument",
+    ],
+)
+def test_view_admission_refuses_hidden_copy_routes(
+    monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    """Each route that can hide a full-size copy of a view keeps the view charged: a view
+    off CPU (the reader lists were measured on CPU), a copying reader of a version alias,
+    a listed reader writing ``out=`` or in place, ``norm`` (an SVD for ``p="nuc"``), and a
+    listed reduction given a dtype (it casts a full-size copy first), and a listed reader
+    passing any literal argument outside the forms it was measured with."""
+
+    view = _admission_slot("s:view", device_type="cuda" if route == "cuda_view" else "cpu")
+    extra: tuple[Any, ...] = ()
+    reader_op = ("torch", "add")
+    reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",))
+    if route == "reader_through_alias":
+        extra = (_admission_slot("s:alias", alias_of="s:view"),)
+        reader = _admission_call("c:read", reads=("s:alias",), writes=("s:out",))
+        reader_op = ("torch", "median")
+    elif route == "out_reader":
+        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), out="s:buf")
+    elif route == "inplace_reader":
+        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), inplace=True)
+    elif route == "norm_reader":
+        reader_op = ("Tensor", "norm")
+    elif route == "unmeasured_reader_argument":
+        reader = _admission_call(
+            "c:read", reads=("s:view",), writes=("s:out",), literal_paths=(("kwargs", "bogus"),)
+        )
+        reader_op = ("torch", "sum")
+    elif route == "dtype_reader":
+        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), dtype="float64")
+        reader_op = ("torch", "sum")
+    assert not _admits(monkeypatch, view, extra, reader, reader_op)
+
+
+def _alias_slot(slots: dict[str, dict[str, Any]], target_id: str, slot_id: str) -> dict[str, Any]:
+    """A crafted unread version alias of ``target_id``, recorded at the target's shape."""
+
+    alias = copy.deepcopy(slots[target_id])
+    alias.update(slot_id=slot_id, version_of=target_id, producer_slot_id=target_id, use_sites=[])
+    return alias
+
+
+def _alias_of_alias(manifest: dict[str, Any]) -> None:
+    """Hang a two-level version-alias chain off the ``expand`` view."""
+
+    run = manifest["run"]
+    view_id = _calls_by_op(run)["expand"]["output_slot_ids"][0]
+    slots = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
+    first = _alias_slot(slots, view_id, f"{view_id}:alias")
+    slots[first["slot_id"]] = first
+    run["tensor_slots"] += [first, _alias_slot(slots, first["slot_id"], f"{view_id}:alias2")]
+
+
+def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
+    """Bind writes a produced value only into its direct version aliases, so a file whose
+    alias names another alias is refused at load, which keeps the run's alias maps one
+    level deep (a crafted chain cannot make run-prep quadratic). The parse refusal is
+    the load's readiness diagnostic, and the run refuses before any op executes."""
+
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "alias_chain.tlspec", _HugeView(), x, save=tl.func("sum"))
+    _tamper(bundle, _alias_of_alias)
+    loaded = tl.load(str(bundle))
+    readiness = loaded.readiness
+    assert readiness is not None and readiness.status.value != "ready"
+    diagnostics = " ".join(f"{d.code.value} {d.message}" for d in readiness.diagnostics)
+    assert "context_field_invalid" in diagnostics and "one level deep" in diagnostics
+    with pytest.raises(RunnableTLSPECError):
+        loaded.run(inputs=x.clone())
+
+
+def test_alias_reader_map_is_linear_in_slots() -> None:
+    """The view-admission reader map holds one entry per read and per direct alias read,
+    however long a version-alias chain the descriptor carries."""
+
+    from torchlens._runnable_retention import _readers_through_version_aliases
+
+    chain = 2000
+    slots = [_admission_slot("s:a0")] + [
+        _admission_slot(f"s:a{index}", alias_of=f"s:a{index - 1}") for index in range(1, chain)
+    ]
+    readers = {
+        "s:a0": [_admission_call("c:head", reads=("s:a0",))],
+        f"s:a{chain - 1}": [_admission_call("c:tail", reads=(f"s:a{chain - 1}",))],
+    }
+    descriptor = types.SimpleNamespace(tensor_slots=tuple(slots))
+    mapped = _readers_through_version_aliases(descriptor, readers)
+    assert sum(len(calls) for calls in mapped.values()) <= 2 * len(readers)
+
+
+def test_admitted_view_realized_off_cpu_refused_at_bind() -> None:
+    """A view admitted past the budget as a CPU view whose realized value is on another
+    device (the recorded label lied) is refused at bind, before any reader runs; an
+    unadmitted output there, or an admitted one on CPU, passes."""
+
+    from torchlens._runnable_retention import _check_unretained_extent
+
+    labels = {"call_id": "c:expand", "slot_id": "s:view"}
+    _check_unretained_extent(torch.empty(4, device="meta"), **labels)
+    _check_unretained_extent(torch.empty(4), admitted_view=True, **labels)
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        _check_unretained_extent(torch.empty(4, device="meta"), admitted_view=True, **labels)
+    assert caught.value.fields.get("detection_stage") == "op_allocation_execution"
+    assert caught.value.fields.get("device") == "meta"
+
+
+def test_bind_tells_the_extent_check_which_outputs_are_admitted_views(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bind passes run-prep's admission to the extent check, so the device check above
+    applies to exactly the admitted views."""
+
+    _fix_host_budget(monkeypatch)
+    real_check = rex._check_unretained_extent
+    admitted_by_slot: dict[str, bool] = {}
+
+    def recording_check(value: torch.Tensor, **kwargs: Any) -> None:
+        admitted_by_slot[str(kwargs["slot_id"])] = bool(kwargs.get("admitted_view", False))
+        real_check(value, **kwargs)
+
+    monkeypatch.setattr(rex, "_check_unretained_extent", recording_check)
+    x = torch.randn(1, 4)
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
+    result = tl.load(str(bundle)).run(inputs=x.clone())
+    assert result.report.path_faithfulness.value == "verified"
+    admitted = sorted(slot for slot, flag in admitted_by_slot.items() if flag)
+    assert admitted and all("expand" in slot for slot in admitted)
 
 
 def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:

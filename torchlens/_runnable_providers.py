@@ -140,6 +140,7 @@ def run_loaded_sparse_trace(
         input_byte_digests = {}
         input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
+    ceiling.admit_unretained_views(prepared_state.admitted_view_slot_ids)
     slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values, ceiling))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:

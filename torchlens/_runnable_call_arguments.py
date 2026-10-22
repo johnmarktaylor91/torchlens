@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._runnable_retention import _fail_open_unless_admitted
 from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
     _allocation_budget_bytes,
+    _slot_device,
+    _torch_dtype,
 )
 from .errors import (
     RunCapabilityUnavailableError,
@@ -23,6 +26,7 @@ from .runnable import (
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
+    TensorSlotDescriptor,
     TensorSlotRole,
 )
 
@@ -36,6 +40,7 @@ if TYPE_CHECKING:
         _op_for_slot,
         _ProjectionCountExceeded,
         _UnreadableProjectedOutput,
+        _value_at_path,
     )
 
 __all__ = (
@@ -47,6 +52,8 @@ __all__ = (
     "_input_storage_ids",
     "_new_allocation_bytes",
     "_preflight_call_allocation",
+    "_pure_view_projector",
+    "_projects_as_pure_view",
     "_execute_sparse_call",
     "_populate_source_slots",
     "_write_argument",
@@ -281,10 +288,14 @@ def _preflight_call_allocation(
     """
 
     del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    # A call producing a view run-prep admitted past the budget has no recorded-output
+    # bound behind it, so every fail-open below fails CLOSED for it instead.
     if not _projection_required_by_arguments(args, kwargs):
+        _fail_open_unless_admitted(call, ceiling)
         return  # provably trivial: no tensor operand and no numeric literal -> no size source
     mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
+        _fail_open_unless_admitted(call, ceiling)
         return  # feature-detect fail-open -> run-prep recorded-output bound
     count_ceiling = (
         ceiling.per_call_output_count_ceiling(call)
@@ -326,6 +337,7 @@ def _preflight_call_allocation(
                 call_id=call.call_id,
                 affected_op_labels=call.op_labels,
             ) from exc
+        _fail_open_unless_admitted(call, ceiling, exc)
         return
     try:
         new_bytes_by_device = _new_allocation_bytes(projected, input_storage_ids)
@@ -356,6 +368,81 @@ def _preflight_call_allocation(
                 available_bytes=available,
                 affected_op_labels=call.op_labels,
             )
+
+
+def _pure_view_projector(
+    descriptor: SparseRunDescriptor,
+    callables: Mapping[str, Callable[..., Any]],
+) -> Callable[[TensorSlotDescriptor], bool]:
+    """Build the run-prep proof that an op-output slot is a pure view of its operands.
+
+    The run-prep per-slot bound charges every recorded op-output slot its logical size,
+    which is what replay allocates for a fresh output. A pure view (``expand``/
+    ``broadcast_to``/``as_strided``) allocates nothing when its op runs. The returned
+    lookup projects the slot's producing call under the count-bounded ``FakeTensorMode``
+    (zero allocation) on contiguous fake operands built from the recorded slot shapes,
+    and returns True only if the projected output aliases a fake input storage and
+    matches the recorded shape. Any other outcome (fresh output, unresolvable call,
+    projection failure) returns False, so the caller keeps the logical charge. At run
+    time the per-call projection re-checks the real call before it executes.
+    """
+
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
+
+    def project(slot: TensorSlotDescriptor) -> bool:
+        """Return whether one slot's producing call projects as a pure view."""
+
+        call = producers.get(slot.slot_id)
+        func = callables.get(call.call_id) if call is not None else None
+        if call is None or func is None:
+            return False
+        try:
+            return _projects_as_pure_view(call, func, slots, slot)
+        except Exception:  # any projection failure keeps the logical charge
+            return False
+
+    return project
+
+
+def _projects_as_pure_view(
+    call: RunnableCallDescriptor,
+    func: Callable[..., Any],
+    slots: Mapping[str, TensorSlotDescriptor],
+    slot: TensorSlotDescriptor,
+) -> bool:
+    """Project one call on fake operands; return whether ``slot`` aliases an operand."""
+
+    mode_cls = _count_bounded_fake_tensor_mode_class()
+    if mode_cls is None:
+        return False
+    args: list[Any] = [None] * call.num_positional_args
+    kwargs: dict[str, Any] = {}
+    for literal_argument in call.literal_arguments:
+        _write_argument(
+            args, kwargs, literal_argument.argument_path, _decode_literal(literal_argument.value)
+        )
+    count_ceiling = max(len(call.output_slot_ids) * 8, _OUTPUT_COUNT_FLOOR)
+    # No real-kernel fallback: an op without a meta kernel would run for real on
+    # zero-filled operands of the recorded (not yet bounded) shapes. It raises instead,
+    # and the slot keeps its logical charge.
+    with mode_cls(
+        allow_non_fake_inputs=True, allow_fallback_kernels=False, ceiling=count_ceiling
+    ) as mode:
+        for tensor_argument in call.tensor_arguments:
+            operand = slots[tensor_argument.slot_id]
+            fake = torch.empty(
+                operand.shape, dtype=_torch_dtype(operand.dtype), device=_slot_device(operand)
+            )
+            _write_argument(args, kwargs, tensor_argument.argument_path, fake)
+        input_storage_ids = _input_storage_ids(args) | _input_storage_ids(kwargs)
+        mode._tl_set_baseline()
+        value = _value_at_path(func(*args, **kwargs), slot.output_path or ())
+        if not isinstance(value, torch.Tensor):
+            return False
+        storage_id = _fake_tensor_storage_id(value)
+        shape = tuple(int(size) for size in value.shape)
+        return storage_id is not None and storage_id in input_storage_ids and shape == slot.shape
 
 
 def _execute_sparse_call(

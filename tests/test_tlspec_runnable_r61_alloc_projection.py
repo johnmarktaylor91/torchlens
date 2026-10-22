@@ -393,6 +393,62 @@ def test_honest_zero_numel_model_runs_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
+class _ExpandSum(nn.Module):
+    """A broadcast view read by a reduction: the view's extent is the reduction's work."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(64, 4)
+        return wide.sum() + x.sum()
+
+
+def test_e2e_self_consistent_view_extent_tamper_refused(tmp_path: Path) -> None:
+    """Tamper the ``expand`` literal AND its recorded slot shape (64 -> 1e11 rows) of a
+    capture that did not save the view, so the view is self-consistent and the run would
+    allocate nothing for it, but the ``sum`` reading it would touch 4e11 elements.
+    View-aware run-prep charging must not admit it: the view's logical extent is over
+    both the host budget and the view work ceiling, so it refuses typed at
+    ``op_allocation_preflight`` before any call executes, as it did before."""
+
+    x = torch.randn(1, 4)
+    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
+    bundle = tmp_path / "view_extent.tlspec"
+    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
+    assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
+    assert _tamper_slot_shapes(bundle, [64, 4], [10**11, 4]) >= 1
+    with _rlimit_cap():
+        loaded = tl.load(str(bundle))
+        with pytest.raises(RunCapabilityUnavailableError) as caught:
+            loaded.run(inputs=x.clone())
+    fields = caught.value.fields
+    assert fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(fields["logical_elements"]) == 4 * 10**11
+    assert int(fields["logical_elements"]) > int(fields["logical_element_ceiling"])
+
+
+def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
+    tmp_path: Path,
+) -> None:
+    """Inflate only the ``expand`` literal (64 -> 1e11 rows) of a capture that did not save
+    the view, leaving the recorded slot honest. Run-prep passes (the recorded slot is
+    small) and the run copies nothing for the view, so under ``return_diverged`` the shape
+    divergence alone would let the ``sum`` read 4e11 elements. The produced view must be
+    refused typed before any consumer runs."""
+
+    x = torch.randn(1, 4)
+    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
+    bundle = tmp_path / "view_literal.tlspec"
+    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
+    with _rlimit_cap():
+        loaded = tl.load(str(bundle))
+        with pytest.raises(RunCapabilityUnavailableError) as caught:
+            loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+    fields = caught.value.fields
+    assert fields.get("detection_stage") == "op_allocation_execution"
+    assert int(fields["logical_elements"]) == 4 * 10**11
+
+
 # --------------------------------------------------------------------------- #
 # (4) corr_2 -- input mirror clone byte-guarded; honest requires_grad preserved   #
 # --------------------------------------------------------------------------- #

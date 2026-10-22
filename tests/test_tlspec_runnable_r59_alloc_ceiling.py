@@ -71,8 +71,10 @@ _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 # --------------------------------------------------------------------------- #
 
 
-def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path:
-    trace = tl.trace(model.eval(), x, **_CAPTURE)
+def _build(
+    tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **trace_kwargs: Any
+) -> Path:
+    trace = tl.trace(model.eval(), x, **_CAPTURE, **trace_kwargs)
     bundle = tmp_path / name
     tl.save(trace, str(bundle), level="runnable", include_weights=True)
     return bundle
@@ -188,6 +190,13 @@ class _AddChain(nn.Module):
         for _ in range(self._depth):
             x = x + 1.0
         return x
+
+
+class _AddChainSum(_AddChain):
+    """The same chain reduced by a final ``sum``, so ``save=tl.func("sum")`` saves no add."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x).sum()
 
 
 class _Chunk(nn.Module):
@@ -368,10 +377,51 @@ def test_retention_floor_refuses_cumulative_over_budget(
     assert int(caught.value.fields["required_bytes"]) == floor
 
 
+def test_retention_floor_refuses_cumulative_over_budget_when_nothing_is_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same accumulation shape from a capture that saved none of the chain's ops still
+    refuses at ``run_retention_preflight``: every op output stays alive in the run's slot
+    values until the run ends, so the floor charges it whether or not it was saved."""
+
+    x = torch.randn(1024)
+    bundle = _build(tmp_path, "chain_unsaved.tlspec", _AddChainSum(30), x, save=tl.func("sum"))
+    descriptor = _descriptor(tl.load(str(bundle)))
+    floor = _expected_retention_floor(descriptor)
+    per_slot_max = max(
+        math.prod(s.shape) * _torch_dtype(s.dtype).itemsize
+        for s in descriptor.tensor_slots
+        if s.role.value in {"intermediate", "output"}
+    )
+    budget = floor - 1
+    assert per_slot_max < budget < floor
+    monkeypatch.setattr(rstate, "_allocation_budget_bytes", lambda device: budget)
+
+    loaded = tl.load(str(bundle))
+    with pytest.raises(RunCapabilityUnavailableError) as caught:
+        loaded.run(inputs=x.clone())
+    assert caught.value.fields.get("detection_stage") == "run_retention_preflight"
+    assert int(caught.value.fields["required_bytes"]) == floor
+
+
+def test_retained_slots_resolve_op_labels_like_bind() -> None:
+    """Run-prep decides which op outputs the run copies with the same label lookup bind
+    uses, so an op found only by its ``layer_list`` label still counts as saved."""
+
+    from torchlens._runnable_retention import _retained_output_slot_ids
+
+    saved = types.SimpleNamespace(label="add_1", has_saved_activation=True)
+    trace = types.SimpleNamespace(layer_dict_all_keys={}, layer_list=[saved])
+    call = types.SimpleNamespace(output_slot_ids=("slot:add",), op_labels=("add_1",))
+    descriptor = types.SimpleNamespace(tensor_slots=(), calls=(call,))
+    assert _retained_output_slot_ids(trace, descriptor) == frozenset({"slot:add"})
+
+
 def test_retention_floor_premise_every_op_label_retains_a_clone(tmp_path: Path) -> None:
-    """Pin the gate-4 floor premise (P-A1): the descriptor charges one retained clone per
-    taken-path op-output slot + one per model-output slot. If fork materialization ever
-    stops retaining an op output, the floor proof re-opens here."""
+    """Pin the gate-4 floor premise (P-A1): the descriptor charges one live value per
+    taken-path op-output slot (kept in the run's slot values until the run ends, saved
+    or not) + one per model-output slot. If replay ever stops keeping an op output
+    alive, the floor proof re-opens here."""
 
     x = torch.randn(16)
     bundle = _build(tmp_path, "premise.tlspec", _AddChain(12), x)

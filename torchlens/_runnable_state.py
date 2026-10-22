@@ -52,6 +52,7 @@ class PreparedRunnableState:
     initializer_policy_version: str | None
     seed: int | None
     random_filled_slot_ids: tuple[str, ...]
+    admitted_view_slot_ids: frozenset[str] = frozenset()
 
 
 TORCH_MANUAL_SEED_MIN = -0x8000_0000_0000_0000
@@ -1263,13 +1264,24 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     # r55 free_1: bound every recorded op-output allocation BEFORE the DAG runs, on
     # every state source (staged/embedded/random-init), so a tampered self-consistent
     # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
-    _preflight_run_allocation((), _recorded_output_slots(descriptor))
+    from ._runnable_retention import (
+        _preflight_retention_floor,
+        _retained_output_slot_ids,
+        _unretained_view_lookup,
+    )
+
+    retained_slot_ids = _retained_output_slot_ids(trace, descriptor)
+    admitted_view_slot_ids = _preflight_run_allocation(
+        (),
+        _recorded_output_slots(descriptor),
+        _unretained_view_lookup(trace, descriptor, retained_slot_ids),
+    )
     # r59: aggregate retention floor -- the SUM of guaranteed-retained op-output clone
     # bytes per device provably exceeding the budget is a guaranteed mid-replay OOM the
     # per-slot bound above cannot see (honest, individually-feasible slots that together
     # exhaust the host). Refused typed here, before the DAG runs. Zero false refusals:
     # the floor under-counts true retention and the budget never under-estimates.
-    _preflight_retention_floor(descriptor)
+    _preflight_retention_floor(descriptor, admitted_view_slot_ids)
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
@@ -1278,6 +1290,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         staged = replace(
             prepared,
             slot_values=stage_state_to_slot_devices(descriptor, prepared.slot_values),
+            admitted_view_slot_ids=admitted_view_slot_ids,
         )
         # r65 F-1: reproduce the recorded per-slot ``requires_grad`` bit AFTER device
         # staging, on every state source (user-staged, embedded, random-init) -- the
@@ -2121,11 +2134,29 @@ class RunResourceCeiling:
     :func:`_preflight_retention_floor`, co-located because it shares the same budget.
     """
 
-    __slots__ = ("_expected_output_count", "_realized_output_count")
+    __slots__ = ("_admitted_view_slot_ids", "_expected_output_count", "_realized_output_count")
 
     def __init__(self, descriptor: SparseRunDescriptor) -> None:
         self._expected_output_count = sum(len(call.output_slot_ids) for call in descriptor.calls)
         self._realized_output_count = 0
+        self._admitted_view_slot_ids: frozenset[str] = frozenset()
+
+    def admit_unretained_views(self, slot_ids: frozenset[str]) -> None:
+        """Record the slots run-prep admitted past the budget on their view proof alone."""
+
+        self._admitted_view_slot_ids = frozenset(slot_ids)
+
+    def is_admitted_view(self, slot_id: str) -> bool:
+        """Whether run-prep admitted ``slot_id`` on its view proof (no logical charge)."""
+
+        return slot_id in self._admitted_view_slot_ids
+
+    def produces_admitted_view(self, call: Any) -> bool:
+        """Whether ``call`` produces a slot admitted on its view proof (no logical charge)."""
+
+        return not self._admitted_view_slot_ids.isdisjoint(
+            getattr(call, "output_slot_ids", ()) or ()
+        )
 
     def aggregate_output_count_ceiling(self) -> int:
         """Aggregate realized-leaf ceiling ``max(sum recorded * MARGIN, FLOOR)``."""
@@ -2226,7 +2257,8 @@ def _recorded_output_slots(descriptor: SparseRunDescriptor) -> tuple[TensorSlotD
 def _preflight_run_allocation(
     representatives: Sequence[TensorSlotDescriptor],
     output_slots: Iterable[TensorSlotDescriptor] = (),
-) -> None:
+    unretained_view: Callable[[TensorSlotDescriptor], bool] | None = None,
+) -> frozenset[str]:
     """Refuse an infeasible run allocation BEFORE any op executes (r53 free_1 / r55 free_1).
 
     Two per-device passes against the never-under-estimating live budget
@@ -2246,6 +2278,14 @@ def _preflight_run_allocation(
 
     W2's per-call ``FakeTensorMode`` projection preflight composes with this: it is
     the primary op-agnostic projection, this is the run-prep fallback bound.
+
+    An output slot over the budget is charged its logical size unless
+    ``unretained_view`` proves it a pure view the run does not snapshot: its op allocates
+    nothing and no ``Op.out`` copy is made, so a 4e8-element ``expand`` of a 4-element
+    input needs no new bytes, not 1.6 GB. Such a view is still refused past the logical
+    extent ceiling of :mod:`._runnable_retention`, which bounds the work of the ops that
+    read it. The lookup runs only for slots that would otherwise refuse. Returns the ids
+    of the slots admitted that way, for the retention floor and the per-call projection.
     """
 
     from .errors import RunCapabilityUnavailableError
@@ -2275,10 +2315,20 @@ def _preflight_run_allocation(
                 available_bytes=available,
             )
 
+    admitted: list[str] = []
+    admitted_elements = 0
     for slot in output_slots:
         device = _slot_device(slot)
         requested = math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
         available = _allocation_budget_bytes(device)
+        if requested > available and unretained_view is not None and unretained_view(slot):
+            from ._runnable_retention import _refuse_view_past_logical_ceiling
+
+            admitted_elements = _refuse_view_past_logical_ceiling(
+                slot, device, requested, available, admitted_elements
+            )
+            admitted.append(slot.slot_id)
+            continue
         if requested > available:
             raise RunCapabilityUnavailableError(
                 f"Recorded op-output slot {slot.slot_id!r} for device {str(device)!r} "
@@ -2291,70 +2341,7 @@ def _preflight_run_allocation(
                 required_bytes=requested,
                 available_bytes=available,
             )
-
-
-def _preflight_retention_floor(descriptor: SparseRunDescriptor) -> None:
-    """Refuse a run whose GUARANTEED retained clone bytes provably exceed the budget (r59).
-
-    Loaded-sparse replay retains a materialized clone of every taken-path op output for
-    the life of the returned trace (one ``Op.out`` clone per ``(call, output_slot_id)``
-    at bind, plus one reconstruct clone per model-``output`` slot). The SUM of those
-    recorded op-output bytes is therefore a guaranteed LOWER BOUND on replay memory --
-    a floor. A descriptor whose per-device floor exceeds the never-under-estimating
-    live budget could never complete on this host: every honest per-op allocation may
-    pass the per-slot bound (:func:`_preflight_run_allocation`) and every clone may pass
-    its per-clone byte guard, yet their cumulative retention guarantees a mid-replay
-    allocator death (r58 free_1/free_2 accumulation seam: e.g. 40 honest 4 GB output
-    slots = 160 GB floor > a 105 GB host budget). This refuses that typed at
-    ``run_retention_preflight`` before any call executes.
-
-    The floor UNDER-counts true retention (it ignores live ``slot_values`` entries, raw
-    ``call_outputs``, attestation/witness snapshots) and the budget never under-estimates,
-    so ``floor > budget`` proves a guaranteed OOM -- a refusal can NEVER hit a completable
-    run (zero false refusals). A legit deep model whose cumulative retention is within
-    budget (a deep-adds chain of small outputs) is untouched.
-    """
-
-    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
-    floor: dict[str, int] = defaultdict(int)
-    devices: dict[str, torch.device] = {}
-
-    def _charge(slot: TensorSlotDescriptor) -> None:
-        """Add one slot's guaranteed-retained clone bytes to its device's floor."""
-
-        device = _slot_device(slot)
-        key = str(device)
-        devices[key] = device
-        floor[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
-
-    # One retained ``Op.out`` clone per taken-path op label (bind, ``:2957``): alias/
-    # version slots are NOT in ``output_slot_ids`` so each producing op label charges
-    # exactly once, mirroring ``_bind_call_outputs``'s ``output_slot_ids`` zip.
-    for call in descriptor.calls:
-        for slot_id in call.output_slot_ids:
-            slot = slots.get(slot_id)
-            if slot is not None:
-                _charge(slot)
-    # One additional retained reconstruct clone per model-output slot (``:3161``).
-    for slot in descriptor.tensor_slots:
-        if slot.role is TensorSlotRole.OUTPUT:
-            _charge(slot)
-
-    for key, requested in sorted(floor.items()):
-        available = _allocation_budget_bytes(devices[key])
-        if requested > available:
-            raise RunCapabilityUnavailableError(
-                f"Loaded-sparse replay retains at least {requested} bytes of op-output "
-                f"clones on device {key!r} for the run's lifetime, but only {available} "
-                "bytes are available on this host. The cumulative retained state exceeds "
-                "the budget and the run is guaranteed to fail mid-replay; the descriptor "
-                "may be tampered or the host is too small.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="run_retention_preflight",
-                device=key,
-                required_bytes=requested,
-                available_bytes=available,
-            )
+    return frozenset(admitted)
 
 
 def _preflight_random_init_allocation(

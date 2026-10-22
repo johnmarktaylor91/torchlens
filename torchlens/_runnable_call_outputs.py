@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._runnable_retention import _check_unretained_extent
 from ._runnable_state import (
     RunResourceCeiling,
 )
@@ -175,9 +176,11 @@ def _bind_call_outputs(
                     affected_op_labels=call.op_labels,
                 )
         op = _op_for_label(fork, op_label)
-        if op is not None:
-            # r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it materializes a
-            # tampered view (r58 free_2) and before the shape-mismatch check below.
+        if op is not None and bool(getattr(op, "has_saved_activation", False)):
+            # Snapshot only what the capture saved: the result trace keeps the capture's
+            # saved set, and an unsaved output (a huge ``expand`` view, say) is never
+            # copied out. r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it
+            # materializes a tampered view (r58 free_2) and before the shape check below.
             op._internal_set(
                 "out",
                 ceiling.guarded_clone(
@@ -186,6 +189,14 @@ def _bind_call_outputs(
                     slot_id=slot_id,
                     affected_op_labels=(op_label,),
                 ),
+            )
+        else:
+            _check_unretained_extent(
+                value,
+                call_id=call.call_id,
+                slot_id=slot_id,
+                affected_op_labels=(op_label,),
+                admitted_view=ceiling.is_admitted_view(slot_id),
             )
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype

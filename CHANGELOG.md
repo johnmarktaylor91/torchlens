@@ -319,6 +319,23 @@
   True; the promoted warning now propagates, and under ordinary filters the verdict is False with
   the warning, as documented. Replayed ops and the bool evidence probes now run with warnings
   ignored, so a warning a replayed op emits cannot fail or unverify a correct capture.
+- **runnable**: `tl.load(path).run(inputs=...)` keeps an `Op.out` copy only for the ops the
+  capture saved (plus the model outputs), as the capture did. It used to copy out every op's
+  output, so a run needed memory for activations the capture never kept, and a huge broadcast view
+  such as `x.expand(10**8, 4)` of a 4-element `x` was refused (`op_allocation_preflight`) on a host
+  with less free memory than its 1.6 GB logical size. Behavior change: on the run's result
+  trace, `Op.out` is now `None` for every op the capture did not save, since the capture kept no
+  activation for it either (the capture's own `Op.out` raises `PayloadUnavailableError` there).
+  Before, such ops showed a value the capture never had. Capture with `save=` covering an op to
+  read its activation from a run. An unsaved CPU view is admitted past the memory budget only
+  when its producer is a view op and every op that reads it, directly or through a version alias,
+  does not copy it (indexing, `sum`, `mean`, elementwise ops with a fresh output); a view read by
+  `median`, `max`, `mm`, `norm`, `unique` and similar ops, which copy their operand internally, or
+  by an op writing `out=` or in place or passing an argument it was not measured with (such as
+  `dtype=`), is still charged and refused at its full size, as is any view off CPU. A run's admitted views share a ceiling of 2**32 logical
+  elements, and the retention floor still charges every op output the run keeps alive, saved or
+  not.
+
 - **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
   now compares against the inventory observed on tinygrad's current default device (CPU or
   PYTHON), instead of failing on the PYTHON device, which the tinygrad replay oracles require,

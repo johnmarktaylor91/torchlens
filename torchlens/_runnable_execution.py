@@ -34,6 +34,7 @@ from . import (
     _state,
 )
 from ._io._torch_symbols import torch_attr
+from ._runnable_retention import _check_unretained_extent, _fail_open_unless_admitted
 from ._runnable_state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
     _OUTPUT_COUNT_FLOOR,
@@ -42,6 +43,8 @@ from ._runnable_state import (
     RunResourceCeiling,
     _allocation_budget_bytes,
     _guarded_defensive_materialize,
+    _slot_device,
+    _torch_dtype,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
     state_metadata_full_violations,
@@ -569,6 +572,10 @@ _input_storage_ids = _rebind_function(_runnable_call_arguments._input_storage_id
 _new_allocation_bytes = _rebind_function(_runnable_call_arguments._new_allocation_bytes, globals())
 _preflight_call_allocation = _rebind_function(
     _runnable_call_arguments._preflight_call_allocation, globals()
+)
+_pure_view_projector = _rebind_function(_runnable_call_arguments._pure_view_projector, globals())
+_projects_as_pure_view = _rebind_function(
+    _runnable_call_arguments._projects_as_pure_view, globals()
 )
 _execute_sparse_call = _rebind_function(_runnable_call_arguments._execute_sparse_call, globals())
 _populate_source_slots = _rebind_function(
