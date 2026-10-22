@@ -253,6 +253,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_runnable_output_contracts.py` | Output reconstruction and post-execution contracts |
 | `_runnable_path_faithfulness.py` | Path-faithfulness and state comparison helpers |
 | `_runnable_providers.py` | Public provider entry points and run finalization |
+| `_runnable_retention.py` | Loaded-sparse retention floor and run-prep/bind memory bounds, including bounded admission of uncopied CPU views |
 | `_runnable_seam.py` | Narrow ownership seam between `Trace` and sparse runnable internals |
 | `_runnable_state.py` | Non-executing state binding and allocation for sparse runnable traces |
 | `_runnable_state_context.py` | State contracts and captured execution contexts |
