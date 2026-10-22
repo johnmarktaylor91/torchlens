@@ -356,24 +356,52 @@ def _scope(model: Any, claim: Any, **names: Any) -> dict[str, Any]:
     }
 
 
-@pytest.mark.parametrize(
-    "kind",
-    [
-        "no_corrupted",
-        "no_metric",
-        "corrupted_other_shape",
-        "metric_not_per_example",
-        "other_inputs",
-        "unresolvable_edge",
-        "target_given",
-    ],
-)
-def test_edge_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
-    """Missing or misaligned corrupted inputs or metric, other inputs, an unknown edge."""
+def _misaligned_refusal_runs_its_remedy(model: Any, table: Any, call: dict[str, Any]) -> None:
+    with pytest.raises(attribution.AttributionError) as excinfo:
+        attribution.causal_audit(model, CLEAN, claim=table, k=1, **call)
+    assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
+    fixed = eval(_remedy(str(excinfo.value)), _scope(model, table))  # noqa: S307
+    assert isinstance(fixed, attribution.CausalAuditResult)
+    assert fixed.extra["claim_kind"] == "edge_table" and len(fixed.units) == 5
+
+
+# One family per cause, each well inside the 5s tier's aggregate family budget.
+@pytest.mark.parametrize("kind", ["no_corrupted", "no_metric"])
+def test_edge_missing_corrupted_or_metric_refuses_and_the_remedy_runs(kind: str) -> None:
+    """No corrupted inputs, or no metric."""
 
     model = Fixture().eval()
-    table = _table(model, PAIR_CLEAN, PAIR_CORRUPT) if kind == "other_inputs" else _table(model)
-    if kind == "unresolvable_edge":
+    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
+    call.pop("corrupted" if kind == "no_corrupted" else "metric")
+    _misaligned_refusal_runs_its_remedy(model, _table(model), call)
+
+
+@pytest.mark.parametrize(
+    "kind", ["corrupted_other_shape", "metric_not_per_example", "target_given"]
+)
+def test_edge_misaligned_audit_settings_refuse_and_the_remedy_runs(kind: str) -> None:
+    """Corrupted inputs of another shape, a metric that is not per example, a target."""
+
+    model = Fixture().eval()
+    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
+    if kind == "corrupted_other_shape":
+        call["corrupted"] = torch.tensor([[1, 1]])
+    elif kind == "metric_not_per_example":
+        call["metric"] = lambda logits: logits[:, -1]
+    else:
+        call["target"] = 0
+    _misaligned_refusal_runs_its_remedy(model, _table(model), call)
+
+
+@pytest.mark.parametrize("kind", ["other_inputs", "unresolvable_edge"])
+def test_edge_misaligned_claim_tables_refuse_and_the_remedy_runs(kind: str) -> None:
+    """A table built on other inputs, a table naming an edge the model does not have."""
+
+    model = Fixture().eval()
+    if kind == "other_inputs":
+        table = _table(model, PAIR_CLEAN, PAIR_CORRUPT)
+    else:
+        table = _table(model)
         rows = table.rows()
         renamed = dataclasses.replace(rows[0], address=("a3.h1->m9",))
         table = type(table)(
@@ -381,23 +409,9 @@ def test_edge_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
             table.provenance,
             trace=table.trace,
         )
-    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
-    if kind == "no_corrupted":
-        call.pop("corrupted")
-    elif kind == "no_metric":
-        call.pop("metric")
-    elif kind == "corrupted_other_shape":
-        call["corrupted"] = torch.tensor([[1, 1]])
-    elif kind == "metric_not_per_example":
-        call["metric"] = lambda logits: logits[:, -1]
-    elif kind == "target_given":
-        call["target"] = 0
-    with pytest.raises(attribution.AttributionError) as excinfo:
-        attribution.causal_audit(model, CLEAN, claim=table, k=1, **call)
-    assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
-    fixed = eval(_remedy(str(excinfo.value)), _scope(model, table))  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult)
-    assert fixed.extra["claim_kind"] == "edge_table" and len(fixed.units) == 5
+    _misaligned_refusal_runs_its_remedy(
+        model, table, {"corrupted": CORRUPT, "metric": fixture_metric}
+    )
 
 
 @pytest.mark.parametrize("kind", ["mixed_rows", "other_reduction", "edge_inputs_on_a_read"])
