@@ -13,7 +13,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-pytestmark = [pytest.mark.real_model, pytest.mark.real_checkpoint]
+# heavy: 12.4 s median under transformers 5.18, against 2.5 s under transformers 4.
+pytestmark = [pytest.mark.heavy, pytest.mark.real_model, pytest.mark.real_checkpoint]
 
 
 def test_qk_ov_circuits_equal_explicit_products_gpt2_small(r1_loader):
