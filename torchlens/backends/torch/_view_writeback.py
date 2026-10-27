@@ -209,5 +209,5 @@ def _value_is_the_destination_view(base: torch.Tensor, index: Any, value: torch.
                 and tuple(destination.shape) == tuple(value.shape)
                 and tuple(destination.stride()) == tuple(value.stride())
             )
-        except Exception:
+        except (IndexError, RuntimeError, TypeError, ValueError):
             return False

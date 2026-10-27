@@ -3,12 +3,13 @@
 A ``torch.distributions`` prior or a diffusers scheduler built in ``__init__``
 holds tensors that exist before the forward, exactly like a module tensor
 attribute. ``buffer_writes.iter_module_held_plain_tensors`` stamps them as
-buffer sources through ``plain_holder_tensor_attrs``.
+buffer sources through ``iter_plain_holder_tensors``.
 """
 
 from __future__ import annotations
 
 import types
+from collections.abc import Iterator
 from typing import Any
 
 import torch
@@ -66,3 +67,21 @@ def plain_holder_tensor_attrs(item: Any) -> list[tuple[str, torch.Tensor]]:
         and isinstance(value, torch.Tensor)
         and not isinstance(value, nn.Parameter)
     ]
+
+
+def iter_plain_holder_tensors(
+    scan: Any, attr_name: str, holder: object
+) -> Iterator[tuple[str, torch.Tensor]]:
+    """Yield ``(name, tensor)`` for a plain holder's public tensor attributes.
+
+    Each name is ``<attr_name>[<attr>]``, reserved, admitted and stamped through
+    ``scan`` (the module's ``buffer_writes._HeldScan``); the holder's scan stops at
+    the first name the object bound refuses.
+    """
+
+    for held_attr, item in plain_holder_tensor_attrs(holder):
+        name = scan.reserve(f"{attr_name}[{held_attr}]")
+        if not scan.admit(name):
+            return
+        scan.stamp(item)
+        yield name, item

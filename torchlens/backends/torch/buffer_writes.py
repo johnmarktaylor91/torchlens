@@ -15,7 +15,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ...ir import BufferWriteEvent
 from ...utils._torch_compat import tensor_version_or_none
 from ...utils.tensor_utils import safe_copy
-from ._held_plain_holders import plain_holder_tensor_attrs
+from ._held_plain_holders import iter_plain_holder_tensors
 from ._tl import (
     clear_tensor_label,
     get_buffer_address,
@@ -448,12 +448,7 @@ def iter_module_held_plain_tensors(
         else:
             # A plain object's direct public tensor attributes (a distributions
             # prior, a diffusers scheduler); never containers inside it.
-            for held_attr, item in plain_holder_tensor_attrs(attr_val):
-                name = scan.reserve(f"{attr_name}[{held_attr}]")
-                if not scan.admit(name):
-                    break
-                scan.stamp(item)
-                yield name, item
+            yield from iter_plain_holder_tensors(scan, attr_name, attr_val)
     scan.finish()
 
 
