@@ -49,8 +49,12 @@ def test_body_roles_only_on_passes_inside_the_body() -> None:
     in_body = [op for op in rolled if op.conditional_branch_stack]
     outside = [op for op in rolled if not op.conditional_branch_stack]
     assert in_body and outside
-    assert all(op.is_in_conditional_body for op in in_body)
-    assert not any(op.is_in_conditional_body for op in outside)
+
+    def has_body_role(op: tl.Op) -> bool:
+        return any(role.role == "body" for role in op.in_conditionals or [])
+
+    assert all(has_body_role(op) for op in in_body)
+    assert not any(has_body_role(op) for op in outside)
     for op in trace.ops:
         if any(role.role == "body" for role in op.in_conditionals or []):
             assert op.conditional_branch_stack, op.label

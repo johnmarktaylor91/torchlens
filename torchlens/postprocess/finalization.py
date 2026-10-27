@@ -52,7 +52,7 @@ from ..utils._torch_symbols import torch_attr
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
     from ..data_classes.op import Op
-    from ..data_classes.trace import ConditionalRoleRef, Trace
+    from ..data_classes.trace import Trace
 
 
 def _undecorate_all_saved_tensors(self: "Trace") -> None:
@@ -1301,6 +1301,7 @@ def _build_conditional_records(self: "Trace") -> None:
         ConditionalArm,
         ConditionalRoleRef,
     )
+    from .control_flow import roles_held_by_pass
 
     conditionals: list[Conditional] = []
     event_by_id = {event.id: event for event in self.conditional_records}
@@ -1456,7 +1457,7 @@ def _build_conditional_records(self: "Trace") -> None:
                         ConditionalRoleRef(conditional.id, arm_index, arm.kind, role)
                     )
     for layer in self.layer_list:
-        layer.in_conditionals = _roles_held_by_pass(
+        layer.in_conditionals = roles_held_by_pass(
             layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
         )
         if (
@@ -1546,47 +1547,6 @@ def _resolve_conditional_bool_op(
         if raw_op is not None:
             return raw_op
     return self.layer_dict_all_keys.get(terminal_bool)
-
-
-def _roles_held_by_pass(
-    op: "Op",
-    layer_roles: list["ConditionalRoleRef"],
-    arm_stack_entries: dict[tuple[str, int], tuple[int, str]],
-) -> list["ConditionalRoleRef"]:
-    """Return the conditional roles one pass of a layer actually holds.
-
-    Role buckets are keyed by the rolled layer label, so every pass of a layer
-    sees the roles of all its passes. A rolled layer can mix passes inside and
-    outside an arm body (the same ``lamda < 0`` evaluated as an ``if`` test and
-    again in that ``if``'s body, rolled as one layer). A ``body`` role is kept
-    only for a pass whose own ``conditional_branch_stack`` holds that arm, the
-    per-pass record of arm membership.
-
-    Parameters
-    ----------
-    op:
-        One pass of a layer.
-    layer_roles:
-        Roles collected for the pass's rolled layer label.
-    arm_stack_entries:
-        ``(conditional_id, arm_index)`` to the ``(event_id, branch_kind)``
-        branch-stack entry of that arm.
-
-    Returns
-    -------
-    list[ConditionalRoleRef]
-        The roles this pass holds, in the layer's role order.
-    """
-
-    if not layer_roles:
-        return []
-    pass_stack = set(op.conditional_branch_stack or ())
-    return [
-        role
-        for role in layer_roles
-        if role.role != "body"
-        or arm_stack_entries.get((role.conditional_id, role.arm_index)) in pass_stack
-    ]
 
 
 def _merge_conditional_role_labels(

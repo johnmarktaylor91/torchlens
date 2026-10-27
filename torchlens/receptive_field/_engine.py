@@ -266,14 +266,7 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
-            if _has_zero_extent(op):
-                # An empty input has no units: it influences nothing.
-                states_by_op[op.label] = {}
-                continue
-            seed = _seed_input(op)
-            states_by_op[op.label] = {
-                seed.io_role: _BranchState(state=seed, geometry_neutral=False)
-            }
+            states_by_op[op.label] = _seed_branches(op)
             continue
 
         parents = tuple(by_reference[label] for label in op.parents if label in by_reference)
@@ -327,6 +320,19 @@ def _solve_uncached(
         per_op=MappingProxyType(per_op),
         states=MappingProxyType(flattened_states),
     )
+
+
+def _seed_branches(op: Op) -> dict[str, _BranchState]:
+    """Return the seed branch of one input operation; an empty input seeds none.
+
+    An empty input has no units, so it influences nothing and no descriptor
+    names it.
+    """
+
+    if _has_zero_extent(op):
+        return {}
+    seed = _seed_input(op)
+    return {seed.io_role: _BranchState(state=seed, geometry_neutral=False)}
 
 
 def _seed_input(op: Op) -> _InputState:
