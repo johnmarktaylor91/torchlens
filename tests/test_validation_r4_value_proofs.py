@@ -151,6 +151,34 @@ def test_and_with_true_operand_still_fails_when_frozen() -> None:
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
 
 
+class _OrTrue(nn.Module):
+    def __init__(self, other_all_true: bool) -> None:
+        super().__init__()
+        self.other_all_true = other_all_true
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        s = x.sum(-1)
+        a = s > 1e9
+        b = s > -1e9 if self.other_all_true else s > 2e9
+        return x + (a | b).unsqueeze(-1)
+
+
+def test_or_with_all_true_operand_exempts_the_other_operand() -> None:
+    assert _validates(_OrTrue(True), torch.randn(3, 4))
+    trace = _capture(_OrTrue(True), torch.randn(3, 4))
+    op = _op(trace, {"__or__"})
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "disjunction_saturated")
+
+
+def test_or_with_false_operand_and_the_true_operand_itself_still_fail() -> None:
+    trace = _capture(_OrTrue(False), torch.randn(3, 4))
+    op = _op(trace, {"__or__"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
+    trace = _capture(_OrTrue(True), torch.randn(3, 4))
+    op = _op(trace, {"__or__"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
+
+
 # ------------------------------------------------------------------------ einsum
 
 

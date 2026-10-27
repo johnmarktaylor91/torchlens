@@ -9,6 +9,7 @@ saved co-arguments, and returns non-exempt for anything else:
 - division: the saved dividend is all zero, so the divisor (``args[1]``) only
   scales a zero;
 - bitwise/logical and: the other saved operand is all zero/False;
+- bool or: the other saved operand is all True;
 - einsum: another saved operand is all zero (einsum is multilinear, every term
   of every output element carries one factor from each operand);
 - eval-mode ``batch_norm``: ``input - running_mean`` is exactly zero, so the
@@ -61,12 +62,24 @@ CONJUNCTION_FUNC_NAMES = frozenset(
         "logical_and_",
     }
 )
+DISJUNCTION_FUNC_NAMES = frozenset(
+    {
+        "__or__",
+        "__ror__",
+        "__ior__",
+        "bitwise_or",
+        "bitwise_or_",
+        "logical_or",
+        "logical_or_",
+    }
+)
 POW_FUNC_NAMES = frozenset({"__pow__", "__ipow__", "pow", "pow_"})
 SCATTER_REDUCE_FUNC_NAMES = frozenset({"scatter_reduce", "scatter_reduce_", "scatterreduce"})
 SPLIT_FUNC_NAMES = frozenset({"split", "split_with_sizes", "splitwithsizes"})
 VALUE_PROOF_FUNC_NAMES = (
     DIVISION_FUNC_NAMES
     | CONJUNCTION_FUNC_NAMES
+    | DISJUNCTION_FUNC_NAMES
     | POW_FUNC_NAMES
     | SPLIT_FUNC_NAMES
     | frozenset({"einsum", "batch_norm", "__setitem__"})
@@ -130,13 +143,8 @@ def _conjunction_decision(
 ) -> PosthocPerturbDecision:
     """Exempt one operand of a bitwise/logical and whose other operand is all zero."""
 
-    if keys == {0}:
-        other = 1
-    elif keys == {1}:
-        other = 0
-    else:
-        return _NOT_PROVED
-    if len(args) <= other or not _is_all_zero_value(args[other]):
+    other = _sibling_operand_slot(keys)
+    if other is None or len(args) <= other or not _is_all_zero_value(args[other]):
         return _NOT_PROVED
     if not _output_all_equal(layer, 0):
         return _NOT_PROVED
@@ -145,6 +153,44 @@ def _conjunction_decision(
         "conjunction_zero_annihilator",
         f"the non-perturbed and-operand at args[{other}] is all zero/False, so the "
         "conjunction is zero whatever the perturbed operand holds",
+    )
+
+
+def _sibling_operand_slot(keys: set[Any]) -> int | None:
+    """Return the other operand slot of a binary op whose perturbed parent fills one slot."""
+
+    if keys == {0}:
+        return 1
+    if keys == {1}:
+        return 0
+    return None
+
+
+def _is_all_true_bool(value: Any) -> bool:
+    """Return whether ``value`` is ``True`` or a non-empty all-True bool tensor."""
+
+    if value is True:
+        return True
+    if not isinstance(value, torch.Tensor) or value.dtype != torch.bool or value.numel() == 0:
+        return False
+    return bool(value.all().item())
+
+
+def _disjunction_decision(
+    layer: Op, keys: set[Any], args: tuple[Any, ...]
+) -> PosthocPerturbDecision:
+    """Exempt one operand of a bool or whose other operand is all True."""
+
+    other = _sibling_operand_slot(keys)
+    if other is None or len(args) <= other or not _is_all_true_bool(args[other]):
+        return _NOT_PROVED
+    if not _is_all_true_bool(getattr(layer, "out", None)):
+        return _NOT_PROVED
+    return PosthocPerturbDecision(
+        True,
+        "disjunction_saturated",
+        f"the non-perturbed bool or-operand at args[{other}] is all True, so the "
+        "disjunction is True whatever the perturbed operand holds",
     )
 
 
@@ -391,6 +437,7 @@ def _empty_split_chunk_decision(
 _DECISIONS_BY_FAMILY = (
     (DIVISION_FUNC_NAMES, _division_decision),
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
+    (DISJUNCTION_FUNC_NAMES, _disjunction_decision),
     (POW_FUNC_NAMES, _pow_zero_exponent_decision),
     (SPLIT_FUNC_NAMES, _empty_split_chunk_decision),
     (frozenset({"einsum"}), _einsum_decision),

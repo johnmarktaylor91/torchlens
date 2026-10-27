@@ -430,6 +430,17 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="disjunction_saturated",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_disjunction_decision",
+        refuses=(
+            "a co-operand with any False element or a non-bool dtype (an integer or-operand "
+            "needs every bit set), an output that is not all True, and a perturbed "
+            "parent that occupies both operand slots"
+        ),
+    ),
+    Exemption(
         code="norm_centered_input_running_var",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
