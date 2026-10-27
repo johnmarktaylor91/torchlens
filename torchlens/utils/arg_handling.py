@@ -58,13 +58,49 @@ def leaf_preserving_input_copies() -> Iterator[None]:
         _PRESERVE_LEAF_INPUT_COPIES.reset(token)
 
 
-def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
+def move_input_tensor(tensor: torch.Tensor, device: torch.device | str) -> torch.Tensor:
+    """Move one input tensor to ``device``, keeping a grad-tracked leaf a leaf in validation.
+
+    ``tensor.to(device)`` of a grad-tracked leaf is a NON-leaf, so a model that
+    sets ``x.requires_grad = True`` on its input raised inside validation on a
+    device move although its plain forward runs. Inside
+    :func:`leaf_preserving_input_copies` (validation's
+    private input copies, which promise no gradient path to the caller) the move
+    makes a new leaf with the same ``requires_grad``; elsewhere the historical
+    graph-connected move keeps gradients reaching the caller's input.
+
+    Parameters
+    ----------
+    tensor:
+        Input tensor on another device.
+    device:
+        Target device.
+
+    Returns
+    -------
+    torch.Tensor
+        The moved tensor.
+    """
+
+    if not (tensor.is_leaf and tensor.requires_grad and _PRESERVE_LEAF_INPUT_COPIES.get()):
+        return tensor.to(device)
+    moved = tensor.detach().to(device).requires_grad_(True)
+    if getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False):
+        setattr(moved, INPUT_WAS_PARAMETER_ATTR, True)
+    return moved
+
+
+def _clone_input_tensor_payload(arg: torch.Tensor, *, preserve_leaf: bool = False) -> torch.Tensor:
     """Clone a forward-input tensor without preserving ``nn.Parameter`` type.
 
     Parameters
     ----------
     arg
         Forward input tensor or parameter to clone.
+    preserve_leaf
+        Whether a grad-tracked leaf ``nn.Parameter`` input is copied as a new
+        leaf with the same ``requires_grad`` (validation's private copies; see
+        :func:`leaf_preserving_input_copies`) instead of the graph-connected clone.
 
     Returns
     -------
@@ -76,8 +112,11 @@ def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
     if isinstance(arg, torch.nn.Parameter):
         from .._state import pause_logging
 
+        detach_leaf = preserve_leaf and arg.is_leaf and arg.requires_grad
         with pause_logging():
-            cloned = _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+            cloned = _copy_tensor_payload(arg, detach_tensor=detach_leaf, save_mode="copy")
+            if detach_leaf:
+                cloned.requires_grad_(True)
         setattr(cloned, INPUT_WAS_PARAMETER_ATTR, True)
         return cloned
     return cast(torch.Tensor, _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy"))
@@ -588,7 +627,7 @@ def _copy_input_tree_node(
         tensor_records.append((path, value, False))
         if id(value) in memo:
             return memo[id(value)]
-        cloned = _clone_input_tensor_payload(value)
+        cloned = _clone_input_tensor_payload(value, preserve_leaf=preserve_leaf_inputs)
         memo[id(value)] = cloned
         return cloned
     if isinstance(value, torch.Tensor):

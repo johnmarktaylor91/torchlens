@@ -1301,11 +1301,13 @@ def _build_conditional_records(self: "Trace") -> None:
         ConditionalArm,
         ConditionalRoleRef,
     )
+    from .control_flow import roles_held_by_pass
 
     conditionals: list[Conditional] = []
     event_by_id = {event.id: event for event in self.conditional_records}
     conditional_id_by_event_id = _make_public_conditional_ids(self.conditional_records)
     role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]] = defaultdict(list)
+    arm_stack_entries: dict[tuple[str, int], tuple[int, str]] = {}
     for event in self.conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = conditional_id_by_event_id[event.id]
@@ -1406,6 +1408,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 execution_entry_edge=edge_list[0] if edge_list else None,
             )
             arm_index = len(arms)
+            arm_stack_entries[(conditional_id, arm_index)] = (event.id, branch_kind)
             _merge_conditional_role_labels(
                 role_labels_by_cond_arm,
                 (conditional_id, arm_index, "evaluation"),
@@ -1454,7 +1457,9 @@ def _build_conditional_records(self: "Trace") -> None:
                         ConditionalRoleRef(conditional.id, arm_index, arm.kind, role)
                     )
     for layer in self.layer_list:
-        layer.in_conditionals = roles_by_label.get(layer.layer_label, [])
+        layer.in_conditionals = roles_held_by_pass(
+            layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
+        )
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id

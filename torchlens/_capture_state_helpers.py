@@ -2148,12 +2148,13 @@ def _move_tensors_to_device_inner(
         raise_input_tree_depth_refusal,
     )
     from torchlens.ir.container import get_registered_container
+    from torchlens.utils.arg_handling import move_input_tensor
 
     if isinstance(obj, torch.Tensor):
         target = torch.device(device) if not isinstance(device, torch.device) else device
         if obj.device == target:
             return _UNMOVED
-        return obj.to(device)
+        return move_input_tensor(obj, device)
 
     registration = None if isinstance(obj, type) else get_registered_container(type(obj))
     is_dataclass_instance = _dataclasses.is_dataclass(obj) and not isinstance(obj, type)

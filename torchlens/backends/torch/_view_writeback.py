@@ -1,4 +1,4 @@
-"""Bind ``x[idx] += y``'s write-back ``__setitem__`` to the base's own version.
+"""Bind a view-mutation write-back ``__setitem__`` to the base's own version.
 
 ``wrappers._propagate_mutation_label_to_storage_aliases`` advances a base
 tensor's label to an in-place op on one of its views. For the write-back of an
@@ -151,19 +151,22 @@ def record_view_mutation_prior_label(
 
 
 def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
-    """Give ``x[idx] += y``'s write-back ``__setitem__`` its base's own parent label.
+    """Give a ``__setitem__`` whose value is a mutated view of its base the base's own label.
 
     Python runs ``x[idx] += y`` as ``v = x[idx]; v += y; x[idx] = v``. The
     in-place ``v += y`` advances the base ``x`` to the view's label, so the
     write-back ``__setitem__(x, idx, v)`` would bind ONE label to two slots
-    holding two different values (the full base and the view). When the value
-    is that same view of ``idx``'s destination region and the base's label
-    came from that view mutation, the base slot is bound to the base's label
-    from before the mutation instead. This is exact: the write-back overwrites
-    precisely the region the mutation wrote, so
-    ``setitem(base_before, idx, v)`` equals the result, and the consumed
-    base's actual content still reaches replay through the per-child version
-    snapshot.
+    holding two different values (the full base and the view). The same holds
+    when the mutated view is written to ANOTHER region of its base
+    (``v = m[:, 0:2]; v.mul_(3); m[:, 2:4] = v``). When the value carries the
+    view-mutation label the base was advanced to, the base slot is bound to the
+    base's label from before the mutation, so each slot has its own label: the
+    value slot the mutation op, the base slot the base's own lineage. The base
+    slot consumes a later version of that label, and its actual content reaches
+    replay through the per-child version snapshot. For a same-region write-back
+    the binding is exact even without the snapshot: the write-back overwrites
+    precisely the region the mutation wrote, so ``setitem(base_before, idx, v)``
+    equals the result.
 
     Parameters
     ----------
@@ -173,7 +176,7 @@ def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
 
     if len(args) < 3:
         return
-    base, index, value = args[0], args[1], args[2]
+    base, value = args[0], args[2]
     if not isinstance(base, torch.Tensor) or not isinstance(value, torch.Tensor):
         return
     if base is value:
@@ -187,27 +190,4 @@ def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
     session_token, mutation_label, prior_label = entry
     if session_token != active_label_session_token() or mutation_label != shared_label:
         return
-    if _value_is_the_destination_view(base, index, value):
-        set_tensor_label(base, prior_label)
-
-
-def _value_is_the_destination_view(base: torch.Tensor, index: Any, value: torch.Tensor) -> bool:
-    """Return whether ``value`` is exactly the view ``base[index]`` (same storage region).
-
-    The storage, offset, shape and stride reads are TorchLens's own bookkeeping,
-    so they run under ``pause_logging`` and ``internal_scalar_read``; an index
-    that cannot be re-applied reads as not the same region.
-    """
-
-    with _state.pause_logging(), internal_scalar_read():
-        try:
-            destination = base[index]
-            return bool(
-                storage_alias_index_key(destination.untyped_storage())
-                == storage_alias_index_key(value.untyped_storage())
-                and destination.storage_offset() == value.storage_offset()
-                and tuple(destination.shape) == tuple(value.shape)
-                and tuple(destination.stride()) == tuple(value.stride())
-            )
-        except (IndexError, RuntimeError, TypeError, ValueError):
-            return False
+    set_tensor_label(base, prior_label)

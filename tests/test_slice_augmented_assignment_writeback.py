@@ -56,3 +56,35 @@ def test_writeback_setitem_parents_are_the_base_and_the_view() -> None:
         value_parent = op.parent_arg_positions["args"][2]
         assert base_parent != value_parent
         assert value_parent.startswith("iadd")
+
+
+class _ViewWrittenElsewhere(nn.Module):
+    """A view mutated in place, then written to a different region of its base."""
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        m = x * 1.0
+        v = m[:, 0:2]
+        v.mul_(3)
+        v.add_(y)
+        m[:, 2:4] = v
+        return m * 2
+
+
+def test_view_written_to_another_region_validates() -> None:
+    torch.manual_seed(0)
+    inputs = (torch.randn(3, 4), torch.randn(3, 2))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(_ViewWrittenElsewhere().eval(), inputs, scope="forward") is True, (
+            last_validation_failure()
+        )
+
+
+def test_view_written_to_another_region_binds_two_labels() -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(_ViewWrittenElsewhere().eval(), (torch.randn(3, 4), torch.randn(3, 2)))
+    (setitem,) = [op for op in trace.ops if op.func_name == "__setitem__"]
+    base_parent = setitem.parent_arg_positions["args"][0]
+    value_parent = setitem.parent_arg_positions["args"][2]
+    assert base_parent.startswith("mul")
+    assert value_parent.startswith("add")

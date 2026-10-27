@@ -27,7 +27,7 @@ from . import ast_branches
 
 if TYPE_CHECKING:
     from ..data_classes.func_call_location import FuncCallLocation
-    from ..data_classes.trace import ConditionalEvent, Trace
+    from ..data_classes.trace import ConditionalEvent, ConditionalRoleRef, Trace
 
 
 _BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
@@ -1357,3 +1357,44 @@ def _finish_deferred_buffer_removals(
         remove_references=True,
         replacement_labels=replacement_labels,
     )
+
+
+def roles_held_by_pass(
+    op: Op,
+    layer_roles: list[ConditionalRoleRef],
+    arm_stack_entries: dict[tuple[str, int], tuple[int, str]],
+) -> list[ConditionalRoleRef]:
+    """Return the conditional roles one pass of a layer actually holds.
+
+    Role buckets are keyed by the rolled layer label, so every pass of a layer
+    sees the roles of all its passes. A rolled layer can mix passes inside and
+    outside an arm body (the same ``lamda < 0`` evaluated as an ``if`` test and
+    again in that ``if``'s body, rolled as one layer). A ``body`` role is kept
+    only for a pass whose own ``conditional_branch_stack`` holds that arm, the
+    per-pass record of arm membership.
+
+    Parameters
+    ----------
+    op:
+        One pass of a layer.
+    layer_roles:
+        Roles collected for the pass's rolled layer label.
+    arm_stack_entries:
+        ``(conditional_id, arm_index)`` to the ``(event_id, branch_kind)``
+        branch-stack entry of that arm.
+
+    Returns
+    -------
+    list[ConditionalRoleRef]
+        The roles this pass holds, in the layer's role order.
+    """
+
+    if not layer_roles:
+        return []
+    pass_stack = set(op.conditional_branch_stack or ())
+    return [
+        role
+        for role in layer_roles
+        if role.role != "body"
+        or arm_stack_entries.get((role.conditional_id, role.arm_index)) in pass_stack
+    ]
