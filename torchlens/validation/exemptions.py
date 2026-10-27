@@ -56,6 +56,7 @@ from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
 from ._structural_slot_checks import (
     check_expand_pinned_size_exempt,
     check_packed_rnn_batch_sizes_exempt,
+    setitem_bool_mask_at_index_slot,
 )
 from ._value_predicates import (
     _extrema_operand_dominates,
@@ -508,6 +509,10 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
         and isinstance(args[1][0], torch.Tensor)
         and args[1][0].dtype == torch.bool
     ):
+        return True
+
+    # Case 2b: a bool mask at any slot of the index tuple (``x[:, mask] = v``).
+    if setitem_bool_mask_at_index_slot(layer, layers_to_perturb):
         return True
 
     # Case 3: perturbed layer is the destination, but the indexed destination

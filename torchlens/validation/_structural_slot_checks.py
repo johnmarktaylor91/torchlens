@@ -8,7 +8,9 @@ replay can only raise), never a parent whose value feeds the output:
   (``args[1]`` of the packed overload), the packed sequence's layout metadata,
   as ``_check_lstm_exempt`` already excuses for ``lstm``;
 - ``expand``: a size at a non-singleton input dim, which must equal the input's
-  extent there (the saved size is checked to be exactly that extent).
+  extent there (the saved size is checked to be exactly that extent);
+- ``__setitem__``: a bool mask at any slot of the index tuple (Case 2 of
+  ``_check_setitem_exempt`` reads only the first slot).
 
 Registered in ``exemptions.CUSTOM_EXEMPTION_CHECKS`` (Menagerie rung 4, round 2).
 """
@@ -101,3 +103,23 @@ def check_expand_pinned_size_exempt(self: Trace, layer: Op, layers_to_perturb: l
             return False
         size = int(size.item())
     return type(size) is int and size == extent
+
+
+def setitem_bool_mask_at_index_slot(layer: Op, layers_to_perturb: list[str]) -> bool:
+    """Return whether the perturbed parent is only a bool mask inside the index tuple."""
+
+    keys = _arg_keys_of(layer, layers_to_perturb)
+    args = tuple(getattr(layer, "saved_args", ()) or ())
+    if keys is None or len(args) < 2 or not isinstance(args[1], tuple):
+        return False
+    index = args[1]
+    for key in keys:
+        if not (isinstance(key, tuple) and len(key) == 2 and key[0] == 1):
+            return False
+        slot = key[1]
+        if not isinstance(slot, int) or not 0 <= slot < len(index):
+            return False
+        mask = index[slot]
+        if not (isinstance(mask, torch.Tensor) and mask.dtype == torch.bool):
+            return False
+    return True

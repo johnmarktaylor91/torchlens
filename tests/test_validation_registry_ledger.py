@@ -566,7 +566,8 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         justification=(
             "exempts a __setitem__ destination only for a structural mask/index slot or "
             "a PROVEN total overwrite of the destination, and the uninitialized-origin "
-            "walk deliberately does not chain through prior in-place writes"
+            "walk deliberately does not chain through prior in-place writes; a bool "
+            "mask is structural at any index-tuple slot (x[:, mask] = v), not only the first"
         ),
         refuses=(
             "a partial overwrite, a destination holding real written data from an "

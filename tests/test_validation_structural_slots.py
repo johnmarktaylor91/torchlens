@@ -131,3 +131,33 @@ def test_expand_size_at_a_singleton_dim_still_fails_when_frozen() -> None:
     trace = _capture(_ExpandToWidth(True), torch.randn(4))
     op = _op(trace, "expand")
     _assert_frozen_edge_fails(trace, op, _expand_size_parent(op))
+
+
+# ------------------------------------------ __setitem__ bool mask in an index tuple
+
+
+class _MaskedColumnWrite(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.register_buffer("mask", torch.tensor([True, False, True, True]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # ``out[:, mask] = v``, as m15093's ``x[:, mask] = ...``.
+        out = torch.zeros(2, 4)
+        out[:, self.mask] = self.lin(x)[:, :3]
+        return out * 2.0
+
+
+def test_bool_mask_at_a_later_index_slot_is_exempt() -> None:
+    assert _validates(_MaskedColumnWrite(), torch.randn(2, 4))
+    trace = _capture(_MaskedColumnWrite(), torch.randn(2, 4))
+    op = _op(trace, "__setitem__")
+    assert _decision(trace, op, op.parent_arg_positions["args"][(1, 1)]) == _EXEMPT
+
+
+def test_masked_write_value_and_destination_still_fail_when_frozen() -> None:
+    for slot in (2, 0):
+        trace = _capture(_MaskedColumnWrite(), torch.randn(2, 4))
+        op = _op(trace, "__setitem__")
+        _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][slot])
