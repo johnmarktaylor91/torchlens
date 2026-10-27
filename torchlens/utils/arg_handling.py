@@ -58,13 +58,29 @@ def leaf_preserving_input_copies() -> Iterator[None]:
         _PRESERVE_LEAF_INPUT_COPIES.reset(token)
 
 
-def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
+def leaf_preserving_input_copies_active() -> bool:
+    """Return whether the current block copies and moves leaf inputs as leaves.
+
+    Returns
+    -------
+    bool
+        True inside :func:`leaf_preserving_input_copies`.
+    """
+
+    return _PRESERVE_LEAF_INPUT_COPIES.get()
+
+
+def _clone_input_tensor_payload(arg: torch.Tensor, *, preserve_leaf: bool = False) -> torch.Tensor:
     """Clone a forward-input tensor without preserving ``nn.Parameter`` type.
 
     Parameters
     ----------
     arg
         Forward input tensor or parameter to clone.
+    preserve_leaf
+        Whether a grad-tracked leaf ``nn.Parameter`` input is copied as a new
+        leaf with the same ``requires_grad`` (validation's private copies; see
+        :func:`leaf_preserving_input_copies`) instead of the graph-connected clone.
 
     Returns
     -------
@@ -76,8 +92,11 @@ def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
     if isinstance(arg, torch.nn.Parameter):
         from .._state import pause_logging
 
+        detach_leaf = preserve_leaf and arg.is_leaf and arg.requires_grad
         with pause_logging():
-            cloned = _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+            cloned = _copy_tensor_payload(arg, detach_tensor=detach_leaf, save_mode="copy")
+            if detach_leaf:
+                cloned.requires_grad_(True)
         setattr(cloned, INPUT_WAS_PARAMETER_ATTR, True)
         return cloned
     return cast(torch.Tensor, _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy"))
@@ -588,7 +607,7 @@ def _copy_input_tree_node(
         tensor_records.append((path, value, False))
         if id(value) in memo:
             return memo[id(value)]
-        cloned = _clone_input_tensor_payload(value)
+        cloned = _clone_input_tensor_payload(value, preserve_leaf=preserve_leaf_inputs)
         memo[id(value)] = cloned
         return cloned
     if isinstance(value, torch.Tensor):

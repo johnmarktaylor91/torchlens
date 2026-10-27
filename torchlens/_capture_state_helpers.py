@@ -2116,6 +2116,43 @@ _UNMOVED = object()
 """Sentinel: this subtree holds no tensor that changed device, so keep the original."""
 
 
+def _moved_input_tensor(tensor: torch.Tensor, device: torch.device | str) -> torch.Tensor:
+    """Move one input tensor to ``device``, keeping a grad-tracked leaf a leaf in validation.
+
+    ``tensor.to(device)`` of a grad-tracked leaf is a NON-leaf, so a model that
+    sets ``x.requires_grad = True`` on its input raised inside validation on a
+    device move although its plain forward runs. Inside
+    :func:`~torchlens.utils.arg_handling.leaf_preserving_input_copies` (validation's
+    private input copies, which promise no gradient path to the caller) the move
+    makes a new leaf with the same ``requires_grad``; elsewhere the historical
+    graph-connected move keeps gradients reaching the caller's input.
+
+    Parameters
+    ----------
+    tensor:
+        Input tensor on another device.
+    device:
+        Target device.
+
+    Returns
+    -------
+    torch.Tensor
+        The moved tensor.
+    """
+
+    from torchlens.utils.arg_handling import (
+        INPUT_WAS_PARAMETER_ATTR,
+        leaf_preserving_input_copies_active,
+    )
+
+    if not (tensor.is_leaf and tensor.requires_grad and leaf_preserving_input_copies_active()):
+        return tensor.to(device)
+    moved = tensor.detach().to(device).requires_grad_(True)
+    if getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False):
+        setattr(moved, INPUT_WAS_PARAMETER_ATTR, True)
+    return moved
+
+
 def _move_tensors_to_device_inner(
     obj: Any,
     device: torch.device | str,
@@ -2153,7 +2190,7 @@ def _move_tensors_to_device_inner(
         target = torch.device(device) if not isinstance(device, torch.device) else device
         if obj.device == target:
             return _UNMOVED
-        return obj.to(device)
+        return _moved_input_tensor(obj, device)
 
     registration = None if isinstance(obj, type) else get_registered_container(type(obj))
     is_dataclass_instance = _dataclasses.is_dataclass(obj) and not isinstance(obj, type)
