@@ -8985,6 +8985,14 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_structural_slot_checks.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "_edge_uses",
   "file": "torchlens/validation/core.py",
   "has_default": true,
