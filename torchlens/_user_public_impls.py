@@ -49,7 +49,11 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
-from .utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from .utils.arg_handling import (
+    leaf_preserving_input_copies,
+    normalize_input_args,
+    safe_copy_input_tree,
+)
 from .utils.display import warn_parallel
 from .utils.hashing import compute_graph_shape_hash
 from .utils.introspection import get_vars_of_type_from_obj
@@ -1274,6 +1278,41 @@ def _refuse_validation_precondition(
 
 
 def _validate_forward_pass_torch(
+    model: nn.Module | Callable[..., Any],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
+    verbose: bool = False,
+    validate_metadata: bool = True,
+    *,
+    num_threads: int | None = None,
+    output_device: OutputDeviceLiteral = "same",
+    save_budget: SaveBudgetOption = "auto",
+    _trace_observer: Callable[[Trace | None], None] | None = None,
+) -> bool:
+    """Validate saved outs; see :func:`_validate_forward_pass_torch_unscoped`.
+
+    Every input copy validation makes (its own and the capture's) keeps a
+    grad-tracked leaf input a leaf (:func:`leaf_preserving_input_copies`), so a
+    model that sets ``requires_grad`` on its input validates like it runs.
+    """
+
+    with leaf_preserving_input_copies():
+        return _validate_forward_pass_torch_unscoped(
+            model,
+            input_args,
+            input_kwargs,
+            random_seed,
+            verbose,
+            validate_metadata,
+            num_threads=num_threads,
+            output_device=output_device,
+            save_budget=save_budget,
+            _trace_observer=_trace_observer,
+        )
+
+
+def _validate_forward_pass_torch_unscoped(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,

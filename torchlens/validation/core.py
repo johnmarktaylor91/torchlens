@@ -746,12 +746,17 @@ def _comparator_self_test() -> None:
     from .._state import pause_logging
 
     with pause_logging():
-        base = torch.tensor([1.0, -2.0, 0.0, 0.5])
-        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75])
-        nan_pair = torch.tensor([float("nan"), 1.0])
-        nan_vs_number = torch.tensor([0.25, 1.0])
-        neg_zero = torch.tensor([-0.0, 1.0])
-        pos_zero = torch.tensor([0.0, 1.0])
+        # Every sentinel is pinned to float32, the dtype whose band the pairs
+        # below derive: a model that calls ``torch.set_default_dtype(float64)``
+        # would otherwise build float64 sentinels, judge the fp32-derived accept
+        # pair against the far tighter float64 band, and refuse a healthy judge.
+        fp32 = torch.float32
+        base = torch.tensor([1.0, -2.0, 0.0, 0.5], dtype=fp32)
+        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75], dtype=fp32)
+        nan_pair = torch.tensor([float("nan"), 1.0], dtype=fp32)
+        nan_vs_number = torch.tensor([0.25, 1.0], dtype=fp32)
+        neg_zero = torch.tensor([-0.0, 1.0], dtype=fp32)
+        pos_zero = torch.tensor([0.0, 1.0], dtype=fp32)
         # R74r6-F1: bound the EFFECTIVE fp32 band from BOTH sides, not just
         # non-vacuity. The loosest sentinel above is a 1/3 relative gap, so
         # any rtol below 0.333 used to pass -- a 5,461x-loosened band ran
@@ -767,7 +772,7 @@ def _comparator_self_test() -> None:
         # surface a poisoned/corrupted band lives in and must not be able to
         # move its own tripwire. (Headroom walk-out is pinned separately by
         # tests/test_replay_tolerance_dtype_tripwire.py's literal pins.)
-        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0])
+        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0], dtype=fp32)
         fp32_replay_rtol = derive_float_tolerances(
             torch.float32, _ACCUMULATING_REPLAY_ULP_HEADROOM
         )[0]
@@ -4247,6 +4252,11 @@ def _perturb_domain_sensitive_parent_values(
         complement = _bernoulli_complement_probabilities(layer, parent_values)
         if complement is not None:
             return complement
+    if layer.func_name in {"__pow__", "pow"} and _pow_zero_base_exponent_parent(
+        layer, parent_label
+    ):
+        # ``0 ** e`` is 0 for every e > 0; only an exponent of 0 or below moves it.
+        return _finite_fill_distinct_from(parent_values, 0.0, -1.0)
     if not _parent_label_occupies_arg_position(layer, parent_label, 0):
         return None
     if layer.func_name == "log":
@@ -4677,6 +4687,20 @@ def _finite_fill_distinct_from(
     if torch.equal(candidate, tensor):
         return torch.full_like(tensor, fallback)
     return candidate
+
+
+def _pow_zero_base_exponent_parent(layer: Op, parent_label: str) -> bool:
+    """Return whether ``parent_label`` is only the exponent of a power whose saved base is zero."""
+
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    if len(saved_args) < 2 or _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return False
+    if not _parent_label_occupies_arg_position(layer, parent_label, 1):
+        return False
+    base = saved_args[0]
+    if isinstance(base, torch.Tensor):
+        return base.numel() > 0 and bool(torch.all(torch.eq(base, 0)).item())
+    return isinstance(base, (int, float)) and not isinstance(base, bool) and base == 0
 
 
 def _pow_exponent(layer: Op) -> Any:

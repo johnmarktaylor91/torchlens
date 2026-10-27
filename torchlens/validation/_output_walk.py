@@ -67,6 +67,13 @@ def independent_output_tensor_ids(output: Any) -> list[int]:
             Remaining recursion budget guard.
         """
 
+        if isinstance(value, torch.nn.Parameter):
+            # Capture's agreed semantics: a Parameter returned as-is is model
+            # state, not a computed output leaf, and the adapter excludes it
+            # by design. Counting it here reported that design as a dropped
+            # leaf. Only Parameter instances are skipped; any other tensor the
+            # adapter misses still fails the cross-check.
+            return
         if isinstance(value, torch.Tensor):
             seen.add(id(value))
             return

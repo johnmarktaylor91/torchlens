@@ -18,12 +18,13 @@ from ._query import (
     _build_box,
     _call_index_callback,
     _call_interval_callback,
-    _distinct_terminals,
     _IndexSet,
     _initial_axis_sets,
+    _memoized_path_walk,
     _normalize_unit,
     _TerminalState,
     _validate_descriptor_for_query,
+    _WalkHop,
     map_transposed_convolution_index_set,
 )
 from ._rules import _RuleResult
@@ -154,35 +155,35 @@ def _walk_to_target(
     exact: bool,
     memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Recursively transpose a joint axis-set state toward one target.
+    """Transpose a joint axis-set state toward one target along every path.
 
     ``memo`` collapses the path enumeration to distinct
-    ``(operation, axis-set state)`` states for the duration of one query. It is
-    plain memoization of a pure function, so the cached tuple is exactly what
-    the recursion would rebuild; see ``_query._walk_to_input``.
+    ``(operation, axis-set state)`` states for the duration of one query; the
+    walk runs without recursion, see ``_query._memoized_path_walk``.
     """
 
-    key = (op.label, input_sets, exact)
-    cached = memo.get(key)
-    if cached is not None:
-        return cached
-    terminals_for_key = _walk_target_body(
-        op, input_sets, target_label, active, by_reference, exact, memo
-    )
-    memo[key] = terminals_for_key
-    return terminals_for_key
+    def expand(
+        current: Op, sets: _AxisSets, current_exact: bool
+    ) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+        return _forward_hops(current, sets, target_label, active, by_reference, current_exact)
+
+    return _memoized_path_walk(op, input_sets, exact, expand, memo)
 
 
-def _walk_target_body(
+def _forward_hops(
     op: Op,
     input_sets: _AxisSets,
     target_label: str,
     active: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
-) -> tuple[_TerminalState, ...]:
-    """Transpose one joint axis-set state across a single forward hop."""
+) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+    """Transpose one joint axis-set state across a single forward hop.
+
+    Returns the terminal state when ``op`` is the target, otherwise the child
+    hops in child order (a concatenation branch whose mapped sets are empty is
+    skipped).
+    """
 
     if op.label == target_label:
         clipped = tuple(
@@ -190,8 +191,8 @@ def _walk_target_body(
             for axis, item in enumerate(input_sets)
         )
         sets_exact = all(item is None or item.exact for item in input_sets)
-        return (_TerminalState(input_sets, clipped, exact and sets_exact),)
-    terminals: list[_TerminalState] = []
+        return (_TerminalState(input_sets, clipped, exact and sets_exact),), []
+    hops: list[_WalkHop] = []
     children = tuple(
         by_reference[label]
         for label in op.children
@@ -212,18 +213,14 @@ def _walk_target_body(
                 for axis, item in enumerate(child_sets)
             )
         )
-        terminals.extend(
-            _walk_to_target(
+        hops.append(
+            (
                 child,
                 bounded,
-                target_label,
-                active,
-                by_reference,
                 exact and hop_exact and all(item is None or item.exact for item in child_sets),
-                memo,
             )
         )
-    return _distinct_terminals(terminals)
+    return (), hops
 
 
 def _map_to_child(

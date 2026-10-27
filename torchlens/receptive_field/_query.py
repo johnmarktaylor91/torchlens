@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import islice
@@ -395,6 +395,74 @@ def _distinct_terminals(terminals: Iterable[_TerminalState]) -> tuple[_TerminalS
     return tuple(dict.fromkeys(terminals))
 
 
+_WalkHop: TypeAlias = "tuple[Op, _AxisSets, bool]"
+"""One hop of a path walk: the next operation, its bounded axis sets, its exactness."""
+
+_WalkExpand: TypeAlias = (
+    "Callable[[Op, _AxisSets, bool], tuple[tuple[_TerminalState, ...], list[_WalkHop]]]"
+)
+"""Expands one walk state into its terminal states (at the endpoint) or its next hops."""
+
+
+@dataclass
+class _WalkFrame:
+    """One pending walk state on the explicit stack of :func:`_memoized_path_walk`."""
+
+    key: tuple[str, _AxisSets, bool]
+    hops: list[_WalkHop]
+    terminals: list[_TerminalState]
+    next_hop: int = 0
+
+
+def _memoized_path_walk(
+    op: Op,
+    axis_sets: _AxisSets,
+    exact: bool,
+    expand: _WalkExpand,
+    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
+) -> tuple[_TerminalState, ...]:
+    """Walk every path from one state to the walk's endpoint with an explicit stack.
+
+    The result of a state ``(operation, axis sets, exact)`` is the de-duplicated
+    concatenation of its hops' results, in hop order, or the terminal states
+    ``expand`` returns at the endpoint. That definition is naturally recursive,
+    one Python frame per hop, which overflowed on deep chains (a 450-layer
+    ResNet-like stack raised ``RecursionError``). This driver evaluates the same
+    definition depth-first with a stack of :class:`_WalkFrame` objects, resolving
+    hops in the same order the recursion did, so every result and every ``memo``
+    entry is identical; depth costs list entries, not interpreter frames.
+
+    ``memo`` caches each state's pure result for one query, collapsing the path
+    enumeration (exponential in the number of merges) to distinct states.
+    Terminal de-duplication is a separate step; see :func:`_distinct_terminals`.
+    """
+    root_key = (op.label, axis_sets, exact)
+    cached = memo.get(root_key)
+    if cached is not None:
+        return cached
+    terminals, hops = expand(op, axis_sets, exact)
+    frames = [_WalkFrame(root_key, hops, list(terminals))]
+    while True:
+        frame = frames[-1]
+        if frame.next_hop < len(frame.hops):
+            next_op, next_sets, next_exact = frame.hops[frame.next_hop]
+            frame.next_hop += 1
+            key = (next_op.label, next_sets, next_exact)
+            cached = memo.get(key)
+            if cached is not None:
+                frame.terminals.extend(cached)
+                continue
+            terminals, hops = expand(next_op, next_sets, next_exact)
+            frames.append(_WalkFrame(key, hops, list(terminals)))
+            continue
+        frames.pop()
+        result = _distinct_terminals(frame.terminals)
+        memo[frame.key] = result
+        if not frames:
+            return result
+        frames[-1].terminals.extend(result)
+
+
 def _walk_to_input(
     op: Op,
     output_sets: _AxisSets,
@@ -404,50 +472,49 @@ def _walk_to_input(
     exact: bool,
     memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Recursively map a joint axis-set state to one requested model input.
+    """Map a joint axis-set state to one requested model input along every path.
 
-    The walk enumerates paths, so a merge-heavy graph re-derives the same
-    ``(operation, axis-set state)`` subwalk once per path that reaches it --
-    exponential in the number of merges. ``memo`` caches that pure subresult
-    for the duration of one query. It is plain memoization of a pure function:
-    the cached tuple is exactly what the recursion would rebuild. Terminal
-    de-duplication is a separate step; see :func:`_distinct_terminals`.
+    The walk enumerates paths, so ``memo`` caches each ``(operation, axis-set
+    state)`` subwalk for the duration of one query; see
+    :func:`_memoized_path_walk`, which runs it without recursion.
     """
-    key = (op.label, output_sets, exact)
-    cached = memo.get(key)
-    if cached is not None:
-        return cached
-    terminals_for_key = _walk_body(
-        op, output_sets, input_label, ancestry, by_reference, exact, memo
-    )
-    memo[key] = terminals_for_key
-    return terminals_for_key
+
+    def expand(
+        current: Op, sets: _AxisSets, current_exact: bool
+    ) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+        return _reverse_hops(current, sets, input_label, ancestry, by_reference, current_exact)
+
+    return _memoized_path_walk(op, output_sets, exact, expand, memo)
 
 
-def _walk_body(
+def _reverse_hops(
     op: Op,
     output_sets: _AxisSets,
     input_label: str,
     ancestry: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
-) -> tuple[_TerminalState, ...]:
-    """Map one joint axis-set state across a single reverse hop."""
+) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+    """Map one joint axis-set state across a single reverse hop.
+
+    Returns the terminal state when ``op`` is the requested input, otherwise
+    the parent hops in parent order (a concatenation branch whose mapped sets
+    are empty is skipped).
+    """
     if op.label == input_label:
         clipped = tuple(
             None if item is None else item.clipped(int(op.shape[axis]))
             for axis, item in enumerate(output_sets)
         )
         sets_exact = all(item is None or item.exact for item in output_sets)
-        return (_TerminalState(output_sets, clipped, exact and sets_exact),)
+        return (_TerminalState(output_sets, clipped, exact and sets_exact),), []
     result, _ = _engine._rule_result(op)
     parents = tuple(
         by_reference[label]
         for label in op.parents
         if label in by_reference and by_reference[label].label in ancestry
     )
-    terminals: list[_TerminalState] = []
+    hops: list[_WalkHop] = []
     for parent in parents:
         parent_sets, hop_exact = _map_to_parent(op, parent, output_sets, result)
         if isinstance(result.values.get("concatenate_axis"), int) and any(
@@ -462,18 +529,14 @@ def _walk_body(
                 for axis, item in enumerate(parent_sets)
             )
         )
-        terminals.extend(
-            _walk_to_input(
+        hops.append(
+            (
                 parent,
                 bounded,
-                input_label,
-                ancestry,
-                by_reference,
                 exact and hop_exact and all(item is None or item.exact for item in parent_sets),
-                memo,
             )
         )
-    return _distinct_terminals(terminals)
+    return (), hops
 
 
 def _map_to_parent(
