@@ -65,6 +65,11 @@ CHECK_PRECONDITION = "precondition_refusal"
 #: actually needs. ``get_validation_failure(trace)`` returned ``None`` for a
 #: ``False`` result, the bare-``repr(False)`` menagerie's ``convit_*`` rows hit.
 CHECK_RETRACE_MISMATCH = "retrace_mismatch"
+#: Replay finished with no failed decision but could not verify every node
+#: (status ``unverified``: an op replay could not check, or no node replayed).
+#: Such a run returns ``False``; ``_non_pass_record.finish_validation_status``
+#: records this check with the first unverified op so the ``False`` is typed.
+CHECK_REPLAY_UNVERIFIED = "replay_unverified"
 
 
 @dataclass
