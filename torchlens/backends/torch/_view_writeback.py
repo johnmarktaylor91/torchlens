@@ -115,6 +115,33 @@ def overlapping_labeled_aliases(
     return found
 
 
+def data_alias_write_reaches_base(trace: Any, receiver: torch.Tensor) -> bool:
+    """Return whether an in-place write through a ``.data`` alias will advance a labeled base.
+
+    The ``.data`` getter is captured as ``detach``; a receiver mutation through
+    it reaches the base tensor in the graph only through storage-alias label
+    propagation, which runs in default captures and only when a labeled alias
+    shares the receiver's elements (the base itself).
+
+    Parameters
+    ----------
+    trace
+        Active capture trace.
+    receiver
+        The ``.data`` alias about to be written in place.
+
+    Returns
+    -------
+    bool
+        True when the propagation will connect the write to a labeled base.
+    """
+
+    if not view_mutation_propagation_enabled(trace):
+        return False
+    with _state.pause_logging(), internal_scalar_read():
+        return bool(overlapping_labeled_aliases(receiver, get_tensor_label(receiver)))
+
+
 def record_view_mutation_prior_label(
     alias: torch.Tensor, mutation_label: str, prior_label: str
 ) -> None:
