@@ -346,7 +346,7 @@ class _SubgraphReplay:
             # replay's leaves so its gradients stay connected to them.
             output = _select_output(op, _replay_boundary(op, input_args, [], self.param_leaves))
         else:
-            output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
+            output = _execute_func_with_restored_state(op, input_args, [], False)
         if not isinstance(output, torch.Tensor):
             raise AutogradGradReplayError(f"subgraph op {op.label!r} did not replay a tensor")
         return output

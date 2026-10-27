@@ -596,21 +596,24 @@ def _setitem_destination_coverage_is_total(
         return False
     if not _index_positions_cover_destination_exactly(destination, index):
         return False
-    if isinstance(replacement, torch.Tensor):
-        if broadcast_replacement:
-            return _replacement_broadcasts_onto(replacement, selected)
-        return tuple(selected.shape) == tuple(replacement.shape)
-    return True
+    return _replacement_fits_selection(replacement, selected, broadcast_replacement)
 
 
-def _replacement_broadcasts_onto(replacement: torch.Tensor, selected: torch.Tensor) -> bool:
+def _replacement_fits_selection(
+    replacement: Any, selected: torch.Tensor, broadcast_replacement: bool
+) -> bool:
     """Return whether assigning ``replacement`` writes every element of ``selected``.
 
-    ``__setitem__`` broadcasts its value onto the selected region, so a value of
-    shape ``[256]`` written to a ``[1, 256]`` slice still writes all 256 slots.
-    The broadcast must leave the selected shape unchanged.
+    A non-tensor replacement fills the selection. A tensor must match the
+    selected shape exactly, or, with ``broadcast_replacement``, broadcast onto it
+    unchanged: ``__setitem__`` broadcasts its value, so a ``[256]`` value written
+    to a ``[1, 256]`` slice still writes all 256 slots.
     """
 
+    if not isinstance(replacement, torch.Tensor):
+        return True
+    if not broadcast_replacement:
+        return tuple(selected.shape) == tuple(replacement.shape)
     try:
         broadcast = torch.broadcast_shapes(tuple(replacement.shape), tuple(selected.shape))
     except RuntimeError:

@@ -58,7 +58,7 @@ def finish_validation_status(trace: Any, decision_recorder: Any) -> ValidationRe
     """
 
     status = decision_recorder.as_status(backend=str(getattr(trace, "backend", "torch")))
-    setattr(trace, "_validation_replay_status", status)
+    trace._validation_replay_status = status
     if not status.passed and get_validation_failure(trace) is None:
         record_validation_failure(trace, _failure_for_status(trace, status))
     return status
