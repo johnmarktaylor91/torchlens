@@ -912,6 +912,22 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
             "overload, and a parent that also sits at another slot or a kwarg"
         ),
     ),
+    CustomCheckExemption(
+        func_name="expand",
+        check="check_expand_pinned_size_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts a size argument at a NON-singleton input dim only when its saved "
+            "value equals the input's extent there, the one value expand accepts at "
+            "that dim (a tensor-held size, as m18155's arange(n).expand(b, n))"
+        ),
+        refuses=(
+            "a size at a singleton or new leading dim, where any value is valid and "
+            "the size sets the output shape; a size that differs from the extent; "
+            "the arg-0 input; and a parent at more than one slot"
+        ),
+    ),
 )
 
 #: Kwarg spellings that may match a structural POSITION. Every alias widens the

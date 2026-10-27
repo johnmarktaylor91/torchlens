@@ -97,3 +97,37 @@ def test_packed_recurrence_batch_sizes_slot_is_exempt() -> None:
 def test_packed_recurrence_data_slot_still_fails_when_frozen() -> None:
     trace, op = _packed_trace("gru")
     _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][0])
+
+
+# ------------------------------------------------------- expand pinned size
+
+
+class _ExpandToWidth(nn.Module):
+    def __init__(self, singleton: bool) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.singleton = singleton
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # A size held in a 0-d tensor, as m18155's ``arange(n).expand(b, n)``.
+        h = self.lin(x)
+        width = (h.new_ones(()) * 4).long()
+        source = h[:1] if self.singleton else h
+        return source.expand(2, width) * 2.0
+
+
+def _expand_size_parent(op: Any) -> str:
+    return op.parent_arg_positions["args"][2]
+
+
+def test_expand_size_pinned_to_the_input_extent_is_exempt() -> None:
+    assert _validates(_ExpandToWidth(False), torch.randn(4))
+    trace = _capture(_ExpandToWidth(False), torch.randn(4))
+    op = _op(trace, "expand")
+    assert _decision(trace, op, _expand_size_parent(op)) == _EXEMPT
+
+
+def test_expand_size_at_a_singleton_dim_still_fails_when_frozen() -> None:
+    trace = _capture(_ExpandToWidth(True), torch.randn(4))
+    op = _op(trace, "expand")
+    _assert_frozen_edge_fails(trace, op, _expand_size_parent(op))

@@ -54,6 +54,7 @@ from ._index_domain import (
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
 from ._structural_slot_checks import (
+    check_expand_pinned_size_exempt,
     check_packed_rnn_batch_sizes_exempt,
 )
 from ._value_predicates import (
@@ -1232,6 +1233,7 @@ CUSTOM_EXEMPTION_CHECKS: dict[str, Callable[["Trace", Op, list[str]], bool]] = {
     "gru": check_packed_rnn_batch_sizes_exempt,
     "rnn_tanh": check_packed_rnn_batch_sizes_exempt,
     "rnn_relu": check_packed_rnn_batch_sizes_exempt,
+    "expand": check_expand_pinned_size_exempt,
 }
 
 
