@@ -474,7 +474,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         proof="torchlens.validation._saved_value_proofs:_sdpa_singleton_key_decision",
         refuses=(
             "two or more key positions, non-zero dropout, a non-finite output, and a "
-            "perturbed query, value or mask"
+            "perturbed value or mask"
         ),
     ),
     Exemption(

@@ -334,17 +334,21 @@ class _Attention(nn.Module):
 _SDPA = {"scaled_dot_product_attention"}
 
 
-def test_single_key_position_exempts_the_key() -> None:
+def test_single_key_position_exempts_query_and_key() -> None:
     assert _validates(_Attention(1), torch.randn(2, 3, 4))
     trace = _capture(_Attention(1), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
-    assert _decision(trace, op, _arg_parent(op, 1)) == ("exempted", "sdpa_singleton_key")
+    for slot in (0, 1):
+        assert _decision(trace, op, _arg_parent(op, slot)) == ("exempted", "sdpa_singleton_key")
 
 
-def test_key_of_longer_memory_and_lone_value_still_fail() -> None:
+def test_query_and_key_of_longer_memory_and_lone_value_still_fail() -> None:
     trace = _capture(_Attention(2), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
+    trace = _capture(_Attention(2), torch.randn(2, 3, 4))
+    op = _op(trace, _SDPA)
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
     trace = _capture(_Attention(1), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 2))

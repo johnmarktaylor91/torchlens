@@ -16,8 +16,8 @@ saved co-arguments, and returns non-exempt for anything else:
   ``running_var`` (``args[4]``) only scales a zero;
 - pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0,
   or the saved base is all one, so the exponent (``args[1]``) is irrelevant;
-- sdpa: there is one key position and no dropout, so the key (``args[1]``)
-  gets softmax weight exactly one;
+- sdpa: there is one key position and no dropout, so its softmax weight is
+  exactly one whatever the query (``args[0]``) or key (``args[1]``) holds;
 - ``__setitem__``: the perturbed parent is an integer index component that
   addresses a destination dim of size 1, where every valid index is position 0;
 - ``scatter_reduce``: ``include_self=False`` and the index covers every
@@ -315,14 +315,14 @@ def _is_bool_mask(component: Any) -> bool:
 def _sdpa_singleton_key_decision(
     layer: Op, keys: set[Any], args: tuple[Any, ...]
 ) -> PosthocPerturbDecision:
-    """Exempt sdpa's key when there is one key position and no dropout.
+    """Exempt sdpa's query or key when there is one key position and no dropout.
 
     Softmax over a single key position is exactly one for any finite score, so
-    every query reads the lone value row whatever the key holds. A masked-out
-    lone key makes the output non-finite, which is refused.
+    every query reads the lone value row whatever the query and key hold. A
+    masked-out lone key makes the output non-finite, which is refused.
     """
 
-    if keys != {1} or len(args) < 3 or not isinstance(args[1], torch.Tensor):
+    if keys not in ({0}, {1}) or len(args) < 3 or not isinstance(args[1], torch.Tensor):
         return _NOT_PROVED
     kwargs = getattr(layer, "saved_kwargs", None) or {}
     dropout_p = kwargs.get("dropout_p", args[4] if len(args) > 4 else 0.0)
@@ -334,7 +334,7 @@ def _sdpa_singleton_key_decision(
         True,
         "sdpa_singleton_key",
         "there is one key position, so its softmax weight is exactly one and the "
-        "key values cannot reach the output",
+        "query and key values cannot reach the output",
     )
 
 
