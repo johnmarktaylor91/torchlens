@@ -32,7 +32,8 @@ per-op logging split:
   nesting detection, argument/activation/retention handling.
 - `sources.py` / `tensor_tracking.py` — source-node logging and parent-child links.
 - `belt.py` / `rescue.py` — stale pre-wrap reference safety net (derived protocol-invisible
-  belt + disclosed mode-rescue rerun).
+  belt and a wrap-time module-global sweep of every wrapped callable + disclosed mode-rescue
+  rerun).
 - `_completeness_*.py` / `completeness_witness.py` — capture-completeness witness.
 - `collectives.py` — explicit `torch.distributed` collective boundary ops.
 
