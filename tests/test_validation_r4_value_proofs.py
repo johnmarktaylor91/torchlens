@@ -322,9 +322,10 @@ class _SplitEmptyChunk(nn.Module):
         super().__init__()
         self.lin = nn.Linear(4, 6)
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        a, b, c = torch.split(self.lin(x), [3, 0, 3], dim=-1)
-        return a + c, b
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # The empty chunk stays unused, as in the real model (m16291).
+        a, _, c = torch.split(self.lin(x), [3, 0, 3], dim=-1)
+        return a + c
 
 
 _SPLIT_NAMES = {"split", "split_with_sizes"}
@@ -373,6 +374,17 @@ class _PairIndexOverwrite(nn.Module):
         return dest
 
 
+class _NumpyMaskScalarFill(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pts = self.lin(x)
+        pts[np.ones(pts.shape[0], dtype=bool)] = 0.5
+        return pts * x
+
+
 _ALL_PAIRS = [0, 1, 2, 0, 1, 2]
 _REPEATED_PAIR = [0, 1, 1, 0, 1, 2]
 
@@ -387,7 +399,16 @@ def test_full_overwrite_proof_reads_numpy_masks_and_index_pairs(model: nn.Module
     assert _validates(model, x)
     trace = _capture(model, x)
     op = _op(trace, {"__setitem__"})
-    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "full_destination_overwrite")
+    # A tensor right-hand side settles the destination before perturbation.
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "pre_perturbation_exemption")
+
+
+def test_scalar_fill_through_full_numpy_mask_is_proved_after_perturbation() -> None:
+    assert _validates(_NumpyMaskScalarFill(), torch.randn(2, 3))
+    trace = _capture(_NumpyMaskScalarFill(), torch.randn(2, 3))
+    op = _op(trace, {"__setitem__"})
+    decision = _decision(trace, op, _arg_parent(op, 0))
+    assert decision == ("exempted", "scalar_destination_overwrite")
 
 
 @pytest.mark.parametrize(
