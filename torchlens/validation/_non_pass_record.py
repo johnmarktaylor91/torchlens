@@ -7,6 +7,8 @@ caller saw a bare ``False`` with nothing to type it by. Every status return of
 ``validate_saved_outs`` goes through :func:`finish_validation_status`, which
 records the first non-passing decision when no site recorded a failure first.
 It adds a record only; it never changes the status or any decision.
+:func:`record_replay_exception` keeps the exception text of a perturbed replay
+that raised, so an ``unverified`` record can say what raised.
 """
 
 from __future__ import annotations
@@ -17,10 +19,14 @@ from .diagnostics import (
     CHECK_GROUND_TRUTH,
     CHECK_METADATA_INVARIANT,
     CHECK_PERTURBATION,
+    CHECK_PERTURBATION_EXCEPTION,
     CHECK_REPLAY,
     CHECK_REPLAY_UNVERIFIED,
+    ValidationDiagnostic,
     ValidationFailure,
+    get_validation_diagnostics,
     get_validation_failure,
+    record_validation_diagnostic,
     record_validation_failure,
 )
 
@@ -54,11 +60,11 @@ def finish_validation_status(trace: Any, decision_recorder: Any) -> ValidationRe
     status = decision_recorder.as_status(backend=str(getattr(trace, "backend", "torch")))
     setattr(trace, "_validation_replay_status", status)
     if not status.passed and get_validation_failure(trace) is None:
-        record_validation_failure(trace, _failure_for_status(status))
+        record_validation_failure(trace, _failure_for_status(trace, status))
     return status
 
 
-def _failure_for_status(status: ValidationReplayStatus) -> ValidationFailure:
+def _failure_for_status(trace: Any, status: ValidationReplayStatus) -> ValidationFailure:
     """Describe a non-passing status by its first deciding decision."""
 
     decisions = list(status.decisions)
@@ -75,6 +81,9 @@ def _failure_for_status(status: ValidationReplayStatus) -> ValidationFailure:
         )
     deciding = deciding or {}
     reason = deciding.get("reason")
+    exceptions = _replay_exceptions_for(trace, deciding.get("op_label"))
+    if exceptions:
+        detail = f"{detail}; perturbed replay raised {exceptions[0]}"
     return ValidationFailure(
         check=check,
         op_label=deciding.get("op_label"),
@@ -87,5 +96,41 @@ def _failure_for_status(status: ValidationReplayStatus) -> ValidationFailure:
             "decision_reason": reason,
             "failed_node_count": status.failed_node_count,
             "unverified_node_count": status.unverified_node_count,
+            "replay_exceptions": exceptions,
         },
+    )
+
+
+def _replay_exceptions_for(trace: Any, op_label: str | None) -> list[str]:
+    """Return the recorded perturbed-replay exception texts for ``op_label``."""
+
+    for diagnostic in get_validation_diagnostics(trace):
+        if (
+            diagnostic.check == CHECK_PERTURBATION_EXCEPTION
+            and diagnostic.extra.get("op_label") == op_label
+        ):
+            return list(diagnostic.extra.get("exceptions", ()))
+    return []
+
+
+def record_replay_exception(
+    trace: Any,
+    layer_label: str,
+    layers_to_perturb: list[str],
+    exceptions: list[Exception],
+) -> None:
+    """Record which exception left a perturbed replay unverified (diagnostics only)."""
+
+    described = [f"{type(exc).__name__}: {exc}"[:500] for exc in exceptions]
+    record_validation_diagnostic(
+        trace,
+        ValidationDiagnostic(
+            check=CHECK_PERTURBATION_EXCEPTION,
+            message=described[0] if described else "perturbed replay raised",
+            extra={
+                "op_label": layer_label,
+                "perturbed_parents": list(layers_to_perturb),
+                "exceptions": described,
+            },
+        ),
     )

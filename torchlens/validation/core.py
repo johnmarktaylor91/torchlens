@@ -63,7 +63,10 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
-from ._non_pass_record import finish_validation_status as _finish_validation_status
+from ._non_pass_record import (
+    finish_validation_status as _finish_validation_status,
+    record_replay_exception as _record_replay_exception,
+)
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._source_provenance import check_source_provenance
@@ -2564,6 +2567,7 @@ def _execute_func_with_restored_state(
     layers_to_perturb: list[str],
     layer_label: str,
     verbose: bool,
+    exception_sink: list[Exception] | None = None,
 ) -> Any:
     """Execute a layer's function with restored RNG and autocast state.
 
@@ -2575,7 +2579,8 @@ def _execute_func_with_restored_state(
     The caller treats ``None`` as a failed replay execution for normal replay
     and an unverified perturbation execution exception for perturbation replay.
 
-    Returns the recomputed output tensor, or None on exception.
+    Returns the recomputed output tensor, or None on exception; the exception
+    is appended to ``exception_sink`` when one is given.
     """
     layer_func = layer.func
 
@@ -2587,6 +2592,8 @@ def _execute_func_with_restored_state(
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
         # caller decide whether this is acceptable.
+        if exception_sink is not None:
+            exception_sink.append(e)
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
@@ -3175,8 +3182,14 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if input_args is None:
         return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
+    replay_exceptions: list[Exception] = []
     recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+        layer,
+        input_args,
+        layers_to_perturb,
+        layer_to_validate_parents_for_label,
+        verbose,
+        replay_exceptions,
     )
 
     # A perturbed execution that RAISES proves the op read the perturbed value
@@ -3196,7 +3209,12 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer,
+                retry_args,
+                layers_to_perturb,
+                layer_to_validate_parents_for_label,
+                verbose,
+                replay_exceptions,
             )
             if recomputed_output is not None:
                 input_args = retry_args
@@ -3230,6 +3248,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.failed_result("replay_execution_exception")
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape). It is unverified, not a pass.
+        _record_replay_exception(
+            self, layer_to_validate_parents_for_label, layers_to_perturb, replay_exceptions
+        )
         return ValidationCheckResult.unverified("perturbation_execution_exception")
 
     matches_saved = tensor_nanequal(recomputed_output, saved_output, allow_tolerance=True)

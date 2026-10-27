@@ -159,3 +159,32 @@ def test_a_site_record_is_kept_over_the_status_record() -> None:
         assert failure is not None and "decision_reason" not in failure.extra
     finally:
         trace.cleanup()
+
+
+def test_perturbation_exception_text_reaches_the_unverified_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A perturbed replay that raises leaves its exception text in the record."""
+
+    real = core.execute_replay_func
+
+    def raising(layer: Any, input_args: Any, layers_to_perturb: list[str]) -> Any:
+        if layers_to_perturb:
+            raise ValueError("synthetic perturbed-replay error")
+        return real(layer, input_args, layers_to_perturb)
+
+    model = nn.Sequential(nn.Linear(4, 6), nn.ReLU(), nn.Linear(6, 3))
+    x = torch.randn(2, 4)
+    ground_truth = model(x).detach().clone()
+    trace = _capture(model, x)
+    monkeypatch.setattr(core, "execute_replay_func", raising)
+    try:
+        status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        failure = get_validation_failure(trace)
+    finally:
+        trace.cleanup()
+    assert status.state == "unverified"
+    assert failure is not None and failure.check == CHECK_REPLAY_UNVERIFIED
+    assert failure.extra["decision_reason"] == "perturbation_execution_exception"
+    assert failure.extra["replay_exceptions"]
+    assert "synthetic perturbed-replay error" in failure.message

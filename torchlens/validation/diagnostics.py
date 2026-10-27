@@ -70,6 +70,9 @@ CHECK_RETRACE_MISMATCH = "retrace_mismatch"
 #: Such a run returns ``False``; ``_non_pass_record.finish_validation_status``
 #: records this check with the first unverified op so the ``False`` is typed.
 CHECK_REPLAY_UNVERIFIED = "replay_unverified"
+#: Diagnostic (never a failure by itself): a perturbed replay raised on every
+#: attempt, so the edge stayed unverified. Carries the exception text per attempt.
+CHECK_PERTURBATION_EXCEPTION = "perturbation_execution_exception"
 
 
 @dataclass
