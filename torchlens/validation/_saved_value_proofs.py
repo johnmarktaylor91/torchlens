@@ -17,7 +17,8 @@ saved co-arguments, and returns non-exempt for anything else:
 - pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0,
   or the saved base is all one, so the exponent (``args[1]``) is irrelevant;
 - sdpa: there is one key position and no dropout, so its softmax weight is
-  exactly one whatever the query (``args[0]``) or key (``args[1]``) holds;
+  exactly one whatever the query (``args[0]``), key (``args[1]``) or additive
+  float mask (``args[3]``) holds;
 - ``__setitem__``: the perturbed parent is an integer index component that
   addresses a destination dim of size 1, where every valid index is position 0;
 - ``scatter_reduce``: ``include_self=False`` and the index covers every
@@ -40,6 +41,11 @@ from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 from .exemptions import PosthocPerturbDecision
 
 _NOT_PROVED = PosthocPerturbDecision(False, "not_value_proved")
+
+#: Keyword spellings read as their positional slot, per op family.
+_KWARG_SLOTS = {
+    "scaled_dot_product_attention": {"query": 0, "key": 1, "value": 2, "attn_mask": 3},
+}
 
 DIVISION_FUNC_NAMES = frozenset(
     {
@@ -111,10 +117,15 @@ def _perturbed_arg_keys(layer: Op, layers_to_perturb: list[str]) -> set[Any] | N
         return None
     positions = getattr(layer, "parent_arg_positions", None) or {}
     label = layers_to_perturb[0]
-    if label in (positions.get("kwargs", {}) or {}).values():
-        return None
+    kwarg_slots = _KWARG_SLOTS.get(getattr(layer, "func_name", None) or "", {})
+    keys: set[Any] = set()
+    for name, parent in (positions.get("kwargs", {}) or {}).items():
+        if parent == label:
+            if name not in kwarg_slots:
+                return None
+            keys.add(kwarg_slots[name])
     arg_positions = positions.get("args", {}) or {}
-    return {key for key, parent in arg_positions.items() if parent == label}
+    return keys | {key for key, parent in arg_positions.items() if parent == label}
 
 
 def _output_all_equal(layer: Op, value: float) -> bool:
@@ -315,16 +326,21 @@ def _is_bool_mask(component: Any) -> bool:
 def _sdpa_singleton_key_decision(
     layer: Op, keys: set[Any], args: tuple[Any, ...]
 ) -> PosthocPerturbDecision:
-    """Exempt sdpa's query or key when there is one key position and no dropout.
+    """Exempt sdpa's query, key or additive mask when there is one key position.
 
     Softmax over a single key position is exactly one for any finite score, so
-    every query reads the lone value row whatever the query and key hold. A
-    masked-out lone key makes the output non-finite, which is refused.
+    with no dropout every query reads the lone value row whatever the query, key
+    or an additive float mask hold. A bool mask can mask the lone key out and is
+    never exempted; a masked-out lone key makes the output non-finite, which is
+    refused.
     """
 
-    if keys not in ({0}, {1}) or len(args) < 3 or not isinstance(args[1], torch.Tensor):
+    if keys not in ({0}, {1}, {3}) or len(args) < 3 or not isinstance(args[1], torch.Tensor):
         return _NOT_PROVED
     kwargs = getattr(layer, "saved_kwargs", None) or {}
+    mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
+    if keys == {3} and not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
+        return _NOT_PROVED
     dropout_p = kwargs.get("dropout_p", args[4] if len(args) > 4 else 0.0)
     if args[1].ndim < 2 or args[1].shape[-2] != 1 or dropout_p != 0:
         return _NOT_PROVED
@@ -334,7 +350,7 @@ def _sdpa_singleton_key_decision(
         True,
         "sdpa_singleton_key",
         "there is one key position, so its softmax weight is exactly one and the "
-        "query and key values cannot reach the output",
+        "query, key and additive mask values cannot reach the output",
     )
 
 

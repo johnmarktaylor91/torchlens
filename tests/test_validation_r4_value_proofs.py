@@ -326,29 +326,43 @@ class _Attention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         memory = x[:, : self.key_length]
+        mask = x[:, :, : self.key_length].unsqueeze(1) * 0.5
         return nn.functional.scaled_dot_product_attention(
-            self.q(x).unsqueeze(1), self.k(memory).unsqueeze(1), self.v(memory).unsqueeze(1)
+            self.q(x).unsqueeze(1),
+            self.k(memory).unsqueeze(1),
+            self.v(memory).unsqueeze(1),
+            attn_mask=mask,
         )
 
 
 _SDPA = {"scaled_dot_product_attention"}
 
 
-def test_single_key_position_exempts_query_and_key() -> None:
+def _mask_parent(op: Any) -> str:
+    """Return sdpa's attn_mask parent, positional or keyword."""
+
+    kwargs = op.parent_arg_positions.get("kwargs", {}) or {}
+    return kwargs.get("attn_mask") or _arg_parent(op, 3)
+
+
+def test_single_key_position_exempts_query_key_and_additive_mask() -> None:
     assert _validates(_Attention(1), torch.randn(2, 3, 4))
     trace = _capture(_Attention(1), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
-    for slot in (0, 1):
-        assert _decision(trace, op, _arg_parent(op, slot)) == ("exempted", "sdpa_singleton_key")
+    for parent in (_arg_parent(op, 0), _arg_parent(op, 1), _mask_parent(op)):
+        assert _decision(trace, op, parent) == ("exempted", "sdpa_singleton_key")
 
 
-def test_query_and_key_of_longer_memory_and_lone_value_still_fail() -> None:
+def test_query_key_and_mask_of_longer_memory_and_lone_value_still_fail() -> None:
     trace = _capture(_Attention(2), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
     trace = _capture(_Attention(2), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
+    trace = _capture(_Attention(2), torch.randn(2, 3, 4))
+    op = _op(trace, _SDPA)
+    _assert_frozen_edge_fails(trace, op, _mask_parent(op))
     trace = _capture(_Attention(1), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 2))
