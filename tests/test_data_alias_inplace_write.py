@@ -44,7 +44,6 @@ def test_data_alias_masked_fill_validates() -> None:
         assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
 
 
-@pytest.mark.smoke
 def test_data_alias_write_binds_the_base_consumer() -> None:
     torch.manual_seed(0)
     with warnings.catch_warnings():
@@ -56,7 +55,6 @@ def test_data_alias_write_binds_the_base_consumer() -> None:
     assert list(softmax.parents) == [fill.layer_label]
 
 
-@pytest.mark.smoke
 def test_data_alias_marker_stays_without_base_propagation() -> None:
     """A saved-grads capture keeps the historical topology, so the marker stands."""
 

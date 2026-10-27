@@ -46,7 +46,6 @@ def test_slice_augmented_assignment_validates() -> None:
         assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
 
 
-@pytest.mark.smoke
 def test_writeback_setitem_parents_are_the_base_and_the_view() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_SliceIadd().eval(), torch.randn(1, 2, 4))

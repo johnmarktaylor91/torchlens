@@ -74,7 +74,6 @@ def test_stale_module_global_validates_and_captures_the_op(
     assert stale_module.bmm is _state._orig_to_decorated[id(pristine)]
 
 
-@pytest.mark.smoke
 def test_unwrap_restores_the_swept_global(stale_module: types.ModuleType) -> None:
     """``unwrap_torch()`` puts the pristine callable back; a rewrap patches it again."""
 
@@ -87,7 +86,6 @@ def test_unwrap_restores_the_swept_global(stale_module: types.ModuleType) -> Non
     assert stale_module.bmm is _state._orig_to_decorated[id(pristine)]
 
 
-@pytest.mark.smoke
 def test_sweep_never_replaces_a_class_or_a_foreign_callable() -> None:
     """Only exact wrapped torch callables are patched; ``Tensor`` stays a type."""
 

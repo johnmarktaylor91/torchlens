@@ -49,8 +49,10 @@ class _DistributionPrior(nn.Module):
         return self.prior.log_prob(self.lin(x)).sum()
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize("model_cls", [_ScheduleUser, _DistributionPrior])
+@pytest.mark.parametrize(
+    "model_cls",
+    [pytest.param(_ScheduleUser, marks=pytest.mark.smoke), _DistributionPrior],
+)
 def test_plain_object_held_tensor_validates(model_cls: type[nn.Module]) -> None:
     torch.manual_seed(0)
     model = model_cls().eval()
@@ -60,7 +62,6 @@ def test_plain_object_held_tensor_validates(model_cls: type[nn.Module]) -> None:
         assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
 
 
-@pytest.mark.smoke
 def test_plain_object_held_tensor_is_a_named_buffer_source() -> None:
     torch.manual_seed(0)
     with warnings.catch_warnings():

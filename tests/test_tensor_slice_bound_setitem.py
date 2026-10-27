@@ -51,8 +51,13 @@ class _ZeroTail(nn.Module):
         return frame
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize("tensor_bounds", [True, False], ids=["tensor_bound", "int_bound"])
+@pytest.mark.parametrize(
+    "tensor_bounds",
+    [
+        pytest.param(True, id="tensor_bound", marks=pytest.mark.smoke),
+        pytest.param(False, id="int_bound"),
+    ],
+)
 def test_slice_bound_setitem_validates(tensor_bounds: bool) -> None:
     torch.manual_seed(0)
     model = _FlipPrefix(tensor_bounds).eval()
@@ -64,7 +69,6 @@ def test_slice_bound_setitem_validates(tensor_bounds: bool) -> None:
     assert [op.func_name for op in trace.ops].count("__setitem__") == 2
 
 
-@pytest.mark.smoke
 def test_tensor_bound_augmented_slice_assignment_validates() -> None:
     torch.manual_seed(0)
     model = _ZeroTail().eval()
