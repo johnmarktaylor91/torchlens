@@ -2096,7 +2096,10 @@ def _posthoc_overwrite_decision(
         _perturbed_parent_is_uninitialized_setitem_dest(layer, layers_to_perturb)
     ):
         return PosthocPerturbDecision(True, "uninitialized_destination_overwrite")
-    return PosthocPerturbDecision(False, "not_overwrite")
+    # Imported here: ``_saved_value_proofs`` imports ``PosthocPerturbDecision`` from this module.
+    from ._saved_value_proofs import scatter_reduce_excluded_destination_decision
+
+    return scatter_reduce_excluded_destination_decision(layer, layers_to_perturb, args)
 
 
 def _posthoc_value_proof_decision(
@@ -2123,6 +2126,12 @@ def _posthoc_value_proof_decision(
 
     if layer.func_name in _INDEX_DOMAIN_ARG_SPECS:
         decision = _index_domain_value_irrelevance_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    from ._saved_value_proofs import VALUE_PROOF_FUNC_NAMES, saved_value_proof_decision
+
+    if layer.func_name in VALUE_PROOF_FUNC_NAMES:
+        decision = saved_value_proof_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
     if layer.func_name in _MULTIPLICATIVE_ANNIHILATOR_FUNC_NAMES and len(args) > 1:
