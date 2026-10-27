@@ -319,3 +319,25 @@ def _scatter_index_fully_overwrites_dim(dest: torch.Tensor, dim: int, index: tor
         if not required.issubset(row_values):
             return False
     return True
+
+
+def _replacement_fits_selection(
+    replacement: Any, selected: torch.Tensor, broadcast_replacement: bool
+) -> bool:
+    """Return whether assigning ``replacement`` writes every element of ``selected``.
+
+    A non-tensor replacement fills the selection. A tensor must match the
+    selected shape exactly, or, with ``broadcast_replacement``, broadcast onto it
+    unchanged: ``__setitem__`` broadcasts its value, so a ``[256]`` value written
+    to a ``[1, 256]`` slice still writes all 256 slots.
+    """
+
+    if not isinstance(replacement, torch.Tensor):
+        return True
+    if not broadcast_replacement:
+        return tuple(selected.shape) == tuple(replacement.shape)
+    try:
+        broadcast = torch.broadcast_shapes(tuple(replacement.shape), tuple(selected.shape))
+    except RuntimeError:
+        return False
+    return tuple(broadcast) == tuple(selected.shape)

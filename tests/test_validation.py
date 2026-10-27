@@ -1156,7 +1156,6 @@ def test_validation_recompute_selects_dict_output_by_container_path() -> None:
         layer=layer,
         input_args={"args": [torch.tensor([-1.0, 2.0])], "kwargs": {}},
         layers_to_perturb=[],
-        layer_label="dict_output",
         verbose=False,
     )
 

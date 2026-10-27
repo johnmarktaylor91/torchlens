@@ -63,6 +63,10 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._non_pass_record import (
+    finish_validation_status as _finish_validation_status,
+    record_replay_exception as _record_replay_exception,
+)
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._source_provenance import check_source_provenance
@@ -909,9 +913,7 @@ def validate_saved_outs(
             decision="failed",
             reason=dispatch_count_result.reason,
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
+        return _finish_validation_status(self, decision_recorder)
     if dispatch_count_result.decision == "validated":
         # Positive census coverage is part of the verdict record: a passed
         # status now carries auditable evidence the dispatch census matched.
@@ -984,9 +986,7 @@ def validate_saved_outs(
                 decision="failed",
                 reason="output_count_mismatch",
             )
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
+            return _finish_validation_status(self, decision_recorder)
         output_label_counts: dict[str, int] = defaultdict(int)
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = _resolve_output_entry_for_index(
@@ -1010,9 +1010,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="output_missing",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
+                return _finish_validation_status(self, decision_recorder)
             if not _ground_truth_output_matches_saved(
                 output_layer.out, ground_truth_output_tensors[i]
             ):
@@ -1039,9 +1037,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="ground_truth_mismatch",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
+                return _finish_validation_status(self, decision_recorder)
             decision_recorder.record(
                 op_label=output_layer_label,
                 func_name=getattr(output_layer, "func_name", None),
@@ -1085,9 +1081,7 @@ def validate_saved_outs(
             decision_recorder,
         )
         if parents_valid.failed:
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
+            return _finish_validation_status(self, decision_recorder)
 
     # Completeness check: BFS must visit every op in the graph, counted at
     # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
@@ -1119,9 +1113,7 @@ def validate_saved_outs(
             decision="failed",
             reason="bfs_incomplete",
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
+        return _finish_validation_status(self, decision_recorder)
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
@@ -1156,9 +1148,7 @@ def validate_saved_outs(
             raise
     # Source-less tensor args replay fine from saved args; a gap records a failure here.
     check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-    setattr(self, "_validation_replay_status", status)
-    return status
+    return _finish_validation_status(self, decision_recorder)
 
 
 def validate_parents_of_saved_layer(
@@ -2575,8 +2565,8 @@ def _execute_func_with_restored_state(
     layer: Op,
     input_args: dict[str, Any],
     layers_to_perturb: list[str],
-    layer_label: str,
     verbose: bool,
+    exception_sink: list[Exception] | None = None,
 ) -> Any:
     """Execute a layer's function with restored RNG and autocast state.
 
@@ -2588,7 +2578,8 @@ def _execute_func_with_restored_state(
     The caller treats ``None`` as a failed replay execution for normal replay
     and an unverified perturbation execution exception for perturbation replay.
 
-    Returns the recomputed output tensor, or None on exception.
+    Returns the recomputed output tensor, or None on exception; the exception
+    is appended to ``exception_sink`` when one is given.
     """
     layer_func = layer.func
 
@@ -2600,10 +2591,12 @@ def _execute_func_with_restored_state(
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
         # caller decide whether this is acceptable.
+        if exception_sink is not None:
+            exception_sink.append(e)
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
-                f"{layer_label} caused {type(e).__name__}: {e}"
+                f"{layer.label} caused {type(e).__name__}: {e}"
             )
         return None
 
@@ -3188,8 +3181,13 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if input_args is None:
         return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
+    replay_exceptions: list[Exception] = []
     recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+        layer,
+        input_args,
+        layers_to_perturb,
+        verbose,
+        replay_exceptions,
     )
 
     # A perturbed execution that RAISES proves the op read the perturbed value
@@ -3209,7 +3207,11 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer,
+                retry_args,
+                layers_to_perturb,
+                verbose,
+                replay_exceptions,
             )
             if recomputed_output is not None:
                 input_args = retry_args
@@ -3243,6 +3245,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.failed_result("replay_execution_exception")
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape). It is unverified, not a pass.
+        _record_replay_exception(
+            self, layer_to_validate_parents_for_label, layers_to_perturb, replay_exceptions
+        )
         return ValidationCheckResult.unverified("perturbation_execution_exception")
 
     matches_saved = tensor_nanequal(recomputed_output, saved_output, allow_tolerance=True)
@@ -3276,7 +3281,6 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                     layer,
                     snapshot_args,
                     layers_to_perturb,
-                    layer_to_validate_parents_for_label,
                     verbose,
                 )
                 if snapshot_args is not None
@@ -3355,7 +3359,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             retry_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer, retry_args, layers_to_perturb, verbose
             )
             if retry_output is not None and not tensor_nanequal(
                 retry_output, layer.out, allow_tolerance=False

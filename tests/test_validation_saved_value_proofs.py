@@ -471,7 +471,63 @@ def test_nonempty_split_chunk_still_fails_when_frozen() -> None:
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
 
 
+# ------------------------------------------------------- empty matrix product
+
+
+class _EmptyKeyScores(nn.Module):
+    def __init__(self, keys: int) -> None:
+        super().__init__()
+        self.q = nn.Linear(4, 4)
+        self.keys = keys
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Attention scores against an empty key set, as in m15089's cross-attention.
+        q = self.q(x)
+        k = x[:, : self.keys]
+        scores = torch.bmm(q, k.transpose(1, 2))
+        return q + scores.sum(-1, keepdim=True)
+
+
+def test_empty_matmul_product_exempts_its_nonempty_operand() -> None:
+    assert _validates(_EmptyKeyScores(0), torch.randn(2, 3, 4))
+    trace = _capture(_EmptyKeyScores(0), torch.randn(2, 3, 4))
+    op = _op(trace, {"bmm"})
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_matmul_product")
+
+
+def test_nonempty_matmul_product_still_fails_when_frozen() -> None:
+    trace = _capture(_EmptyKeyScores(2), torch.randn(2, 3, 4))
+    op = _op(trace, {"bmm"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
+
+
 # ------------------------------------- __setitem__ full overwrite coverage proof
+
+
+class _BroadcastRowWrite(nn.Module):
+    def __init__(self, rows: int) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.rows = rows
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # A [4] value broadcast into a [1, 4] row, as in m15089's ``vidsrc_[i] = ...``.
+        buf = torch.zeros(self.rows, 1, 4)
+        buf[0] = self.lin(x)
+        return buf * 2.0
+
+
+def test_broadcast_value_full_overwrite_exempts_the_destination() -> None:
+    assert _validates(_BroadcastRowWrite(1), torch.randn(4))
+    trace = _capture(_BroadcastRowWrite(1), torch.randn(4))
+    op = _op(trace, {"__setitem__"})
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "full_destination_overwrite")
+
+
+def test_broadcast_value_partial_overwrite_still_fails_when_frozen() -> None:
+    trace = _capture(_BroadcastRowWrite(2), torch.randn(4))
+    op = _op(trace, {"__setitem__"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
 
 
 class _NumpyMaskOverwrite(nn.Module):
