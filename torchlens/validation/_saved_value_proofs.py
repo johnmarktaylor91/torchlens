@@ -408,27 +408,46 @@ def _setitem_singleton_index_decision(
     dims = _index_component_dims(destination.ndim, components)
     if dims is None:
         return _NOT_PROVED
-    for key in keys:
-        if key == 1 and not isinstance(index, tuple):
-            component_position = 0
-        elif isinstance(key, tuple) and len(key) == 2 and key[0] == 1:
-            component_position = key[1]
-        else:
-            return _NOT_PROVED
-        component = components[component_position]
-        dim = dims[component_position]
-        if not isinstance(component, torch.Tensor) or component.dtype == torch.bool:
-            return _NOT_PROVED
-        if component.is_floating_point() or component.is_complex() or dim is None:
-            return _NOT_PROVED
-        if destination.shape[dim] != 1:
-            return _NOT_PROVED
+    if not all(
+        _key_is_integer_index_into_singleton_dim(key, index, components, dims, destination)
+        for key in keys
+    ):
+        return _NOT_PROVED
     return PosthocPerturbDecision(
         True,
         "setitem_singleton_index_dim",
         "the perturbed integer index addresses a destination dim of size 1, where "
         "every valid index selects the same position",
     )
+
+
+def _key_is_integer_index_into_singleton_dim(
+    key: Any,
+    index: Any,
+    components: tuple[Any, ...],
+    dims: list[int | None],
+    destination: torch.Tensor,
+) -> bool:
+    """Return whether a perturbed ``__setitem__`` index key addresses a size-1 dim.
+
+    ``key`` is ``1`` for a bare (non-tuple) index or ``(1, position)`` for one
+    component of a tuple index; the component must be an integer tensor whose
+    destination dim has size 1.
+    """
+
+    if key == 1 and not isinstance(index, tuple):
+        component_position = 0
+    elif isinstance(key, tuple) and len(key) == 2 and key[0] == 1:
+        component_position = key[1]
+    else:
+        return False
+    component = components[component_position]
+    dim = dims[component_position]
+    if not isinstance(component, torch.Tensor) or component.dtype == torch.bool:
+        return False
+    if component.is_floating_point() or component.is_complex() or dim is None:
+        return False
+    return bool(destination.shape[dim] == 1)
 
 
 def scatter_reduce_excluded_destination_decision(

@@ -482,6 +482,8 @@ def _walk_to_input(
     def expand(
         current: Op, sets: _AxisSets, current_exact: bool
     ) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+        """Return the reverse hops and terminal states from ``current``."""
+
         return _reverse_hops(current, sets, input_label, ancestry, by_reference, current_exact)
 
     return _memoized_path_walk(op, output_sets, exact, expand, memo)

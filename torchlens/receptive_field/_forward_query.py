@@ -165,6 +165,8 @@ def _walk_to_target(
     def expand(
         current: Op, sets: _AxisSets, current_exact: bool
     ) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+        """Return the forward hops and terminal states from ``current``."""
+
         return _forward_hops(current, sets, target_label, active, by_reference, current_exact)
 
     return _memoized_path_walk(op, input_sets, exact, expand, memo)

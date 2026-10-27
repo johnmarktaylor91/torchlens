@@ -55,42 +55,44 @@ def independent_output_tensor_ids(output: Any) -> list[int]:
     """
 
     seen: set[int] = set()
-
-    def _walk(value: Any, depth: int) -> None:
-        """Accumulate tensor ids from one subtree.
-
-        Parameters
-        ----------
-        value:
-            Subtree to inspect.
-        depth:
-            Remaining recursion budget guard.
-        """
-
-        if isinstance(value, torch.nn.Parameter):
-            # Capture's agreed semantics: a Parameter returned as-is is model
-            # state, not a computed output leaf, and the adapter excludes it
-            # by design. Counting it here reported that design as a dropped
-            # leaf. Only Parameter instances are skipped; any other tensor the
-            # adapter misses still fails the cross-check.
-            return
-        if isinstance(value, torch.Tensor):
-            seen.add(id(value))
-            return
-        if depth >= _MAX_DEPTH:
-            return
-        if isinstance(value, dict):
-            for item in value.values():
-                _walk(item, depth + 1)
-            return
-        if isinstance(value, (list, tuple, set, frozenset)):
-            for item in value:
-                _walk(item, depth + 1)
-            return
-        if is_dataclass(value) and not isinstance(value, type):
-            for field_info in fields(value):
-                _walk(getattr(value, field_info.name, None), depth + 1)
-            return
-
-    _walk(output, 0)
+    _walk_output_tree(output, 0, seen)
     return sorted(seen)
+
+
+def _walk_output_tree(value: Any, depth: int, seen: set[int]) -> None:
+    """Accumulate tensor ids from one subtree.
+
+    Parameters
+    ----------
+    value:
+        Subtree to inspect.
+    depth:
+        Remaining recursion budget guard.
+    seen:
+        Accumulator of tensor object ids.
+    """
+
+    if isinstance(value, torch.nn.Parameter):
+        # Capture's agreed semantics: a Parameter returned as-is is model
+        # state, not a computed output leaf, and the adapter excludes it
+        # by design. Counting it here reported that design as a dropped
+        # leaf. Only Parameter instances are skipped; any other tensor the
+        # adapter misses still fails the cross-check.
+        return
+    if isinstance(value, torch.Tensor):
+        seen.add(id(value))
+        return
+    if depth >= _MAX_DEPTH:
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _walk_output_tree(item, depth + 1, seen)
+        return
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            _walk_output_tree(item, depth + 1, seen)
+        return
+    if is_dataclass(value) and not isinstance(value, type):
+        for field_info in fields(value):
+            _walk_output_tree(getattr(value, field_info.name, None), depth + 1, seen)
+        return
