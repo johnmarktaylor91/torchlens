@@ -545,6 +545,7 @@ def _setitem_destination_slice_is_fully_overwritten(
 def _setitem_destination_coverage_is_total(
     perturbed_tensor: torch.Tensor | None,
     args: tuple[Any, ...],
+    broadcast_replacement: bool = False,
 ) -> bool:
     """Return whether a ``__setitem__`` write provably covers its whole destination.
 
@@ -560,13 +561,18 @@ def _setitem_destination_coverage_is_total(
         Tensor selected for perturbation.
     args:
         Saved ``__setitem__`` positional arguments.
+    broadcast_replacement:
+        Accept a tensor replacement that broadcasts onto the selected shape
+        (the posthoc decision, after a perturbed replay already left the output
+        unchanged); the pre-execution gate keeps the exact-shape match.
 
     Returns
     -------
     bool
         True when the perturbed tensor is the destination, ``destination[index]``
         selects every destination element exactly once, and a tensor replacement
-        (when present) exactly matches the selected shape.
+        (when present) matches the selected shape, or broadcasts onto it when
+        ``broadcast_replacement``.
     """
 
     if len(args) < 3:
@@ -591,8 +597,25 @@ def _setitem_destination_coverage_is_total(
     if not _index_positions_cover_destination_exactly(destination, index):
         return False
     if isinstance(replacement, torch.Tensor):
+        if broadcast_replacement:
+            return _replacement_broadcasts_onto(replacement, selected)
         return tuple(selected.shape) == tuple(replacement.shape)
     return True
+
+
+def _replacement_broadcasts_onto(replacement: torch.Tensor, selected: torch.Tensor) -> bool:
+    """Return whether assigning ``replacement`` writes every element of ``selected``.
+
+    ``__setitem__`` broadcasts its value onto the selected region, so a value of
+    shape ``[256]`` written to a ``[1, 256]`` slice still writes all 256 slots.
+    The broadcast must leave the selected shape unchanged.
+    """
+
+    try:
+        broadcast = torch.broadcast_shapes(tuple(replacement.shape), tuple(selected.shape))
+    except RuntimeError:
+        return False
+    return tuple(broadcast) == tuple(selected.shape)
 
 
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -2084,7 +2107,7 @@ def _posthoc_overwrite_decision(
         and _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
         and len(args) > 2
         and isinstance(args[0], torch.Tensor)
-        and _setitem_destination_coverage_is_total(args[0], args)
+        and _setitem_destination_coverage_is_total(args[0], args, broadcast_replacement=True)
     ):
         reason = (
             "full_destination_overwrite"
