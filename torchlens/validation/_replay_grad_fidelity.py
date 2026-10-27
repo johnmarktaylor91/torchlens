@@ -224,7 +224,11 @@ def _captured_slot_grad_flags(
         leaves a leaf (``t.detach().requires_grad_()``) is recorded against
         TorchLens's safe copy (``CloneBackward0``) and so replays as a
         non-leaf: the safe direction, since every in-place op legal on the
-        captured leaf stays legal on a non-leaf.
+        captured leaf stays legal on a non-leaf. The same safe direction holds
+        when the slot consumed a LATER version of the parent (a per-child
+        version snapshot: the parent was mutated through a view before this
+        call, as in ``x[idx] += y``'s write-back): the parent's ``grad_fn``
+        then describes its original output, not the consumed value.
 
     Returns
     -------
@@ -246,7 +250,16 @@ def _captured_slot_grad_flags(
     requires_grad, snapshot_leaf = _snapshot_grad_flags(snapshot)
     if not requires_grad or parent_layer is None:
         return requires_grad, snapshot_leaf
+    if _consumed_a_later_parent_version(layer, parent_layer):
+        return True, False
     return True, getattr(parent_layer, "grad_fn_class_name", None) is None
+
+
+def _consumed_a_later_parent_version(layer: Op, parent_layer: Op) -> bool:
+    """Return whether ``layer`` consumed a per-child version snapshot of ``parent_layer``."""
+
+    versions = getattr(parent_layer, "out_versions_by_child", None) or {}
+    return any(key in versions for key in (getattr(layer, "label", None), layer.layer_label) if key)
 
 
 def _deep_clone_tensors(val: Any) -> Any:

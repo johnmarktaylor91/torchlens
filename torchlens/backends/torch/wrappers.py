@@ -77,6 +77,12 @@ from ._tl import (
     propagate_detached_saved_activation,
     set_tensor_label,
 )
+from ._view_writeback import (
+    bind_setitem_writeback_base_to_prior_label,
+    overlapping_labeled_aliases,
+    record_view_mutation_prior_label,
+    view_mutation_propagation_enabled,
+)
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from .aliasing import _tensors_alias
 from .buffer_writes import (
@@ -1365,7 +1371,6 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
-    from ._tl import session_storage_alias_candidates, storage_alias_index_key
     from .ops import _record_label_version_snapshot
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
@@ -1380,11 +1385,7 @@ def _propagate_mutation_label_to_storage_aliases(
     # (receptive fields, influence geometry, collapse -- the W3-F1 impact
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
-    if (
-        getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
-        or getattr(trace, "save_grads", None) not in (None, False)
-    ):
+    if not view_mutation_propagation_enabled(trace):
         return
 
     # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
@@ -1395,46 +1396,11 @@ def _propagate_mutation_label_to_storage_aliases(
     # (kept off the escape census / metadata patches) -- the same sanctioned
     # pattern as ``completeness_witness``'s storage-site indexers.
     with _state.pause_logging(), internal_scalar_read():
-        try:
-            # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
-            storage_ptr = storage_alias_index_key(mutated.untyped_storage())
-        except Exception:
-            return
-        if storage_ptr is None:
-            return
-        candidates = session_storage_alias_candidates(storage_ptr)
-        if not candidates or (len(candidates) == 1 and candidates[0] is mutated):
-            return
-        mutated_lo, mutated_hi = _storage_overlap_byte_interval(mutated)
-        if mutated_hi <= mutated_lo:
-            return
-        for alias in candidates:
-            if (
-                alias is mutated
-                or not isinstance(alias, torch.Tensor)
-                or isinstance(alias, torch.nn.Parameter)
-            ):
-                continue
-            # Gated read: rejects foreign-session stamps and storage-rebound
-            # objects, so a stale index entry can never act as a live alias.
-            alias_label = get_tensor_label(alias)
-            if alias_label is None or alias_label == out_label:
-                continue
-            try:
-                if (
-                    storage_alias_index_key(alias.untyped_storage()) != storage_ptr
-                    or alias.device != mutated.device
-                ):
-                    continue
-                # Element-exact where provable (round-31 M4): interleaved
-                # element-disjoint views must not inherit the mutation edge.
-                shares_elements = _strided_views_share_storage_elements(mutated, alias)
-            except Exception:
-                continue
-            if shares_elements:
-                set_tensor_label(alias, out_label)
-                _register_inplace_live_grad_hook(trace, alias, out_label)
-                _record_label_version_snapshot(alias)
+        for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
+            record_view_mutation_prior_label(alias, out_label, alias_label)
+            set_tensor_label(alias, out_label)
+            _register_inplace_live_grad_hook(trace, alias, out_label)
+            _record_label_version_snapshot(alias)
 
 
 # Tensor getset properties whose SETTER mutates the receiver's forward data:
@@ -1944,6 +1910,9 @@ def torch_func_decorator(
             or _call_requests_inplace(inplace_param_index, args, kwargs)
         ):
             materialize_deferred_for_call(arg_tensorlike)
+
+        if func_name == "__setitem__":
+            bind_setitem_writeback_base_to_prior_label(args)
 
         # ---- Execute the original function ----
         # Write a unique barcode BEFORE the call. If any inner wrapped functions
