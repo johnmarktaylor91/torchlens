@@ -11,6 +11,7 @@ import inspect
 from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, cast
 
 import torch
@@ -30,7 +31,9 @@ from .tensor_utils import (
 
 INPUT_WAS_PARAMETER_ATTR = "_torchlens_input_was_parameter"
 
-_PRESERVE_LEAF_INPUT_COPIES = False
+_PRESERVE_LEAF_INPUT_COPIES: ContextVar[bool] = ContextVar(
+    "torchlens_preserve_leaf_input_copies", default=False
+)
 """Whether :func:`safe_copy_input_tree` keeps grad-tracked leaf inputs as leaves by default."""
 
 
@@ -48,13 +51,11 @@ def leaf_preserving_input_copies() -> Iterator[None]:
     clone, whose contract is that gradients still reach the caller's input.
     """
 
-    global _PRESERVE_LEAF_INPUT_COPIES
-    prior = _PRESERVE_LEAF_INPUT_COPIES
-    _PRESERVE_LEAF_INPUT_COPIES = True
+    token = _PRESERVE_LEAF_INPUT_COPIES.set(True)
     try:
         yield
     finally:
-        _PRESERVE_LEAF_INPUT_COPIES = prior
+        _PRESERVE_LEAF_INPUT_COPIES.reset(token)
 
 
 def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
@@ -971,7 +972,7 @@ def safe_copy_input_tree(
     semantic_gaps: list[str] = []
     tensor_records: list[tuple[str, torch.Tensor, bool]] = []
     if preserve_leaf_inputs is None:
-        preserve_leaf_inputs = _PRESERVE_LEAF_INPUT_COPIES
+        preserve_leaf_inputs = _PRESERVE_LEAF_INPUT_COPIES.get()
     try:
         with pause_logging():
             copied_args = _copy_input_tree_node(
