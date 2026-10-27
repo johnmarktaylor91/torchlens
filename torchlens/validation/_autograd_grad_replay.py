@@ -211,6 +211,7 @@ class _SubgraphReplay:
         self.nested = nested
         self.values: dict[str, torch.Tensor] = {}
         self.depends: dict[str, bool] = {}
+        self.unperturbed: dict[str, torch.Tensor] = {}
 
     def resolve(self, label: str) -> Op:
         """Resolve a parent label to its concrete op."""
@@ -266,16 +267,40 @@ class _SubgraphReplay:
             if depends:
                 self.values[op.label] = self._replay_op(op)
 
+    def grad_input(self, label: str) -> torch.Tensor:
+        """Return the tensor the ``inputs`` slot of op input ``label`` differentiates against.
+
+        For a perturbed input this is its unperturbed node, upstream of the
+        perturbed node the subgraph consumes, so the gradient carries the
+        perturbation's derivative scaling (see ``_input_node``).
+        """
+
+        value = self.value(label)
+        return self.unperturbed.get(self.resolve(label).label, value)
+
     def _input_node(self, op: Op, depends_upstream: bool) -> torch.Tensor:
-        """Return the replay node of an op passed in ``inputs``."""
+        """Return the replay node of an op passed in ``inputs``.
+
+        A perturbed input is replayed as ``_perturbed_node`` over its unperturbed
+        node, and the gradient is taken against that unperturbed node. Taking it
+        against the perturbed value itself would leave a gradient that does not
+        read its input's value (any root linear in the input) unchanged, so the
+        perturbation could never reach the boundary's output.
+        """
 
         slot_value = self.input_values[op.label]
-        if not depends_upstream:
+        perturbed = op.label in self.perturbed_inputs
+        if depends_upstream:
+            node = self._replay_op(op)
+        elif perturbed and isinstance(op.out, torch.Tensor):
+            saved = op.out.to(device=slot_value.device, dtype=slot_value.dtype)
+            node = _fresh_leaf(saved, self.param_leaves, self.nested)
+        else:
             return _fresh_leaf(slot_value, self.param_leaves, self.nested)
-        node = self._replay_op(op)
-        if op.label in self.perturbed_inputs:
-            return _perturbed_node(node, slot_value)
-        return node
+        if not perturbed:
+            return node
+        self.unperturbed[op.label] = node
+        return _perturbed_node(node, slot_value)
 
     def _connected_value(self, label: str) -> torch.Tensor | None:
         """Return the replayed value for a parent label, or None when it is constant."""
@@ -414,7 +439,7 @@ def _replay_boundary(
             perturbed,
         )
         for path, label in op_slots.items():
-            inputs_value = _write_path(inputs_value, path, replay.value(label))
+            inputs_value = _write_path(inputs_value, path, replay.grad_input(label))
         bound.arguments["inputs"] = inputs_value
         grads = original_autograd_grad()(*bound.args, **bound.kwargs)
     if outer is not None:
