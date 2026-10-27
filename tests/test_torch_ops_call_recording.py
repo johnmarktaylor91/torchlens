@@ -196,15 +196,17 @@ def test_recorders_are_wrapped_epoch_scoped() -> None:
 # --- Boundary review fixes: operators that mutate an argument and return nothing ----
 
 if _HAS_CUSTOM_OP:
-    _VF_MUL_ = torch._C.TensorBase.mul_
+    # Unpatchable C writes go through ``torch._C.TensorBase`` attribute access at call
+    # time: a module global bound to the pristine method would be rebound to its
+    # wrapper by the wrap-time module sweep.
 
     @torch.library.custom_op("tltest_r11::scale_", mutates_args=("x",))
     def _scale_(x: torch.Tensor, scale: float) -> None:
-        _VF_MUL_(x, scale)  # an unpatchable C write, like a C++ kernel
+        torch._C.TensorBase.mul_(x, scale)  # an unpatchable C write, like a C++ kernel
 
     @torch.library.custom_op("tltest_r11::doubled", mutates_args=("x",))
     def _doubled(x: torch.Tensor) -> None:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
 
     @torch.library.custom_op("tltest_r11::write_into", mutates_args=("dst",))
     def _write_into(src: torch.Tensor, dst: torch.Tensor) -> None:
@@ -215,7 +217,7 @@ if _HAS_CUSTOM_OP:
         # A wrapped metadata read that logs nothing, like torch 2.7's Python
         # ``check_aliasing_constraint`` calling ``untyped_storage()`` in every kernel.
         x.untyped_storage()
-        _VF_MUL_(x, scale)
+        torch._C.TensorBase.mul_(x, scale)
 
     @torch.library.custom_op("tltest_r15::body_mul_", mutates_args=("x",))
     def _body_mul_(x: torch.Tensor) -> None:
@@ -385,12 +387,14 @@ if _HAS_CUSTOM_OP:
 
     @torch.library.custom_op("tltest_r13::mut_ret", mutates_args=("x",))
     def _mut_ret(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)  # state update, then a fresh output (KV-cache, running stats)
+        torch._C.TensorBase.mul_(
+            x, 2.0
+        )  # state update, then a fresh output (KV-cache, running stats)
         return torch._C._VariableFunctions.add(x, 0.0)
 
     @torch.library.custom_op("tltest_r13::unknown_ret", mutates_args="unknown")
     def _unknown_ret(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
         return torch._C._VariableFunctions.add(x, 1.0)
 
     @torch.library.custom_op("tltest_r13::buf_ret", mutates_args=("buf",))
@@ -402,7 +406,7 @@ if _HAS_CUSTOM_OP:
     _R13_LIB.define("inplace(Tensor(a!) x) -> Tensor(a!)")
 
     def _r13_inplace(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
         return x
 
     _R13_LIB.impl("inplace", _r13_inplace, "CPU")
