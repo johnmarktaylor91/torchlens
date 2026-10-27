@@ -266,6 +266,10 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
+            if _has_zero_extent(op):
+                # An empty input has no units: it influences nothing.
+                states_by_op[op.label] = {}
+                continue
             seed = _seed_input(op)
             states_by_op[op.label] = {
                 seed.io_role: _BranchState(state=seed, geometry_neutral=False)
@@ -1631,6 +1635,17 @@ def _operation_is_live(op: Op) -> bool:
     """Return whether an operation has not been cleared by trace removal."""
 
     return isinstance(getattr(op, "label", None), str)
+
+
+def _has_zero_extent(op: Op) -> bool:
+    """Return whether an operation's output is an empty tensor (some extent is zero).
+
+    An empty endpoint has no units, so it has an empty receptive (or projective)
+    field: no geometry is seeded from it and no descriptor names it.
+    """
+
+    shape = getattr(op, "shape", None)
+    return shape is not None and any(int(extent) == 0 for extent in shape)
 
 
 __all__: list[str] = []
