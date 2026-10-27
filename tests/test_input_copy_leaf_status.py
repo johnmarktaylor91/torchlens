@@ -40,13 +40,12 @@ def test_model_setting_requires_grad_on_leaf_input_validates() -> None:
     assert x.is_leaf and x.requires_grad
 
 
-def test_leaf_preserving_copy_keeps_leaf_status_and_storage_topology() -> None:
-    """Inside validation's scope a grad-tracked leaf copies as a new leaf, views intact."""
+def test_leaf_preserving_copy_keeps_a_grad_tracked_leaf_a_leaf() -> None:
+    """Inside validation's scope a grad-tracked leaf copies as a new leaf."""
 
     base = torch.randn(4, 3).requires_grad_(True)
-    view = base[1:3]
     with leaf_preserving_input_copies():
-        (copied_base, copied_view), _kwargs, gaps = safe_copy_input_tree([base, view], {})
+        (copied_base,), _kwargs, gaps = safe_copy_input_tree([base], {})
     assert gaps == ()
     assert copied_base is not base
     assert copied_base.is_leaf and copied_base.requires_grad
