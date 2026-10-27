@@ -1599,7 +1599,11 @@ def torch_func_decorator(
     if func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
-    is_barcode_transparent = func_name == "as_subclass"
+    # ``__index__`` too: Python converts a 0-d tensor slice bound
+    # (``x[i:i + 1, :length] = v``) through the type slot INSIDE the enclosing
+    # ``__setitem__``/``__getitem__``, and stealing its barcode dropped that
+    # whole indexing op from the graph (Menagerie rung 4: f-tm2t, f-cg-detr).
+    is_barcode_transparent = func_name in ("as_subclass", "__index__")
 
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
@@ -1781,7 +1785,7 @@ def torch_func_decorator(
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        # R16-5: ``as_subclass`` is barcode-TRANSPARENT. Torch's default
+        # R16-5: ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
         # ``__torch_function__`` return conversion calls ``ret.as_subclass(cls)``
         # INSIDE the enclosing wrapped call (``torch.tanh(subclass_tensor)``),
         # which used to steal the enclosing call's bottom-level barcode: the
