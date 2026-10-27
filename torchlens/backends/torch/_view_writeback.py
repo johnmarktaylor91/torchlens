@@ -187,10 +187,22 @@ def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
     session_token, mutation_label, prior_label = entry
     if session_token != active_label_session_token() or mutation_label != shared_label:
         return
+    if _value_is_the_destination_view(base, index, value):
+        set_tensor_label(base, prior_label)
+
+
+def _value_is_the_destination_view(base: torch.Tensor, index: Any, value: torch.Tensor) -> bool:
+    """Return whether ``value`` is exactly the view ``base[index]`` (same storage region).
+
+    The storage, offset, shape and stride reads are TorchLens's own bookkeeping,
+    so they run under ``pause_logging`` and ``internal_scalar_read``; an index
+    that cannot be re-applied reads as not the same region.
+    """
+
     with _state.pause_logging(), internal_scalar_read():
         try:
             destination = base[index]
-            same_region = (
+            return bool(
                 storage_alias_index_key(destination.untyped_storage())
                 == storage_alias_index_key(value.untyped_storage())
                 and destination.storage_offset() == value.storage_offset()
@@ -198,6 +210,4 @@ def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
                 and tuple(destination.stride()) == tuple(value.stride())
             )
         except Exception:
-            return
-    if same_region:
-        set_tensor_label(base, prior_label)
+            return False
