@@ -520,7 +520,10 @@ def test_buffer_write_models_validate_and_expose_entities(
         copy_op = next(op for op in trace.ops if op.func_name == "copy_")
         add_op = next(op for op in trace.ops if op.func_name == "__add__")
         assert copy_op.unattributed_tensor_args == ()
-        assert copy_op.layer_label in add_op.parents
+        # The read of ``b`` after the write is the buffer's post-write version
+        # node, whose parent is the copy.
+        buffer_read = next(label for label in add_op.parents if label.startswith("buffer"))
+        assert copy_op.layer_label in trace.layer_dict_all_keys[buffer_read].parents
     for address, overwrite_count in expected_overwrites.items():
         assert address in trace.buffers
         buffer = trace.buffers[address]
