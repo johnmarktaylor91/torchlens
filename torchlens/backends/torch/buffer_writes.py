@@ -15,6 +15,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ...ir import BufferWriteEvent
 from ...utils._torch_compat import tensor_version_or_none
 from ...utils.tensor_utils import safe_copy
+from ._held_plain_holders import plain_holder_tensor_attrs
 from ._tl import (
     clear_tensor_label,
     get_buffer_address,
@@ -384,7 +385,11 @@ def iter_module_held_plain_tensors(
       (``attention_bias_cache['cpu']``), so the address's last ``.`` still splits the
       owning module from the buffer name;
     * nested list/tuple/dict values below those: ``[<index>]`` / ``[<key>]`` appended
-      per level (``cache['outer']['cpu']``, ``lists['k'][0]``, ``pairs.0[1]``).
+      per level (``cache['outer']['cpu']``, ``lists['k'][0]``, ``pairs.0[1]``);
+    * a public tensor attribute of a plain (non-Module) object held in a module
+      attribute, such as a ``torch.distributions`` prior or a diffusers scheduler
+      built in ``__init__``: ``name[<attr>]`` (``prior[scale]``,
+      ``scheduler[final_alpha_cumprod]``). Only the object's own attributes are read.
 
     Names are never dropped: a rendering that repeats an earlier name gets ``#2``,
     ``#3``, ... in scan order. Below the attribute's own list/tuple items the scan is
@@ -440,6 +445,15 @@ def iter_module_held_plain_tensors(
                         yield name, item
                 elif _is_enterable(item) and id(item) not in scan.entered:
                     yield from scan.walk(item, name, 2)
+        else:
+            # A plain object's direct public tensor attributes (a distributions
+            # prior, a diffusers scheduler); never containers inside it.
+            for held_attr, item in plain_holder_tensor_attrs(attr_val):
+                name = scan.reserve(f"{attr_name}[{held_attr}]")
+                if not scan.admit(name):
+                    break
+                scan.stamp(item)
+                yield name, item
     scan.finish()
 
 
