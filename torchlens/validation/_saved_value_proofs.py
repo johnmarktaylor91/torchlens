@@ -14,7 +14,10 @@ saved co-arguments, and returns non-exempt for anything else:
   of every output element carries one factor from each operand);
 - eval-mode ``batch_norm``: ``input - running_mean`` is exactly zero, so the
   ``running_var`` (``args[4]``) only scales a zero;
-- pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0;
+- pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0,
+  or the saved base is all one, so the exponent (``args[1]``) is irrelevant;
+- sdpa: there is one key position and no dropout, so the key (``args[1]``)
+  gets softmax weight exactly one;
 - ``__setitem__``: the perturbed parent is an integer index component that
   addresses a destination dim of size 1, where every valid index is position 0;
 - ``scatter_reduce``: ``include_self=False`` and the index covers every
@@ -82,7 +85,7 @@ VALUE_PROOF_FUNC_NAMES = (
     | DISJUNCTION_FUNC_NAMES
     | POW_FUNC_NAMES
     | SPLIT_FUNC_NAMES
-    | frozenset({"einsum", "batch_norm", "__setitem__"})
+    | frozenset({"einsum", "batch_norm", "__setitem__", "scaled_dot_product_attention"})
 )
 
 
@@ -261,13 +264,33 @@ def _batch_norm_centered_input_decision(
     )
 
 
-def _pow_zero_exponent_decision(
-    layer: Op, keys: set[Any], args: tuple[Any, ...]
-) -> PosthocPerturbDecision:
+def _is_all_one_value(value: Any) -> bool:
+    """Return whether ``value`` is a real scalar or non-empty tensor equal to one everywhere."""
+
+    if isinstance(value, torch.Tensor):
+        return value.numel() > 0 and bool(torch.all(torch.eq(value, 1)).item())
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value == 1
+
+
+def _pow_decision(layer: Op, keys: set[Any], args: tuple[Any, ...]) -> PosthocPerturbDecision:
+    """Exempt a base under a zero exponent, or an exponent over a unit base."""
+
+    if keys == {0}:
+        return _pow_zero_exponent_decision(layer, args)
+    if keys != {1} or not args or not _is_all_one_value(args[0]):
+        return _NOT_PROVED
+    if not _output_all_equal(layer, 1.0):
+        return _NOT_PROVED
+    return PosthocPerturbDecision(
+        True,
+        "pow_unit_base",
+        "the saved base is all one, so every exponent value yields one",
+    )
+
+
+def _pow_zero_exponent_decision(layer: Op, args: tuple[Any, ...]) -> PosthocPerturbDecision:
     """Exempt the base of a power whose saved exponent is all zero."""
 
-    if keys != {0}:
-        return _NOT_PROVED
     kwargs = getattr(layer, "saved_kwargs", None) or {}
     exponent = args[1] if len(args) > 1 else kwargs.get("exponent")
     if exponent is None or not _is_all_zero_value(exponent):
@@ -287,6 +310,32 @@ def _is_bool_mask(component: Any) -> bool:
     if isinstance(component, torch.Tensor):
         return component.dtype == torch.bool
     return isinstance(component, np.ndarray) and component.dtype == np.bool_
+
+
+def _sdpa_singleton_key_decision(
+    layer: Op, keys: set[Any], args: tuple[Any, ...]
+) -> PosthocPerturbDecision:
+    """Exempt sdpa's key when there is one key position and no dropout.
+
+    Softmax over a single key position is exactly one for any finite score, so
+    every query reads the lone value row whatever the key holds. A masked-out
+    lone key makes the output non-finite, which is refused.
+    """
+
+    if keys != {1} or len(args) < 3 or not isinstance(args[1], torch.Tensor):
+        return _NOT_PROVED
+    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    dropout_p = kwargs.get("dropout_p", args[4] if len(args) > 4 else 0.0)
+    if args[1].ndim < 2 or args[1].shape[-2] != 1 or dropout_p != 0:
+        return _NOT_PROVED
+    if not _saved_output_all_finite(layer):
+        return _NOT_PROVED
+    return PosthocPerturbDecision(
+        True,
+        "sdpa_singleton_key",
+        "there is one key position, so its softmax weight is exactly one and the "
+        "key values cannot reach the output",
+    )
 
 
 def _index_component_dims(ndim: int, components: tuple[Any, ...]) -> list[int | None] | None:
@@ -438,11 +487,12 @@ _DECISIONS_BY_FAMILY = (
     (DIVISION_FUNC_NAMES, _division_decision),
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
     (DISJUNCTION_FUNC_NAMES, _disjunction_decision),
-    (POW_FUNC_NAMES, _pow_zero_exponent_decision),
+    (POW_FUNC_NAMES, _pow_decision),
     (SPLIT_FUNC_NAMES, _empty_split_chunk_decision),
     (frozenset({"einsum"}), _einsum_decision),
     (frozenset({"batch_norm"}), _batch_norm_centered_input_decision),
     (frozenset({"__setitem__"}), _setitem_singleton_index_decision),
+    (frozenset({"scaled_dot_product_attention"}), _sdpa_singleton_key_decision),
 )
 
 

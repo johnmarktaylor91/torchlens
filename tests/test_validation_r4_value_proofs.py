@@ -289,6 +289,67 @@ def test_exponent_of_zero_base_is_perturbed_across_zero() -> None:
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
 
 
+class _ConstantBasePow(nn.Module):
+    def __init__(self, base: float) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 1)
+        self.base = base
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        alpha = torch.sigmoid(self.lin(x)) + 1.0
+        return torch.pow(self.base, alpha) + x
+
+
+def test_unit_base_exempts_the_exponent() -> None:
+    assert _validates(_ConstantBasePow(1.0), torch.randn(3, 4))
+    trace = _capture(_ConstantBasePow(1.0), torch.randn(3, 4))
+    op = _op(trace, {"pow", "__pow__"})
+    assert _decision(trace, op, _arg_parent(op, 1)) == ("exempted", "pow_unit_base")
+
+
+def test_exponent_over_non_unit_base_still_fails_when_frozen() -> None:
+    trace = _capture(_ConstantBasePow(2.0), torch.randn(3, 4))
+    op = _op(trace, {"pow", "__pow__"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
+
+
+# ------------------------------------------------------- sdpa with a single key
+
+
+class _Attention(nn.Module):
+    def __init__(self, key_length: int) -> None:
+        super().__init__()
+        self.q = nn.Linear(4, 4)
+        self.k = nn.Linear(4, 4)
+        self.v = nn.Linear(4, 4)
+        self.key_length = key_length
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        memory = x[:, : self.key_length]
+        return nn.functional.scaled_dot_product_attention(
+            self.q(x).unsqueeze(1), self.k(memory).unsqueeze(1), self.v(memory).unsqueeze(1)
+        )
+
+
+_SDPA = {"scaled_dot_product_attention"}
+
+
+def test_single_key_position_exempts_the_key() -> None:
+    assert _validates(_Attention(1), torch.randn(2, 3, 4))
+    trace = _capture(_Attention(1), torch.randn(2, 3, 4))
+    op = _op(trace, _SDPA)
+    assert _decision(trace, op, _arg_parent(op, 1)) == ("exempted", "sdpa_singleton_key")
+
+
+def test_key_of_longer_memory_and_lone_value_still_fail() -> None:
+    trace = _capture(_Attention(2), torch.randn(2, 3, 4))
+    op = _op(trace, _SDPA)
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
+    trace = _capture(_Attention(1), torch.randn(2, 3, 4))
+    op = _op(trace, _SDPA)
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 2))
+
+
 # --------------------------------------------------- __setitem__ index of size 1
 
 
