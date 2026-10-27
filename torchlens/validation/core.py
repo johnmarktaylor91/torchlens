@@ -4252,6 +4252,11 @@ def _perturb_domain_sensitive_parent_values(
         complement = _bernoulli_complement_probabilities(layer, parent_values)
         if complement is not None:
             return complement
+    if layer.func_name in {"__pow__", "pow"} and _pow_zero_base_exponent_parent(
+        layer, parent_label
+    ):
+        # ``0 ** e`` is 0 for every e > 0; only an exponent of 0 or below moves it.
+        return _finite_fill_distinct_from(parent_values, 0.0, -1.0)
     if not _parent_label_occupies_arg_position(layer, parent_label, 0):
         return None
     if layer.func_name == "log":
@@ -4682,6 +4687,20 @@ def _finite_fill_distinct_from(
     if torch.equal(candidate, tensor):
         return torch.full_like(tensor, fallback)
     return candidate
+
+
+def _pow_zero_base_exponent_parent(layer: Op, parent_label: str) -> bool:
+    """Return whether ``parent_label`` is only the exponent of a power whose saved base is zero."""
+
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    if len(saved_args) < 2 or _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return False
+    if not _parent_label_occupies_arg_position(layer, parent_label, 1):
+        return False
+    base = saved_args[0]
+    if isinstance(base, torch.Tensor):
+        return base.numel() > 0 and bool(torch.all(torch.eq(base, 0)).item())
+    return isinstance(base, (int, float)) and not isinstance(base, bool) and base == 0
 
 
 def _pow_exponent(layer: Op) -> Any:

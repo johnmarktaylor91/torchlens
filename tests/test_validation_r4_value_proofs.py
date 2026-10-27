@@ -269,6 +269,26 @@ def test_base_under_nonzero_exponent_and_zero_exponent_itself_still_fail() -> No
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
 
 
+class _ZeroBasePow(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        alpha = torch.sigmoid(self.lin(x)) + 1.0
+        return torch.pow(0.0, alpha) + x
+
+
+def test_exponent_of_zero_base_is_perturbed_across_zero() -> None:
+    """``0 ** e`` is flat for e > 0, so the exponent edge is tested by crossing to e = 0."""
+
+    assert _validates(_ZeroBasePow(), torch.randn(3, 4))
+    trace = _capture(_ZeroBasePow(), torch.randn(3, 4))
+    op = _op(trace, {"pow", "__pow__"})
+    assert _decision(trace, op, _arg_parent(op, 1)) == ("validated", "perturbation_changed")
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
+
+
 # --------------------------------------------------- __setitem__ index of size 1
 
 
