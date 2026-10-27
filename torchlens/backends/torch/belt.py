@@ -414,8 +414,9 @@ def _wrapped_callable_replacement(value: Any) -> Any | None:
 
     if isinstance(value, type) or not callable(value):
         return None
-    wrapper = _state._orig_to_decorated.get(id(value))
-    if wrapper is None or _state._decorated_to_orig.get(id(wrapper)) is not value:
+    decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
+    wrapper = orig_to_decorated.get(id(value))
+    if wrapper is None or decorated_to_orig.get(id(wrapper)) is not value:
         return None
     return wrapper
 
