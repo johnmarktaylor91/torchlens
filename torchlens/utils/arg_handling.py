@@ -9,6 +9,8 @@ the ``list`` form expected by ``model(*input_args)``.
 import copy
 import inspect
 from collections import Counter, OrderedDict, defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 
 import torch
@@ -27,6 +29,32 @@ from .tensor_utils import (
 )
 
 INPUT_WAS_PARAMETER_ATTR = "_torchlens_input_was_parameter"
+
+_PRESERVE_LEAF_INPUT_COPIES = False
+"""Whether :func:`safe_copy_input_tree` keeps grad-tracked leaf inputs as leaves by default."""
+
+
+@contextmanager
+def leaf_preserving_input_copies() -> Iterator[None]:
+    """Make every model-input copy inside the block keep leaf inputs as leaves.
+
+    Validation copies the caller's inputs for its private forwards (ground truth,
+    validation capture, re-trace). A grad-tracked leaf input copied through the
+    graph-connected clone becomes a NON-leaf, so a model that sets
+    ``x.requires_grad = True`` on its input raises inside validation although its
+    plain forward runs. Validation never promises that gradients reach the
+    caller's input, so inside this block a leaf input is copied as a new leaf with
+    the same ``requires_grad``. A plain ``tl.trace`` keeps the graph-connected
+    clone, whose contract is that gradients still reach the caller's input.
+    """
+
+    global _PRESERVE_LEAF_INPUT_COPIES
+    prior = _PRESERVE_LEAF_INPUT_COPIES
+    _PRESERVE_LEAF_INPUT_COPIES = True
+    try:
+        yield
+    finally:
+        _PRESERVE_LEAF_INPUT_COPIES = prior
 
 
 def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
@@ -501,6 +529,7 @@ def _copy_input_tree_node(
     in_progress: set[int],
     semantic_gaps: list[str],
     tensor_records: list[tuple[str, torch.Tensor, bool]],
+    preserve_leaf_inputs: bool = False,
 ) -> Any:
     """Copy one input-tree node INERTLY, returning the copy (b3-opus-R12-1).
 
@@ -539,6 +568,10 @@ def _copy_input_tree_node(
         Tensor paths, originals, and whether storage-preserving deepcopy
         remains available, for cross-tensor alias checks (one per PATH
         occurrence, so repeated tensors keep every alias-pair site).
+    preserve_leaf_inputs:
+        Whether a grad-tracked exact-``Tensor`` leaf is copied as a new leaf
+        (storage-preserving deepcopy keeps ``requires_grad``) instead of the
+        graph-connected clone; see :func:`leaf_preserving_input_copies`.
 
     Returns
     -------
@@ -559,7 +592,9 @@ def _copy_input_tree_node(
         return cloned
     if isinstance(value, torch.Tensor):
         deepcopy_preserves_contract = (
-            value.is_leaf and not value.requires_grad and type(value) is torch.Tensor
+            value.is_leaf
+            and (preserve_leaf_inputs or not value.requires_grad)
+            and type(value) is torch.Tensor
         )
         tensor_records.append((path, value, deepcopy_preserves_contract))
         if id(value) in memo:
@@ -608,6 +643,7 @@ def _copy_input_tree_node(
             in_progress=in_progress,
             semantic_gaps=semantic_gaps,
             tensor_records=tensor_records,
+            preserve_leaf_inputs=preserve_leaf_inputs,
         )
 
     def _reference_with_gap(reason: str) -> Any:
@@ -883,6 +919,7 @@ def safe_copy_input_tree(
     kwargs: dict[Any, Any],
     *,
     require_distinct_tensor_sites: bool = False,
+    preserve_leaf_inputs: bool | None = None,
 ) -> tuple[list[Any], dict[Any, Any], tuple[str, ...]]:
     """Copy one complete model-input graph while preserving tensor topology.
 
@@ -890,7 +927,9 @@ def safe_copy_input_tree(
     tensors without autograd history, PyTorch's deepcopy protocol copies each
     underlying storage once and rebuilds every view with its original size,
     stride, and storage offset. Grad-tracked tensors use the historical clone
-    path so gradients still reach the caller's input. Every path shares one memo,
+    path so gradients still reach the caller's input; with ``preserve_leaf_inputs``
+    (validation's private copies) a grad-tracked LEAF is deepcopied as a new leaf
+    instead, so a model may still set ``requires_grad`` on it. Every path shares one memo,
     so the same tensor repeated at multiple call sites remains one object.
 
     The tree walk itself is INERT (b3-opus-R12-1): containers are copied by
@@ -909,6 +948,10 @@ def safe_copy_input_tree(
     require_distinct_tensor_sites:
         Whether aliases between distinct input sites must fail closed because a
         downstream sparse runnable descriptor cannot encode them.
+    preserve_leaf_inputs:
+        Whether grad-tracked leaf inputs are copied as new leaves with the same
+        ``requires_grad`` (so gradients do NOT reach the caller's input).
+        ``None`` follows :func:`leaf_preserving_input_copies`.
 
     Returns
     -------
@@ -927,6 +970,8 @@ def safe_copy_input_tree(
     in_progress: set[int] = set()
     semantic_gaps: list[str] = []
     tensor_records: list[tuple[str, torch.Tensor, bool]] = []
+    if preserve_leaf_inputs is None:
+        preserve_leaf_inputs = _PRESERVE_LEAF_INPUT_COPIES
     try:
         with pause_logging():
             copied_args = _copy_input_tree_node(
@@ -937,6 +982,7 @@ def safe_copy_input_tree(
                 in_progress=in_progress,
                 semantic_gaps=semantic_gaps,
                 tensor_records=tensor_records,
+                preserve_leaf_inputs=preserve_leaf_inputs,
             )
             copied_kwargs = _copy_input_tree_node(
                 kwargs,
@@ -946,6 +992,7 @@ def safe_copy_input_tree(
                 in_progress=in_progress,
                 semantic_gaps=semantic_gaps,
                 tensor_records=tensor_records,
+                preserve_leaf_inputs=preserve_leaf_inputs,
             )
     except RecursionError as exc:
         from .._input_walk import raise_input_tree_stack_refusal
