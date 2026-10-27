@@ -2267,3 +2267,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a8d24db9e3c40ead16241542c62ba7a1a8f9603a (dirty)
 recorded: 2026-10-27T04:01:43.820203+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 round 2 close-out: static read-site scan gains the parent_arg_positions read of the structural-slot carve-out checks (validation/_structural_slot_checks.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69e25d0e3c97d3d97b30b61c458cc3b8854dcb68 (dirty)
+recorded: 2026-10-27T07:16:44.450024+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 round 2 close-out: static read-site scan gains the parent_arg_positions read of the structural-slot carve-out checks (validation/_structural_slot_checks.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69e25d0e3c97d3d97b30b61c458cc3b8854dcb68 (dirty)
+recorded: 2026-10-27T07:16:48.918540+00:00
