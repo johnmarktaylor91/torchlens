@@ -864,6 +864,54 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
             "parent outside args 0/3/4"
         ),
     ),
+    CustomCheckExemption(
+        func_name="gru",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="rnn_tanh",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="rnn_relu",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
 )
 
 #: Kwarg spellings that may match a structural POSITION. Every alias widens the

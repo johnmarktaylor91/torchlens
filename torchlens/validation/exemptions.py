@@ -41,6 +41,7 @@ from ._destination_coverage import (
     _get_scatter_destination_dim_index,
     _index_positions_cover_destination_exactly,
     _index_put_destination_is_fully_overwritten,
+    _replacement_fits_selection,
     _scatter_index_fully_overwrites_dim,
     _setitem_index_targets_are_unique,
 )
@@ -52,6 +53,9 @@ from ._index_domain import (
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
+from ._structural_slot_checks import (
+    check_packed_rnn_batch_sizes_exempt,
+)
 from ._value_predicates import (
     _extrema_operand_dominates,
     _is_all_inf_value,
@@ -597,28 +601,6 @@ def _setitem_destination_coverage_is_total(
     if not _index_positions_cover_destination_exactly(destination, index):
         return False
     return _replacement_fits_selection(replacement, selected, broadcast_replacement)
-
-
-def _replacement_fits_selection(
-    replacement: Any, selected: torch.Tensor, broadcast_replacement: bool
-) -> bool:
-    """Return whether assigning ``replacement`` writes every element of ``selected``.
-
-    A non-tensor replacement fills the selection. A tensor must match the
-    selected shape exactly, or, with ``broadcast_replacement``, broadcast onto it
-    unchanged: ``__setitem__`` broadcasts its value, so a ``[256]`` value written
-    to a ``[1, 256]`` slice still writes all 256 slots.
-    """
-
-    if not isinstance(replacement, torch.Tensor):
-        return True
-    if not broadcast_replacement:
-        return tuple(selected.shape) == tuple(replacement.shape)
-    try:
-        broadcast = torch.broadcast_shapes(tuple(replacement.shape), tuple(selected.shape))
-    except RuntimeError:
-        return False
-    return tuple(broadcast) == tuple(selected.shape)
 
 
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -1247,6 +1229,9 @@ CUSTOM_EXEMPTION_CHECKS: dict[str, Callable[["Trace", Op, list[str]], bool]] = {
     "masked_fill_": _check_masked_fill_exempt,
     "batch_norm": _check_norm_running_stat_exempt,
     "instance_norm": _check_norm_running_stat_exempt,
+    "gru": check_packed_rnn_batch_sizes_exempt,
+    "rnn_tanh": check_packed_rnn_batch_sizes_exempt,
+    "rnn_relu": check_packed_rnn_batch_sizes_exempt,
 }
 
 
