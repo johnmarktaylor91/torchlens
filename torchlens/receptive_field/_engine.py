@@ -1644,7 +1644,7 @@ def _has_zero_extent(op: Op) -> bool:
     field: no geometry is seeded from it and no descriptor names it.
     """
 
-    shape = getattr(op, "shape", None)
+    shape = op.shape
     return shape is not None and any(int(extent) == 0 for extent in shape)
 
 
