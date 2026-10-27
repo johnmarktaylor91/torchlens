@@ -477,11 +477,12 @@ def test_demoded_composite_interior_ref_is_disclosed_unrecovered(
     ``handle_torch_function`` shape, so under ANY TorchFunctionMode its body
     runs with the mode popped — the rescue net can never see ``interior``.
 
-    DELIBERATE FLIP (crawler deletion, verdict disposition D): the crawler
-    used to patch the module global; now the escape signal fires, the rescue
-    is attempted, recovers nothing, and the standing escape is DISCLOSED
-    (silence-vs-loud was the recorded design-review criterion; belt-extension only
-    if real-world hits appear).
+    DELIBERATE FLIP (crawler deletion, verdict disposition D): the escape
+    signal fires, the rescue is attempted, recovers nothing, and the standing
+    escape is DISCLOSED (silence-vs-loud was the recorded design-review
+    criterion). The stale ref is held as a function default: the wrap-time
+    module sweep now patches a module-GLOBAL ``interior`` (real-world hits
+    appeared in Menagerie rung 4), so a global would no longer escape.
     """
     mod = types.ModuleType("_tl_outcome_composite_interior")
     corpus_env.register_module(mod)
@@ -489,12 +490,12 @@ def test_demoded_composite_interior_ref_is_disclosed_unrecovered(
         {
             "has_torch_function": torch.overrides.has_torch_function,
             "handle_torch_function": torch.overrides.handle_torch_function,
-            "interior": corpus_env.cos,
+            "_stale_cos": corpus_env.cos,
         }
     )
     exec(
         """
-def protocol_composite(x):
+def protocol_composite(x, interior=_stale_cos):
     if has_torch_function((x,)):
         return handle_torch_function(protocol_composite, (x,), x)
     return interior(x)

@@ -10,6 +10,14 @@ re-run cannot fix what nothing detects, so these functions keep the targeted
 stale-reference patching (module-level attributes, the measured reachable
 holder class) after the broad crawler's deletion.
 
+The same module-global sweep also patches stale references to every OTHER
+wrapped torch callable (``from torch import bmm`` /
+``from torch.nn.functional import linear`` bound before the first wrap). Those
+are mode-visible, but only ``tl.trace`` re-runs under the rescue net; the
+validation capture and every other mode-free capture would otherwise drop the
+op from the graph. Patching at wrap time keeps the capture mode-free (the
+rescue mode de-fuses fast paths) and is reversed at ``unwrap_torch()``.
+
 The belt membership is DERIVED MECHANICALLY per build, never hand-listed:
 
 1. Candidates are every ``ORIG_TORCH_FUNCS`` entry whose ORIGINAL callable is
@@ -396,8 +404,28 @@ def _evict_live_id(entry_id: int) -> Callable[[Any], None]:
     return _evict
 
 
+def _wrapped_callable_replacement(value: Any) -> Any | None:
+    """Return the live wrapper when ``value`` is a pristine wrapped torch callable.
+
+    The reverse registry check guards against a recycled ``id``: the entry
+    counts only when the wrapper still maps back to this exact object. Classes
+    are never replaced (a module-global ``Tensor`` must stay a type).
+    """
+
+    if isinstance(value, type) or not callable(value):
+        return None
+    wrapper = _state._orig_to_decorated.get(id(value))
+    if wrapper is None or _state._decorated_to_orig.get(id(wrapper)) is not value:
+        return None
+    return wrapper
+
+
 def sweep_stale_belt_references() -> int:
-    """Patch stale module-level references to belt members, with a ledger.
+    """Patch stale module-level references to wrapped torch callables, with a ledger.
+
+    Belt members (protocol-invisible) and every other wrapped torch callable
+    are patched alike; see the module docstring for why the mode-visible ones
+    are covered here too.
 
     Scans each live module identity ONCE per wrapper epoch (new imports are
     picked up on the next sweep). Only module ``__dict__`` slots are
@@ -419,8 +447,9 @@ def sweep_stale_belt_references() -> int:
     # close. The per-module memo below already makes every sweep O(modules)
     # dict lookups with O(new modules) real work.
     report = belt_report()
-    if report is None or _member_map is None or not _member_map:
+    if report is None:
         return 0
+    member_map = _member_map or {}
     # O(new-modules) pre-filter: every id in ``_swept_ids_live`` is a module
     # this epoch's loop already scanned AND that is provably still the same
     # object (death callbacks evict dead ids, so a reused id reads as new).
@@ -456,7 +485,9 @@ def sweep_stale_belt_references() -> int:
         except TypeError:
             continue
         for attr_name, attr_val in list(module_dict.items()):
-            replacement = _member_map.get(id(attr_val))
+            replacement = member_map.get(id(attr_val))
+            if replacement is None:
+                replacement = _wrapped_callable_replacement(attr_val)
             if replacement is None:
                 continue
             try:
