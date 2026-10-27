@@ -24,7 +24,10 @@ saved co-arguments, and returns non-exempt for anything else:
 - ``scatter_reduce``: ``include_self=False`` and the index covers every
   destination slot along ``dim``, so the destination (``args[0]``) is never read;
 - split: the output chunk has zero elements and its shape is fixed by the
-  parent's shape and the integer split sizes.
+  parent's shape and the integer split sizes;
+- matmul family (``bmm``, ``mm``, ``matmul``): the product has zero elements
+  while the perturbed operand has some, so the other operand's free (or batch)
+  extent is empty and no element exists for the perturbed values to reach.
 
 Split from ``validation/exemptions.py`` (R43 file-size ratchet), which dispatches
 here from its posthoc value-proof and overwrite decisions.
@@ -85,8 +88,10 @@ DISJUNCTION_FUNC_NAMES = frozenset(
 POW_FUNC_NAMES = frozenset({"__pow__", "__ipow__", "pow", "pow_"})
 SCATTER_REDUCE_FUNC_NAMES = frozenset({"scatter_reduce", "scatter_reduce_", "scatterreduce"})
 SPLIT_FUNC_NAMES = frozenset({"split", "split_with_sizes", "splitwithsizes"})
+MATMUL_FUNC_NAMES = frozenset({"bmm", "mm", "matmul", "__matmul__", "__rmatmul__"})
 VALUE_PROOF_FUNC_NAMES = (
     DIVISION_FUNC_NAMES
+    | MATMUL_FUNC_NAMES
     | CONJUNCTION_FUNC_NAMES
     | DISJUNCTION_FUNC_NAMES
     | POW_FUNC_NAMES
@@ -518,12 +523,38 @@ def _empty_split_chunk_decision(
     )
 
 
+def _empty_matmul_product_decision(
+    layer: Op, keys: set[Any], args: tuple[Any, ...]
+) -> PosthocPerturbDecision:
+    """Exempt a non-empty operand of a matrix product that has zero elements."""
+
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor) or out.numel() != 0 or len(keys) != 1:
+        return _NOT_PROVED
+    (key,) = keys
+    if key not in (0, 1) or len(args) < 2:
+        return _NOT_PROVED
+    operands = args[:2]
+    if not all(isinstance(operand, torch.Tensor) for operand in operands):
+        return _NOT_PROVED
+    if operands[key].numel() == 0:
+        return _NOT_PROVED
+    return PosthocPerturbDecision(
+        True,
+        "empty_matmul_product",
+        "the matrix product has zero elements while this operand has some, so the "
+        "other operand's free or batch extent is empty and no output element exists "
+        "for this operand's values to reach",
+    )
+
+
 _DECISIONS_BY_FAMILY = (
     (DIVISION_FUNC_NAMES, _division_decision),
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
     (DISJUNCTION_FUNC_NAMES, _disjunction_decision),
     (POW_FUNC_NAMES, _pow_decision),
     (SPLIT_FUNC_NAMES, _empty_split_chunk_decision),
+    (MATMUL_FUNC_NAMES, _empty_matmul_product_decision),
     (frozenset({"einsum"}), _einsum_decision),
     (frozenset({"batch_norm"}), _batch_norm_centered_input_decision),
     (frozenset({"__setitem__"}), _setitem_singleton_index_decision),

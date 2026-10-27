@@ -471,6 +471,36 @@ def test_nonempty_split_chunk_still_fails_when_frozen() -> None:
     _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
 
 
+# ------------------------------------------------------- empty matrix product
+
+
+class _EmptyKeyScores(nn.Module):
+    def __init__(self, keys: int) -> None:
+        super().__init__()
+        self.q = nn.Linear(4, 4)
+        self.keys = keys
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Attention scores against an empty key set, as in m15089's cross-attention.
+        q = self.q(x)
+        k = x[:, : self.keys]
+        scores = torch.bmm(q, k.transpose(1, 2))
+        return q + scores.sum(-1, keepdim=True)
+
+
+def test_empty_matmul_product_exempts_its_nonempty_operand() -> None:
+    assert _validates(_EmptyKeyScores(0), torch.randn(2, 3, 4))
+    trace = _capture(_EmptyKeyScores(0), torch.randn(2, 3, 4))
+    op = _op(trace, {"bmm"})
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_matmul_product")
+
+
+def test_nonempty_matmul_product_still_fails_when_frozen() -> None:
+    trace = _capture(_EmptyKeyScores(2), torch.randn(2, 3, 4))
+    op = _op(trace, {"bmm"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 0))
+
+
 # ------------------------------------- __setitem__ full overwrite coverage proof
 
 

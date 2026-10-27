@@ -504,6 +504,13 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
             "a non-empty chunk, tensor-valued split sizes, and a perturbed parent outside the input slot"
         ),
     ),
+    Exemption(
+        code="empty_matmul_product",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_empty_matmul_product_decision",
+        refuses=("a non-empty product, a parent in both operand slots, and a non-tensor operand"),
+    ),
 )
 
 
