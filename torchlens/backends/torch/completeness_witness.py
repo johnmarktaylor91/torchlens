@@ -113,7 +113,7 @@ from .escape_detection import (
 CompletenessWitnessMode = Literal["off", "shadow"]
 """Supported dispatcher-witness rollout modes."""
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 9
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 10
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
 _TORCH_ROOT = Path(torch.__file__).resolve().parent
@@ -168,6 +168,13 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         wrapper_name="torch_func:__int__:logged",
         operator="aten._local_scalar_dense.default",
         reason="int(tensor) extracts a Python int, which is intentionally not an op output",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="torch_func:__index__:logged",
+        operator="aten._local_scalar_dense.default",
+        reason=(
+            "operator.index(tensor) extracts a Python int, which is intentionally not an op output"
+        ),
     ),
     AuditedCompletenessBoundary(
         wrapper_name="autograd:grad",
