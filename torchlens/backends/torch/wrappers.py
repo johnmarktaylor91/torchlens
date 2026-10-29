@@ -65,7 +65,7 @@ from ...utils.tensor_utils import (
 )
 from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
-from ._protocol_redispatch import redispatch_declined_protocol
+from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
@@ -1641,13 +1641,6 @@ def torch_func_decorator(
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
 
-    def _call_original_redispatching(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
-        """Call the original, re-offering a declined protocol dispatch (inlined on hot paths)."""
-        try:
-            return func(*args, **kwargs)
-        except TypeError as exc:
-            return redispatch_declined_protocol(exc, wrapped_func, func_name, args, kwargs)
-
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
@@ -1716,7 +1709,9 @@ def torch_func_decorator(
                 try:
                     out = func(*args, **kwargs)
                 except TypeError as exc:
-                    out = redispatch_declined_protocol(exc, wrapped_func, func_name, args, kwargs)
+                    out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                    if out is STILL_DECLINED:
+                        raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)
@@ -1748,7 +1743,9 @@ def torch_func_decorator(
             try:
                 out = func(*args, **kwargs)
             except TypeError as exc:
-                out = redispatch_declined_protocol(exc, wrapped_func, func_name, args, kwargs)
+                out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                if out is STILL_DECLINED:
+                    raise
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1774,20 +1771,20 @@ def torch_func_decorator(
                 _state._functorch_warning_emitted = True
                 trace._raw_transform_escape_detected = True
                 _warn_functorch_region_not_logged()
-            # A raw transform interior is outside the witness claim, but the witness-off
-            # route retains its original logging state and avoids the context-manager cost.
-            # The pass-through keeps the declined-protocol redispatch (tensordict under vmap).
-            if _state._completeness_witness_mode == "shadow":
-                with _state.pause_logging():
-                    if _state._escape_detector_mode == "shadow":
-                        with expected_original_call(func, f"torch_func:{func_name}:functorch"):
-                            return _call_original_redispatching(args, kwargs)
-                    return _call_original_redispatching(args, kwargs)
-            else:
-                if _state._escape_detector_mode == "shadow":
-                    with expected_original_call(func, f"torch_func:{func_name}:functorch"):
-                        return _call_original_redispatching(args, kwargs)
-                return _call_original_redispatching(args, kwargs)
+            # A raw transform interior is outside the witness claim; the witness-off route
+            # retains its original logging state (declined dispatches still redispatch).
+            shadow_witness = _state._completeness_witness_mode == "shadow"
+            edge_ctx: Any = nullcontext()
+            if _state._escape_detector_mode == "shadow":
+                edge_ctx = expected_original_call(func, f"torch_func:{func_name}:functorch")
+            with _state.pause_logging() if shadow_witness else nullcontext(), edge_ctx:
+                try:
+                    return func(*args, **kwargs)
+                except TypeError as exc:
+                    out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                    if out is STILL_DECLINED:
+                        raise
+                    return out
 
         # Skip logging inside a Dynamo-traced region, for the same reason as the
         # functorch guard above: TorchLens' internal operations (safe_copy,
@@ -2037,17 +2034,22 @@ def torch_func_decorator(
         )
         try:
             with mode_pause as paused_modes, frozen_receiver_ctx:
+                logged_edge_ctx: Any = nullcontext()
                 if _diagnostic_edge_armed():
-                    with expected_original_call(
+                    logged_edge_ctx = expected_original_call(
                         func,
                         f"torch_func:{func_name}:logged",
                         func_name=func_name,
                         func_call_id=func_call_id,
                         call_barcode=func_call_barcode,
-                    ) as expected_token:
-                        out_orig = _call_original_redispatching(args, kwargs)
-                else:
-                    out_orig = _call_original_redispatching(args, kwargs)
+                    )
+                with logged_edge_ctx as expected_token:
+                    try:
+                        out_orig = func(*args, **kwargs)
+                    except TypeError as exc:
+                        out_orig = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                        if out_orig is STILL_DECLINED:
+                            raise
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.

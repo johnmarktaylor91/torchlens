@@ -101,7 +101,10 @@
   a genuine decline still raises torch's own `TypeError`. Unwrapped torch has no wrapper to re-offer
   (validation's pristine ground truth unwraps), so every `unwrap_torch()` first adds the original
   key beside each wrapper key in module- and class-level `dict`/`set` tables of modules imported
-  after the redispatch module (torch and TorchLens excluded). Tests: `tests/test_protocol_redispatch.py`.
+  after the redispatch module (torch and TorchLens excluded), and the next wrap removes exactly
+  those keys. Every call of the original and every re-raise stays in the wrapper's own frame: the
+  escape detector and failure-origin classification read that frame, so never route `func` through
+  a helper. Tests: `tests/test_protocol_redispatch.py`.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
 - `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals

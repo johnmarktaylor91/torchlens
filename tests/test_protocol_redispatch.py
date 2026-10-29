@@ -18,6 +18,7 @@ import itertools
 import subprocess
 import sys
 import textwrap
+import traceback
 import types
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -30,6 +31,7 @@ import torch.nn.functional as F
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch import _protocol_redispatch
+from torchlens.capture.outcome import FailureOrigin, classify_failure_origin
 from torchlens.utils import _torch_compat
 
 
@@ -192,7 +194,7 @@ def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: typ
 def test_unwrap_aliases_post_wrap_tables_onto_originals(
     post_wrap_library: types.ModuleType,
 ) -> None:
-    """Unwrapped torch dispatches a post-wrap table; the wrapper key stays."""
+    """Unwrapped torch dispatches a post-wrap table; the next wrap undoes the alias."""
 
     from torchlens.backends.torch.wrappers import unwrap_torch
 
@@ -207,6 +209,10 @@ def test_unwrap_aliases_post_wrap_tables_onto_originals(
     finally:
         _ensure_wrapped()
     assert torch.stack is wrapped_stack
+    # Back on the call path, the wrappers redispatch; the foreign table is again
+    # exactly what its import built (wrapper keys only).
+    assert _resolve(wrapped_stack) not in post_wrap_library.HANDLED
+    assert set(post_wrap_library.HANDLED) == {wrapped_stack, F.relu}
 
 
 def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
@@ -216,12 +222,30 @@ def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
     wrapper, original = torch.cat, _resolve(torch.cat)
     table: dict[Any, Any] = {wrapper: "impl", "name": 1}
     members: set[Any] = {wrapper, 3}
-    ledger = _state._decorated_to_orig
+    ledger, _ = _state.wrap_epoch_ledgers()
+    try:
+        assert _protocol_redispatch._alias_container(table, ledger) == 1
+        assert _protocol_redispatch._alias_container(members, ledger) == 1
+        assert table == {wrapper: "impl", "name": 1, original: "impl"}
+        assert members == {wrapper, 3, original}
+        assert _protocol_redispatch._alias_container(table, ledger) == 0
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert table == {wrapper: "impl", "name": 1}
+    assert members == {wrapper, 3}
+
+
+def test_undo_leaves_a_re_registered_original_alone() -> None:
+    """An original key whose value changed since the alias is the library's now."""
+
+    _ensure_wrapped()
+    wrapper, original = torch.cat, _resolve(torch.cat)
+    table: dict[Any, Any] = {wrapper: "impl"}
+    ledger, _ = _state.wrap_epoch_ledgers()
     assert _protocol_redispatch._alias_container(table, ledger) == 1
-    assert _protocol_redispatch._alias_container(members, ledger) == 1
-    assert table == {wrapper: "impl", "name": 1, original: "impl"}
-    assert members == {wrapper, 3, original}
-    assert _protocol_redispatch._alias_container(table, ledger) == 0
+    table[original] = "re-registered"
+    _protocol_redispatch.undo_table_aliases()
+    assert table == {wrapper: "impl", original: "re-registered"}
 
 
 def test_original_keyed_table_is_unchanged(post_wrap_bag: type) -> None:
@@ -294,6 +318,39 @@ def test_overloaded_args_follow_torch_protocol_order() -> None:
         ([torch.ones(1), base, param], child), {"other": base}, disabled
     )
     assert [type(value) for value in ordered] == [Child, Base]
+
+
+def _capture_failure(forward: Callable[[torch.Tensor], Any]) -> BaseException:
+    """Return the exception a capture of ``forward`` raises."""
+
+    class Model(nn.Module):
+        """Runs ``forward``."""
+
+        def forward(self, x: torch.Tensor) -> Any:
+            return forward(x)
+
+    with pytest.raises(TypeError) as info:
+        tl.trace(Model(), torch.ones(2))
+    return info.value
+
+
+def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin() -> None:
+    """A TypeError that is no declined dispatch re-raises from the wrapper frame."""
+
+    exc = _capture_failure(lambda x: torch.matmul(x, "not a tensor"))
+    assert classify_failure_origin(exc) is FailureOrigin.USER_OP
+    assert not any(
+        frame.filename.endswith("_protocol_redispatch.py")
+        for frame in traceback.extract_tb(exc.__traceback__)
+    )
+
+
+def test_genuine_decline_in_capture_classifies_user_op(post_wrap_bag: type) -> None:
+    """A dispatch every handler declines twice is still the user's op."""
+
+    exc = _capture_failure(lambda x: torch.cat([post_wrap_bag(x), post_wrap_bag(x)]))
+    assert "Multiple dispatch failed for 'torch.cat'" in str(exc)
+    assert classify_failure_origin(exc) is FailureOrigin.USER_OP
 
 
 @pytest.mark.heavy

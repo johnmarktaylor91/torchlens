@@ -299,6 +299,10 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "export-bridge target with no declared extra",
     ),
+    "tensordict": (
+        UNAVAILABLE_OK,
+        "post-wrap handler-table reproduction (Menagerie m4387); no declared extra",
+    ),
     "tensorflow": (OPTIONAL_PREVIEW, "tf extra"),
     "timm": (TEST_EXTRA, "timm"),
     "tinygrad": (OPTIONAL_PREVIEW, "tinygrad extra (py>=3.11 only)"),

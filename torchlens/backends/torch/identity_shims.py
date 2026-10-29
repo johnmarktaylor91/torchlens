@@ -296,6 +296,11 @@ def install_identity_shims() -> None:
     """
 
     global _family_installed
+    # Wrappers return to the call path: drop the original keys the last unwrap
+    # aliased into third-party handler tables (``_protocol_redispatch``).
+    from ._protocol_redispatch import undo_table_aliases
+
+    undo_table_aliases()
     if _family_installed:
         # The causal-bias site resolves only through sys.modules (lazy-import
         # belt). The import hook shims a post-wrap import the moment the
@@ -344,7 +349,7 @@ def remove_identity_shims() -> None:
     _family_installed = False
     _remove_import_hook()
     # Third-party handler tables keyed on wrappers by a post-wrap import gain
-    # their original keys before the wrappers leave the call path.
+    # their original keys while the wrappers are off the call path.
     from ._protocol_redispatch import alias_wrapper_keyed_tables
 
     alias_wrapper_keyed_tables()
