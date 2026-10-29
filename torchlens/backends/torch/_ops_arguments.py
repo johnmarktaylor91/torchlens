@@ -22,6 +22,7 @@ from ...ir.container import (
 from ...utils.tensor_utils import (
     safe_copy,
 )
+from ._param_fingerprint import param_fingerprint
 from ._tl import (
     get_live_tensor_label,
     get_param_meta,
@@ -137,7 +138,11 @@ def _classify_arg_component(
             param_meta = get_param_meta(value)
             param_barcode = getattr(param_meta, "param_barcode", None)
             return LiteralTensor(
-                value, param_barcode=str(param_barcode) if param_barcode is not None else None
+                value,
+                param_barcode=str(param_barcode) if param_barcode is not None else None,
+                capture_fingerprint=param_fingerprint(
+                    value, getattr(param_meta, "param_address", None)
+                ),
             )
         with pause_logging():
             return LiteralTensor(safe_copy(value))

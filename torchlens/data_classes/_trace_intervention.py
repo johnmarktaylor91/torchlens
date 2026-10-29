@@ -662,8 +662,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log after the selected propagation engine runs.
         """
 
-        from ..intervention.errors import EngineDispatchError
-
         if type(hooks_or_site).__name__ == "SiteTable":
             # find_sites() output is a first-class address (leverage B3/NEW-4):
             # the zero-match refusal recommends find_sites, so its result must
@@ -672,6 +670,57 @@ class TraceInterventionMixin(_TraceMixinBase):
 
             hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
         intervention_options = merge_intervention_options(intervention=intervention)
+        from ..intervention._param_fingerprint import changed_param_scope
+
+        with changed_param_scope(intervention_options.allow_changed_params):
+            return self._do_with_options(
+                hooks_or_site,
+                value_or_hook,
+                model=model,
+                x=x,
+                intervention_options=intervention_options,
+                direction=direction,
+            )
+
+    def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
+        self: "Trace",
+        hooks_or_site: Any,
+        value_or_hook: Any,
+        *,
+        model: nn.Module | None,
+        x: Any,
+        intervention_options: InterventionOptions,
+        direction: str | None,
+    ) -> "Trace":
+        """Run one ``do()`` transaction under its merged options.
+
+        :meth:`do` enters the ``allow_changed_params`` scope around this call, so
+        every replay the transaction runs (push, push_from, selection and region
+        doors) sees one opt-in.
+
+        Parameters
+        ----------
+        hooks_or_site:
+            Mapping/list batch input or selector-like site.
+        value_or_hook:
+            Optional hook for the ``(site, hook)`` input shape.
+        model:
+            Model required when ``engine="rerun"``.
+        x:
+            Input required when ``engine="rerun"``.
+        intervention_options:
+            Merged ``InterventionOptions``.
+        direction:
+            Optional signal direction override for hook-style mutations.
+
+        Returns
+        -------
+        Trace
+            This model log after the selected propagation engine runs.
+        """
+
+        from ..intervention.errors import EngineDispatchError
+
         engine_value = intervention_options.engine
         confirm_mutation_value = intervention_options.confirm_mutation
         strict_value = intervention_options.strict

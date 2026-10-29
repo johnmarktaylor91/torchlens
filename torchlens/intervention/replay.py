@@ -25,9 +25,16 @@ from ..options import ReplayOptions, merge_replay_options
 from ..quantities import Bytes
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
+from ._param_fingerprint import (
+    CHANGED_PARAMS_RUN_KEY,
+    changed_param_scope,
+    checked_param_value,
+    record_changed_params,
+)
 from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
+    _final_label_for_ref,
     _record_capture_digest,
     _replay_site_key,
 )
@@ -158,21 +165,22 @@ def push(
     origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("push requires at least one hook target")
-    if replay_options.differentiable:
-        return _run_differentiable_replay(
+    with changed_param_scope(replay_options.allow_changed_params):
+        if replay_options.differentiable:
+            return _run_differentiable_replay(
+                log,
+                origins,
+                hook_entries=hook_entries,
+                strict=replay_options.strict,
+                preserve_origins=False,
+            )
+        return _run_replay(
             log,
             origins,
             hook_entries=hook_entries,
             strict=replay_options.strict,
             preserve_origins=False,
         )
-    return _run_replay(
-        log,
-        origins,
-        hook_entries=hook_entries,
-        strict=replay_options.strict,
-        preserve_origins=False,
-    )
 
 
 def push_from(
@@ -205,9 +213,10 @@ def push_from(
     origin = _resolve_single_origin(log, site, strict=replay_options.strict)
     if not isinstance(origin.out, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor out")
-    return _run_replay(
-        log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
-    )
+    with changed_param_scope(replay_options.allow_changed_params):
+        return _run_replay(
+            log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+        )
 
 
 def _run_differentiable_replay(
@@ -546,6 +555,7 @@ def _run_replay(
     run_ctx = {**_ensure_replay_run_ctx(log), "differentiable": is_differentiable}
     if not is_differentiable:
         run_ctx.pop("frontier", None)
+    run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
     log.last_run = run_ctx
     cone = cone_of_effect(log, origins)
     origin_keys = {_replay_site_key(origin) for origin in origins}
@@ -702,6 +712,7 @@ def _run_replay(
         "errors_non_fatal": errors_non_fatal,
         "cone": tuple(_disclosure_label(site) for site in cone),
     }
+    record_changed_params(log)
     log._record_operation(
         "replay",
         engine="replay",
@@ -1015,7 +1026,7 @@ def _resolve_arg_component(
             f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
         )
     if isinstance(component, LiteralTensor):
-        return component.value
+        return checked_param_value(component, pass_log)
     if isinstance(component, LiteralValue):
         return component.value
     if isinstance(component, Unsupported):
@@ -1703,27 +1714,6 @@ def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
     """
 
     return all(isinstance(item, tuple) and len(item) == 2 for item in component)
-
-
-def _final_label_for_ref(log: Trace, label: str) -> str:
-    """Resolve raw or final parent-ref label to a current lookup label.
-
-    Parameters
-    ----------
-    log:
-        Model log to query.
-    label:
-        Raw or final label from a template.
-
-    Returns
-    -------
-    str
-        Lookup label.
-    """
-
-    if label in log.layer_dict_all_keys:
-        return label
-    return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
 
 def _warn_if_unexpected_parent(

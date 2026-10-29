@@ -2,7 +2,8 @@
 
 Session-time state the replay/push engine keeps on ``Trace.last_run`` (RUNTIME
 storage, never persisted): the pass-qualified key every replay structure is
-addressed by, the run-context accessor that seeds it, and the ledger of
+addressed by, the resolver from a template parent ref to the exact recorded
+op, the run-context accessor that seeds it, and the ledger of
 capture-time out digests recorded the first time replay overwrites a site,
 and the rollback journal a multi-door transaction restores on failure.
 Split out of ``replay.py`` so validation can read the ledger without importing
@@ -38,6 +39,44 @@ def _replay_site_key(site: Op) -> str:
     if isinstance(label, str) and label:
         return label
     return site.layer_label
+
+
+def _final_label_for_ref(log: Trace, label: str) -> str:
+    """Resolve raw or final parent-ref label to a current lookup label.
+
+    The exact recorded op comes first: a raw label through the pass-exact
+    ``_raw_to_final_op_labels``, a final lookup label (what labeling renames a
+    template ref to) back through ``_final_to_raw_layer_labels`` and then the
+    pass-exact map. Both maps come from the same labeling loop, so the result
+    names one pass of one layer. A layer-wide spelling can also be another op's
+    public raw label (a fused multi-pass layer shifts later step indices), so
+    resolving it as a lookup key could look ambiguous or name the wrong op.
+    Labels the maps do not hold (traces without them) keep the layer-wide
+    lookup, where an ambiguous spelling still refuses.
+
+    Parameters
+    ----------
+    log:
+        Model log to query.
+    label:
+        Raw or final label from a template.
+
+    Returns
+    -------
+    str
+        Lookup label.
+    """
+
+    op_labels = log._raw_to_final_op_labels or {}
+    raw_label = label
+    if raw_label not in op_labels:
+        raw_label = (log._final_to_raw_layer_labels or {}).get(label, "")
+    exact_label = op_labels.get(raw_label)
+    if isinstance(exact_label, str) and exact_label in log.layer_dict_all_keys:
+        return exact_label
+    if label in log.layer_dict_all_keys:
+        return label
+    return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
 
 def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:

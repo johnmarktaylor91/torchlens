@@ -170,6 +170,7 @@ from ...utils.tensor_utils import (
     tensor_nanequal,
 )
 from . import module_stack as _mstack
+from ._param_fingerprint import param_fingerprint
 from ._tl import (
     active_label_session_token,
     get_label_list,

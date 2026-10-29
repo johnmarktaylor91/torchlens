@@ -22,6 +22,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
+from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.types import (
     CapturedArgTemplate,
     LiteralTensor,
@@ -82,9 +83,11 @@ def _label(trace: Trace, fragment: str, index: int = 0) -> str:
     return [op.layer_label for op in trace.layer_list if fragment in op.layer_label][index]
 
 
-def _push(trace: Trace, label: str) -> torch.Tensor:
+def _push(trace: Trace, label: str, *, allow: bool = False) -> torch.Tensor:
     edited = trace.fork().do(
-        label, tl.scale(0.5), intervention=InterventionOptions(engine="replay")
+        label,
+        tl.scale(0.5),
+        intervention=InterventionOptions(engine="replay", allow_changed_params=allow),
     )
     return edited.output_ops[0].out.detach().clone()
 
@@ -228,9 +231,10 @@ def test_live_parameter_edit_after_forking_keeps_recorded_values() -> None:
             model.fc2.weight.copy_(saved)
 
 
-def test_every_trace_and_fork_replays_with_the_live_parameter() -> None:
-    """After an in-place edit of the live parameter, the source, a push fork and
-    a rerun fork all replay with the edited parameter, and agree."""
+def test_every_trace_and_fork_refuses_a_changed_live_parameter() -> None:
+    """After an in-place edit of the live parameter, the source, a push fork and a
+    rerun fork each refuse replay; with ``allow_changed_params=True`` all three replay
+    with the edited parameter and agree with a fresh capture."""
 
     model, x, trace = _capture()
     relu = _label(trace, "relu")
@@ -243,13 +247,16 @@ def test_every_trace_and_fork_replays_with_the_live_parameter() -> None:
     try:
         with torch.no_grad():
             model.fc2.weight.mul_(3.0)
+        for stale in (trace, push_fork, rerun_fork):
+            with pytest.raises(ReplayPreconditionError, match="changed since capture"):
+                _push(stale, fc1)
         fresh = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
         fresh_fork = fresh.fork().do(
             relu, tl.scale(2.0), intervention=InterventionOptions(engine="replay")
         )
-        assert torch.equal(_push(trace, fc1), _push(fresh, fc1))
-        assert torch.equal(_push(push_fork, fc1), _push(fresh_fork, fc1))
-        assert torch.equal(_push(rerun_fork, fc1), _push(push_fork, fc1))
+        assert torch.equal(_push(trace, fc1, allow=True), _push(fresh, fc1))
+        assert torch.equal(_push(push_fork, fc1, allow=True), _push(fresh_fork, fc1))
+        assert torch.equal(_push(rerun_fork, fc1, allow=True), _push(push_fork, fc1, allow=True))
     finally:
         with torch.no_grad():
             model.fc2.weight.copy_(saved)
