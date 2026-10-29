@@ -100,10 +100,27 @@ def test_chunked_capture_carries_peak_memory_knob() -> None:
         SmallNet(),
         x,
         chunk_size=4,
-        capture=CaptureOptions(measure_python_peak_memory=True),
+        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True),
     )
     peak = log.forward_peak_memory
     assert peak is not None and peak > 0, (
         "measure_python_peak_memory=True on a chunked capture reported no "
         "tracemalloc peak; the knob was dropped by the recursive rebuild"
+    )
+
+
+def test_chunked_capture_carries_host_peak_memory_knob() -> None:
+    """measure_host_peak_memory survives the chunked rebuild (measure.2)."""
+
+    from torchlens.capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
+
+    log = tl.trace(
+        SmallNet(),
+        torch.randn(8, 4),
+        chunk_size=4,
+        capture=CaptureOptions(measure_host_peak_memory=True),
+    )
+    assert log.forward_peak_memory_reason != CPU_PEAK_NOT_REQUESTED_REASON, (
+        "measure_host_peak_memory=True on a chunked capture read as not requested; "
+        "the knob was dropped by the recursive rebuild"
     )

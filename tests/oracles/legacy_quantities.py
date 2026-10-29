@@ -126,6 +126,7 @@ def _traces() -> Iterator[Any]:
             save_grads=True,
             compute_input_output_distances=True,
             measure_python_peak_memory=True,
+            measure_host_peak_memory=True,
         ),
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())

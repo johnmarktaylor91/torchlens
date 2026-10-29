@@ -113,6 +113,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "track_device_memory",
     "structure_only",
     "log_injections",
+    "measure_host_peak_memory",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -594,10 +595,11 @@ class CaptureOptions:
     measure_python_peak_memory:
         Whether the host-side forward-pass peak recorded in
         ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
-        Python-allocation peak. The default is ``False``: the CPU/MPS
-        measurement is then the cheap host resident-set-size (or MPS allocator)
-        delta alone; on CPU a delta of 0 (a model too small to move that
-        coarse-grained counter) is recorded as ``None`` with
+        Python-allocation peak. On CPU it adds to the peak measured under
+        ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
+        ``None`` and this probe fills only the peak pair's ``live`` value. A
+        measured CPU peak of 0 (a model too small to move the coarse-grained
+        resident counters) is recorded as ``None`` with
         ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
         for the duration of the forward pass, which is precise for small models
         but taxes every traced operation (measured at 1.7x-2.5x total capture
@@ -658,6 +660,14 @@ class CaptureOptions:
         Whether computation inside intervention hooks is recorded as anchored
         injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
         (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+    measure_host_peak_memory:
+        Whether CPU captures measure ``Trace.forward_peak_memory`` and
+        ``Trace.backward_peak_memory`` (a session-time knob; measure.2, 28 Oct 2026).
+        Measuring needs a per-bracket reset of the process-wide resident high-water
+        mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
+        ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
+        ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
+        option. CUDA peaks and the MPS allocator delta ignore it.
 
     Examples
     --------
@@ -716,6 +726,7 @@ class CaptureOptions:
     track_device_memory: bool = False
     structure_only: bool = False
     log_injections: bool = False
+    measure_host_peak_memory: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -771,6 +782,7 @@ class CaptureOptions:
         track_device_memory: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
+        measure_host_peak_memory: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -926,6 +938,9 @@ class CaptureOptions:
             ),
             "log_injections": _resolve_option_value(
                 "log_injections", log_injections, False, specified_fields
+            ),
+            "measure_host_peak_memory": _resolve_option_value(
+                "measure_host_peak_memory", measure_host_peak_memory, False, specified_fields
             ),
         }
         _validate_capture_values(values)

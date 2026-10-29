@@ -274,7 +274,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the merged tree (measures 4376); next 50-line step above it. This
     # entry-point registry grows with each reviewed public surface addition
     # by design; the post-sprint debloat target is unchanged.
-    "torchlens/user_funcs.py": 4400,
+    # 4400 -> 4450 (2026-10-29 measure.2): the measure_host_peak_memory knob is
+    # threaded like track_device_memory (signature, docstring, trace stamp, the
+    # chunked rebuild and the capture call); the file sat exactly at 4400.
+    "torchlens/user_funcs.py": 4450,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
@@ -310,7 +313,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2026-08-30 F42 re-reconcile: the T82d landed rows (3965-measured union)
     # + the F42 coupling/F01-AMENDED edits (3951 alone) UNION to 3968 on the
     # merged tree -- the landed 4000 ceiling already covers it; no new step.
-    "torchlens/data_classes/trace.py": 4000,
+    # 4000 -> 4050 (2026-10-29 measure.2, JMT's opt-in CPU peak ruling): the
+    # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
+    # field need their policy, init, default-fill and rerun-refresh rows here,
+    # beside their forward twins; the file sat at 3998.
+    "torchlens/data_classes/trace.py": 4050,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the

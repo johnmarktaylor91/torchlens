@@ -61,7 +61,7 @@ from .outcome import (
     settle_failed,
     settle_halted,
 )
-from .peak_memory import peak_rss_bytes, process_rss_bytes, record_forward_peak, reset_peak_rss
+from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
 from .session import (
     CaptureSession,
     attach_capture_events_session,
@@ -167,10 +167,10 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     the MODEL device only (single-device heuristic, R36 doc line): a
     model-parallel forward's peaks on other devices are not measured.
 
-    CPU/MPS measure a process resident-set-size (or MPS allocator) delta, which
-    captures torch's C++-allocated tensor buffers for sizeable models. That
-    counter is coarse: when the forward fits in already-resident heap headroom
-    the CPU delta reads 0 and is recorded as ``None`` with a reason.
+    CPU measures only under ``CaptureOptions(measure_host_peak_memory=True)``
+    (the resident high-water reset is process-wide; otherwise ``None`` with a
+    reason); MPS measures its allocator delta. A measured CPU peak of 0 is
+    likewise recorded as ``None`` with a reason.
 
     ``CaptureOptions(measure_python_peak_memory=True)`` additionally folds in the
     stdlib ``tracemalloc`` Python-allocation peak, which stays reliably positive
@@ -256,12 +256,11 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     else:
         backend_label = "cpu"
         before = process_rss_bytes()
-    # F20 peak PAIR (brainpipe D-7): scope the host resident high-water mark
-    # to THIS capture when the platform allows it. Without the reset, VmHWM
-    # is the process-lifetime maximum and legitimately reads 0 growth for
-    # every capture after the first -- the memo's sweep-scale instrument
-    # defect.
-    rss_peak_scoped = reset_peak_rss()
+    # F20 peak PAIR (brainpipe D-7): scope the host resident high-water mark to
+    # THIS capture, but only under the measure_host_peak_memory opt-in (measure.2):
+    # the reset is process-wide and also resets the caller's ru_maxrss.
+    host_requested = bool(getattr(trace, "measure_host_peak_memory", False))
+    rss_peak_scoped = host_requested and reset_peak_rss()
     rss_before = before if backend_label == "cpu" else process_rss_bytes()
 
     # Opt-in only: the tracemalloc allocator hook is the single most expensive
@@ -329,24 +328,15 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water
-        # growth over this bracket, per-capture-scoped when the VmHWM reset
-        # succeeded (Linux) and a lifetime-max approximation otherwise.
-        resident_growth: int | None = None
-        with contextlib.suppress(Exception):
-            peak_rss_after = peak_rss_bytes()
-            if peak_rss_after > 0 and rss_before > 0:
-                resident_growth = max(0, peak_rss_after - rss_before)
-        # ``resident_basis`` discloses WHY ``resident`` is ``None`` (an unreadable
-        # baseline: no psutil and no procfs) instead of claiming a scoped or unscoped
-        # measurement that never happened; see ``process_rss_bytes``.
-        if resident_growth is None:
-            resident_basis = "unavailable"
-        else:
-            resident_basis = "per_capture" if rss_peak_scoped else "process_lifetime"
+        # growth over this bracket; ``resident_basis`` discloses its scope or
+        # why it is ``None`` (not requested, or an unreadable baseline).
+        resident_growth, resident_basis = peak_memory.resident_growth_and_basis(
+            rss_before, bool(rss_peak_scoped), host_requested
+        )
         measured = peak_memory.host_forward_peak(
             backend_label, rss_delta, int(traced_peak), resident_growth, resident_basis
         )
-        record_forward_peak(trace, backend_label, measured, tracemalloc_module)
+        record_forward_peak(trace, backend_label, measured, tracemalloc_module, host_requested)
         trace._forward_peak_memory_pair = {
             "live": int(traced_peak) if tracemalloc_module is not None else None,
             "resident": resident_growth,
@@ -711,6 +701,8 @@ def save_new_outs(
         # forwarded only inference_only, so a raise_on_nan capture silently
         # lost its abort policy on every refreshed forward.
         raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+        # measure.2: a refresh measures CPU peaks only if the source opted in.
+        measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
         save_raw_output=getattr(self, "save_raw_output", "small"),
         retain_output_parents_for_layers_to_save=True,

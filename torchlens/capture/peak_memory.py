@@ -4,6 +4,15 @@ Split out of ``capture/trace.py`` under the R43 file-size ratchet: the
 process RSS readers, the per-capture resident high-water scoping, and the
 ``Trace.forward_peak_memory_pair`` reader live here; the forward bracket in
 ``capture/trace.py`` stays the only writer (through :func:`record_forward_peak`).
+
+CPU peaks are opt-in (measure.2, JMT 28 Oct 2026): measuring one resets the
+process-wide resident high-water mark, which also resets the caller's own
+``VmHWM`` and ``ru_maxrss`` readings and cannot be undone. Only a capture with
+``CaptureOptions(measure_host_peak_memory=True)`` calls :func:`reset_peak_rss`
+(the forward bracket, and each CPU backward pass); by default nothing is written,
+and the CPU forward and backward peaks read ``None`` with
+:data:`CPU_PEAK_NOT_REQUESTED_REASON`. CUDA and the MPS allocator delta never
+touch the host mark and are unchanged.
 """
 
 from __future__ import annotations
@@ -38,11 +47,6 @@ def process_rss_bytes() -> int:
     return int(psutil.Process().memory_info().rss)
 
 
-#: The one switch for the process-wide ``VmHWM`` reset: every reset (the forward
-#: bracket and each CPU backward pass) goes through :func:`reset_peak_rss`.
-RESET_HOST_PEAK = True
-
-
 def reset_peak_rss() -> bool:
     """Best-effort reset of the process resident high-water mark (Linux).
 
@@ -55,8 +59,7 @@ def reset_peak_rss() -> bool:
     (forward bracket) or a CPU ``log_backward`` (each pass), a caller's own
     ``VmHWM`` and ``ru_maxrss`` reads report the high-water since that bracket
     began, not since process start. Nothing in TorchLens reads it across
-    brackets. With :data:`RESET_HOST_PEAK` off nothing is written and the
-    peaks fall back to the unscoped (process-lifetime) basis.
+    brackets. Called only under ``CaptureOptions(measure_host_peak_memory=True)``.
 
     Returns
     -------
@@ -64,8 +67,6 @@ def reset_peak_rss() -> bool:
         Whether the reset succeeded (Linux with a writable procfs).
     """
 
-    if not RESET_HOST_PEAK:
-        return False
     try:
         with open("/proc/self/clear_refs", "w") as handle:
             handle.write("5")
@@ -181,7 +182,10 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
     ``"cpu:maxlive+rss"`` / ``"mps:allocated+rss"``), and
     ``resident_basis`` (``"per_capture"`` when the host high-water mark was
     reset for this bracket and a baseline was measured, ``"process_lifetime"``
-    when measured but the reset was unavailable, ``"unavailable"`` when
+    when measured but the reset was unavailable, ``"not_requested"`` (with
+    ``resident`` ``None``) when the capture did not opt in with
+    ``measure_host_peak_memory=True``, so the mark was neither reset nor read,
+    ``"unavailable"`` when
     ``resident`` could not be computed at all (e.g. psutil is not installed,
     so the pre-forward RSS baseline reads 0 regardless of the reset outcome
     -- a typed disclosure, never a bare unexplained ``None``), or
@@ -220,9 +224,52 @@ CPU_ZERO_PEAK_WITH_PYTHON_REASON = (
     "(measure_python_peak_memory=True) both read 0"
 )
 
+#: The reason for a CPU forward or backward peak of ``None`` on a capture that
+#: did not opt in (measure.2): measuring resets the process-wide high-water mark.
+CPU_PEAK_NOT_REQUESTED_REASON = (
+    "not measured: a CPU peak resets the process-wide resident high-water mark "
+    "(VmHWM, ru_maxrss); pass CaptureOptions(measure_host_peak_memory=True) to measure it"
+)
+
+
+def resident_growth_and_basis(
+    rss_before: int, scoped: bool, requested: bool
+) -> tuple[int | None, str]:
+    """Return the forward pair's ``resident`` growth and its ``resident_basis``.
+
+    Parameters
+    ----------
+    rss_before:
+        The bracket's baseline RSS in bytes (0 when unreadable).
+    scoped:
+        Whether :func:`reset_peak_rss` scoped the mark to this bracket.
+    requested:
+        Whether the capture opted in with ``measure_host_peak_memory=True``.
+
+    Returns
+    -------
+    tuple[int | None, str]
+        ``(None, "not_requested")`` without the opt-in (the mark is not read);
+        otherwise the ``VmHWM`` growth over the baseline with ``"per_capture"``
+        or ``"process_lifetime"``, or ``(None, "unavailable")`` when unreadable.
+    """
+
+    if not requested:
+        return None, "not_requested"
+    growth: int | None = None
+    try:
+        peak_rss_after = peak_rss_bytes()
+        if peak_rss_after > 0 and rss_before > 0:
+            growth = max(0, peak_rss_after - rss_before)
+    except Exception:  # noqa: BLE001 - measurement never raises into capture
+        growth = None
+    if growth is None:
+        return None, "unavailable"
+    return growth, "per_capture" if scoped else "process_lifetime"
+
 
 def forward_peak_value(
-    backend: str, measured: int, *, python_peak_measured: bool
+    backend: str, measured: int, *, python_peak_measured: bool, host_requested: bool = True
 ) -> tuple[int | None, str | None]:
     """Return the forward peak to record and its reason.
 
@@ -234,15 +281,20 @@ def forward_peak_value(
         The measured host peak in bytes (:func:`host_forward_peak`).
     python_peak_measured:
         Whether the opt-in tracemalloc probe ran.
+    host_requested:
+        Whether the capture opted in with ``measure_host_peak_memory=True``.
 
     Returns
     -------
     tuple[int | None, str | None]
         ``(measured, None)`` for every positive value and every non-CPU
-        backend (MPS and CUDA semantics are unchanged); ``(None, reason)`` for
-        a CPU zero, the reason naming ``measure_python_peak_memory=True``.
+        backend (MPS and CUDA semantics are unchanged); on CPU without the
+        opt-in ``(None, CPU_PEAK_NOT_REQUESTED_REASON)``; ``(None, reason)``
+        for a measured CPU zero, the reason naming ``measure_python_peak_memory=True``.
     """
 
+    if backend == "cpu" and not host_requested:
+        return None, CPU_PEAK_NOT_REQUESTED_REASON
     if backend != "cpu" or measured > 0:
         return measured, None
     if python_peak_measured:
@@ -284,7 +336,9 @@ def host_forward_peak(
     return max(rss_delta, traced_peak, scoped or 0)
 
 
-def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: Any) -> None:
+def record_forward_peak(
+    trace: Any, backend: str, measured: int, python_probe: Any, host_requested: bool = True
+) -> None:
     """Write ``forward_peak_memory`` and its reason onto ``trace``.
 
     Parameters
@@ -297,11 +351,49 @@ def record_forward_peak(trace: Any, backend: str, measured: int, python_probe: A
         The measured host peak in bytes (:func:`host_forward_peak`).
     python_probe:
         The tracemalloc module when the opt-in probe ran, else ``None``.
+    host_requested:
+        Whether the capture opted in with ``measure_host_peak_memory=True``.
     """
 
     from ..quantities import Bytes
 
     peak, trace.forward_peak_memory_reason = forward_peak_value(
-        backend, measured, python_peak_measured=python_probe is not None
+        backend,
+        measured,
+        python_peak_measured=python_probe is not None,
+        host_requested=host_requested,
     )
     trace.forward_peak_memory = None if peak is None else Bytes(peak)
+
+
+def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
+    """Fold one backward pass's peak into ``trace.backward_peak_memory``.
+
+    CPU passes aggregate by max (the largest peak above a pass's starting
+    baseline) and only under ``measure_host_peak_memory=True``; without the
+    opt-in the CPU peak is ``None`` with :data:`CPU_PEAK_NOT_REQUESTED_REASON`.
+    CUDA sums its per-pass high-water excesses (their total is the growth of the
+    device mark); MPS keeps its allocator-delta sum.
+
+    Parameters
+    ----------
+    trace:
+        The trace whose backward pass just finished.
+    backend:
+        The pass's measurement backend (``"cpu"``, ``"cuda"`` or ``"mps"``).
+    peak_delta:
+        The pass's peak above its starting baseline, in bytes.
+    """
+
+    from ..quantities import Bytes
+
+    if backend == "cpu" and not getattr(trace, "measure_host_peak_memory", False):
+        trace.backward_peak_memory = None
+        trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
+        return
+    prior_value = getattr(trace, "backward_peak_memory", None)
+    prior = int(prior_value) if prior_value is not None else 0
+    trace.backward_peak_memory = Bytes(
+        max(prior, peak_delta) if backend == "cpu" else prior + peak_delta
+    )
+    trace.backward_peak_memory_reason = None

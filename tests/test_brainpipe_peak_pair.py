@@ -45,6 +45,10 @@ def test_peak_pair_shape_and_backend_label() -> None:
     # fabricated zero.
     if pair["backend"] == "cpu:maxlive+rss":
         assert pair["live"] is None
+        # measure.2: without measure_host_peak_memory the host mark is neither
+        # reset nor read, so ``resident`` is unmeasured, never the unscoped basis.
+        assert pair["resident"] is None
+        assert pair["resident_basis"] == "not_requested"
 
 
 def test_peak_pair_live_populates_under_the_tracemalloc_opt_in() -> None:
@@ -113,7 +117,11 @@ def test_multi_capture_resident_peak_is_non_degenerate() -> None:
     captures.append((nn.Sequential(nn.ReLU(), nn.Sigmoid()), torch.randn(64, 196_608)))
     readings = []
     for model, x in captures:
-        log = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
+        log = tl.trace(
+            model,
+            x,
+            capture=tl.options.CaptureOptions(inference_only=True, measure_host_peak_memory=True),
+        )
         pair = log.forward_peak_memory_pair
         assert pair is not None
         readings.append((pair["resident"], pair["resident_basis"]))

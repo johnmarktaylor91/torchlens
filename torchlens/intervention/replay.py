@@ -325,6 +325,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log.backward_durations = []
     log.num_backward_passes = 0
     log.backward_peak_memory = Bytes(0)
+    log.backward_peak_memory_reason = None
     log.total_backward_memory = Bytes(0)
     log.total_gradient_memory = Bytes(0)
     log.saved_gradient_memory = Bytes(0)

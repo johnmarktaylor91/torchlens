@@ -309,7 +309,9 @@ def test_forward_peak_memory_ignores_pre_existing_external_tracemalloc_peak() ->
 
         model = nn.Linear(10, 10)
         x = torch.randn(1, 10)
-        probe = tl.options.CaptureOptions(measure_python_peak_memory=True)
+        probe = tl.options.CaptureOptions(
+            measure_python_peak_memory=True, measure_host_peak_memory=True
+        )
         log1 = tl.trace(model, x, capture=probe)
         log2 = tl.trace(model, x, capture=probe)
     finally:

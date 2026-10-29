@@ -129,6 +129,9 @@ class TestFieldOrderSync:
             # F24 device-memory lane: fifth session knob, DROP, unordered, load
             # restores the default (CaptureOptions.track_device_memory).
             "track_device_memory",
+            # measure.2: sixth session knob, DROP, unordered, load restores the
+            # default (CaptureOptions.measure_host_peak_memory).
+            "measure_host_peak_memory",
         }
         portable_unordered = {
             "checkpoint_invocation_witness",

@@ -5,7 +5,8 @@ refresh must carry the rerun's ``forward_peak_memory_reason`` with its
 ``forward_peak_memory``: a CPU-zero first capture (``None`` plus a reason)
 followed by a positive rerun otherwise keeps the stale reason beside the new
 number, and the load-side pair check refuses the saved artifact. The host
-measurement is pinned so both orders are deterministic.
+measurement is pinned so both orders are deterministic. The captures opt in
+with ``measure_host_peak_memory=True`` (measure.2), which the rerun inherits.
 """
 
 from __future__ import annotations
@@ -44,7 +45,11 @@ def _rerun_log(
     torch.manual_seed(0)
     model = _LinearRelu().eval()
     _measure(monkeypatch, first)
-    log = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(intervention_ready=True))
+    log = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=CaptureOptions(intervention_ready=True, measure_host_peak_memory=True),
+    )
     assert (log.forward_peak_memory is None) == (first == 0)
     _measure(monkeypatch, rerun)
     log.attach_hooks(tl.func("relu"), tl.zero_ablate())

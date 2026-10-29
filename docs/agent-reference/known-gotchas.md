@@ -6,17 +6,19 @@
   `allowed_custom_callable_modules={"my_trusted_module"}` is narrower and remains restrictive even if
   the boolean is also true. TorchLens-owned `torchlens.*` custom callables and the fixed trusted
   namespaces resolve without an opt-in.
-- `Trace.forward_peak_memory` on CPU is the host resident high-water growth over the forward
-  (`VmHWM` after a per-capture reset minus the pre-forward RSS; `/proc/self/statm` when psutil is
-  absent), so a buffer freed inside the forward counts; MPS is the allocator delta. A CPU forward
-  that grew nothing (it fit in resident headroom, common for small models) is recorded as `None`,
-  and `Trace.forward_peak_memory_reason` says why and names
-  `CaptureOptions(measure_python_peak_memory=True)`; MPS can still read `0`. The `tracemalloc`
-  Python-allocation peak is opt-in because the allocator hook costs 1.7x-2.5x total capture time.
-  Never assert `forward_peak_memory > 0` (or not None) on the default path. The `VmHWM` reset
-  (forward bracket, and each CPU backward pass) is process-wide: it also resets the caller's own
-  `VmHWM` and `ru_maxrss` readings, and cannot be undone; `capture.peak_memory.RESET_HOST_PEAK`
-  is the one switch. `backward_peak_memory` is the largest pass peak on CPU, not a sum.
+- CPU peaks are opt-in (measure.2): a default capture reads CPU `Trace.forward_peak_memory` and
+  `backward_peak_memory` as `None`, with `forward_peak_memory_reason` / `backward_peak_memory_reason`
+  naming `CaptureOptions(measure_host_peak_memory=True)`, and never writes the process high-water
+  mark. Under the opt-in the CPU forward peak is the host resident high-water growth (`VmHWM` after
+  a per-capture reset minus the pre-forward RSS; `/proc/self/statm` when psutil is absent), so a
+  buffer freed inside the forward counts; that reset (forward bracket, and each CPU backward pass)
+  is process-wide: it also resets the caller's own `VmHWM` and `ru_maxrss` readings, and cannot be
+  undone. An opted-in CPU forward that grew nothing (it fit in resident headroom) is recorded as
+  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)`. MPS is the
+  allocator delta and can read `0`. The `tracemalloc` Python-allocation peak is a second opt-in
+  because the allocator hook costs 1.7x-2.5x total capture time. Never assert `forward_peak_memory
+  > 0` (or not None) on the default path; a test that needs a CPU number opts in.
+  `backward_peak_memory` is the largest pass peak on CPU, not a sum.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.compat.report`, so the two cannot drift.
