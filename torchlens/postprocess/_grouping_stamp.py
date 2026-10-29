@@ -41,7 +41,7 @@ POLICY_VALUES = frozenset({"structural", "strict_shapes", "fold_sites", "params_
 REQUESTED_VALUES = frozenset({"structural", "strict_shapes", "fold_sites", "unknown"})
 
 #: Closed detector vocabulary (versioned algorithm names).
-DETECTOR_VALUES = frozenset({"grouper_v1", "unknown"})
+DETECTOR_VALUES = frozenset({"callsite_v1", "grouper_v1", "unknown"})
 
 #: The exact writer key set: loads refuse any other shape (tamper check).
 _STAMP_KEYS = frozenset(
@@ -105,6 +105,7 @@ def build_grouping_policy_stamp(
     *,
     ran_recurrence_grouping: bool,
     requested: str,
+    detector: str = "grouper_v1",
 ) -> dict[str, Any]:
     """Return the healthy wave-0 stamp for one live capture.
 
@@ -121,7 +122,7 @@ def build_grouping_policy_stamp(
         "requested": requested,
         "folded_sites": "none",
         "site_join": "none",
-        "detector": "grouper_v1" if ran_recurrence_grouping else "unknown",
+        "detector": detector if ran_recurrence_grouping else "unknown",
         "effective": True,
         "settlement_note": None,
     }

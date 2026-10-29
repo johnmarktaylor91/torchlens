@@ -76,6 +76,12 @@ class RawGraphWorkspace:
     # ``None`` (unreadable storage or counter) never matches. The session stamp
     # registry holds every logged buffer, so ``id(tensor)`` stays stable.
     buffer_version_keys: dict[str, tuple[Any, ...] | None] = field(default_factory=dict)
+    #: ``(func_call_id, call-site chain)`` of the wrapped call whose outputs are
+    #: being logged (written by the shared-fields builder, read per output).
+    pending_call_site: tuple[Any, Any] | None = None
+    #: Call-site key -> its 1-based first-appearance index in this capture; the
+    #: index names the op's call-site equivalence class (``<type>@cs<N>``).
+    call_site_index: dict[Any, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

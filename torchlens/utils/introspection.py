@@ -20,7 +20,8 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 
 # r-b4 R26-6c: read capability flags at USE time through the module object --
 # an import-time value binding never sees mark_torch_capability_missing flips.
-from . import _torch_compat
+from . import _call_site, _torch_compat
+from ._call_site import _BOUNDARY_CODES
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -863,11 +864,46 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
+def _call_site_chain(
+    survivors: list[tuple[FrameType, CodeType, int, int]],
+    inner_boundary_pos: int,
+    outer_boundary_pos: int,
+    last_forward_pos: int,
+    context_cache: _CodeContextCache | None,
+) -> tuple[Any, ...]:
+    """Return the call-site chain of the frames inside the op's module call.
+
+    ``survivors`` runs innermost first. Under ``MODULE_CALL_IS_PASS`` the chain
+    stops at the innermost module forward wrapper; otherwise it runs up to the
+    root model's forward (the outermost wrapper or ``forward`` survivor),
+    keeping every caller frame. Without any wrapper frame it runs up to the
+    outermost ``forward`` survivor.
+    """
+
+    if _call_site.MODULE_CALL_IS_PASS and inner_boundary_pos >= 0:
+        boundary = inner_boundary_pos
+    else:
+        boundary = max(outer_boundary_pos, last_forward_pos + 1)
+    if boundary <= 0:
+        return ()
+    raw = tuple((code, lasti) for _frame, code, _lineno, lasti in survivors[:boundary])
+    cache_key = ("__torchlens_call_site__", raw)
+    if context_cache is not None:
+        cached = context_cache.get(cache_key)
+        if cached is not None:
+            return cached
+    chain = _call_site.canonical_chain(raw)
+    if context_cache is not None:
+        context_cache[cache_key] = chain
+    return chain
+
+
 def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
     disable_col_offset: bool = False,
     context_cache: _CodeContextCache | None = None,
+    call_site_out: list[Any] | None = None,
 ) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
@@ -910,6 +946,10 @@ def _get_code_context(
         context_cache: Optional per-capture cache keyed by filtered frame
             identity. When supplied, repeated operations at the same call
             stack reuse the lightweight location objects.
+        call_site_out: When supplied, the same walk also appends the op's
+            call-site chain (:func:`torchlens.utils._call_site.canonical_chain`
+            of the frames inside the innermost module call), or ``()`` when no
+            Python frame lies inside it. Grouping (step 7) keys layers on it.
 
     Returns:
         List[FuncCallLocation] ordered shallow-to-deep.
@@ -933,10 +973,18 @@ def _get_code_context(
     survivors: list[tuple[FrameType, CodeType, int, int]] = []
     append_survivor = survivors.append
     last_forward_pos = -1
+    # Survivor counts when the innermost / outermost module forward wrapper
+    # frame was passed: the call-site chain boundaries.
+    inner_boundary_pos = -1
+    outer_boundary_pos = -1
     anchor_frame: FrameType | None = None
     frame: FrameType | None = sys._getframe(0)
     while frame is not None:
         code = frame.f_code
+        if call_site_out is not None and code in _BOUNDARY_CODES:
+            if inner_boundary_pos < 0:
+                inner_boundary_pos = len(survivors)
+            outer_boundary_pos = len(survivors)
         if (
             anchor is not None
             and id(frame) == anchor[0]
@@ -954,6 +1002,13 @@ def _get_code_context(
                 last_forward_pos = len(survivors)
             append_survivor((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
+
+    if call_site_out is not None:
+        call_site_out.append(
+            _call_site_chain(
+                survivors, inner_boundary_pos, outer_boundary_pos, last_forward_pos, context_cache
+            )
+        )
 
     # Reconstruct the historical selection from the survivor list. With no
     # ``forward`` frame, tracking never starts and the context is empty; the

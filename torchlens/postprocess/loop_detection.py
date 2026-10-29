@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from ..data_classes._site_key import SiteKeyMinter
+from ..utils._call_site import CALL_SITE_CLASS_MARKER
 from ._grouping_stamp import build_grouping_policy_stamp
 from .loop_grouping_adapter import (
     RecurrenceAssignment,
@@ -344,7 +345,13 @@ def _group_by_shared_params(self: "Trace") -> None:
 
 
 def _detect_and_label_loops(self: "Trace") -> None:
-    """Delegate recurrence grouping to the backend-neutral implementation.
+    """Group ops into layers and passes (step 7).
+
+    A capture whose ops carry call-site equivalence classes (the torch
+    backend's exhaustive capture) groups by call site (``callsite_v1``,
+    :func:`_group_by_call_sites`). Captures without that evidence (other
+    backends, predicate-mode recordings) keep the backend-neutral structural
+    grouper (``grouper_v1``).
 
     Parameters
     ----------
@@ -353,13 +360,84 @@ def _detect_and_label_loops(self: "Trace") -> None:
     """
 
     _mint_site_keys(self)
-    grouping_graph = _build_recurrence_grouping_graph(self)
-    assignments = group_recurrent_nodes(grouping_graph)
-    _apply_recurrence_assignments(self, assignments)
+    if _has_call_site_evidence(self):
+        _group_by_call_sites(self)
+        detector = "callsite_v1"
+    else:
+        grouping_graph = _build_recurrence_grouping_graph(self)
+        assignments = group_recurrent_nodes(grouping_graph)
+        _apply_recurrence_assignments(self, assignments)
+        detector = "grouper_v1"
     self.grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=True,
         requested=getattr(self, "grouping", "structural"),
+        detector=detector,
     )
+
+
+def _is_call_site_class(equivalence_class: Any) -> bool:
+    """Whether an equivalence class names a call site (``<type>@cs<N>``)."""
+
+    return isinstance(equivalence_class, str) and CALL_SITE_CLASS_MARKER in equivalence_class
+
+
+def _has_call_site_evidence(self: "Trace") -> bool:
+    """Whether any retained op of this capture carries a call-site class."""
+
+    for label in self._raw_graph_ws.raw_layer_labels_list:
+        node = self[label]
+        if not getattr(node, "is_orphan", False) and _is_call_site_class(node.equivalence_class):
+            return True
+    return False
+
+
+def _call_site_group_key(node: Any) -> tuple[Any, ...]:
+    """The grouping key of one retained op under call-site grouping.
+
+    An op with a call-site class groups with every op of the same class (same
+    innermost module instance, same call-site chain, same function and output
+    slot). Inputs and outputs stay single. Anything else (no Python frame inside
+    its module call: buffer sources, synthesized nodes) falls back to its
+    ``site_key_v1`` position within the module call, which never fuses two
+    positions of one call and still groups a module called several times.
+    """
+
+    if _is_call_site_class(node.equivalence_class):
+        return ("call_site", node.equivalence_class)
+    if node.is_input or node.is_output:
+        return ("single", node._label_raw)
+    return ("position", node.site_key, node.func_name)
+
+
+def _group_by_call_sites(self: "Trace") -> None:
+    """Partition retained ops into layers by call-site key (``callsite_v1``).
+
+    Two ops are passes of one layer exactly when their keys are equal
+    (:func:`_call_site_group_key`). Passes are numbered in capture order by
+    :func:`_rebuild_pass_assignments`. Every member takes the first pass's
+    equivalence class, so a layer has one class.
+
+    Parameters
+    ----------
+    self:
+        Trace currently running Step 7 postprocessing.
+    """
+
+    groups: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
+    for label in self._raw_graph_ws.raw_layer_labels_list:
+        node = self[label]
+        if getattr(node, "is_orphan", False):
+            continue
+        groups[_call_site_group_key(node)].append(node)
+
+    for members in groups.values():
+        leader = min(members, key=lambda member: member.raw_index)
+        for member in members:
+            member._layer_label_raw = leader._layer_label_raw
+            if member.equivalence_class != leader.equivalence_class:
+                member.equivalence_class = leader.equivalence_class
+
+    _rebuild_pass_assignments(self)
 
 
 def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
