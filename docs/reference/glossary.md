@@ -559,7 +559,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   value refuses `transform_mask_incompatible`). Unsupported spellings refuse
   `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
-**torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
+**tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
 : Builds one contrastive steering direction from saved activations. `pos_traces` and
   `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
   negatives pairs with row `i` of the positives. One token per prompt is read at `site`
@@ -568,7 +568,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
   principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
   regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
-  norm. Returns a `Direction`. Refusals use the `direction_*` codes of the error contract.
+  norm. Also `torchlens.intervention.direction_from_pairs`. Returns a `Direction`. Refusals use
+  the `direction_*` codes of the error contract.
 
 **Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
 : The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,

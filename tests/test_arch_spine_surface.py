@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 151, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 151: "
+    assert len(rows) == 152, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 152: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -58,12 +58,14 @@ def test_root_budget_is_frozen() -> None:
         "torchlens.intervention) = 151. Batch-2 SEL briefly added 21 namespace "
         "rows (172); the forks ruling names.4 replaced them with three teaching "
         "redirects (mechinterp, semantic, tviz; redirects are not surface rows), "
-        "restoring 151. "
+        "restoring 151 -- and +1 by names.5: tl.direction_from_pairs, the "
+        "U46.1 contrastive direction builder JMT ruled as a root name (in "
+        "__all__) = 152. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )
     in_all = [row for row in rows if row.in_all]
-    assert len(in_all) == len(torchlens.__all__) == 115, (
+    assert len(in_all) == len(torchlens.__all__) == 116, (
         "__all__ budget moved -- update U-PUBLIC-OPERATIONS and this pin in "
         "the same deliberate change"
     )
