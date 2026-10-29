@@ -177,7 +177,7 @@ def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
     model, x, trace = _capture()
     _in_place_no_grad(model)
     rerun = trace.fork().do(
-        tl.label(_relu_label(trace)),
+        tl.func("relu"),
         _double,
         model=model,
         x=x,
