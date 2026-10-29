@@ -20,7 +20,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
 | `ast_branches.py` | 5 support, 11.5 | Conditional AST indexing and source variable names. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
-| `control_flow.py` | 5-6 | Conditional attribution and buffer dedup |
+| `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
 | `loop_detection.py` | 7 adapter | Adapt Trace state and apply recurrence assignments |
 | `loop_grouping_adapter.py` | 7 implementation | Backend-neutral recurrence grouping |
 | `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists (field reordering was REMOVED — see step 10 note below) |
@@ -95,7 +95,7 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 3 | `_remove_orphan_nodes` | Drop unconnected raw nodes |
 | 4 | `_mark_layer_depths` | Optional input/output distance metadata |
 | 5 | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
-| 6 | `_fix_buffer_layers` | Deduplicate and reconnect buffers |
+| 6 | `_fix_buffer_layers` | Reconnect buffers; merge only re-logged reads of one recorded buffer version |
 | 7 | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
 | 8 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
 | 9 | `_log_final_info_for_layers` | Write final layer/module fields |

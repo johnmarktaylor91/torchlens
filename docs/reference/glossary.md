@@ -179,7 +179,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Parameter / Buffer**
 : Registered model state. Parameters are trainable state; buffers are non-parameter state and may
-  have multiple captured versions. A training-mode `BatchNorm2d` collapse label can say
+  have multiple captured versions. Every journaled write (a reassignment, a `.data =` or `set_`
+  swap, a tracked in-place write) is its own version whatever value it wrote, so a capture records
+  the same buffer structure whatever values the buffers start from. A training-mode `BatchNorm2d` collapse label can say
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
   BatchNorm calls. An in-place op on a Parameter inside `forward`

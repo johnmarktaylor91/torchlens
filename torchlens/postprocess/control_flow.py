@@ -842,7 +842,7 @@ def _merge_same_version_buffers(
     later node is not itself a journaled write (``buffer_write_kind``). Every
     reassignment, ``.data =``/``set_`` swap and tracked in-place write therefore
     keeps its own version node whatever value it wrote, so the graph records the
-    same buffer provenance from any entry state (AGT-2415): a re-trace whose
+    same buffer provenance from any entry state: a re-trace whose
     buffers start from different values builds the same structure. The value
     check that follows only refuses a merge across an opaque host write (same
     version, changed bytes). A node with no recorded version (a projected
