@@ -6,7 +6,7 @@ is ONE ``jitscript`` boundary op that validates through replay, with the armed c
 clean. ``PYTORCH_JIT=0`` (``torch.jit._state.disable()``, the proxy the variable sets)
 gives the op-by-op graph. A scripted module is still refused. Armed negatives: a scripted
 call that writes into its argument stays the census gap, and an opaque call that is not a
-scripted function (a direct ``torch.ops.aten`` call) still fails completeness.
+scripted function (a scripted module held outside ``named_modules()``) still fails completeness.
 """
 
 from __future__ import annotations
@@ -130,16 +130,30 @@ class _WriteModel(nn.Module):
         return torch.relu(scripted_write(self.fc(x).clone()))
 
 
-class _AtenDirectModel(nn.Module):
-    """An opaque call that is not a scripted function: a direct aten overload call."""
+class _Cos3(nn.Module):
+    """Body of the scripted module the negative holds outside ``named_modules()``."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.cos() * 3
+
+
+_UNREGISTERED_SCRIPTED = {"module": torch.jit.script(_Cos3())}
+
+
+class _UnregisteredScriptModuleModel(nn.Module):
+    """An opaque call that is not a ScriptFunction: a scripted module held in a dict.
+
+    Its forward is a ``ScriptMethod`` of a ``ScriptModule`` the up-front refusal cannot
+    see (it is not a registered submodule), so it is exactly as opaque as a scripted
+    function but is not one.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.fc = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.fc(x)
-        return torch.relu(torch.ops.aten.linear.default(h.unsqueeze(0), self.fc.weight))
+        return torch.relu(_UNREGISTERED_SCRIPTED["module"](self.fc(x)))
 
 
 def _boundary_ops(trace: tl.Trace) -> list:
@@ -303,7 +317,7 @@ def test_scripted_call_writing_its_argument_is_not_collapsed() -> None:
 def test_opaque_call_that_is_not_scripted_still_fails_completeness() -> None:
     """Armed negative: the boundary never reaches outside ``ScriptFunction`` calls."""
 
-    model = _AtenDirectModel()
+    model = _UnregisteredScriptModuleModel()
     x = torch.randn(3, 4)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
