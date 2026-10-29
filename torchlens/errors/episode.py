@@ -198,7 +198,13 @@ class BundleRelationError(ValidationError, ValueError):
     ``bundle_relation_span_unverified``,
     ``bundle_relation_auto_spans_unavailable``,
     ``bundle_relation_auto_spans_ambiguous``, or
-    ``bundle_relation_auto_spans_unmatched``.
+    ``bundle_relation_auto_spans_unmatched``; ``Bundle.token_divergence``
+    refuses ``bundle_token_divergence_unavailable`` and
+    ``Bundle.add_alternative`` refuses ``alternative_target_missing``,
+    ``alternative_target_unsteered``,
+    ``alternative_capture_position_dependent``,
+    ``alternative_steer_undeclared``, ``alternative_member_name_taken`` or
+    ``alternative_unchanged_call_diverged``.
     """
 
 

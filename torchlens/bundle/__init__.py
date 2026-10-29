@@ -34,6 +34,11 @@ from ..intervention.errors import (
 from ..intervention.resolver import resolve_sites
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site
+from ._alternatives import (
+    AlternativeCall as AlternativeCall,  # re-export: torchlens.bundle.AlternativeCall
+    AlternativeReport as AlternativeReport,  # re-export: torchlens.bundle.AlternativeReport
+    _bundle_add_alternative,
+)
 from ._compare_gate import require_comparable
 
 # Re-exports (redundant aliases): _distance_value is imported from
@@ -65,6 +70,10 @@ from ._relation_carriage import (
     settle_relation_rows,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._token_divergence import (
+    TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
+    _bundle_token_divergence,
+)
 from ._vary import bundle_vary as _bundle_vary
 
 if TYPE_CHECKING:
@@ -807,6 +816,8 @@ class Bundle:
     # One explicit edit or identity per member (F03 item 5); broadcast do()
     # is untouched forever.
     vary = _bundle_vary
+    token_divergence = _bundle_token_divergence
+    add_alternative = _bundle_add_alternative
 
     def effects(self, operation_id: str | None = None) -> Any:
         """Serve the stored per-candidate effect table (F03 item 8).
