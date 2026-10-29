@@ -89,8 +89,10 @@ _FRESH_SUBPACKAGE_PROBE = """
 import importlib, sys
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
-for name in sys.argv[1:]:
-    assert f"torchlens.{name}" not in sys.modules, f"import torchlens loaded torchlens.{name}"
+names = sys.argv[1:]
+loaded = [name for name in names if f"torchlens.{name}" in sys.modules]
+assert not loaded, f"import torchlens loaded {loaded}"
+for name in names:
     try:
         getattr(tl, name)
     except FacadeTeachingError as error:
@@ -99,6 +101,7 @@ for name in sys.argv[1:]:
     else:
         raise AssertionError(f"tl.{name} resolved in a fresh interpreter")
     assert not hasattr(tl, name) and name not in dir(tl)
+for name in names:
     module = importlib.import_module(f"torchlens.{name}")
     assert getattr(tl, name) is module
 print("ok")
