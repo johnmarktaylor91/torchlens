@@ -3375,23 +3375,16 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.exempted("ulp_swamped_perturbation")
         # A genuine perturbation-insensitivity failure: the output did not
         # change when a parent's value was perturbed and no posthoc excuse applied.
-        from .diagnostics import (
-            CHECK_PERTURBATION,
-            ValidationFailure,
-            record_validation_failure,
-        )
+        # A degenerate forward (all non-finite output, identically zero
+        # autograd.grad gradient) is recorded under its own check; it fails
+        # exactly the same way.
+        from ._degenerate_forward import perturbation_insensitive_failure
+        from .diagnostics import record_validation_failure
 
         record_validation_failure(
             self,
-            ValidationFailure(
-                check=CHECK_PERTURBATION,
-                op_label=layer_to_validate_parents_for_label,
-                func_name=getattr(layer, "func_name", None),
-                message=(
-                    "output insensitive to perturbing parent(s) "
-                    f"{layers_to_perturb}; the parent does not influence this op's value"
-                ),
-                extra={"perturbed_parents": list(layers_to_perturb)},
+            perturbation_insensitive_failure(
+                layer, layer_to_validate_parents_for_label, list(layers_to_perturb)
             ),
         )
         return ValidationCheckResult.failed_result("perturbation_insensitive")
