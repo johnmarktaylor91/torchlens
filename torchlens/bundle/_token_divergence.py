@@ -85,6 +85,8 @@ def capture_edit_rows(trace: Trace) -> list[dict[str, Any]]:
 
 
 def _divergence_unavailable(name: str, reason: str, *, code: str) -> BundleRelationError:
+    """Build the typed refusal for a member ``token_divergence`` cannot split."""
+
     return BundleRelationError(
         f"Bundle.token_divergence cannot split member {name!r} into prompt and "
         f"completion: {reason}.",
@@ -184,7 +186,8 @@ def _bundle_token_divergence(
 ) -> TokenDivergence:
     """Return where two members' prompts and completions part, by exact token ids.
 
-    Exposed as ``Bundle.token_divergence`` (spelling documented-unstable).
+    Exposed as the dynamic method ``Bundle.token_divergence`` (spelling
+    documented-unstable).
     Typically ``original`` is a call of the first run and ``rerun`` its copy
     from a steered re-run (``b.token_divergence("critique", "cf_critique")``),
     but any two bound members compare.

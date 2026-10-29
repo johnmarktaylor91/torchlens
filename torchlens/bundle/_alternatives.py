@@ -89,6 +89,8 @@ class AlternativeReport:
         """Return the report as a fixed-width text table, one line per call."""
 
         def cell(value: int | None, paired: bool) -> str:
+            """Render one divergence cell (``-`` for an unpaired call)."""
+
             return "-" if not paired else str(value)
 
         lines = [f"{'call':16} {'status':10} {'prompt diverges at':>19} {'output diverges at':>19}"]
@@ -105,6 +107,8 @@ class AlternativeReport:
 def _alternative_refusal(
     message: str, remedy: str, *, code: str, **fields: Any
 ) -> BundleRelationError:
+    """Build one typed ``add_alternative`` refusal."""
+
     return BundleRelationError(message, code=code, remedy=remedy, **fields)
 
 
@@ -297,7 +301,8 @@ def _bundle_add_alternative(
 ) -> AlternativeReport:
     """Merge a re-run of the user's harness with some calls steered; report what changed.
 
-    Exposed as ``Bundle.add_alternative`` (spelling documented-unstable).
+    Exposed as the dynamic method ``Bundle.add_alternative`` (spelling
+    documented-unstable).
 
     Parameters
     ----------

@@ -713,7 +713,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   completion. Typical use is a call and its copy from a steered re-run
   (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses
   `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
-  range or the ids are missing; an unknown name raises `KeyError`.
+  range or the ids are missing; an unknown name raises `KeyError`. A Bundle helper-table method.
 
 **TokenDivergence** *(`from torchlens.bundle import TokenDivergence`; spelling documented-unstable)*
 : The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
@@ -739,7 +739,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   different text: noise TorchLens cannot separate from the steer). Then every second-run member is
   added as `prefix + name`, each paired call gets an `alternative_of` row from its copy, the second
   run's own relation rows are copied onto the copies, and one `add` operation records the statuses.
-  A failure while merging restores the bundle. TorchLens never runs your harness.
+  A failure while merging restores the bundle. TorchLens never runs your harness. A Bundle
+  helper-table method.
 
 **AlternativeReport** *(`from torchlens.bundle import AlternativeReport`; spelling documented-unstable)*
 : The frozen result of `Bundle.add_alternative`: `prefix`, `steered` (the declared calls), `calls`

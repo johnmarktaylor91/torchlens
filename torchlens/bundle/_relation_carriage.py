@@ -239,11 +239,16 @@ def _bundle_downstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
 def register_relation_walks(table: dict[str, Callable[..., Any]]) -> None:
     """Install the walk helpers on the Bundle dynamic-method table."""
 
+    from ._alternatives import _bundle_add_alternative
+    from ._token_divergence import _bundle_token_divergence
     from ._token_spans import register_token_pairs
 
     table["upstream"] = _bundle_upstream
     table["downstream"] = _bundle_downstream
     register_token_pairs(table)
+    # Steer one call and re-run the harness (harness.2).
+    table["token_divergence"] = _bundle_token_divergence
+    table["add_alternative"] = _bundle_add_alternative
 
 
 def _bundle_derive_episode_status(
