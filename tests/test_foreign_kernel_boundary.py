@@ -244,3 +244,51 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     # The verdict is whatever the base tree gives (True today); the only thing the
     # boundary may never do is turn this plain round trip into a boundary op.
     assert base_verdict is True or (failure is not None and failure.check == CHECK_COMPLETENESS)
+
+
+class _ForeignHandle:
+    """A DGL-style opaque handle: hashing it fails like ``dgl._ffi.object.ObjectBase``.
+
+    DGL's ``ObjectBase.__hash__`` calls ``_api_internal._raw_ptr``, which the shipped
+    wheel does not register, so any ``hash()`` of a graph index raises AttributeError.
+    """
+
+    def __hash__(self) -> int:
+        raise AttributeError("module 'dgl._api_internal' has no attribute '_raw_ptr'")
+
+
+class _HandleDoubleFunction(torch.autograd.Function):
+    """DGL SpMM shape: ``apply(x, handle)`` where the handle is not a tensor."""
+
+    @staticmethod
+    def forward(ctx, x, handle):  # type: ignore[override]
+        assert isinstance(handle, _ForeignHandle)
+        return torch.from_numpy(x.detach().numpy() * 2)
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        return grad_output * 2, None
+
+
+class _HandleFunctionModel(nn.Module):
+    """Linear, then a Function applied with an unhashable non-tensor argument."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.handle = _ForeignHandle()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = _HandleDoubleFunction.apply(self.fc(x), self.handle)
+        return torch.relu(y)
+
+
+def test_foreign_function_with_unhashable_handle_argument() -> None:
+    """A non-tensor ``apply`` argument is never hashed: the boundary records and replays it."""
+
+    model = _HandleFunctionModel()
+    x = torch.randn(3, 4)
+    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
+        trace = tl.trace(model, x)
+    _assert_one_boundary(trace, _HandleDoubleFunction)
+    _assert_validates_clean(model, x)
