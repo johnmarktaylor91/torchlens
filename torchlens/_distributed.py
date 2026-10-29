@@ -1045,7 +1045,8 @@ def _build_findings(evidence: _Evidence) -> tuple[DistributedFinding, ...]:
                     "Trace the undistributed module. Cross-rank merging "
                     "(tl.merge_ranks) covers dense-parameter captures with "
                     "explicit collectives; DTensor/TP capture stays refused "
-                    "until its capture fidelity is proven."
+                    "until its capture fidelity is proven (planned design: "
+                    "docs/reference/tensor_parallel_design.md)."
                 ),
                 sites=tp_sites,
                 exact=evidence.tp_module_exact,
