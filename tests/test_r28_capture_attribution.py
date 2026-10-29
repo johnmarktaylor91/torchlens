@@ -409,7 +409,7 @@ def test_m4_genuinely_overlapping_views_keep_mutation_edge() -> None:
 def test_m4_exact_overlap_helper_matrix() -> None:
     """Unit matrix for the element-exact overlap decision."""
 
-    from torchlens.backends.torch.wrappers import _strided_views_share_storage_elements
+    from torchlens.backends.torch._storage_overlap import _strided_views_share_storage_elements
 
     base = torch.arange(12, dtype=torch.float32)
     assert _strided_views_share_storage_elements(base[::2], base[1::2]) is False
