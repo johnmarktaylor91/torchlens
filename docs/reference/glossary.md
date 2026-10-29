@@ -521,6 +521,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
   engine runs the live model and ignores the option.
 
+**LiteralTensor.capture_fingerprint** (`torchlens.intervention.types.LiteralTensor`) *(internal; session-only)*
+: The record behind **allow_changed_params**: for an `nn.Parameter` literal in a replay template,
+  the parameter's address, version counter, storage pointer and shape at the moment the template
+  classified it; `None` for every other literal. Replay compares it with the live parameter to
+  refuse `replay_param_changed_since_capture`. It lives only on `Op.args_template`, which is never
+  saved, so a loaded trace carries none and nothing in a saved artifact depends on it. Not a user
+  input: construct templates through capture, not by hand.
+
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
   not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
