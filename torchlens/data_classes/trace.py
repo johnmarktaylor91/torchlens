@@ -234,6 +234,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "raise_on_nan": False,
     "track_nonfinite": False,
     "track_device_memory": False,
+    "measure_host_peak_memory": False,
     "structure_only": False,
     "intervention_audit": [],
     "keep_orphans": False,
@@ -280,6 +281,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
     "forward_peak_memory_reason": None,
+    "backward_peak_memory_reason": None,
     "_forward_peak_memory_pair": None,
     "_phase_timings": {},
     "_replay_arg_version_data_complete": True,
@@ -363,6 +365,12 @@ _MODEL_LOG_DEFAULT_FILL = {
     **_MODEL_LOG_DEFAULT_FILL,
 }
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
+_SESSION_BOOL_KNOBS = (
+    "measure_python_peak_memory",
+    "measure_host_peak_memory",
+    "track_nonfinite",
+    "track_device_memory",
+)
 
 # Plausible-but-absent attribute names, mapped to the fields that answer them. A
 # frontier-scale user's first question is "how big is this capture?", and the
@@ -1336,6 +1344,7 @@ class Trace(
         # F24 sampling knob + per-call sample store: allocator counters are
         # process facts of the capturing run; load restores the default.
         "track_device_memory": FieldPolicy.DROP,
+        "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
         "_device_memory_samples": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
@@ -1597,6 +1606,7 @@ class Trace(
         "num_backward_passes": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
+        "backward_peak_memory_reason": FieldPolicy.KEEP,
         "_backward_gradfn_refs": FieldPolicy.DROP,
         # B1-17: the remaining undeclared runtime Trace attrs the widened
         # lockstep gate finds across the 30-axis postprocess matrix. All are
@@ -1870,6 +1880,7 @@ class Trace(
         self.raise_on_nan: bool = False
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
+        self.measure_host_peak_memory: bool = False
         self.annotations: dict[str, Any] = {}
         self.code_context: list[FuncCallLocation] = []
         self.manual_tensor_connections: list[tuple[str, str]] = []
@@ -2066,8 +2077,9 @@ class Trace(
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
         self.num_backward_passes: int = 0
-        self.backward_peak_memory: Bytes = Bytes(0)
+        self.backward_peak_memory: Bytes | None = Bytes(0)  # CPU None: see the reason
         self.backward_memory_backend: str = "unknown"
+        self.backward_peak_memory_reason: str | None = None
         _state.register_log(self)
 
     # ********************************************
@@ -3164,6 +3176,7 @@ class Trace(
             "num_backward_passes": 0,
             "backward_peak_memory": 0,
             "backward_memory_backend": "unknown",
+            "backward_peak_memory_reason": None,
             "total_autograd_memory": None,
             "pinned_autograd_memory": None,
             "_buffer_accessor": None,
@@ -3182,6 +3195,7 @@ class Trace(
             "raise_on_nan": False,
             "track_nonfinite": False,
             "track_device_memory": False,
+            "measure_host_peak_memory": False,
             "structure_only": False,
             "intervention_audit": [],
             "keep_orphans": False,
@@ -3258,15 +3272,12 @@ class Trace(
             }
         if state["backward_ready"] is None:
             state["backward_ready"] = False
-        if state.get("measure_python_peak_memory") is None:
-            state["measure_python_peak_memory"] = False
-        # ``track_nonfinite`` is FieldPolicy.DROP for the same reason: a loaded
-        # artifact never re-records, so load restores the default and the
-        # queryable record falls back to the saved-payload basis.
-        if state.get("track_nonfinite") is None:
-            state["track_nonfinite"] = False
-        if state.get("track_device_memory") is None:
-            state["track_device_memory"] = False
+        # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never
+        # re-records, so load restores the default and the queryable record falls
+        # back to the saved-payload basis).
+        for knob in _SESSION_BOOL_KNOBS:
+            if state.get(knob) is None:
+                state[knob] = False
         if state.get("distributed_witness") is None:
             state["distributed_witness"] = "none"
         # ``save_budget`` is FieldPolicy.DROP, so a portable artifact never
@@ -3321,8 +3332,8 @@ class Trace(
             "forward_peak_memory",
             "backward_peak_memory",
         ):
-            if field_name == "forward_peak_memory" and state.get(field_name, 0) is None:
-                continue  # a recorded CPU zero stays None
+            if field_name.endswith("_peak_memory") and state.get(field_name, 0) is None:
+                continue  # a recorded CPU None (with its reason) stays None
             state[field_name] = Bytes(state.get(field_name, 0) or 0)
         if state.get("total_autograd_memory") is not None:
             state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])
@@ -3746,6 +3757,7 @@ class Trace(
             "forward_memory_backend",
             "_forward_peak_memory_pair",
             "backward_peak_memory",
+            "backward_peak_memory_reason",
             "output_layers",
             "output_layers_by_pass",
             "output_layers_by_module_call",

@@ -9,7 +9,9 @@ pin the measurement to one CPU, plant a fresh 64 MiB mapping and free it. The ex
 the test's own exact RSS growth around the plant (``statm``), never a TorchLens
 output. Before the lag correction the reported peak was the residue short
 (several MiB on a 32-CPU host). Hosts where the residue cannot be built (an
-approximate ``/proc`` RSS, or too few CPUs) skip by design.
+approximate ``/proc`` RSS, or too few CPUs) skip by design. The captures opt in
+with ``measure_host_peak_memory=True`` (measure.2: a default CPU capture
+measures no peak).
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.capture import peak_memory
+from torchlens.options import CaptureOptions
 
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 MARGIN = 2**20
@@ -38,6 +41,7 @@ MIN_LAG = MARGIN + 2**19
 RESIDUE_PAGES = 44
 REGION_PAGES = 256
 SAMPLES: dict[str, int] = {}
+HOST = CaptureOptions(measure_host_peak_memory=True)
 
 linux_procfs = pytest.mark.skipif(
     not (
@@ -158,7 +162,7 @@ def test_cpu_forward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
     model = Transient().eval()
     SAMPLES.clear()
     with _Lagged() as lagged:
-        trace = tl.trace(model, torch.randn(2, 4))
+        trace = tl.trace(model, torch.randn(2, 4), capture=HOST)
     try:
         outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PLANT_BYTES - MARGIN
@@ -173,7 +177,7 @@ def _planted_trace(samples: dict[str, int]) -> tuple[Any, torch.Tensor]:
     """A trace whose output gradient hook plants and frees the 64 MiB buffer."""
 
     torch.manual_seed(0)
-    trace = tl.trace(nn.Linear(4, 4).train(), torch.randn(2, 4))
+    trace = tl.trace(nn.Linear(4, 4).train(), torch.randn(2, 4), capture=HOST)
     out = trace[trace.output_layers[0]].out
 
     def plant(grad: torch.Tensor) -> None:

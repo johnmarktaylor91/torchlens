@@ -633,7 +633,7 @@ public `torch.compiler.set_stance("force_eager")` scoped to the forward, so
 compiled regions run their original eager Python: the interior is fully logged
 with full verified semantics, zero graph breaks or new compiles happen during
 capture, compiled caches stay intact, and wrapper install/uninstall costs a
-one-time bounded burst of recompilations on the first compiled call after each
+bounded burst of recompilations on the first compiled call after each
 capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny
 GPT-2). On torch < 2.6 the
 historical fallback holds: a Dynamo-traced region reached mid-capture is

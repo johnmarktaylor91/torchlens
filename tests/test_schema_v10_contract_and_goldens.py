@@ -69,10 +69,15 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # SCHEMA-REQUESTS row 9 (REAL-2B2, AGT-2362): the uncalled-module record,
     # taken while the source model is live. DROP: a restored trace reads
     # num_uncalled_modules as None (unknown), never a stale 0.
+    # SCHEMA-REQUESTS rows 16 and 17 (measure.2, JMT 28 Oct 2026): the CPU peaks
+    # are opt-in. KEEP: why a CPU backward peak is None travels with the None;
+    # DROP: the measure_host_peak_memory session knob (load restores False).
     "trace": {
         "pinned_autograd_memory": "drop",
         "forward_peak_memory_reason": "keep",
         "_uncalled_module_addresses": "drop",
+        "backward_peak_memory_reason": "keep",
+        "measure_host_peak_memory": "drop",
     },
     # SCHEMA-REQUESTS row 6 (OBSERVER, AGT-2360): the record of the plain
     # attributes a forward wrote (arbitrary user objects). DROP, both the public
@@ -91,7 +96,12 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
 V10_FIELD_RETYPES: dict[str, dict[str, str]] = {
     # SCHEMA-REQUESTS row 7 (REPORT, forks.13): a CPU forward delta of 0 is
     # recorded as None with forward_peak_memory_reason; KEEP policy unchanged.
-    "trace": {"forward_peak_memory": "Bytes -> Bytes | None (CPU zero delta reads None)"},
+    # SCHEMA-REQUESTS row 16 (measure.2): a CPU backward peak without the
+    # measure_host_peak_memory opt-in is None with backward_peak_memory_reason.
+    "trace": {
+        "forward_peak_memory": "Bytes -> Bytes | None (CPU zero delta reads None)",
+        "backward_peak_memory": "Bytes -> Bytes | None (CPU without the opt-in reads None)",
+    },
 }
 
 _INSEQ_STEP_SCORES_MAP_KEYS = (

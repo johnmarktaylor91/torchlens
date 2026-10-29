@@ -151,12 +151,11 @@ def test_forward_peak_memory_is_populated(small_input):
     is now bracketed by a peak-memory probe (CUDA device peak; CPU/MPS host
     resident-set-size or MPS allocator delta).
 
-    The default path deliberately does NOT run a tracemalloc probe -- that
-    allocator hook costs 1.7x-2.5x total capture time -- so the coarse host delta
-    may read 0 for a model this small; on CPU that zero is recorded as ``None``
-    with ``forward_peak_memory_reason`` (forks.13). The measurement is present
-    and labeled; positive Python-allocation peaks for small models are the
-    opt-in behavior asserted by
+    The default CPU path measures nothing (measure.2): the CPU peak needs the
+    process-wide high-water reset, so it reads ``None`` with a reason naming
+    ``measure_host_peak_memory=True``. The tracemalloc probe is a second opt-in
+    (its allocator hook costs 1.7x-2.5x total capture time). Positive Python-allocation peaks for small
+    models are the opt-in behavior asserted by
     ``test_measure_python_peak_memory_opt_in_reports_positive_peak``.
     """
 
@@ -164,13 +163,14 @@ def test_forward_peak_memory_is_populated(small_input):
     mh = trace_fn(model, small_input)
     if mh.forward_peak_memory is None:
         assert mh.forward_memory_backend == "cpu"
-        assert "measure_python_peak_memory=True" in mh.forward_peak_memory_reason
+        assert "measure_host_peak_memory=True" in mh.forward_peak_memory_reason
     else:
         assert isinstance(mh.forward_peak_memory, torchlens.Bytes)
         assert int(mh.forward_peak_memory) >= 0
         assert mh.forward_peak_memory_reason is None
     assert mh.forward_memory_backend in {"cpu", "cuda", "mps"}
     assert mh.measure_python_peak_memory is False
+    assert mh.measure_host_peak_memory is False
 
 
 def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
@@ -188,7 +188,9 @@ def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
     measured = trace_fn(
         model,
         small_input,
-        capture=torchlens.options.CaptureOptions(measure_python_peak_memory=True),
+        capture=torchlens.options.CaptureOptions(
+            measure_python_peak_memory=True, measure_host_peak_memory=True
+        ),
     )
     assert measured.measure_python_peak_memory is True
     assert isinstance(measured.forward_peak_memory, torchlens.Bytes)

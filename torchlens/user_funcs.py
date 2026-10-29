@@ -1099,6 +1099,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "intervention_ready",
         "capture_container_structure",
         "track_device_memory",
+        "measure_host_peak_memory",
         "hooks",
         "backward_ready",
         "inference_only",
@@ -1593,6 +1594,7 @@ def _run_model_and_save_specified_outs(
     track_device_memory: bool = False,
     structure_only: bool = False,
     log_injections: bool = False,
+    measure_host_peak_memory: bool = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -1740,6 +1742,7 @@ def _run_model_and_save_specified_outs(
             committed op output, served by ``Trace.nonfinite_ops`` (session-time
             knob; never changes control flow).
         log_injections: Record intervention-hook torch calls as injected-op records.
+        measure_host_peak_memory: Measure CPU peaks (resets the process ``VmHWM``).
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
@@ -2037,6 +2040,7 @@ def _run_model_and_save_specified_outs(
         trace.raise_on_nan = raise_on_nan
         trace.track_nonfinite = track_nonfinite
         trace.track_device_memory = track_device_memory
+        trace.measure_host_peak_memory = measure_host_peak_memory
         _injection.arm_injection_logging(trace, armed=log_injections)
         # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
         # (memo sec 1.5) and stamps the mirror field here at entry. At S2
@@ -3573,6 +3577,8 @@ def _trace_torch_model(
             "intervention_ready": intervention_ready,
             "structure_only": capture_options.structure_only,
             "track_device_memory": capture_options.track_device_memory,
+            # A cached capture without the opt-in holds no CPU peak.
+            "measure_host_peak_memory": capture_options.measure_host_peak_memory,
             "log_injections": capture_options.log_injections,
             "save_raw_input": repr(save_raw_input_policy),
             "save_raw_output": repr(save_raw_output_policy),
@@ -3717,6 +3723,7 @@ def _trace_torch_model(
             structure_only=capture_options.structure_only,
             log_injections=capture_options.log_injections,
             carry_state=capture_options.carry_state,
+            measure_host_peak_memory=capture_options.measure_host_peak_memory,
         )
         recursive_save_options = SaveOptions(
             activation_transform=activation_transform,
@@ -4000,6 +4007,7 @@ def _trace_torch_model(
         track_device_memory=capture_options.track_device_memory,
         structure_only=capture_options.structure_only,
         log_injections=capture_options.log_injections,
+        measure_host_peak_memory=capture_options.measure_host_peak_memory,
         transform=input_transform,
         raw_input=raw_input,
         save_raw_input=save_raw_input_policy,

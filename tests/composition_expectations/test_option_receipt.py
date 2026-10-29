@@ -27,7 +27,8 @@ def test_receipt_covers_every_public_field_in_order() -> None:
     # merged tree carries both. As of T85 (F01-AMENDED landed) both parents
     # carry log_injections, so the pins agree at 49.
     # 49 -> 50: U40.1 CaptureOptions.carry_state.
-    assert len(receipt) == 50
+    # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
+    assert len(receipt) == 51
 
 
 def test_receipt_distinguishes_explicit_from_default() -> None:

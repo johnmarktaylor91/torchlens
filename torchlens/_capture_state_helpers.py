@@ -276,7 +276,7 @@ def _warn_compiled_plain_callables_forced_eager_once(sites: tuple[str, ...]) -> 
         f"{', '.join(sites)}; this capture runs their original eager Python under "
         "torch.compiler.set_stance('force_eager'), so their interiors ARE logged. "
         "Compiled caches are untouched; captured values are eager-path values, and "
-        "TorchLens wrapper install/uninstall can cost a one-time bounded burst of "
+        "TorchLens wrapper install/uninstall can cost a bounded burst of "
         "recompilations on the first compiled call after each capture, then steady "
         "state.",
         UserWarning,

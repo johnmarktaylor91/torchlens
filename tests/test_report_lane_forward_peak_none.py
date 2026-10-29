@@ -3,7 +3,9 @@
 JMT 2026-10-12: "a, but zero becomes None with a reason". CPU forward peak
 only: positive values and their basis, CUDA zero semantics, MPS and the
 backward peak are unchanged. The host RSS reader is pinned so the zero (and
-the positive) delta is deterministic.
+the positive) delta is deterministic. Every capture here opts in with
+``measure_host_peak_memory=True`` (measure.2: without it a CPU peak is never
+measured); the process-wide reset is pinned too, so nothing is written.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens.capture import trace as capture_trace
+from torchlens.capture import peak_memory, trace as capture_trace
 from torchlens.capture.peak_memory import (
     CPU_ZERO_PEAK_REASON,
     CPU_ZERO_PEAK_WITH_PYTHON_REASON,
@@ -42,11 +44,13 @@ def _rss(monkeypatch: pytest.MonkeyPatch, *readings: int) -> None:
 
     monkeypatch.setattr(capture_trace, "process_rss_bytes", fake_rss)
     # The CPU peak also reads the resident high-water: serve the largest reading.
-    monkeypatch.setattr(capture_trace, "peak_rss_bytes", lambda: max(readings))
+    monkeypatch.setattr(peak_memory, "peak_rss_bytes", lambda: max(readings))
+    monkeypatch.setattr(capture_trace, "reset_peak_rss", lambda: True)
 
 
 def _capture(**kwargs: Any) -> Any:
     torch.manual_seed(0)
+    kwargs.setdefault("capture", CaptureOptions(measure_host_peak_memory=True))
     return tl.trace(nn.Linear(4, 2), torch.randn(2, 4), **kwargs)
 
 
@@ -97,7 +101,9 @@ def test_python_peak_opt_in_reason_when_both_read_zero() -> None:
 
 def test_opt_in_positive_python_peak_is_a_value(monkeypatch: pytest.MonkeyPatch) -> None:
     _rss(monkeypatch, 1_000_000)
-    trace = _capture(capture=CaptureOptions(measure_python_peak_memory=True))
+    trace = _capture(
+        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True)
+    )
 
     assert isinstance(trace.forward_peak_memory, tl.Bytes)
     assert int(trace.forward_peak_memory) > 0

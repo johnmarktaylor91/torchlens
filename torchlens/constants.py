@@ -323,6 +323,7 @@ MODEL_LOG_FIELD_ORDER = [
     "num_backward_passes",
     "backward_peak_memory",
     "backward_memory_backend",
+    "backward_peak_memory_reason",
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [

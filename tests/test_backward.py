@@ -1343,8 +1343,13 @@ def test_peak_memory_tracking_populated() -> None:
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     assert trace.has_backward_pass
-    assert isinstance(trace.backward_peak_memory, int)
     assert trace.backward_memory_backend in {"cpu", "cuda", "mps"}
+    if trace.backward_memory_backend == "cpu":
+        # measure.2: the CPU peak is opt-in; the default reads None with the reason.
+        assert trace.backward_peak_memory is None
+        assert "measure_host_peak_memory=True" in trace.backward_peak_memory_reason
+    else:
+        assert isinstance(trace.backward_peak_memory, int)
 
 
 def test_higher_order_grads_basic_support() -> None:

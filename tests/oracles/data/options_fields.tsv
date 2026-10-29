@@ -20,6 +20,7 @@ CaptureOptions.keep_orphans
 CaptureOptions.layer_visualizers
 CaptureOptions.layers_to_save
 CaptureOptions.log_injections
+CaptureOptions.measure_host_peak_memory
 CaptureOptions.measure_python_peak_memory
 CaptureOptions.module_filter
 CaptureOptions.module_identity_mode

@@ -1251,11 +1251,11 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
     # The coexistence contract shipped by the rung-2 stance integration (torch
     # >= 2.6): compiled callables run their original eager Python during
     # capture with zero graph breaks, compiled caches stay intact with a
-    # one-time bounded burst of recompilations on the first compiled call after
+    # bounded burst of recompilations on the first compiled call after
     # each capture, then steady state, and unwrap_torch() reverts torch for free.
     stance_available = bool(_torch_compat.HAS_SET_STANCE)
     contract = (
-        "Coexistence contract: zero graph breaks during capture, a one-time bounded "
+        "Coexistence contract: zero graph breaks during capture, a bounded "
         "burst of recompilations on the first compiled call after each capture, then "
         "steady state, and unwrap_torch() reverts torch for free. Captured values are "
         "eager-path values, not compiled-path numerics."

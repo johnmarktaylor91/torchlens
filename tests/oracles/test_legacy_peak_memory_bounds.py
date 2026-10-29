@@ -11,6 +11,8 @@ The margin, registered before these tests first ran, is 1 MiB on every CPU
 bound: it covers resident-set movement between TorchLens's bracket baseline and
 the test's own sample. The resident high-water reset is Linux procfs only; the
 CPU bounds skip by design elsewhere, and the CUDA bounds skip without a GPU.
+Every CPU capture opts in with ``measure_host_peak_memory=True`` (measure.2: a
+default capture measures no CPU peak and never resets the mark).
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from _fresh_plant import touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture import trace as capture_trace
+from torchlens.capture import peak_memory, trace as capture_trace
 from torchlens.capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions
 
@@ -34,6 +36,7 @@ PLANT = 8 * 2**20  # float64 elements
 PLANT_BYTES = PLANT * 8  # 67,108,864
 PY_PLANT_BYTES = 32 * 2**20  # 33,554,432
 MARGIN = 2**20
+HOST = CaptureOptions(measure_host_peak_memory=True)
 #: In-forward samples live outside the module: a default trace restores
 #: module attributes after the forward (pure observer).
 SAMPLES: dict[str, int] = {}
@@ -51,11 +54,29 @@ def _rss() -> int:
 
 
 def _hwm() -> int:
+    """The resident high-water mark on the exact-RSS basis of ``_rss()``.
+
+    Where ``/proc`` RSS is the exact per-CPU sum, the kernel sets the
+    ``VmHWM`` mark from its approximate total (``/proc/self/stat``), so a mark
+    above the current RSS is raised by that counter lag (exact minus
+    approximate) to put both bounds on the same basis.
+    """
+
+    fields: dict[str, int] = {}
     with open("/proc/self/status") as handle:
         for line in handle:
-            if line.startswith("VmHWM:"):
-                return int(line.split()[1]) * 1024
-    raise AssertionError("no VmHWM line")
+            key = line.split(":", 1)[0]
+            if key in ("VmHWM", "VmRSS"):
+                fields[key] = int(line.split()[1]) * 1024
+    if "VmHWM" not in fields:
+        raise AssertionError("no VmHWM line")
+    hwm, rss = fields["VmHWM"], fields.get("VmRSS", 0)
+    if hwm > rss:
+        with open("/proc/self/stat") as handle:
+            text = handle.read()
+        approximate = int(text[text.rindex(")") + 2 :].split()[21]) * os.sysconf("SC_PAGE_SIZE")
+        hwm += max(0, rss - approximate)
+    return hwm
 
 
 class Transient(nn.Module):
@@ -95,7 +116,7 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
     model = Transient().eval()
     SAMPLES.clear()
     before = _rss()
-    trace = tl.trace(model, torch.randn(2, 4))
+    trace = tl.trace(model, torch.randn(2, 4), capture=HOST)
     high_water = _hwm()
     try:
         assert trace.forward_memory_backend == "cpu"
@@ -116,7 +137,9 @@ def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
     model = PyTransient().eval()
     SAMPLES.clear()
     trace = tl.trace(
-        model, torch.randn(2, 4), capture=CaptureOptions(measure_python_peak_memory=True)
+        model,
+        torch.randn(2, 4),
+        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True),
     )
     try:
         outside = SAMPLES["alive"] - SAMPLES["entry"]
@@ -131,9 +154,9 @@ def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
 def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     # An outside measurement of zero growth: every resident reading is the same.
     monkeypatch.setattr(capture_trace, "process_rss_bytes", lambda: 1_000_000)
-    monkeypatch.setattr(capture_trace, "peak_rss_bytes", lambda: 1_000_000)
+    monkeypatch.setattr(peak_memory, "peak_rss_bytes", lambda: 1_000_000)
     torch.manual_seed(0)
-    trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4))
+    trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4), capture=HOST)
     try:
         assert trace.forward_memory_backend == "cpu"
         assert trace.forward_peak_memory is None
@@ -145,7 +168,8 @@ def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyP
 def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
     torch.manual_seed(0)
     model = nn.Linear(4, 4).to(device).train()
-    trace = tl.trace(model, torch.randn(2, 4, device=device))
+    host = CaptureOptions(measure_host_peak_memory=device == "cpu")
+    trace = tl.trace(model, torch.randn(2, 4, device=device), capture=host)
     out = trace[trace.output_layers[0]].out
 
     def plant(grad: torch.Tensor) -> None:

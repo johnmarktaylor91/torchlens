@@ -25,7 +25,12 @@ import torch
 from ... import _state
 from ..._deprecations import MISSING, MissingType
 from ..._state import pause_logging
-from ...capture.peak_memory import peak_rss_bytes, process_rss_bytes, reset_peak_rss
+from ...capture.peak_memory import (
+    peak_rss_bytes,
+    process_rss_bytes,
+    record_backward_peak,
+    reset_peak_rss,
+)
 from ...data_classes.backward_pass import BackwardPass
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.grad_fn import GradFn
@@ -2565,7 +2570,7 @@ def _memory_snapshot(device: torch.device) -> tuple[str, int]:
     return "cpu", max(process_rss_bytes(), peak_rss_bytes())  # VmHWM: a freed buffer counts
 
 
-def _peak_memory_baseline(device: torch.device) -> tuple[str, int]:
+def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str, int]:
     """Return the pre-pass memory baseline WITHOUT resetting peak tracking.
 
     R36-2: this used to call ``torch.cuda.reset_peak_memory_stats`` on every
@@ -2573,21 +2578,25 @@ def _peak_memory_baseline(device: torch.device) -> tuple[str, int]:
     The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
     a backward that pushes a new device peak reports the exact excess over
     the prior high-water mark, and one that stays under it honestly reads
-    ``0``. CPU first resets the process ``VmHWM`` to the current RSS (Linux;
-    see ``capture.peak_memory.reset_peak_rss`` for the process-wide effect),
-    so its baseline is the pass-start RSS and its end reading the pass peak.
+    ``0``. Under ``CaptureOptions(measure_host_peak_memory=True)`` CPU first
+    resets the process ``VmHWM`` to the current RSS (Linux; see
+    ``capture.peak_memory.reset_peak_rss`` for the process-wide effect), so its
+    baseline is the pass-start RSS and its end reading the pass peak. Without
+    the opt-in nothing is reset and the CPU peak is recorded as ``None``.
 
     Parameters
     ----------
     device:
         Device associated with the backward loss tensor.
+    measure_host:
+        Whether the trace opted in to the CPU peak (and so to the reset).
 
     Returns
     -------
     tuple[str, int]
         Backend label and starting memory snapshot in bytes.
     """
-    if device.type not in {"cuda", "mps"}:
+    if measure_host and device.type not in {"cuda", "mps"}:
         reset_peak_rss()
     return _memory_snapshot(device)
 
@@ -3338,7 +3347,9 @@ def _run_backward_with_capture(
         with contextlib.suppress(BaseException):
             _materialize_backward_projections(trace)
         raise
-    backend, before = _peak_memory_baseline(loss.device)
+    backend, before = _peak_memory_baseline(
+        loss.device, bool(getattr(trace, "measure_host_peak_memory", False))
+    )
     backward_start_time = time.time()
     status = "ok"
     result = None
@@ -3457,11 +3468,8 @@ def _run_backward_with_capture(
         except BaseException as exc:
             cleanup_error = cleanup_error if cleanup_error is not None else exc
         trace.backward_memory_backend = backend
-        # Largest peak over a pass baseline: CPU max; CUDA high-water excesses sum.
-        prior = int(trace.backward_peak_memory)
-        trace.backward_peak_memory = Bytes(
-            max(prior, peak_delta) if backend == "cpu" else prior + peak_delta
-        )
+        # Largest peak over a pass baseline: CPU max (opt-in); CUDA excesses sum.
+        record_backward_peak(trace, backend, peak_delta)
         trace.backward_durations.append(Duration(duration))
         trace.total_param_gradient_memory = Bytes(
             sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))

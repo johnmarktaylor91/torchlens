@@ -301,7 +301,8 @@ def test_capture_options_private_filter_both_directions() -> None:
     # track_device_memory and the F44 log_injections options. As of T85
     # (F01-AMENDED landed) both parents carry log_injections; pins agree.
     # 49 -> 50: U40.1 CaptureOptions.carry_state.
-    assert len(_censuses.capture_option_fields()) == 50
+    # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
+    assert len(_censuses.capture_option_fields()) == 51
 
 
 def test_env_var_census_shapes() -> None:

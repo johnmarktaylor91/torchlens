@@ -210,33 +210,34 @@ def _validate_tl_authored_root(trace: Trace) -> None:
             )
 
 
-def _validate_forward_peak_memory_reason(trace: Trace) -> None:
-    """Validate the forward-peak reason pair (tlspec v10).
+def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None:
+    """Validate one peak's reason pair (tlspec v10).
 
-    ``forward_peak_memory_reason`` is ``None`` (a value was measured, or the
+    ``<which>_peak_memory_reason`` is ``None`` (a value was measured, or the
     artifact predates the field) or a non-empty string explaining why
-    ``forward_peak_memory`` is ``None``. A reason beside a number, or a
-    non-string reason, is a forged or drifted artifact.
+    ``<which>_peak_memory`` is ``None``. A reason beside a number, or a
+    non-string reason, is a forged or drifted artifact. ``code`` is the
+    refusal code for the forward or the backward peak.
     """
 
-    reason_value = getattr(trace, "forward_peak_memory_reason", None)
+    reason_value = getattr(trace, f"{which}_peak_memory_reason", None)
     if reason_value is None:
         return
     reason = None
     if not isinstance(reason_value, str) or not reason_value:
         reason = "not_a_string"
-    elif getattr(trace, "forward_peak_memory", None) is not None:
+    elif getattr(trace, f"{which}_peak_memory", None) is not None:
         reason = "reason_beside_a_value"
     if reason is not None:
         _refuse_identity(
-            f"Trace.forward_peak_memory_reason {reason_value!r} must be a non-empty string "
-            "and may only explain a forward_peak_memory of None.",
-            code="artifact_forward_peak_memory_invalid",
-            field="Trace.forward_peak_memory_reason",
+            f"Trace.{which}_peak_memory_reason {reason_value!r} must be a non-empty string "
+            f"and may only explain a {which}_peak_memory of None.",
+            code=code,
+            field=f"Trace.{which}_peak_memory_reason",
             reason=reason,
             remedy=(
                 "re-save the artifact with one current TorchLens version; do not "
-                "hand-edit the forward peak-memory fields"
+                f"hand-edit the {which} peak-memory fields"
             ),
         )
 
@@ -245,11 +246,12 @@ def _validate_identity_facts(trace: Trace) -> None:
     """Run the Trace identity-fact validators in their contract order.
 
     Episode-step stamps, the TL-authored root flag, the root entry point,
-    then the forward-peak reason pair (the one consumer is
+    then the forward- and backward-peak reason pairs (the one consumer is
     ``validate_persisted_forgery_surfaces``).
     """
 
     _validate_episode_step_stamps(trace)
     _validate_tl_authored_root(trace)
     _validate_root_entry_point(trace)
-    _validate_forward_peak_memory_reason(trace)
+    _validate_peak_memory_reason(trace, "forward", code="artifact_forward_peak_memory_invalid")
+    _validate_peak_memory_reason(trace, "backward", code="artifact_backward_peak_memory_invalid")
