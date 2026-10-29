@@ -10,7 +10,10 @@ populated, typed, non-shadowing, and pointing at spellings that resolve.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -32,6 +35,16 @@ _AUDIT_NAMED_SHIMS = (
 
 _DOTTED = re.compile(r"use (torchlens(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
+#: Rows naming a torchlens subpackage (forks ruling names.4: teaching rows for
+#: mechinterp, semantic and tviz instead of root module rows). Importing a
+#: subpackage binds it on the package, and attribute lookup then never reaches
+#: ``__getattr__``, so these rows teach only until the subpackage is imported.
+#: In-process state depends on what ran before, so they are pinned in a fresh
+#: interpreter (``test_subpackage_rows_teach_until_imported``).
+_SUBPACKAGE_ROWS = sorted(
+    name for name in tl._REDIRECTS if importlib.util.find_spec(f"torchlens.{name}") is not None
+)
+
 
 def test_redirect_table_is_populated_with_the_audit_named_shims() -> None:
     """Every shim the audit named is a redirect row."""
@@ -41,7 +54,7 @@ def test_redirect_table_is_populated_with_the_audit_named_shims() -> None:
     assert len(tl._REDIRECTS) >= 50
 
 
-@pytest.mark.parametrize("name", sorted(tl._REDIRECTS))
+@pytest.mark.parametrize("name", sorted(set(tl._REDIRECTS) - set(_SUBPACKAGE_ROWS)))
 def test_each_redirect_row_is_typed_and_teaches(name: str) -> None:
     """A redirect row raises the typed facade_redirect AttributeError naming the home."""
 
@@ -63,10 +76,60 @@ def test_no_redirect_row_shadows_a_live_name() -> None:
     removed; it must never enter the redirect table.
     """
 
-    live = set(tl.__all__) | set(tl._LAZY_ATTRS) | {k for k in vars(tl) if not k.startswith("_")}
+    # An imported subpackage sits in vars(tl) but is never shadowed: lookup
+    # finds it before __getattr__ (pinned in a fresh interpreter below).
+    bound = {k for k in vars(tl) if not k.startswith("_")} - set(_SUBPACKAGE_ROWS)
+    live = set(tl.__all__) | set(tl._LAZY_ATTRS) | bound
     shadowing = sorted(set(tl._REDIRECTS) & live)
     assert shadowing == [], f"redirect rows shadow live names: {shadowing}"
     assert "summary" in tl.__all__ and "summary" not in tl._REDIRECTS
+
+
+_FRESH_SUBPACKAGE_PROBE = """
+import importlib, sys
+import torchlens as tl
+from torchlens._errors import FacadeTeachingError
+names = sys.argv[1:]
+loaded = [name for name in names if f"torchlens.{name}" in sys.modules]
+assert not loaded, f"import torchlens loaded {loaded}"
+for name in names:
+    try:
+        getattr(tl, name)
+    except FacadeTeachingError as error:
+        assert error.fields["code"] == "facade_redirect"
+        assert tl._REDIRECTS[name] in str(error)
+    else:
+        raise AssertionError(f"tl.{name} resolved in a fresh interpreter")
+    assert not hasattr(tl, name) and name not in dir(tl)
+for name in names:
+    module = importlib.import_module(f"torchlens.{name}")
+    assert getattr(tl, name) is module
+print("ok")
+"""
+
+
+def test_subpackage_rows_are_the_ruled_three() -> None:
+    """names.4: exactly mechinterp, semantic and tviz teach at the root."""
+
+    assert _SUBPACKAGE_ROWS == ["mechinterp", "semantic", "tviz"]
+    assert not set(_SUBPACKAGE_ROWS) & (set(tl._LAZY_ATTRS) | set(tl.__all__))
+
+
+# Heavy: one cold interpreter importing torchlens+torch (~3.3s) plus three
+# subpackages, the tests/test_import_hygiene.py precedent.
+@pytest.mark.heavy
+def test_subpackage_rows_teach_until_imported() -> None:
+    """In a fresh interpreter each subpackage row raises the typed redirect, then
+    resolves to the subpackage once it is imported."""
+
+    result = subprocess.run(
+        [sys.executable, "-c", _FRESH_SUBPACKAGE_PROBE, *_SUBPACKAGE_ROWS],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0 and result.stdout.strip() == "ok", result.stderr[-2000:]
 
 
 @pytest.mark.parametrize("name", sorted(tl._REDIRECTS))

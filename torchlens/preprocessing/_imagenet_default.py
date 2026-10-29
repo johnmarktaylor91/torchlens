@@ -6,7 +6,7 @@ silently feeds a model a recipe it was not trained with. A user who knows the
 ImageNet recipe is right opts in by name::
 
     tl.trace(model, image, capture=tl.options.CaptureOptions(
-        transform=tl.preprocessing.imagenet_default()))
+        transform=torchlens.preprocessing.imagenet_default()))
 
 The opt-in stays a TorchLens-authored recipe, never an authority: its record
 keeps ``source="imagenet_default"`` and ``verified=False``, so its derived

@@ -1,6 +1,6 @@
 """Grounding a direct-logit-attribution table for the causal audit.
 
-``tl.mechinterp.direct_logit_contributions`` splits the model's logit (or
+``torchlens.mechinterp.direct_logit_contributions`` splits the model's logit (or
 logit difference) at chosen positions into one row per component, plus one
 constant row (the final norm's shift and the unembedding bias, projected).
 Each row is a claim that removing the component removes that much logit.
@@ -31,7 +31,7 @@ from torchlens.attribution._result import AttributionError
 
 
 def _is_contribution_table(claim: Any) -> bool:
-    """Return whether ``claim`` is a ``tl.mechinterp`` direct-logit table."""
+    """Return whether ``claim`` is a ``torchlens.mechinterp`` direct-logit table."""
 
     from torchlens.mechinterp._records import ContributionScores
 
@@ -43,7 +43,7 @@ def _dla_spelling(claim: Any) -> str:
 
     vs = f", vs={claim.vs_tokens!r}" if claim.vs_tokens is not None else ""
     return (
-        "tl.mechinterp.direct_logit_contributions(tl.trace(model, x), "
+        "torchlens.mechinterp.direct_logit_contributions(tl.trace(model, x), "
         f"answer={claim.answer_tokens!r}{vs}, positions={claim.positions!r})"
     )
 

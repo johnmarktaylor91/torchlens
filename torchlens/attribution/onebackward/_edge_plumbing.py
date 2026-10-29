@@ -12,7 +12,7 @@ correspondences, ``ambiguous`` when several forward consumptions are
 candidates, ``unsupported`` otherwise. The map is session-time plumbing (no
 persisted fields; its persistence is the EDGE-MAP-SCHEMA coordination with
 the NEXT trace-schema bump). Edge attribution patching over the component
-graph (``tl.mechinterp.edge_scores``) does not depend on it: each receiver's
+graph (``torchlens.mechinterp.edge_scores``) does not depend on it: each receiver's
 gradient is read at that receiver's own downstream op (its norm output, or
 its head's q/k/v slice of the projection output) and pulled back locally,
 so no backward slot has to be mated with a forward consumption.

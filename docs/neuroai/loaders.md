@@ -12,6 +12,7 @@ Model names are case-sensitive in every ecosystem below; copy them exactly.
 **torchvision** (the weights enum IS the authority):
 
 ```python
+import torchlens.preprocessing
 from torchvision.models import ResNet50_Weights, resnet50
 model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2).eval()
 
@@ -27,6 +28,7 @@ misses.
 the network -- the resolution discloses whether a fetch was attempted):
 
 ```python
+import torchlens.preprocessing
 from transformers import AutoImageProcessor, CLIPModel
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval()
 
@@ -38,6 +40,7 @@ print(pre.record.description)
 **timm** (the model carries its own data config; no network needed):
 
 ```python
+import torchlens.preprocessing
 import timm
 model = timm.create_model("resnet18.a1_in1k", pretrained=True).eval()
 
@@ -48,6 +51,7 @@ print(pre.record.description)
 **open_clip** (the returned preprocess pipeline is the authority):
 
 ```python
+import torchlens.preprocessing
 import open_clip
 model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
 
@@ -59,6 +63,7 @@ print(pre.record.description)
 what you use explicitly and the audit compares against it):
 
 ```python
+import torchlens.preprocessing
 model = torch.hub.load("pytorch/vision", "resnet18", weights=None).eval()
 
 pre = torchlens.preprocessing.resolve({"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]})
@@ -73,6 +78,7 @@ none apply. torchvision's detection presets are the canonical case: a
 is the CORRECT input, and the preset exposes no mean/std/size:
 
 ```python
+import torchlens.preprocessing
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 pre = torchlens.preprocessing.resolve(FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
 print(pre.declared)      # None -- the authority declares nothing

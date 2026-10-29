@@ -1,6 +1,6 @@
 """Grounding an EDGE read table (edge attribution patching scores) for the causal audit.
 
-``tl.mechinterp.edge_scores`` scores every edge ``s->t`` of the component
+``torchlens.mechinterp.edge_scores`` scores every edge ``s->t`` of the component
 graph by edge attribution patching: ``(s_corrupt - s_clean) . dM/d(input of
 t)``, summed over positions and reduced over examples, with the gradient
 taken at the clean input (EAP: Syed et al., "Attribution Patching
@@ -11,7 +11,7 @@ does to the metric, ``M(patched) - M(clean)``, when receiver ``t`` reads
 ``clean input - s_clean + s_corrupt``.
 
 The audit does the patch. Each ``ok`` row's edge is patched alone with
-``tl.mechinterp.patch_edges`` on a fork of the audit's trace (the clean run,
+``torchlens.mechinterp.patch_edges`` on a fork of the audit's trace (the clean run,
 with the sender's value from the corrupted run), and the metric the table
 was scored with is read from the unembedding output of the fork and reduced
 over examples as the table was (mean or sum). The measured effect is
@@ -51,7 +51,7 @@ _AUDIT_CALL = (
     "tl.attribution.causal_audit(model, x, claim=claim, corrupted=corrupted, metric=metric, k=1)"
 )
 _RESCORED_CALL = (
-    "tl.attribution.causal_audit(model, x, claim=tl.mechinterp.edge_scores(model, x, "
+    "tl.attribution.causal_audit(model, x, claim=torchlens.mechinterp.edge_scores(model, x, "
     "corrupted=corrupted, metric=metric), corrupted=corrupted, metric=metric, k=1)"
 )
 #: The cheaper spelling the many-units warning names for an EDGE table.
@@ -236,7 +236,7 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
         raise _edge_refusal(
             f"{' and '.join(f'{name}=' for name in missing)} not given; an EDGE table records "
             "neither the corrupted inputs nor the metric it was scored with (its rows cannot be "
-            "re-scored), so pass the ones tl.mechinterp.edge_scores was given",
+            "re-scored), so pass the ones torchlens.mechinterp.edge_scores was given",
             _AUDIT_CALL,
             code="attribution_audit_claim_misaligned",
         )
@@ -263,7 +263,7 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
     ):
         raise _edge_refusal(
             f"its rows are {methods!r} scores reduced by {reductions!r}; the audit compares "
-            f"patches with one tl.mechinterp.edge_scores table (methods {_METHODS!r})",
+            f"patches with one torchlens.mechinterp.edge_scores table (methods {_METHODS!r})",
             _RESCORED_CALL,
             code="attribution_audit_claim_unsupported",
         )
@@ -293,7 +293,7 @@ def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
             raise _edge_refusal(
                 f"node {name!r} is {tuple(node.value.shape)} on the clean inputs and {found} on "
                 "corrupted=; edge scores compare one node on two inputs of one shape",
-                "pass the corrupted= tl.mechinterp.edge_scores was given, the same shape as x, "
+                "pass the corrupted= torchlens.mechinterp.edge_scores was given, the same shape as x, "
                 f"e.g. {_AUDIT_CALL}",
                 code="attribution_audit_claim_misaligned",
             )
@@ -319,10 +319,10 @@ def _metric_scorer(
     ):
         raise _edge_refusal(
             f"metric returned {type(values).__name__}{'' if shape is None else shape} on the "
-            f"logits; tl.mechinterp.edge_scores takes a metric with one real value per example "
+            f"logits; torchlens.mechinterp.edge_scores takes a metric with one real value per example "
             f"(shape ({n_examples},)) or one scalar, so this is not the metric the table was "
             "scored with",
-            "pass the metric tl.mechinterp.edge_scores was given, e.g. metric=lambda logits: "
+            "pass the metric torchlens.mechinterp.edge_scores was given, e.g. metric=lambda logits: "
             f"logits[:, -1, 0] - logits[:, -1, 1], as in {_AUDIT_CALL}",
             code="attribution_audit_claim_misaligned",
         )

@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 115 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -39,7 +39,7 @@
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - Contrastive directions (DOCUMENTED-UNSTABLE):
-  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
+  `tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
   returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `n_pairs`,
   `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
   steer; `direction.to_steering_vectors()`, `direction.to_repeng()` and `direction.to_dialz()`

@@ -14,6 +14,7 @@ import _common as common  # the sibling module; scripts here run from this folde
 import torch
 
 import torchlens as tl
+import torchlens.mechinterp
 
 CLAIM = (
     "Olsson et al. 2022 ('In-context Learning and Induction Heads', Transformer Circuits "
@@ -94,8 +95,8 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     tokens = induction_tokens(oracle["protocol"])
     trace = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
     try:
-        result = tl.mechinterp.head_scores(
-            trace, kind=tl.mechinterp.FixedPeriodInduction(period=PERIOD), measure="mul"
+        result = torchlens.mechinterp.head_scores(
+            trace, kind=torchlens.mechinterp.FixedPeriodInduction(period=PERIOD), measure="mul"
         )
     finally:
         trace.cleanup()

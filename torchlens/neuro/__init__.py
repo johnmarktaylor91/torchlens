@@ -227,12 +227,12 @@ _REFUSALS: dict[str, str] = {
     ),
     "svcca": (
         "SVCCA is a different statistic, not a CKA kernel; netrep and "
-        "documented recipes own it. tl.extract_dataset / tl.features "
+        "documented recipes own it. tl.extract_dataset / torchlens.features "
         "produce the matched [n_obs x n_features] pairs it consumes"
     ),
     "pwcca": (
         "PWCCA lives in netrep and documented recipes; tl.extract_dataset "
-        "/ tl.features produce the matched [n_obs x n_features] pairs it "
+        "/ torchlens.features produce the matched [n_obs x n_features] pairs it "
         "consumes"
     ),
     "nonmetric_mds": (
@@ -243,7 +243,7 @@ _REFUSALS: dict[str, str] = {
     "model_zoo": (
         "matched preprocessing, model zoos, and gLocal weights belong to "
         "thingsvision; torchlens captures whatever model YOU construct, "
-        "with tl.preprocessing.resolve() verifying the preprocessing "
+        "with torchlens.preprocessing.resolve() verifying the preprocessing "
         "authority your loader ships"
     ),
     "brain_data": (

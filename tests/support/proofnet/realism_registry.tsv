@@ -42,6 +42,7 @@ clear_capture_cache	toy	referenced	F36-freeze
 contains	toy	referenced	F36-freeze
 dead	toy	referenced	F36-freeze
 decide_recording_of_batch	toy	referenced	F36-freeze
+direction_from_pairs	toy	referenced	STEER
 do	R1	referenced	F36-freeze
 export	toy	referenced	F36-freeze
 extract	R1	referenced	F36-freeze

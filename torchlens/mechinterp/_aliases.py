@@ -366,7 +366,7 @@ def _resolve(trace: Any, query: _Query) -> AliasResolution:
             query=query.display,
             status="structurally_absent",
             remedy="no translation row matches this spelling; see "
-            "tl.mechinterp.translation_table() for the known (name, generation) rows",
+            "torchlens.mechinterp.translation_table() for the known (name, generation) rows",
         )
     facet = query.facet
     homes = _homes_for(trace, query, facet)

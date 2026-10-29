@@ -1,7 +1,7 @@
 """Multi-receiver edge patching on GPT-2 small against plain forward hooks.
 
 In float64 on the first two vendored MIB IOI rows (clean prompt and its
-``s2_io_flip_counterfactual``), one ``tl.mechinterp.patch_edges`` call that
+``s2_io_flip_counterfactual``), one ``torchlens.mechinterp.patch_edges`` call that
 patches every edge outside a random kept set into every MLP, ``logits`` and
 the q, k and v receivers of layers 0, 6 and 11 (121 receivers in 16
 topological stages) equals the independent forward-hook implementation of the same
@@ -25,6 +25,7 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
     from support.multi_patch_reference import HookedPatch, gpt2_spec
 
     import torchlens as tl
+    import torchlens.mechinterp
     from real_model.r1.test_circ2_edge_scores_real import _ioi_batch
 
     loaded = r1_loader("r1-gpt2")
@@ -35,8 +36,8 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
     clean = tl.trace(model, clean_ids, capture=capture)
     corrupt_trace = tl.trace(model, corrupt_ids, capture=capture)
     try:
-        graph = tl.mechinterp.component_graph(clean)
-        corrupt = tl.mechinterp.component_graph(corrupt_trace)
+        graph = torchlens.mechinterp.component_graph(clean)
+        corrupt = torchlens.mechinterp.component_graph(corrupt_trace)
         from test_circ3_multi_receiver_patch import _outside_random_circuit
 
         def chosen(receiver) -> bool:
@@ -45,7 +46,7 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
         edges = [e for e in _outside_random_circuit(graph, keep=0.05) if chosen(e.receiver)]
         assert len({edge.receiver.name for edge in edges}) == 12 + 1 + 3 * 36
         started = time.perf_counter()
-        patched = tl.mechinterp.patch_edges(clean, edges, corrupt=corrupt)
+        patched = torchlens.mechinterp.patch_edges(clean, edges, corrupt=corrupt)
         elapsed = time.perf_counter() - started
         receivers = len({edge.receiver.name for edge in edges})
         print(f"patch_edges: {len(edges)} edges into {receivers} receivers in {elapsed:.1f} s")

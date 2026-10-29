@@ -191,7 +191,7 @@ class CausalAuditResult:
     sets
         The top-k set, then the controls in ``controls`` order (one set per
         random draw); for an EDGE table each set's edges are patched together
-        in one ``tl.mechinterp.patch_edges`` call, into one receiver or
+        in one ``torchlens.mechinterp.patch_edges`` call, into one receiver or
         several.
     rank_agreement
         Spearman correlation of claimed and measured per-unit effects
@@ -262,16 +262,16 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     Four claim kinds are audited. A layer attribution (``layer_attribution``,
     ``layer_integrated_gradients``, ``layer_conductance``), possibly computed
     against a :class:`SiteTarget`, scores the units of one hidden site. A
-    ``tl.mechinterp.direct_logit_contributions`` table scores components,
+    ``torchlens.mechinterp.direct_logit_contributions`` table scores components,
     each at its own site, by their direct share of a logit; each component's
     whole site is ablated and the same logit quantity is read from the
     unembedding head (after the model's logits are checked against the
     table's native logits). A ``tl.attribution.read`` table of
     activation-times-gradient ``ACT`` rows scores sites, or their elements,
     for one seeded target; each is ablated and that target is measured. A
-    ``tl.mechinterp.edge_scores`` table of ``EDGE`` rows scores
+    ``torchlens.mechinterp.edge_scores`` table of ``EDGE`` rows scores
     component-graph edges; each edge is patched alone with
-    ``tl.mechinterp.patch_edges`` (its sender's value from the corrupted
+    ``torchlens.mechinterp.patch_edges`` (its sender's value from the corrupted
     run) and the metric is measured, ``M(patched) - M(clean)``.
 
     Each unit is ablated alone, then the top-k claimed units together,
@@ -438,7 +438,7 @@ def _refuse_edge_inputs(request: _AuditRequest) -> None:
         target = "" if request.target is None else ", target=target"
         raise _setting_error(
             f"got {', '.join(f'{name}=' for name in given)}, which only an EDGE table from "
-            "tl.mechinterp.edge_scores takes",
+            "torchlens.mechinterp.edge_scores takes",
             f"tl.attribution.causal_audit(model, x, claim=claim{target})",
             code="attribution_eval_setting_invalid",
         )

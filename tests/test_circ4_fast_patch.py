@@ -1,4 +1,4 @@
-"""The cost of a multi-receiver ``tl.mechinterp.patch_edges`` call, as deterministic counters.
+"""The cost of a multi-receiver ``torchlens.mechinterp.patch_edges`` call, as deterministic counters.
 
 Counters per call: replays (runs of the replay engine's cone executor),
 component-graph builds, and trace forks. Declared target: one replay per

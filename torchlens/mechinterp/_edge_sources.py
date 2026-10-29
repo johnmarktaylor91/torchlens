@@ -121,7 +121,7 @@ def pre_norm_input(trace: Any, module: Any, *, receiver: str) -> tuple[Any, Any]
             "under this decomposition (post-norm blocks read an already renormalized state).",
             remedy="use a pre-norm additive-residual model (GPT-2, GPT-NeoX/Pythia, "
             "Llama-class); for other models decompose one state with "
-            "tl.mechinterp.residual_decomposition(trace, target=...)",
+            "torchlens.mechinterp.residual_decomposition(trace, target=...)",
             receiver=receiver,
             module_address=address,
             norms=distinct,
@@ -189,7 +189,7 @@ def _refuse_nonadditive_writer(label: str, where: str, func_name: str) -> NoRetu
         "unknown writer).",
         remedy="use a pre-norm additive-residual model (GPT-2, GPT-NeoX/Pythia, "
         "Llama-class); for other models decompose one state with "
-        "tl.mechinterp.residual_decomposition(trace, target=...)",
+        "torchlens.mechinterp.residual_decomposition(trace, target=...)",
         writer_label=label,
         module_address=where,
     )

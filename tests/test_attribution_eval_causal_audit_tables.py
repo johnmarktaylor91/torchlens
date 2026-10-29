@@ -28,6 +28,7 @@ from torch import Tensor, nn
 
 import torchlens as tl
 import torchlens.attribution as attribution
+import torchlens.mechinterp
 from torchlens.mechinterp._records import ContributionScores
 
 # Stated before the first run. The integer-valued float64 models are exact: measured effects,
@@ -113,7 +114,7 @@ def _lm(exact: bool = True) -> TinyLM:
 
 
 def _dla(model: nn.Module, ids: Tensor = IDS) -> ContributionScores:
-    return tl.mechinterp.direct_logit_contributions(
+    return torchlens.mechinterp.direct_logit_contributions(
         tl.trace(model, ids), answer=ANSWER, vs=VS, positions=POSITIONS
     )
 
@@ -308,7 +309,9 @@ def test_dla_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     with pytest.raises(attribution.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=1, **extra)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
-    fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": IDS})  # noqa: S307
+    fixed = eval(
+        _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS}
+    )  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
 
 
@@ -333,7 +336,9 @@ def test_dla_a_row_without_a_site_refuses_and_the_remedy_runs() -> None:
         attribution.causal_audit(model, IDS, claim=broken, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     assert "blocks.1.proj" in str(excinfo.value)
-    fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": IDS})  # noqa: S307
+    fixed = eval(
+        _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS}
+    )  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult)
 
 
@@ -345,7 +350,7 @@ def test_dla_k_larger_than_the_rows_refuses_and_the_remedy_runs() -> None:
     with pytest.raises(attribution.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=9)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
-    scope = {"tl": tl, "model": model, "x": IDS, "claim": claim}
+    scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult)
 
@@ -495,7 +500,9 @@ def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     with pytest.raises(attribution.AttributionError) as excinfo:
         attribution.causal_audit(model, X, claim=table, target=target, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
-    fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": X})  # noqa: S307
+    fixed = eval(
+        _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": X}
+    )  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
 
 
@@ -524,7 +531,7 @@ def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     if kind == "edge_rows":
         assert "mixes EDGE rows with ACT rows" in str(excinfo.value)
-    scope = {"tl": tl, "model": model, "x": X, "claim": claim}
+    scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": X, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
     assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
 

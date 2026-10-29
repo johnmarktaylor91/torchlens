@@ -3,7 +3,7 @@
 Pre-registered bar CIRC-2a (definition exactness, gating): on GPT-2 small,
 the first 8 rows of the pinned ``mib-bench/ioi`` train split kept by MIB's
 tokenisation filter (the vendored rows beside this file; clean prompt and its
-``s2_io_flip_counterfactual``), float64, ``tl.mechinterp.edge_scores`` with
+``s2_io_flip_counterfactual``), float64, ``torchlens.mechinterp.edge_scores`` with
 EAP and with EAP-IG at ``m`` in {1, 5} equals a plain-PyTorch implementation
 on the Hugging Face model (``tests/support/eap_reference.py``, run in a fresh
 interpreter that never imports torchlens) within 1e-8 relative plus 1e-10
@@ -53,7 +53,7 @@ def _ioi_batch(tokenizer, n: int):
 def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader, tmp_path) -> None:
     from support.eap_reference import edge_names, scores_in_subprocess
 
-    import torchlens as tl
+    import torchlens.mechinterp
 
     loaded = r1_loader("r1-gpt2")
     model = copy.deepcopy(loaded["model"]).to(torch.float64).eval()
@@ -78,7 +78,7 @@ def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader, tm
     assert len(want[cases[0]]) == len(edge_names(12, 12)) == 32_491
     for method, steps in cases:
         extra = {} if method == "eap" else {"steps": steps}
-        table = tl.mechinterp.edge_scores(
+        table = torchlens.mechinterp.edge_scores(
             model, clean, corrupted=corrupt, metric=logit_difference, method=method, **extra
         )
         got = {address[0]: row.score for (_t, _k, address), row in table.items()}

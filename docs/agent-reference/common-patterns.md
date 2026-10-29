@@ -246,12 +246,15 @@ assert isinstance(ablate, tl.Edit)
 # in-span component over the target's instead.
 first_token = tl.intervention.at_positions(tl.scale(0.0), [0])  # token axis 1 by default
 assert isinstance(first_token, tl.Edit)
-# tl.mechinterp.FactoredMatrix(A, B) keeps A @ B factored.
-factored = tl.mechinterp.FactoredMatrix(torch.randn(4, 2), torch.randn(2, 4))
+# Namespaces are imported, not root attributes: import torchlens.mechinterp first.
+import torchlens.mechinterp
+
+# torchlens.mechinterp.FactoredMatrix(A, B) keeps A @ B factored.
+factored = torchlens.mechinterp.FactoredMatrix(torch.randn(4, 2), torch.randn(2, 4))
 assert factored.ndim == 2 and factored.AB.shape == (4, 4)
-# On a transformer trace, tl.mechinterp.qk_circuit(trace, attention) and
-# tl.mechinterp.ov_circuit(trace, attention) return one FactoredMatrix per query head, and
-# tl.mechinterp.mlp_neuron_contributions(trace) returns per-neuron MLP rows.
+# On a transformer trace, torchlens.mechinterp.qk_circuit(trace, attention) and
+# torchlens.mechinterp.ov_circuit(trace, attention) return one FactoredMatrix per query head, and
+# torchlens.mechinterp.mlp_neuron_contributions(trace) returns per-neuron MLP rows.
 disagreement = tl.repgeom.metric_disagreement(
     {"cka": {"layer1": 0.9, "layer2": 0.4}, "rsa": {"layer1": 0.3, "layer2": 0.8}}
 )
@@ -270,8 +273,8 @@ else:
     raise AssertionError("output_style_unknown did not refuse")
 # Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
-# tl.trackers.MLflowSink and tl.trackers.CometSink (forward-watch sinks over a run or
-# experiment the user owns) and tl.tviz.render_logit_lens_heatmap(result, path)
+# torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
+# experiment the user owns) and torchlens.tviz.render_logit_lens_heatmap(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
 

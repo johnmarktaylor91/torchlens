@@ -92,6 +92,7 @@ TARGET_ALL = [
     "splice_module",
     "span",
     "steer",
+    "direction_from_pairs",
     "sweep",
     "swap_with",
     "zero_ablate",

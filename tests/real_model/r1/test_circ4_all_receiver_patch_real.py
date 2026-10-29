@@ -1,7 +1,7 @@
 """Every GPT-2 small receiver patched in one call: cost counters and plain-hook agreement.
 
 In float64 on the first two vendored MIB IOI rows (clean prompt and its
-``s2_io_flip_counterfactual``), one ``tl.mechinterp.patch_edges`` call that
+``s2_io_flip_counterfactual``), one ``torchlens.mechinterp.patch_edges`` call that
 patches every edge outside a random kept set into all 445 receivers costs
 one replay per topological stage (12 q/k/v stages, 12 MLP stages and
 ``logits``: 25), 24 graph builds and one fork, and equals the independent
@@ -31,6 +31,7 @@ def test_every_gpt2_small_receiver_in_one_call_costs_one_replay_per_stage(
     from test_circ4_fast_patch import counted_patch
 
     import torchlens as tl
+    import torchlens.mechinterp
     from real_model.r1.test_circ2_edge_scores_real import _ioi_batch
 
     loaded = r1_loader("r1-gpt2")
@@ -41,8 +42,8 @@ def test_every_gpt2_small_receiver_in_one_call_costs_one_replay_per_stage(
     clean = tl.trace(model, clean_ids, capture=capture)
     corrupt_trace = tl.trace(model, corrupt_ids, capture=capture)
     try:
-        graph = tl.mechinterp.component_graph(clean)
-        corrupt = tl.mechinterp.component_graph(corrupt_trace)
+        graph = torchlens.mechinterp.component_graph(clean)
+        corrupt = torchlens.mechinterp.component_graph(corrupt_trace)
         edges = _outside_random_circuit(graph, keep=0.05)
         receivers = len({edge.receiver.name for edge in edges})
         assert receivers == len(graph.receivers) == 445

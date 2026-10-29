@@ -1,4 +1,4 @@
-"""Edge attribution patching (``tl.mechinterp.edge_scores``): EAP and EAP-IG.
+"""Edge attribution patching (``torchlens.mechinterp.edge_scores``): EAP and EAP-IG.
 
 Pre-registered bar CIRC-2b (deterministic nonlinear fixture, float64): the
 fixture of the bars file is built as an ``nn.Module`` and scored through the
@@ -31,6 +31,7 @@ import torch
 from support.eap_fixture import CLEAN, CORRUPT, Fixture, fixture_metric
 
 import torchlens as tl
+import torchlens.mechinterp
 
 pytestmark = pytest.mark.heavy
 
@@ -94,10 +95,10 @@ def _fixture_scores(**kwargs) -> dict[str, float]:
     """Score the fixture and rename edges into the bar's vocabulary by module address."""
 
     model = Fixture().eval()
-    table = tl.mechinterp.edge_scores(
+    table = torchlens.mechinterp.edge_scores(
         model, CLEAN, corrupted=CORRUPT, metric=fixture_metric, **kwargs
     )
-    graph = tl.mechinterp.component_graph(tl.trace(model, CLEAN))
+    graph = torchlens.mechinterp.component_graph(tl.trace(model, CLEAN))
     names = {node.name: node.module_address or "input" for node in graph.nodes.values()}
     names = {key: {"embed": "input"}.get(value, value) for key, value in names.items()}
     names["logits"] = "R"
@@ -179,7 +180,7 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
     assert len(want[cases[0]]) == len(edge_names(2, 2))
     for method, steps in cases:
         extra = {} if method == "eap" else {"steps": steps}
-        table = tl.mechinterp.edge_scores(
+        table = torchlens.mechinterp.edge_scores(
             model, clean, corrupted=corrupt, metric=_logit_difference, method=method, **extra
         )
         got = {address[0]: row.score for (_t, _k, address), row in table.items()}
@@ -191,7 +192,7 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
 def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> None:
     """EDGE rows: address ``(edge name,)``, provenance sample count, scalar save and load."""
 
-    table = tl.mechinterp.edge_scores(
+    table = torchlens.mechinterp.edge_scores(
         Fixture().eval(),
         torch.tensor([[0], [0]]),
         corrupted=torch.tensor([[1], [1]]),
@@ -226,8 +227,8 @@ def test_bad_settings_refuse_typed(kwargs, code) -> None:
     """Unknown method, steps with EAP, bad steps or reduction, a non-scalar metric, shapes."""
 
     call = {"corrupted": CORRUPT, "metric": fixture_metric, **kwargs}
-    with pytest.raises(tl.mechinterp.MechInterpError) as caught:
-        tl.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
+    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+        torchlens.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
     assert caught.value.fields["code"] == code
 
 
@@ -242,9 +243,9 @@ def test_shared_norm_and_unshiftable_input_refuse_typed() -> None:
         "a0.h0<q>": SimpleNamespace(norm_address="ln", module_address="attn"),
         "m0": SimpleNamespace(norm_address="ln", module_address="mlp"),
     }
-    with pytest.raises(tl.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
         _eap._refuse_shared_norms(SimpleNamespace(receivers=receivers))
     assert caught.value.fields["code"] == "mi_edge_scores_shared_norm"
-    with pytest.raises(tl.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
         _eap._input_write_module(None, SimpleNamespace(_input_writes=()))
     assert caught.value.fields["code"] == "mi_edge_scores_input_unresolvable"

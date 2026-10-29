@@ -878,10 +878,10 @@ class TraceStatsMixin(_TraceMixinBase):
         The priority is the module's hidden-op count (its subtree's distinct
         ops minus one) over the largest hidden-op count of any module in the
         trace, rounded to 6 places; a module the renderer never collapses (the
-        root, one with at most one Layer, or one whose single child hides the
-        same ops) reads 0.0. It ranks candidates and does not depend on the
-        plan the optimizer selects (``collapse_plan()``), which may skip a
-        high-priority module. Past the pathological-input pre-gate (20x
+        root, one with at most one Layer, or the only child of a non-root module
+        that hides the same ops, whose parent ranks instead) reads 0.0. It ranks
+        candidates and does not depend on the plan the optimizer selects
+        (``collapse_plan()``), which may skip a high-priority module. Past the pathological-input pre-gate (20x
         ``COLLAPSE_OPTIMIZER_MAX_OPS`` ops) the ranking is empty.
 
         Returns
@@ -902,12 +902,9 @@ class TraceStatsMixin(_TraceMixinBase):
         scores: dict[str, float] = {}
         for module in self.modules:
             address, signal = module.address, signals[module.address]
-            children = list(getattr(module, "address_children", ()) or ())
-            only = signals.get(children[0]) if len(children) == 1 else None
-            same_child = only is not None and only.hidden_ops == signal.hidden_ops
-            # ``eligible`` covers the root and <=1-Layer gates; its single-child
-            # gate misses parents built before their child, so it is applied here.
-            ranked = signal.eligible and not same_child and largest > 0
+            # ``eligible`` carries every gate: the root, at most one Layer, and
+            # the only child that hides its non-root parent's ops (the parent ranks).
+            ranked = signal.eligible and largest > 0
             scores[address] = round(signal.hidden_ops / largest, 6) if ranked else 0.0
         return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 

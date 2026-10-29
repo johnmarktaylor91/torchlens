@@ -1,4 +1,4 @@
-"""Site-resolution cost of one ``tl.mechinterp.patch_edges`` call, as deterministic counters.
+"""Site-resolution cost of one ``torchlens.mechinterp.patch_edges`` call, as deterministic counters.
 
 One circuit patch writes each topological stage through the replay engine,
 and the engine resolves every hook's site selector against the trace. This

@@ -15,6 +15,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.bridge.hf as hf_bridge
+import torchlens.preprocessing
 
 
 class _ImageModel(nn.Module):
@@ -132,8 +133,8 @@ def test_unknown_cnn_refuses_and_names_imagenet_opt_in() -> None:
 
     assert excinfo.value.fields["code"] == "preprocessing_unresolved"
     assert excinfo.value.fields["model_type"] == "_ImageModel"
-    assert "tl.preprocessing.imagenet_default()" in str(excinfo.value)
-    assert "tl.preprocessing.attach_authority(model, weights)" in str(excinfo.value)
+    assert "torchlens.preprocessing.imagenet_default()" in str(excinfo.value)
+    assert "torchlens.preprocessing.attach_authority(model, weights)" in str(excinfo.value)
     assert excinfo.value.fields["resolution_attempt"]["resolution_method"] == "none"
 
 
@@ -144,7 +145,7 @@ def test_refusal_remedy_attach_authority_resolves_the_pil_input() -> None:
 
     torchvision = pytest.importorskip("torchvision")
     weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
-    model = tl.preprocessing.attach_authority(_ImageModel(), weights)
+    model = torchlens.preprocessing.attach_authority(_ImageModel(), weights)
 
     trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
@@ -164,7 +165,7 @@ def test_imagenet_default_opt_in_applies_and_discloses() -> None:
             _ImageModel(),
             _pil_image(),
             capture=tl.options.CaptureOptions(
-                transform=tl.preprocessing.imagenet_default(), layers_to_save="all"
+                transform=torchlens.preprocessing.imagenet_default(), layers_to_save="all"
             ),
         )
 
@@ -265,7 +266,7 @@ def test_list_of_pil_images_batches() -> None:
         _ImageModel(),
         [_pil_image(), _pil_image()],
         capture=tl.options.CaptureOptions(
-            transform=tl.preprocessing.imagenet_default(), layers_to_save="all"
+            transform=torchlens.preprocessing.imagenet_default(), layers_to_save="all"
         ),
     )
 
