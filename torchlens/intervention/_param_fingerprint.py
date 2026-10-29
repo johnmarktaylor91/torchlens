@@ -25,11 +25,11 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..backends.torch._param_fingerprint import ParamFingerprint, param_fingerprint
 from ..errors import InterventionError
 from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
+    from ..backends.torch._param_fingerprint import ParamFingerprint
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .types import LiteralTensor
@@ -108,6 +108,9 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
         when the parameter changed and the replay door did not opt in with
         ``allow_changed_params=True``.
     """
+
+    # Deferred: the backend package imports this package while it initializes.
+    from ..backends.torch._param_fingerprint import ParamFingerprint, param_fingerprint
 
     recorded = getattr(component, "capture_fingerprint", None)
     value = component.value
