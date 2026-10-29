@@ -55,7 +55,9 @@ and only if their keys are equal.
 3. **Operation**: the torch function name (`linear`, `__add__`, `tanh`).
 4. **Output slot**: which output of a multi-output op (`max` gives values and indices).
 
-Passes are numbered 1 to N in capture order, flat across nested loops.
+Passes are numbered 1 to N in capture order, flat across nested loops. Because weights are not
+part of the key, the passes of one layer can use different weights; the layer then lists every
+weight its passes used (`layer.params`), and each pass lists its own (`layer.ops[k].params`).
 
 When no Python frame sits between the module boundary and the op (a module whose `forward` is a C
 function, for example), TorchLens falls back to the op's position: the same operation type at the
@@ -105,6 +107,8 @@ passes are its versions). Inputs and outputs are always single-pass layers.
 | Root `ModuleList` loop with glue `x = x + blk(x)` | blocks separate; the glue `add` one pass per block |
 | `torch.utils.checkpoint` of one block from two lines | the block's ops 2 passes each |
 | A forward hook on a module called in a loop | hook ops one pass per call |
+| One hook on two distinct modules called from one loop line | hook ops: one layer per module |
+| A loop over a `ParameterList`: which weights does the layer list? | all of them; each pass lists its own |
 | A special first step before a loop that uses the same weight | first-step ops single; loop ops one pass per iteration |
 | A function built with `exec` and called in a loop | one pass per iteration |
 | Two separately written identical functions | separate layers |
@@ -118,9 +122,11 @@ passes are its versions). Inputs and outputs are always single-pass layers.
 - One Python instruction that makes several same-function torch calls through C code (builtin
   `sum`, `map`, `functools.reduce`, a C extension calling the torch Python API) gives passes of
   one layer, because there is no Python frame to tell the calls apart.
-- A forward hook runs outside the module's own `forward`, so its ops belong to the caller's scope.
-  A hooked module called from one loop line gives hook ops one pass per call; called from two lines,
-  two hook-op layers.
+- A forward hook (or pre-hook) runs outside the module's own `forward`, so its ops belong to the
+  caller's scope, with the hooked module as part of the place: the same hook on two distinct
+  modules gives two layers (two weight-normed layers in one `nn.Sequential` have separate
+  weight-norm layers), a hooked module called from one loop line gives hook ops one pass per call,
+  and called from two lines, two hook-op layers.
 - TorchScript modules and `torch.func` transforms are recorded as single boundary ops, keyed by
   their Python call site; TorchLens does not see inside them.
 - Capturing across concurrent Python threads, including `nn.DataParallel`, is not supported.
