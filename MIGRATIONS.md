@@ -577,3 +577,16 @@ Ops that read `flops_forward=None` (linear and convolution weights computed in `
 `nn.RNN`, `nn.GRU` and `nn.LSTM` kernels and their cells, `torch.linalg.multi_dot`, `einsum` with
 `...`, `mv`, `dot`, `vdot` and `spmm`) now carry numbers, and totals that summed over them grow; an
 executed-backward total on a model with CPU fused attention or a CPU LSTM grows by that work.
+
+## CPU peaks are opt-in: `measure_host_peak_memory` (2026-10-29, default flip)
+
+Measuring a CPU peak resets the process-wide resident high-water mark (Linux `VmHWM`),
+which also resets your own `ru_maxrss` reading and cannot be undone, so CPU captures no
+longer do it by default. `Trace.forward_peak_memory` and `Trace.backward_peak_memory` on a
+CPU capture now read `None`, and `forward_peak_memory_reason` / the new
+`backward_peak_memory_reason` say why and name the opt-in. Code that read a CPU peak passes
+`capture=tl.options.CaptureOptions(measure_host_peak_memory=True)` and gets the same numbers
+as before. The `forward_peak_memory_pair` reads `resident=None` with
+`resident_basis="not_requested"` without the opt-in. `torchlens.capture.peak_memory.RESET_HOST_PEAK`
+is removed with no alias: the option is the one switch. CUDA peaks and the MPS allocator delta
+are unchanged.

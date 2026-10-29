@@ -263,8 +263,7 @@
   `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
   the harness graph. Relation kind `fed_by` (tlspec v10): "critique fed_by draft", the later
   member's prompt contains the earlier member's output; CONTENT provenance only (a router
-  decision without a text feed is `successor_of` plus application metadata; no
-  control-dependency kind). Params exactly `token_spans` (four-int half-open rows), `basis`
+  decision without a text feed is `selected_by`). Params exactly `token_spans` (four-int half-open rows), `basis`
   (`declared`/`verified`/`matched`), `coverage`, `label` (free text, never interpreted).
   Positional `b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]])` beside the
   row form; `token_spans="auto"` finds the spans by exact token-id runs of the source's bound
@@ -280,6 +279,21 @@
   (shared prompt tokens never verify), re-checked at every door (unverifiable clamps
   to `declared`, contradicted refuses `bundle_relation_span_unverified`; out-of-range spans
   refuse `bundle_relation_span_out_of_bounds`). `fed_by` is an ordering kind for the gate.
+  Relation kind `selected_by` (tlspec v10, CONTROL): "writer selected_by router", the earlier
+  member's decision selected the later call; params closed and optional: `chosen` (one JSON
+  scalar), `candidates` (distinct JSON scalars; `chosen` must be among them), `evidence` (the
+  `successor_of` graded envelope); malformed refuses `bundle_relation_schema_invalid`; an
+  ordering kind for the walks and the gate. STEER ONE CALL AND RE-RUN: the user runs their
+  harness twice; `b.add_alternative(second_run, steered=("draft",), prefix="cf_")` pairs calls by
+  member name, refuses `alternative_target_missing` / `alternative_target_unsteered` /
+  `alternative_steer_undeclared` / `alternative_capture_position_dependent` /
+  `alternative_member_name_taken` / `alternative_unchanged_call_diverged` before any change, then
+  adds `cf_<name>` copies, `alternative_of` rows, the second run's rows and one `add` operation,
+  returning `AlternativeReport` (`calls` of `AlternativeCall`: status `steered` / `unchanged` /
+  `absorbed` / `changed` / `added` / `dropped`, first differing prompt and completion token).
+  `b.token_divergence(original, rerun)` returns `TokenDivergence` (`prompt_divergence`,
+  `completion_divergence`, `lengths`, `shared` span rows, `intervened`); unbound members refuse
+  `bundle_token_divergence_unavailable`. TorchLens never runs the harness; no `paired_rerun`.
   `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;
   `b.node(site, members=[...])` scopes the gate to a subset; `delta_map`/`norm_delta`/
   `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
@@ -469,11 +483,17 @@
   `weights=` parameter was removed -- collapse memo D9, clean-v2). These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `Trace.forward_peak_memory` is a real runtime measurement, never a portable fact. CUDA
-  reports the device peak; CPU reports the host resident high-water growth over the forward
-  (a buffer freed inside the forward counts; a forward that grew nothing reads `None` with
-  `forward_peak_memory_reason`); MPS reports the allocator delta. `backward_peak_memory` is
-  the largest peak above a pass's starting baseline (CPU: largest pass; CUDA: device
-  high-water growth), and `total_backward_memory` counts retained gradient storage once.
+  reports the device peak; MPS reports the allocator delta. CPU peaks are opt-in:
+  by default the CPU forward and backward peaks read `None`, with
+  `forward_peak_memory_reason` / `backward_peak_memory_reason` naming
+  `CaptureOptions(measure_host_peak_memory=True)`, and capture never writes the process
+  high-water mark. Under the opt-in CPU reports the host resident high-water growth over the
+  forward (a buffer freed inside the forward counts; a forward that grew nothing reads `None`
+  with a reason), and the per-bracket reset also resets the caller's own `VmHWM` and
+  `ru_maxrss`. `backward_peak_memory` is the largest peak above a pass's starting baseline
+  (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
+  retained gradient storage once. `measure_host_peak_memory` is a session-time knob
+  (`FieldPolicy.DROP`) that reruns and refreshes inherit.
   `CaptureOptions(measure_python_peak_memory=True)` additionally folds in a `tracemalloc`
   Python-allocation peak, which stays positive for tiny models. It is OFF by default because
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
@@ -561,7 +581,7 @@
   interior is fully logged with FULL verified semantics (no ceiling), interior interventions work,
   zero graph breaks / zero new compiles happen during capture (fresh shapes included), compiled
   caches stay intact with the warm artifact bitwise-reproduced afterward, and TorchLens wrapper
-  install/uninstall costs a one-time bounded burst of recompilations on the first compiled call
+  install/uninstall costs a bounded burst of recompilations on the first compiled call
   after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny GPT-2;
   verify with `tl.debug.count_compiles()`; correlate breaks with `tl.debug.graph_breaks()`). Compiled child
   `nn.Module`s are still unwrapped to their eager source in both regimes. On torch < 2.6 (or a
@@ -934,6 +954,21 @@
   Replay/push engine ONLY: rerun/set_only refuse
   `param_substitution_engine_unsupported`. The audit record (kind `PARAM`)
   discloses "substituted at consumption ... live parameters unchanged".
+- CHANGED PARAMETERS REFUSE REPLAY (spellings DOCUMENTED-UNSTABLE): a
+  replay template holds the live `nn.Parameter`, and capture records its
+  version counter, storage pointer and shape on the template literal
+  (session-only, `torchlens/intervention/_param_fingerprint.py`). Every
+  replay door (`do()` on the replay engine, `push`, `push_from`,
+  differentiable replay, later replays of every fork kind) refuses
+  `replay_param_changed_since_capture` (`ReplayPreconditionError`, fields
+  `param`/`op`/`changed`) when a consumed parameter changed since capture
+  (optimizer step, `load_state_dict`, in-place op under `no_grad`,
+  `param.data = t`). `allow_changed_params=True` on `InterventionOptions` or
+  `ReplayOptions` replays with the current values and records the names in
+  `trace.last_run["replayed_with_changed_params"]`. Not detected: in-place
+  writes through `param.data` or a numpy/raw-storage alias. A replaced
+  parameter object is never read (the template keeps the captured one).
+  The rerun engine runs the live model and ignores the option.
 - PASS-QUALIFIED REPLAY (decided 2026-08-17; refusal spelling
   DOCUMENTED-UNSTABLE): the replay/push engine operates on pass-qualified
   op labels (`Op.label`, the `label:pass` spelling — single-pass ops carry
@@ -946,7 +981,12 @@
   only the last pass — wrong values, nothing raised). The parent-edge
   divergence check compares in replay-key space (no more spurious
   `ControlFlowDivergenceWarning` on multi-pass replays; `strict=True`
-  multi-pass replay works). BOUNDARY: a bare layer label naming a
+  multi-pass replay works). A template parent ref resolves to the exact
+  recorded op first (`_final_to_raw_layer_labels`, then the pass-exact
+  `_raw_to_final_op_labels`): a fused layer's public raw label that equals
+  another op's final label no longer reads as two passes (the tiny
+  Gemma-2 norm/pattern replay); a trace without those maps still refuses
+  rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`SiteAmbiguityError`) on string/`tl.label` addressing
   (do/attach_hooks/push_from/resolve_sites), `selection_unresolvable` /
@@ -1101,7 +1141,7 @@
   against TransformerLens oracles -- `residual_accumulation` /
   `residual_decomposition` / `full_decomposition` (bitwise-closed),
   `direct_logit_contributions` (DLA), `attention_head_contributions`,
-  `head_scores` (pass `tl.mechinterp.FixedPeriodInduction` as
+  `head_scores` (pass `torchlens.mechinterp.FixedPeriodInduction` as
   `kind=FixedPeriodInduction(period=n)` to score fixed-period induction on
   repeated sequences), `patch_heads_grid` / `patch_residual_grid` (turnkey
   `PatchGrid` results), `patch_query_heads_grid` (per-query-head k/v
@@ -1113,28 +1153,28 @@
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
   planning (`retention_plan`). ~47 names; `MechInterpError` family.
-  Component edge graph: `tl.mechinterp.component_graph(trace)` returns a
-  `tl.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
+  Component edge graph: `torchlens.mechinterp.component_graph(trace)` returns a
+  `torchlens.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
   the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
   `a{L}.h{H}<q|k|v>`/`m{L}`/`logits`, edges `"s->t"`) of
-  `tl.mechinterp.ComponentNode`, `tl.mechinterp.ComponentReceiver` and
-  `tl.mechinterp.ComponentEdge` records (nodes and receivers carry `layer_index`
+  `torchlens.mechinterp.ComponentNode`, `torchlens.mechinterp.ComponentReceiver` and
+  `torchlens.mechinterp.ComponentEdge` records (nodes and receivers carry `layer_index`
   and `head`); every receiver's pre-norm input is
   checked equal to the sum of its edges' contributions in the API, and an edge
-  is an intervention selection. `tl.mechinterp.patch_edges(trace, edges, *,
+  is an intervention selection. `torchlens.mechinterp.patch_edges(trace, edges, *,
   corrupt)` patches edges into one receiver or several in one call on the
   replay engine; with several, each receiver reads its patched senders'
   corrupted values while every other sender carries its value in the patched
   forward (the MIB convention), so a circuit runs as one call.
-  Edge attribution patching: `tl.mechinterp.edge_scores(model, inputs, *,
+  Edge attribution patching: `torchlens.mechinterp.edge_scores(model, inputs, *,
   corrupted, metric, method="eap_ig", steps=None, example_reduction="mean")`
   scores every graph edge, `(s_corrupt - s_clean) . dM/d(input of t)` summed
   over positions (EAP: gradient at the clean input; EAP-IG: averaged over
   `steps` points, default 5, from the corrupted to the clean `input` node),
   one backward per point, each receiver's own gradient; returns a one-backward
   `ReadTable` of `EDGE` rows addressed `(edge name,)`.
-  `tl.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
-  log_scale=False)` (CPR) and `tl.mechinterp.circuit_model_difference(...)`
+  `torchlens.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
+  log_scale=False)` (CPR) and `torchlens.mechinterp.circuit_model_difference(...)`
   (CMD) are the MIB trapezoidal areas under `f` and `|1 - f|`.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
@@ -1310,8 +1350,9 @@
   contract with a name-to-stimulus-id sidecar; `allow_pickle=False`, object arrays
   refuse `npz_export_invalid`); `parse_bytes("8 GiB")` is the human-unit budget
   reader. `Trace.forward_peak_memory_pair` is the session-time (live, resident) peak
-  pair with the backend named -- per-capture resident scoping on Linux, so multi-capture
-  sweeps read real peaks. `tl.repgeom.rdm` gains keyword-only `metric="manhattan"`,
+  pair with the backend named. Its CPU `resident` follows `measure_host_peak_memory`:
+  under the opt-in it is scoped per capture on Linux, so multi-capture sweeps read real
+  peaks; by default it is `None` with `resident_basis="not_requested"`. `tl.repgeom.rdm` gains keyword-only `metric="manhattan"`,
   `compute_device=`, `row_chunk_size=`, `output_device=`, `dtype=`,
   `output="condensed"`, `input_kind="batched"` (the no-new-keyword call is
   bit-identical); `tl.repgeom.rdm_compare(a, b, method=)` is the DESCRIPTIVE
@@ -1337,7 +1378,7 @@
   recipe never anchors `verified`); a PIL image whose model resolves no authority
   refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
   silently; its explicit opt-in is
-  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
+  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `tl.trace(transform=)` capture whose transform IS a recognized authority (the object
@@ -1553,13 +1594,13 @@
 - Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
   input_kwargs=None, *, claim, target=None, corrupted=None, metric=None, edges=None, k=5,
   ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
-  `tl.attribution.SiteTarget`) at its hidden site, a `tl.mechinterp.direct_logit_contributions`
+  `tl.attribution.SiteTarget`) at its hidden site, a `torchlens.mechinterp.direct_logit_contributions`
   table (each component's whole site ablated, the logit read from the unembedding head after a
   native-logit check; leave `target=` out; the constant row is reported apart in
   `extra["constant_row"]`), or a `tl.attribution.read` table of `activation_x_grad` `ACT` rows
   (each site or element ablated, `target=` the same `tl.attribution.seed(...)`), or a
-  `tl.mechinterp.edge_scores` table of `EDGE` rows (each edge patched alone with
-  `tl.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
+  `torchlens.mechinterp.edge_scores` table of `EDGE` rows (each edge patched alone with
+  `torchlens.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
   scored with, `edges=` audits a subset; every set is patched in one call, into one receiver or
   several, and replays from its per-receiver pairs): each unit ablated (or patched) alone (one
   `torchlens.experiment.site_sweep` member per unit where one edit serves every unit), then the

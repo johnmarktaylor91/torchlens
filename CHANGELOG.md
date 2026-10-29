@@ -5,6 +5,42 @@
 
 ### Behavior changes
 
+- **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
+  in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
+  the import. Import the subpackage (`import torchlens.mechinterp`) and call
+  `torchlens.mechinterp.edge_scores(...)`. The other root namespace rows added during this
+  release cycle (`checks`, `conformance`, `differential`, `ecosystem`, `experiment`, `features`,
+  `inventory`, `kernel_telemetry`, `observe`, `preprocessing`, `quickstart`, the four
+  `selection_*`, `snoop`, `trace_slice`, `trackers`) are gone too; import them the same way.
+  A subpackage already imported (by you or by TorchLens itself) still resolves as `tl.<name>`.
+- **visualization**: when a module's only child hides exactly the module's operations, the
+  module (the name you wrote) is the collapse box and the child is not; a chain of such
+  wrappers keeps the outermost. `Module.collapse_score` and `Trace.module_collapse_order` read
+  0.0 for that child and rank the parent. Auto-collapse renders box `@blocks.1` rather than
+  `@blocks.1.net` for a block wrapping one `Sequential`, and parallel branches that each wrap
+  one `Sequential` fold into one repeated box again.
+
+- **replay**: replay refuses `replay_param_changed_since_capture` when a parameter the replay
+  reads changed after capture (an optimizer step, `load_state_dict`, an in-place op under
+  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine, `push`, `push_from`,
+  differentiable replay and later replays of every fork. Before, it silently computed with the
+  new weight. Re-capture, or pass `allow_changed_params=True` (`InterventionOptions` or
+  `ReplayOptions`) to replay with the current values; the run lists the parameters in
+  `trace.last_run["replayed_with_changed_params"]`. An in-place write through `param.data` is
+  still not detected.
+- **memory**: CPU peaks are opt-in. A default capture no
+  longer resets the process-wide resident high-water mark, so it leaves a caller's own `VmHWM`
+  and `ru_maxrss` readings alone; in exchange the CPU `Trace.forward_peak_memory` and
+  `Trace.backward_peak_memory` read `None`, with `forward_peak_memory_reason` and the new
+  `backward_peak_memory_reason` naming the opt-in, and the forward peak pair reads
+  `resident=None`, `resident_basis="not_requested"`. Pass
+  `CaptureOptions(measure_host_peak_memory=True)` to measure them as before (reruns and
+  refreshes of that trace inherit it). CUDA peaks and the MPS allocator delta are unchanged.
+  The module switch `torchlens.capture.peak_memory.RESET_HOST_PEAK` is removed.
+- **docs and warnings**: the torch.compile coexistence wording drops "one-time": TorchLens's
+  wrapper install/uninstall costs a bounded burst of recompilations on the first compiled call
+  after each capture, then steady state (README, the compile-stance warning, the compat report
+  row, `tl.debug.count_compiles`, debug and limitations pages).
 - **attribution**: layer-method results carry one more `extra` key, `integer_input_layers`, and
   the uncoded float-input refusal is replaced by the coded `attribution_input_not_float`.
 - **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
@@ -64,6 +100,26 @@
   steady-state model.
 
 ### Features
+
+- **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
+  root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
+  names.
+
+- **bundle**: harness bundles gain the `selected_by` control relation kind (tlspec 10, no
+  version bump): `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])`
+  records that a router's or judge's decision selected a later call without its text entering
+  that call's prompt. Optional params `chosen`, `candidates` and `evidence`; it orders members for
+  `upstream`/`downstream` and the comparison gate, and replaces the documented
+  `successor_of`-plus-metadata workaround. Readers older than tlspec 10 refuse the kind.
+- **bundle**: steer one call and re-run your harness. `b.add_alternative(second_run,
+  steered=("draft",))` merges a re-run of your own harness as `cf_<name>` members with
+  `alternative_of` rows and returns an `AlternativeReport` saying per call whether it was steered
+  and whether its prompt and output changed, from which token; it refuses a missing, unsteered,
+  position-dependent or undeclared steer, a taken name, and an unsteered call that saw the same
+  prompt but wrote different text (`alternative_*` codes). `b.token_divergence(original, rerun)`
+  returns a `TokenDivergence` with the first differing prompt and completion positions and the
+  stretches both runs share (`bundle_token_divergence_unavailable` without a bound completion
+  range). Documented-unstable; recipe in `docs/reference/harness_bundles.md`.
 
 - **attribution**: the layer methods (`layer_attribution`, `layer_integrated_gradients`,
   `layer_conductance`, `grad_cam`) accept integer inputs such as token ids: the input path starts at
@@ -136,11 +192,11 @@
   tokens, per layer and position), returning `tl.stats.TrajectoryStats`;
   `torchlens.semantic.logit_lens_predictions(..., mask_input=True)` bans the input's own tokens
   before its reductions.
-- **mechinterp**: `tl.mechinterp.component_graph(trace)`: the circuit-discovery component graph
+- **mechinterp**: `torchlens.mechinterp.component_graph(trace)`: the circuit-discovery component graph
   (MIB/EAP-IG vocabulary: `input`, per-head `a{L}.h{H}`, per-layer attention output bias `b{L}`,
   `m{L}`; receivers `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`), with every receiver's pre-norm input
   checked equal to the sum of its edges' contributions; edges are intervention selections, and
-  `tl.mechinterp.patch_edges(trace, edges, *, corrupt)` patches the edges into one receiver on the
+  `torchlens.mechinterp.patch_edges(trace, edges, *, corrupt)` patches the edges into one receiver on the
   replay engine. Documented unstable.
 - **semantic**: GPT-NeoX (Pythia) attention recipe: per-head `q`, `k`, `v`, `result` and
   `attn_out` facets from the fused `query_key_value` projection.
@@ -156,11 +212,11 @@
   `randomization_test` now refuses when no layer with parameters runs during the method call instead
   of returning an empty result.
 - **attribution**: `tl.attribution.causal_audit` now also audits direct-logit-attribution tables
-  from `tl.mechinterp.direct_logit_contributions` (each component's whole site is ablated and the
+  from `torchlens.mechinterp.direct_logit_contributions` (each component's whole site is ablated and the
   same logit quantity is read from the unembedding head, after a check that the model reproduces the
   table's native logits; the constant row is reported apart) and one-backward read tables from
   `tl.attribution.read` (each activation-times-gradient site or element is ablated and the seeded
-  target measured; `EDGE` rows refuse and point to `tl.mechinterp.patch_edges`). Its `target=` is
+  target measured; `EDGE` rows refuse and point to `torchlens.mechinterp.patch_edges`). Its `target=` is
   now optional (left out for a direct-logit table), and every audit row names its `site` and
   `component`.
 - **intervention**: `tl.intervention.keep_grad(edit)` warns `keep_grad_replay_frontier` once per
@@ -172,12 +228,12 @@
   learned rotation (DAS, ReFT) is applied as `tl.subspace(site, R[:k], origin=...)`. Load refuses
   `subspace_spec_invalid`, `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
   New field `BasisProvenance.source_dtype`. Fire records of such edits name `subspace_edit`.
-- **mechinterp**: `tl.mechinterp.edge_scores(model, inputs, *, corrupted, metric, method="eap_ig",
+- **mechinterp**: `torchlens.mechinterp.edge_scores(model, inputs, *, corrupted, metric, method="eap_ig",
   steps=None, example_reduction="mean")`: edge attribution patching over the component graph (EAP,
   and EAP-IG with a left Riemann sum over the input embedding), one capture and one backward per
   evaluation point, each receiver's own gradient (q, k and v per head); returns a one-backward
-  `ReadTable` of `EDGE` rows addressed by edge name. `tl.mechinterp.circuit_performance_ratio` and
-  `tl.mechinterp.circuit_model_difference`: the MIB circuit track's CPR and CMD areas over a
+  `ReadTable` of `EDGE` rows addressed by edge name. `torchlens.mechinterp.circuit_performance_ratio` and
+  `torchlens.mechinterp.circuit_model_difference`: the MIB circuit track's CPR and CMD areas over a
   faithfulness curve. Documented unstable.
 - **bridge**: `tl.bridge.sae.write_sae_dashboard(latents, tokens, path=...)` and
   `tl.bridge.sae.write_delphi(latents, tokens, site=..., model_name=..., directory=...)` write SAE
@@ -189,7 +245,7 @@
   two traces (`docs/recipes/sae_crosscoder_diff.md`); Prisma CLIP SAEs
   (`docs/recipes/prisma_clip_sae.md`); latent export (`docs/recipes/sae_latent_export.md`).
 - **attribution**: `tl.attribution.causal_audit` now also audits EDGE tables from
-  `tl.mechinterp.edge_scores`: each edge is patched alone with `tl.mechinterp.patch_edges` (the
+  `torchlens.mechinterp.edge_scores`: each edge is patched alone with `torchlens.mechinterp.patch_edges` (the
   sender's value from the corrupted run) and the metric's change `M(patched) - M(clean)` is compared
   with the edge's score, with rank agreement and top-k, bottom-k and random-k sets (sets whose edges
   enter several receivers are listed in `extra["sets_not_measured"]`). New keyword-only arguments
@@ -217,10 +273,10 @@
   models), native PyTorch through a capture-free binding.
 - **docs**: a CLIP-Dissect network dissection recipe (`docs/recipes/dissection.md`) built on
   `tl.extract_dataset` and `tl.stats.TopK`, with the paper's soft-WPMI score.
-- **mechinterp**: `tl.mechinterp.patch_edges` patches edges into several receivers in one call (the
+- **mechinterp**: `torchlens.mechinterp.patch_edges` patches edges into several receivers in one call (the
   MIB circuit-track convention: each patched receiver sees its patched senders' corrupted values
   while every other sender carries its value in the patched forward), so a circuit runs as one call;
-  `tl.mechinterp.head_scores(..., kind=tl.mechinterp.FixedPeriodInduction(period=n))` scores
+  `torchlens.mechinterp.head_scores(..., kind=torchlens.mechinterp.FixedPeriodInduction(period=n))` scores
   fixed-period induction on repeated sequences; recipe page `docs/recipes/acdc_ioi.md` (ACDC as a
   driver loop over edge substitution and the experiment ledger). Documented unstable.
 - **bundle**: `Bundle.measure_members(order="chain")` orders members by the bundle's validated
@@ -313,6 +369,10 @@
 
 ### Bug Fixes
 
+- **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
+  that layer" when a fused multi-pass layer's public raw label equals another op's final label
+  (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the
+  capture recorded. No label, pass count or grouping changes.
 - **validation**: a warning filter no longer changes a `validate_forward_pass` verdict. Under a
   filter that turns TorchLens warnings into errors, a stateful model's re-trace warning
   (`TraceNotReproducibleWarning`) was caught as "re-trace unavailable" and validation returned
@@ -353,7 +413,7 @@
   gradient edits through `intervene=` then gave wrong parameter gradients, and with two captures
   in one backward or a `create_graph=True` second-order backward the pass went unobserved
   (`backward_status` read `grad_enabled_unobserved`). torch 2.13 was not affected.
-- **mechinterp**: `tl.mechinterp.retention_plan(trace, "head_scores")` (and `"heads"`) now plans
+- **mechinterp**: `torchlens.mechinterp.retention_plan(trace, "head_scores")` (and `"heads"`) now plans
   the attention interiors from a structure-only first capture (`layers_to_save="none"`), which
   before planned nothing, and `"head_scores"` also plans the model inputs whose token ids the
   masks compare, so `save=plan.predicate` gives a capture `head_scores` can read. `head_scores` on
@@ -414,6 +474,14 @@
   models (the hop walk keeps its pending steps on an explicit stack; results unchanged).
 - **validation**: an eval-mode batch_norm whose input equals its running mean exactly no longer
   reports running_var as a dead edge; exact value proof, no tolerance
+- **validation**: seven more exact value proofs, each read from saved values with no tolerance,
+  stop replay validation from reporting a dead edge where the parent provably cannot reach the
+  output: scaled_dot_product_attention with an all-zero value (query or key perturbed) or a single
+  key (query or key perturbed); einsum with another operand all zero; scatter_reduce with
+  `include_self=False` and every destination position written; an output with no elements;
+  grid_sampler of an all-zero input (grid perturbed) and convolution of an all-zero input (weight
+  perturbed, output equal to the bias); bool `or` against an all-True operand and `pow` with a
+  base of exactly 1.
 - **benchmarks**: the memory pass frees collectable garbage before reading its baselines, so a
   collection inside the measured call can no longer make the phase-local peak read 0.0.
 - **capture**: an augmented slice assignment (`x[idx] += v` and the other in-place operators)
@@ -513,7 +581,7 @@
   sweep, a fork made right after a rerun makes about 420,000 Python calls instead of about 1.25
   million.
 - **mechinterp**: Circuit patching resolves the replay engine's hook sites through one label index
-  per replay and builds the replay cone's key set once, so one `tl.mechinterp.patch_edges` call into
+  per replay and builds the replay cone's key set once, so one `torchlens.mechinterp.patch_edges` call into
   every GPT-2 small receiver makes 14 times fewer selector evaluations and about 4 times fewer
   Python calls, with bit-identical results.
 - **capture**: Incremental `LiveIndex` updates for re-seen labels. A multi-pass `Recorder`, a
@@ -537,7 +605,7 @@
 - **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
   `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
   only while you still use one.
-- **mechinterp**: tl.mechinterp.head_scores scores attention patterns in their own dtype when
+- **mechinterp**: torchlens.mechinterp.head_scores scores attention patterns in their own dtype when
   float32 or wider; float64 traces previously had their patterns cast to float32, so their scores
   now carry full float64 precision.
 - **rerun**: After a rerun, the refreshed trace's replay templates hold the live parameters, as the
@@ -545,7 +613,7 @@
   later pushes on a rerun fork the same way it affects the source.
 - **attribution**: `tl.attribution.causal_audit` now measures every top-k, bottom-k and random-k set
   of an EDGE table, including sets whose edges enter several receivers, by patching the set in one
-  `tl.mechinterp.patch_edges` call; such sets were previously listed in
+  `torchlens.mechinterp.patch_edges` call; such sets were previously listed in
   `extra["sets_not_measured"]`, which is now empty. A set's `intervention` holds one `(selection,
   value)` pair per receiver, read from the fork that measured it. Documented unstable.
 - **attribution**: `tl.attribution.causal_audit` measures the single-unit rows of a layer
