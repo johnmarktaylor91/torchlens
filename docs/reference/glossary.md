@@ -715,7 +715,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
   range or the ids are missing; an unknown name raises `KeyError`.
 
-**TokenDivergence** *(`torchlens.bundle.TokenDivergence`; spelling documented-unstable)*
+**TokenDivergence** *(`from torchlens.bundle import TokenDivergence`; spelling documented-unstable)*
 : The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
   `prompt_divergence`: the first prompt position whose ids differ (the shorter prompt's length when
   one extends the other; `None` when equal). `completion_divergence`: the same for the completions,
@@ -741,13 +741,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   run's own relation rows are copied onto the copies, and one `add` operation records the statuses.
   A failure while merging restores the bundle. TorchLens never runs your harness.
 
-**AlternativeReport** *(`torchlens.bundle.AlternativeReport`; spelling documented-unstable)*
+**AlternativeReport** *(`from torchlens.bundle import AlternativeReport`; spelling documented-unstable)*
 : The frozen result of `Bundle.add_alternative`: `prefix`, `steered` (the declared calls), `calls`
   (one `AlternativeCall` per call of either run, the original's order first), `uncopied_rows` (the
   second run's rows of unknown namespaced kinds, not copied) and `table()`, a fixed-width text
   table with one line per call.
 
-**AlternativeCall** *(`torchlens.bundle.AlternativeCall`; spelling documented-unstable)*
+**AlternativeCall** *(`from torchlens.bundle import AlternativeCall`; spelling documented-unstable)*
 : One call of an `AlternativeReport`: `call` (the original member name), `member` (its copy,
   `None` when dropped), `status`, and `prompt_divergence` / `completion_divergence` as on
   `TokenDivergence` (`None` for unpaired calls). Statuses: `steered` (declared in `steered=`),
