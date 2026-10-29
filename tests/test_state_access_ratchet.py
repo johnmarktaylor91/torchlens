@@ -87,7 +87,12 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 # with and without a capture. A function-call accessor would tax every wrapped
 # torch call of every native forward; the module-entry and hook sites route
 # through the public `_state.note_fingerprint_token` instead.
-_ACCESS_SITE_BASELINE = 291
+# 291 -> 292 (2026-10-28, foreign-kernel boundary): backends/torch/
+# _function_boundary.py reads `_state._completeness_witness_mode` once to
+# pause logging around its boundary-op emit only under the shadow census,
+# the same gate wrappers.py:496 keeps for the torch.func boundary; there is
+# no accessor for the witness mode, so the raw single-field load stays.
+_ACCESS_SITE_BASELINE = 292
 
 
 def _state_access_sites() -> list[tuple[str, int]]:

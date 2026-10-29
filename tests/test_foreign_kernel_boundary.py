@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import warnings
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -30,8 +31,6 @@ from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
 from torchlens.validation.diagnostics import CHECK_COMPLETENESS
-
-np = pytest.importorskip("numpy")
 
 
 class _NumpyDoubleFunction(torch.autograd.Function):
