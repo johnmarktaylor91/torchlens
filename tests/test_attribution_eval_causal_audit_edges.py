@@ -352,6 +352,7 @@ def test_edge_audit_leaves_the_caller_model_and_random_state_untouched() -> None
 def _scope(model: Any, claim: Any, **names: Any) -> dict[str, Any]:
     return {
         "tl": tl,
+        "torchlens": torchlens,
         "model": model,
         "x": CLEAN,
         "claim": claim,
