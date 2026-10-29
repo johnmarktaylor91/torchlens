@@ -24,12 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._legend import (
-    LEGEND_NODE_NAME,
-    drawn_legend_roles,
-    legend_table_lines_for_rank_path,
-    theme_role_sections,
-)
+from torchlens.visualization._header_block import KEY_TABLE_ID, key_swatches
+from torchlens.visualization._legend import LEGEND_NODE_NAME, drawn_legend_roles
 from torchlens.visualization._render_utils import strip_path_directories
 from torchlens.visualization.lenses.audit import palette_distinguishability
 from torchlens.visualization.themes import THEME_PRESETS, _contrast_ratio
@@ -120,10 +116,25 @@ def _node_lines(dot: str) -> list[str]:
 
 
 def _legend_rows(dot: str) -> list[str]:
-    """Return the role rows of the one legend table, in order."""
+    """Return the key's entries, in order (the key rides in the header label)."""
 
-    legend = next(line for line in dot.splitlines() if line.strip().startswith(LEGEND_NODE_NAME))
-    return re.findall(r"<FONT [^>]*>([^<]+)</FONT></TD></TR>", legend)
+    label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
+    if f'ID="{KEY_TABLE_ID}"' not in label:
+        return []
+    key = label[label.index(f'ID="{KEY_TABLE_ID}"') :]
+    return re.findall(r"<FONT [^>]*>([^<]+)</FONT></TD>", key)
+
+
+def _fills(skin: str) -> tuple[str, str]:
+    """Return the plain-op fill and the key's buffer fill under ``skin``."""
+
+    from torchlens.visualization.node_spec import NodeSpec
+    from torchlens.visualization.themes import apply_theme_to_spec
+
+    theme = THEME_PRESETS[skin]
+    plain = str(apply_theme_to_spec(NodeSpec(["x"], fillcolor="white"), theme).fillcolor)
+    buffer = next(s.fill for s in key_swatches(theme, frozenset({"buffer"}), has_module=False))
+    return plain, buffer
 
 
 def test_dark_skin_edges_and_edge_labels_follow_the_skin(tmp_path: Path) -> None:
@@ -180,7 +191,7 @@ def test_dark_skin_node_text_is_readable_on_every_fill(tmp_path: Path) -> None:
 
 
 def test_legend_lists_only_the_roles_drawn(tmp_path: Path) -> None:
-    """A Linear+ReLU graph has inputs, outputs, a parameterized op and a plain op only."""
+    """A Linear+ReLU graph keys input, output, both weight grays and the module box."""
 
     dot = _draw(
         nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
@@ -189,11 +200,17 @@ def test_legend_lists_only_the_roles_drawn(tmp_path: Path) -> None:
         "drawn_roles",
         show_legend=True,
     )
-    assert _legend_rows(dot) == ["input", "output", "plain op", "parameterized"]
+    assert _legend_rows(dot) == [
+        "input",
+        "output",
+        "trainable weights",
+        "frozen weights",
+        "module",
+    ]
 
 
 def test_legend_buffer_row_appears_with_a_drawn_buffer(tmp_path: Path) -> None:
-    """A drawn buffer brings its row; the row carries its shape hint."""
+    """A drawn buffer brings its entry, drawn as a cylinder."""
 
     dot = _draw(
         _Stateful(),
@@ -204,8 +221,9 @@ def test_legend_buffer_row_appears_with_a_drawn_buffer(tmp_path: Path) -> None:
         show_buffer_layers="always",
     )
     rows = _legend_rows(dot)
-    assert "buffer (cylinder)" in rows
-    assert "parameterized" not in rows and "boolean" not in rows
+    assert "buffer" in rows
+    assert "trainable weights" not in rows and "true/false test" not in rows
+    assert "key-cylinder-" in dot
 
 
 def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) -> None:
@@ -232,18 +250,14 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
         vis_outpath=str(tmp_path / "edited"),
         show_legend=True,
     )
-    assert "intervention/cone (outline)" in _legend_rows(str(edited))
+    assert "intervention/cone" in _legend_rows(str(edited))
 
 
 @pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
 def test_plain_op_row_and_buffer_fill_are_distinguishable(skin: str) -> None:
-    """Every skin keys plain ops, and its buffer fill differs from them under CVD."""
+    """Every skin's buffer fill differs from its plain-op fill under CVD."""
 
-    theme = THEME_PRESETS[skin]
-    rows = {row.text: row for row in theme_role_sections(theme)[0].rows}
-    assert "plain op" in rows
-    plain, buffer = rows["plain op"].swatch_fill, rows["buffer"].swatch_fill
-    assert plain is not None and buffer is not None
+    plain, buffer = _fills(skin)
     findings = palette_distinguishability({"plain op": plain, "buffer": buffer})
     assert len(findings) == 4
     assert all(finding.passed for finding in findings), [f.detail for f in findings]
@@ -253,8 +267,7 @@ def test_plain_op_row_and_buffer_fill_are_distinguishable(skin: str) -> None:
 def test_buffer_nodes_are_painted_with_the_legend_buffer_fill(skin: str, tmp_path: Path) -> None:
     """The drawn buffer's fill is the buffer swatch, never the plain-op fill."""
 
-    theme = THEME_PRESETS[skin]
-    rows = {row.text: row for row in theme_role_sections(theme)[0].rows}
+    plain, buffer = _fills(skin)
     dot = _draw(
         _Stateful(),
         torch.randn(1, 3),
@@ -266,8 +279,8 @@ def test_buffer_nodes_are_painted_with_the_legend_buffer_fill(skin: str, tmp_pat
     cylinders = [line for line in _node_lines(dot) if "shape=cylinder" in line]
     assert cylinders
     for line in cylinders:
-        assert _attr_values(line, "fillcolor") == [rows["buffer"].swatch_fill]
-        assert _attr_values(line, "fillcolor") != [rows["plain op"].swatch_fill]
+        assert _attr_values(line, "fillcolor") == [buffer]
+        assert _attr_values(line, "fillcolor") != [plain]
 
 
 def test_drawn_roles_ignore_layout_helpers_and_collapsed_boxes() -> None:
@@ -285,17 +298,13 @@ def test_drawn_roles_ignore_layout_helpers_and_collapsed_boxes() -> None:
     assert roles == frozenset()
 
 
-def test_rank_path_legend_lists_only_the_roles_drawn() -> None:
-    """The rank engine's pinned legend uses the same gate as the dot path."""
+def test_key_lists_only_the_roles_drawn() -> None:
+    """A picture of plain ops only has nothing to key: plain ops get no entry."""
 
     theme = THEME_PRESETS["torchlens"]
-    lines = legend_table_lines_for_rank_path(
-        theme, 100.0, node_attrs=[{"shape": "oval", "fillcolor": "white"}]
-    )
-    assert len(lines) == 1
-    assert ">plain op<" in lines[0]
-    assert ">input<" not in lines[0] and ">boolean<" not in lines[0]
-    assert legend_table_lines_for_rank_path(theme, 100.0, node_attrs=[]) == []
+    plain_only = drawn_legend_roles([{"shape": "oval", "fillcolor": "white"}], theme)
+    assert key_swatches(theme, plain_only, has_module=False) == ()
+    assert key_swatches(theme, frozenset(), has_module=False) == ()
 
 
 def test_strip_path_directories_keeps_file_and_line() -> None:

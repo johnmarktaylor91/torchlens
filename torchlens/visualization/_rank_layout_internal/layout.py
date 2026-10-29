@@ -19,7 +19,7 @@ from ..._errors import InvalidArgumentError
 from ...utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
 from .._render_common import GraphvizRenderError, GraphvizUnavailableError
-from .._render_utils import _open_file_quietly, compute_module_penwidth
+from .._render_utils import _open_file_quietly, cluster_caption_attrs, compute_module_penwidth
 from .._typography import DEFAULT_TYPOGRAPHY
 from ..code_panel import _code_panel_label
 from ..render_execution import atomic_render_target, is_raster_format, surface_layout_stderr
@@ -519,14 +519,12 @@ def render_rank_layout(
     rankdir: str,
     code_panel_source: str | None = None,
     *,
-    show_legend: bool = False,
     theme: Any = None,
     dpi: int | None = None,
     graph_overrides: dict[str, str] | None = None,
     execution_record: dict[str, str] | None = None,
     overlay_nodes: Sequence[tuple[str | None, Mapping[str, Any]]] = (),
     overlay_edges: Sequence[Mapping[str, Any]] = (),
-    legend_mutated_parameter: bool = False,
 ) -> str:
     """Render a graph with the pure-Python rank layout.
 
@@ -546,12 +544,11 @@ def render_rank_layout(
         vis_outpath: Output file path (without extension).
         vis_fileformat: Output format (pdf, png, svg, etc.).
         vis_save_only: If True, don't open viewer.
-        graph_caption: HTML label for the graph title.
+        graph_caption: HTML label for the graph title (the header, with the
+            key under it when one is shown, as on the dot path).
         rankdir: Graphviz rank direction (BT, TB, LR).
         code_panel_source: Optional source code to embed as a graph cluster.
-        show_legend: If True, emit the compact colorblind-safe legend cluster
-            (parity with the dot path, which was previously dropped here).
-        theme: Resolved visualization theme; used only for the legend styling.
+        theme: Resolved visualization theme (page colour and typography).
         dpi: Optional Graphviz output DPI, applied as a graph attribute.
         graph_overrides: Resolved (string-valued) graph-attribute overrides,
             applied last so they win, matching the dot path.
@@ -562,8 +559,6 @@ def render_rank_layout(
             ``(module_region_key | None, node_args)`` (see
             ``_rank_overlay_entries``).
         overlay_edges: Edge arguments for the synthesized nodes.
-        legend_mutated_parameter: Whether the legend lists the mutated
-            Parameter row (the render drew one).
 
     Returns:
         The generated DOT source string.
@@ -755,6 +750,8 @@ def render_rank_layout(
         mod_attrs["style"] = "filled,solid" if module_has_ancestor.get(mod_key) else "filled,dashed"
         mod_attrs["penwidth"] = f"{compute_module_penwidth(depth, max_nest):.1f}"
         mod_attrs.pop("margin", None)
+        # neato -n places cluster captions in page coordinates (no rankdir flip).
+        mod_attrs.update(cluster_caption_attrs())
 
         # r-b6 R19-2: pass-qualified lookup — each pass cluster gets ITS OWN
         # bbox instead of whichever pass's geometry happened to write last.
@@ -843,21 +840,6 @@ def render_rank_layout(
         head = _dot_id(edge_data.pop("head_name"))
         parts = [f"{k}={_dot_quote(str(v))}" for k, v in edge_data.items()]
         lines.append(f"  {tail} -> {head} [{' '.join(parts)}]")
-
-    # The legend was historically dropped on the rank path; it now emits the
-    # SAME one-table form as the dot path (vizmech item 13), pinned so
-    # ``neato -n`` places it deterministically.
-    if show_legend:
-        from .._legend import legend_table_lines_for_rank_path
-
-        lines.extend(
-            legend_table_lines_for_rank_path(
-                theme,
-                max_y,
-                mutated_parameter=legend_mutated_parameter,
-                node_attrs=[entry["attrs"] for entry in node_data.values()],
-            )
-        )
 
     lines.append("}")
     dot_source = "\n".join(lines)

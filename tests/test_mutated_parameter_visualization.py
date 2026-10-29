@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.visualization.themes import resolve_theme
 
-#: Parameter fills as the DEFAULT skin renders them (Okabe-Ito since R2-29).
+#: Parameter fills as the DEFAULT skin renders them.
 TRAINABLE_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_trainable"]
 FROZEN_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_frozen"]
 
@@ -364,11 +364,11 @@ def test_legend_lists_mutated_parameter_only_when_drawn(tmp_path: Path) -> None:
         mutated.cleanup()
         plain.cleanup()
 
-    assert "mutated parameter (cylinder)" in mutated_dot
+    assert ">mutated parameter<" in mutated_dot
     assert "mutated parameter" not in plain_dot
     # The buffer row is gated the same way: present exactly when a buffer is drawn.
     for dot in (mutated_dot, plain_dot):
-        assert ("buffer (cylinder)" in dot) == _draws_buffer_node(dot)
+        assert (">buffer<" in dot) == _draws_buffer_node(dot)
 
 
 def _draws_buffer_node(dot: str) -> bool:
@@ -377,7 +377,7 @@ def _draws_buffer_node(dot: str) -> bool:
     return any(
         "shape=cylinder" in line and '"#E69F00"' in line
         for line in dot.splitlines()
-        if not line.strip().startswith("tl_legend")
+        if not line.strip().startswith("graph [")
     )
 
 
@@ -562,7 +562,7 @@ def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> 
     assert "pos=" in line  # positioned for neato -n like every rank node
     assert f"{param_node} [" in _cluster_body(dot, "cluster_inner_pass1")
     assert (param_node, clamp) in _edges(dot)
-    assert "mutated parameter (cylinder)" in dot
+    assert ">mutated parameter<" in dot
     assert "mutated parameter" not in plain_dot
     assert "mutatedparam_" not in plain_dot
 

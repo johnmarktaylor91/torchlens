@@ -1070,8 +1070,7 @@ def finalize_forward_regions(
     overrides:
         Resolved visualization overrides.
     rankdir:
-        Graphviz rank direction; enables member-geometry caption placement
-        (vizmech item 15). ``None`` keeps the geometry-free defaults.
+        Graphviz rank direction, so module captions land top left on the page.
     theme:
         Resolved skin; module and container boxes take its ink
         (``_theme_cluster_attrs``) under any user module overrides.
@@ -1122,27 +1121,14 @@ def finalize_forward_regions(
     # collection scans, i.e. quadratic time on module-rich models.
     region_keys = set(module_payloads)
     region_nodes: defaultdict[str, list[str]] = defaultdict(list)
-    region_subtree_nodes: defaultdict[str, list[str]] = defaultdict(list)
     for node in render_ir.nodes:
         region_keys.update(node.region_path)
         if node.region_path:
             region_nodes[node.region_path[-1]].append(node.name)
-        for path_key in node.region_path:
-            region_subtree_nodes[path_key].append(node.name)
     region_edge_indexes: defaultdict[str, list[int]] = defaultdict(list)
     for index, edge in enumerate(edges):
         if edge.owner_cluster is not None:
             region_edge_indexes[edge.owner_cluster].append(index)
-    # Caption-placement geometry works on the EMITTED endpoint names (the
-    # captured tail/head names), never the pre-replacement unit ids -- the
-    # two spaces differ (pass suffixes), and a name mismatch silently
-    # degrades every caption decision to the geometry-free default.
-    emitted_edge_endpoints = tuple(
-        (edge.tail_name or edge.source_unit, edge.head_name or edge.target_unit) for edge in edges
-    )
-    node_depths = (
-        _node_flow_depths(render_ir, emitted_edge_endpoints) if rankdir is not None else {}
-    )
     module_children, top_modules = _region_module_hierarchy(trace, vis_mode)
     max_depth = _get_max_call_depth(top_modules, module_payloads, module_children)
     call_depths = _region_call_depths(top_modules, module_children)
@@ -1159,14 +1145,6 @@ def finalize_forward_regions(
         # other. ``payload_names`` reproduces exactly that scope.
         payload_names = set(node_names)
         node_names += tuple(name for name in region_nodes.get(key, ()) if name not in payload_names)
-        caption_end, caption_pierced = _region_caption_plan(
-            direct_names=node_names,
-            # The DIRECT set is what is DRAWN inside this cluster (pruned leaf
-            # child modules hoist their nodes into the parent's payload).
-            subtree_names=tuple(region_subtree_nodes.get(key, ())) + node_names,
-            node_depths=node_depths,
-            edge_endpoints=emitted_edge_endpoints,
-        )
         attrs = make_module_cluster_attrs(
             title=label,
             module_type=module.class_name,
@@ -1174,8 +1152,6 @@ def finalize_forward_regions(
             penwidth=compute_module_penwidth(
                 call_depths.get(key, _module_depth(key) - 1), max_depth
             ),
-            caption_end=caption_end,
-            caption_pierced=caption_pierced,
             rankdir=rankdir,
         )
         attrs.update(cluster_ink)
@@ -1199,6 +1175,7 @@ def finalize_forward_regions(
             line_style="dotted",
             penwidth=1.0,
             fillcolor="white",
+            rankdir=rankdir,
         )
         attrs.update(cluster_ink)
         owner = str(container.owner_key)
@@ -1226,99 +1203,6 @@ def _region_display_label(trace: Trace, module: Any, key: str, address: str, vis
     if vis_mode == "rolled" and getattr(module, "num_calls", 1) > 1:
         return f"{address} (x{module.num_calls}{_collapsed_module_rolling_suffix(trace, address)})"
     return address
-
-
-def _node_flow_depths(
-    render_ir: RenderIR, edge_endpoints: tuple[tuple[str, str], ...]
-) -> dict[str, int]:
-    """Return a BFS flow depth per node name over the emitted dataflow edges.
-
-    A cheap emit-time stand-in for the layout ranks dot will compute: enough
-    to tell whether a cluster's direct members sit at its entry or exit end
-    (vizmech item 15). ``edge_endpoints`` are the EMITTED tail/head names
-    (unit ids differ from node names on pass-suffixed graphs). Cycles are
-    handled by the visited guard; unreached nodes default to depth 0.
-    """
-
-    children: defaultdict[str, list[str]] = defaultdict(list)
-    in_degree: defaultdict[str, int] = defaultdict(int)
-    names = {node.name for node in render_ir.nodes}
-    for source, target in edge_endpoints:
-        if source in names and target in names:
-            children[source].append(target)
-            in_degree[target] += 1
-    depths: dict[str, int] = {}
-    frontier = deque(sorted(name for name in names if in_degree[name] == 0))
-    for name in frontier:
-        depths[name] = 0
-    while frontier:
-        current = frontier.popleft()
-        for child in children[current]:
-            if child not in depths:
-                depths[child] = depths[current] + 1
-                frontier.append(child)
-    return depths
-
-
-def _region_caption_plan(
-    *,
-    direct_names: Any,
-    subtree_names: Any,
-    node_depths: dict[str, int],
-    edge_endpoints: tuple[tuple[str, str], ...],
-) -> tuple[str | None, bool]:
-    """Plan a cluster caption: which flow end, and is that end pierced.
-
-    Two forces (vizmech item 15 + the widened audit's finding):
-
-    - FINDABILITY: the caption belongs at the end where the cluster's DIRECT
-      members sit (the measured defect was captions up to 1121.9 pt from
-      anything they name).
-    - LEGIBILITY: boundary-crossing edge splines pierce the border near the
-      end their inside endpoint occupies; a caption centered on a pierced
-      end gets struck through (found by the widened audit on the first axis
-      sweep). The end with FEWER crossings wins ties against the member end,
-      and a pierced choice is reported so the caller can justify the caption
-      into the corner instead of the spline channel.
-
-    Returns ``(end, pierced)`` where ``end`` is ``"entry"``/``"exit"``/
-    ``None`` (no usable geometry) and ``pierced`` says whether the chosen
-    end has any crossing edges.
-    """
-
-    if not node_depths:
-        return None, False
-    direct_depths = [node_depths[name] for name in direct_names if name in node_depths]
-    subtree = {name for name in subtree_names if name in node_depths}
-    subtree_depths = [node_depths[name] for name in subtree]
-    if not subtree_depths:
-        return None, False
-    if not direct_depths:
-        # A region whose own direct set is empty (its ops live in pruned
-        # leaf child regions that never render as clusters) effectively
-        # DRAWS its whole subtree directly; the subtree distribution is the
-        # honest member geometry.
-        direct_depths = subtree_depths
-    low, high = min(subtree_depths), max(subtree_depths)
-    if high == low:
-        return None, False
-    midpoint = (low + high) / 2.0
-    mean_direct = sum(direct_depths) / len(direct_depths)
-    member_end = "entry" if mean_direct <= midpoint else "exit"
-
-    crossings = {"entry": 0, "exit": 0}
-    for source, target in edge_endpoints:
-        source_in = source in subtree
-        target_in = target in subtree
-        if source_in == target_in:
-            continue
-        inside = source if source_in else target
-        inside_depth = node_depths.get(inside, low)
-        crossings["entry" if inside_depth <= midpoint else "exit"] += 1
-
-    other_end = "exit" if member_end == "entry" else "entry"
-    chosen = other_end if crossings[other_end] < crossings[member_end] else member_end
-    return chosen, crossings[chosen] > 0
 
 
 def _module_depth(key: str) -> int:

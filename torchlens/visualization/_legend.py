@@ -1,24 +1,15 @@
-"""One compact legend table in a dedicated rank (vizmech item 13, D28).
+"""Legend helpers: drawn-role detection and the one compact legend table.
 
-The historical legend was six DISCONNECTED Graphviz nodes in a cluster. dot
-packs disconnected components side by side, so the strip (839 x 77 pt on the
-memo's resnet50 depth-1 measurement) drove the page from 366 pt to 1048 pt
-wide -- 2.86x -- while the collision audit scored the render CLEAN (the
-two-oracles worked example, memo D2). The channel disclosure legend had the
-same disconnected-nodes form.
+The forward picture's key is drawn by ``_header_block`` inside the header
+label (JMT, 29 Oct 2026: header, then key, then graph, all top left); this
+module still detects which roles a picture drew, builds the channel
+disclosure and backward-key sections, and emits the backward key's table.
 
-This module renders every legend as ONE HTML-table plaintext node:
-
-- rows carry a color swatch cell (the REAL rendered fill, resolved through
-  ``apply_theme_to_spec`` -- the legend must show what was painted, never an
-  aspirational palette hex) plus a text cell;
-- the node is placed in a DEDICATED RANK (``rank=sink``) and tied into the
-  main component with an invisible non-constraint edge when an anchor node is
-  known, so it stops being a disconnected component dot packs BESIDE the
-  model;
-- the theme role legend, the channel (AUTO) disclosure legend, and the
-  backward-vocabulary key (vizmech item 17, D30) are SECTIONS of the same
-  table, so a render never carries two competing legend topologies.
+The backward key is ONE HTML-table plaintext node (vizmech item 13, D28;
+the older six disconnected nodes were packed beside the model and drove a
+366 pt page to 1048 pt): rows carry the rendered fill as a swatch plus a
+text cell, and the node sits in a dedicated ``rank=sink`` group tied into the
+main component with an invisible non-constraint edge.
 
 The bounded legend-to-content ratio is enforced by the usability-envelope
 oracle (``_geometry_audit``), not at build time. Spellings here are
@@ -48,9 +39,7 @@ __all__ = [
     "build_legend_table_label",
     "drawn_legend_roles",
     "encoding_sections",
-    "legend_table_lines_for_rank_path",
     "statement_node_attrs",
-    "theme_role_sections",
 ]
 
 #: The one legend node name. Tests and the audit key on this marker.
@@ -190,98 +179,6 @@ def drawn_legend_roles(
             if fill in role_fills and not (role == "plain op" and shape == "box3d"):
                 roles.add(role)
     return frozenset(roles)
-
-
-def theme_role_sections(
-    theme: VisualizationTheme,
-    *,
-    mutated_parameter: bool = False,
-    drawn: frozenset[str] | None = None,
-) -> tuple[LegendSection, ...]:
-    """Build the node-role legend section from the RENDERED specs.
-
-    The swatches resolve through the same ``NodeSpec`` + ``apply_theme_to_spec``
-    path the graph nodes use, so the legend shows the colors actually painted
-    (the dark theme remaps parameterized fills, for example) -- never the
-    aspirational palette hexes.
-
-    Parameters
-    ----------
-    theme:
-        Resolved theme.
-    mutated_parameter:
-        Whether the render drew a mutated-Parameter source node. Its row is
-        gated on that, like the backward key's rows: a row for a node kind the
-        render does not draw would be an unexplained claim, and plain renders
-        keep their legend unchanged.
-    drawn:
-        Roles the render drew (``drawn_legend_roles``). Every other row is
-        left out for the same reason; ``None`` lists every role.
-
-    Returns
-    -------
-    tuple[LegendSection, ...]
-        The one role section, or nothing when no listed role was drawn.
-    """
-
-    from ._render_common import (
-        BOOL_NODE_COLOR,
-        BUFFER_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-    from .node_spec import INTERVENTION_SITE_COLOR, NodeSpec
-    from .themes import apply_theme_to_spec
-
-    role_specs = (
-        ("input", NodeSpec(["input"], shape="oval", fillcolor=INPUT_COLOR), None),
-        ("output", NodeSpec(["output"], shape="oval", fillcolor=OUTPUT_COLOR), None),
-        ("plain op", NodeSpec(["plain op"], shape="oval", fillcolor=DEFAULT_BG_COLOR), None),
-        (
-            "parameterized",
-            NodeSpec(["parameterized"], shape="oval", fillcolor=TRAINABLE_PARAMS_BG_COLOR),
-            None,
-        ),
-        ("buffer", NodeSpec(["buffer"], shape="cylinder", fillcolor=BUFFER_NODE_COLOR), "cylinder"),
-        (
-            "mutated parameter",
-            NodeSpec(["mutated parameter"], shape="cylinder", fillcolor=TRAINABLE_PARAMS_BG_COLOR),
-            "cylinder",
-        ),
-        ("boolean", NodeSpec(["boolean"], shape="oval", fillcolor=BOOL_NODE_COLOR), None),
-        (
-            # Sites and cone members are marked by their OUTLINE, so the
-            # swatch is a plain-op fill inside the site outline.
-            "intervention/cone",
-            NodeSpec(
-                ["intervention/cone"],
-                shape="oval",
-                fillcolor=DEFAULT_BG_COLOR,
-                color=INTERVENTION_SITE_COLOR,
-            ),
-            "outline",
-        ),
-    )
-    rows = []
-    for text, spec, hint in role_specs:
-        if text == "mutated parameter" and not mutated_parameter:
-            continue
-        if drawn is not None and text not in drawn and text != "mutated parameter":
-            continue
-        themed = apply_theme_to_spec(spec, theme)
-        rows.append(
-            LegendRow(
-                text=text,
-                swatch_fill=str(themed.fillcolor),
-                swatch_border=str(themed.color),
-                hint=hint,
-            )
-        )
-    if not rows:
-        return ()
-    return (LegendSection(title="TorchLens legend", rows=tuple(rows)),)
 
 
 def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
@@ -428,34 +325,3 @@ def add_legend_table_to_graphviz(
         )
     if anchor is not None:
         dot.edge(anchor, LEGEND_NODE_NAME, style="invis", constraint="false", arrowhead="none")
-
-
-def legend_table_lines_for_rank_path(
-    theme: Any,
-    max_y: float,
-    *,
-    mutated_parameter: bool = False,
-    node_attrs: Iterable[Mapping[str, Any]] | None = None,
-) -> list[str]:
-    """Return raw-DOT lines for the rank path's pinned legend table.
-
-    The rank path builds DOT text directly (no ``graphviz.Digraph``), and
-    ``neato -n`` needs every node positioned, so the one table node is pinned
-    left of the graph origin like the historical pinned cluster -- but as ONE
-    compact node instead of six. ``mutated_parameter`` adds the gated
-    ``mutated parameter`` row exactly as on the dot path; ``node_attrs`` (the
-    drawn nodes' attributes) keeps only the roles drawn, as on the dot path.
-    """
-
-    from .themes import THEME_PRESETS
-
-    resolved = theme if theme is not None else THEME_PRESETS["torchlens"]
-    drawn = None if node_attrs is None else drawn_legend_roles(node_attrs, resolved)
-    sections = theme_role_sections(resolved, mutated_parameter=mutated_parameter, drawn=drawn)
-    if not sections:
-        return []
-    label = build_legend_table_label(sections, resolved)
-    return [
-        f"  {LEGEND_NODE_NAME} [label={label} shape=plaintext margin=0 "
-        f'fontname="{resolved.typography.family}" pos="-200.0,{max(max_y - 40.0, 40.0):.1f}!"]'
-    ]

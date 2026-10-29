@@ -244,11 +244,10 @@ def test_m7_rank_engine_emits_legend(tmp_path):
         vis_node_placement="rank",
         show_legend=True,
     )
-    # One-table legend (vizmech 13): a single pinned plaintext node.
-    assert "tl_legend" in src
-    assert "TorchLens legend" in src
+    # The key rides in the header label, as on the dot path; no legend node.
+    assert 'ID="tl_key"' in src
+    assert "tl_legend" not in src
     svg = (tmp_path / "m7rank.svg").read_text()
-    assert "TorchLens legend" in svg
     assert ">input<" in svg and ">output<" in svg
 
 
@@ -261,7 +260,7 @@ def test_m7_rank_engine_no_legend_by_default(tmp_path):
         vis_node_placement="rank",
         show_legend=False,
     )
-    assert "tl_legend" not in src
+    assert "tl_legend" not in src and "tl_key" not in src
 
 
 # ---------------------------------------------------------------------------

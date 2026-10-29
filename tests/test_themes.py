@@ -27,7 +27,7 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
         show_legend=True,
     )
 
-    assert "TorchLens legend" in dot
+    assert 'ID="tl_key"' in dot  # the key under the header
     assert (tmp_path / f"{theme}.svg").exists()
 
 

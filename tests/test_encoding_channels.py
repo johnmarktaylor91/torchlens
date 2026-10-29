@@ -342,23 +342,24 @@ def test_auto_large_graph_forces_dot_with_notice(
 def test_legend_auto_with_channel_emits_channel_only(mlp_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(mlp_log, tmp_path, color_by="bytes")
     assert "TorchLens encoding" in dot
-    assert "TorchLens legend" not in dot  # channel-only, not the role legend
+    assert 'ID="tl_key"' not in dot  # channel-only, not the role key
     assert "linear min-max" in dot
     assert "color_by: bytes" in dot
 
 
 def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
     # color_by="bytes" repaints every node, inputs and outputs included, so no
-    # role fill is drawn and the role section lists nothing: the one table
-    # carries the encoding section alone.
+    # role fill is drawn and the key lists no input or output: the header
+    # block carries the encoding section and only the marks still drawn.
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
-    drawn = "\n".join(line for line in dot.splitlines() if "tl_legend" not in line)
-    assert '"#009E73"' not in drawn and '"#D55E00"' not in drawn  # no input/output role fill
-    assert "TorchLens legend" not in dot
-    assert "TorchLens encoding" in dot
-    # One-table form (vizmech 13): sections of the one legend node, never two
-    # competing legend topologies.
-    assert dot.count("tl_legend [label=") == 1
+    label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
+    drawn = "\n".join(line for line in dot.splitlines() if not line.strip().startswith("graph ["))
+    assert '"#98FB98"' not in drawn and '"#ff9999"' not in drawn  # no input/output role fill
+    assert ">input<" not in label and ">output<" not in label
+    assert "TorchLens encoding" in label
+    # One block: the key and the channel section share the header label;
+    # there is no second legend topology.
+    assert "tl_legend" not in dot
     assert dot.count("TorchLens encoding") == 1
 
 
@@ -367,13 +368,14 @@ def test_legend_false_honored_even_with_channel(mlp_log: tl.Trace, tmp_path: Pat
 
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=False)
     assert "tl_legend" not in dot
+    assert "TorchLens encoding" not in dot and "tl_key" not in dot
 
 
 def test_legend_true_without_channel_keeps_todays_meaning(
     mlp_log: tl.Trace, tmp_path: Path
 ) -> None:
     dot = _draw(mlp_log, tmp_path, show_legend=True)
-    assert "TorchLens legend" in dot
+    assert 'ID="tl_key"' in dot
     assert "TorchLens encoding" not in dot
 
 

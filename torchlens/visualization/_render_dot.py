@@ -41,8 +41,6 @@ from ._render_utils import (
     DEFAULT_DRAW_STEM,
     announce_written_graph,
     collision_safe_outpath,
-    html_escape,
-    strip_path_directories,
 )
 from ._svg_compose import (
     _inline_svg_file_local_images,
@@ -405,136 +403,13 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
     return resolve_pattern_request(fold_patterns)
 
 
-def _params_caption_detail(trace: "Trace") -> str:
-    """Return the caption's parameter-count line for one trace.
-
-    Returns
-    -------
-    str
-        Human-readable parameter summary (count, trainable split, memory).
-    """
-
-    if trace.num_params == 0:
-        return "0 params"
-    if trace.num_params_frozen == 0:
-        return f"{trace.num_params} params (all trainable, {trace.total_param_memory})"
-    if trace.num_params_trainable == 0:
-        return f"{trace.num_params} params (all frozen, {trace.total_param_memory})"
-    return (
-        f"{trace.num_params} params "
-        f"({trace.num_params_trainable}/{trace.num_params} trainable, "
-        f"{trace.total_param_memory})"
-    )
-
-
-def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
-    """Assemble the caption body: stats, honesty banner, and disclosures.
-
-    Returns
-    -------
-    str
-        HTML-like caption body without the outer FONT wrapper.
-    """
-
-    caption_body = (
-        f"<B>{html_escape(trace.model_class_name)}</B>"
-        f"<br align='left'/>{trace.num_tensors} tensors total ({trace.total_activation_memory})"
-        f"<br align='left'/>{_params_caption_detail(trace)}<br align='left'/>"
-    )
-    if getattr(trace, "_has_direct_writes", False):
-        caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
-    # an unverified capture, or an episode capture must not RENDER clean --
-    # the graph is a publishable artifact, so the caption carries the facts.
-    from .._capture_honesty import honesty_banner_lines
-
-    # The picture keeps a cited source location's file name and line only.
-    for banner_line in honesty_banner_lines(trace):
-        banner_text = html_escape(strip_path_directories(banner_line))
-        caption_body += f"<B>{banner_text}</B><br align='left'/>"
-    encoding_state = getattr(request, "encoding", None)
-    if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
-        # Stacking disclosure is part of the contract (memo 4.1): the
-        # rendered output captions which annotation produced the columns.
-        caption_body += (
-            f"stacked by: {html_escape(encoding_state.stack_spec.display_name)}<br align='left'/>"
-        )
-    # No silent floor (collapse memo D4): a floor-fallback plan renders with a
-    # VISIBLE notice, never as if the optimizer had chosen it.
-    collapse_result = getattr(request.collapse_fn, "_torchlens_v2_result", None)
-    if collapse_result is not None and getattr(collapse_result, "planner", "") == "floor_fallback":
-        floor_note = (
-            f"collapse fell back to the floor plan ({collapse_result.visible_count} nodes visible)"
-        )
-        if getattr(collapse_result, "k_cap_exhausted", False):
-            floor_note += f" -- root owns {collapse_result.root_own_units} units, above K_CAP"
-        caption_body += f"<B>{html_escape(floor_note)}</B><br align='left'/>"
-    if getattr(request.collapse_fn, "_torchlens_overview_reason", None) is not None:
-        caption_body += (
-            "<B>collapse overview: top-level modules only (trace past the smart-collapse "
-            "ceiling); see the expansion manifest</B><br align='left'/>"
-        )
-    reuse_note = _module_reuse_note(trace, request)
-    if reuse_note is not None:
-        caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
-    return caption_body
-
-
-def _module_reuse_note(trace: "Trace", request: ResolvedRenderRequest) -> str | None:
-    """Disclose module reuse on an unrolled overview, never switching modes (collapse 5).
-
-    The collapse panel ratified "disclose, don't switch" for weight-shared
-    models: the default ``vis_mode`` stays, and an overview render (a smart
-    collapse mode) says how many modules ran more than once and that rolled
-    mode draws the loop. Nested modules of a reused module are not counted
-    again.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    request:
-        Resolved request (its ``vis_mode`` and ``collapse`` gate the note).
-
-    Returns
-    -------
-    str | None
-        The note, or ``None`` when the render is rolled, not an overview, or
-        no module ran more than once.
-    """
-
-    overview = request.collapse in ("auto", "max") or (
-        isinstance(request.collapse, float) and request.collapse > 0.0
-    )
-    if request.vis_mode != "unrolled" or not overview:
-        return None
-    reused = {
-        str(module.address): int(module.num_calls)
-        for module in trace.modules
-        if str(getattr(module, "address", "")) not in ("", "self")
-        and int(getattr(module, "num_calls", 1) or 1) > 1
-    }
-    outermost = {
-        address: calls
-        for address, calls in reused.items()
-        if not any(address.startswith(f"{other}.") for other in reused)
-    }
-    if not outermost:
-        return None
-    count = len(outermost)
-    calls = sum(outermost.values())
-    noun = "module" if count == 1 else "modules"
-    return (
-        f"this model reuses {count} {noun} across {calls} calls; vis_mode='rolled' shows the loop"
-    )
-
-
 def _build_graphviz_shell(
     trace: "Trace",
     request: ResolvedRenderRequest,
     target: RenderTarget,
     theme: VisualizationTheme,
     rankdir: str,
+    node_universe: "NodeUniverse",
 ) -> tuple[str, graphviz.Digraph]:
     """Build the caption and configured Graphviz graph shell.
 
@@ -544,7 +419,10 @@ def _build_graphviz_shell(
         Graph caption and configured empty Graphviz graph.
     """
 
-    caption_body = _graph_caption_body(trace, request)
+    from ._header_block import drawn_count_line, graph_caption_body
+
+    count_line = drawn_count_line(trace, node_universe, request.vis_mode)
+    caption_body = graph_caption_body(trace, count_line, request)
     graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
 
     dot = graphviz.Digraph(
@@ -669,7 +547,9 @@ def _resolve_forward_context(
         f"Rendering {request.vis_mode} graph ({num_nodes} nodes, format={target.fileformat})",
     )
     _vprint(trace, f"Layout engine: {engine} (estimated cost={layout_cost})")
-    graph_caption, dot = _build_graphviz_shell(trace, request, target, theme, rankdir)
+    graph_caption, dot = _build_graphviz_shell(
+        trace, request, target, theme, rankdir, node_universe
+    )
     return _ForwardRenderContext(
         request=request,
         target=target,
@@ -947,6 +827,54 @@ def _finalize_forward_ir(
     return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
 
 
+def _forward_header_label(
+    trace: "Trace",
+    context: _ForwardRenderContext,
+    forward_render_ir: "RenderIR",
+    mutated_parameter: bool,
+) -> str | None:
+    """Return the graph label with the key under the header, or ``None`` for no key.
+
+    Legend visibility rule (L5 channel core): ``show_legend`` is tri-state
+    (None = AUTO: the channel disclosure only, when a channel is active;
+    explicit False is honoured and the docs state the encoding is then
+    undisclosed). The key sits inside the header label so the two stay
+    together in the top-left corner on every engine. A label set through
+    ``vis_graph_overrides`` (or a lens caption) stays the header.
+    """
+
+    from ._header_block import (
+        caption_from_label,
+        drawn_module_marks,
+        header_block_label,
+        key_swatches,
+    )
+    from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
+
+    request = context.request
+    swatches: tuple[Any, ...] = ()
+    if request.show_legend is True:
+        node_attrs = list(statement_node_attrs(forward_render_ir.dot_statements))
+        swatches = key_swatches(
+            context.theme,
+            drawn_legend_roles(node_attrs, context.theme),
+            has_module=drawn_module_marks(node_attrs, bool(forward_render_ir.regions)),
+            mutated_parameter=mutated_parameter,
+        )
+    sections: tuple[LegendSection, ...] = ()
+    if request.encoding is not None and request.show_legend is not False:
+        sections = encoding_sections(request.encoding)
+    if not swatches and not sections:
+        return None
+    caption = context.graph_caption
+    override = cast(VisualizationOverrides, request.overrides).graph.get("label")  # type: ignore[union-attr]
+    if override is not None:
+        caption = caption_from_label(
+            str(override(trace) if callable(override) else override), context.theme
+        )
+    return header_block_label(caption, swatches, sections, context.theme)
+
+
 def _emit_and_finish_forward(
     trace: "Trace",
     context: _ForwardRenderContext,
@@ -964,6 +892,9 @@ def _emit_and_finish_forward(
     request = context.request
     target = context.target
     overrides = cast(VisualizationOverrides, request.overrides)
+    keyed_label = _forward_header_label(
+        trace, context, forward_render_ir, bool(work.mutated_parameter_nodes)
+    )
     if context.engine == "rank":
         from ._rank_layout_internal.layout import render_rank_layout
         from ._rank_segments import project_segments_for_rank
@@ -974,6 +905,9 @@ def _emit_and_finish_forward(
             key: str(val(trace)) if callable(val) else str(val)
             for key, val in overrides.graph.items()  # type: ignore[union-attr]
         }
+        if keyed_label is not None:
+            # The keyed block already carries any label override as its header.
+            resolved_graph_overrides.pop("label", None)
         rank_visualizer_dir = getattr(trace, "_visualizer_dir", None)
         if rank_visualizer_dir and "imagepath" not in resolved_graph_overrides:
             # r-b6 R19-6: one-attribute image root for the rank engine. T9
@@ -992,13 +926,9 @@ def _emit_and_finish_forward(
                 target.outpath,
                 target.fileformat,
                 target.save_only,
-                context.graph_caption,
+                keyed_label if keyed_label is not None else context.graph_caption,
                 context.rankdir,
                 context.source_text,
-                # Tri-state None = AUTO resolves to no legend on the rank
-                # backend (channels are never active here -- the 2.1 fence
-                # forces dot or refuses before this point).
-                show_legend=bool(request.show_legend),
                 theme=context.theme,
                 dpi=request.dpi,
                 graph_overrides=resolved_graph_overrides,
@@ -1014,7 +944,6 @@ def _emit_and_finish_forward(
                     for emission in work.mutated_parameter_nodes
                     for _, edge_args in emission.edges
                 ],
-                legend_mutated_parameter=bool(work.mutated_parameter_nodes),
             )
         trace._last_render_geometry = build_render_geometry_record(
             engine=rank_execution.get("engine", "neato"),
@@ -1047,36 +976,8 @@ def _emit_and_finish_forward(
         )
     if request.show_orphans:
         _add_orphan_island_nodes(trace, dot, request.vis_mode, context.theme)
-    # Legend visibility rule (L5 channel core): show_legend is tri-state
-    # (None = AUTO: channel-only disclosure legend iff a channel is active).
-    # Both legends render as SECTIONS of one compact HTML table in a
-    # dedicated rank (vizmech item 13, D28): the historical six disconnected
-    # nodes were packed BESIDE the model by dot and drove a 366-pt page to
-    # 1048 pt while the collision audit scored the render clean.
-    from ._legend import (
-        LegendSection,
-        add_legend_table_to_graphviz,
-        drawn_legend_roles,
-        encoding_sections,
-        statement_node_attrs,
-        theme_role_sections,
-    )
-
-    legend_sections: tuple[LegendSection, ...] = ()
-    if request.show_legend is True:
-        drawn = drawn_legend_roles(
-            statement_node_attrs(forward_render_ir.dot_statements), context.theme
-        )
-        legend_sections += theme_role_sections(
-            context.theme, mutated_parameter=bool(work.mutated_parameter_nodes), drawn=drawn
-        )
-    if request.encoding is not None and request.show_legend is not False:
-        # None (AUTO) or True with an active channel -> disclosure section;
-        # explicit False is honored (a deliberate act; the docs state the
-        # encoding is then undisclosed).
-        legend_sections += encoding_sections(request.encoding)
-    legend_anchor = forward_render_ir.nodes[-1].name if forward_render_ir.nodes else None
-    add_legend_table_to_graphviz(dot, context.theme, legend_sections, anchor=legend_anchor)
+    if keyed_label is not None:
+        dot.graph_attr["label"] = keyed_label
     compose_code_panel = context.source_text is not None and _code_panel_composition_available(
         target.fileformat, context.engine
     )
