@@ -140,7 +140,7 @@ def _version_of(tensor: torch.Tensor) -> int | None:
 def _make_replay_callable(function: Any, original_call: Callable[..., Any]) -> Callable[..., Any]:
     """Build the boundary op's callable: the same scripted function, called again."""
 
-    from ._transform_metadata import _set_transform_metadata
+    from .wrappers import _set_transform_metadata
 
     def jitscript(*call_args: Any, **call_kwargs: Any) -> Any:
         """Call the scripted function through the unwrapped ``__call__``."""

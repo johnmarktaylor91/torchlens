@@ -62,6 +62,7 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
@@ -81,12 +82,6 @@ from ._tl import (
     mark_tensor_data_alias,
     propagate_detached_saved_activation,
     set_tensor_label,
-)
-from ._transform_metadata import (
-    _callable_code_location,
-    _set_transform_metadata,
-    _transform_builder_config,
-    _transform_tags,
 )
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from .aliasing import _tensors_alias
@@ -257,6 +252,140 @@ DIRECT_TRANSFORM_SITES: tuple[tuple[str, str, str, str], ...] = (
     ("torch.autograd.functional", "vhp", "autograd.vhp", "autogradvhp"),
 )
 """Torch autograd.functional direct-call transform entry points."""
+
+
+def _transform_tags(callable_obj: Callable[..., Any]) -> tuple[str, ...]:
+    """Return TorchLens transform tags carried by a callable.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable or partial to inspect.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Transform tags, outermost first, or an empty tuple when unavailable.
+    """
+
+    tags = getattr(callable_obj, "__tl_transform_tags__", ())
+    if tags:
+        return tuple(tags)
+    if isinstance(callable_obj, partial):
+        return _transform_tags(callable_obj.func)
+    return ()
+
+
+def _callable_code_location(callable_obj: Callable[..., Any]) -> str | None:
+    """Return a best-effort code-location fingerprint for a callable.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable, partial, or bound method to inspect.
+
+    Returns
+    -------
+    str | None
+        ``filename:firstlineno`` when available.
+    """
+
+    target = callable_obj
+    if isinstance(target, partial):
+        target = target.func
+    target = getattr(target, "__func__", target)
+    code = getattr(target, "__code__", None)
+    if code is None:
+        return None
+    return f"{code.co_filename}:{code.co_firstlineno}"
+
+
+def _transform_builder_config(
+    transform_kind: str,
+    builder_args: tuple[Any, ...],
+    builder_kwargs: dict[str, Any],
+    inner_fn: Callable[..., Any],
+) -> dict[str, Any]:
+    """Build serializable metadata for a transform builder invocation.
+
+    Parameters
+    ----------
+    transform_kind:
+        Transform kind being built.
+    builder_args:
+        Positional builder arguments after the inner function.
+    builder_kwargs:
+        Keyword builder arguments.
+    inner_fn:
+        User callable being transformed.
+
+    Returns
+    -------
+    dict[str, Any]
+        Best-effort transform configuration.
+    """
+
+    config = dict(builder_kwargs)
+    if transform_kind == "vmap":
+        if builder_args:
+            config.setdefault("in_dims", builder_args[0])
+        if len(builder_args) > 1:
+            config.setdefault("out_dims", builder_args[1])
+        config.setdefault("in_dims", 0)
+        config.setdefault("out_dims", 0)
+    elif transform_kind == "grad":
+        if builder_args:
+            config.setdefault("argnums", builder_args[0])
+        config.setdefault("argnums", 0)
+    code_location = _callable_code_location(inner_fn)
+    if code_location is not None:
+        config["fn_code_location"] = code_location
+    return config
+
+
+def _set_transform_metadata(
+    callable_obj: Callable[..., Any],
+    *,
+    transform_kind: str,
+    tags: tuple[str, ...],
+    transform_config: dict[str, Any],
+    inner_fn: Callable[..., Any],
+) -> None:
+    """Attach TorchLens transform metadata to a callable when possible.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable receiving metadata.
+    transform_kind:
+        Unsanitized transform kind.
+    tags:
+        Transform chain tags.
+    transform_config:
+        Captured transform configuration.
+    inner_fn:
+        User function being transformed.
+
+    Returns
+    -------
+    None
+        Metadata is attached best-effort.
+    """
+
+    metadata = {
+        "__tl_is_transform_boundary__": True,
+        "__tl_transform_tags__": tags,
+        "__tl_transform_kind__": transform_kind,
+        "__tl_transform_config__": transform_config,
+        "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
+        "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
+        "__tl_transform_fn_source__": _callable_source_location(inner_fn),
+    }
+    for name, value in metadata.items():
+        try:
+            setattr(callable_obj, name, value)
+        except (AttributeError, TypeError):
+            pass
 
 
 def transform_builder_decorator(

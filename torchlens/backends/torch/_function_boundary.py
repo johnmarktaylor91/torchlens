@@ -303,7 +303,7 @@ def _make_replay_callable(
 ) -> Callable[..., Any]:
     """Build the boundary op's callable: the Function's own ``apply``."""
 
-    from ._transform_metadata import _set_transform_metadata
+    from .wrappers import _set_transform_metadata
 
     def autogradfunction(*call_args: Any, **call_kwargs: Any) -> Any:
         """Run the Function through its original ``apply`` (the boundary's interior)."""
