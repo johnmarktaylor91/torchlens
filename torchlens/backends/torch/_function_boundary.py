@@ -11,9 +11,11 @@ returned tensors its outputs, and its callable runs the Function's own ``apply``
 again so forward replay and perturbation validate through it.
 
 Detection is dynamic and never changes an ordinary Function: the forward runs with
-logging on, exactly as today, and the call collapses only when a host re-entry op
-(``from_numpy`` / ``from_dlpack`` / ``frombuffer``, or a parentless ``as_tensor`` /
-``asarray``) was logged inside its dynamic extent. The interior op events stay in
+logging on, exactly as today, and the call collapses only when its tensors actually
+left torch inside its dynamic extent: a zero-copy export (``numpy`` / ``__array__`` /
+``__dlpack__`` / ``to_dlpack``, the DGL write-through shape included) or a host
+re-entry op (``from_numpy`` / ``from_dlpack`` / ``frombuffer``, or a parentless
+``as_tensor`` / ``asarray``). The interior op events stay in
 the append-only journal; their raw labels are removed in postprocess step 3
 (``postprocess.graph_traversal._remove_foreign_kernel_interiors``) and their aten
 dispatches, including an unowned one such as ``to_dlpack``'s ``as_strided``, are
@@ -61,8 +63,90 @@ HOST_ENTRY_FUNC_NAMES = frozenset({"from_numpy", "from_dlpack", "frombuffer"})
 PARENTLESS_HOST_ENTRY_FUNC_NAMES = frozenset({"as_tensor", "asarray"})
 """Constructors that build from host memory only when no captured tensor is an argument."""
 
+EXPORT_FUNC_NAMES = frozenset({"numpy", "__array__", "__dlpack__", "to_dlpack"})
+"""Zero-copy exports that hand a tensor's memory to the host (numpy / dlpack).
+
+``numpy`` and ``__array__`` are wrapped-but-unlogged torch functions and report through
+``note_function_export`` from the wrapper; ``Tensor.__dlpack__`` and the module-level
+``to_dlpack`` are not wrapped by TorchLens and are patched here. DGL's SpMM allocates its
+output in torch and lets its C kernel write through a ``to_dlpack`` export, so the export
+alone (no re-entry constructor) must count as leaving torch.
+"""
+
+_FRAMES: list[set[str]] = []
+"""Export names seen inside each live ``Function.apply`` frame, innermost last."""
+
+_MODULE_EXPORT_SITES: tuple[tuple[Any, str], ...] = (
+    (torch.utils.dlpack, "to_dlpack"),
+    (torch, "to_dlpack"),
+)
+_PATCHED_EXPORTS: list[tuple[Any, str, Any, Any]] = []
+
 _INSTALLED_APPLY: classmethod[Any, Any, Any] | None = None
 _ORIGINAL_APPLY: classmethod[Any, Any, Any] | None = None
+
+
+def note_function_export(name: str) -> None:
+    """Record a numpy / dlpack export made inside the innermost live ``apply`` frame.
+
+    Parameters
+    ----------
+    name:
+        Export spelling (``numpy``, ``__array__``, ``__dlpack__``, ``to_dlpack``).
+    """
+
+    if _FRAMES:
+        _FRAMES[-1].add(name)
+
+
+def _make_export_wrapper(original: Callable[..., Any], name: str) -> Callable[..., Any]:
+    """Wrap an unwrapped export entry point so a Function frame learns about it."""
+
+    @functools.wraps(original)
+    def export_wrapper(*args: Any, **kwargs: Any) -> Any:
+        """Note the export for the live frame, then call through unchanged."""
+
+        if _FRAMES:
+            _FRAMES[-1].add(name)
+        return original(*args, **kwargs)
+
+    return export_wrapper
+
+
+def _install_export_patches() -> None:
+    """Patch ``Tensor.__dlpack__`` and the module-level ``to_dlpack`` spellings."""
+
+    if _PATCHED_EXPORTS:
+        return
+    sites: list[tuple[Any, str]] = [(torch.Tensor, "__dlpack__"), *_MODULE_EXPORT_SITES]
+    for owner, attr_name in sites:
+        original = (
+            owner.__dict__.get(attr_name)
+            if owner is torch.Tensor
+            else getattr(owner, attr_name, None)
+        )
+        if original is None or not callable(original):
+            continue
+        patched = _make_export_wrapper(original, attr_name)
+        try:
+            setattr(owner, attr_name, patched)
+        except (AttributeError, TypeError):
+            continue
+        _PATCHED_EXPORTS.append((owner, attr_name, patched, original))
+
+
+def _uninstall_export_patches() -> None:
+    """Restore every export entry point that still holds our patch."""
+
+    for owner, attr_name, patched, original in _PATCHED_EXPORTS:
+        current = (
+            owner.__dict__.get(attr_name)
+            if owner is torch.Tensor
+            else getattr(owner, attr_name, None)
+        )
+        if current is patched:
+            setattr(owner, attr_name, original)
+    _PATCHED_EXPORTS.clear()
 
 
 def is_foreign_function_recorder(func: Any) -> bool:
@@ -110,9 +194,10 @@ def install_function_apply_wrapper() -> None:
 
     functools.update_wrapper(wrapped_apply, original_function)
     installed = classmethod(wrapped_apply)
-    torch.autograd.Function.apply = installed  # type: ignore[method-assign]
+    torch.autograd.Function.apply = installed  # type: ignore[assignment]
     _INSTALLED_APPLY = installed
     _ORIGINAL_APPLY = original
+    _install_export_patches()
 
 
 def uninstall_function_apply_wrapper() -> None:
@@ -128,9 +213,10 @@ def uninstall_function_apply_wrapper() -> None:
     if _INSTALLED_APPLY is None or _ORIGINAL_APPLY is None:
         return
     if torch.autograd.Function.__dict__.get("apply") is _INSTALLED_APPLY:
-        torch.autograd.Function.apply = _ORIGINAL_APPLY  # type: ignore[method-assign]
+        torch.autograd.Function.apply = _ORIGINAL_APPLY  # type: ignore[assignment]
     _INSTALLED_APPLY = None
     _ORIGINAL_APPLY = None
+    _uninstall_export_patches()
 
 
 def _active_witness_state(trace: Any) -> Any | None:
@@ -142,6 +228,21 @@ def _active_witness_state(trace: Any) -> Any | None:
     if state is None or state.trace is not trace:
         return None
     return state
+
+
+def _event_label(event: Any) -> str | None:
+    """Return a journal op's raw label (``OpRecord.core`` or a flat ``OpEvent``)."""
+
+    core = getattr(event, "core", None)
+    label = getattr(core if core is not None else event, "label_raw", None)
+    return label if isinstance(label, str) else None
+
+
+def _event_parents(event: Any) -> tuple[Any, ...]:
+    """Return a journal op's parent edges (``OpRecord.core`` or a flat ``OpEvent``)."""
+
+    core = getattr(event, "core", None)
+    return tuple(getattr(core if core is not None else event, "parents", ()) or ())
 
 
 def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple[str, ...]:
@@ -162,12 +263,12 @@ def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple
 
     names: list[str] = []
     for event in events:
-        if getattr(event, "label_raw", None) in already_collapsed:
+        if _event_label(event) in already_collapsed:
             continue
         func_name = getattr(getattr(event, "function", None), "func_name", None)
         if not isinstance(func_name, str):
             continue
-        parentless = not getattr(event, "parents", ())
+        parentless = not _event_parents(event)
         if func_name in HOST_ENTRY_FUNC_NAMES or (
             func_name in PARENTLESS_HOST_ENTRY_FUNC_NAMES and parentless
         ):
@@ -177,7 +278,7 @@ def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple
 
 
 def _make_replay_callable(
-    cls: type[Any], original_function: Callable[..., Any], host_entry_ops: tuple[str, ...]
+    cls: type[Any], original_function: Callable[..., Any], exits: tuple[str, ...]
 ) -> Callable[..., Any]:
     """Build the boundary op's callable: the Function's own ``apply``."""
 
@@ -196,7 +297,7 @@ def _make_replay_callable(
         transform_config={
             "function": cls.__qualname__,
             "function_module": cls.__module__,
-            "host_entry_ops": list(host_entry_ops),
+            "exits": list(exits),
         },
         inner_fn=cls.forward,
     )
@@ -269,7 +370,7 @@ def _log_boundary_op(
         emit()
 
 
-def _warn_foreign_boundary(trace: Any, cls: type[Any], host_entry_ops: tuple[str, ...]) -> None:
+def _warn_foreign_boundary(trace: Any, cls: type[Any], exits: tuple[str, ...]) -> None:
     """Disclose one collapsed Function class per capture."""
 
     from ..._errors import TorchLensWarning
@@ -282,7 +383,7 @@ def _warn_foreign_boundary(trace: Any, cls: type[Any], host_entry_ops: tuple[str
     warnings.warn(
         TorchLensWarning(
             f"TorchLens captured the autograd.Function {function_name} as one foreign-kernel "
-            f"boundary op: its forward left torch ({', '.join(host_entry_ops)}). The "
+            f"boundary op: its forward left torch ({', '.join(exits)}). The "
             "operations inside it are not logged; the boundary op replays by calling the "
             "Function's apply again.",
             code=FOREIGN_FUNCTION_WARNING_CODE,
@@ -329,14 +430,23 @@ def record_function_apply(
     rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
     autocast_state = log_current_autocast_state()
 
-    out = original_function(cls, *args, **kwargs)
+    frame_exports: set[str] = set()
+    _FRAMES.append(frame_exports)
+    try:
+        out = original_function(cls, *args, **kwargs)
+    finally:
+        if _FRAMES and _FRAMES[-1] is frame_exports:
+            _FRAMES.pop()
+        elif frame_exports in _FRAMES:
+            _FRAMES.remove(frame_exports)
 
     if journal_mark is None or op_events is None:
         return out
     interior_events = list(op_events[journal_mark:])
     collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
     host_entry_ops = _host_entry_ops(interior_events, collapsed)
-    if not host_entry_ops:
+    exits = tuple(sorted(frame_exports)) + host_entry_ops
+    if not exits:
         return out
 
     from .wrappers import _collect_output_tensors
@@ -350,11 +460,11 @@ def record_function_apply(
         rng_states=rng_states,
         autocast_state=autocast_state,
     )
-    replay = _make_replay_callable(cls, original_function, host_entry_ops)
+    replay = _make_replay_callable(cls, original_function, exits)
     _log_boundary_op(trace, replay, args, kwargs, out, exec_ctx, func_call_id)
     interior_labels = {
         label
-        for label in (getattr(event, "label_raw", None) for event in interior_events)
+        for label in (_event_label(event) for event in interior_events)
         if isinstance(label, str)
     }
     trace.__dict__.setdefault(FOREIGN_FUNCTION_INTERIOR_ATTR, set()).update(interior_labels)
@@ -362,5 +472,5 @@ def record_function_apply(
         _reown_witness_events(
             witness_state, witness_mark, witness_stop, original_function, func_call_id
         )
-    _warn_foreign_boundary(trace, cls, host_entry_ops)
+    _warn_foreign_boundary(trace, cls, exits)
     return out

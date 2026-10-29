@@ -63,6 +63,7 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
@@ -1547,6 +1548,9 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
+    # Decoration-time constant: only the numpy / dlpack export spellings tell a live
+    # ``autograd.Function`` frame that its forward left torch (foreign-kernel boundary).
+    is_export_func = func_name in EXPORT_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
@@ -1797,6 +1801,8 @@ def torch_func_decorator(
             trace._wrapper_runtime_ws.current_func_barcode if is_barcode_transparent else 0
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
+        if is_export_func:
+            note_function_export(func_name)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
                 wrapper_name = f"torch_func:{func_name}:not_logged"
