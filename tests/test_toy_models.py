@@ -26,7 +26,11 @@ VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 
 
 def _assert_degenerate_forward(model: torch.nn.Module, x: torch.Tensor) -> None:
-    """Assert validation fails as degenerate: every final output element is non-finite."""
+    """Assert validation fails as degenerate: every final output element is non-finite.
+
+    Used where the NaN or inf is intrinsic to the model: no affine input change
+    ``c + s * x`` (c in [-25, 25], s in {1, 0.1, 0.01}) makes the output finite.
+    """
 
     assert not validate_forward_pass(model, x)
     failure = last_validation_failure()
@@ -732,9 +736,6 @@ def test_repeated_module(default_input1):
 @pytest.mark.heavy
 def test_nested_modules(default_input1):
     model = example_models.NestedModules()
-    # Every final output element is non-finite for the fixture input, and no affine
-    # input change c + s * x (c in [-25, 25], s in {1, 0.1, 0.01}) makes it finite,
-    # so the forward is degenerate by construction and must never validate.
     _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
@@ -882,9 +883,6 @@ def test_repeated_op_type_in_loop(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam1(default_input1):
     model = example_models.VaryingLoopNoParam1()
-    # Every final output element is non-finite for the fixture input, and no affine
-    # input change c + s * x (c in [-25, 25], s in {1, 0.1, 0.01}) makes it finite,
-    # so the forward is degenerate by construction and must never validate.
     _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
@@ -909,9 +907,6 @@ def test_varying_loop_noparam1(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
-    # Every final output element is non-finite for the fixture input, and no affine
-    # input change c + s * x (c in [-25, 25], s in {1, 0.1, 0.01}) makes it finite,
-    # so the forward is degenerate by construction and must never validate.
     _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
@@ -1142,9 +1137,6 @@ def test_recurrent_params_simple(input_2d):
 
 def test_recurrent_params_complex(input_2d):
     model = example_models.RecurrentParamsComplex()
-    # Every final output element is non-finite for the fixture input, and no affine
-    # input change c + s * x (c in [-25, 25], s in {1, 0.1, 0.01}) makes it finite,
-    # so the forward is degenerate by construction and must never validate.
     _assert_degenerate_forward(model, input_2d)
     show_model_graph(
         model,
@@ -1657,9 +1649,6 @@ def test_ubermodel3(input_2d):
 
 def test_ubermodel4(input_2d):
     model = example_models.UberModel4()
-    # Every final output element is non-finite for the fixture input, and no affine
-    # input change c + s * x (c in [-25, 25], s in {1, 0.1, 0.01}) makes it finite,
-    # so the forward is degenerate by construction and must never validate.
     _assert_degenerate_forward(model, input_2d)
     show_model_graph(
         model,

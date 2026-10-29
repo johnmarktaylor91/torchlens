@@ -193,7 +193,8 @@ def fail_if_final_outputs_non_finite(trace: Any, ground_truth_outputs: Sequence[
     -------
     bool
         ``True`` when the guard fired: a ``degenerate_forward`` failure is recorded
-        at the first output layer and the trace's replay status becomes ``failed``.
+        at the first output layer and the trace's replay status becomes ``failed``
+        (its node counts are unchanged: no op failed).
         ``False`` (nothing changed) for a partly finite, empty or non-float output.
     """
 
@@ -225,6 +226,5 @@ def fail_if_final_outputs_non_finite(trace: Any, ground_truth_outputs: Sequence[
         state="failed",
         reason="degenerate_forward",
         message="Replay validation failed: every final model output is non-finite.",
-        failed_node_count=status.failed_node_count + 1,
     )
     return True
