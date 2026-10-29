@@ -113,7 +113,7 @@ from .escape_detection import (
 CompletenessWitnessMode = Literal["off", "shadow"]
 """Supported dispatcher-witness rollout modes."""
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 10
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 11
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
 _TORCH_ROOT = Path(torch.__file__).resolve().parent
@@ -182,6 +182,15 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         reason=(
             "torch.autograd.grad executes a separately captured backward pass; its engine "
             "dispatches are not forward operations"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="autograd_function:foreign",
+        operator=None,
+        reason=(
+            "an autograd.Function whose forward left torch (numpy / dlpack round trip) is "
+            "recorded as one autogradfunction boundary op that replays through apply; every "
+            "dispatch inside it belongs to that op"
         ),
     ),
 )
