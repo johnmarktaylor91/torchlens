@@ -7,6 +7,7 @@
     "escalates",
     "fed_by",
     "forked_from",
+    "selected_by",
     "successor_of"
    ],
    "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
@@ -4094,5 +4095,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "ff49d65bd3e76bb6a596cae32bfcfcb32c062031d58fd7ce185e5d1e622ceb1d"
+ "writer_contract_digest": "8c89d12e0fee3d2b5d6a713ce5d40032a06ba10ea8edfd2666cbb3e2359164ea"
 }
