@@ -10140,7 +10140,7 @@
   "field": "modules",
   "file": "torchlens/visualization/auto_collapse.py",
   "has_default": false,
-  "sites": 11,
+  "sites": 12,
   "via_getattr": false
  },
  {
