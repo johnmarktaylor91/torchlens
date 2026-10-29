@@ -387,15 +387,16 @@ class LiteralTensor:
     optional-with-default keeps unpickling of pre-r75 payloads intact (readers use
     ``getattr`` with a ``None`` fallback).
 
-    ``capture_fingerprint`` records, for an ``nn.Parameter`` argument, its version
-    counter, storage pointer and shape when the template classified it (session-only:
-    ``Op.args_template`` never persists); replay refuses a parameter that changed since
-    (:mod:`torchlens.intervention._param_fingerprint`). ``None`` for other literals.
+    ``_capture_param_fingerprint`` (private) records, for an ``nn.Parameter`` argument,
+    its version counter, storage pointer and shape when the template classified it
+    (session-only: ``Op.args_template`` never persists); replay refuses a parameter that
+    changed since (:mod:`torchlens.intervention._param_fingerprint`). ``None`` for other
+    literals.
     """
 
     value: Any
     param_barcode: str | None = None
-    capture_fingerprint: Any = None
+    _capture_param_fingerprint: Any = None
 
 
 @dataclass(frozen=True)

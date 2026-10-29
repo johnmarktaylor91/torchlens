@@ -112,7 +112,7 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
     # Deferred: the backend package imports this package while it initializes.
     from ..backends.torch._param_fingerprint import ParamFingerprint, param_fingerprint
 
-    recorded = getattr(component, "capture_fingerprint", None)
+    recorded = getattr(component, "_capture_param_fingerprint", None)
     value = component.value
     if not isinstance(recorded, ParamFingerprint) or not isinstance(value, torch.Tensor):
         return value

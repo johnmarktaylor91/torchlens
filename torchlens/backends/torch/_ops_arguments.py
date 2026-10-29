@@ -140,7 +140,7 @@ def _classify_arg_component(
             return LiteralTensor(
                 value,
                 param_barcode=str(param_barcode) if param_barcode is not None else None,
-                capture_fingerprint=param_fingerprint(
+                _capture_param_fingerprint=param_fingerprint(
                     value, getattr(param_meta, "param_address", None)
                 ),
             )
