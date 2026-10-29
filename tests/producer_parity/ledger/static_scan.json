@@ -9482,6 +9482,14 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
+  "file": "torchlens/validation/_operand_value_proofs.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
   "file": "torchlens/validation/_replay_grad_fidelity.py",
   "has_default": true,
   "sites": 1,
