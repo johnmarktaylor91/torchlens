@@ -150,7 +150,7 @@ def intern_view(value: Any, pool: dict[Any, Any]) -> Any:
 
     try:
         canonical = pool.get(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 -- any raise from __hash__ means "unpoolable"
         return value
     if canonical is None:
         pool[value] = value
