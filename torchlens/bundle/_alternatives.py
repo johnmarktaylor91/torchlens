@@ -249,7 +249,7 @@ def _merge(
     try:
         for name in second.names:
             bundle.add(second[name], names=report.prefix + name)
-        pairs = [
+        pairs: list[dict[str, Any]] = [
             {"kind": "alternative_of", "from": call.member, "to": call.call, "params": {}}
             for call in report.calls
             if call.status not in ("added", "dropped")
