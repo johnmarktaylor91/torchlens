@@ -274,19 +274,29 @@ def _validated_params(kind: str, params: Any) -> dict[str, Any]:
         raise ValueError(
             f"bundle-relation row of kind {kind!r} is missing required param keys {sorted(missing)}"
         )
-    validated: dict[str, Any] = {}
-    for key in sorted(spec.declared):
-        if key not in params:
-            continue
-        value = params[key]
-        if kind == FED_BY_KIND:
-            validated[key] = validate_fed_by_param(key, value)
-            continue
-        if kind == SELECTED_BY_KIND and key in SELECTED_BY_DECISION_PARAMS:
-            validated[key] = validate_selected_by_param(key, value)
-            continue
-        _validate_param_value(kind, key, value)
-        validated[key] = _clamp_evidence_grades(value) if key == "evidence" else value
+    validated = {
+        key: _validated_param_value(kind, key, params[key])
+        for key in sorted(spec.declared)
+        if key in params
+    }
+    _check_cross_params(kind, validated)
+    return validated
+
+
+def _validated_param_value(kind: str, key: str, value: Any) -> Any:
+    """Validate one declared param value and return its persisted normal form."""
+
+    if kind == FED_BY_KIND:
+        return validate_fed_by_param(key, value)
+    if kind == SELECTED_BY_KIND and key in SELECTED_BY_DECISION_PARAMS:
+        return validate_selected_by_param(key, value)
+    _validate_param_value(kind, key, value)
+    return _clamp_evidence_grades(value) if key == "evidence" else value
+
+
+def _check_cross_params(kind: str, validated: Mapping[str, Any]) -> None:
+    """Run a kind's cross-param rules over its validated params."""
+
     if kind == FED_BY_KIND:
         check_fed_by_params(validated)
         if "token_spans" in validated:
@@ -294,7 +304,6 @@ def _validated_params(kind: str, params: Any) -> dict[str, Any]:
             _enforce_evidence_budget(kind, spans, param="token_spans")
     if kind == SELECTED_BY_KIND:
         check_selected_by_params(validated)
-    return validated
 
 
 def _clamp_evidence_grades(envelope: Mapping[str, Any]) -> dict[str, Any]:

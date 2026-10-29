@@ -29,8 +29,6 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
     from . import Bundle
 
-UNAVAILABLE_CODE = "bundle_token_divergence_unavailable"
-
 
 @dataclass(frozen=True)
 class TokenDivergence:
@@ -108,26 +106,30 @@ def _split(name: str, trace: Trace) -> tuple[list[int], list[int]]:
     binding = member_binding(trace)
     if binding is None:
         raise _divergence_unavailable(
-            name, "it carries no token_boundary_v1 binding", code=UNAVAILABLE_CODE
+            name,
+            "it carries no token_boundary_v1 binding",
+            code="bundle_token_divergence_unavailable",
         )
     completion = binding.get("completion")
     if completion is None:
         raise _divergence_unavailable(
-            name, "its binding names no completion range", code=UNAVAILABLE_CODE
+            name,
+            "its binding names no completion range",
+            code="bundle_token_divergence_unavailable",
         )
     ids = retained_ids(trace, binding)
     if ids is None:
         raise _divergence_unavailable(
             name,
             "its token ids are not retained or disagree with its binding",
-            code=UNAVAILABLE_CODE,
+            code="bundle_token_divergence_unavailable",
         )
     start, end = int(completion[0]), int(completion[1])
     if end > len(ids):
         raise _divergence_unavailable(
             name,
             f"its completion range ends at {end}, past the {len(ids)}-token stream",
-            code=UNAVAILABLE_CODE,
+            code="bundle_token_divergence_unavailable",
         )
     return ids[:start], ids[start:end]
 
