@@ -22,7 +22,6 @@ from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
-    FOREIGN_FUNCTION_WARNING_CODE,
     FOREIGN_FUNCTION_WRAPPER_NAME,
     is_foreign_function_recorder,
 )
@@ -168,7 +167,7 @@ def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op") as record:
         trace = tl.trace(model, x)
     codes = [getattr(w.message, "fields", {}).get("code") for w in record]
-    assert FOREIGN_FUNCTION_WARNING_CODE in codes
+    assert "foreign_kernel_boundary" in codes  # literal: the error-code coverage scan reads it
     _assert_one_boundary(trace, function)
     op = _boundary_ops(trace)[0]
     torch.testing.assert_close(op.out, function.apply(model.fc(x)))

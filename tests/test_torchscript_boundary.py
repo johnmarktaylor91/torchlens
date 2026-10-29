@@ -23,7 +23,6 @@ from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch._script_boundary import (
     SCRIPT_FUNCTION_FUNC_NAME,
     SCRIPT_FUNCTION_TRANSFORM_KIND,
-    SCRIPT_FUNCTION_WARNING_CODE,
     SCRIPT_FUNCTION_WRAPPER_NAME,
     is_script_function_recorder,
 )
@@ -168,7 +167,7 @@ def _trace_with_disclosure(model: nn.Module, x: torch.Tensor, **kwargs) -> tl.Tr
     with pytest.warns(TorchLensWarning, match="TorchScript function") as record:
         trace = tl.trace(model, x, **kwargs)
     codes = [getattr(w.message, "fields", {}).get("code") for w in record]
-    assert SCRIPT_FUNCTION_WARNING_CODE in codes
+    assert "torchscript_boundary" in codes  # literal: the error-code coverage scan reads it
     return trace
 
 
