@@ -682,7 +682,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 direction=direction,
             )
 
-    def _do_with_options(
+    def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
         self: "Trace",
         hooks_or_site: Any,
         value_or_hook: Any,

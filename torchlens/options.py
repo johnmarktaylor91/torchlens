@@ -1402,7 +1402,7 @@ class ReplayOptions:
     allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- an options group's constructor takes one keyword per field
         self,
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
