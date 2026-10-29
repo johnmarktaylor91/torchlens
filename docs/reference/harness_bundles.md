@@ -66,15 +66,35 @@ output never enters the writer's prompt, so `writer fed_by router` would be a fa
 and an empty span list would not repair it (an empty list means a real feed whose alignment is
 unknown). Record that harness as:
 
-- `b.relate("successor_of", "writer", "router")` for the order of the calls;
-- the route decision in your own metadata, for example
-  `b["writer"].annotations["harness"] = {"route_from": "router", "route": 1}`;
+- `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])`: the router's decision
+  selected the writer call;
 - `fed_by` only for text that really flows, such as `writer fed_by lookup` when the looked-up
   text came from a traced call.
 
-TorchLens has no control-dependency relation kind, so it cannot answer "which calls did this
-decision select". `label` is free human text (`"critique"`, `"judge"`, `"routed:calc"`); nothing
-in TorchLens reads it.
+## What `selected_by` means
+
+"writer selected_by router" records a control decision: the earlier call's output decided whether
+the later call ran, or which input it got. The decider's text need not appear in the later prompt,
+and the row never says the decider caused the later call's content. The direction is the one every
+ordering kind uses: the selected call comes first, the decider second, so `upstream("writer")`
+reaches the router and `downstream("router")` lists every call its decision selected (and what
+those calls fed).
+
+Its params are a closed set, all optional:
+
+- `chosen`: the decision as one JSON scalar (route `1`, candidate `"c2"`);
+- `candidates`: the options the decider chose among, distinct JSON scalars; `chosen` must be one of
+  them when both are given. They may be member names, routes or tool names; TorchLens never
+  resolves them as members;
+- `evidence`: why it chose, as the graded evidence envelope `successor_of` takes, for example the
+  router's scores. Measurement grades you write are stored as `disclosed`.
+
+A judge that picks a winner among candidate calls selects the call that uses the winner:
+`b.relate("selected_by", "final", "judge", chosen="c2", candidates=["c1", "c2", "c3"])`, plus
+`final fed_by c2` for the winning text the final prompt quotes. A malformed param (a list as
+`chosen`, a repeated candidate, `chosen` outside `candidates`) refuses
+`bundle_relation_schema_invalid` and leaves the table unchanged. `label` is free human text on
+`fed_by` rows (`"critique"`, `"judge"`); nothing in TorchLens reads it.
 
 ## Token spans, and when a row is verified
 
@@ -215,24 +235,24 @@ it where you report the number and call the result a descriptive comparison.
 ## Reading the graph
 
 - `b.upstream(name)` / `b.downstream(name)`: transitive walks over the ordering kinds (`fed_by`,
-  `successor_of`, `forked_from`, `escalates`), nearest member first.
+  `selected_by`, `successor_of`, `forked_from`, `escalates`), nearest member first.
 - `b.node(site, members=["a", "b"])`: one site across a subset of members, so a foreign member such
   as a small router model does not disable the view for the rest.
 - `tl.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
-  drawn from the earlier member to the later one and labelled with the kind, the row's `label` and,
-  on `fed_by`, its basis and coverage. Solid edges carry token spans TorchLens checked
+  drawn from the earlier member to the later one and labelled with the kind, the row's `label`, on
+  `fed_by` its basis and coverage, and on `selected_by` the `chosen` decision. Solid edges carry token spans TorchLens checked
   (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the
   bundle's union op graph.
-- Comparisons: members joined by an ordering path (including `fed_by`) are not comparison
-  operands, and `delta_map`, `norm_delta`, `output_delta` and `compare` run the same comparison
-  gate as `compare_at`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
+- Comparisons: members joined by an ordering path (including `fed_by` and `selected_by`) are not
+  comparison operands, and `delta_map`, `norm_delta`, `output_delta` and `compare` run the same
+  comparison gate as `compare_at`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
 - `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk
   until read); `map_location` and `materialize_nested` reach the members too.
 
-Artifacts carrying `fed_by` rows need a reader of tlspec 10 or later; earlier readers refuse the
-kind, and an artifact stamped with an earlier version that carries a `fed_by` row refuses
-`bundle_relation_schema_invalid` (no writer of that version could have produced it).
+Artifacts carrying `fed_by` or `selected_by` rows need a reader of tlspec 10 or later; earlier
+readers refuse the kinds, and an artifact stamped with an earlier version that carries either kind
+refuses `bundle_relation_schema_invalid` (no writer of that version could have produced it).
 
 ## Four harnesses
 
@@ -406,9 +426,9 @@ tools = {0: torch.tensor([[200, 201]]), 1: torch.tensor([[210]])}  # Python tool
 answer = tl.trace(big, torch.cat([torch.tensor([[1]]), q, tools[choice]], dim=1))
 
 b = tl.Bundle({"route": route, "answer": answer})
-b.relate("successor_of", "answer", "route")  # chronology, not content
-b["answer"].annotations["harness"] = {"route_from": "route", "route": choice}
+b.relate("selected_by", "answer", "route", chosen=choice, candidates=[0, 1])  # control, not content
 assert b.upstream("answer") == ("route",)
+assert b.member_relations[0].params["chosen"] == choice
 # The tool's tokens in the answer prompt are covered by no span: text from outside any traced
 # call. Reads scoped with b.node(site, members=[...]) skip the foreign router model.
 ```

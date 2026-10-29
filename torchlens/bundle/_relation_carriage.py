@@ -216,8 +216,8 @@ def _ordering_walk(self: Bundle, name: str | Trace, *, upstream: bool) -> tuple[
 def _bundle_upstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     """Return every member ``name`` transitively came after, nearest first.
 
-    Walks the ordering relation kinds (``fed_by``, ``successor_of``,
-    ``forked_from``, ``escalates``) from the later member to the earlier one:
+    Walks the ordering relation kinds (``fed_by``, ``selected_by``,
+    ``successor_of``, ``forked_from``, ``escalates``) from the later member to the earlier one:
     for "critique fed_by draft", ``upstream("critique")`` is ``("draft",)``.
     Exposed as the dynamic method ``Bundle.upstream``.
     """

@@ -108,8 +108,9 @@ _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
 #: the refusal keys on topology, never on relationship rank). ``alternative_of``
 #: is deliberately absent — counterfactual peers stay comparable. ``fed_by``
 #: (tlspec v10) orders a reader after its source: their inputs differ by design.
+#: ``selected_by`` (tlspec v10) orders a selected call after its decider.
 _ORDERING_RELATION_KINDS: frozenset[str] = frozenset(
-    {"successor_of", "forked_from", "escalates", "fed_by"}
+    {"successor_of", "forked_from", "escalates", "fed_by", "selected_by"}
 )
 
 #: Session cache for the live-derived input value digests, keyed weakly by

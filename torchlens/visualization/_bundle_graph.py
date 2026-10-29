@@ -235,7 +235,7 @@ def _member_row_notes(bundle: Any) -> dict[str, list[str]]:
 
 
 def _relation_edge_label(row: Any) -> tuple[str, bool]:
-    """Return ``(label, checked)`` for one pair row: kind, label, basis, coverage."""
+    """Return ``(label, checked)`` for one pair row: kind, label, basis, coverage, choice."""
 
     params = row.params
     lines = [str(row.kind)]
@@ -247,6 +247,8 @@ def _relation_edge_label(row: Any) -> tuple[str, bool]:
         basis = params.get("basis", "declared") if spans else "no spans"
         coverage = params.get("coverage")
         lines.append(basis if coverage is None else f"{basis}, coverage {coverage:.2f}")
+    if row.kind == "selected_by" and "chosen" in params:
+        lines.append(f"chose {params['chosen']!r}")
     return "\n".join(lines), checked
 
 
@@ -261,8 +263,8 @@ def _add_bundle_member_graph(
     Edges run from the earlier member to the later one (the direction text
     and time flow: ``draft -> critique`` for "critique fed_by draft"; peer
     rows such as ``alternative_of`` draw without an arrowhead),
-    labelled with the kind, the row's free ``label`` and, on ``fed_by``,
-    its basis and coverage. Solid edges carry token spans TorchLens checked
+    labelled with the kind, the row's free ``label``, on ``fed_by`` its
+    basis and coverage, and on ``selected_by`` the ``chosen`` decision. Solid edges carry token spans TorchLens checked
     (``verified``/``matched``); every other row is dashed. MEMBER-kind rows
     (``episode_member``) annotate their member's node. Overrides key nodes
     by member name and edges by ``(earlier, later)``.

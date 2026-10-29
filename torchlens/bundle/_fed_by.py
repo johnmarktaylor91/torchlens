@@ -6,7 +6,7 @@ later member (the reader) and ``to`` the earlier member (the source), so
 ``ordering_path`` and the upstream/downstream walks read it in the same
 direction as ``successor_of``. ``fed_by`` is CONTENT provenance only: a router
 whose decision selects a call without its output entering that call's prompt
-is chronology (``successor_of``) plus application metadata, never ``fed_by``.
+is ``selected_by`` (:mod:`torchlens.bundle._selected_by`), never ``fed_by``.
 
 Params (all optional, per-kind closed): ``token_spans`` (rows of four ints:
 source start, source end, destination start, destination end; half-open),

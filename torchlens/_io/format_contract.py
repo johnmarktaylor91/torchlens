@@ -71,8 +71,10 @@ __tl_layer__ = "L1"
 # the ``fed_by`` bundle relation kind (harness bundles: the later member's
 # prompt contains the earlier member's output; optional ``token_spans`` /
 # ``basis`` / ``coverage`` / ``label`` params) and the ``token_boundary_v1``
-# member binding in the reserved ``torchlens.boundary_facts`` sidecar family;
-# a v9 reader refuses the bare kind, as the loader doctrine requires. The v9
+# member binding in the reserved ``torchlens.boundary_facts`` sidecar family,
+# and the ``selected_by`` control kind (a router's or judge's decision selected
+# the later member; optional ``chosen`` / ``candidates`` / ``evidence``);
+# a v9 reader refuses both bare kinds, as the loader doctrine requires. The v9
 # contract of record stays frozen byte-for-byte beside the v10 one.
 TLSPEC_VERSION = 10
 
