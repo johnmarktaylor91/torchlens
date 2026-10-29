@@ -533,6 +533,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG": True,
         "HAS_ATTENTION_CAUSAL_BIAS": tc.HAS_ATTENTION_CAUSAL_BIAS,
         "HAS_EXPANDED_WEIGHTS_CONV_PICKER": True,
+        # Declined-protocol redispatch skips torch's disabled-handler sentinel,
+        # present across the supported range.
+        "HAS_DISABLED_TORCH_FUNCTION_IMPL": True,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
         # Legacy tensor-constructor capture: CPython type-layout probe.
         "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH": True,

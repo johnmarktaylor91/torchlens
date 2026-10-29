@@ -75,6 +75,7 @@ __all__ = [
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_DEVICE_MESH",
     "HAS_DISABLE_TORCH_FUNCTION",
+    "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_DISPATCH_MODE_STACK_QUERY",
     "HAS_DTENSOR",
     "HAS_DTENSOR_SHARD_GEOMETRY",
@@ -185,6 +186,7 @@ __all__ = [
     "get_jit_boolean_dispatch_table",
     "get_jit_overload_resolver_module",
     "get_optional_torch_namespace",
+    "get_disabled_torch_function_impl",
     "get_torch_capability_snapshot",
     "kineto_events_from_profiler",
     "memory_profile_from_profiler",
@@ -1361,6 +1363,21 @@ def _probe_expanded_weights_conv_picker() -> bool:
     )
 
 
+def _probe_disabled_torch_function_impl() -> bool:
+    """Return whether ``torch._C._disabled_torch_function_impl`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the sentinel handler torch's C protocol SKIPS exists
+        (``torch.nn.Parameter`` carries it). The declined-protocol redispatch
+        (``backends/torch/_protocol_redispatch.py``) skips what torch skips,
+        so without it the redispatch stays off.
+    """
+
+    return callable(_nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl")))
+
+
 def _probe_gradient_edge() -> bool:
     """Return whether torch's GradientEdge surface actually WORKS end to end.
 
@@ -1868,6 +1885,7 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
+HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
@@ -2035,6 +2053,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_JIT_SCHEMA_ENUMERATION",
     "HAS_TENSORBASE_CLASS",
     "HAS_DISABLE_TORCH_FUNCTION",
+    "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",
@@ -2847,6 +2866,14 @@ def get_tensorbase_class() -> type[Any] | None:
             "C-level tensor-base introspection is unavailable",
         )
     return _TENSORBASE_CLASS
+
+
+def get_disabled_torch_function_impl() -> Any | None:
+    """Return ``torch._C._disabled_torch_function_impl``, or ``None`` when absent."""
+
+    if not HAS_DISABLED_TORCH_FUNCTION_IMPL:
+        return None
+    return _nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl"))
 
 
 def get_disable_torch_function_context() -> Any | None:
