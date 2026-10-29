@@ -392,24 +392,64 @@ def _has_call_site_evidence(self: "Trace") -> bool:
 
 
 def _call_site_group_key(node: Any) -> tuple[Any, ...]:
-    """The grouping key of one retained op under call-site grouping.
+    """The grouping key of one retained non-buffer op under call-site grouping.
 
-    A buffer node groups with every version of the same registered buffer. An
-    op with a call-site class groups with every op of the same class (same
+    An op with a call-site class groups with every op of the same class (same
     innermost module instance, same call-site chain, same function and output
     slot). Inputs and outputs stay single. Anything else (no Python frame inside
     its module call, synthesized nodes) falls back to its ``site_key_v1``
     position within the module call, which never fuses two positions of one
-    call and still groups a module called several times.
+    call and still groups a module called several times; its capture-time
+    equivalence class (type, non-tensor arguments, module) joins the fallback
+    key so a fallback layer never spans two equivalence sets. Buffer versions
+    are keyed by :func:`_buffer_group_keys`.
     """
 
-    if node.is_buffer and node.address:
-        return ("buffer", node.address)
     if _is_call_site_class(node.equivalence_class):
         return ("call_site", node.equivalence_class)
     if node.is_input or node.is_output:
         return ("single", node._label_raw)
-    return ("position", node.site_key, node.func_name)
+    return ("position", node.site_key, node.func_name, node.equivalence_class)
+
+
+def _buffer_group_keys(
+    buffers: list[Any], op_keys: dict[str, tuple[Any, ...]]
+) -> list[tuple[Any, tuple[Any, ...]]]:
+    """Group the versions of each registered buffer by the place that wrote them.
+
+    A version written by an op takes that op's key, so the versions one write
+    line produces across a loop are passes of one buffer layer, and versions
+    written at different places are different layers. The entry version (no
+    writer) joins the layer of the version written next when that layer
+    repeats (the loop-carried state of a loop); otherwise it stays on its own,
+    as does every version of a buffer written once.
+    """
+
+    keyed: dict[str, tuple[Any, ...]] = {}
+    entries: list[Any] = []
+    written_by_address: dict[Any, list[Any]] = defaultdict(list)
+    for node in buffers:
+        writer = next((parent for parent in node.parents if parent in op_keys), None)
+        if writer is None:
+            entries.append(node)
+            continue
+        keyed[node._label_raw] = ("buffer", node.address, op_keys[writer])
+        written_by_address[node.address].append(node)
+    sizes: dict[tuple[Any, ...], int] = defaultdict(int)
+    for key in keyed.values():
+        sizes[key] += 1
+    for node in entries:
+        later = [
+            version
+            for version in written_by_address.get(node.address, ())
+            if version.raw_index > node.raw_index
+        ]
+        first = min(later, key=lambda version: version.raw_index, default=None)
+        if first is not None and sizes[keyed[first._label_raw]] > 1:
+            keyed[node._label_raw] = keyed[first._label_raw]
+        else:
+            keyed[node._label_raw] = ("buffer", node.address, "entry", node._label_raw)
+    return [(node, keyed[node._label_raw]) for node in buffers]
 
 
 def _group_by_call_sites(self: "Trace") -> None:
@@ -427,11 +467,19 @@ def _group_by_call_sites(self: "Trace") -> None:
     """
 
     groups: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
+    keys: dict[str, tuple[Any, ...]] = {}
+    buffers: list[Any] = []
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
         if getattr(node, "is_orphan", False):
             continue
-        groups[_call_site_group_key(node)].append(node)
+        if node.is_buffer and node.address:
+            buffers.append(node)
+            continue
+        keys[label] = _call_site_group_key(node)
+        groups[keys[label]].append(node)
+    for node, key in _buffer_group_keys(buffers, keys):
+        groups[key].append(node)
 
     for members in groups.values():
         leader = min(members, key=lambda member: member.raw_index)

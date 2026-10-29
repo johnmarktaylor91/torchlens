@@ -61,9 +61,14 @@ part of the key, the passes of one layer can use different weights; the layer th
 weight its passes used (`layer.params`), and each pass lists its own (`layer.ops[k].params`).
 
 When no Python frame sits between the module boundary and the op (a module whose `forward` is a C
-function, for example), TorchLens falls back to the op's position: the same operation type at the
-same position within the module call. Buffers are grouped by the buffer itself (one layer whose
-passes are its versions). Inputs and outputs are always single-pass layers.
+function, for example), TorchLens falls back to the op's position: the same operation type, with
+the same non-tensor arguments, at the same position within the module call.
+
+A buffer's versions are grouped by the place that wrote them: the versions one line writes across
+a loop are passes of one buffer layer, and versions written on different lines are different
+layers. The buffer's starting value joins the loop's layer when the first write after it repeats
+(loop-carried state); a buffer written once keeps its starting value and its new value as two
+single-pass layers. Inputs and outputs are always single-pass layers.
 
 ## Cases
 

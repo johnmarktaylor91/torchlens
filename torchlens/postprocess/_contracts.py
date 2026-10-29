@@ -807,12 +807,18 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "_label_raw",
                 "_layer_label_raw",
                 "_param_barcodes",
+                # Call-site grouping (callsite_v1): buffer versions key by
+                # buffer address and writing op, inputs and outputs are
+                # singletons.
+                "address",
                 "children",
                 "equivalence_class",
                 "equivalent_ops",
                 "func_name",
                 "is_buffer",
+                "is_input",
                 "is_orphan",
+                "is_output",
                 "modules",
                 "multi_output_index",
                 "non_tensor_kwargs",
