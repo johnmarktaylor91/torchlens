@@ -1312,3 +1312,37 @@ def test_row73_layer_over_varying_weights_lists_every_weight() -> None:
     assert matmul.num_params == 48
     assert matmul.annotations["varying_across_passes"]["params"] == [["ws.0"], ["ws.1"], ["ws.2"]]
     assert tl.validate(model, _x(), scope="forward", random_seed=0, validate_metadata=True)
+
+
+def _buffer_passes(build: Callable[[], nn.Module]) -> list[int]:
+    """Sorted pass counts of the buffer layers of one trace."""
+
+    trace = _capture(build, _x())
+    seen = {op.layer_label: int(op.num_passes or 1) for op in trace.layer_list if op.is_buffer}
+    return sorted(seen.values())
+
+
+class BufferOnce(InplaceBuffer):
+    def forward(self, x: Tensor) -> Tensor:
+        self.state.add_(x)
+        return self.state * 1.0
+
+
+class BufferLoop(InplaceBuffer):
+    def forward(self, x: Tensor) -> Tensor:
+        for _ in range(3):
+            self.state.add_(1.0)
+            x = x + self.state
+        return x
+
+
+def test_row74_buffer_versions_group_by_writing_line() -> None:
+    """Row 74: buffer versions group by the line that wrote them.
+
+    A buffer written once keeps its starting value and its new value apart; written on two
+    lines, three single versions; written by one loop line, the starting value joins the
+    loop's versions (loop-carried state, one buffer layer with 4 passes).
+    """
+    assert _buffer_passes(BufferOnce) == [1, 1]
+    assert _buffer_passes(BufferTwoSites) == [1, 1, 1]
+    assert _buffer_passes(BufferLoop) == [4]

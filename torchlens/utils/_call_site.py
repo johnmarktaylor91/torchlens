@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dis
 import sys
+import weakref
 from types import CodeType
 from typing import Any
 
@@ -38,8 +39,12 @@ _HAS_CO_POSITIONS = sys.version_info >= (3, 11)
 # boundary between a module call and the code that called the module.
 _BOUNDARY_CODES: set[CodeType] = set()
 
-_INSTRUCTION_MAPS: dict[CodeType, Any] = {}
-_CODE_TOKENS: dict[CodeType, tuple[str, str, int, bytes]] = {}
+# Per-code memos, held weakly so code built at run time (``exec``, lambdas in
+# reloaded modules) is not pinned by the cache.
+_INSTRUCTION_MAPS: weakref.WeakKeyDictionary[CodeType, Any] = weakref.WeakKeyDictionary()
+_CODE_TOKENS: weakref.WeakKeyDictionary[CodeType, tuple[str, str, int, bytes]] = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def register_module_boundary_code(code: CodeType) -> None:
