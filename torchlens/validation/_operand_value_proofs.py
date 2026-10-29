@@ -98,13 +98,17 @@ def sole_perturbed_slot(layer: Any, layers_to_perturb: list[str]) -> int | tuple
     return None
 
 
-def output_has_no_elements(layer: Any) -> bool:
+def output_has_no_elements(layer: Any, layers_to_perturb: list[str], args: tuple[Any, ...]) -> bool:
     """Return whether the op's saved output is a tensor with no elements.
 
     Parameters
     ----------
     layer:
         Op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation (any parent: an empty output cannot change).
+    args:
+        Saved positional arguments for ``layer`` (unused).
 
     Returns
     -------
@@ -112,6 +116,7 @@ def output_has_no_elements(layer: Any) -> bool:
         True when the saved output is a tensor whose ``numel()`` is zero.
     """
 
+    del layers_to_perturb, args
     out = getattr(layer, "out", None)
     return isinstance(out, torch.Tensor) and out.numel() == 0
 
@@ -206,18 +211,13 @@ def scatter_reduce_destination_overwritten(
         return False
     kwargs = getattr(layer, "saved_kwargs", None) or {}
     include_self = kwargs.get("include_self", args[5] if len(args) > 5 else True)
-    if include_self is not False:
-        return False
     dest, dim, index = args[0], args[1], args[2]
+    if include_self is not False or not isinstance(dim, int) or isinstance(dim, bool):
+        return False
     if not isinstance(dest, torch.Tensor) or not isinstance(index, torch.Tensor):
         return False
-    if isinstance(dim, bool) or not isinstance(dim, int):
-        return False
-    if dim < 0:
-        dim += dest.ndim
-    if not 0 <= dim < dest.ndim:
-        return False
-    return _scatter_index_fully_overwrites_dim(dest, dim, index)
+    dim = dim + dest.ndim if dim < 0 else dim
+    return 0 <= dim < dest.ndim and _scatter_index_fully_overwrites_dim(dest, dim, index)
 
 
 def grid_sampler_zero_input(
@@ -409,48 +409,68 @@ def operand_value_proof_decision(
 
     from .exemptions import PosthocPerturbDecision
 
-    if output_has_no_elements(layer):
-        return PosthocPerturbDecision(
-            True,
-            "empty_output_no_elements",
-            "the output has no elements, so no perturbation can change its value",
-        )
-    if einsum_zero_operand(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "einsum_zero_operand",
-            "a non-perturbed einsum operand is all zero, so every product term and the output "
-            "are zero for any finite value of the perturbed operand",
-        )
-    if scatter_reduce_destination_overwritten(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "scatter_reduce_destination_overwritten",
-            "scatter_reduce with include_self=False addresses every destination position, so "
-            "the destination's values cannot reach the output",
-        )
-    if grid_sampler_zero_input(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "grid_sampler_zero_input",
-            "the sampled input is all zero, so every finite grid samples to zero",
-        )
-    if conv_zero_input_output_is_bias(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "conv_zero_input_output_is_bias",
-            "the convolution input is all zero, so the output is the bias for any finite weight",
-        )
-    if or_absorbing_true_operand(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "or_absorbing_true_operand",
-            "the non-perturbed or operand is all True, so the output is all True",
-        )
-    if pow_unit_base(layer, layers_to_perturb, args):
-        return PosthocPerturbDecision(
-            True,
-            "pow_unit_base",
-            "the base is exactly 1 everywhere, so pow is exactly 1 for every exponent",
-        )
+    proofs = (
+        (
+            output_has_no_elements,
+            PosthocPerturbDecision(
+                True,
+                "empty_output_no_elements",
+                "the output has no elements, so no perturbation can change its value",
+            ),
+        ),
+        (
+            einsum_zero_operand,
+            PosthocPerturbDecision(
+                True,
+                "einsum_zero_operand",
+                "a non-perturbed einsum operand is all zero, so every product term and the "
+                "output are zero for any finite value of the perturbed operand",
+            ),
+        ),
+        (
+            scatter_reduce_destination_overwritten,
+            PosthocPerturbDecision(
+                True,
+                "scatter_reduce_destination_overwritten",
+                "scatter_reduce with include_self=False addresses every destination position, "
+                "so the destination's values cannot reach the output",
+            ),
+        ),
+        (
+            grid_sampler_zero_input,
+            PosthocPerturbDecision(
+                True,
+                "grid_sampler_zero_input",
+                "the sampled input is all zero, so every finite grid samples to zero",
+            ),
+        ),
+        (
+            conv_zero_input_output_is_bias,
+            PosthocPerturbDecision(
+                True,
+                "conv_zero_input_output_is_bias",
+                "the convolution input is all zero, so the output is the bias for any finite "
+                "weight",
+            ),
+        ),
+        (
+            or_absorbing_true_operand,
+            PosthocPerturbDecision(
+                True,
+                "or_absorbing_true_operand",
+                "the non-perturbed or operand is all True, so the output is all True",
+            ),
+        ),
+        (
+            pow_unit_base,
+            PosthocPerturbDecision(
+                True,
+                "pow_unit_base",
+                "the base is exactly 1 everywhere, so pow is exactly 1 for every exponent",
+            ),
+        ),
+    )
+    for proves, decision in proofs:
+        if proves(layer, layers_to_perturb, args):
+            return decision
     return PosthocPerturbDecision(False, "no_operand_value_proof")
