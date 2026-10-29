@@ -5,6 +5,9 @@ When a perturbation check finds an op's output unchanged, the failure is recorde
 every saved output element is non-finite, or an in-forward ``autograd.grad`` gradient
 is identically zero. The run still fails in every case. A partly non-finite output and
 a finite forward with a mis-recorded parent keep the plain ``perturbation`` check.
+
+The run-level guard fails a run that passed every edge check when every final model
+output element is non-finite; partly non-finite and all-zero outputs are untouched.
 """
 
 from __future__ import annotations
@@ -19,10 +22,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.validation._degenerate_forward as degenerate_forward
 import torchlens.validation.core as validation_core
 from torchlens.validation import last_validation_failure
 from torchlens.validation._degenerate_forward import (
     degenerate_forward_kind,
+    fail_if_final_outputs_non_finite,
     perturbation_insensitive_failure,
 )
 from torchlens.validation.diagnostics import CHECK_DEGENERATE_FORWARD, CHECK_PERTURBATION
@@ -96,6 +101,40 @@ class _TanhMul(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.tanh(self.lin(x)) * x
+
+
+class _Mlp(nn.Module):
+    """Linear, ReLU, Linear: no buffer or parameter is a perturbed parent."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+        self.b = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.b(torch.relu(self.a(x)))
+
+
+class _ZeroOutput(nn.Module):
+    """A finite forward whose final output is identically zero."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(self.a(x)) * 0.0
+
+
+def _validate_without_run_guard(model: nn.Module, x: torch.Tensor) -> bool:
+    """Validate with the run-level guard switched off (today's behaviour)."""
+
+    original = degenerate_forward.fail_if_final_outputs_non_finite
+    degenerate_forward.fail_if_final_outputs_non_finite = lambda *_args: False
+    try:
+        return _validate(model, x)
+    finally:
+        degenerate_forward.fail_if_final_outputs_non_finite = original
 
 
 def _ignore_parents_of_mul(trace: Any) -> None:
@@ -190,3 +229,64 @@ def test_zero_output_is_degenerate_only_for_autograd_grad() -> None:
     failure = perturbation_insensitive_failure(zero, "relu_1_1", ["input_1"])
     assert failure.check == CHECK_PERTURBATION
     assert failure.extra == {"perturbed_parents": ["input_1"]}
+
+
+def test_all_nan_final_outputs_fail_the_run_as_degenerate_forward() -> None:
+    """An all-NaN forward with no failing edge passed before the guard; now it fails."""
+
+    x = torch.full((2, 4), float("nan"))
+    torch.manual_seed(0)
+    assert _validate_without_run_guard(_Mlp(), x) is True
+    torch.manual_seed(0)
+    assert _validate(_Mlp(), x) is False
+    failure = last_validation_failure()
+    assert failure is not None
+    assert failure.check == CHECK_DEGENERATE_FORWARD, failure.summary()
+    assert failure.extra["degenerate_kind"] == "non_finite_output"
+    assert failure.extra["scope"] == "final_outputs"
+    assert failure.op_label is not None and failure.op_label.startswith("output")
+
+
+def test_all_inf_final_outputs_fail_the_run_as_degenerate_forward() -> None:
+    """Infinite as well as NaN final outputs are degenerate."""
+
+    torch.manual_seed(0)
+    assert _validate(_Mlp(), torch.full((2, 4), float("inf"))) is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == CHECK_DEGENERATE_FORWARD
+
+
+def test_partly_nan_final_outputs_keep_todays_outcome() -> None:
+    """ARMED NEGATIVE: one finite output element leaves the run as it was."""
+
+    x = torch.randn(2, 4)
+    x[0] = float("nan")
+    torch.manual_seed(0)
+    before = _validate_without_run_guard(_Mlp(), x)
+    torch.manual_seed(0)
+    assert _validate(_Mlp(), x) is before is True
+
+
+def test_all_zero_final_outputs_keep_todays_outcome() -> None:
+    """ARMED NEGATIVE: an all-zero final output is finite, so the guard stays off."""
+
+    x = torch.randn(2, 4)
+    torch.manual_seed(0)
+    before = _validate_without_run_guard(_ZeroOutput(), x)
+    torch.manual_seed(0)
+    after = _validate(_ZeroOutput(), x)
+    assert after is before
+    failure = last_validation_failure()
+    assert failure is None or failure.check != CHECK_DEGENERATE_FORWARD
+
+
+def test_run_guard_ignores_empty_mixed_and_zero_outputs() -> None:
+    """Unit: the guard fires only when every element of every output is non-finite."""
+
+    nan = float("nan")
+    trace = SimpleNamespace(output_layers=["output_1"])
+    assert fail_if_final_outputs_non_finite(trace, [torch.zeros(3)]) is False
+    assert fail_if_final_outputs_non_finite(trace, [torch.tensor([nan, 1.0])]) is False
+    assert fail_if_final_outputs_non_finite(trace, [torch.tensor([nan]), torch.ones(1)]) is False
+    assert fail_if_final_outputs_non_finite(trace, [torch.empty(0)]) is False
+    assert fail_if_final_outputs_non_finite(trace, []) is False

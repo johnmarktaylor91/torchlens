@@ -16,11 +16,18 @@ check, ``degenerate_forward``, instead of ``perturbation``. It relabels the
 failure only: the decision stays ``perturbation_insensitive`` and the run still
 fails. A partly non-finite output, or a finite forward that is really
 insensitive, keeps the plain ``perturbation`` check.
+
+:func:`fail_if_final_outputs_non_finite` is the run-level guard: a forward whose
+every final output element is non-finite can pass every edge check (a perturbed
+parent turns NaN into finite values, and a replay from all-NaN arguments matches
+the saved NaN whatever the func), so it would validate while proving nothing. It
+fails such a run under the same check. It only ever turns a pass into a failure.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import dataclasses
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -145,3 +152,77 @@ def perturbation_insensitive_failure(
         ),
         extra=extra,
     )
+
+
+def _all_non_finite(tensors: list[torch.Tensor]) -> bool:
+    """Return whether every element of every tensor is non-finite (none empty).
+
+    Parameters
+    ----------
+    tensors:
+        Tensors to inspect.
+
+    Returns
+    -------
+    bool
+        ``False`` for an empty list, an empty tensor, or any finite element.
+    """
+
+    if not tensors or any(tensor.numel() == 0 for tensor in tensors):
+        return False
+    try:
+        with torch.no_grad():
+            return not any(bool(torch.isfinite(tensor).any()) for tensor in tensors)
+    except (RuntimeError, TypeError):
+        return False
+
+
+def fail_if_final_outputs_non_finite(trace: Any, ground_truth_outputs: Sequence[Any]) -> bool:
+    """Fail a passing run whose final model outputs are entirely non-finite.
+
+    Parameters
+    ----------
+    trace:
+        Live validation Trace whose replay validation passed.
+    ground_truth_outputs:
+        The model's final output tensors from the ground-truth forward.
+
+    Returns
+    -------
+    bool
+        ``True`` when the guard fired: a ``degenerate_forward`` failure is recorded
+        at the first output layer and the trace's replay status becomes ``failed``.
+        ``False`` (nothing changed) for a partly finite, empty or non-float output.
+    """
+
+    tensors = list(_out_tensors(list(ground_truth_outputs)))
+    if not _all_non_finite(tensors):
+        return False
+    from .diagnostics import record_validation_failure
+
+    output_layers = [str(label) for label in getattr(trace, "output_layers", []) or []]
+    record_validation_failure(
+        trace,
+        ValidationFailure(
+            check=CHECK_DEGENERATE_FORWARD,
+            op_label=output_layers[0] if output_layers else None,
+            message=(
+                "degenerate forward: every element of every final model output is "
+                "non-finite, so validation cannot check the forward"
+            ),
+            extra={
+                "degenerate_kind": DEGENERATE_NON_FINITE_OUTPUT,
+                "scope": "final_outputs",
+                "output_layers": output_layers,
+            },
+        ),
+    )
+    status = trace.validation_replay_status
+    trace._validation_replay_status = dataclasses.replace(
+        status,
+        state="failed",
+        reason="degenerate_forward",
+        message="Replay validation failed: every final model output is non-finite.",
+        failed_node_count=status.failed_node_count + 1,
+    )
+    return True
