@@ -167,8 +167,9 @@ def test_a_later_push_on_a_replay_fork_refuses() -> None:
     model, _x, trace = _capture()
     fork = _replay_fork_do(trace)
     _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError, match=CODE):
+    with pytest.raises(ReplayPreconditionError) as excinfo:
         _replay_fork_do(fork)
+    assert excinfo.value.fields["code"] == CODE
 
 
 def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
@@ -188,8 +189,9 @@ def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
     pushed = _replay_fork_do(rerun)
     assert RUN_KEY not in pushed.last_run
     _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError, match=CODE):
+    with pytest.raises(ReplayPreconditionError) as excinfo:
         _replay_fork_do(rerun)
+    assert excinfo.value.fields["code"] == CODE
 
 
 def test_an_edit_through_param_data_is_not_caught() -> None:

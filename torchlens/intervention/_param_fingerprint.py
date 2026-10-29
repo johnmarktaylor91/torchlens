@@ -117,9 +117,15 @@ def param_fingerprint(param: torch.Tensor, address: str | None = None) -> ParamF
         Version counter, storage pointer and shape (no tensor op runs).
     """
 
+    from ..backends.torch.completeness_witness import internal_scalar_read
+
+    # TorchLens bookkeeping read: unmarked, a capture-time ``_version`` read on registered
+    # state would record a forward read-kind and refuse the runnable save.
+    with internal_scalar_read():
+        version = tensor_version_or_none(param)
     return ParamFingerprint(
         address=address,
-        version=tensor_version_or_none(param),
+        version=version,
         storage_ptr=_storage_ptr(param),
         shape=tuple(param.shape),
     )
