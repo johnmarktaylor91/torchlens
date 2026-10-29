@@ -1922,6 +1922,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/backends/torch/_protocol_redispatch.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/backends/torch/_session_forwards.py",
   "has_default": false,
   "sites": 1,

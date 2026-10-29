@@ -21,6 +21,7 @@ import textwrap
 import traceback
 import types
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -339,10 +340,10 @@ def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin()
 
     exc = _capture_failure(lambda x: torch.matmul(x, "not a tensor"))
     assert classify_failure_origin(exc) is FailureOrigin.USER_OP
-    assert not any(
-        frame.filename.endswith("_protocol_redispatch.py")
-        for frame in traceback.extract_tb(exc.__traceback__)
-    )
+    frames = traceback.extract_tb(exc.__traceback__)
+    assert "_protocol_redispatch.py" not in {Path(frame.filename).name for frame in frames}
+    assert Path(frames[-1].filename).name == "wrappers.py"
+    assert "out_orig = func(" in (frames[-1].line or "")
 
 
 def test_genuine_decline_in_capture_classifies_user_op(post_wrap_bag: type) -> None:
