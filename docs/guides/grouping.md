@@ -8,14 +8,15 @@ trace.
 ## The rule in plain words
 
 A layer is one operation written at one place in a module's code. Running that same place again
-is another pass of the same layer. That covers a loop, a recursion, a comprehension, a later
-generation step, and the module itself being called again. Two different places are two layers,
-even when they compute the same operation with the same weights.
+is another pass of the same layer: a loop, a recursion, a comprehension or a later generation step
+repeats it. Two different places are two layers, even when they compute the same operation with the
+same weights.
 
-A module object is a scope. Everything inside one module instance is grouped by where it sits in
-that module's code, and calling the module again, from anywhere, gives every op inside it its next
-pass. So `self.block(x)` called three times from a loop gives every op inside `block` three
-passes, and the pass number equals the module call number (`block:1`, `block:2`, `block:3`).
+Calling a module again is a separate concept: a module call. A module object called three times,
+from one line or from several, has three module calls, numbered `block:1`, `block:2`, `block:3`.
+The module is not looping; each op inside it simply runs once per module call, so its layer has
+one pass per call and the pass number equals the module call number. Everything inside one module
+instance is grouped by where it sits in that module's code.
 
 Argument values, tensor shapes, shared weights and the shape of the graph are never evidence
 either way.
@@ -83,12 +84,12 @@ passes are its versions). Inputs and outputs are always single-pass layers.
 | Two same-type ops on one line, inside a loop | two layers, one pass per iteration each |
 | One raw weight used on two lines, `x @ W` twice | 2 single-pass `matmul` layers |
 | Embedding and output head with tied weights | separate layers |
-| One module called 3 times from a loop | 3 passes |
-| One module instance called from 3 different lines | 3 passes |
-| One `nn.ReLU` instance reused on 3 lines, with other ops between | `relu` 3 passes |
-| One module instance shared by two parent modules | 1 layer, 2 passes |
+| One module called 3 times from a loop | 3 module calls; each op inside, one pass per call |
+| One module instance called from 3 different lines | 3 module calls; each op inside, one pass per call |
+| One `nn.ReLU` instance reused on 3 lines, with other ops between | 3 module calls; `relu` 3 passes |
+| One module instance shared by two parent modules | 2 module calls; each op inside, 1 layer with 2 passes |
 | A `ModuleList` of distinct but identical modules | separate layers |
-| Siamese encoder (one encoder on two inputs) | every encoder op 2 passes |
+| Siamese encoder (one encoder on two inputs) | 2 module calls; every encoder op 2 passes |
 | `[torch.exp(c) for c in cs]` | `exp` one pass per element |
 | `sum(h(x) for h in self.heads)` over a `ModuleList` | each head its own layer; builtin `sum` gives `radd` once and `add` N-1 times |
 | `map(torch.sin, xs)`, `map(lambda t: torch.sin(t), xs)` | `sin` one pass per element |

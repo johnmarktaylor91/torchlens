@@ -140,7 +140,8 @@ call-site chain from `utils/_call_site.py`, func_name, output slot) and writes
 `equivalence_class = "<type>@cs<N>"`; the key itself is not persisted. Step 7
 (`_group_by_call_sites`) makes ops with one class passes of one layer, buffers group by buffer
 address, inputs and outputs stay single, and ops with no chain fall back to their site key
-position. Whether a module called again is the next pass is one predicate,
+position. Whether each module call of one module object repeats the ops inside it (decided
+yes, 2026-10-29; repeated calls are module calls, `m:1`, `m:2`) is one predicate,
 `_call_site.MODULE_CALL_IS_PASS`. When no op carries a call-site class (other backends,
 predicate-mode `tl.record`), `loop_detection.py` builds a backend-neutral
 `RecurrenceGroupingGraph` and applies the assignments returned by `loop_grouping_adapter.py`
