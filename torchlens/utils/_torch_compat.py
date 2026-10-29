@@ -52,10 +52,6 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._dynamo_explain_shapes import (
-    _DynamoExplainOutputError as _DynamoExplainOutputError,
-    normalize_dynamo_explain_output as normalize_dynamo_explain_output,
-)
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
