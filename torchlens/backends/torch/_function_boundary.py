@@ -31,6 +31,7 @@ import threading
 import time
 import warnings
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -281,11 +282,11 @@ def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple
         if not isinstance(func_name, str):
             continue
         parentless = not _event_parents(event)
-        if func_name in HOST_ENTRY_FUNC_NAMES or (
+        is_entry = func_name in HOST_ENTRY_FUNC_NAMES or (
             func_name in PARENTLESS_HOST_ENTRY_FUNC_NAMES and parentless
-        ):
-            if func_name not in names:
-                names.append(func_name)
+        )
+        if is_entry and func_name not in names:
+            names.append(func_name)
     return tuple(names)
 
 
@@ -343,15 +344,19 @@ def _reown_witness_events(
         event.owner = token
 
 
-def _log_boundary_op(
-    trace: Any,
-    replay: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    out: Any,
-    exec_ctx: FuncExecutionContext,
-    func_call_id: int,
-) -> None:
+@dataclass(frozen=True)
+class _BoundaryCall:
+    """One collapsed ``Function.apply`` call, ready to be logged as the boundary op."""
+
+    replay: Callable[..., Any]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+    out: Any
+    exec_ctx: FuncExecutionContext
+    func_call_id: int
+
+
+def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the one ``autogradfunction`` op."""
 
     from .ops import log_function_output_tensors
@@ -361,16 +366,16 @@ def _log_boundary_op(
 
         log_function_output_tensors(
             trace,
-            replay,
+            call.replay,
             FOREIGN_FUNCTION_FUNC_NAME,
-            args,
-            kwargs,
-            args,
-            kwargs,
-            out,
-            exec_ctx,
+            call.args,
+            call.kwargs,
+            call.args,
+            call.kwargs,
+            call.out,
+            call.exec_ctx,
             True,
-            func_call_id,
+            call.func_call_id,
         )
 
     # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census,
@@ -398,7 +403,7 @@ def _warn_foreign_boundary(trace: Any, cls: type[Any], exits: tuple[str, ...]) -
             f"boundary op: its forward left torch ({', '.join(exits)}). The "
             "operations inside it are not logged; the boundary op replays by calling the "
             "Function's apply again.",
-            code=FOREIGN_FUNCTION_WARNING_CODE,
+            code="foreign_kernel_boundary",  # literal: the warning-contract census reads it
             function=function_name,
         ),
         stacklevel=5,
@@ -473,13 +478,13 @@ def record_function_apply(
         autocast_state=autocast_state,
     )
     replay = _make_replay_callable(cls, original_function, exits)
-    _log_boundary_op(trace, replay, args, kwargs, out, exec_ctx, func_call_id)
+    _log_boundary_op(trace, _BoundaryCall(replay, args, kwargs, out, exec_ctx, func_call_id))
     interior_labels = {
         label
         for label in (_event_label(event) for event in interior_events)
         if isinstance(label, str)
     }
-    trace.__dict__.setdefault(FOREIGN_FUNCTION_INTERIOR_ATTR, set()).update(interior_labels)
+    trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
     if witness_state is not None:
         _reown_witness_events(
             witness_state, witness_mark, witness_stop, original_function, func_call_id

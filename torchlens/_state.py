@@ -509,7 +509,7 @@ census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a cl
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 ``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
 ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
-round trip captured on every path: ``backends.torch._function_boundary`` records it
+round trip captured on every path: the ``_function_boundary`` backend module records it
 as one ``autogradfunction`` boundary op whose interior the census owns. The ``tl.validate`` paths flip it to ``"shadow"``
 for their own run, and ``wrap_torch(completeness_witness=True)`` arms it for every
 capture; only an armed census can produce ``capture_verified=True``. Flipping the

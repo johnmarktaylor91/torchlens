@@ -16,6 +16,9 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # torch.ops recorder suppression depth: incremented/decremented in the
         # census redispatch's own try/finally; a survivor would silently stop
         # recording user torch.ops calls.
+        # Foreign-kernel boundary: the stack of export names seen inside each live
+        # Function.apply frame, pushed and popped around that one apply call.
+        ("torchlens/backends/torch/_function_boundary.py", "_FRAMES"),
         ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
@@ -205,6 +208,12 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_ENTER"),
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_INIT"),
         ("torchlens/backends/torch/backward.py", "_SAVED_TENSORS_HOOKS_INIT_PATCHED"),
+        # Foreign-kernel boundary (autograd.Function.apply wrapper and the dlpack
+        # export patches): installed by wrap_torch beside the autograd wrappers,
+        # restored identity-checked and emptied by unwrap_torch.
+        ("torchlens/backends/torch/_function_boundary.py", "_INSTALLED_APPLY"),
+        ("torchlens/backends/torch/_function_boundary.py", "_ORIGINAL_APPLY"),
+        ("torchlens/backends/torch/_function_boundary.py", "_PATCHED_EXPORTS"),
         # Patched legacy constructor classes (torch.<dtype>Tensor, Variable):
         # installed by wrap_torch, restored and emptied by unwrap_torch.
         ("torchlens/backends/torch/legacy_ctors.py", "_INSTALLED"),
