@@ -16,7 +16,9 @@ Key entry points:
   `Layer.site_key` / `Layer.site_peers` / `Layer.shape_summary` are the
   Layer surface (typed refusals `layer_site_ambiguous` /
   `site_key_unavailable`); `grouping=` is the closed-vocabulary knob
-  ("structural" default; others refuse typed pre-D1/S2) mirrored on
+  ("structural" default, which on torch is call-site grouping,
+  `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
+  refuse typed pre-D1/S2) mirrored on
   `trace.grouping`, with the load-validated `grouping_policy_v1` stamp on
   `trace.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold

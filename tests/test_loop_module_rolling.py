@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
+from torchlens.utils import _call_site
 from torchlens.visualization._render_nodes import compute_default_node_lines
 
 # Session-private output root (conftest exports it before collection); the
@@ -319,7 +320,7 @@ class TwoDistinctLoops(nn.Module):
 
 
 class BufferRewriteLoops(nn.Module):
-    """Buffer rewritten across repeated loop bodies."""
+    """Buffer read and rewritten on every pass of one loop body."""
 
     def __init__(self) -> None:
         """Initialize the state buffer."""
@@ -328,13 +329,14 @@ class BufferRewriteLoops(nn.Module):
         self.register_buffer("state", torch.zeros(4))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Read and rewrite the buffer across two loops."""
+        """Read and rewrite the buffer five times from one loop body.
+
+        One loop, so the read and the rewrite are each one layer with five passes
+        (two loops would be two places in the code, so two layers each).
+        """
 
         y = x
-        for _ in range(2):
-            y = y + self.state
-            self.state = self.state + 1
-        for _ in range(3):
+        for _ in range(5):
             y = y + self.state
             self.state = self.state + 1
         return y
@@ -729,7 +731,9 @@ def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: 
     assert "@relu:" not in dot
 
 
-def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
+def test_separable_atomic_module_marks_distinct_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An atomic module reused at separable outside+inside sites labels its calls.
 
     Unlike the continuous chain, ``InsideOutsideReluSeparable`` uses the relu at an
@@ -739,6 +743,10 @@ def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
     already maximally collapsed.
     """
 
+    # Separable calls of one module instance are distinct layers only under pure
+    # call-site grouping; with MODULE_CALL_IS_PASS (the default) the reused relu
+    # is one 4-pass layer, the case test_grouping_call_sites row 28 pins.
+    monkeypatch.setattr(_call_site, "MODULE_CALL_IS_PASS", False)
     trace = _trace(InsideOutsideReluSeparable())
     shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", vis_call_depth=1)
     deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", vis_call_depth=1000)
