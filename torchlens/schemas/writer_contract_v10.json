@@ -976,6 +976,7 @@
     "backward_memory_backend": "keep",
     "backward_pass_logs": "keep",
     "backward_peak_memory": "keep",
+    "backward_peak_memory_reason": "keep",
     "backward_ready": "drop",
     "backward_root_grad_fn_object_ids": "keep",
     "batch_render": "keep",
@@ -1082,6 +1083,7 @@
     "layers_with_params": "keep",
     "manual_tensor_connections": "keep",
     "mark_layer_depths": "keep",
+    "measure_host_peak_memory": "drop",
     "measure_python_peak_memory": "drop",
     "model_class_name": "keep",
     "model_class_qualname": "keep",
@@ -3496,6 +3498,7 @@
      "backward_memory_backend": "keep",
      "backward_pass_logs": "keep",
      "backward_peak_memory": "keep",
+     "backward_peak_memory_reason": "keep",
      "backward_ready": "drop",
      "backward_root_grad_fn_object_ids": "keep",
      "batch_render": "keep",
@@ -3602,6 +3605,7 @@
      "layers_with_params": "keep",
      "manual_tensor_connections": "keep",
      "mark_layer_depths": "keep",
+     "measure_host_peak_memory": "drop",
      "measure_python_peak_memory": "drop",
      "model_class_name": "keep",
      "model_class_qualname": "keep",
@@ -3723,6 +3727,7 @@
      "backward_memory_backend": "fact",
      "backward_pass_logs": "fact",
      "backward_peak_memory": "fact",
+     "backward_peak_memory_reason": "fact",
      "backward_root_grad_fn_object_ids": "fact",
      "batch_render": "fact",
      "buffer_layers": "fact",
@@ -3912,6 +3917,7 @@
      "backward_memory_backend",
      "backward_pass_logs",
      "backward_peak_memory",
+     "backward_peak_memory_reason",
      "backward_root_grad_fn_object_ids",
      "batch_render",
      "buffer_layers",
@@ -4094,5 +4100,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "ff49d65bd3e76bb6a596cae32bfcfcb32c062031d58fd7ce185e5d1e622ceb1d"
+ "writer_contract_digest": "50ed28bf3aaebdc5375a0f93dbf20facb47ecfb47caabeff2bd4b6227dc51bcd"
 }
