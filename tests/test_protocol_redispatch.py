@@ -114,6 +114,11 @@ def _stack(bags, dim=0):
     return torch.stack([bag.tensor for bag in bags], dim) * 2
 
 
+@implements(torch.flatten)
+def _flatten(bag, start_dim=0, end_dim=-1):
+    raise RuntimeError("bag cannot flatten")
+
+
 @implements(F.relu)
 def _relu(bag, inplace=False):
     return F.relu(bag.tensor) + 1
@@ -131,7 +136,9 @@ def post_wrap_library() -> Iterator[types.ModuleType]:
     module = types.ModuleType(name)
     sys.modules[name] = module
     try:
-        exec(compile(_POST_WRAP_LIBRARY_SOURCE, name, "exec"), module.__dict__)
+        # Installed-package path, as tensordict's frames are (classifier zone "library").
+        filename = f"/opt/venv/lib/python3/site-packages/{name}.py"
+        exec(compile(_POST_WRAP_LIBRARY_SOURCE, filename, "exec"), module.__dict__)
         assert torch.stack in module.HANDLED
         assert _resolve(torch.stack) not in module.HANDLED
         yield module
@@ -320,8 +327,10 @@ def test_overloaded_args_follow_torch_protocol_order() -> None:
     assert [type(value) for value in ordered] == [Child, Base]
 
 
-def _capture_failure(forward: Callable[[torch.Tensor], Any]) -> BaseException:
-    """Return the exception a capture of ``forward`` raises."""
+def _capture_failure(
+    forward: Callable[[torch.Tensor], Any], expected: type[BaseException] = TypeError
+) -> BaseException:
+    """Return the ``expected`` exception a capture of ``forward`` raises."""
 
     class Model(nn.Module):
         """Runs ``forward``."""
@@ -329,7 +338,7 @@ def _capture_failure(forward: Callable[[torch.Tensor], Any]) -> BaseException:
         def forward(self, x: torch.Tensor) -> Any:
             return forward(x)
 
-    with pytest.raises(TypeError) as info:
+    with pytest.raises(expected) as info:
         tl.trace(Model(), torch.ones(2))
     return info.value
 
@@ -351,3 +360,18 @@ def test_genuine_decline_in_capture_classifies_user_op(post_wrap_bag: type) -> N
     exc = _capture_failure(lambda x: torch.cat([post_wrap_bag(x), post_wrap_bag(x)]))
     assert "Multiple dispatch failed for 'torch.cat'" in str(exc)
     assert classify_failure_origin(exc) is FailureOrigin.USER_OP
+
+
+def test_handler_error_after_redispatch_classifies_user_op(post_wrap_bag: type) -> None:
+    """A library handler's own error after redispatch is the user's op failing."""
+
+    exc = _capture_failure(lambda x: torch.flatten(post_wrap_bag(x)), RuntimeError)
+    assert "bag cannot flatten" in str(exc)
+    frames = traceback.extract_tb(exc.__traceback__)
+    assert "_protocol_redispatch.py" in {Path(frame.filename).name for frame in frames}
+    assert classify_failure_origin(exc) is FailureOrigin.USER_OP
+    # The classifier matches the re-offer line by source text; pin it exists.
+    from torchlens.capture import outcome
+
+    source = Path(_protocol_redispatch.__file__).read_text()
+    assert outcome._PROTOCOL_REDISPATCH_MARKER in source

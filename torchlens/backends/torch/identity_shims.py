@@ -26,9 +26,9 @@ allowlist (``torch._library.utils._RANDOM_FUNCTIONS``, the MaskedTensor
 reduce maps, the lazy-module ``_allowed_methods`` allowlist -- each safe on
 an eager-import or protocol-supplied-original basis) live in
 ``tests/test_wrap_state_compat.py``; an unreviewed new table fails that gate. A THIRD-PARTY
-handler table keyed on wrappers by a post-wrap import (tensordict) is not
-shimmed per library: the wrapper re-offers a fully declined dispatch under
-its own identity (``_protocol_redispatch``). A fourth normalization rides along:
+handler table keyed on wrappers by a post-wrap import (tensordict) gets no
+per-library shim: the wrapper re-offers a fully declined dispatch under its
+own identity, and unwrap aliases such tables generically (``_protocol_redispatch``). A fourth normalization rides along:
 ``torch.overrides.resolve_name`` keys its cached index by the pre-warm
 originals, so a wrapper argument resolved to ``None`` -- the shim retries a
 miss with the ledger original. A fifth normalizes TorchScript's overload
