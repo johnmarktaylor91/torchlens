@@ -536,6 +536,40 @@ def _find_output_ancestors(self: "Trace") -> None:
                 node.output_descendants.update(child.output_descendants)
 
 
+def _remove_foreign_kernel_interiors(self: "Trace") -> None:
+    """Drop the interior ops of every collapsed foreign-kernel ``autograd.Function``.
+
+    ``backends.torch._function_boundary`` records a Function whose forward left torch
+    as one ``autogradfunction`` boundary op and lists the raw labels of the ops logged
+    inside its ``apply`` on the session-time attribute
+    ``_foreign_kernel_interior_labels``. Those ops are the boundary's interior, not
+    graph nodes: they go before the reachability flood so an input-side chain such as
+    ``detach -> numpy()`` is neither kept as a dead end nor reported as an internal
+    sink. Their aten dispatches were re-owned to the boundary token at capture time,
+    so the completeness census needs no pruned-op credit for them.
+    """
+
+    labels = self.__dict__.pop("_foreign_kernel_interior_labels", None)
+    if not labels:
+        return
+    raw_layer_dict = self._raw_graph_ws.raw_layer_dict
+    present = [label for label in self._raw_graph_ws.raw_layer_labels_list if label in labels]
+    if not present:
+        return
+    self._batch_remove_log_entries(
+        [raw_layer_dict[label] for label in present], remove_references=True
+    )
+    removed = set(present)
+    new_layer_dict = OrderedDict()
+    new_layer_list = []
+    for tensor_label in self._raw_graph_ws.raw_layer_labels_list:
+        if tensor_label not in removed:
+            new_layer_dict[tensor_label] = raw_layer_dict[tensor_label]
+            new_layer_list.append(tensor_label)
+    self._raw_graph_ws.raw_layer_labels_list = new_layer_list
+    self._raw_graph_ws.raw_layer_dict = new_layer_dict
+
+
 def _remove_orphan_nodes(self: "Trace") -> None:
     """Step 3: Remove orphan nodes unreachable from both inputs and outputs.
 
@@ -549,6 +583,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     Any non-output node with no children is logged as an internally-terminated tensor
     (it produced a value that was never used by downstream computation reaching an output).
     """
+    _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
     nodes_seen = set()
     # Seed with inputs, outputs, and written buffer-version nodes. Written

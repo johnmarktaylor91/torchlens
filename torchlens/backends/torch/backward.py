@@ -4149,7 +4149,12 @@ def install_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED, _ORIGINAL_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_GRAD
+    from ._function_boundary import install_function_apply_wrapper
+
     _install_saved_tensors_hooks_scope()
+    # The foreign-kernel boundary rides the same install/teardown pair as the
+    # autograd entry wrappers (``Function.apply`` is an autograd entry point too).
+    install_function_apply_wrapper()
     if _AUTOGRAD_WRAPPERS_INSTALLED:
         return
     _ORIGINAL_AUTOGRAD_BACKWARD = torch.autograd.backward
@@ -4249,8 +4254,11 @@ def uninstall_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
+    from ._function_boundary import uninstall_function_apply_wrapper
+
     buried_sites: list[str] = []
     _uninstall_saved_tensors_hooks_scope(buried_sites)
+    uninstall_function_apply_wrapper()
     if not _AUTOGRAD_WRAPPERS_INSTALLED:
         _warn_buried_autograd_sites(buried_sites)
         return
