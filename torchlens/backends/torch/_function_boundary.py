@@ -220,10 +220,22 @@ def uninstall_function_apply_wrapper() -> None:
 
 
 def _active_witness_state(trace: Any) -> Any | None:
-    """Return the armed completeness-witness state of ``trace``, if any."""
+    """Return the armed completeness-witness state of ``trace``, if any.
 
+    The census publishes ``_ACTIVE_WITNESS_STATE`` only for runnable captures, so the
+    live ``_CompletenessDispatchMode`` on the dispatch-mode stack is read first: it
+    carries the state of every armed census, runnable or not.
+    """
+
+    from ...utils._torch_compat import get_current_dispatch_mode_stack
     from . import completeness_witness
 
+    for mode in reversed(get_current_dispatch_mode_stack() or []):
+        state = getattr(mode, "state", None)
+        if isinstance(mode, completeness_witness._CompletenessDispatchMode) and (
+            getattr(state, "trace", None) is trace
+        ):
+            return state
     state = getattr(completeness_witness, "_ACTIVE_WITNESS_STATE", None)
     if state is None or state.trace is not trace:
         return None

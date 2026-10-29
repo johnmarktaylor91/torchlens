@@ -149,7 +149,7 @@ def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
 
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op") as record:
         trace = tl.trace(model, x)
-    codes = [getattr(w.message, "code", None) for w in record]
+    codes = [getattr(w.message, "fields", {}).get("code") for w in record]
     assert FOREIGN_FUNCTION_WARNING_CODE in codes
     _assert_one_boundary(trace, function)
     op = _boundary_ops(trace)[0]
@@ -235,7 +235,7 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     assert _boundary_ops(trace) == []
     from_numpy_ops = [op for op in trace.layer_list if op.layer_type == "fromnumpy"]
     assert len(from_numpy_ops) == 1
-    assert from_numpy_ops[0].parents == []
+    assert list(from_numpy_ops[0].parents) == []
     assert not trace.output_ops[0].input_ancestors
     assert any(op.layer_type == "detach" for op in trace.layer_list)
     with warnings.catch_warnings():
