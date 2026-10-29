@@ -87,6 +87,14 @@ def _buffer_addresses_by_label(
         if address not in used_addresses and not address.endswith(".num_batches_tracked")
     ]
     unmatched_address_names = {address for address, _value in unmatched_addresses}
+    # A recorded address may name the same registered buffer on several events
+    # (a read re-logged after an overlapping write cleared its live label is a
+    # second node for the same buffer). Only the value/shape ladder consumes an
+    # address; a recorded one is checked against the whole registered universe,
+    # so every read of one buffer joins its equivalence group at step 0.
+    registered_address_names = unmatched_address_names | {
+        address for address in used_addresses if not address.endswith(".num_batches_tracked")
+    }
     for event in source_buffer_events:
         if event.label_raw in by_label:
             continue
@@ -111,7 +119,7 @@ def _buffer_addresses_by_label(
             # `UNSUPPORTED_TENSOR_CONSTANT` refusal on runnable save. Skipping
             # the ladder here is what both blocks the theft AND preserves the
             # recorded-vs-heuristic `address`/`backend_address` distinction.
-            if recorded not in unmatched_address_names:
+            if recorded not in registered_address_names:
                 continue
             address = recorded
         else:
