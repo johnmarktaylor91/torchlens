@@ -121,7 +121,7 @@ def constants() -> dict[str, Any]:
         for name, param in inspect.signature(TraceVisualizationMixin.draw).parameters.items()
     }
     typo = DEFAULT_TYPOGRAPHY
-    # Role colors as the default skin renders them (Okabe-Ito since R2-29), not the
+    # Role colors as the default skin renders them, not the
     # historical constants the skin translates.
     palette = themes.resolve_theme("torchlens").semantic_palette
     return {
@@ -165,7 +165,9 @@ FULL = {"node_label_fields": None}
 CALLS = {"node_label_fields": ["label", "module"]}
 CAP = {"vis_graph_overrides": {}}
 QUIET = {"show_legend": False}
-LEGEND = "node(text~TorchLens)"
+#: The key rides in the header label; its weight entries name it (a crop, then a mark).
+LEGEND = "text:trainable weights"
+LEGEND_KEY = 'graph(label~"trainable weights")'
 
 SLIDES: tuple[Slide, ...] = (
     Slide(
@@ -482,7 +484,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Clamp",
                 kwargs={"show_legend": True, **FULL},
                 label="show_legend=True",
-                crop=(LEGEND,),
+                crop=("text:mutated parameter",),
             ),
         ),
         keys=(
@@ -490,7 +492,7 @@ SLIDES: tuple[Slide, ...] = (
             Key("Dashed black edges to its earlier readers", "edge(style=dashed)"),
             Key(
                 "The legend gains this row only now",
-                'node(text~"mutated parameter")',
+                'graph(label~"mutated parameter")',
                 "b",
                 at="mutated parameter",
             ),
@@ -798,15 +800,15 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": "flops", "show_legend": None},
                 label="its legend",
-                crop=("node(text~color_by)",),
+                crop=("text:color_by",),
             ),
         ),
         keys=(
             Key("Most FLOPs: the darkest fill", "node(text~linear_1_1)"),
-            Key("The encoding legend appears by itself", "node(text~color_by)", panel="b"),
+            Key("The encoding legend appears by itself", "graph(label~color_by)", panel="b"),
             Key(
                 "Unencoded nodes stay white and are counted",
-                "node(text~encoded)",
+                "graph(label~encoded)",
                 panel="b",
                 at="encoded",
             ),
@@ -852,12 +854,12 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"size_by": "dims", "scale": "sqrt", "show_legend": None},
                 label="its legend",
-                crop=("node(text~size_by)",),
+                crop=("text:size_by",),
             ),
         ),
         keys=(
             Key("Bigger tensor, bigger node", "node(text~linear_1)"),
-            Key("The legend states the size rule", "node(text~size_by)", panel="b"),
+            Key("The legend states the size rule", "graph(label~size_by)", panel="b"),
             Key('scale="sqrt" by default; "linear" grows faster', None),
         ),
         rows=("VK04", "VK06"),
@@ -879,12 +881,12 @@ SLIDES: tuple[Slide, ...] = (
                 "Loop2",
                 kwargs={"view": "unrolled", "stack_by": True, "show_legend": None},
                 label="its legend",
-                crop=("node(text~stack_by)",),
+                crop=("text:stack_by",),
             ),
         ),
         keys=(
             Key("Each pass shares a rank", "node(name=linear_1_1pass2)"),
-            Key("The legend explains the rank rule", "node(text~stack_by)", panel="b"),
+            Key("The legend explains the rank rule", "graph(label~stack_by)", panel="b"),
             Key("Sibling ordering is off while stacking", None),
         ),
         footnote="The caption adds the line stacked by pass_index.",
@@ -1130,7 +1132,7 @@ SLIDES: tuple[Slide, ...] = (
                 crop=(LEGEND, "node(text~input_1)"),
             ),
         ),
-        keys=(Key("The rank engine pins its legend at the left", LEGEND),),
+        keys=(Key("The rank engine keeps the key under the header", LEGEND_KEY),),
         footnote="The rank engine draws no orphans and does not order siblings.",
         rows=("VY02", "VI04"),
     ),
@@ -1187,9 +1189,10 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="builtin-legend",
         title="The legend TorchLens draws",
-        rule="show_legend=True adds a row only for each fill role drawn (input, output, plain op, "
-        "parameterized, buffer, boolean, intervention/cone); None shows only an active channel's "
-        "section.",
+        rule="show_legend=True adds the key under the header, one entry per mark drawn, each with its "
+        "real shape and fill (input, output, trainable and frozen weights, module, and buffer, "
+        "true/false test, mutated parameter or intervention/cone when drawn); None shows only an "
+        "active channel's section.",
         panels=(
             Panel(
                 "a",
@@ -1200,8 +1203,8 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The built-in legend table", 'node(text~"TorchLens legend")'),
-            Key("No shapes, dashes, double borders, box weights or arrow words", None),
+            Key("The key sits under the header", LEGEND_KEY),
+            Key("Real shapes and fills; no operation or arrow rows", None),
             Key("Channel and backward sections join when they apply", None),
             Key("show_legend=False hides even those", None),
         ),
