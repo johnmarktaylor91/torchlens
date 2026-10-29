@@ -213,3 +213,30 @@ def test_a_replaced_parameter_object_keeps_the_captured_values() -> None:
     result = _replay_fork_do(trace)
     out = str(trace.output_layers[0])
     assert torch.allclose(result.layer_dict_all_keys[out].out, expected)
+
+
+@pytest.mark.parametrize("engine", ["replay", "rerun"])
+def test_allow_changed_params_never_changes_the_capture(engine: str) -> None:
+    """Cache-key dont-care witness: the opt-in only gates replay's parameter check.
+
+    ``tl.trace`` takes neither options group, and a ``do()`` that captures (rerun) or
+    replays an unedited model produces the same trace under both values.
+    """
+
+    model, x, trace = _capture()
+    results = [
+        trace.fork().do(
+            tl.func("relu"),
+            _double,
+            model=model,
+            x=x,
+            intervention=InterventionOptions(engine=engine, allow_changed_params=allow),
+        )
+        for allow in (False, True)
+    ]
+    labels = [[str(op.label) for op in result.layer_list] for result in results]
+    assert labels[0] == labels[1]
+    for left, right in zip(results[0].layer_list, results[1].layer_list, strict=True):
+        if isinstance(left.out, torch.Tensor):
+            assert torch.equal(left.out, right.out), left.label
+    assert all(RUN_KEY not in result.last_run for result in results)
