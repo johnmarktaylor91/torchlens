@@ -102,7 +102,9 @@ class AlternativeReport:
         return "\n".join(lines)
 
 
-def _refuse(code: str, message: str, remedy: str, **fields: Any) -> BundleRelationError:
+def _alternative_refusal(
+    message: str, remedy: str, *, code: str, **fields: Any
+) -> BundleRelationError:
     return BundleRelationError(message, code=code, remedy=remedy, **fields)
 
 
@@ -130,42 +132,42 @@ def _check_steering(original: Bundle, second: Bundle, steered: tuple[str, ...]) 
     for name in steered:
         for side, bundle in (("original", original), ("second_run", second)):
             if name not in bundle.names:
-                raise _refuse(
-                    "alternative_target_missing",
+                raise _alternative_refusal(
                     f"add_alternative: the steered call {name!r} is not a member of the "
                     f"{side.replace('_', ' ')}; members: {bundle.names}.",
                     "name each steered call as the harness names its member in both runs",
                     call=name,
                     side=side,
+                    code="alternative_target_missing",
                 )
         rows = capture_edit_rows(second[name])
         if not any(row.get("sites") for row in rows):
-            raise _refuse(
-                "alternative_target_unsteered",
+            raise _alternative_refusal(
                 f"add_alternative: {name!r} in the second run was not captured under a "
                 "spec that fired, so its activations are not those of the steered call.",
                 "capture the steered call with tl.trace(model, ids, intervene=spec), the "
                 "spec it generated under",
                 call=name,
+                code="alternative_target_unsteered",
             )
         edits = " ".join(f"{row.get('edit', '')} {row.get('selection_repr', '')}" for row in rows)
         if any(marker in edits for marker in _POSITION_EDITS):
-            raise _refuse(
-                "alternative_capture_position_dependent",
+            raise _alternative_refusal(
                 f"add_alternative: {name!r}'s spec edits chosen positions or decode steps; "
                 "one teacher-forced forward does not reproduce that generation.",
                 "use a position-uniform spec, or capture the generation as an episode "
                 "(docs/reference/episode_capture.md)",
                 call=name,
+                code="alternative_capture_position_dependent",
             )
     for name in second.names:
         if name not in steered and capture_edit_rows(second[name]):
-            raise _refuse(
-                "alternative_steer_undeclared",
+            raise _alternative_refusal(
                 f"add_alternative: {name!r} in the second run was captured under a spec "
                 f"but is not declared in steered={list(steered)!r}.",
                 "declare every steered call in steered=, or capture the others plainly",
                 call=name,
+                code="alternative_steer_undeclared",
             )
 
 
@@ -175,8 +177,7 @@ def _status(name: str, steered: tuple[str, ...], report: TokenDivergence) -> str
     if name in steered:
         return "steered"
     if report.prompt_same and not report.completion_same:
-        raise _refuse(
-            "alternative_unchanged_call_diverged",
+        raise _alternative_refusal(
             f"add_alternative: {name!r} was not steered and saw the same prompt in both "
             f"runs, but its completion differs from token {report.completion_divergence}. "
             "The runs carry noise TorchLens cannot separate from the steer's effect; "
@@ -185,6 +186,7 @@ def _status(name: str, steered: tuple[str, ...], report: TokenDivergence) -> str
             "the batch the same, then re-run",
             call=name,
             completion_divergence=report.completion_divergence,
+            code="alternative_unchanged_call_diverged",
         )
     if report.prompt_same:
         return "unchanged"
@@ -338,11 +340,11 @@ def _bundle_add_alternative(
     _check_steering(self, second_run, names)
     taken = [prefix + name for name in second_run.names if prefix + name in self.names]
     if taken:
-        raise _refuse(
-            "alternative_member_name_taken",
+        raise _alternative_refusal(
             f"add_alternative: the copies {taken} would reuse existing member names.",
             "pass another prefix=, for example prefix='cf2_'",
             names=taken,
+            code="alternative_member_name_taken",
         )
     calls = _pair_calls(self, second_run, names, prefix)
     rows, opaque = _renamed_rows(second_run, prefix)

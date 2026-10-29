@@ -84,11 +84,11 @@ def capture_edit_rows(trace: Trace) -> list[dict[str, Any]]:
     return [row for row in audit if isinstance(row, dict) and row.get("kind") == "ACT"]
 
 
-def _refuse(name: str, reason: str) -> BundleRelationError:
+def _divergence_unavailable(name: str, reason: str, *, code: str) -> BundleRelationError:
     return BundleRelationError(
         f"Bundle.token_divergence cannot split member {name!r} into prompt and "
         f"completion: {reason}.",
-        code=UNAVAILABLE_CODE,
+        code=code,
         remedy=(
             "attach a token_boundary_v1 descriptor naming the member's completion range "
             "(torchlens.io.attach_sidecar(trace, 'torchlens.boundary_facts', {'stream': "
@@ -105,16 +105,28 @@ def _split(name: str, trace: Trace) -> tuple[list[int], list[int]]:
 
     binding = member_binding(trace)
     if binding is None:
-        raise _refuse(name, "it carries no token_boundary_v1 binding")
+        raise _divergence_unavailable(
+            name, "it carries no token_boundary_v1 binding", code=UNAVAILABLE_CODE
+        )
     completion = binding.get("completion")
     if completion is None:
-        raise _refuse(name, "its binding names no completion range")
+        raise _divergence_unavailable(
+            name, "its binding names no completion range", code=UNAVAILABLE_CODE
+        )
     ids = retained_ids(trace, binding)
     if ids is None:
-        raise _refuse(name, "its token ids are not retained or disagree with its binding")
+        raise _divergence_unavailable(
+            name,
+            "its token ids are not retained or disagree with its binding",
+            code=UNAVAILABLE_CODE,
+        )
     start, end = int(completion[0]), int(completion[1])
     if end > len(ids):
-        raise _refuse(name, f"its completion range ends at {end}, past the {len(ids)}-token stream")
+        raise _divergence_unavailable(
+            name,
+            f"its completion range ends at {end}, past the {len(ids)}-token stream",
+            code=UNAVAILABLE_CODE,
+        )
     return ids[:start], ids[start:end]
 
 
