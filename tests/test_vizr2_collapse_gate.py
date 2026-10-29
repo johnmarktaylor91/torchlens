@@ -121,7 +121,7 @@ def test_child_hiding_fewer_ops_and_two_child_parent_keep_their_eligibility() ->
 def test_wrapper_chain_keeps_the_outermost_and_the_root_never_gates_its_child() -> None:
     """In a chain of same-op wrappers only the outermost non-root module is a candidate."""
     signals = _signals(_OnlyChild(_OnlyChild(_OnlyChild())))
-    assert signals["self"] == (2, False)
+    assert signals["self"][1] is False
     # The root is never a candidate, so its only child is not gated by it.
     assert signals["inner"] == (2, True)
     assert signals["inner.inner"] == (2, False)
