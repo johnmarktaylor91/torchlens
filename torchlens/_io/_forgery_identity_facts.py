@@ -210,20 +210,14 @@ def _validate_tl_authored_root(trace: Trace) -> None:
             )
 
 
-#: The refusal code for each peak's reason pair (forks.13 forward; measure.2 backward).
-_PEAK_REASON_CODES = {
-    "forward": "artifact_forward_peak_memory_invalid",
-    "backward": "artifact_backward_peak_memory_invalid",
-}
-
-
-def _validate_peak_memory_reason(trace: Trace, which: str) -> None:
+def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None:
     """Validate one peak's reason pair (tlspec v10).
 
     ``<which>_peak_memory_reason`` is ``None`` (a value was measured, or the
     artifact predates the field) or a non-empty string explaining why
     ``<which>_peak_memory`` is ``None``. A reason beside a number, or a
-    non-string reason, is a forged or drifted artifact.
+    non-string reason, is a forged or drifted artifact. ``code`` is the
+    refusal code (forks.13 forward; measure.2 backward).
     """
 
     reason_value = getattr(trace, f"{which}_peak_memory_reason", None)
@@ -238,7 +232,7 @@ def _validate_peak_memory_reason(trace: Trace, which: str) -> None:
         _refuse_identity(
             f"Trace.{which}_peak_memory_reason {reason_value!r} must be a non-empty string "
             f"and may only explain a {which}_peak_memory of None.",
-            code=_PEAK_REASON_CODES[which],
+            code=code,
             field=f"Trace.{which}_peak_memory_reason",
             reason=reason,
             remedy=(
@@ -259,5 +253,5 @@ def _validate_identity_facts(trace: Trace) -> None:
     _validate_episode_step_stamps(trace)
     _validate_tl_authored_root(trace)
     _validate_root_entry_point(trace)
-    _validate_peak_memory_reason(trace, "forward")
-    _validate_peak_memory_reason(trace, "backward")
+    _validate_peak_memory_reason(trace, "forward", code="artifact_forward_peak_memory_invalid")
+    _validate_peak_memory_reason(trace, "backward", code="artifact_backward_peak_memory_invalid")
