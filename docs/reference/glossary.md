@@ -1682,6 +1682,13 @@ S2-gated*
   cleared with the other temporary build state (`None` outside a capture). The
   `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
 
+**tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
+: Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
+  key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
+  buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
+  the field goes away with the raw-graph workspace once the trace is projected. The
+  `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
+
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
   signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:
