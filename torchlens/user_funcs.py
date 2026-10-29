@@ -3577,7 +3577,7 @@ def _trace_torch_model(
             "intervention_ready": intervention_ready,
             "structure_only": capture_options.structure_only,
             "track_device_memory": capture_options.track_device_memory,
-            # measure.2: a cached capture without the opt-in holds no CPU peak.
+            # A cached capture without the opt-in holds no CPU peak.
             "measure_host_peak_memory": capture_options.measure_host_peak_memory,
             "log_injections": capture_options.log_injections,
             "save_raw_input": repr(save_raw_input_policy),

@@ -5,7 +5,7 @@ process RSS readers, the per-capture resident high-water scoping, and the
 ``Trace.forward_peak_memory_pair`` reader live here; the forward bracket in
 ``capture/trace.py`` stays the only writer (through :func:`record_forward_peak`).
 
-CPU peaks are opt-in (measure.2, JMT 28 Oct 2026): measuring one resets the
+CPU peaks are opt-in: measuring one resets the
 process-wide resident high-water mark, which also resets the caller's own
 ``VmHWM`` and ``ru_maxrss`` readings and cannot be undone. Only a capture with
 ``CaptureOptions(measure_host_peak_memory=True)`` calls :func:`reset_peak_rss`
@@ -225,7 +225,7 @@ CPU_ZERO_PEAK_WITH_PYTHON_REASON = (
 )
 
 #: The reason for a CPU forward or backward peak of ``None`` on a capture that
-#: did not opt in (measure.2): measuring resets the process-wide high-water mark.
+#: did not opt in: measuring resets the process-wide high-water mark.
 CPU_PEAK_NOT_REQUESTED_REASON = (
     "not measured: a CPU peak resets the process-wide resident high-water mark "
     "(VmHWM, ru_maxrss); pass CaptureOptions(measure_host_peak_memory=True) to measure it"

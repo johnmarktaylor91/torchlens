@@ -257,7 +257,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         backend_label = "cpu"
         before = process_rss_bytes()
     # F20 peak PAIR (brainpipe D-7): scope the host resident high-water mark to
-    # THIS capture, but only under the measure_host_peak_memory opt-in (measure.2):
+    # THIS capture, but only under the measure_host_peak_memory opt-in:
     # the reset is process-wide and also resets the caller's ru_maxrss.
     host_requested = bool(getattr(trace, "measure_host_peak_memory", False))
     rss_peak_scoped = host_requested and reset_peak_rss()
@@ -701,7 +701,7 @@ def save_new_outs(
         # forwarded only inference_only, so a raise_on_nan capture silently
         # lost its abort policy on every refreshed forward.
         raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
-        # measure.2: a refresh measures CPU peaks only if the source opted in.
+        # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
         save_raw_output=getattr(self, "save_raw_output", "small"),

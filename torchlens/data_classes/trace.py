@@ -1344,7 +1344,7 @@ class Trace(
         # F24 sampling knob + per-call sample store: allocator counters are
         # process facts of the capturing run; load restores the default.
         "track_device_memory": FieldPolicy.DROP,
-        "measure_host_peak_memory": FieldPolicy.DROP,  # measure.2 session knob
+        "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
         "_device_memory_samples": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,

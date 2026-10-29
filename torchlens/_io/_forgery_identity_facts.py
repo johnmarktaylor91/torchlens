@@ -217,7 +217,7 @@ def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None
     artifact predates the field) or a non-empty string explaining why
     ``<which>_peak_memory`` is ``None``. A reason beside a number, or a
     non-string reason, is a forged or drifted artifact. ``code`` is the
-    refusal code (forks.13 forward; measure.2 backward).
+    refusal code for the forward or the backward peak.
     """
 
     reason_value = getattr(trace, f"{which}_peak_memory_reason", None)

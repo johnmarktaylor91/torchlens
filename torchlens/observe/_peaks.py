@@ -80,7 +80,7 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
     backend = getattr(trace, f"{which}_memory_backend", None)
     peak = getattr(trace, f"{which}_peak_memory", None)
     if not backend or backend == "unknown" or peak is None:
-        # a CPU peak that was not requested (measure.2) or read 0 is recorded
+        # a CPU peak that was not requested or read 0 is recorded
         # as None WITH the reason naming the opt-in; surface it verbatim.
         # The reason explains a CPU measurement only, never an unknown backend.
         reason = getattr(trace, f"{which}_peak_memory_reason", None)

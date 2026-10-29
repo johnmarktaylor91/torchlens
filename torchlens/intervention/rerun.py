@@ -1005,7 +1005,7 @@ def _capture_with_active_spec(
             # source log's configured budget rather than silently rebudgeting at
             # the default.
             save_budget=getattr(log, "save_budget", "auto"),
-            # measure.2: a rerun measures CPU peaks only if the source opted in.
+            # A rerun measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(log, "measure_host_peak_memory", False)),
             output_transform=output_transform,
             save_raw_output=getattr(log, "save_raw_output", "small"),
