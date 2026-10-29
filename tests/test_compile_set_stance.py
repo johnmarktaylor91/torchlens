@@ -13,7 +13,7 @@ run its ORIGINAL Python for the duration of a capture:
 * interior interventions work inside formerly-opaque regions.
 
 One honest qualification (review): the stance invalidates nothing, but TorchLens's
-own wrapper install/uninstall can cost a one-time bounded burst of
+own wrapper install/uninstall can cost a bounded burst of
 recompilations on the first compiled call after each capture, then steady
 state. The coexistence contract is that burst, not "zero cost"; its size on
 real models is pinned in ``tests/real_model/test_track_compile_recompile_burst.py``.
@@ -176,7 +176,7 @@ def test_forced_eager_disclosure_note_fires_once_per_process() -> None:
     assert len(notes) == 1
     text = str(notes[0].message)
     assert "interiors ARE logged" in text
-    assert "a one-time bounded burst of recompilations" in text
+    assert "a bounded burst of recompilations" in text
 
     with warnings.catch_warnings(record=True) as second:
         warnings.simplefilter("always")
@@ -425,7 +425,7 @@ def test_warm_artifact_is_reproduced_and_the_recompile_is_bounded() -> None:
     """The coexistence contract: caches intact, a bounded burst after, then steady.
 
     ``force_eager`` itself invalidates nothing; TorchLens's wrapper
-    install/uninstall may cost a one-time bounded burst of recompilations on
+    install/uninstall may cost a bounded burst of recompilations on
     the first compiled call after each capture, then steady state. This toy
     model measures at most one recompile; the real-model burst bound lives in
     ``tests/real_model/test_track_compile_recompile_burst.py``. The reproduced
@@ -499,7 +499,7 @@ def test_compat_row_states_the_coexistence_contract_under_stance() -> None:
     assert row.detected is True
     assert row.status == "pass"
     assert "set_stance" in row.details
-    assert "a one-time bounded burst of recompilations" in row.details
+    assert "a bounded burst of recompilations" in row.details
     assert "unwrap_torch()" in row.details
     assert "tl.debug.graph_breaks" in row.suggestion
     assert "tl.debug.count_compiles" in row.suggestion

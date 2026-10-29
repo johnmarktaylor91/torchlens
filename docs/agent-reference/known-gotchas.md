@@ -69,7 +69,7 @@
   `prepare_compiled_capture`; skipped when `torch._dynamo` was never imported), so compiled plain
   attributes and free functions run their ORIGINAL eager Python: interiors are fully logged with
   ordinary verified semantics, zero compiles happen during capture, compiled caches survive with a
-  one-time bounded burst of recompilations on the first compiled call after each capture, then
+  bounded burst of recompilations on the first compiled call after each capture, then
   steady state (wrapper install/uninstall guard invalidation and graph breaks around TorchLens's own
   wrapper; measured by `tests/real_model/test_track_compile_recompile_burst.py`: zero on
   `resnet18`, six to seven frames on a tiny GPT-2, never above Dynamo's recompile limit), and the
