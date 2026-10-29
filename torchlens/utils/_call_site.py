@@ -163,8 +163,28 @@ def collapse_recursion(tokens: list[tuple[Any, Any]]) -> tuple[tuple[Any, Any], 
     return tuple(out)
 
 
-def canonical_chain(raw: tuple[tuple[CodeType, int], ...]) -> tuple[tuple[Any, Any], ...]:
-    """Turn raw ``(code, f_lasti)`` frames, innermost first, into a call-site chain."""
+def module_scope_entry(module: Any) -> tuple[tuple[str, int], int]:
+    """A raw chain entry for a module whose hook an op runs in.
 
-    tokens = [(_code_token(code), instruction_id(code, lasti)) for code, lasti in reversed(raw)]
+    Hooks run in ``_call_impl`` before the module's forward wrapper, so the
+    module is not the op's scope; its identity in the chain keeps the hooks of
+    distinct modules (two weight-normed convolutions in one ``Sequential``)
+    apart while one module called again still repeats its hook's place.
+    """
+
+    return (("module", id(module)), 0)
+
+
+def canonical_chain(raw: tuple[tuple[Any, int], ...]) -> tuple[tuple[Any, Any], ...]:
+    """Turn raw ``(code, f_lasti)`` frames, innermost first, into a call-site chain.
+
+    Module scope entries (:func:`module_scope_entry`) pass through unchanged.
+    """
+
+    tokens = [
+        (code, lasti)
+        if isinstance(code, tuple)
+        else (_code_token(code), instruction_id(code, lasti))
+        for code, lasti in reversed(raw)
+    ]
     return collapse_recursion(tokens)

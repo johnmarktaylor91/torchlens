@@ -870,6 +870,7 @@ def _call_site_chain(
     outer_boundary_pos: int,
     last_forward_pos: int,
     context_cache: _CodeContextCache | None,
+    hook_scopes: list[tuple[int, Any]] | tuple[()] = (),
 ) -> tuple[Any, ...]:
     """Return the call-site chain of the frames inside the op's module call.
 
@@ -877,7 +878,8 @@ def _call_site_chain(
     stops at the innermost module forward wrapper; otherwise it runs up to the
     root model's forward (the outermost wrapper or ``forward`` survivor),
     keeping every caller frame. Without any wrapper frame it runs up to the
-    outermost ``forward`` survivor.
+    outermost ``forward`` survivor. Each ``hook_scopes`` entry (a module whose
+    hook the op runs in) becomes a module token at its place in the chain.
     """
 
     if _call_site.MODULE_CALL_IS_PASS and inner_boundary_pos >= 0:
@@ -886,7 +888,15 @@ def _call_site_chain(
         boundary = max(outer_boundary_pos, last_forward_pos + 1)
     if boundary <= 0:
         return ()
-    raw = tuple((code, lasti) for _frame, code, _lineno, lasti in survivors[:boundary])
+    raw_frames: list[tuple[Any, int]] = []
+    scopes = iter(hook_scopes)
+    scope = next(scopes, None)
+    for position, (_frame, code, _lineno, lasti) in enumerate(survivors[:boundary]):
+        while scope is not None and scope[0] <= position:
+            raw_frames.append(_call_site.module_scope_entry(scope[1]))
+            scope = next(scopes, None)
+        raw_frames.append((code, lasti))
+    raw = tuple(raw_frames)
     cache_key = ("__torchlens_call_site__", raw)
     if context_cache is not None:
         cached = context_cache.get(cache_key)
@@ -977,6 +987,11 @@ def _get_code_context(
     # frame was passed: the call-site chain boundaries.
     inner_boundary_pos = -1
     outer_boundary_pos = -1
+    # Modules whose ``_call_impl`` sits inside the innermost module call: the op
+    # runs in that module's hook (its forward wrapper is not on the stack yet),
+    # recorded as (survivor count, module) so the chain keeps hooks of distinct
+    # modules apart.
+    hook_scopes: list[tuple[int, Any]] = []
     anchor_frame: FrameType | None = None
     frame: FrameType | None = sys._getframe(0)
     while frame is not None:
@@ -997,6 +1012,8 @@ def _get_code_context(
             anchor_frame = frame
             break
         name = code.co_name
+        if call_site_out is not None and inner_boundary_pos < 0 and name == "_call_impl":
+            hook_scopes.append((len(survivors), frame.f_locals.get("self")))
         if not code.co_filename.startswith(pkg_dir) and "_call_impl" not in name:
             if name == "forward":
                 last_forward_pos = len(survivors)
@@ -1006,7 +1023,12 @@ def _get_code_context(
     if call_site_out is not None:
         call_site_out.append(
             _call_site_chain(
-                survivors, inner_boundary_pos, outer_boundary_pos, last_forward_pos, context_cache
+                survivors,
+                inner_boundary_pos,
+                outer_boundary_pos,
+                last_forward_pos,
+                context_cache,
+                hook_scopes,
             )
         )
 
