@@ -440,12 +440,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
     # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
     "torchlens/backends/torch/wrappers.py": 3400,
-    # 3500 -> 3550 (2026-10-29 batch-2 tsboundary base): the foreign-kernel
-    # boundary's export note (+6: the _function_boundary import and the
-    # decoration-time is_export_func gate) lands on a train measurement of
-    # 3498, so the merged tree measures 3504; next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3550,
-    "torchlens/backends/torch/wrappers.py": 3500,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
