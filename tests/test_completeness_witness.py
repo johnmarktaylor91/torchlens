@@ -976,6 +976,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__int__:logged",
         "torch_func:__index__:logged",
         "autograd:grad",
+        "autograd_function:foreign",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {

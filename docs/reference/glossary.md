@@ -459,7 +459,9 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.head` selects one attention head; `tl.facet` selects a semantic facet view;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and
+  `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
+  whose forward left torch through a numpy or dlpack round trip, with
+  `transform_kind="autograd.Function"`); `tl.output` selects model outputs, and
   `tl.output_at` / `tl.input_at` select a nested output or model-input path.
 
 **Temporal composition**
