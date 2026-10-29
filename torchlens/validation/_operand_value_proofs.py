@@ -37,7 +37,6 @@ with no elements has no value a perturbation could change.
 
 from __future__ import annotations
 
-from numbers import Number
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -344,7 +343,7 @@ def _is_exactly_one(value: Any) -> bool:
 
     if isinstance(value, bool):
         return False
-    if isinstance(value, Number):
+    if isinstance(value, (int, float)):
         return value == 1
     return (
         isinstance(value, torch.Tensor)
