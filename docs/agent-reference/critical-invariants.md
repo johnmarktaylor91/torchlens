@@ -93,7 +93,11 @@
     validation replays it by calling the Function's `apply` again. An ordinary custom Function
     (interior in torch) is captured op by op exactly as before; a plain round trip outside a
     Function is never collapsed: its `from_numpy` stays a parentless source op and the census
-    keeps reporting any unowned dispatch it makes.
+    keeps reporting any unowned dispatch it makes. A `torch.jit.ScriptFunction` called from an
+    eager forward is one `jitscript` boundary op (`transform_kind="jit.script"`,
+    `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
+    `jit_script:boundary` token and replay calls the function again; a call that writes into a
+    tensor argument in place is never collapsed and stays a census gap.
 14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.

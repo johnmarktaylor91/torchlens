@@ -225,6 +225,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/_function_boundary.py", "_INSTALLED_APPLY"),
         ("torchlens/backends/torch/_function_boundary.py", "_ORIGINAL_APPLY"),
         ("torchlens/backends/torch/_function_boundary.py", "_PATCHED_EXPORTS"),
+        # TorchScript call boundary (ScriptFunction.__call__ wrapper): installed and
+        # restored identity-checked by the same pair as the Function.apply wrapper.
+        ("torchlens/backends/torch/_script_boundary.py", "_INSTALLED_CALL"),
+        ("torchlens/backends/torch/_script_boundary.py", "_ORIGINAL_CALL"),
         # Patched legacy constructor classes (torch.<dtype>Tensor, Variable):
         # installed by wrap_torch, restored and emptied by unwrap_torch.
         ("torchlens/backends/torch/legacy_ctors.py", "_INSTALLED"),

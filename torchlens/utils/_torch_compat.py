@@ -52,6 +52,7 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._script_call_slot import probe_script_function_call_hook
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -116,6 +117,7 @@ __all__ = [
     "HAS_NAMED_TENSOR_API",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
+    "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -1859,11 +1861,10 @@ HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = _probe_legacy_constructor_new_patch()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
-# r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published
-# capability. It tracks a user-side torch spelling limitation (torch.roll with a
-# bare 0-dim tensor `shifts`: 2.8 rejects, 2.13 accepts) on which TorchLens does
-# NOT degrade -- zero library consumers exist, so publishing it made doctor WARN
-# across most of the declared support range for nothing TorchLens does.
+HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = probe_script_function_call_hook()
+# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
+# R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
+# a user-side limit TorchLens never degrades on, so doctor does not report it.
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
@@ -2070,6 +2071,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
+    "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",

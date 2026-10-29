@@ -195,11 +195,16 @@
   A `tl.where` predicate that reads post-capture fields (`p.layer_label`) is opaque, so it still
   fails at the first op with `bind_rule_runtime_error`.
 - TorchScript and DLPack: a `torch.jit.script` function called from an eager forward runs its
-  body in the TorchScript interpreter, below the Python functions TorchLens wraps, so its
-  operations are not in the graph. The completeness witness counts them as unaccounted and the
-  capture is `capture_verified=False` (a scripted module is refused up front). The advisory
-  `scripted_function_not_captured` names the scripted function and the call line; set
-  `PYTORCH_JIT=0` in the environment before the model's code is imported
+  body in the TorchScript interpreter, below the Python functions TorchLens wraps, so each call
+  is recorded as ONE `jitscript` boundary op (`backends/torch/_script_boundary.py`, hook on
+  `ScriptFunction.__call__`, gated by `HAS_SCRIPT_FUNCTION_CALL_HOOK`; warning
+  `torchscript_boundary`): its interior ops are not in the graph, every dispatch inside it is
+  owned by the audited `jit_script:boundary` token, and validation replays it by calling the
+  function again (a scripted module is still refused up front). A call that writes into one of
+  its tensor arguments in place is NOT recorded: the witness counts its dispatches as
+  unaccounted, the capture is `capture_verified=False`, and the advisory
+  `scripted_function_not_captured` names the function and the call line. To see the interior,
+  set `PYTORCH_JIT=0` in the environment before the model's code is imported
   (`PYTORCH_JIT=0 python your_script.py`) and `torch.jit.script` returns the plain function, so
   every operation inside it is captured. A tensor handed to another library through `to_dlpack`
   runs that library's kernels outside PyTorch's Python layer; `dlpack_call_not_captured` names the

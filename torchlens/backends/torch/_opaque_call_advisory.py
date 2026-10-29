@@ -5,6 +5,10 @@ the call-site line those dispatches came from calls a TorchScript function
 (``torch.jit.ScriptFunction``) or hands a tensor out through DLPack (``to_dlpack``),
 :func:`advise_opaque_calls` emits one coded advisory that names the call and its line,
 says why its internal operations are missing, and gives the spelling that captures them.
+A scripted call is normally recorded as one ``jitscript`` boundary op
+(``_script_boundary``) and leaves no gap; the scripted advisory covers the calls that
+boundary leaves out (an in-place write into a tensor argument, or no call hook on this
+torch build).
 
 Cost and scope: it runs only on the gap path (``_finalize_census`` with at least one
 diagnostic), so a capture without unaccounted dispatches pays nothing new. On the gap
@@ -308,9 +312,12 @@ def _warn_scripted(found: list[tuple[_CallSite, _ScriptedCall]]) -> None:
     warnings.warn(
         TorchLensCaptureGapWarning(
             f"The forward calls the TorchScript function `{call.name}`{defined} at "
-            f"{site.file}:{site.line}{in_function}: `{site.source}`. A scripted function "
-            "runs its body in the TorchScript interpreter, below the Python functions "
-            f"TorchLens wraps, so the {site.dispatch_count} operation(s) it dispatched are "
+            f"{site.file}:{site.line}{in_function}: `{site.source}`. TorchLens records a "
+            "scripted call as one `jitscript` boundary op, but not this one: it wrote into "
+            "one of its tensor arguments in place, which a boundary op cannot attest, or "
+            "this torch build does not let TorchLens hook scripted calls "
+            "(HAS_SCRIPT_FUNCTION_CALL_HOOK is False). Its body ran in the TorchScript "
+            f"interpreter, so the {site.dispatch_count} operation(s) it dispatched are "
             "not in the graph; the completeness witness counted them as unaccounted and "
             "the capture is marked capture_verified=False (trace.completeness_diagnostics "
             f"lists them).{_more_sites(others)} See {_GOTCHA_POINTER}. Remedy: set "

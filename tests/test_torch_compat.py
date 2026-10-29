@@ -389,6 +389,10 @@ def test_torch_capability_snapshot_contract() -> None:
             tc.HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
         ),
         "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE": tc.HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
+        # TorchScript call boundary: ScriptFunction.__call__ replaceable from Python
+        # (a pybind11 heap type). Without it a scripted call stays a census gap with
+        # its advisory; mirror the live value.
+        "HAS_SCRIPT_FUNCTION_CALL_HOOK": tc.HAS_SCRIPT_FUNCTION_CALL_HOOK,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,

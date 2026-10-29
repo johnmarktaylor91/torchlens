@@ -2,9 +2,9 @@
 
 The reviewable table of wrapper scopes whose aten dispatches are opaque by design
 (metadata and export conversions that TorchLens never records as ops, the scalar
-extraction family, the in-forward ``torch.autograd.grad`` engine pass, and the
-foreign-kernel ``autograd.Function`` boundary), its hard budget, and the derived
-wrapper-wide set. ``completeness_witness`` re-exports every name; split out along the
+extraction family, the in-forward ``torch.autograd.grad`` engine pass, the
+foreign-kernel ``autograd.Function`` boundary and the TorchScript call boundary), its
+hard budget, and the derived wrapper-wide set. ``completeness_witness`` re-exports every name; split out along the
 table seam for the file-size ratchet, logic unchanged. A new row needs a regression
 test and a reason.
 """
@@ -19,7 +19,7 @@ __all__ = (
     "_EXPECTED_OPAQUE_WRAPPERS",
 )
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 11
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 12
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
 AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
@@ -85,6 +85,15 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
             "an autograd.Function whose forward left torch (numpy / dlpack round trip) is "
             "recorded as one autogradfunction boundary op that replays through apply; every "
             "dispatch inside it belongs to that op"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="jit_script:boundary",
+        operator=None,
+        reason=(
+            "a torch.jit.ScriptFunction called from an eager forward runs in the TorchScript "
+            "interpreter; the call is recorded as one jitscript boundary op that replays by "
+            "calling the scripted function again, and every dispatch inside it belongs to that op"
         ),
     ),
 )

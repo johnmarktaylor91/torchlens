@@ -992,7 +992,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
   whose forward left torch through a numpy or dlpack round trip, with
-  `transform_kind="autograd.Function"`); `tl.output` selects model outputs, and
+  `transform_kind="autograd.Function"`, and `jitscript`, one call to a
+  `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
+  `tl.output` selects model outputs, and
   `tl.output_at` / `tl.input_at` select a nested output or model-input path.
 
 **Temporal composition**
