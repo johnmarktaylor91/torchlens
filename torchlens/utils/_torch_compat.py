@@ -832,30 +832,18 @@ def _probe_named_tensor_api() -> bool:
 def _probe_cached_untyped_storage_wrapper() -> bool:
     """Return whether a tensor retains one stable untyped-storage Python wrapper.
 
-    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
-    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
-    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
-    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
-    Newer torch retains one wrapper on the tensor, which makes weak-key storage
-    registries safe for the tensor's lifetime.
-
-    The probe deliberately compares two live handles instead of constructing a
-    weakref: exercising the broken weakref destructor would itself corrupt the
-    interpreter on an unsupported runtime.
+    The probe lives in the torch-only leaf ``_untyped_storage_probe``, imported here,
+    at probe time, so this module's eager import closure does not grow.
 
     Returns
     -------
     bool
-        ``True`` when repeated calls return the same retained wrapper.
+        ``True`` when repeated ``Tensor.untyped_storage()`` calls return one wrapper.
     """
 
-    try:
-        tensor = torch.empty(0)
-        first = tensor.untyped_storage()
-        second = tensor.untyped_storage()
-    except (AttributeError, RuntimeError, TypeError):
-        return False
-    return first is second
+    from ._untyped_storage_probe import probe_cached_untyped_storage_wrapper
+
+    return probe_cached_untyped_storage_wrapper()
 
 
 def _probe_dynamo_orig_callable_marker() -> bool:
