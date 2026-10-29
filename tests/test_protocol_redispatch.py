@@ -9,15 +9,14 @@ __torch_function__ handlers returned NotImplemented" once the library was
 imported post-wrap. The wrapper now re-offers a fully declined dispatch to the
 same handlers under its own identity; these tests pin that, the negative
 controls (a genuine decline still raises the same error, a handler never runs
-twice), and the real tensordict reproduction in a fresh interpreter.
+twice). The real tensordict package is not a declared extra, so its
+end-to-end proof is the Menagerie m4387 row; the stand-in library here is the gate.
 """
 
 from __future__ import annotations
 
 import itertools
-import subprocess
 import sys
-import textwrap
 import traceback
 import types
 from collections.abc import Callable, Iterator
@@ -352,50 +351,3 @@ def test_genuine_decline_in_capture_classifies_user_op(post_wrap_bag: type) -> N
     exc = _capture_failure(lambda x: torch.cat([post_wrap_bag(x), post_wrap_bag(x)]))
     assert "Multiple dispatch failed for 'torch.cat'" in str(exc)
     assert classify_failure_origin(exc) is FailureOrigin.USER_OP
-
-
-@pytest.mark.heavy
-def test_real_tensordict_imported_after_wrap_torch() -> None:
-    """tensordict imported after ``wrap_torch()`` dispatches, traces and validates (m4387)."""
-
-    pytest.importorskip("tensordict")
-    script = textwrap.dedent(
-        """
-        import torch
-        from torchlens.backends.torch.wrappers import wrap_torch
-
-        wrap_torch()
-        from tensordict import TensorDict
-
-        td = TensorDict({"a": torch.zeros(3, 2)}, batch_size=[3])
-        assert type(torch.stack([td, td])).__name__ == "TensorDict"
-        assert type(torch.cat([td, td])).__name__ == "TensorDict"
-        assert len(torch.unbind(td, 0)) == 3
-        assert type(torch.zeros_like(td)).__name__ == "TensorDict"
-
-        import torch.nn as nn
-        import torchlens as tl
-
-
-        class Model(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.lin = nn.Linear(2, 2)
-
-            def forward(self, x):
-                td = TensorDict({"a": self.lin(x)}, batch_size=[x.shape[0]])
-                return torch.cat([torch.stack([td, td]), td.unsqueeze(0)])["a"].sum(0)
-
-
-        x = torch.randn(3, 2)
-        layer_types = [op.layer_type for op in tl.trace(Model(), x).layer_list]
-        assert "stack" in layer_types and "cat" in layer_types, layer_types
-        assert tl.validate(Model(), x, scope="forward")
-        print("OK")
-        """
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
-    )
-    assert result.returncode == 0, result.stderr[-2000:]
-    assert result.stdout.strip().endswith("OK")
