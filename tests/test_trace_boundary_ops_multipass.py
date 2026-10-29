@@ -18,11 +18,11 @@ from typing import Any
 
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
-from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens.agent import call_tool
 from torchlens.data_classes._trace_accessors import boundary_label_ops
 from torchlens.data_classes.op import Op
