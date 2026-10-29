@@ -22,6 +22,8 @@ every final output element is non-finite can pass every edge check (a perturbed
 parent turns NaN into finite values, and a replay from all-NaN arguments matches
 the saved NaN whatever the func), so it would validate while proving nothing. It
 fails such a run under the same check. It only ever turns a pass into a failure.
+It runs in ``Trace.validate_forward_pass``, which ``tl.validate`` also goes through,
+so a direct call on a caller's own trace gets it too.
 """
 
 from __future__ import annotations

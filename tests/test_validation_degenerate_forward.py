@@ -24,13 +24,18 @@ from torch import nn
 import torchlens as tl
 import torchlens.validation._degenerate_forward as degenerate_forward
 import torchlens.validation.core as validation_core
+from torchlens.user_funcs import _run_model_and_save_specified_outs
 from torchlens.validation import last_validation_failure
 from torchlens.validation._degenerate_forward import (
     degenerate_forward_kind,
     fail_if_final_outputs_non_finite,
     perturbation_insensitive_failure,
 )
-from torchlens.validation.diagnostics import CHECK_DEGENERATE_FORWARD, CHECK_PERTURBATION
+from torchlens.validation.diagnostics import (
+    CHECK_DEGENERATE_FORWARD,
+    CHECK_PERTURBATION,
+    get_validation_failure,
+)
 
 
 def _validate(model: nn.Module, *inputs: torch.Tensor) -> bool:
@@ -290,3 +295,37 @@ def test_run_guard_ignores_empty_mixed_and_zero_outputs() -> None:
     assert fail_if_final_outputs_non_finite(trace, [torch.tensor([nan]), torch.ones(1)]) is False
     assert fail_if_final_outputs_non_finite(trace, [torch.empty(0)]) is False
     assert fail_if_final_outputs_non_finite(trace, []) is False
+
+
+def test_direct_trace_validate_forward_pass_fails_all_nan_outputs() -> None:
+    """The guard sits where both entry points meet: a direct call on a trace gets it."""
+
+    torch.manual_seed(0)
+    model = _Mlp()
+    x = torch.full((2, 4), float("nan"))
+    with torch.no_grad():
+        ground_truth = model(x).clone()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = _run_model_and_save_specified_outs(
+            model=model,
+            input_args=(x,),
+            input_kwargs={},
+            layers_to_save="all",
+            activation_transform=None,
+            mark_layer_depths=False,
+            detach_saved_activations=False,
+            save_grads=False,
+            save_arg_values=True,
+            random_seed=0,
+            save_rng_states=True,
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            assert trace.validate_forward_pass([ground_truth]) is False
+        failure = get_validation_failure(trace)
+        assert failure is not None and failure.check == CHECK_DEGENERATE_FORWARD
+        assert trace.validation_replay_status.state == "failed"
+    finally:
+        trace.cleanup()

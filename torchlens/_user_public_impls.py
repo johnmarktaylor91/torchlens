@@ -1763,12 +1763,6 @@ def _validate_forward_pass_torch(
             outs_are_valid = validation_result
         else:
             outs_are_valid = bool(getattr(validation_result, "passed", False))
-        if outs_are_valid:
-            from .validation._degenerate_forward import fail_if_final_outputs_non_finite
-
-            outs_are_valid = not fail_if_final_outputs_non_finite(
-                trace, ground_truth_output_tensors
-            )
         if _trace_observer is not None:
             _trace_observer(trace)
     finally:
