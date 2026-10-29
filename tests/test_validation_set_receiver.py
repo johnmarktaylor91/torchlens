@@ -74,6 +74,9 @@ def _receiver_and_set_op(model: nn.Module) -> tuple[Any, Any, str]:
     return trace, set_op, set_op.parent_arg_positions["args"][0]
 
 
+# End-to-end validation of these two overloads is filed separately: AGT-2474
+# (set_() changes the buffer's shape and the replay-state restore raises) and
+# AGT-2475 (the storage overload's isolated replay misses the saved view).
 @pytest.mark.parametrize("model_cls", [_SetToNothing, _SetToStorageView])
 def test_set_overloads_without_a_source_tensor_exempt_only_the_receiver(
     model_cls: type[nn.Module],
