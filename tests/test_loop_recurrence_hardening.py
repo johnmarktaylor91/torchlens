@@ -21,8 +21,8 @@ from collections import OrderedDict, defaultdict
 import pytest
 import torch
 import torch.nn as nn
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
-from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens import trace as trace_fn
 from torchlens.postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,

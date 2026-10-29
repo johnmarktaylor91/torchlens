@@ -10,9 +10,9 @@ from typing import Any
 import example_models
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
 import torchlens.postprocess.loop_grouping_adapter as lga
-from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens import trace as trace_fn
 from torchlens.postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,
