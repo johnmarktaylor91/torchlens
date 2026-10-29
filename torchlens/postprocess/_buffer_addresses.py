@@ -17,6 +17,7 @@ import torch
 from torchlens.ir.events import OpEvent
 
 from ..utils import safe_copy
+from ..utils.tensor_utils import tensor_nanequal
 
 
 def _buffer_addresses_by_label(
@@ -271,7 +272,8 @@ def _tensor_values_match(left: object, right: object) -> bool:
     Returns
     -------
     bool
-        True when both values are tensors with equal shape, dtype, and values.
+        True when both values are tensors with equal shape, dtype, and values
+        (NaN positions equal).
     """
 
     if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
@@ -281,6 +283,6 @@ def _tensor_values_match(left: object, right: object) -> bool:
         # meta substrate (aten::equal has no meta kernel); an UNKNOWN verdict
         # never claims a match — the address ladder simply does not fill.
         return False
-    return bool(
-        left.shape == right.shape and left.dtype == right.dtype and torch.equal(left, right)
-    )
+    # Exact and NaN-aware: a NaN-bearing buffer still matches an exact copy of
+    # itself, so the fallback address never depends on the values reached.
+    return tensor_nanequal(left, right)

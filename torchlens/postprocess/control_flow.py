@@ -7,8 +7,9 @@ Step 5 (_mark_conditional_branches) runs a six-phase conditional pipeline:
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
     5f. Materialize derived compatibility views from primary structures.
-Step 6 (_fix_buffer_layers): Connects buffer sources, deduplicates identical
-    buffers (same module, same value, same parent), and assigns buffer pass numbers.
+Step 6 (_fix_buffer_layers): Connects buffer sources, merges re-logged reads of
+    one buffer version (same module, same parent, same recorded version), and
+    assigns buffer pass numbers.
 """
 
 from __future__ import annotations
@@ -826,73 +827,74 @@ def _get_gained_branch_entries(
     return child_stack[shared_prefix_len:]
 
 
-def _buffer_value_fingerprint(value: torch.Tensor) -> tuple[Any, ...]:
-    """Return a cheap equality-compatible fingerprint for a buffer value.
+def _merge_same_version_buffers(
+    self: Trace,
+    buffer_labels: list[str],
+    deferred_removals: dict[str, tuple[Op, Op]],
+    survivor_edge_shadows: dict[str, dict[str, set[str]]],
+    rewired_buffers: list[str],
+) -> None:
+    """Merge the re-logged reads of one buffer version within one hash group.
 
-    Tensors that ``_buffer_values_identical`` equates always share a
-    fingerprint (shape, dtype, device, and the first/last elements), so
-    bucketing dedup candidates by this key never separates a pair the pairwise
-    sweep would have merged. Collisions are fine -- the caller still confirms
-    with ``_buffer_values_identical``. A NaN sample element is keyed as the
-    string ``"nan"``: a float NaN compares unequal to itself (and hashes by
-    object identity), so keying it raw would put two identical NaN-bearing
-    buffers in different buckets and their dedup would depend on the values
-    the forward happened to reach.
+    A buffer node merges into an earlier node of its group only when capture
+    recorded both as the same buffer version: the same tensor object, storage
+    and version counter (``RawGraphWorkspace.buffer_version_keys``), and the
+    later node is not itself a journaled write (``buffer_write_kind``). Every
+    reassignment, ``.data =``/``set_`` swap and tracked in-place write therefore
+    keeps its own version node whatever value it wrote, so the graph records the
+    same buffer provenance from any entry state (AGT-2415): a re-trace whose
+    buffers start from different values builds the same structure. The value
+    check that follows only refuses a merge across an opaque host write (same
+    version, changed bytes). A node with no recorded version (a projected
+    capture carries none) never merges.
 
-    Parameters
-    ----------
-    value:
-        Captured buffer tensor.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Hashable bucket key.
-    """
-
-    numel = value.numel()
-    head: Any
-    tail: Any
-    if numel == 0:
-        head = tail = None
-    else:
-        try:
-            if value.dim() == 0:
-                head = tail = value.item()
-            else:
-                head = value[(0,) * value.dim()].item()
-                tail = value[tuple(size - 1 for size in value.shape)].item()
-        except (RuntimeError, ValueError):
-            # Exotic dtypes without .item() support degrade to a
-            # metadata-only bucket -- correct, just coarser.
-            head = tail = "unsampled"
-    return (
-        str(value.dtype),
-        str(value.device),
-        tuple(value.shape),
-        numel,
-        _nan_safe_sample(head),
-        _nan_safe_sample(tail),
-    )
-
-
-def _nan_safe_sample(sample: Any) -> Any:
-    """Return a hashable, self-equal stand-in for a NaN fingerprint sample.
+    Bucketing by version key also keeps the sweep linear: distinct versions are
+    never compared (the hunt-6 R52-1 quadratic).
 
     Parameters
     ----------
-    sample:
-        One sampled element (a Python scalar, ``None`` or a marker string).
-
-    Returns
-    -------
-    Any
-        ``"nan"`` for a NaN float or complex sample, otherwise the sample.
+    self:
+        Trace being postprocessed.
+    buffer_labels:
+        Buffer labels sharing one (modules + buffer_source + address) hash, in
+        logging order.
+    deferred_removals:
+        Shared deferred-removal map for ``_merge_buffer_entries``.
+    survivor_edge_shadows:
+        Shared survivor edge-membership sets for ``_merge_buffer_entries``.
+    rewired_buffers:
+        Raw labels of buffer rows whose edges changed; survivors are appended.
     """
 
-    if isinstance(sample, (float, complex)) and sample != sample:
-        return "nan"
-    return sample
+    workspace = getattr(self, "_raw_graph_ws", None)
+    version_keys = {} if workspace is None else workspace.buffer_version_keys
+    unique_labels_by_version: dict[tuple[Any, ...], list[str]] = defaultdict(list)
+    for buffer_label in buffer_labels:
+        buffer = self[buffer_label]
+        version_key = version_keys.get(buffer._label_raw)
+        if version_key is None or buffer.out is None:
+            continue
+        survivor = None
+        if buffer.buffer_write_kind is None:
+            survivor = next(
+                (
+                    self[label]
+                    for label in unique_labels_by_version[version_key]
+                    if _buffer_values_identical(buffer.out, self[label].out)
+                ),
+                None,
+            )
+        if survivor is None:
+            unique_labels_by_version[version_key].append(buffer_label)
+            continue
+        _merge_buffer_entries(
+            self,
+            survivor,
+            buffer,
+            deferred_removals=deferred_removals,
+            survivor_edge_shadows=survivor_edge_shadows,
+        )
+        rewired_buffers.append(survivor._label_raw)
 
 
 def _buffer_values_identical(left: torch.Tensor, right: torch.Tensor) -> bool:
@@ -934,12 +936,11 @@ def _fix_buffer_layers(self: Trace) -> None:
 
     1. Connects each buffer to its buffer_source (the tensor that produced the
        buffer's value), updating parent/child links and ancestry.
-    2. Deduplicates buffers: buffers with the same containing module, same parent,
-       same address, AND same tensor value are merged into a single node.
-       The dedup hash is (modules + buffer_source + address).
+    2. Merges re-logged reads of one buffer version: within a group sharing the
+       hash (modules + buffer_source + address), a node merges into an earlier
+       node only when capture recorded the same buffer version for both (see
+       ``_merge_same_version_buffers``). Values never decide it.
     3. Assigns sequential buffer_pass numbers per address.
-
-    Note: Buffer deduplication is scoped by containing module, source, address, and value.
     """
     buffer_counter: dict[str, int] = defaultdict(lambda: 1)
     buffer_hash_groups: dict[str, list[str]] = defaultdict(list)
@@ -987,63 +988,15 @@ def _fix_buffer_layers(self: Trace) -> None:
         buffer_hash = str(layer.modules) + str(layer.buffer_source) + layer.address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
-    # Merge buffers with the same hash AND the same tensor value.
-    # Buffers sharing the same hash but different values are kept as separate
-    # unique buffers (the for/else clause registers unmatched buffers as new uniques).
-    # torch.equal candidates are narrowed by a cheap value fingerprint first:
-    # the former sweep compared every new buffer against EVERY prior unique in
-    # its hash group, Theta(G^2) whole-tensor compares when the values all
-    # differ (a training-mode recurrent BatchNorm's running stats, hunt-6
-    # R52-1). Equal tensors always share a fingerprint, so bucketing never
-    # changes which unique a buffer merges into.
     deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
     # Per-survivor membership sets shared across the whole sweep: the
     # membership guards in _merge_buffer_entries otherwise rescan the
-    # survivor's growing edge lists once per merged duplicate (the second
-    # half of the R52-1 quadratic).
+    # survivor's growing edge lists once per merged duplicate (hunt-6 R52-1).
     survivor_edge_shadows: dict[str, dict[str, set[str]]] = {}
-    for _, buffers_orig in buffer_hash_groups.items():
-        unique_labels_by_fingerprint: dict[tuple[Any, ...], list[str]] = defaultdict(list)
-        first_out = self[buffers_orig[0]].out if buffers_orig else None
-        if first_out is not None:
-            unique_labels_by_fingerprint[_buffer_value_fingerprint(first_out)].append(
-                buffers_orig[0]
-            )
-        for buffer_label in buffers_orig[1:]:
-            buffer = self[buffer_label]
-            candidate_labels = (
-                ()
-                if buffer.out is None
-                else unique_labels_by_fingerprint.get(_buffer_value_fingerprint(buffer.out), ())
-            )
-            for unique_buffer_label in candidate_labels:
-                unique_buffer = self[unique_buffer_label]
-                # W1-FAB guard: value-equality dedup is unobservable on meta
-                # payloads (no aten::equal meta kernel); unknown never merges.
-                if (
-                    buffer.out.is_meta
-                    or unique_buffer.out is not None
-                    and unique_buffer.out.is_meta
-                ):
-                    continue
-                if (unique_buffer.out is not None) and _buffer_values_identical(
-                    buffer.out, unique_buffer.out
-                ):
-                    _merge_buffer_entries(
-                        self,
-                        unique_buffer,
-                        buffer,
-                        deferred_removals=deferred_buffer_removals,
-                        survivor_edge_shadows=survivor_edge_shadows,
-                    )
-                    rewired_buffers.append(unique_buffer._label_raw)
-                    break
-            else:
-                if buffer.out is not None:
-                    unique_labels_by_fingerprint[_buffer_value_fingerprint(buffer.out)].append(
-                        buffer_label
-                    )
-
+    for buffers_orig in buffer_hash_groups.values():
+        _merge_same_version_buffers(
+            self, buffers_orig, deferred_buffer_removals, survivor_edge_shadows, rewired_buffers
+        )
     _finish_deferred_buffer_removals(self, deferred_buffer_removals)
 
     _repropagate_ancestry_after_buffer_wiring(self, rewired_buffers)

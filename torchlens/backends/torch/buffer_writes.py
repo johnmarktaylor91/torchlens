@@ -1635,6 +1635,36 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
         return None
 
 
+def buffer_version_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
+    """Return the identity of the buffer version ``tensor`` holds right now.
+
+    The same triple a ``BufferWriteEvent`` journals (``object_id``,
+    ``storage_key``, ``buffer_version``): two buffer nodes name one version only
+    when the tensor object, its storage and its version counter all agree, so a
+    reassignment (new object), a ``.data =``/``set_`` swap (new storage) or a
+    tracked in-place write (version bump, shared by views) is a new version
+    whatever values it wrote. Logged buffer tensors are session-stamped, and the
+    stamp registry's strong reference keeps ``id(tensor)`` stable for the session.
+
+    Parameters
+    ----------
+    tensor:
+        Buffer tensor being logged as a graph node.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        ``(object_id, storage_key, version)``, or ``None`` when the storage key
+        or the version counter cannot be read (an unknown version never matches).
+    """
+
+    key = storage_key(tensor)
+    version = _tensor_version(tensor)
+    if key is None or version is None:
+        return None
+    return (id(tensor), key, version)
+
+
 def _make_scoped_setattr(
     cls: type[nn.Module],
     original_setattr: Callable[[Any, str, Any], None],

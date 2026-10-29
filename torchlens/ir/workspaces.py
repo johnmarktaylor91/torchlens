@@ -67,6 +67,11 @@ class RawGraphWorkspace:
     layer_counter: int = 0
     raw_layer_type_counter: dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
     input_tensor_addresses: list[str] = field(default_factory=list)
+    # Raw buffer label -> the buffer version it was logged from (object id,
+    # storage key, version counter; ``buffer_writes.buffer_version_key``).
+    # Step 6 merges two buffer nodes only when they name the same version, so
+    # buffer provenance never rests on the values the forward happened to reach.
+    buffer_version_keys: dict[str, tuple[Any, ...] | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
