@@ -621,7 +621,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The bundle's typed, directed relation rows between members, read as an immutable tuple of
   `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
-  `successor_of`, `escalates`, `fed_by`; member kind: `episode_member`. Each kind's params are a
+  `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
+  params are a
   closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
@@ -639,8 +640,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **fed_by** *(relation kind; spelling documented-unstable)*
 : "B fed_by A": the later member B's prompt contains the earlier member A's output. Content
   provenance only: a router whose decision selects a call without its output entering that call's
-  prompt is not `fed_by`; record that order with `successor_of` and keep the route decision in
-  your own metadata (TorchLens has no control-dependency kind). Optional params: `token_spans`
+  prompt is not `fed_by`; record that decision with `selected_by`. Optional params: `token_spans`
   (rows of four ints, half-open: source start, source end, destination start, destination end),
   `basis` (`declared`, `verified`, `matched`), `coverage` (a fraction in [0, 1]) and `label` (free
   human text such as `"critique"` or `"judge"`; nothing in TorchLens interprets it).
@@ -652,6 +652,34 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   refuses `bundle_relation_auto_spans_unmatched`; missing evidence (no source completion range,
   ids not retained) refuses `bundle_relation_auto_spans_unavailable`. `fed_by` is an ordering kind
   for the comparison gate.
+
+**selected_by** *(relation kind; spelling documented-unstable)*
+: "B selected_by A": the earlier member A's decision (a router's route, a judge's verdict)
+  selected the later member B, deciding whether B ran or which input it got. Control only: A's
+  text need not appear in B's prompt (text that does is `fed_by`), and the row never says A
+  caused B's content. `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])`
+  persists `from="writer"`, `to="router"`, like every ordering kind. Optional params, a closed set:
+  `chosen`, `candidates` and `evidence`. Malformed params refuse
+  `bundle_relation_schema_invalid`. An ordering kind: `upstream`/`downstream` walk it and the
+  comparison gate refuses the selected call and its decider as operands. Admitted from tlspec 10;
+  an artifact stamped earlier that carries the kind refuses.
+
+**selected_by.chosen** *(relation param; spelling documented-unstable)*
+: The decision, as one JSON scalar: a bool, an int, a finite float or a non-empty string of at
+  most 256 characters (route `1`, candidate `"c2"`). Compared by type and value, so `1` and `True`
+  are different decisions. When `candidates` is also given, `chosen` must be one of them.
+
+**selected_by.candidates** *(relation param; spelling documented-unstable)*
+: The options the decider chose among: a non-empty list of distinct JSON scalars (same scalar
+  rule as `chosen`). They may be member names, routes or tool names; TorchLens never resolves
+  them as members.
+
+**selected_by.evidence** *(relation param; spelling documented-unstable)*
+: Why the decider chose, as the graded evidence envelope `successor_of` admits
+  (`{schema, items, facts_digest}`; each item a graded claim with a nullable `basis`), for
+  example the router's scores. User-written measurement grades (`verified`, `consistent`,
+  `divergent`) are stored as `disclosed` with the original under `declared_grade`, and the
+  envelope keeps the 1 MiB per-row budget (`bundle_relation_evidence_over_budget`).
 
 **Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
 : What makes `fed_by` spans checkable: a per-member descriptor in the reserved
@@ -675,7 +703,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
 : `b.upstream(name)` lists every member `name` transitively came after (what fed it), and
   `b.downstream(name)` every member that came after it, nearest first, over the ordering kinds
-  (`fed_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table methods, like
+  (`fed_by`, `selected_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table
+  methods, like
   `compare`.
 
 **Bundle.token_pairs** *(spelling documented-unstable)*
@@ -692,6 +721,56 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   never evidence of matching meaning. A verified row whose evidence now contradicts it refuses
   `bundle_relation_span_unverified`. A Bundle helper-table method; any reduction over a
   many-to-one group is the caller's own descriptive comparison.
+
+**Bundle.token_divergence** *(spelling documented-unstable)*
+: `b.token_divergence(original, rerun)` returns a `TokenDivergence`: where two members' prompts and
+  completions part, by exact token ids. Each member needs a token-stream binding that names its
+  `completion` range, with its token ids retained; the prompt is the bound stream before the
+  completion. Typical use is a call and its copy from a steered re-run
+  (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses
+  `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
+  range or the ids are missing; an unknown name raises `KeyError`. A Bundle helper-table method.
+
+**TokenDivergence** *(`from torchlens.bundle import TokenDivergence`; spelling documented-unstable)*
+: The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
+  `prompt_divergence`: the first prompt position whose ids differ (the shorter prompt's length when
+  one extends the other; `None` when equal). `completion_divergence`: the same for the completions,
+  counted from the first generated token. `lengths`: `((prompt, completion), (prompt,
+  completion))`. `shared`: the stretches both runs share as `(orig_start, orig_end, rerun_start,
+  rerun_end)` half-open stream positions, the `token_spans` grammar: the common prompt prefix, the
+  common prompt tail after a divergence, the common completion prefix. `intervened`: whether each
+  capture ran under an intervention. Properties `prompt_same` and `completion_same`.
+
+**Bundle.add_alternative** *(spelling documented-unstable)*
+: `b.add_alternative(second_run, steered=("draft",), prefix="cf_")` merges a second run of your
+  own harness, made with the `steered` calls captured under their specs, into `b` and returns an
+  `AlternativeReport`. Calls pair by member name, never by order. Before anything changes it
+  refuses, with these codes: `alternative_target_missing` (a steered call absent from either run;
+  field `side`), `alternative_target_unsteered` (a declared call captured without a spec that
+  fired), `alternative_steer_undeclared` (another second-run call captured under a spec),
+  `alternative_capture_position_dependent` (the spec edits chosen positions or decode steps:
+  `at_positions`, `at_step`), `alternative_member_name_taken` (a copy would reuse a name; pass
+  another `prefix`), `bundle_token_divergence_unavailable` (a paired call lacks a bound completion
+  range) and `alternative_unchanged_call_diverged` (an unsteered call saw the same prompt but wrote
+  different text: noise TorchLens cannot separate from the steer). Then every second-run member is
+  added as `prefix + name`, each paired call gets an `alternative_of` row from its copy, the second
+  run's own relation rows are copied onto the copies, and one `add` operation records the statuses.
+  A failure while merging restores the bundle. TorchLens never runs your harness. A Bundle
+  helper-table method.
+
+**AlternativeReport** *(`from torchlens.bundle import AlternativeReport`; spelling documented-unstable)*
+: The frozen result of `Bundle.add_alternative`: `prefix`, `steered` (the declared calls), `calls`
+  (one `AlternativeCall` per call of either run, the original's order first), `uncopied_rows` (the
+  second run's rows of unknown namespaced kinds, not copied) and `table()`, a fixed-width text
+  table with one line per call.
+
+**AlternativeCall** *(`from torchlens.bundle import AlternativeCall`; spelling documented-unstable)*
+: One call of an `AlternativeReport`: `call` (the original member name), `member` (its copy,
+  `None` when dropped), `status`, and `prompt_divergence` / `completion_divergence` as on
+  `TokenDivergence` (`None` for unpaired calls). Statuses: `steered` (declared in `steered=`),
+  `unchanged` (prompt and output the same), `absorbed` (the prompt changed, the output did not; the
+  common case), `changed` (both changed), `added` (only the second run made the call) and
+  `dropped` (only the original made it).
 
 **Bundle.node** *(members= spelling documented-unstable)*
 : `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
@@ -1151,8 +1230,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   Trace collections and `tl.show_bundle_graph` renders a bundle's graph:
   `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
-  labelled with the kind, the row's `label` and, on `fed_by`, its basis and coverage; solid edges
-  carry token spans TorchLens checked, every other row is dashed. `tl.load(path, lazy=True)` on a
+  labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
+  `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
+  row is dashed. `tl.load(path, lazy=True)` on a
   saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*

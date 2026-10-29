@@ -34,6 +34,10 @@ from ..intervention.errors import (
 from ..intervention.resolver import resolve_sites
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site
+from ._alternatives import (
+    AlternativeCall as AlternativeCall,  # re-export: torchlens.bundle.AlternativeCall
+    AlternativeReport as AlternativeReport,  # re-export: torchlens.bundle.AlternativeReport
+)
 from ._compare_gate import require_comparable
 
 # Re-exports (redundant aliases): _distance_value is imported from
@@ -65,6 +69,9 @@ from ._relation_carriage import (
     settle_relation_rows,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._token_divergence import (
+    TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
+)
 from ._vary import bundle_vary as _bundle_vary
 
 if TYPE_CHECKING:

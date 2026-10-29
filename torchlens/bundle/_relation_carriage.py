@@ -216,8 +216,8 @@ def _ordering_walk(self: Bundle, name: str | Trace, *, upstream: bool) -> tuple[
 def _bundle_upstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     """Return every member ``name`` transitively came after, nearest first.
 
-    Walks the ordering relation kinds (``fed_by``, ``successor_of``,
-    ``forked_from``, ``escalates``) from the later member to the earlier one:
+    Walks the ordering relation kinds (``fed_by``, ``selected_by``,
+    ``successor_of``, ``forked_from``, ``escalates``) from the later member to the earlier one:
     for "critique fed_by draft", ``upstream("critique")`` is ``("draft",)``.
     Exposed as the dynamic method ``Bundle.upstream``.
     """
@@ -239,11 +239,16 @@ def _bundle_downstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
 def register_relation_walks(table: dict[str, Callable[..., Any]]) -> None:
     """Install the walk helpers on the Bundle dynamic-method table."""
 
+    from ._alternatives import _bundle_add_alternative
+    from ._token_divergence import _bundle_token_divergence
     from ._token_spans import register_token_pairs
 
     table["upstream"] = _bundle_upstream
     table["downstream"] = _bundle_downstream
     register_token_pairs(table)
+    # Steer one call and re-run the harness (harness.2).
+    table["token_divergence"] = _bundle_token_divergence
+    table["add_alternative"] = _bundle_add_alternative
 
 
 def _bundle_derive_episode_status(

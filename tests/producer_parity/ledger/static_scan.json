@@ -9692,7 +9692,7 @@
   "field": "kind",
   "file": "torchlens/visualization/_bundle_graph.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
