@@ -8,3 +8,5 @@ torchlens/constants.py::_get_torch_overridable_functions
 torchlens/user_funcs.py::<assign> cache_config
 torchlens/utils/_callable_safety.py::_torch_overridable_callable_ids
 torchlens/visualization/_fonts.py::_fontconfig_file_for
+torchlens/visualization/_header_block.py::_private_swatch_dir
+torchlens/visualization/_header_block.py::_text_width
