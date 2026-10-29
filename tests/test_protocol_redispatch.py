@@ -206,6 +206,7 @@ def test_unwrap_aliases_post_wrap_tables_onto_originals(
     from torchlens.backends.torch.wrappers import unwrap_torch
 
     wrapped_stack = torch.stack
+    imported_keys = set(post_wrap_library.HANDLED)
     unwrap_torch()
     try:
         assert torch.stack is _resolve(wrapped_stack)
@@ -219,7 +220,7 @@ def test_unwrap_aliases_post_wrap_tables_onto_originals(
     # Back on the call path, the wrappers redispatch; the foreign table is again
     # exactly what its import built (wrapper keys only).
     assert _resolve(wrapped_stack) not in post_wrap_library.HANDLED
-    assert set(post_wrap_library.HANDLED) == {wrapped_stack, F.relu}
+    assert set(post_wrap_library.HANDLED) == imported_keys
 
 
 def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
