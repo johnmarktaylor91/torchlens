@@ -19,10 +19,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._state import pause_logging
 from ..data_classes.op import Op
 from ..utils.display import identity
-from ..utils.tensor_utils import safe_copy
+from ..utils.tensor_utils import safe_copy, tensor_nanequal
 from . import ast_branches
 
 if TYPE_CHECKING:
@@ -830,12 +829,15 @@ def _get_gained_branch_entries(
 def _buffer_value_fingerprint(value: torch.Tensor) -> tuple[Any, ...]:
     """Return a cheap equality-compatible fingerprint for a buffer value.
 
-    ``torch.equal`` tensors always share a fingerprint (shape, dtype, device,
-    and the first/last elements), so bucketing dedup candidates by this key
-    never separates a pair the pairwise sweep would have merged. Collisions
-    are fine -- the caller still confirms with ``torch.equal``. NaN sample
-    elements compare unequal to themselves, which matches ``torch.equal``
-    refusing to equate NaN-bearing tensors.
+    Tensors that ``_buffer_values_identical`` equates always share a
+    fingerprint (shape, dtype, device, and the first/last elements), so
+    bucketing dedup candidates by this key never separates a pair the pairwise
+    sweep would have merged. Collisions are fine -- the caller still confirms
+    with ``_buffer_values_identical``. A NaN sample element is keyed as the
+    string ``"nan"``: a float NaN compares unequal to itself (and hashes by
+    object identity), so keying it raw would put two identical NaN-bearing
+    buffers in different buckets and their dedup would depend on the values
+    the forward happened to reach.
 
     Parameters
     ----------
@@ -864,7 +866,64 @@ def _buffer_value_fingerprint(value: torch.Tensor) -> tuple[Any, ...]:
             # Exotic dtypes without .item() support degrade to a
             # metadata-only bucket -- correct, just coarser.
             head = tail = "unsampled"
-    return (str(value.dtype), str(value.device), tuple(value.shape), numel, head, tail)
+    return (
+        str(value.dtype),
+        str(value.device),
+        tuple(value.shape),
+        numel,
+        _nan_safe_sample(head),
+        _nan_safe_sample(tail),
+    )
+
+
+def _nan_safe_sample(sample: Any) -> Any:
+    """Return a hashable, self-equal stand-in for a NaN fingerprint sample.
+
+    Parameters
+    ----------
+    sample:
+        One sampled element (a Python scalar, ``None`` or a marker string).
+
+    Returns
+    -------
+    Any
+        ``"nan"`` for a NaN float or complex sample, otherwise the sample.
+    """
+
+    if isinstance(sample, (float, complex)) and sample != sample:
+        return "nan"
+    return sample
+
+
+def _buffer_values_identical(left: torch.Tensor, right: torch.Tensor) -> bool:
+    """Return whether two buffer payloads hold exactly the same values.
+
+    Buffer provenance (whether a buffer version replays as ``identity`` of its
+    source op, and whether two reads of one buffer version merge) is decided by
+    this comparison, so it must not depend on the values the forward happens to
+    reach. IEEE ``torch.equal`` reads a NaN-bearing tensor as unequal to an exact
+    copy of itself, so a model whose buffer reaches NaN from one entry state but
+    not another recorded two different graphs. This is the exact (no tolerance)
+    ``tensor_nanequal`` that validation replay checks the ``identity`` op against:
+    identical NaN and Inf positions, identical finite values, identical zero signs.
+    Meta payloads carry no values, so they never compare identical (W1-FAB).
+
+    Parameters
+    ----------
+    left:
+        First captured buffer-side payload.
+    right:
+        Second captured buffer-side payload.
+
+    Returns
+    -------
+    bool
+        True when the payloads are exactly equal under NaN-equal semantics.
+    """
+
+    if left.is_meta or right.is_meta:
+        return False
+    return tensor_nanequal(left, right)
 
 
 def _fix_buffer_layers(self: Trace) -> None:
@@ -967,7 +1026,9 @@ def _fix_buffer_layers(self: Trace) -> None:
                     and unique_buffer.out.is_meta
                 ):
                     continue
-                if (unique_buffer.out is not None) and torch.equal(buffer.out, unique_buffer.out):
+                if (unique_buffer.out is not None) and _buffer_values_identical(
+                    buffer.out, unique_buffer.out
+                ):
                     _merge_buffer_entries(
                         self,
                         unique_buffer,
@@ -1148,11 +1209,10 @@ def _buffer_source_value_matches(
         return False
     if tuple(source.out.shape) != tuple(buffer_layer.out.shape):
         return False
-    with pause_logging():
-        try:
-            return bool(torch.equal(source.out, buffer_layer.out))
-        except Exception:
-            return False
+    try:
+        return _buffer_values_identical(source.out, buffer_layer.out)
+    except Exception:
+        return False
 
 
 def _merge_buffer_entries(
