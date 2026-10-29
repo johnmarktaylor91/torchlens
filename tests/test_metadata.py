@@ -153,7 +153,8 @@ def test_forward_peak_memory_is_populated(small_input):
 
     The default CPU path measures nothing (measure.2): the CPU peak needs the
     process-wide high-water reset, so it reads ``None`` with a reason naming
-    ``measure_host_peak_memory=True``. Positive Python-allocation peaks for small
+    ``measure_host_peak_memory=True``. The tracemalloc probe is a second opt-in
+    (its allocator hook costs 1.7x-2.5x total capture time). Positive Python-allocation peaks for small
     models are the opt-in behavior asserted by
     ``test_measure_python_peak_memory_opt_in_reports_positive_peak``.
     """
