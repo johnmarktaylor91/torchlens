@@ -1,4 +1,4 @@
-"""Multi-receiver edge patching (``tl.mechinterp.patch_edges``) against plain hooks.
+"""Multi-receiver edge patching (``torchlens.mechinterp.patch_edges``) against plain hooks.
 
 The convention: in one patched forward, every patched receiver reads
 ``input - sum(s) + sum(s_corrupt)`` over its patched edges, with ``input``

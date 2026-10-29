@@ -1,7 +1,7 @@
 """The causal audit measures EDGE sets whose edges enter several receivers.
 
 A top-k, bottom-k or random-k set of an EDGE table is patched in one
-``tl.mechinterp.patch_edges`` call: each later receiver reads the forward as
+``torchlens.mechinterp.patch_edges`` call: each later receiver reads the forward as
 patched so far (the MIB circuit-track convention). Its measured effect is
 compared with the same set patched by the independent plain-PyTorch hook
 patcher (``tests/support/multi_patch_reference.py``) within 1e-12 absolute in
@@ -24,8 +24,8 @@ from support.eap_fixture import CLEAN, CORRUPT, Fixture, fixture_metric
 from support.multi_patch_reference import HookedPatch, PatchSpec, gpt2_spec
 from torch import Tensor, nn
 
-import torchlens as tl
 import torchlens.attribution as attribution
+import torchlens.mechinterp
 
 _BOUND = 1e-12
 
@@ -124,15 +124,15 @@ def test_fixture_sets_across_receivers_match_the_reference_and_replay(monkeypatc
     """On the float64 fixture, every set (one receiver or several) is measured and replays."""
 
     model = Fixture().eval()
-    table = tl.mechinterp.edge_scores(model, CLEAN, corrupted=CORRUPT, metric=fixture_metric)
+    table = torchlens.mechinterp.edge_scores(model, CLEAN, corrupted=CORRUPT, metric=fixture_metric)
     audit = attribution.causal_audit(
         model, CLEAN, claim=table, corrupted=CORRUPT, metric=fixture_metric, k=2, random_draws=4
     )
     assert len(audit.units) == 5 and len(audit.sets) == 6
-    graph = tl.mechinterp.component_graph(audit.extra["trace"])
+    graph = torchlens.mechinterp.component_graph(audit.extra["trace"])
     case = _Case(model, _fixture_spec(model, graph), CLEAN, CORRUPT, fixture_metric)
     with monkeypatch.context() as patched:
-        patched.setattr(tl.mechinterp, "patch_edges", _refuse_patching)
+        patched.setattr(torchlens.mechinterp, "patch_edges", _refuse_patching)
         recorded = [item.intervention for item in (*audit.units, *audit.sets)]
     assert _check_sets(audit, case, table) >= 1
     for item, pairs in zip((*audit.units, *audit.sets), recorded, strict=True):
@@ -192,7 +192,7 @@ def test_tiny_gpt2_sets_across_receivers_match_the_reference_and_replay() -> Non
     """
 
     model, clean, corrupt = _tiny_gpt2()
-    table = tl.mechinterp.edge_scores(
+    table = torchlens.mechinterp.edge_scores(
         model, clean, corrupted=corrupt, metric=_logit_difference, method="eap"
     )
     common = {"claim": table, "corrupted": corrupt, "metric": _logit_difference, "edges": EDGES}

@@ -16,6 +16,7 @@ import _common as common  # the sibling module; scripts here run from this folde
 import torch
 
 import torchlens as tl
+import torchlens.mechinterp
 
 CLAIM = (
     "Wang et al. 2022 ('Interpretability in the Wild: a Circuit for Indirect Object "
@@ -78,8 +79,8 @@ def prompt_contributions(
     versus = common.single_token(tokenizer, row["subject"])
     trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
     try:
-        scores = tl.mechinterp.direct_logit_contributions(
-            trace, tl.mechinterp.full_decomposition(trace), answer=answer, vs=versus
+        scores = torchlens.mechinterp.direct_logit_contributions(
+            trace, torchlens.mechinterp.full_decomposition(trace), answer=answer, vs=versus
         )
     finally:
         trace.cleanup()

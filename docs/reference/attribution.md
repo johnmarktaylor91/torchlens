@@ -654,9 +654,9 @@ random_draws=10, per_unit=True, seed=0)` tests an internal attribution causally.
 one of four kinds: a layer attribution (`layer_attribution`, `layer_integrated_gradients`,
 `layer_conductance`), for a model output target or for a [`SiteTarget`](#site-targets-sitetarget),
 whose values score every unit of one hidden site; a direct-logit-attribution table from
-`tl.mechinterp.direct_logit_contributions` ([below](#direct-logit-attribution-tables)); a
+`torchlens.mechinterp.direct_logit_contributions` ([below](#direct-logit-attribution-tables)); a
 one-backward read table from `tl.attribution.read` ([below](#one-backward-read-tables)); or an
-EDGE table of edge attribution patching scores from `tl.mechinterp.edge_scores`
+EDGE table of edge attribution patching scores from `torchlens.mechinterp.edge_scores`
 ([below](#edge-tables-edge-attribution-patching)). A layer claim needs the `target=` it was
 computed for; an EDGE table needs the `corrupted=` and `metric=` it was scored with.
 The audit ablates each unit alone (unit ablation, Meyes et al., 2019) and measures the target's
@@ -749,7 +749,7 @@ for a claim that is not an EDGE table. Each refusal names a spelling that works.
 
 #### Direct-logit-attribution tables
 
-A `ContributionScores` table from `tl.mechinterp.direct_logit_contributions` splits the model's
+A `ContributionScores` table from `torchlens.mechinterp.direct_logit_contributions` splits the model's
 logit, or logit difference, at chosen positions into one row per component (the embedding and
 every residual writer), plus one constant row (the final norm's shift and the unembedding bias).
 Each row claims how much logit its component contributes directly. The audit ablates each
@@ -776,6 +776,7 @@ answer and `vs` tokens; the row's claimed effect is its values summed the same w
 import torch
 from torch import nn
 import torchlens as tl
+import torchlens.mechinterp
 
 
 class TinyLM(nn.Module):
@@ -796,7 +797,7 @@ class TinyLM(nn.Module):
 torch.manual_seed(0)
 model = TinyLM().eval()
 ids = torch.tensor([[1, 2, 3]])
-claim = tl.mechinterp.direct_logit_contributions(tl.trace(model, ids), answer=1, vs=2)
+claim = torchlens.mechinterp.direct_logit_contributions(tl.trace(model, ids), answer=1, vs=2)
 audit = tl.attribution.causal_audit(model, ids, claim=claim, k=1, random_draws=2)
 for row in audit.units:
     print(row.component, round(row.claimed_effect, 3), round(row.measured_effect, 3))
@@ -872,12 +873,12 @@ smooth nonlinearities, or a read with a frozen linearization, the gap is the fin
 
 #### EDGE tables (edge attribution patching)
 
-A `ReadTable` from `tl.mechinterp.edge_scores(model, inputs, *, corrupted, metric)` holds one
+A `ReadTable` from `torchlens.mechinterp.edge_scores(model, inputs, *, corrupted, metric)` holds one
 `EDGE` row per edge `s->t` of the component graph, addressed by the edge's name
 (`"a0.h1->m1"`). Its score, `(s_corrupt - s_clean) . dM/d(input of t)` summed over positions and
 reduced over examples (EAP, or EAP-IG along the input path), estimates what patching the edge
 does to the metric: receiver `t` reads `clean input - s_clean + s_corrupt`. The audit does that
-patch. Each `ok` row's edge is patched alone with `tl.mechinterp.patch_edges` on a fork of the
+patch. Each `ok` row's edge is patched alone with `torchlens.mechinterp.patch_edges` on a fork of the
 audit's clean trace, with the sender's value from the corrupted run, and the metric is read from
 the unembedding output of the fork. The measured effect is `M(patched) - M(clean)`, reduced over
 examples as the table was (`extra["example_reduction"]`: `"mean"` or `"sum"`), the same sign as
@@ -898,7 +899,7 @@ receiver one head's slice of the projection output).
   listed in `extra["rows_not_audited"]` as `(edge, status)` and not patched. Bias-sender rows
   (`b{L}->...`) score exactly zero and are audited like any other row: their patch changes
   nothing, so they measure zero up to rounding, and they enter rank agreement.
-- Sets: a top-k, bottom-k or random-k set is patched in one `tl.mechinterp.patch_edges` call,
+- Sets: a top-k, bottom-k or random-k set is patched in one `torchlens.mechinterp.patch_edges` call,
   never measured as a sum of single-edge effects. When its edges enter several receivers, each
   later receiver reads the forward as patched so far (the MIB circuit-track convention that
   `patch_edges` follows), so a patched receiver upstream changes what a downstream sender carries.
@@ -921,6 +922,7 @@ receiver one head's slice of the projection output).
 import torch
 import transformers
 import torchlens as tl
+import torchlens.mechinterp
 
 torch.manual_seed(0)
 config = transformers.GPT2Config(n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32)
@@ -933,7 +935,7 @@ def metric(logits):
     return logits[:, -1, 1] - logits[:, -1, 2]
 
 
-claim = tl.mechinterp.edge_scores(model, clean, corrupted=corrupted, metric=metric)
+claim = torchlens.mechinterp.edge_scores(model, clean, corrupted=corrupted, metric=metric)
 largest = sorted(claim.rows(), key=lambda row: -abs(row.score))[:6]
 audit = tl.attribution.causal_audit(
     model,

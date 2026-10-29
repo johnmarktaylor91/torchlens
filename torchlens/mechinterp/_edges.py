@@ -280,7 +280,7 @@ def _require_mha(trace: Any, address: str) -> int:
             message=f"Attention {address!r} uses grouped-query attention ({n_q} query heads, "
             f"{n_kv} key/value heads); the component graph's k and v receiver vocabulary "
             "for shared key/value heads is not defined yet.",
-            remedy="use tl.mechinterp.attention_head_contributions(trace) for per-head "
+            remedy="use torchlens.mechinterp.attention_head_contributions(trace) for per-head "
             "writer rows on this model",
             module_address=address,
             n_q_heads=n_q,

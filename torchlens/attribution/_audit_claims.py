@@ -261,7 +261,7 @@ def _unsupported_claim(
     return AttributionError(
         f"causal_audit cannot audit {what}: it audits a layer attribution at one hidden site "
         "(a module that runs once with one output) whose values have that output's shape, a "
-        "tl.mechinterp.direct_logit_contributions table, or a tl.attribution.read table. "
+        "torchlens.mechinterp.direct_logit_contributions table, or a tl.attribution.read table. "
         f"Remedy: audit a layer attribution, e.g. {_remedy_call(request.target, example)}. "
         f"{_AUDIT_DOCS_POINTER}",
         code=code,

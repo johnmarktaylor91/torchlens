@@ -1,7 +1,7 @@
 """``tl.attribution.causal_audit`` on EDGE read tables (edge attribution patching scores).
 
-Each ``ok`` row of a ``tl.mechinterp.edge_scores`` table is audited by
-patching its edge alone (``tl.mechinterp.patch_edges``, the sender's value
+Each ``ok`` row of a ``torchlens.mechinterp.edge_scores`` table is audited by
+patching its edge alone (``torchlens.mechinterp.patch_edges``, the sender's value
 from the corrupted run) and measuring ``M(patched) - M(clean)``, reduced over
 examples as the table was. On the deterministic nonlinear fixture
 (``tests/support/eap_fixture.py``) every measured effect equals the edge's
@@ -28,6 +28,7 @@ from torch import Tensor
 
 import torchlens as tl
 import torchlens.attribution as attribution
+import torchlens.mechinterp
 
 PAIR_CLEAN, PAIR_CORRUPT = torch.tensor([[0], [0]]), torch.tensor([[1], [1]])
 _CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
@@ -41,7 +42,7 @@ def _remedy(message: str) -> str:
 
 def _table(model: Any = None, clean: Tensor = CLEAN, corrupt: Tensor = CORRUPT, **kwargs: Any):
     model = Fixture().eval() if model is None else model
-    return tl.mechinterp.edge_scores(
+    return torchlens.mechinterp.edge_scores(
         model, clean, corrupted=corrupt, metric=fixture_metric, **kwargs
     )
 
@@ -113,7 +114,7 @@ def test_fixture_measured_effects_equal_the_hand_patch(method: str, reduction: s
     clean, corrupt = (CLEAN, CORRUPT) if batch == 1 else (PAIR_CLEAN, PAIR_CORRUPT)
     table = _table(model, clean, corrupt, method=method, example_reduction=reduction)
     audit = _audit(table, model, clean, corrupted=corrupt, k=1, random_draws=2)
-    graph = tl.mechinterp.component_graph(tl.trace(model, clean))
+    graph = torchlens.mechinterp.component_graph(tl.trace(model, clean))
     assert graph.nodes["m0"].module_address == "h1" and graph.nodes["m1"].module_address == "h2"
     want = _hand_effects(model, clean, corrupt, reduction)
     got = {row.component: row.measured_effect for row in audit.units}
@@ -202,17 +203,19 @@ def test_patch_edges_resolves_layer_zero_receivers() -> None:
 
     model = Fixture().eval()
     clean = tl.trace(model, CLEAN, capture=_CAPTURE)
-    graph = tl.mechinterp.component_graph(clean)
-    corrupt = tl.mechinterp.component_graph(tl.trace(model, CORRUPT, capture=_CAPTURE))
-    patched = tl.mechinterp.patch_edges(clean, [graph.edges["input->m0"]], corrupt=corrupt)
+    graph = torchlens.mechinterp.component_graph(clean)
+    corrupt = torchlens.mechinterp.component_graph(tl.trace(model, CORRUPT, capture=_CAPTURE))
+    patched = torchlens.mechinterp.patch_edges(clean, [graph.edges["input->m0"]], corrupt=corrupt)
     with torch.no_grad():
         want = model.h1(model.norm1(model.embed(CORRUPT)))
     assert torch.equal(patched.modules["h1"].out, want)
     gpt2, ids, other = _tiny_gpt2()
     trace = tl.trace(gpt2, ids, capture=_CAPTURE)
-    tiny = tl.mechinterp.component_graph(trace)
-    tiny_corrupt = tl.mechinterp.component_graph(tl.trace(gpt2, other, capture=_CAPTURE))
-    head = tl.mechinterp.patch_edges(trace, [tiny.edges["input->a0.h0<q>"]], corrupt=tiny_corrupt)
+    tiny = torchlens.mechinterp.component_graph(trace)
+    tiny_corrupt = torchlens.mechinterp.component_graph(tl.trace(gpt2, other, capture=_CAPTURE))
+    head = torchlens.mechinterp.patch_edges(
+        trace, [tiny.edges["input->a0.h0<q>"]], corrupt=tiny_corrupt
+    )
     assert not torch.equal(
         head.modules["transformer.h.0.attn.c_attn"].out[..., :8],
         trace.modules["transformer.h.0.attn.c_attn"].out[..., :8],
@@ -285,7 +288,9 @@ def test_tiny_gpt2_q_k_v_patches_replay_to_their_measured_effects() -> None:
     """Head-slice patches (q, k, v), MLP and logits receivers, and a bias row replay exactly."""
 
     model, clean, corrupt = _tiny_gpt2()
-    table = tl.mechinterp.edge_scores(model, clean, corrupted=corrupt, metric=_logit_difference)
+    table = torchlens.mechinterp.edge_scores(
+        model, clean, corrupted=corrupt, metric=_logit_difference
+    )
     audit = attribution.causal_audit(
         model,
         clean,

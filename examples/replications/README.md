@@ -18,8 +18,8 @@ loadable with `tl.load`. The bundles keep every activation: about 370 MB for the
 run (one 101-token sequence) and about 50 MB for one IOI prompt.
 
 The TorchLens calls used: `tl.trace` with `tl.options.CaptureOptions`,
-`tl.mechinterp.head_scores` with `tl.mechinterp.FixedPeriodInduction`,
-`tl.mechinterp.direct_logit_contributions` over `tl.mechinterp.full_decomposition`,
+`torchlens.mechinterp.head_scores` with `torchlens.mechinterp.FixedPeriodInduction`,
+`torchlens.mechinterp.direct_logit_contributions` over `torchlens.mechinterp.full_decomposition`,
 `trace.fork`, `attach_hooks` with a `tl.facet(...).in_module(...)` selector, `run`, and
 `tl.save`.
 

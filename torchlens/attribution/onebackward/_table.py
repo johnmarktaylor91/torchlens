@@ -13,7 +13,7 @@ loaded through the bounded reader); tensor-bearing tables refuse
 Dense tensors live on the carrier, not in scalar pandas rows.
 
 The EDGE kind carries kind-specific addresses: ``read`` produces ACT rows,
-and ``tl.mechinterp.edge_scores`` produces EDGE rows addressed ``(edge
+and ``torchlens.mechinterp.edge_scores`` produces EDGE rows addressed ``(edge
 name,)`` in the component-graph vocabulary (built by :func:`edge_read_table`);
 ``sample_id`` is nullable from day one (dataset-mean seam).
 """

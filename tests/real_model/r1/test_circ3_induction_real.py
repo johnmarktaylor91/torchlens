@@ -7,7 +7,7 @@ with Hugging Face eager attention and no TorchLens): GPT-2 small at revision
 607a30d7, ``[bos] + R + R`` with ``R`` 50 random tokens in ``[1000, 50000)``
 drawn by a ``torch.Generator`` seeded 0, batch 8; a head's score is its mean
 attention from each second-copy query to the token after that token's first
-occurrence. With the model in float64, ``tl.mechinterp.head_scores(...,
+occurrence. With the model in float64, ``torchlens.mechinterp.head_scores(...,
 kind=FixedPeriodInduction(period=50))`` equals the oracle's float64 scores within 1e-9 absolute
 for all 144 heads and its top 5 heads are the oracle's top 5; float32 is held
 to a 1e-4 ceiling against the same scores.
@@ -55,6 +55,7 @@ def _tokens() -> torch.Tensor:
 
 def _scores(model, dtype: torch.dtype):
     import torchlens as tl
+    import torchlens.mechinterp
 
     model = copy.deepcopy(model).to(dtype).eval()
     model.set_attn_implementation("eager")
@@ -64,13 +65,13 @@ def _scores(model, dtype: torch.dtype):
     # on a CI runner.
     meta = tl.trace(model, _tokens(), capture=tl.options.CaptureOptions(layers_to_save="none"))
     try:
-        plan = tl.mechinterp.retention_plan(meta, "head_scores")
+        plan = torchlens.mechinterp.retention_plan(meta, "head_scores")
     finally:
         meta.cleanup()
     trace = tl.trace(model, _tokens(), save=plan.predicate)
     try:
-        kind = tl.mechinterp.FixedPeriodInduction(period=50)
-        return tl.mechinterp.head_scores(trace, kind=kind, measure="mul")
+        kind = torchlens.mechinterp.FixedPeriodInduction(period=50)
+        return torchlens.mechinterp.head_scores(trace, kind=kind, measure="mul")
     finally:
         trace.cleanup()
 

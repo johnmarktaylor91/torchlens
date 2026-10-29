@@ -5,9 +5,9 @@ receivers from the output back to the input, and for each receiver try
 removing each incoming edge (patching it to its value on a corrupted
 input); keep the removal when the metric moves by less than a threshold
 `tau`. TorchLens does not ship a circuit-search loop. It enumerates the
-edges (`tl.mechinterp.component_graph`), executes each patch
-(`tl.mechinterp.patch_edges`, edge substitution on the replay engine) and
-records each decision (`tl.experiment.ledger`); the loop and every prune
+edges (`torchlens.mechinterp.component_graph`), executes each patch
+(`torchlens.mechinterp.patch_edges`, edge substitution on the replay engine) and
+records each decision (`torchlens.experiment.ledger`); the loop and every prune
 decision are yours, and live on this page.
 
 Why each edge test goes through edge substitution and not `site_sweep`:
@@ -38,6 +38,7 @@ import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
+import torchlens.mechinterp
 
 config = GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32, n_positions=16, use_cache=False)
 config._attn_implementation = "eager"
@@ -52,8 +53,8 @@ corrupt_ids = torch.tensor([[5, 7, 2, 9, 8, 5], [4, 6, 3, 8, 1, 4]])
 ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
 clean = tl.trace(model, clean_ids, capture=ready)
 corrupt_trace = tl.trace(model, corrupt_ids, capture=ready)
-graph = tl.mechinterp.component_graph(clean)
-corrupt = tl.mechinterp.component_graph(corrupt_trace)
+graph = torchlens.mechinterp.component_graph(clean)
+corrupt = torchlens.mechinterp.component_graph(corrupt_trace)
 full_logp = torch.log_softmax(clean.modules["lm_head"].out[:, -1], dim=-1)
 
 
@@ -65,7 +66,7 @@ def kl_to_full(logits):
 
 def circuit_kl(pruned):
     """Patch every pruned edge to its corrupted sender in one call; return the KL."""
-    patched = tl.mechinterp.patch_edges(clean, pruned, corrupt=corrupt)
+    patched = torchlens.mechinterp.patch_edges(clean, pruned, corrupt=corrupt)
     return kl_to_full(patched.modules["lm_head"].out)
 
 

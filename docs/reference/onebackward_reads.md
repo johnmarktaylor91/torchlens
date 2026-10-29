@@ -162,7 +162,7 @@ sites you multiply. Capture itself costs ~70x a bare forward with
 ## The EDGE row kind
 
 `ReadTable` rows have two kinds. `read` produces `ACT` rows, addressed
-`(layer_label, pass_index)`. `tl.mechinterp.edge_scores` produces `EDGE`
+`(layer_label, pass_index)`. `torchlens.mechinterp.edge_scores` produces `EDGE`
 rows: one per component-graph edge, keyed `("t0", "EDGE", (edge name,))`
 with the edge's graph-vocabulary name (`"a9.h9->logits"`,
 `"m0->a1.h0<q>"`). An EDGE row's `score` is the edge attribution patching

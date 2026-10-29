@@ -28,6 +28,7 @@ from torch import Tensor, nn
 
 import torchlens as tl
 import torchlens.attribution as attribution
+import torchlens.mechinterp
 from torchlens.mechinterp._records import ContributionScores
 
 # Stated before the first run. The integer-valued float64 models are exact: measured effects,
@@ -113,7 +114,7 @@ def _lm(exact: bool = True) -> TinyLM:
 
 
 def _dla(model: nn.Module, ids: Tensor = IDS) -> ContributionScores:
-    return tl.mechinterp.direct_logit_contributions(
+    return torchlens.mechinterp.direct_logit_contributions(
         tl.trace(model, ids), answer=ANSWER, vs=VS, positions=POSITIONS
     )
 

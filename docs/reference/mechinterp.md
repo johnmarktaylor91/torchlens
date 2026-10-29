@@ -97,7 +97,7 @@ refusal (`worst_element`).
 - `head_scores` / `inspect_prompt` / `test_prompt`: taxonomy masks with
   TLens-compatible conventions (credited), structured prompt records with
   explicit BOS disclosure and teacher-forced multi-token scoring.
-  `head_scores(trace, kind=tl.mechinterp.FixedPeriodInduction(period=n))`
+  `head_scores(trace, kind=torchlens.mechinterp.FixedPeriodInduction(period=n))`
   scores the fixed repeat of a sequence with period `n` instead of the
   token-equality induction mask (the result reports `kind="induction"` and
   the period in its provenance; a period that is not a positive int refuses
@@ -145,6 +145,7 @@ import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
+import torchlens.mechinterp
 
 config = GPT2Config(
     n_layer=2, n_head=2, n_embd=8, vocab_size=32, n_positions=16, attn_implementation="eager"
@@ -152,7 +153,7 @@ config = GPT2Config(
 model = GPT2LMHeadModel(config).eval()
 ids = torch.randint(0, 32, (1, 5))
 trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
-graph = tl.mechinterp.component_graph(trace)
+graph = torchlens.mechinterp.component_graph(trace)
 
 receiver = graph.receivers["a1.h1<q>"]
 print([node.name for node in receiver.senders])  # input, a0.h0, a0.h1, b0, m0
@@ -166,10 +167,10 @@ assert edge.contribution is graph.nodes["m0"].value
 ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
 clean = tl.trace(model, ids, capture=ready)
 corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
-corrupt_graph = tl.mechinterp.component_graph(corrupt)
+corrupt_graph = torchlens.mechinterp.component_graph(corrupt)
 kept = {"input->a0.h0<q>", "a0.h0->a1.h1<v>", "a1.h1->logits"}
-outside = [e for name, e in tl.mechinterp.component_graph(clean).edges.items() if name not in kept]
-circuit = tl.mechinterp.patch_edges(clean, outside, corrupt=corrupt_graph)
+outside = [e for name, e in torchlens.mechinterp.component_graph(clean).edges.items() if name not in kept]
+circuit = torchlens.mechinterp.patch_edges(clean, outside, corrupt=corrupt_graph)
 print(circuit.modules["lm_head"].out[0, -1, :3])
 for t in (trace, clean, corrupt):
     t.cleanup()
@@ -242,6 +243,7 @@ import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
+import torchlens.mechinterp
 
 config = GPT2Config(
     n_layer=2, n_head=2, n_embd=8, vocab_size=32, n_positions=16, attn_implementation="eager"
@@ -255,7 +257,7 @@ def logit_difference(logits):
     return logits[:, -1, 3] - logits[:, -1, 4]
 
 
-table = tl.mechinterp.edge_scores(
+table = torchlens.mechinterp.edge_scores(
     model, clean, corrupted=corrupted, metric=logit_difference, steps=2
 )
 scores = {address[0]: row.score for (_target, kind, address), row in table.items()}
@@ -263,8 +265,8 @@ print(max(scores, key=lambda name: abs(scores[name])))
 assert scores["b0->m0"] == 0.0
 
 curve = [0.1, 0.2, 0.35, 0.5, 0.7, 0.9, 1.05, 1.0, 0.98, 1.0]
-cpr = tl.mechinterp.circuit_performance_ratio(curve)
-cmd = tl.mechinterp.circuit_model_difference(curve)
+cpr = torchlens.mechinterp.circuit_performance_ratio(curve)
+cmd = torchlens.mechinterp.circuit_model_difference(curve)
 assert 0 < cmd < cpr < 1
 ```
 

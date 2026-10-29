@@ -349,7 +349,7 @@ linear imputation from their neighbours. `causal_audit` grades an internal attri
 table or a one-backward read table) by ablating the units it ranks, through forks of an
 intervention-ready trace, and comparing the measured effects with the claim; each row names its
 `site` and its `component`, and a direct-logit table's `constant_row` is reported apart. An EDGE table
-from `tl.mechinterp.edge_scores` is audited by patching each edge alone with the `corrupted` inputs and
+from `torchlens.mechinterp.edge_scores` is audited by patching each edge alone with the `corrupted` inputs and
 `metric` it was scored with (`edges` names a subset); every set is patched in one call, into one
 receiver or several, and `sets_not_measured` stays empty. The callable/index/site annotation used inside `torchlens.attribution` is
 privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
@@ -1150,7 +1150,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.accessors.registered_appliances()` lists the names with their summaries. An
   unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
-  refuses `appliance_registration_invalid`. The word clashes with `tl.semantic.using(*recipes)`
+  refuses `appliance_registration_invalid`. The word clashes with `torchlens.semantic.using(*recipes)`
   (a recipe scope); the naming review settles both.
 **Safetensors Trace export** *(spellings documented-unstable)*
 : `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file: every
@@ -2073,7 +2073,7 @@ shim owed*
 **torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
 : The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
   center-crop 224, ImageNet mean/std), passed as
-  `CaptureOptions(transform=tl.preprocessing.imagenet_default())`. A PIL image
+  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`. A PIL image
   whose model resolves no preprocessing authority (torchvision weights
   handle, timm data config, HF image processor) refuses typed
   `preprocessing_unresolved` instead of receiving this recipe silently. The
@@ -2159,7 +2159,7 @@ shim owed*
   caller's step; raw histograms are exact JSON artifacts. `CometSink(experiment)`
   takes an `Experiment` or `OfflineExperiment`; scalars and text only (Comet
   re-bins histograms, so `raw_histogram` is not advertised). Both implement
-  the `tl.trackers` sink protocol: `capabilities()` returns what the sink
+  the `torchlens.trackers` sink protocol: `capabilities()` returns what the sink
   accepts (`MLflowSink`: `scalar`, `raw_histogram`, `text_manifest`,
   `run_metadata`; `CometSink` the same without `raw_histogram`);
   `emit_scalar(point)` logs one metric at the caller's step;

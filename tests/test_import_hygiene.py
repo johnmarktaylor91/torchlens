@@ -408,15 +408,6 @@ assert collisions == {
     # F29: tl.utils gained a root row (the docs teach tl.utils.doctor()).
     "utils": [],
     "validation": [], "visualization": [], "viz": [],
-    # Batch-2 SEL (R2-32 + UI inventory): module rows for existing subpackages
-    # that did not resolve at the root in a fresh process.
-    "checks": [], "conformance": [], "differential": [],
-    "ecosystem": ["migrate", "plugins"], "experiment": [], "features": [],
-    "inventory": [], "kernel_telemetry": [], "mechinterp": [], "observe": [],
-    "preprocessing": [], "quickstart": [], "selection_compare": [],
-    "selection_graph": [], "selection_subspace": [], "selection_values": [],
-    "semantic": ["logit_lens", "patching"], "snoop": [], "trace_slice": [],
-    "trackers": [], "tviz": [],
 }
 
 """
