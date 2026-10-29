@@ -4,8 +4,9 @@
 made from an eager forward as one boundary op by replacing ``__call__`` on the pybind
 type. That works only when the type is a heap type that owns its ``__call__`` (true of
 every pybind11 class). The ``HAS_SCRIPT_FUNCTION_CALL_HOOK`` flag and its
-capability-snapshot row stay in ``torchlens.utils._torch_compat``; this leaf holds the
-feature test (the sibling of ``_type_sequence_slot`` and ``_type_new_slot``).
+capability-snapshot row stay in ``torchlens.utils._torch_compat``, which imports this leaf
+at probe time so its eager import closure does not grow (the sibling of
+``_type_sequence_slot`` and ``_type_new_slot``).
 """
 
 from __future__ import annotations
