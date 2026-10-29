@@ -70,7 +70,11 @@ class RawGraphWorkspace:
     # Raw buffer label -> the buffer version it was logged from (object id,
     # storage key, version counter; ``buffer_writes.buffer_version_key``).
     # Step 6 merges two buffer nodes only when they name the same version, so
-    # buffer provenance never rests on the values the forward happened to reach.
+    # buffer provenance never rests on the values the forward happened to reach:
+    # a reassignment (new object), a ``.data =``/``set_`` swap (new storage) or a
+    # tracked in-place write (version bump) is a new version whatever it wrote.
+    # ``None`` (unreadable storage or counter) never matches. The session stamp
+    # registry holds every logged buffer, so ``id(tensor)`` stays stable.
     buffer_version_keys: dict[str, tuple[Any, ...] | None] = field(default_factory=dict)
 
 
