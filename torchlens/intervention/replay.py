@@ -1708,6 +1708,16 @@ def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
 def _final_label_for_ref(log: Trace, label: str) -> str:
     """Resolve raw or final parent-ref label to a current lookup label.
 
+    The exact recorded op comes first: a raw label through the pass-exact
+    ``_raw_to_final_op_labels``, a final lookup label (what labeling renames a
+    template ref to) back through ``_final_to_raw_layer_labels`` and then the
+    pass-exact map. Both maps come from the same labeling loop, so the result
+    names one pass of one layer. A layer-wide spelling can also be another op's
+    public raw label (a fused multi-pass layer shifts later step indices), so
+    resolving it as a lookup key could look ambiguous or name the wrong op.
+    Labels the maps do not hold (traces without them) keep the layer-wide
+    lookup, where an ambiguous spelling still refuses.
+
     Parameters
     ----------
     log:
@@ -1721,6 +1731,13 @@ def _final_label_for_ref(log: Trace, label: str) -> str:
         Lookup label.
     """
 
+    op_labels = getattr(log, "_raw_to_final_op_labels", None) or {}
+    raw_label = label
+    if raw_label not in op_labels:
+        raw_label = (getattr(log, "_final_to_raw_layer_labels", None) or {}).get(label, "")
+    exact_label = op_labels.get(raw_label)
+    if isinstance(exact_label, str) and exact_label in log.layer_dict_all_keys:
+        return exact_label
     if label in log.layer_dict_all_keys:
         return label
     return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
