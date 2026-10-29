@@ -1187,6 +1187,12 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Changed-parameter replay refusal: a private ReplayPreconditionError subclass
+    # whose only job is carrying prose plus the coded fields (callers catch the base).
+    "torchlens.intervention._param_fingerprint.ParamChangedSinceCaptureError": (
+        "private ReplayPreconditionError subclass; contracted by its code "
+        "replay_param_changed_since_capture, caught as ReplayPreconditionError"
+    ),
     # Forward-validation copy-failure disclosure: a coded TorchLensWarning
     # (S-18 contract row validation_model_copy_failed) private to validation.
     "torchlens._validation_state_snapshot._ValidationCopyFailedWarning": (

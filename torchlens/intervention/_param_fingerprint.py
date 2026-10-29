@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..errors import InterventionError
 from ..utils._torch_compat import tensor_version_or_none
 from .errors import ReplayPreconditionError
 
@@ -35,6 +36,28 @@ if TYPE_CHECKING:
 
 CHANGED_PARAMS_RUN_KEY = "replayed_with_changed_params"
 """``Trace.last_run`` key naming the changed parameters a replay used under the opt-in."""
+
+
+class ParamChangedSinceCaptureError(ReplayPreconditionError):
+    """``replay_param_changed_since_capture``: prose plus structured ``fields``.
+
+    ``ReplayPreconditionError`` takes a message OR named fields; this refusal needs
+    both (a readable message ending in its remedy, and ``code`` / ``param`` / ``op`` /
+    ``changed`` for callers), so it initializes the way ``UntrustedCallableError`` does.
+    """
+
+    def __init__(self, message: str, **fields: object) -> None:
+        """Initialize with a message and structured fields.
+
+        Parameters
+        ----------
+        message:
+            Human-readable refusal ending in ``Remedy: ...``.
+        **fields:
+            Structured payload retained on ``fields`` (``code`` included).
+        """
+
+        InterventionError.__init__(self, message, **fields)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)
@@ -132,9 +155,10 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
 
     Raises
     ------
-    ReplayPreconditionError
-        ``replay_param_changed_since_capture`` when the parameter changed and the
-        replay door did not opt in with ``allow_changed_params=True``.
+    ParamChangedSinceCaptureError
+        A ``ReplayPreconditionError`` with code ``replay_param_changed_since_capture``
+        when the parameter changed and the replay door did not opt in with
+        ``allow_changed_params=True``.
     """
 
     recorded = getattr(component, "capture_fingerprint", None)
@@ -150,20 +174,18 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
         if name not in scope.used:
             scope.used.append(name)
         return value
-    raise ReplayPreconditionError(
+    op_label = str(getattr(pass_log, "label", None) or pass_log.layer_label)
+    changed = "; ".join(changes)
+    raise ParamChangedSinceCaptureError(
+        f"replay of {op_label!r} reads parameter {name!r}, which changed since capture "
+        f"({changed}); replaying would silently compute with the new value. Remedy: "
+        "re-capture the trace, or pass allow_changed_params=True (InterventionOptions or "
+        "ReplayOptions) to replay with the current values; for an as-if weight edit use "
+        "fork.do(tl.params(name), edit)",
         code="replay_param_changed_since_capture",
         param=name,
-        op=str(getattr(pass_log, "label", None) or pass_log.layer_label),
-        changed="; ".join(changes),
-        reason=(
-            "replay reads the live parameter, which changed after capture, so it would "
-            "silently compute with the new value"
-        ),
-        remedy=(
-            "re-capture the trace, or pass allow_changed_params=True (InterventionOptions "
-            "or ReplayOptions) to replay with the current values; for an as-if weight "
-            "edit use fork.do(tl.params(name), edit)"
-        ),
+        op=op_label,
+        changed=changed,
     )
 
 
