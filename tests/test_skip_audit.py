@@ -1270,6 +1270,11 @@ TRIPWIRE_GUARD_TARGETS: dict[str, str] = {
 
 #: unavailable-ok target -> why its absence is breadth loss, not gate loss.
 OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
+    "tensordict": (
+        "tests/test_protocol_redispatch.py::test_real_tensordict_imported_after_wrap_torch "
+        "(the real-package m4387 reproduction); the in-repo post-wrap stand-in library "
+        "tests in the same file are the gate and need no extra dependency"
+    ),
     "netron": (
         "tests/test_netron_export_vendor.py (the executed netron 9.2.2 parser "
         "harness) and the serve round-trip in tests/test_netron_export_serve.py; "
