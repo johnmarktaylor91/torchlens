@@ -29,7 +29,9 @@ When merging multiple ops into one Layer, these aggregate fields are merged:
     unique per-pass stack signatures and their pass numbers
   - ``conditional_arm_children`` and derived child views:
     pass-stripped ordered unions across ops
-All other 78+ fields use the first pass's values only.
+All other 78+ fields use the first pass's values only, except the fields
+``_reconcile_multipass_layer_fields`` reconciles when passes differ (shapes,
+memory, module stacks, and parameters, which become the union over passes).
 ``output_of_modules`` / ``output_of_module_calls`` are NOT updated across ops
 (correct because same-layer grouping requires identical structural position).
 """

@@ -1064,11 +1064,45 @@ def _build_module_logs(self: "Trace") -> None:
 # passes (variable-length recurrence, autocast dtype shifts, tied-site module
 # attribution) and therefore must never be silently projected from pass 1.
 # Fields absent here are structurally uniform per the grouping identity
-# (function, parameters, output slot, module address, non-tensor args).
+# (function, call site, output slot). Parameters are not part of that identity
+# (``for w in self.ws: x = x @ w`` is one layer), so the parameter fields are
+# reconciled separately (``_union_multipass_params``).
 _MULTIPASS_SHAPE_FIELDS = ("shape", "transformed_out_shape")
 _MULTIPASS_BYTES_FIELDS = ("activation_memory", "transformed_activation_memory")
 _MULTIPASS_FLOPS_FIELDS = ("flops_forward", "flops_backward")
 _MULTIPASS_MARKER_ONLY_FIELDS = ("dtype", "transformed_out_dtype", "device_ref")
+
+
+def _union_multipass_params(layer_log: "Layer", pass_ops: list[Any]) -> None:
+    """Make a layer whose passes consume different parameters list all of them.
+
+    One call site run over different weights (a loop over a ``ParameterList``,
+    one hook applied by a loop over distinct modules) is one layer, so its
+    parameter fields are the first-seen union over passes, deduplicated by
+    parameter identity, with counts and memory summed over that union. Each
+    pass keeps its own parameters on ``layer.ops[k]``; the per-pass addresses
+    are in ``annotations["varying_across_passes"]["params"]``.
+    """
+
+    union: dict[int, Any] = {}
+    barcodes: dict[Any, None] = {}
+    for op in pass_ops:
+        for param_log in op._param_logs or ():
+            union.setdefault(id(param_log), param_log)
+        for barcode in op._param_barcodes or ():
+            barcodes.setdefault(barcode, None)
+    params = list(union.values())
+    layer_log._param_logs = params
+    layer_log._param_barcodes = list(barcodes)
+    layer_log.param_shapes = [tuple(param.shape) for param in params]
+    layer_log.num_params = sum(int(param.num_params) for param in params)
+    layer_log.num_params_trainable = sum(
+        int(param.num_params) for param in params if param.is_trainable
+    )
+    layer_log.num_params_frozen = sum(
+        int(param.num_params) for param in params if not param.is_trainable
+    )
+    layer_log.total_param_memory = Bytes(sum(int(param.param_memory) for param in params))
 
 
 def _honest_multipass_shape(values: list[Any]) -> tuple:
@@ -1178,6 +1212,10 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
     ]
     record_if_varying("modules", module_stacks)
 
+    param_addresses = [[pl.address for pl in (op._param_logs or ())] for op in pass_ops]
+    if record_if_varying("params", param_addresses):
+        _union_multipass_params(layer_log, pass_ops)
+
     if varying:
         layer_log.annotations["varying_across_passes"] = varying
 
@@ -1203,9 +1241,10 @@ def _build_layer_logs(self: "Trace") -> None:
     Derived aggregate views (cond_branch_then/elif/else/start_children) are
     recomputed after the merge from the cond-id-aware primary structures.
 
-    All other 78+ fields use first-pass values only. This is correct because
-    same-layer grouping requires same structural position, so module containment,
-    function info, param info, etc. are identical across ops.
+    All other 78+ fields use first-pass values only: passes of one layer share
+    the call site, function and output slot. Fields that can still differ
+    (shapes, dtypes, memory, module stacks, parameters) are reconciled by
+    ``_reconcile_multipass_layer_fields``.
 
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).

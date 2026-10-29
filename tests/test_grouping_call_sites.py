@@ -1271,3 +1271,44 @@ def test_row71_multi_head_attention_internal_call_sites() -> None:
     linears = [ops for ops in inner.values() if str(ops[0].func_name) == "linear"]
     assert len(linears) >= 2
     assert _layer_shape(trace)[("__add__", 2)] == 1
+
+
+def _prehooked(module: nn.Module) -> nn.Module:
+    module.register_forward_pre_hook(lambda m, inputs: (torch.tanh(inputs[0]),))
+    return module
+
+
+class SeqLoop(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        for _ in range(3):
+            x = self.hooked(x)
+        return x
+
+
+def test_row72_hooks_of_distinct_modules_stay_apart() -> None:
+    """Row 72: one hook on two distinct modules called from one loop line is two layers.
+
+    A hook runs before the module's own forward, so the caller's line is its call site;
+    the module it hooks is part of that place (two weight-normed layers in a Sequential
+    are two weight-norm layers). One hooked module called again repeats the place.
+    """
+    two = lambda: nn.Sequential(_prehooked(_lin()), _prehooked(_lin()))  # noqa: E731
+    assert _shape(two) == _expect("tanh:1x2 linear:1x2")
+    assert _shape(lambda: SeqLoop(hooked=_prehooked(_lin()))) == _expect("tanh:3 linear:3")
+
+
+def test_row73_layer_over_varying_weights_lists_every_weight() -> None:
+    """Row 73: a layer whose passes use different weights lists all of them, and validates."""
+    torch.manual_seed(0)
+    model = ParamListLoop(ws=nn.ParameterList([_w() for _ in range(3)]))
+    trace = tl.trace(model, _x())
+    (matmul,) = [layer for layer in trace.layer_logs.values() if layer.func_name == "__matmul__"]
+    assert [pl.address for pl in matmul._param_logs] == ["ws.0", "ws.1", "ws.2"]
+    assert [[pl.address for pl in op._param_logs] for op in matmul.ops.values()] == [
+        ["ws.0"],
+        ["ws.1"],
+        ["ws.2"],
+    ]
+    assert matmul.num_params == 48
+    assert matmul.annotations["varying_across_passes"]["params"] == [["ws.0"], ["ws.1"], ["ws.2"]]
+    assert tl.validate(model, _x(), scope="forward", random_seed=0, validate_metadata=True)
