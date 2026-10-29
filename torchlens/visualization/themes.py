@@ -9,9 +9,10 @@ ramp (low/mid/high, so a diverging map is later a mapping change, not a
 schema change), and the declared NEUTRAL "aggregate, not encoded" fill
 (N17) for collapsed boxes under an active channel.
 
-FORK-2 (the palette flip to Okabe-Ito) is resolved (after the N10 budget
-resolver landed in 6ca8a37b4): the DEFAULT ``torchlens`` skin renders the
-Okabe-Ito semantic set; the other shipped skins keep their historical palettes.
+Every shipped skin renders the legacy TorchLens role colours (input light
+green, output light red, weights light grey when trainable and dark grey when
+frozen, plain operations the page colour); the Okabe-Ito set ships as data with
+its accessibility evidence attached.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ from .._errors import InvalidArgumentError
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 from .node_spec import NodeSpec
 
-#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set), live on the
-#: default ``torchlens`` skin; the CVD accessibility gate measures it.
+#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set). Shipped as
+#: data only, no skin renders it; the CVD accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
@@ -43,8 +44,8 @@ OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 #: The historical semantic role palette: the identity mapping of the rendered
-#: constants. The paper, colorblind and high_contrast skins keep it unchanged;
-#: the default skin moved to Okabe-Ito.
+#: constants. The default ``torchlens`` skin and the paper, colorblind and
+#: high_contrast skins render it.
 LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
@@ -60,17 +61,20 @@ LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 #: Dark-skin semantic palette: the historical dark-theme role colours (params
-#: remap to the dark grays; input/output/boolean pass through unchanged, as
+#: remap to dark grays; input/output/boolean pass through unchanged, as
 #: before the palette went live). The dark plain fill is the page colour, not
 #: the old ``#1F2937``, so a plain operation and a parameterised one separate.
+#: Frozen weights are a lighter gray than trainable ones (20.6 dE apart under
+#: colour-vision simulation), so the key's two weight rows read apart on the
+#: dark page as they do on the light one.
 _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
         "output": "#ff9999",
         "params_generic": "#374151",
         "params_trainable": "#374151",
-        "params_frozen": "#374151",
-        "params_gradient": "#374151:#4B5563",
+        "params_frozen": "#6B7280",
+        "params_gradient": "#374151:#6B7280",
         "boolean": "#F7D460",
         "buffer": "#E69F00",
         "intervention": "#CC79A7",
@@ -168,8 +172,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_fill="white",
         default_border="black",
         default_font="black",
-        # The default skin renders the Okabe-Ito set.
-        semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
+        semantic_palette=LEGACY_SEMANTIC_PALETTE,
         ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
         neutral_aggregate_fill="#E8EEF2",
     ),
