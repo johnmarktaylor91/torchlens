@@ -73,6 +73,12 @@ CHECK_REPLAY_UNVERIFIED = "replay_unverified"
 #: Diagnostic (never a failure by itself): a perturbed replay raised on every
 #: attempt, so the edge stayed unverified. Carries the exception text per attempt.
 CHECK_PERTURBATION_EXCEPTION = "perturbation_execution_exception"
+#: A perturbation check failed on a degenerate forward: every saved output element
+#: of the op is non-finite, or an in-forward ``autograd.grad`` gradient is
+#: identically zero, so no perturbation could move it and the edge cannot be
+#: checked. Recorded in place of ``CHECK_PERTURBATION`` by
+#: ``_degenerate_forward.perturbation_insensitive_failure``; the run still fails.
+CHECK_DEGENERATE_FORWARD = "degenerate_forward"
 
 
 @dataclass

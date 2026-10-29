@@ -381,7 +381,10 @@ class TestSubclassCtorUnderWitness:
 
         class SubclassCtorModel(nn.Module):
             def forward(self, x):
-                scratch = PlainSubclass(2, 3)
+                # Zero-filled data keeps the output finite: an uninitialized
+                # ``PlainSubclass(2, 3)`` can hold NaN, which makes the whole
+                # output non-finite and the forward degenerate.
+                scratch = PlainSubclass(torch.zeros(2, 3))
                 return x + scratch.sum() * 0
 
         torch.manual_seed(0)
@@ -412,7 +415,8 @@ class TestSubclassCtorUnderWitness:
         # full view there.
         class PlainCtorModel(nn.Module):
             def forward(self, x):
-                scratch = torch.Tensor(2, 3)
+                # Zero-filled data keeps the output finite (see above).
+                scratch = torch.Tensor(torch.zeros(2, 3))
                 return x + scratch.sum() * 0
 
         torch.manual_seed(0)
