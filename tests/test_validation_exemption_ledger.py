@@ -164,16 +164,6 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
-        code="empty_output_no_elements",
-        tier="early_exit",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._operand_value_proofs:output_has_no_elements",
-        refuses=(
-            "any output with one element or more, whatever its parents hold; forward replay "
-            "still runs for the empty output"
-        ),
-    ),
-    Exemption(
         code="ulp_swamped_perturbation",
         tier="early_exit",
         contract="C4 numeric resolution",
@@ -423,6 +413,16 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "a normalized_shape spanning more than one element, and a perturbed parent "
             "other than layer_norm's own input"
+        ),
+    ),
+    Exemption(
+        code="empty_output_no_elements",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:output_has_no_elements",
+        refuses=(
+            "any output with one element or more, whatever its parents hold; forward replay "
+            "still checks the empty output itself"
         ),
     ),
     Exemption(

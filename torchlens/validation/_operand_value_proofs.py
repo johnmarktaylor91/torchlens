@@ -31,8 +31,10 @@ is all True fixes the output to all True whatever the other operand holds.
 ``pow_unit_base``: ``pow(1, y)`` is exactly 1 for every ``y``, NaN included (IEEE 754), so an
 exponent cannot reach the output when the base is exactly 1 everywhere.
 
-``output_has_no_elements`` backs the core early exit ``empty_output_no_elements``: an output
-with no elements has no value a perturbation could change.
+``empty_output_no_elements``: an output with no elements has no value a perturbation could
+change. This widens the existing empty-parent skip (``core._check_perturbation_exemptions``)
+and the empty ``__getitem__`` output proof to any op whose saved output is empty; the forward
+replay still checks the empty output itself.
 """
 
 from __future__ import annotations
@@ -96,21 +98,22 @@ def sole_perturbed_slot(layer: Any, layers_to_perturb: list[str]) -> int | tuple
     return None
 
 
-def output_has_no_elements(saved_output: Any) -> bool:
+def output_has_no_elements(layer: Any) -> bool:
     """Return whether the op's saved output is a tensor with no elements.
 
     Parameters
     ----------
-    saved_output:
-        The op's retained output payload.
+    layer:
+        Op whose unchanged perturbed replay is being classified.
 
     Returns
     -------
     bool
-        True when ``saved_output`` is a tensor whose ``numel()`` is zero.
+        True when the saved output is a tensor whose ``numel()`` is zero.
     """
 
-    return isinstance(saved_output, torch.Tensor) and saved_output.numel() == 0
+    out = getattr(layer, "out", None)
+    return isinstance(out, torch.Tensor) and out.numel() == 0
 
 
 def _einsum_operand_paths(args: tuple[Any, ...]) -> list[tuple[int, ...]] | None:
@@ -406,6 +409,12 @@ def operand_value_proof_decision(
 
     from .exemptions import PosthocPerturbDecision
 
+    if output_has_no_elements(layer):
+        return PosthocPerturbDecision(
+            True,
+            "empty_output_no_elements",
+            "the output has no elements, so no perturbation can change its value",
+        )
     if einsum_zero_operand(layer, layers_to_perturb, args):
         return PosthocPerturbDecision(
             True,
