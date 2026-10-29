@@ -51,11 +51,29 @@ def _rss() -> int:
 
 
 def _hwm() -> int:
+    """The resident high-water mark on the exact-RSS basis of ``_rss()``.
+
+    Where ``/proc`` RSS is the exact per-CPU sum, the kernel sets the
+    ``VmHWM`` mark from its approximate total (``/proc/self/stat``), so a mark
+    above the current RSS is raised by that counter lag (exact minus
+    approximate) to put both bounds on the same basis.
+    """
+
+    fields: dict[str, int] = {}
     with open("/proc/self/status") as handle:
         for line in handle:
-            if line.startswith("VmHWM:"):
-                return int(line.split()[1]) * 1024
-    raise AssertionError("no VmHWM line")
+            key = line.split(":", 1)[0]
+            if key in ("VmHWM", "VmRSS"):
+                fields[key] = int(line.split()[1]) * 1024
+    if "VmHWM" not in fields:
+        raise AssertionError("no VmHWM line")
+    hwm, rss = fields["VmHWM"], fields.get("VmRSS", 0)
+    if hwm > rss:
+        with open("/proc/self/stat") as handle:
+            text = handle.read()
+        approximate = int(text[text.rindex(")") + 2 :].split()[21]) * os.sysconf("SC_PAGE_SIZE")
+        hwm += max(0, rss - approximate)
+    return hwm
 
 
 class Transient(nn.Module):
