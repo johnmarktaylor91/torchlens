@@ -304,7 +304,9 @@
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
   `tl.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `tl.load(path, lazy=True)` reaches bundle members.
+  `tl.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
+  and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
+  takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a

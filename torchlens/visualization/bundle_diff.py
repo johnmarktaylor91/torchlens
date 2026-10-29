@@ -291,6 +291,9 @@ def _build_dot(
             "labelloc": "b",
             "labeljust": "l",
             "fontname": "Helvetica",
+            # The caption and the column titles take the page's text ink, so
+            # the dark skin's caption is not drawn black on a dark page.
+            "fontcolor": theme.default_font,
         }
     )
     dot.graph_attr.update(graph_attrs)

@@ -565,6 +565,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         bwd: int | Iterable[int] | None = None,
         show_legend: bool | None = None,
         *,
+        theme: str = "torchlens",
         show_module_paths: bool = False,
         show_grad_values: bool = False,
     ) -> str:
@@ -580,6 +581,11 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
             forward-visualization API symmetry but are not applied because
             backward graphs do not render collapsed module nodes.
+        theme:
+            Keyword-only. Skin preset, the names :meth:`draw` takes: ``"torchlens"``
+            (default), ``"paper"``, ``"dark"``, ``"colorblind"`` or
+            ``"high_contrast"``. It sets the page, text, typography and key
+            ink; the backward node and arrow colours stay the same.
         show_module_paths:
             UNSTABLE (keyword-only). Opt-in row naming the module that owns
             each backward node (``module <address>``; AccumulateGrad nodes
@@ -611,6 +617,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_mode=vis_mode,
             bwd=bwd,
             show_legend=show_legend,
+            theme=theme,
             show_module_paths=show_module_paths,
             show_grad_values=show_grad_values,
         )

@@ -692,7 +692,8 @@ def draw_backward(
         Optional one-based backward pass number or numbers to render.
     visualization:
         Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
+        format, direction, skin (``theme``), graph overrides, and edge
+        overrides are used.
 
     Returns
     -------
@@ -708,6 +709,7 @@ def draw_backward(
         graph_overrides = None
         edge_overrides = None
         node_mode: VisNodeModeLiteral = "default"
+        theme = "torchlens"
     else:
         container_path = visualization.container_path
         save_only = visualization.save_only
@@ -716,6 +718,7 @@ def draw_backward(
         graph_overrides = visualization.graph_overrides
         edge_overrides = visualization.edge_overrides
         node_mode = visualization.node_style
+        theme = visualization.theme
 
     if node_style is not MISSING:
         node_mode = cast(VisNodeModeLiteral, node_style)
@@ -733,6 +736,7 @@ def draw_backward(
         code_panel=code_panel,
         vis_mode=vis_mode,
         bwd=bwd,
+        theme=theme,
     )
 
 
@@ -818,6 +822,8 @@ def show_bundle_graph(
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     nodes: Literal["ops", "members"] = "ops",
+    theme: str = "torchlens",
+    show_legend: bool | None = None,
 ) -> str | None:
     """Render a multi-trace bundle graph.
 
@@ -853,6 +859,13 @@ def show_bundle_graph(
         carry token spans TorchLens checked, every other row is dashed.
         Node overrides key by member name, edge overrides by
         ``(earlier, later)``; ``direction`` must stay ``"forward"``.
+    theme:
+        Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
+        ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
+        Op nodes take ``draw``'s shapes and fills; a node or arrow every
+        member runs carries no member list.
+    show_legend:
+        ``True`` draws the key under the header, as ``draw`` does.
 
     Returns
     -------
@@ -860,61 +873,22 @@ def show_bundle_graph(
         DOT source, or ``None`` when ``vis_mode='none'``.
     """
 
-    if nodes not in {"ops", "members"}:
-        raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
-    if vis_mode == "none":
-        return None
-    if vis_mode not in {"rolled", "unrolled"}:
-        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    from .visualization._bundle_graph import render_bundle_graph
 
-    import graphviz
-
-    from .visualization._bundle_graph import (
-        _add_bundle_backward_graph,
-        _add_bundle_forward_edges,
-        _add_bundle_forward_nodes,
-        _add_bundle_member_graph,
-    )
-    from .visualization._render_utils import (
-        direction_to_rankdir,
-        render_dot_to_file,
-        strip_known_extension,
-    )
-
-    dot = graphviz.Digraph(
-        name="TorchLens_Bundle",
-        comment="TorchLens bundle graph",
-        format=vis_fileformat,
-    )
-    title = "members" if nodes == "members" else f"{vis_mode}, {direction}"
-    graph_attrs = {
-        "rankdir": direction_to_rankdir(vis_direction),
-        "label": f"TorchLens bundle graph ({title})",
-        "labelloc": "t",
-        "labeljust": "left",
-        "compound": "true",
-    }
-    graph_attrs.update({key: str(value) for key, value in (vis_graph_overrides or {}).items()})
-    dot.graph_attr.update(graph_attrs)
-
-    if nodes == "members":
-        opaque = _add_bundle_member_graph(dot, bundle, vis_node_overrides, vis_edge_overrides)
-        if opaque:
-            dot.graph_attr["label"] += f"\n{opaque} opaque relation row(s) not drawn"
-    elif direction in {"forward", "both", "overlay"}:
-        _add_bundle_forward_nodes(dot, bundle, vis_mode, vis_node_overrides)
-        _add_bundle_forward_edges(dot, bundle, vis_edge_overrides)
-    if nodes == "ops" and direction in {"backward", "both", "overlay"}:
-        _add_bundle_backward_graph(dot, bundle)
-    return render_dot_to_file(
-        dot,
-        strip_known_extension(vis_outpath),
-        vis_fileformat,
-        vis_save_only,
+    return render_bundle_graph(
+        bundle,
+        vis_outpath=vis_outpath,
+        vis_mode=vis_mode,
+        direction=direction,
+        vis_direction=vis_direction,
+        vis_graph_overrides=vis_graph_overrides,
+        vis_node_overrides=vis_node_overrides,
+        vis_edge_overrides=vis_edge_overrides,
+        vis_save_only=vis_save_only,
+        vis_fileformat=vis_fileformat,
+        nodes=nodes,
+        theme_name=theme,
+        show_legend=show_legend,
     )
 
 

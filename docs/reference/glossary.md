@@ -951,9 +951,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **show_legend tri-state**
 : `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
-  then a channel-only disclosure legend), `True` (full theme legend, plus channel rows when
-  active; its `mutated parameter` row appears only when the render draws one), and `False` (no legend, honored even with channels active — the encoding is then
-  undisclosed). The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
+  then a channel-only disclosure legend), `True` (the key: one compact row per drawn mark, each
+  drawn with its real shape and fill -- input, output, trainable and frozen weights, module, and
+  buffer, true/false test, mutated parameter or intervention only when the picture has one -- plus
+  channel rows when active), and `False` (no legend, honored even with channels active — the
+  encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
+  header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
 ## Backend-neutral identity
 
@@ -2134,6 +2137,20 @@ shim owed*
   adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
   captured` when the capture kept none). Both default to `False`, leaving the default render
   unchanged.
+
+**theme (draw_backward kwarg)** — *unstable — no deprecation shim owed; keyword-only*
+: The skin preset on `Trace.draw_backward`, the same names `Trace.draw(vis_theme=)` takes
+  (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
+  colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
+  keep their colours. The functional form with grouped options reads it from
+  `VisualizationOptions.theme`.
+
+**theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
+: `tl.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+  `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
+  one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
+  `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
+  not every member runs.
 
 **Bundled render font** — *unstable — no deprecation shim owed*
 : Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5

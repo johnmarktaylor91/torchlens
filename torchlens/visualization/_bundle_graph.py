@@ -8,10 +8,68 @@ public entry point and its argument handling stay in
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .themes import VisualizationTheme
 
 
-def _bundle_node_display_label(graph_node_label: str, node: Any, vis_mode: str) -> str:
+def _members_note(traces: Any, all_members: frozenset[str] | None) -> str | None:
+    """Return the member list for a node or edge, or ``None`` when every member runs it.
+
+    The picture names members only where they differ, so a bundle whose
+    members share most of their graph is not covered in repeated member lists.
+    """
+
+    names = [str(name) for name in traces]
+    if all_members is not None and set(names) == all_members:
+        return None
+    return ",".join(sorted(names))
+
+
+def _bundle_node_style(node: Any, theme: VisualizationTheme) -> dict[str, str]:
+    """Return the node's shape and fill as ``draw`` paints them under ``theme``.
+
+    Shape says what the node is (oval: one function call, input and output
+    included; box: a leaf module; cylinder: a buffer); fill says its role
+    (input, output, weights, buffer), from the first member that ran it.
+    """
+
+    from ._render_nodes import _get_node_bg_color
+    from .node_spec import NodeSpec
+    from .themes import apply_theme_to_spec
+
+    layer = next(iter(getattr(node, "layer_refs", {}).values()), None)
+    shape, fill = "oval", "white"
+    if layer is not None:
+        if getattr(layer, "is_buffer", False):
+            shape = "cylinder"
+        elif getattr(layer, "is_atomic_module", False) and getattr(layer, "modules", None):
+            shape = "box"
+        try:
+            fill = _get_node_bg_color(getattr(layer, "trace", None), layer)  # type: ignore[arg-type]
+        except AttributeError:
+            fill = "white"
+    themed = apply_theme_to_spec(NodeSpec(["x"], shape=shape, fillcolor=fill), theme)
+    style = {
+        "shape": shape,
+        "style": "filled,solid",
+        "fillcolor": str(themed.fillcolor),
+        "color": str(themed.color),
+        "fontcolor": str(themed.fontcolor),
+    }
+    if ":" in style["fillcolor"]:
+        style["gradientangle"] = "0"
+    return style
+
+
+def _bundle_node_display_label(
+    graph_node_label: str,
+    node: Any,
+    vis_mode: str,
+    all_members: frozenset[str] | None = None,
+) -> str:
     """Return a compact Graphviz label for a bundle supergraph node.
 
     Parameters
@@ -23,16 +81,20 @@ def _bundle_node_display_label(graph_node_label: str, node: Any, vis_mode: str) 
     vis_mode:
         Bundle visualization mode.
 
+    all_members:
+        Every member name; a node every member ran carries no member list.
+
     Returns
     -------
     str
         Display label.
     """
 
-    traces = ",".join(getattr(node, "traces", []))
+    traces = _members_note(getattr(node, "traces", []), all_members)
     mode_suffix = " rolled" if vis_mode == "rolled" else ""
     op_type = getattr(node, "op_type", "") or "op"
-    return f"{graph_node_label}\n{op_type}{mode_suffix}\n[{traces}]"
+    label = f"{graph_node_label}\n{op_type}{mode_suffix}"
+    return label if traces is None else f"{label}\n[{traces}]"
 
 
 def _bundle_module_groups(bundle: Any) -> dict[str, list[str]]:
@@ -63,6 +125,8 @@ def _add_bundle_forward_nodes(
     bundle: Any,
     vis_mode: str,
     node_styles: dict[str, Any] | None,
+    theme: VisualizationTheme | None = None,
+    rankdir: str | None = None,
 ) -> None:
     """Add forward supergraph nodes to a Graphviz digraph.
 
@@ -76,6 +140,10 @@ def _add_bundle_forward_nodes(
         Bundle visualization mode.
     node_styles:
         Optional per-node style overrides.
+    theme:
+        Resolved skin; ``None`` uses the default ``torchlens`` skin.
+    rankdir:
+        Graphviz rank direction, so module captions land top left on the page.
 
     Returns
     -------
@@ -88,13 +156,10 @@ def _add_bundle_forward_nodes(
         make_module_cluster_attrs,
         merge_node_style,
     )
+    from .themes import THEME_PRESETS, _theme_cluster_attrs
 
-    base_style = {
-        "shape": "box",
-        "style": "filled,rounded",
-        "fillcolor": "#F7F7F7",
-        "color": "#333333",
-    }
+    theme = theme if theme is not None else THEME_PRESETS["torchlens"]
+    all_members = frozenset(str(name) for name in bundle.names)
     module_groups = _bundle_module_groups(bundle)
     grouped_nodes = {node for nodes in module_groups.values() for node in nodes}
     for module_path, node_names in module_groups.items():
@@ -103,30 +168,34 @@ def _add_bundle_forward_nodes(
             char if char.isalnum() else "_" for char in module_path
         )
         with dot.subgraph(name=cluster_name) as subgraph:
-            subgraph.attr(
-                **make_module_cluster_attrs(
-                    title=module_path,
-                    module_type=getattr(first_node, "module_type", None),
-                    line_style="solid",
-                    penwidth=compute_module_penwidth(0, 1),
-                )
+            cluster_attrs = make_module_cluster_attrs(
+                title=module_path,
+                module_type=getattr(first_node, "module_type", None),
+                line_style="solid",
+                penwidth=compute_module_penwidth(0, 1),
+                rankdir=rankdir,
             )
+            subgraph.attr(**{**cluster_attrs, **_theme_cluster_attrs(theme)})
             for graph_node_label in node_names:
                 node = bundle.supergraph.nodes[graph_node_label]
-                attrs = merge_node_style(base_style, node_styles, graph_node_label, node)
+                attrs = merge_node_style(
+                    _bundle_node_style(node, theme), node_styles, graph_node_label, node
+                )
                 subgraph.node(
                     f"fwd_{graph_node_label}",
-                    label=_bundle_node_display_label(graph_node_label, node, vis_mode),
+                    label=_bundle_node_display_label(graph_node_label, node, vis_mode, all_members),
                     **attrs,
                 )
     for graph_node_label in bundle.supergraph.topological_order:
         if graph_node_label in grouped_nodes:
             continue
         node = bundle.supergraph.nodes[graph_node_label]
-        attrs = merge_node_style(base_style, node_styles, graph_node_label, node)
+        attrs = merge_node_style(
+            _bundle_node_style(node, theme), node_styles, graph_node_label, node
+        )
         dot.node(
             f"fwd_{graph_node_label}",
-            label=_bundle_node_display_label(graph_node_label, node, vis_mode),
+            label=_bundle_node_display_label(graph_node_label, node, vis_mode, all_members),
             **attrs,
         )
 
@@ -135,6 +204,7 @@ def _add_bundle_forward_edges(
     dot: Any,
     bundle: Any,
     edge_styles: dict[tuple[str, str], Any] | None,
+    theme: VisualizationTheme | None = None,
 ) -> None:
     """Add forward supergraph edges to a Graphviz digraph.
 
@@ -146,21 +216,30 @@ def _add_bundle_forward_edges(
         Bundle to render.
     edge_styles:
         Optional per-edge style overrides.
+    theme:
+        Resolved skin; ``None`` uses the default ``torchlens`` skin.
 
     Returns
     -------
     None
         ``dot`` is mutated in place.
+
+    An edge every member runs carries no label; the others name their members.
     """
 
     from ._render_utils import merge_edge_style
+    from .themes import THEME_PRESETS
 
-    base_style = {"color": "#555555", "fontcolor": "#555555"}
+    theme = theme if theme is not None else THEME_PRESETS["torchlens"]
+    all_members = frozenset(str(name) for name in bundle.names)
+    ink = theme.edge.get("color", theme.default_border)
+    base_style = {"color": ink, "fontcolor": theme.edge.get("fontcolor", ink)}
     for edge_key, traces in bundle.supergraph.edges.items():
         attrs = merge_edge_style(base_style, edge_styles, edge_key, {"traces": traces})
-        dot.edge(
-            f"fwd_{edge_key[0]}", f"fwd_{edge_key[1]}", label=",".join(sorted(traces)), **attrs
-        )
+        note = _members_note(traces, all_members)
+        if note is not None:
+            attrs = {"label": note, **attrs}
+        dot.edge(f"fwd_{edge_key[0]}", f"fwd_{edge_key[1]}", **attrs)
 
 
 def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
@@ -257,6 +336,7 @@ def _add_bundle_member_graph(
     bundle: Any,
     node_styles: dict[str, Any] | None,
     edge_styles: dict[tuple[str, str], Any] | None,
+    theme: VisualizationTheme | None = None,
 ) -> int:
     """Add one node per member and one edge per pair relation row.
 
@@ -279,8 +359,17 @@ def _add_bundle_member_graph(
     from ..bundle._compare_gate import _ORDERING_RELATION_KINDS
     from ..bundle._relations import MemberRelationRow
     from ._render_utils import merge_edge_style, merge_node_style
+    from .themes import THEME_PRESETS
 
-    base_node = {"shape": "box", "style": "filled,rounded", "fillcolor": "#F7F7F7"}
+    theme = theme if theme is not None else THEME_PRESETS["torchlens"]
+    ink = theme.edge.get("color", theme.default_border)
+    base_node = {
+        "shape": "box",
+        "style": "filled,rounded",
+        "fillcolor": theme.default_fill,
+        "color": theme.default_border,
+        "fontcolor": theme.default_font,
+    }
     notes = _member_row_notes(bundle)
     # Index ids, not names: a member name such as "a:b" would read as a DOT port.
     node_ids = {name: f"member_{index}" for index, name in enumerate(bundle.names)}
@@ -298,7 +387,7 @@ def _add_bundle_member_graph(
         if row.from_member is None:
             continue
         label, checked = _relation_edge_label(row)
-        base_edge = {"color": "#333333", "fontcolor": "#333333"}
+        base_edge = {"color": ink, "fontcolor": theme.edge.get("fontcolor", ink)}
         base_edge["style"] = "solid" if checked else "dashed"
         if row.kind not in _ORDERING_RELATION_KINDS:
             base_edge["dir"] = "none"  # peers (alternative_of) have no direction
@@ -306,3 +395,141 @@ def _add_bundle_member_graph(
         attrs = merge_edge_style(base_edge, edge_styles, edge_key, row)
         dot.edge(node_ids[edge_key[0]], node_ids[edge_key[1]], label=label, **attrs)
     return opaque
+
+
+def bundle_header_label(
+    bundle: Any,
+    header_lines: list[str],
+    theme: VisualizationTheme,
+    *,
+    show_legend: bool,
+    draws_ops: bool,
+) -> str:
+    """Return the bundle picture's header label, with the key under it when asked.
+
+    The header and key form one top-left block as on ``draw``. The key lists
+    the marks the op picture draws (from the same styles the nodes were given)
+    and says that unlabelled nodes and arrows run in every member.
+    """
+
+    from ._header_block import header_block_label, key_swatches
+    from ._legend import LegendRow, LegendSection, drawn_legend_roles
+    from ._render_utils import html_escape
+
+    body = "".join(f"{html_escape(line)}<br align='left'/>" for line in header_lines)
+    caption = f"<<FONT COLOR='{theme.default_font}'>{body}</FONT>>"
+    if not show_legend:
+        return caption
+    swatches: tuple[Any, ...] = ()
+    if draws_ops:
+        nodes = bundle.supergraph.nodes.values()
+        node_attrs = [_bundle_node_style(node, theme) for node in nodes]
+        swatches = key_swatches(
+            theme,
+            drawn_legend_roles(node_attrs, theme),
+            has_module=any(getattr(node, "module_path", None) for node in nodes)
+            or any(attrs["shape"] == "box" for attrs in node_attrs),
+        )
+    note = LegendSection(
+        title="members",
+        rows=(LegendRow(text="a node or arrow with no member list runs in every member"),),
+    )
+    return header_block_label(caption, swatches, (note,), theme)
+
+
+def render_bundle_graph(
+    bundle: Any,
+    *,
+    vis_outpath: str,
+    vis_mode: str,
+    direction: str,
+    vis_direction: Any,
+    vis_graph_overrides: dict[str, Any] | None,
+    vis_node_overrides: dict[str, Any] | None,
+    vis_edge_overrides: dict[tuple[str, str], Any] | None,
+    vis_save_only: bool,
+    vis_fileformat: str,
+    nodes: str,
+    theme_name: str,
+    show_legend: bool | None,
+) -> str | None:
+    """Build and render the bundle picture behind ``tl.show_bundle_graph``.
+
+    Arguments are documented on :func:`torchlens.show_bundle_graph`.
+
+    Returns
+    -------
+    str | None
+        DOT source, or ``None`` when ``vis_mode='none'``.
+    """
+
+    if nodes not in {"ops", "members"}:
+        raise ValueError("nodes must be 'ops' or 'members'.")
+    if nodes == "members" and direction != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if vis_mode == "none":
+        return None
+    if vis_mode not in {"rolled", "unrolled"}:
+        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
+    if direction not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+
+    import graphviz
+
+    from ._render_utils import direction_to_rankdir, render_dot_to_file, strip_known_extension
+
+    dot = graphviz.Digraph(
+        name="TorchLens_Bundle",
+        comment="TorchLens bundle graph",
+        format=vis_fileformat,
+    )
+    from .themes import (
+        resolve_theme,
+        theme_edge_attrs,
+        theme_graph_attrs,
+        theme_node_attrs,
+    )
+
+    theme = resolve_theme(theme_name)
+    title = "members" if nodes == "members" else f"{vis_mode}, {direction}"
+    graph_attrs = {
+        "rankdir": direction_to_rankdir(vis_direction),
+        "labelloc": "t",
+        "labeljust": "left",
+        "compound": "true",
+        **theme_graph_attrs(theme, fileformat=vis_fileformat),
+    }
+    dot.node_attr.update(theme_node_attrs(theme))
+    dot.edge_attr.update(theme_edge_attrs(theme))
+
+    header_lines = [f"TorchLens bundle graph ({title})"]
+    if nodes == "members":
+        opaque = _add_bundle_member_graph(
+            dot, bundle, vis_node_overrides, vis_edge_overrides, theme
+        )
+        if opaque:
+            header_lines.append(f"{opaque} opaque relation row(s) not drawn")
+    elif direction in {"forward", "both", "overlay"}:
+        _add_bundle_forward_nodes(
+            dot, bundle, vis_mode, vis_node_overrides, theme, graph_attrs["rankdir"]
+        )
+        _add_bundle_forward_edges(dot, bundle, vis_edge_overrides, theme)
+    if nodes == "ops" and direction in {"backward", "both", "overlay"}:
+        _add_bundle_backward_graph(dot, bundle)
+    graph_attrs["label"] = bundle_header_label(
+        bundle,
+        header_lines,
+        theme,
+        show_legend=show_legend is True,
+        draws_ops=nodes == "ops" and direction in {"forward", "both", "overlay"},
+    )
+    graph_attrs.update({key: str(value) for key, value in (vis_graph_overrides or {}).items()})
+    dot.graph_attr.update(graph_attrs)
+    outpath = strip_known_extension(vis_outpath)
+    source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
+    if vis_fileformat == "svg" and show_legend is True and Path(f"{outpath}.svg").is_file():
+        # Embed the key's swatch images, so the saved SVG stands alone.
+        from ._svg_compose import _inline_svg_file_local_images
+
+        _inline_svg_file_local_images(f"{outpath}.svg")
+    return source
