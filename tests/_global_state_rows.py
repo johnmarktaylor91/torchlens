@@ -1431,6 +1431,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/visualization/_expansion_manifest.py", "__all__"),
         ("torchlens/visualization/_fonts.py", "__all__"),
         ("torchlens/visualization/_geometry_audit.py", "__all__"),
+        ("torchlens/visualization/_header_block.py", "__all__"),
         ("torchlens/visualization/_legend.py", "__all__"),
         ("torchlens/visualization/_mutated_params.py", "__all__"),
         ("torchlens/visualization/_render_common.py", "__all__"),

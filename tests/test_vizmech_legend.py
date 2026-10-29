@@ -176,7 +176,11 @@ def test_output_has_no_double_outline(tmp_path: Path) -> None:
     """The double outline stays reserved for hidden buffer parents, never the output."""
 
     dot = _draw_dot(tmp_path, "output_outline")
-    output_lines = [line for line in dot.splitlines() if line.strip().startswith("output_1")]
+    output_lines = [
+        line
+        for line in dot.splitlines()
+        if line.strip().startswith("output_1") and "[" in line  # node statements, not rank lists
+    ]
     assert output_lines
     assert all("peripheries" not in line for line in output_lines)
     assert all("shape=oval" in line for line in output_lines)  # a function call stays an oval

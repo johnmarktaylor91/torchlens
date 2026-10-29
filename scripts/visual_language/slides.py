@@ -1126,7 +1126,7 @@ SLIDES: tuple[Slide, ...] = (
         panels=(
             Panel(
                 "a",
-                "Tiny",
+                "Params",
                 kwargs={"layout": "rank", "show_legend": True},
                 label='layout="rank", show_legend=True',
                 crop=(LEGEND, "node(text~input_1)"),
