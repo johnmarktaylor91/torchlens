@@ -717,6 +717,11 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "address",
                 "args_template",
                 "buffer_source",
+                # Reviewed widening (AGT-2415): the merge sweep refuses a
+                # journaled write (step 0's buffer_write_kind) as a duplicate,
+                # so every recorded write keeps its own version node whatever
+                # value it wrote.
+                "buffer_write_kind",
                 "children",
                 "conditional_arm_children",
                 "conditional_elif_children",

@@ -186,7 +186,7 @@ def test_nan_reached_by_a_rewritten_buffer_keeps_its_identity_edge() -> None:
         for op in versions:
             assert torch.isnan(op.out).all()
             assert op.func_name == "identity"
-            assert op.parents == [op.buffer_source]
+            assert list(op.parents) == [op.buffer_source]
     finally:
         trace.cleanup()
 
