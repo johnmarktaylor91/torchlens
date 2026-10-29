@@ -2283,3 +2283,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 69e25d0e3c97d3d97b30b61c458cc3b8854dcb68 (dirty)
 recorded: 2026-10-27T07:16:48.918540+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: foreign-kernel boundary: _function_boundary reads journal OpRecord fields (label_raw, parents, function) to detect host re-entry inside Function.apply
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
+recorded: 2026-10-29T04:14:18.497593+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: foreign-kernel boundary: _function_boundary reads journal OpRecord fields (label_raw, parents, function) to detect host re-entry inside Function.apply
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
+recorded: 2026-10-29T04:14:24.023243+00:00
