@@ -2851,3 +2851,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c1420c374e42b42d5bac3cd0fd5f2faa61136dab (clean)
 recorded: 2026-10-21T19:27:19.570739+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: replay-gap value proofs: two new validation proof modules read parent_arg_positions, saved_kwargs and out
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b0b28dddd50e9512351c7cf1e5b8708665e63c54 (dirty)
+recorded: 2026-10-29T03:43:13.537155+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: replay-gap value proofs: two new validation proof modules read parent_arg_positions, saved_kwargs and out
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b0b28dddd50e9512351c7cf1e5b8708665e63c54 (dirty)
+recorded: 2026-10-29T03:43:19.447538+00:00
