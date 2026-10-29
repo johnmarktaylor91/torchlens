@@ -1,15 +1,15 @@
 """Call-site grouping (``detector="callsite_v1"``): one test per row of the rule's case table.
 
 The rule: a layer is one operation written at one place in a module's code; running that
-place again (loop, recursion, comprehension, a later call of the same module instance) is
-another pass of the same layer. Two different places are two layers, even with the same
+place again (loop, recursion, comprehension) is another pass of the same layer, and an op inside
+a module runs once per module call (``m:1``, ``m:2``), so its passes match the module's calls. Two different places are two layers, even with the same
 function and the same weights. Argument values, shapes, shared weights and graph shape are
 never evidence. Each test traces a tiny model and compares the multiset of
 ``(func_name, num_passes)`` over its layers with the row's expected answer, written as
 ``"tanh:3 linear:1x2"`` (one tanh layer with 3 passes, two single-pass linear layers).
 
-Rows 27, 28, 30 and 31 depend on the module-identity fork
-(``torchlens.utils._call_site.MODULE_CALL_IS_PASS``) and run under both values.
+Rows 27, 28, 30 and 31 depend on the module-call choice
+(``torchlens.utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
 """
 
 from __future__ import annotations

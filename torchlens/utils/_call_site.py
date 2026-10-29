@@ -19,11 +19,13 @@ import sys
 from types import CodeType
 from typing import Any
 
-#: The one place the "module call is a pass" choice lives (JMT fork, 2026-10-29).
-#: True: a module instance is a scope, so calling it again from any line or
-#: through any parent is the next pass of every op inside it. False: the caller's
-#: frames stay in the chain, so ``self.m(x)`` on two lines gives two layers while
-#: module calls still read ``m:1`` and ``m:2``.
+#: The one place the module-call choice lives (decided True, 2026-10-29: calling
+#: one module object again is another module call, ``m:1``, ``m:2``, ``m:3``).
+#: True: a module instance is a scope, so each module call, from any line or
+#: through any parent, runs every op inside it once more, and the op's layer gets
+#: one pass per module call. False: the caller's frames stay in the chain, so
+#: ``self.m(x)`` on two lines gives two layers while module calls still read
+#: ``m:1`` and ``m:2``.
 MODULE_CALL_IS_PASS = True
 
 #: Marks a call-site equivalence class (``<type>@cs<N>``).
