@@ -83,7 +83,6 @@ from ...fastlog.types import (
     RecordContext,
     StorageIntent,
 )
-from ...intervention._param_fingerprint import param_fingerprint
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (
@@ -171,6 +170,7 @@ from ...utils.tensor_utils import (
     tensor_nanequal,
 )
 from . import module_stack as _mstack
+from ._param_fingerprint import param_fingerprint
 from ._tl import (
     active_label_session_token,
     get_label_list,

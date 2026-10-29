@@ -4,8 +4,8 @@ A replay template holds the live ``nn.Parameter`` a call consumed, not a copy, s
 made after capture (an optimizer step, ``load_state_dict``, an in-place op under
 ``torch.no_grad()``, ``param.data = t``) would make every later replay of that trace, and
 of its forks, silently compute with the new weight. When a template classifies a
-parameter argument it records a :class:`ParamFingerprint` (version counter, storage
-pointer, shape); replay compares it before using the value and refuses with code
+parameter argument it records a ``ParamFingerprint`` (version counter, storage
+pointer, shape; built in :mod:`torchlens.backends.torch._param_fingerprint`); replay compares it before using the value and refuses with code
 ``replay_param_changed_since_capture`` unless the replay door was given
 ``allow_changed_params=True``, in which case the run records the changed parameter
 names in ``trace.last_run["replayed_with_changed_params"]``.
@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..backends.torch._param_fingerprint import ParamFingerprint, param_fingerprint
 from ..errors import InterventionError
-from ..utils._torch_compat import tensor_version_or_none
 from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
@@ -60,20 +60,6 @@ class ParamChangedSinceCaptureError(ReplayPreconditionError):
         InterventionError.__init__(self, message, **fields)  # type: ignore[arg-type]
 
 
-@dataclass(frozen=True)
-class ParamFingerprint:
-    """What a parameter looked like when a template recorded it.
-
-    A dataclass, not a tuple, so the template rewriters (labeling's parent-ref rename,
-    cleanup's removed-ref sweep) rebuild it with ``dataclasses.replace`` and keep its type.
-    """
-
-    address: str | None
-    version: int | None
-    storage_ptr: int | None
-    shape: tuple[int, ...]
-
-
 @dataclass
 class _ChangedParamScope:
     """One replay door's opt-in and the changed parameters its replays used."""
@@ -85,50 +71,6 @@ class _ChangedParamScope:
 _SCOPE: ContextVar[_ChangedParamScope | None] = ContextVar(
     "torchlens_changed_param_scope", default=None
 )
-
-
-def _storage_ptr(param: torch.Tensor) -> int | None:
-    """Return the storage pointer through the unwrapped C accessors, or ``None``."""
-
-    from ..backends.torch.completeness_witness import (
-        _ORIG_TENSORBASE_UNTYPED_STORAGE,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-    )
-
-    try:
-        return int(_ORIG_UNTYPED_STORAGE_DATA_PTR(_ORIG_TENSORBASE_UNTYPED_STORAGE(param)))
-    except (RuntimeError, TypeError, NotImplementedError, AttributeError):
-        return None
-
-
-def param_fingerprint(param: torch.Tensor, address: str | None = None) -> ParamFingerprint:
-    """Return the current fingerprint of a parameter.
-
-    Parameters
-    ----------
-    param:
-        Parameter to fingerprint.
-    address:
-        Parameter address for refusal messages, when known.
-
-    Returns
-    -------
-    ParamFingerprint
-        Version counter, storage pointer and shape (no tensor op runs).
-    """
-
-    from ..backends.torch.completeness_witness import internal_scalar_read
-
-    # TorchLens bookkeeping read: unmarked, a capture-time ``_version`` read on registered
-    # state would record a forward read-kind and refuse the runnable save.
-    with internal_scalar_read():
-        version = tensor_version_or_none(param)
-    return ParamFingerprint(
-        address=address,
-        version=version,
-        storage_ptr=_storage_ptr(param),
-        shape=tuple(param.shape),
-    )
 
 
 def _changes(recorded: ParamFingerprint, current: ParamFingerprint) -> list[str]:

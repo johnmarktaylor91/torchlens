@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ..._state import pause_logging
-from ...intervention._param_fingerprint import param_fingerprint
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -23,6 +22,7 @@ from ...ir.container import (
 from ...utils.tensor_utils import (
     safe_copy,
 )
+from ._param_fingerprint import param_fingerprint
 from ._tl import (
     get_live_tensor_label,
     get_param_meta,

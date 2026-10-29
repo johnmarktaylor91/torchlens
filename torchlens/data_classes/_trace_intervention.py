@@ -25,7 +25,6 @@ else:
     _TraceMixinBase = object
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
-from ..intervention._param_fingerprint import changed_param_scope
 from ..intervention.types import (
     FrozenInterventionSpec,
     InterventionSpec,
@@ -671,6 +670,8 @@ class TraceInterventionMixin(_TraceMixinBase):
 
             hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
         intervention_options = merge_intervention_options(intervention=intervention)
+        from ..intervention._param_fingerprint import changed_param_scope
+
         with changed_param_scope(intervention_options.allow_changed_params):
             return self._do_with_options(
                 hooks_or_site,

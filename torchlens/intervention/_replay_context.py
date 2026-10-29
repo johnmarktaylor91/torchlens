@@ -67,10 +67,10 @@ def _final_label_for_ref(log: Trace, label: str) -> str:
         Lookup label.
     """
 
-    op_labels = getattr(log, "_raw_to_final_op_labels", None) or {}
+    op_labels = log._raw_to_final_op_labels or {}
     raw_label = label
     if raw_label not in op_labels:
-        raw_label = (getattr(log, "_final_to_raw_layer_labels", None) or {}).get(label, "")
+        raw_label = (log._final_to_raw_layer_labels or {}).get(label, "")
     exact_label = op_labels.get(raw_label)
     if isinstance(exact_label, str) and exact_label in log.layer_dict_all_keys:
         return exact_label
