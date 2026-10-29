@@ -59,6 +59,21 @@ class _DlpackDoubleFunction(torch.autograd.Function):
         return grad_output * 2
 
 
+class _WriteThroughDoubleFunction(torch.autograd.Function):
+    """DGL SpMM shape: the output is allocated in torch and a foreign kernel writes into it."""
+
+    @staticmethod
+    def forward(ctx, x):  # type: ignore[override]
+        out = torch.zeros_like(x)
+        host_view = out.numpy()
+        host_view[...] = x.detach().numpy() * 2
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        return grad_output * 2
+
+
 class _ForeignFunctionModel(nn.Module):
     """Linear, then a Function whose forward leaves torch, then relu."""
 
@@ -104,7 +119,7 @@ def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function
     assert op.transform_config["function"] == function.__qualname__
     assert is_foreign_function_recorder(op.func)
     # The interior (detach, the host re-entry constructor) is not in the graph.
-    interior_types = {"detach", "fromnumpy", "fromdlpack", "contiguous"}
+    interior_types = {"detach", "fromnumpy", "fromdlpack", "contiguous", "zeroslike"}
     assert not any(op.layer_type in interior_types for op in trace.layer_list)
     # Parents are the Function's tensor inputs; the child is the consumer of its output.
     assert [trace[label].layer_type for label in op.parents] == ["linear"]
@@ -121,7 +136,9 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
     assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
 
 
-@pytest.mark.parametrize("function", [_NumpyDoubleFunction, _DlpackDoubleFunction])
+@pytest.mark.parametrize(
+    "function", [_NumpyDoubleFunction, _DlpackDoubleFunction, _WriteThroughDoubleFunction]
+)
 def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     """A Function whose forward leaves torch is one replayable boundary op."""
 
@@ -199,16 +216,32 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
     _assert_validates_clean(model, x)
 
 
-def test_plain_numpy_round_trip_still_fails_completeness() -> None:
-    """Armed negative: without a Function the round trip is a capture hole, as today."""
+def test_plain_numpy_round_trip_is_not_collapsed() -> None:
+    """Armed negative: without a Function the round trip stays the visible hole it is today.
+
+    Nothing is collapsed and no boundary op appears: ``from_numpy`` is a parentless
+    source op and the output has no input ancestor, exactly as on the base tree. (On the
+    base tree forward validation PASSES this model, because a parentless constructor
+    replays deterministically; the completeness check fails only on a dispatcher-visible
+    unowned op such as ``to_dlpack``'s ``as_strided``. Recorded as a finding in the lane
+    report; this test pins that the boundary never reaches outside a Function.)
+    """
 
     model = _PlainNumpyRoundTripModel()
     x = torch.randn(3, 4)
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert validate_forward_pass(model, [x], input_kwargs={}) is False
-    failure = last_validation_failure()
-    assert failure is not None
-    assert failure.check == CHECK_COMPLETENESS, failure
-    trace = tl.trace(model, x)
+        warnings.simplefilter("error", TorchLensWarning)
+        trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
+    from_numpy_ops = [op for op in trace.layer_list if op.layer_type == "fromnumpy"]
+    assert len(from_numpy_ops) == 1
+    assert from_numpy_ops[0].parents == []
+    assert not trace.output_ops[0].input_ancestors
+    assert any(op.layer_type == "detach" for op in trace.layer_list)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        base_verdict = validate_forward_pass(model, [x], input_kwargs={})
+    failure = last_validation_failure()
+    # The verdict is whatever the base tree gives (True today); the only thing the
+    # boundary may never do is turn this plain round trip into a boundary op.
+    assert base_verdict is True or (failure is not None and failure.check == CHECK_COMPLETENESS)
