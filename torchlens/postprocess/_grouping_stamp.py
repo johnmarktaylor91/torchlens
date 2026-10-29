@@ -109,9 +109,12 @@ def build_grouping_policy_stamp(
 ) -> dict[str, Any]:
     """Return the healthy wave-0 stamp for one live capture.
 
-    ``policy`` records what step 7 actually ran: ``"structural"`` when the
-    neutral grouper ran, ``"params_only"`` (the vocabulary spelling of the
-    ``recurrence_detection=False`` path) otherwise. Every live writer
+    ``policy`` records what step 7 actually ran: ``"structural"`` when
+    grouping ran, ``"params_only"`` (the vocabulary spelling of the
+    ``recurrence_detection=False`` path) otherwise. ``detector`` names the
+    grouper that ran: ``"callsite_v1"`` (call-site grouping, torch captures)
+    or ``"grouper_v1"`` (the structural grouper, for captures without
+    call-site evidence); ``"unknown"`` when grouping did not run. Every live writer
     writes ``settlement_note=None`` so the loader's writer-derived exact
     key set is ONE set for healthy and degraded stamps alike.
     """

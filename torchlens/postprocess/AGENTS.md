@@ -21,8 +21,8 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
 | `ast_branches.py` | 5 support, 11.5 | Conditional AST indexing and source variable names. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
-| `loop_detection.py` | 7 adapter | Adapt Trace state and apply recurrence assignments |
-| `loop_grouping_adapter.py` | 7 implementation | Backend-neutral recurrence grouping |
+| `loop_detection.py` | 7 | Call-site grouping (`callsite_v1`, rule in `docs/guides/grouping.md`; keys from `utils/_call_site.py`); falls back to the structural adapter when no op carries call-site evidence |
+| `loop_grouping_adapter.py` | 7 fallback | Backend-neutral structural grouper (`grouper_v1`) for captures without call-site evidence (other backends, predicate-mode `tl.record`) |
 | `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists (field reordering was REMOVED — see step 10 note below) |
 | `finalization.py` | 12-20 | Undecorate, params, layers, modules, streaming finalization/eviction. Steps it orchestrates but does NOT implement: the step-16.5 hash lives in `utils/hashing.py` (`compute_graph_shape_hash`), the step-20 ref release in `data_classes/_trace_validation.py` (`release_param_refs`), and the step-13 CUDA cache clear inline in the executor (`_executor.py`) |
 | `_ingest_contract.py` | 0 support | Step-0 ingest contract helpers |
@@ -134,9 +134,18 @@ propagates `modules`.
 
 ## Loop Detection
 
-`loop_detection.py` builds a backend-neutral `RecurrenceGroupingGraph` and applies the
-assignments returned by `loop_grouping_adapter.py`. The adapter owns the live frontier,
-adjacency, parameter-free false-positive guard, grouping, and pass assignment behavior.
+Torch captures group by call site (`docs/guides/grouping.md`). At op creation
+`_ops_activations._call_site_equivalence_class` keys each op by (innermost module instance,
+call-site chain from `utils/_call_site.py`, func_name, output slot) and writes
+`equivalence_class = "<type>@cs<N>"`; the key itself is not persisted. Step 7
+(`_group_by_call_sites`) makes ops with one class passes of one layer, buffers group by buffer
+address, inputs and outputs stay single, and ops with no chain fall back to their site key
+position. Whether a module called again is the next pass is one predicate,
+`_call_site.MODULE_CALL_IS_PASS`. When no op carries a call-site class (other backends,
+predicate-mode `tl.record`), `loop_detection.py` builds a backend-neutral
+`RecurrenceGroupingGraph` and applies the assignments returned by `loop_grouping_adapter.py`
+(`grouper_v1`), which owns the frontier, adjacency, parameter-free false-positive guard,
+grouping, and pass assignment behavior. The stamp's `detector` records which ran.
 
 ## Refresh Projection
 
@@ -204,7 +213,8 @@ gates on the snapshot; `should_run` evaluates exactly once per step.
 ## Module Suffixes
 
 Capture-time op creation appends module-address information to `equivalence_class`
-so identical ops in different modules do not get loop-grouped together. Step 7's
+so identical ops in different modules do not get loop-grouped together (the structural
+grouper's classes; torch captures replace them with call-site classes). Step 7's
 `loop_detection.py` seam adapts Trace ops to the live backend-neutral implementation
 in `loop_grouping_adapter.py`; do not duplicate grouping logic in the Trace adapter.
 

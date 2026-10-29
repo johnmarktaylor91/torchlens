@@ -170,8 +170,12 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   such as `relu_1_2`.
 
 **Layer**
-: The user-facing grouping of equivalent or recurrent Ops. A recurrent layer may have multiple
-  passes, addressed with a one-based suffix such as `linear_1:2`.
+: The user-facing grouping of Ops that run one place in a module's code. Running that place
+  again (a loop, a recursion, a comprehension, or the module called again) is another pass,
+  addressed with a one-based suffix such as `linear_1:2`; `op.pass_index` is the pass and
+  `num_passes` the count. Two different places are two layers even with the same weights, so a
+  loop written out by hand is N layers. The exact rule (scope, call site, operation, output slot)
+  and the case table are in `docs/guides/grouping.md`.
 
 **Module**
 : A captured framework module or backend-neutral module-like object. A module contains Ops but is
@@ -1558,8 +1562,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 
 **Layer.site_key** — *unstable — no deprecation shim owed*
 : The layer's single site key iff every op in the layer shares exactly one.
-  A site-SPANNING layer (within-call-instance recurrence such as transformer
-  residual-add pairs, or root-context loops) refuses typed
+  A site-SPANNING layer (a loop inside one module call, including
+  root-context loops) refuses typed
   `layer_site_ambiguous` — read per-pass keys via `.ops[k].site_key`.
   Site-uniformity and pass-uniformity are DIFFERENT axes: a reused-module
   multi-pass layer has one key. Legacy pre-site-key artifacts refuse typed
@@ -1611,8 +1615,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 
 **grouping= (trace kwarg) / trace.grouping** — *unstable — no deprecation
 shim owed; S2-gated vocabulary*
-: Closed-vocabulary grouping-policy knob: `"structural"` (default — today's
-  recurrence grouping), `"strict_shapes"` (reserved; refuses typed until its
+: Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
+  grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
   own reviewed design lands), `"fold_sites"` (the D1 within-capture folding
   axis; refuses typed on plain captures until an affirmative D1 ruling).
   Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
@@ -1627,7 +1631,10 @@ vocabulary*
   trace was grouped: `policy` (the step-7 grouping that actually ran —
   `structural` / `params_only` / later `fold_sites`), `requested` (the knob
   mirror), `folded_sites` and `site_join` (two distinct site-granular axes:
-  step-7 folds vs product-layer joins), `detector`, `effective`, and
+  step-7 folds vs product-layer joins), `detector` (`callsite_v1` for
+  call-site grouping, `grouper_v1` for the structural grouper that serves
+  captures without call-site evidence, `unknown` when grouping did not run),
+  `effective`, and
   `settlement_note`. Loads validate against the exact writer key set, closed
   vocabularies, and coherence rules C1–C8; parse failure or incoherence
   warns once and settles to THE canonical degraded representation
