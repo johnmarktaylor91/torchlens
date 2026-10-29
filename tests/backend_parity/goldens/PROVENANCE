@@ -357,3 +357,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
 recorded: 2026-10-14T18:23:57.602240+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.483326+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.567435+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.666443+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.952489+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.970838+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.169562+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.299129+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.483928+00:00

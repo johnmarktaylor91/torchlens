@@ -393,7 +393,8 @@
       "backward_durations",
       "num_backward_passes",
       "backward_peak_memory",
-      "backward_memory_backend"
+      "backward_memory_backend",
+      "backward_peak_memory_reason"
     ],
     "op_field_order": [
       "_label_raw",
@@ -915,6 +916,7 @@
       "backward_memory_backend",
       "backward_pass_logs",
       "backward_peak_memory",
+      "backward_peak_memory_reason",
       "backward_root_grad_fn_object_ids",
       "batch_render",
       "buffer_layers",
@@ -1066,13 +1068,13 @@
     ]
   },
   "sha256_chunks": [
-    "505fb40e",
-    "a3842b8e",
-    "4c4c7617",
-    "9b7f1844",
-    "0374c5be",
-    "8f460ab8",
-    "a3d200d0",
-    "2b0c6b7b"
+    "0835b6b9",
+    "6b82e64f",
+    "49f79529",
+    "c0eea835",
+    "d9383ec2",
+    "ae05dd5e",
+    "3d6003c1",
+    "3d2f7ab9"
   ]
 }
