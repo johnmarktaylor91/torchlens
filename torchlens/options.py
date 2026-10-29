@@ -164,11 +164,13 @@ _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "differentiable",
     "append",
     "chunk_size",
+    "allow_changed_params",
 )
 _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "engine",
     "confirm_mutation",
     "strict",
+    "allow_changed_params",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "bundle_path",
@@ -246,11 +248,13 @@ _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "differentiable": "differentiable",
     "append": "append",
     "chunk_size": "chunk_size",
+    "allow_changed_params": "allow_changed_params",
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
     "confirm_mutation": "confirm_mutation",
     "strict": "strict",
+    "allow_changed_params": "allow_changed_params",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
@@ -1377,6 +1381,11 @@ class ReplayOptions:
     chunk_size:
         Forward chunk size for rerun chunking sugar. Splits positional input
         along dimension 0 and appends compatible chunks.
+    allow_changed_params:
+        Replay with a parameter's current value when it changed since capture
+        (an optimizer step, ``load_state_dict``, an in-place edit). Default
+        ``False`` refuses with ``replay_param_changed_since_capture``; ``True``
+        names the parameters used in ``trace.last_run["replayed_with_changed_params"]``.
 
     Examples
     --------
@@ -1390,6 +1399,7 @@ class ReplayOptions:
     differentiable: bool = False
     append: bool = False
     chunk_size: int | None = None
+    allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -1399,6 +1409,7 @@ class ReplayOptions:
         differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
+        allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen replay option bundle."""
 
@@ -1411,6 +1422,9 @@ class ReplayOptions:
             ),
             "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
+            "allow_changed_params": _resolve_option_value(
+                "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
         }
         _set_frozen_fields(self, _REPLAY_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
@@ -1449,6 +1463,12 @@ class InterventionOptions:
         Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
+    allow_changed_params:
+        Let the replay engine use a parameter's current value when it changed
+        since capture. Default ``False`` refuses with
+        ``replay_param_changed_since_capture``; ``True`` names the parameters used
+        in ``trace.last_run["replayed_with_changed_params"]``. The rerun engine
+        always runs the live model and ignores it.
 
     Examples
     --------
@@ -1460,6 +1480,7 @@ class InterventionOptions:
     engine: str = "auto"
     confirm_mutation: bool = False
     strict: bool = False
+    allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -1467,6 +1488,7 @@ class InterventionOptions:
         engine: str | MissingType = MISSING,
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
+        allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen intervention option bundle."""
 
@@ -1477,6 +1499,9 @@ class InterventionOptions:
                 "confirm_mutation", confirm_mutation, False, specified_fields
             ),
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
+            "allow_changed_params": _resolve_option_value(
+                "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
         }
         _set_frozen_fields(self, _INTERVENTION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))

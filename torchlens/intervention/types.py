@@ -386,10 +386,16 @@ class LiteralTensor:
     literals and foreign/unstamped parameters (matching falls through to the other rungs);
     optional-with-default keeps unpickling of pre-r75 payloads intact (readers use
     ``getattr`` with a ``None`` fallback).
+
+    ``capture_fingerprint`` records, for an ``nn.Parameter`` argument, its version
+    counter, storage pointer and shape when the template classified it (session-only:
+    ``Op.args_template`` never persists); replay refuses a parameter that changed since
+    (:mod:`torchlens.intervention._param_fingerprint`). ``None`` for other literals.
     """
 
     value: Any
     param_barcode: str | None = None
+    capture_fingerprint: Any = None
 
 
 @dataclass(frozen=True)

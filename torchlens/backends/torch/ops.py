@@ -83,6 +83,7 @@ from ...fastlog.types import (
     RecordContext,
     StorageIntent,
 )
+from ...intervention._param_fingerprint import param_fingerprint
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ..._state import pause_logging
+from ...intervention._param_fingerprint import param_fingerprint
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -137,7 +138,11 @@ def _classify_arg_component(
             param_meta = get_param_meta(value)
             param_barcode = getattr(param_meta, "param_barcode", None)
             return LiteralTensor(
-                value, param_barcode=str(param_barcode) if param_barcode is not None else None
+                value,
+                param_barcode=str(param_barcode) if param_barcode is not None else None,
+                capture_fingerprint=param_fingerprint(
+                    value, getattr(param_meta, "param_address", None)
+                ),
             )
         with pause_logging():
             return LiteralTensor(safe_copy(value))
