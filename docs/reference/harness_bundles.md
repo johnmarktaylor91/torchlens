@@ -499,6 +499,131 @@ a_side = b["A1"]["block"].out[0, pairs.source_positions]
 b_side = b["B1"]["block"].out[0, pairs.reader_positions]
 ```
 
+## Steer one call and re-run your harness
+
+TorchLens does not push a steer through later calls: it never sees your harness's prompts, parsing
+or branching, so it cannot rebuild them. Instead you run your own harness twice, once as it is and
+once with one call steered, and hand the second run to the first bundle. TorchLens pairs the calls
+by the member names your harness gives them (never by order), checks the pairing, merges the
+second run's members as `cf_<name>` and reports, for every call, whether it was steered and
+whether its prompt and its output changed, each from which token.
+
+```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):  # causal: position t mixes in a running mean of positions <= t
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(64, 16)
+        self.block = torch.nn.Linear(16, 16)
+        self.head = torch.nn.Linear(16, 64)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        x = self.embed(ids)
+        steps = torch.arange(1, ids.shape[1] + 1, dtype=x.dtype).view(1, -1, 1)
+        x = x + x.cumsum(dim=1) / steps
+        return self.head(torch.relu(self.block(x)))
+
+
+def generate(model, ids, seed):  # native sampling; `model` may be a steered executor
+    rng = torch.Generator().manual_seed(seed)
+    with torch.no_grad():
+        for _ in range(6):
+            probs = torch.softmax(model(ids)[:, -1], dim=-1)
+            ids = torch.cat([ids, torch.multinomial(probs, 1, generator=rng)], dim=1)
+    return ids
+
+
+def chat(*parts):  # stand-in chat template: role tokens around the text
+    return torch.cat([torch.tensor([[1, 2]]), *parts, torch.tensor([[3]])], dim=1)
+
+
+def critique_loop(lm, q, *, intervene):  # your harness; intervene maps a call name to a spec
+    b = tl.Bundle()
+
+    def call(name, prompt, seed):
+        spec = intervene.get(name)
+        out = generate(spec.bind(lm) if spec else lm, prompt, seed)  # steered generation
+        trace = tl.trace(lm, out, intervene=spec) if spec else tl.trace(lm, out)
+        binding = {"stream": "input", "batch_row": 0, "completion": [prompt.shape[1], out.shape[1]]}
+        tl.io.attach_sidecar(trace, "torchlens.boundary_facts", binding)
+        b.add(trace, names=name)
+        return out[:, prompt.shape[1] :]
+
+    draft = call("draft", chat(q), seed=1)  # seed each call, not once per harness
+    critique = call("critique", chat(q, torch.tensor([[4]]), draft), seed=2)
+    call("revise", chat(q, torch.tensor([[4]]), draft, torch.tensor([[5]]), critique), seed=3)
+    b.relate("fed_by", "critique", "draft", token_spans="auto")
+    b.relate("fed_by", "revise", "draft", token_spans="auto")
+    b.relate("fed_by", "revise", "critique", token_spans="auto")
+    return b
+
+
+torch.manual_seed(0)
+lm, q = TinyLM().eval(), torch.tensor([[20, 21, 22]])
+steer = tl.when(tl.module("block"), tl.steer(torch.randn(16), magnitude=6.0, feature_axis=-1))
+
+b = critique_loop(lm, q, intervene={})
+report = b.add_alternative(critique_loop(lm, q, intervene={"draft": steer}), steered=("draft",))
+print(report.table())
+calls = {row.call: row for row in report.calls}
+assert calls["draft"].status == "steered" and calls["draft"].prompt_divergence is None
+assert {calls["critique"].status, calls["revise"].status} <= {"absorbed", "changed"}
+assert b.downstream("draft") == ("critique", "revise")  # what the steer makes stale
+
+d = b.token_divergence("critique", "cf_critique")
+assert d.prompt_divergence == 6 + calls["draft"].completion_divergence  # where the quote parts
+start, end, cf_start, cf_end = d.shared[0]  # the stretch both prompts share, as a span row
+same = b["critique"]["block"].out[0, start:end] - b["cf_critique"]["block"].out[0, cf_start:cf_end]
+assert same.abs().max() == 0  # causal model: identical tokens before the divergence
+```
+
+The table has one line per call:
+
+- `steered`: a call you declared in `steered=`; its prompt is the same, its output moved.
+- `absorbed`: the prompt changed (it quotes the steered text) but the output did not. This is the
+  common case: the critique read a different draft from that token on, its activations moved, and
+  its sampled text happened not to change.
+- `changed`: both the prompt and the output changed.
+- `unchanged`: neither changed.
+- `added` / `dropped`: the call ran in only one run, because the harness took another branch (a
+  router chose differently). Its copy is added unpaired, or the original stays unpaired.
+
+The merge writes one `alternative_of` row from each copy to its original (peers, so the copies
+stay out of `downstream("draft")`), copies the second run's own relation rows onto the copies (so
+`downstream("cf_draft")` is `("cf_critique", "cf_revise")`), and records one `add` operation with
+the statuses. `b.token_divergence(original, rerun)` reads any two members bound with a completion
+range: `prompt_divergence` and `completion_divergence` are the first positions whose token ids
+differ (the completion's counted from its first generated token), `lengths` gives prompt and
+completion sizes, and `shared` lists the stretches both runs share (the common prompt prefix, the
+common prompt tail after the quote, the common output prefix) as four-int rows in the
+`token_spans` grammar. Comparisons after the divergence are descriptive: one paired run is one
+sample, so run several seeds before reading a steer's effect into a number.
+
+`add_alternative` checks everything before it changes the bundle, and a refusal leaves it as it
+was:
+
+| Case | Code |
+|---|---|
+| A steered call is missing from either run | `alternative_target_missing` |
+| A declared call was captured without a spec that fired | `alternative_target_unsteered` |
+| Another call of the second run was captured under a spec | `alternative_steer_undeclared` |
+| The spec edits chosen positions or decode steps (`at_positions`, `at_step`) | `alternative_capture_position_dependent` |
+| An unsteered call saw the same prompt and wrote different text | `alternative_unchanged_call_diverged` |
+| A `cf_<name>` copy would reuse a member name | `alternative_member_name_taken` (pass `prefix=`) |
+| A paired call has no binding with a completion range, or its ids are not retained | `bundle_token_divergence_unavailable` |
+
+The fifth row is the noise tripwire: a harness reseeded between runs, or nondeterministic kernels,
+change text the steer never reached. Seed each call, keep the batch the same and use deterministic
+algorithms. A position-dependent steer refuses because one teacher-forced forward does not
+reproduce generation under it (capture the episode instead, `docs/reference/episode_capture.md`);
+a position-uniform steer captured teacher-forced under the same spec matches the steered
+generation. Effects through hosted or untraced calls show only as uncovered tokens, and that the
+second run used the same code, templates and weights stays yours to keep true.
+
 ## Capture overhead
 
 Measured once, on Wed 14 Oct 2026: gpt2 (the 124M-parameter Hugging Face checkpoint, eval mode) on

@@ -52,7 +52,11 @@
   member-relation table (`member_relations=`, `Bundle.relate`,
   `Bundle.derive_episode_status`; harness bundles add the `fed_by` content-provenance kind
   with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict
-  `Bundle.token_pairs` read, `docs/reference/harness_bundles.md`). Doc of record:
+  `Bundle.token_pairs` read, the `selected_by` control kind (`chosen`/`candidates`/`evidence`),
+  and the steer-one-call-and-re-run pair `b.add_alternative(second_run, steered=("draft",))`
+  (returns `torchlens.bundle.AlternativeReport` of `AlternativeCall` rows) and
+  `b.token_divergence("critique", "cf_critique")` (returns `torchlens.bundle.TokenDivergence`),
+  `docs/reference/harness_bundles.md`). Doc of record:
   `docs/reference/episode_capture.md`;
   refusal codes in `docs/reference/error_refusal_contract.md`.
 - Experiments remember (F03; spellings documented-unstable; doc of record

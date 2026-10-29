@@ -706,6 +706,55 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `bundle_relation_span_unverified`. A Bundle helper-table method; any reduction over a
   many-to-one group is the caller's own descriptive comparison.
 
+**Bundle.token_divergence** *(spelling documented-unstable)*
+: `b.token_divergence(original, rerun)` returns a `TokenDivergence`: where two members' prompts and
+  completions part, by exact token ids. Each member needs a token-stream binding that names its
+  `completion` range, with its token ids retained; the prompt is the bound stream before the
+  completion. Typical use is a call and its copy from a steered re-run
+  (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses
+  `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
+  range or the ids are missing; an unknown name raises `KeyError`.
+
+**TokenDivergence** *(`torchlens.bundle.TokenDivergence`; spelling documented-unstable)*
+: The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
+  `prompt_divergence`: the first prompt position whose ids differ (the shorter prompt's length when
+  one extends the other; `None` when equal). `completion_divergence`: the same for the completions,
+  counted from the first generated token. `lengths`: `((prompt, completion), (prompt,
+  completion))`. `shared`: the stretches both runs share as `(orig_start, orig_end, rerun_start,
+  rerun_end)` half-open stream positions, the `token_spans` grammar: the common prompt prefix, the
+  common prompt tail after a divergence, the common completion prefix. `intervened`: whether each
+  capture ran under an intervention. Properties `prompt_same` and `completion_same`.
+
+**Bundle.add_alternative** *(spelling documented-unstable)*
+: `b.add_alternative(second_run, steered=("draft",), prefix="cf_")` merges a second run of your
+  own harness, made with the `steered` calls captured under their specs, into `b` and returns an
+  `AlternativeReport`. Calls pair by member name, never by order. Before anything changes it
+  refuses, with these codes: `alternative_target_missing` (a steered call absent from either run;
+  field `side`), `alternative_target_unsteered` (a declared call captured without a spec that
+  fired), `alternative_steer_undeclared` (another second-run call captured under a spec),
+  `alternative_capture_position_dependent` (the spec edits chosen positions or decode steps:
+  `at_positions`, `at_step`), `alternative_member_name_taken` (a copy would reuse a name; pass
+  another `prefix`), `bundle_token_divergence_unavailable` (a paired call lacks a bound completion
+  range) and `alternative_unchanged_call_diverged` (an unsteered call saw the same prompt but wrote
+  different text: noise TorchLens cannot separate from the steer). Then every second-run member is
+  added as `prefix + name`, each paired call gets an `alternative_of` row from its copy, the second
+  run's own relation rows are copied onto the copies, and one `add` operation records the statuses.
+  A failure while merging restores the bundle. TorchLens never runs your harness.
+
+**AlternativeReport** *(`torchlens.bundle.AlternativeReport`; spelling documented-unstable)*
+: The frozen result of `Bundle.add_alternative`: `prefix`, `steered` (the declared calls), `calls`
+  (one `AlternativeCall` per call of either run, the original's order first), `uncopied_rows` (the
+  second run's rows of unknown namespaced kinds, not copied) and `table()`, a fixed-width text
+  table with one line per call.
+
+**AlternativeCall** *(`torchlens.bundle.AlternativeCall`; spelling documented-unstable)*
+: One call of an `AlternativeReport`: `call` (the original member name), `member` (its copy,
+  `None` when dropped), `status`, and `prompt_divergence` / `completion_divergence` as on
+  `TokenDivergence` (`None` for unpaired calls). Statuses: `steered` (declared in `steered=`),
+  `unchanged` (prompt and output the same), `absorbed` (the prompt changed, the output did not; the
+  common case), `changed` (both changed), `added` (only the second run made the call) and
+  `dropped` (only the original made it).
+
 **Bundle.node** *(members= spelling documented-unstable)*
 : `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
   the named subset, gated pairwise inside that subset (`same_param_shapes` floor), so one foreign
