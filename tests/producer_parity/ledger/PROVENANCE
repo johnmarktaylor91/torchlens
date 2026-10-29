@@ -2867,3 +2867,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 4a5a24b5f66da7558cedb6e1221657d2ed24beef (dirty)
 recorded: 2026-10-29T19:11:03.099286+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: wip/tensordict-prewrap-train: redispatch module plus the storage-overlap and Dynamo explain-shape splits, rebased on the batch2 train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b8aace5df77b65a05d52061d058d4455128f5959 (clean)
+recorded: 2026-10-29T21:02:23.517056+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: wip/tensordict-prewrap-train: redispatch module plus the storage-overlap and Dynamo explain-shape splits, rebased on the batch2 train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b8aace5df77b65a05d52061d058d4455128f5959 (clean)
+recorded: 2026-10-29T21:02:29.948942+00:00
