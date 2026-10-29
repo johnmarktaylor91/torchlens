@@ -192,3 +192,15 @@
   call line, and no TorchLens setting captures those kernels. Both fire once per session and move
   no verdict; the advisory resolves only names visible in the defining module (module globals, or
   `self.`/`cls.` attributes of its classes), not a scripted function stored on an instance.
+- Replay reads live parameters: a replay template holds the `nn.Parameter` itself, so every replay
+  door refuses `replay_param_changed_since_capture` once a consumed parameter changed since capture
+  (version counter, storage pointer or shape); `allow_changed_params=True` on `InterventionOptions`
+  or `ReplayOptions` replays with the current values and records the names in
+  `trace.last_run["replayed_with_changed_params"]`. Not detected, so replay silently uses the new
+  value: an in-place write through `param.data` (its own version counter on the same storage) or
+  through a numpy or raw-storage alias. A replaced parameter object is never read by replay (the
+  template keeps the captured one). Pinned in `tests/test_replay_param_changed.py`.
+- A model that builds a thread pool lazily in `forward` loses one pool per capture to the capture's
+  attribute restore; a later garbage collection that frees it inside another capture ends its idle
+  workers there, and the thread check then marks that capture unverified. This errs only one way: a
+  false "unverified", never a false "verified".

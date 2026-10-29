@@ -506,6 +506,21 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.grad_scale`, `tl.bwd_hook`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
   values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
 
+**allow_changed_params** (`InterventionOptions`, `ReplayOptions`) *(spelling documented-unstable)*
+: A replay template holds the live `nn.Parameter` each call consumed, and capture records its
+  version counter, storage pointer and shape. If a parameter changed since capture (an optimizer
+  step, `load_state_dict`, an in-place op under `torch.no_grad()`, `param.data = t`), every replay
+  door refuses `replay_param_changed_since_capture` (`ReplayPreconditionError`, naming the
+  parameter and the op) rather than silently compute with the new value: `do()` on the replay
+  engine, `push`, `push_from`, differentiable replay, and later replays of every fork (a rerun
+  fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
+  `False`) replays with the current values and records the parameter names in
+  `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
+  `param.data` or through a numpy or raw-storage alias. A replaced parameter object
+  (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
+  captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
+  engine runs the live model and ignores the option.
+
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
   not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
