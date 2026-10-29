@@ -82,12 +82,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 # snapshot; the `_active_hook_plan` one stays raw (r43 class: no accessor
 # by design, the same single-field hot-path load `runtime.py` already keeps
 # unconverted at six sites), net +1 reviewed and ledgered here.
-# 290 -> 291 (2026-10-28, foreign-kernel boundary): backends/torch/
-# _function_boundary.py reads `_state._completeness_witness_mode` once to
-# pause logging around its boundary-op emit only under the shadow census,
-# the same gate wrappers.py:496 keeps for the torch.func boundary; there is
-# no accessor for the witness mode, so the raw single-field load stays.
-_ACCESS_SITE_BASELINE = 291
+_ACCESS_SITE_BASELINE = 290
 
 
 def _state_access_sites() -> list[tuple[str, int]]:

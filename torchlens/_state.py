@@ -1164,6 +1164,20 @@ def diagnostic_observer_armed() -> bool:
     )
 
 
+def completeness_witness_is_shadow() -> bool:
+    """Return whether the opt-in user-op completeness census is armed.
+
+    Returns
+    -------
+    bool
+        ``True`` under ``wrap_torch(completeness_witness=True)`` or a
+        ``tl.validate`` census pass, when a boundary emitter hides TorchLens
+        bookkeeping dispatches from the census with ``pause_logging``.
+    """
+
+    return _completeness_witness_mode == "shadow"
+
+
 def active_capture() -> "tuple[Trace | None, bool]":
     """Return one coherent ``(active trace, logging enabled)`` snapshot.
 

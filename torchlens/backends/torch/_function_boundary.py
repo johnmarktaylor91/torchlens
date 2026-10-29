@@ -415,7 +415,7 @@ def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
 
     # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census,
     # exactly as the torch.func transform boundary does.
-    if _state._completeness_witness_mode == "shadow":
+    if _state.completeness_witness_is_shadow():
         with _state.pause_logging():
             emit()
     else:
