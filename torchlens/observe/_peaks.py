@@ -18,7 +18,7 @@ Two rules the gate enforces by construction:
   which is what the counter actually says -- never as "used 0 bytes".
 - a CPU ``None`` renders as unavailable with its recorded reason: without
   ``CaptureOptions(measure_host_peak_memory=True)`` both CPU peaks are
-  ``None`` and the reason names that opt-in (measure.2); an opted-in forward
+  ``None`` and the reason names that opt-in; an opted-in forward
   whose RSS delta read 0 names ``CaptureOptions(measure_python_peak_memory=True)``.
 """
 

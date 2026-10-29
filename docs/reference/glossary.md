@@ -2604,13 +2604,13 @@ deprecation shim owed*
 : The largest memory growth above a bracket's starting baseline, including memory freed before the
   bracket ends. CPU measures only under `CaptureOptions(measure_host_peak_memory=True)`: it reads
   the process resident high-water mark, reset at each bracket on Linux (the reset also resets a
-  caller's own `VmHWM` and `ru_maxrss` readings). Without the opt-in (the default, measure.2) a CPU
+  caller's own `VmHWM` and `ru_maxrss` readings). Without the opt-in (the default) a CPU
   peak is `None` and its `*_peak_memory_reason` names the opt-in. CUDA reads the device allocator
   peak; MPS the allocator delta. `backward_peak_memory` is the largest peak above a pass's starting
   baseline over all backward passes (CUDA: the growth of the device high-water mark).
 
 **measure_host_peak_memory (CaptureOptions)** — *unstable — no deprecation shim owed*
-: Opt-in (default `False`, measure.2, 28 Oct 2026) for the CPU `Trace.forward_peak_memory` and
+: Opt-in (default `False`) for the CPU `Trace.forward_peak_memory` and
   `Trace.backward_peak_memory`. Measuring resets the process-wide resident high-water mark at the
   forward bracket and at each CPU backward pass, which also resets the caller's own `VmHWM` and
   `ru_maxrss` readings and cannot be undone; the default writes nothing and reports CPU peaks as
@@ -2621,7 +2621,7 @@ deprecation shim owed*
 **Trace.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
 : Why `Trace.forward_peak_memory` is `None`. A CPU capture without
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
-  opt-in (measure.2). A CPU forward that measured zero (resident high-water growth,
+  opt-in. A CPU forward that measured zero (resident high-water growth,
   end-of-forward RSS delta and, when opted in, the Python-allocation peak all 0) is recorded as
   `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)` (forks.13).
   `None` when a value was measured, and on artifacts that predate the field. Persisted
@@ -2631,7 +2631,7 @@ deprecation shim owed*
 **Trace.backward_peak_memory_reason** — *unstable — no deprecation shim owed*
 : Why `Trace.backward_peak_memory` is `None`: a CPU backward on a capture without
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
-  opt-in (measure.2). `None` when a value was measured, before any backward, and on artifacts
+  opt-in. `None` when a value was measured, before any backward, and on artifacts
   that predate the field. Persisted (KEEP); a loaded reason that is not a non-empty string, or
   sits beside a number, refuses `artifact_backward_peak_memory_invalid`. CUDA and MPS keep their
   numeric semantics.

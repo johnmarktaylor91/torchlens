@@ -662,7 +662,7 @@ class CaptureOptions:
         (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
     measure_host_peak_memory:
         Whether CPU captures measure ``Trace.forward_peak_memory`` and
-        ``Trace.backward_peak_memory`` (a session-time knob; measure.2, 28 Oct 2026).
+        ``Trace.backward_peak_memory`` (a session-time knob).
         Measuring needs a per-bracket reset of the process-wide resident high-water
         mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
         ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
