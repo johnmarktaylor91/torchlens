@@ -53,7 +53,9 @@ from ._index_domain import (
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
 from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
+from ._operand_value_proofs import operand_value_proof_decision
 from ._replay_warnings import replay_warnings_ignored
+from ._sdpa_value_proofs import sdpa_value_proof_decision
 from ._value_predicates import (
     _extrema_operand_dominates,
     _is_all_inf_value,
@@ -2166,6 +2168,10 @@ def _posthoc_value_proof_decision(
             "non-zero weight, so (input - running_mean) is zero and running_var cannot reach "
             "the output",
         )
+    for value_proof in (operand_value_proof_decision, sdpa_value_proof_decision):
+        decision = value_proof(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
     if norm_input_annihilated_by_zero_weight(layer, layers_to_perturb, args):
         return PosthocPerturbDecision(
             True,

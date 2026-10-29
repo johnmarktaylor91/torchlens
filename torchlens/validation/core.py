@@ -64,6 +64,7 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._operand_value_proofs import output_has_no_elements
 from ._replay_device import (
     align_output_to_saved_device,
     align_parent_to_slot_device,
@@ -3185,6 +3186,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
         return ValidationCheckResult.exempted("pre_perturbation_exemption")
+    # Beside the empty-parent skip: an output with no elements has no value to change.
+    if perturb and output_has_no_elements(saved_output):
+        return ValidationCheckResult.exempted("empty_output_no_elements")
 
     input_args, unverified_reason = _prepare_input_args_for_validating_layer(
         self, layer, layers_to_perturb
