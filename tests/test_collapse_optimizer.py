@@ -1499,23 +1499,21 @@ def test_max_salience_floor_fires_on_synthetic_unique_wide_fan(
         assert not _eligible_module_box(state, "head", signal)
         assert "head" not in result.selected
         assert any("head.branches" in repr(node) for node in result.plan.nodes)
-        folds = any(isinstance(node, RepeatFold) for node in result.plan.nodes)
-        # Re-pinned with the collapse gate fix: a wrapped branch (its only child,
-        # ``net``, hides the same ops) is not a box candidate; the nets are cousins,
-        # not siblings, so the four wrapped branches stop folding.
-        assert folds is (branch is FlatParallelBranch)
+        # A wrapped branch stays the box candidate (its only child ``net`` is gated
+        # off), so wrapped and flat branches both fold as siblings.
+        assert any(isinstance(node, RepeatFold) for node in result.plan.nodes)
     finally:
         trace.cleanup()
 
 
+@pytest.mark.parametrize("branch", [ParallelBranch, FlatParallelBranch], ids=["wrapped", "flat"])
 def test_max_salience_floor_fold_representative_uses_single_instance_stats(
     tmp_path: Path,
+    branch: type[torch.nn.Module],
 ) -> None:
     """Max-mode parallel fold representatives display single-instance stats."""
 
-    # Re-pinned with the collapse gate fix: wrapped branches no longer fold (see
-    # the salience-floor test), so the fold under test is the flat-branch fan.
-    trace = _trace(StemmedUniqueWideFanModel(branch=FlatParallelBranch), torch.randn(1, 4, 8, 8))
+    trace = _trace(StemmedUniqueWideFanModel(branch=branch), torch.randn(1, 4, 8, 8))
     try:
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         source = str(

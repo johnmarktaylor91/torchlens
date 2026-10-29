@@ -781,8 +781,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
 : A module's smart-collapse priority: its hidden ops (distinct subtree ops minus one) over the
-  largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or one
-  whose single child hides the same ops. It ranks candidates and never reads the selected plan
+  largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or the
+  only child of a non-root module that hides the same ops (the parent, the name the user wrote,
+  ranks instead; in a chain of such wrappers the outermost ranks). It ranks candidates and never reads the selected plan
   (`Trace.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
   module's priority, highest first. Computed at access, never persisted.
 

@@ -1785,9 +1785,13 @@ def _compute_signal_skeleton(
             for address in parent_set - child_set:
                 output_edges[address].add(edge)
 
-    # Every hidden count exists before any gate runs: the single-child rule
-    # reads a child that is built after its parent.
     hidden_ops_by_module = {a: max(len(set(ops)) - 1, 0) for a, ops in op_labels_by_module.items()}
+    # Single-child gate input: the only child of a non-root module -> that parent's hidden count.
+    wrapper_hidden_ops = {
+        m.address_children[0]: hidden_ops_by_module.get(m.address)
+        for m in trace.modules
+        if len(m.address_children or ()) == 1 and m.address not in {"", "self"}
+    }
     signals: dict[str, ModuleCollapseSignals] = {}
     for module in trace.modules:
         address = module.address
@@ -1820,7 +1824,7 @@ def _compute_signal_skeleton(
             structural_digest="",
             peer_count=1,
             hidden_ops=hidden_ops,
-            eligible=_gate_module(module, hidden_ops, hidden_ops_by_module),
+            eligible=_gate_module(module, hidden_ops, wrapper_hidden_ops.get(address)),
         )
     return signals
 
@@ -1828,17 +1832,19 @@ def _compute_signal_skeleton(
 def _gate_module(
     module: Module,
     hidden_ops: int,
-    hidden_ops_by_module: Mapping[str, int],
+    wrapper_hidden_ops: int | None,
 ) -> bool:
-    """Return whether a module mirrors renderer collapse eligibility."""
+    """Return whether a module mirrors renderer collapse eligibility.
+
+    An only child that hides its non-root parent's ops is not a candidate: the
+    parent, the name the user wrote, is (the outermost of a wrapper chain).
+    """
 
     if module.address in {"", "self"}:
         return False
     if int(getattr(module, "num_layers", 0) or 0) <= 1:
         return False
-    child_addresses = list(getattr(module, "address_children", ()) or ())
-    single = len(child_addresses) == 1
-    return not (single and hidden_ops_by_module.get(child_addresses[0]) == hidden_ops)
+    return wrapper_hidden_ops != hidden_ops
 
 
 def _compute_structural_digests(

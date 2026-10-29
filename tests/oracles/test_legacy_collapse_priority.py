@@ -4,8 +4,9 @@ Meaning (Lead ruling on the owner question, option B): a module's smart-collapse
 priority is its hidden-op count (the distinct ops in its subtree, minus the one
 op a collapsed box still shows) over the largest hidden-op count of any
 submodule in the trace, rounded to 6 places. A module the renderer never
-collapses reads 0.0: the root, a module with at most one Layer, and a module
-whose single child hides the same ops. The priority never consults the plan the
+collapses reads 0.0: the root, a module with at most one Layer, and the only
+child of a non-root module that hides the same ops (the parent, the name the
+user wrote, ranks instead). The priority never consults the plan the
 optimizer selects. Every expected value is counted from the ``forward`` sources
 below.
 """
@@ -59,7 +60,7 @@ class Big(nn.Module):
 
 
 class OnlyChild(nn.Module):
-    """One child that hides the same 2 ops: never collapsed itself."""
+    """One child that hides the same 2 ops: the wrapper ranks, the child does not."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -85,13 +86,14 @@ class Ranked(nn.Module):
 
 
 # Largest submodule hidden count is big's 4: big 4/4, mid 3/4, small and
-# wrap.inner 2/4. wrap's only child hides the same 2 ops; every leaf Linear is
-# one Layer; the root is never a candidate. Ties sort by address.
+# wrap 2/4. wrap's only child hides the same 2 ops, so wrap.inner reads 0.0;
+# every leaf Linear is one Layer; the root is never a candidate. Ties sort by
+# address.
 RANKED_ORDER = [
     ("big", 1.0),
     ("mid", 0.75),
     ("small", 0.5),
-    ("wrap.inner", 0.5),
+    ("wrap", 0.5),
     ("big.a", 0.0),
     ("big.b", 0.0),
     ("big.c", 0.0),
@@ -102,7 +104,7 @@ RANKED_ORDER = [
     ("self", 0.0),
     ("small.a", 0.0),
     ("small.b", 0.0),
-    ("wrap", 0.0),
+    ("wrap.inner", 0.0),
     ("wrap.inner.a", 0.0),
     ("wrap.inner.b", 0.0),
 ]
@@ -123,9 +125,9 @@ def test_collapse_priority_matches_the_hand_ranking() -> None:
         trace.cleanup()
 
 
-def test_single_same_count_child_reads_zero_and_the_child_ranks() -> None:
+def test_single_same_count_child_reads_zero_and_the_wrapper_ranks() -> None:
     # Top: w wraps w.inner (both hide linear, relu, linear: 2), then c.
-    # Largest hidden count is 2, so w.inner reads 1.0 and w 0.0.
+    # Largest hidden count is 2, so w reads 1.0 and w.inner 0.0.
     class Top(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -138,9 +140,9 @@ def test_single_same_count_child_reads_zero_and_the_child_ranks() -> None:
     trace = _trace(Top())
     try:
         scores = dict(trace.module_collapse_order)
-        assert scores["w.inner"] == 1.0
-        assert scores["w"] == 0.0
-        assert all(score == 0.0 for address, score in scores.items() if address != "w.inner")
+        assert scores["w"] == 1.0
+        assert scores["w.inner"] == 0.0
+        assert all(score == 0.0 for address, score in scores.items() if address != "w")
     finally:
         trace.cleanup()
 
