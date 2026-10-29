@@ -12,12 +12,18 @@ import pytest
 import torch
 
 import torchlens.postprocess.loop_grouping_adapter as lga
+from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens import trace as trace_fn
 from torchlens.postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,
     RecurrenceNode,
     group_recurrent_nodes,
 )
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 
 def _raw_label(trace: Any, final_label: str) -> str:

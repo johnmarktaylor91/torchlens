@@ -394,14 +394,17 @@ def _has_call_site_evidence(self: "Trace") -> bool:
 def _call_site_group_key(node: Any) -> tuple[Any, ...]:
     """The grouping key of one retained op under call-site grouping.
 
-    An op with a call-site class groups with every op of the same class (same
+    A buffer node groups with every version of the same registered buffer. An
+    op with a call-site class groups with every op of the same class (same
     innermost module instance, same call-site chain, same function and output
     slot). Inputs and outputs stay single. Anything else (no Python frame inside
-    its module call: buffer sources, synthesized nodes) falls back to its
-    ``site_key_v1`` position within the module call, which never fuses two
-    positions of one call and still groups a module called several times.
+    its module call, synthesized nodes) falls back to its ``site_key_v1``
+    position within the module call, which never fuses two positions of one
+    call and still groups a module called several times.
     """
 
+    if node.is_buffer and node.address:
+        return ("buffer", node.address)
     if _is_call_site_class(node.equivalence_class):
         return ("call_site", node.equivalence_class)
     if node.is_input or node.is_output:
