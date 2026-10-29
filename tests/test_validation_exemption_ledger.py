@@ -449,6 +449,17 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="sdpa_single_key_key_edge",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._sdpa_value_proofs:sdpa_single_key_key_edge",
+        refuses=(
+            "more than one key, a perturbed query, value or mask, a parent in two slots, a "
+            "non-finite saved query or key, non-zero dropout_p, a non-finite scale, a mask that "
+            "leaves a query row no key, and a saved output that differs from value in any query row"
+        ),
+    ),
+    Exemption(
         code="einsum_zero_operand",
         tier="posthoc",
         contract="C2 perturbation sensitivity",

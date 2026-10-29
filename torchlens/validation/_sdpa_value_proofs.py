@@ -16,7 +16,11 @@ query (slot 0) or key (slot 1), with the saved output all zero.
 ``sdpa_single_key_identity``: with one key (``S = 1``), softmax over that key is exactly 1 for
 every finite score, so the output equals ``v`` whatever the query is. Exempted only for a
 perturbed query (slot 0), with the saved output equal to ``v`` broadcast over the query rows.
-A perturbed key or value stays strict.
+
+``sdpa_single_key_key_edge``: the same identity read from the key side. With one key the
+softmax weight is exactly 1 for every finite score whatever the key values are, so the key
+cannot reach the output either. Same preconditions as ``sdpa_single_key_identity``, exempted
+only for a perturbed key (slot 1). A perturbed value or mask stays strict.
 """
 
 from __future__ import annotations
@@ -163,6 +167,41 @@ def _output_equals_value_rows(out: Any, value: Any) -> bool:
     return bool((out == value).all())
 
 
+def _single_key_output_is_value(
+    layer: Any, layers_to_perturb: list[str], args: tuple[Any, ...], slot: int
+) -> bool:
+    """Return whether one key makes the sdpa output equal ``v`` with ``slot`` perturbed.
+
+    Parameters
+    ----------
+    layer:
+        Op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments ``(q, k, v, ...)``.
+    slot:
+        The only positional slot the perturbed parent may occupy.
+
+    Returns
+    -------
+    bool
+        True when the op is sdpa over a single key, every softmax row is well defined, the
+        perturbed parent sits only at ``slot``, and the saved output equals ``v`` broadcast.
+    """
+
+    if getattr(layer, "func_name", None) != _SDPA_FUNC_NAME or len(args) < 3:
+        return False
+    if sole_perturbed_slot(layer, layers_to_perturb) != slot:
+        return False
+    key = args[1]
+    if not isinstance(key, torch.Tensor) or key.ndim < 2 or key.shape[-2] != 1:
+        return False
+    if not sdpa_softmax_rows_well_defined(layer, args):
+        return False
+    return _output_equals_value_rows(getattr(layer, "out", None), args[2])
+
+
 def sdpa_single_key_identity(
     layer: Any, layers_to_perturb: list[str], args: tuple[Any, ...]
 ) -> bool:
@@ -183,16 +222,30 @@ def sdpa_single_key_identity(
         True when the proof applies.
     """
 
-    if getattr(layer, "func_name", None) != _SDPA_FUNC_NAME or len(args) < 3:
-        return False
-    if sole_perturbed_slot(layer, layers_to_perturb) != 0:
-        return False
-    key = args[1]
-    if not isinstance(key, torch.Tensor) or key.ndim < 2 or key.shape[-2] != 1:
-        return False
-    if not sdpa_softmax_rows_well_defined(layer, args):
-        return False
-    return _output_equals_value_rows(getattr(layer, "out", None), args[2])
+    return _single_key_output_is_value(layer, layers_to_perturb, args, slot=0)
+
+
+def sdpa_single_key_key_edge(
+    layer: Any, layers_to_perturb: list[str], args: tuple[Any, ...]
+) -> bool:
+    """Return whether a perturbed key is the only key of its attention call.
+
+    Parameters
+    ----------
+    layer:
+        Op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments ``(q, k, v, ...)``.
+
+    Returns
+    -------
+    bool
+        True when the proof applies.
+    """
+
+    return _single_key_output_is_value(layer, layers_to_perturb, args, slot=1)
 
 
 def sdpa_value_proof_decision(
@@ -230,5 +283,12 @@ def sdpa_value_proof_decision(
             "sdpa_single_key_identity",
             "attention runs over a single key, so softmax is exactly 1 and the output equals "
             "value for any finite query",
+        )
+    if sdpa_single_key_key_edge(layer, layers_to_perturb, args):
+        return PosthocPerturbDecision(
+            True,
+            "sdpa_single_key_key_edge",
+            "attention runs over a single key, so softmax is exactly 1 and the output equals "
+            "value for any finite key",
         )
     return PosthocPerturbDecision(False, "no_sdpa_value_proof")

@@ -3,7 +3,7 @@
 Mirrors the Menagerie call shapes behind the batch-2 replay gaps:
 
 - ``scaled_dot_product_attention`` with an all-zero value (MaskFormer, DETR, Kandinsky) and
-  with a single key (ARTrack);
+  with a single key, perturbed at the query or the key (ARTrack);
 - ``torch.einsum('bij,bj->bi', (S, k))`` with a fresh all-zero state ``S``;
 - ``new_zeros(...).scatter_reduce_(0, index, src, 'amax', include_self=False)`` whose index
   addresses every destination row;
@@ -13,7 +13,7 @@ Mirrors the Menagerie call shapes behind the batch-2 replay gaps:
 
 Each positive case is exempted under its decision name. Each negative keeps the call shape but
 breaks one precondition (an operand near zero but not zero, a masked-out row, a second key, an
-unaddressed row, a non-empty output), freezes the replay so the edge is really dead, and must
+unaddressed row, a non-empty output, a non-finite key), freezes the replay so the edge is really dead, and must
 still fail validation.
 """
 
@@ -136,35 +136,79 @@ def test_dead_sdpa_query_edge_with_a_fully_masked_row_still_fails() -> None:
 
 
 class _FewKeyAttention(nn.Module):
-    """``sdpa(q, k, v)`` over the first ``keys`` positions of the input."""
+    """``sdpa(q, k, v)`` over the first ``keys`` positions of the input.
 
-    def __init__(self, keys: int) -> None:
+    ``key_scale`` multiplies the key per feature (a ``-inf`` entry makes every score ``-inf``,
+    since ``q`` is positive); ``zero_value`` makes ``v`` all zero, so a row that softmax
+    leaves empty still equals ``v`` and only the precondition under test can refuse it.
+    """
+
+    def __init__(
+        self,
+        keys: int,
+        key_scale: torch.Tensor | None = None,
+        zero_value: bool = False,
+        mask: torch.Tensor | None = None,
+    ) -> None:
         super().__init__()
         self.keys = keys
+        self.key_scale = key_scale
+        self.zero_value = zero_value
+        self.mask = mask
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        q = x * 2.0
-        k = x[:, :, : self.keys] + 1.0
+        q = x.abs() + 1.0
+        k = x[:, :, : self.keys].abs() + 1.0
+        if self.key_scale is not None:
+            k = k * self.key_scale
         v = x[:, :, : self.keys] * 3.0
-        return F.scaled_dot_product_attention(q, k, v)
+        if self.zero_value:
+            v = torch.zeros_like(v)
+        return F.scaled_dot_product_attention(q, k, v, attn_mask=self.mask)
 
 
-def test_sdpa_single_key_query_edge_is_exempted() -> None:
-    trace = _capture(_FewKeyAttention(keys=1), _attention_input())
-    result = _edge(trace, _op(trace, "scaled_dot_product_attention"), 0)
-    _assert_exempted(result, "sdpa_single_key_identity")
+def _sdpa_trace(model: nn.Module) -> tuple[Any, Any]:
+    trace = _capture(model, _attention_input())
+    return trace, _op(trace, "scaled_dot_product_attention")
 
 
-def test_dead_sdpa_query_edge_over_two_keys_still_fails() -> None:
-    trace = _capture(_FewKeyAttention(keys=2), _attention_input())
-    _assert_dead_edge_fails(trace, _op(trace, "scaled_dot_product_attention"), 0)
+@pytest.mark.parametrize(
+    ("slot", "code"),
+    [(0, "sdpa_single_key_identity"), (1, "sdpa_single_key_key_edge")],
+    ids=["query", "key"],
+)
+def test_sdpa_single_key_edge_is_exempted(slot: int, code: str) -> None:
+    trace, op = _sdpa_trace(_FewKeyAttention(keys=1))
+    _assert_exempted(_edge(trace, op, slot), code)
 
 
-def test_dead_sdpa_key_edge_over_one_key_still_fails() -> None:
-    """Only the query is covered: a dead key edge of the same call still fails."""
+@pytest.mark.parametrize("slot", [0, 1], ids=["query", "key"])
+def test_dead_sdpa_edge_over_two_keys_still_fails(slot: int) -> None:
+    trace, op = _sdpa_trace(_FewKeyAttention(keys=2))
+    _assert_dead_edge_fails(trace, op, slot)
 
-    trace = _capture(_FewKeyAttention(keys=1), _attention_input())
-    _assert_dead_edge_fails(trace, _op(trace, "scaled_dot_product_attention"), 1)
+
+def test_dead_sdpa_key_edge_with_a_non_finite_key_still_fails() -> None:
+    key_scale = torch.ones(8)
+    key_scale[0] = float("-inf")
+    trace, op = _sdpa_trace(_FewKeyAttention(keys=1, key_scale=key_scale, zero_value=True))
+    assert bool((op.out == 0).all()), "precondition: an empty softmax row still equals v"
+    _assert_dead_edge_fails(trace, op, 1)
+
+
+def test_dead_sdpa_key_edge_with_a_fully_masked_row_still_fails() -> None:
+    mask = torch.ones(4, 1, dtype=torch.bool)
+    mask[0] = False
+    trace, op = _sdpa_trace(_FewKeyAttention(keys=1, zero_value=True, mask=mask))
+    assert bool((op.out == 0).all()), "precondition: an empty softmax row still equals v"
+    _assert_dead_edge_fails(trace, op, 1)
+
+
+def test_dead_sdpa_value_edge_over_one_key_still_fails() -> None:
+    """Only the query and key are covered: a dead value edge of the same call still fails."""
+
+    trace, op = _sdpa_trace(_FewKeyAttention(keys=1))
+    _assert_dead_edge_fails(trace, op, 2)
 
 
 # ------------------------------------------------------------------ proofs.4: einsum
