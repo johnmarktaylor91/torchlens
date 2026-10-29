@@ -147,6 +147,7 @@ from ...ir.op_record import amend_lookback_retention
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...utils._call_site import CALL_SITE_CLASS_MARKER  # noqa: F401 (rebound helper global)
 from ...utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
 from ...utils._torch_compat import (
     saved_tensors_default_hooks_active,
@@ -859,8 +860,11 @@ _container_leaf_occurrences_from_entries = _rebind_function(
 _get_autograd_saved_stats_for_tensor = _rebind_function(
     _ops_autograd._get_autograd_saved_stats_for_tensor, globals()
 )
-# Rebound helper the shape-metadata reader needs in the caller's namespace.
+# Rebound helpers the per-output logger needs in the caller's namespace.
 _metadata_shape = _rebind_function(_ops_activations._metadata_shape, globals())
+_call_site_equivalence_class = _rebind_function(
+    _ops_activations._call_site_equivalence_class, globals()
+)
 _log_output_tensor_info = _rebind_function(_ops_activations._log_output_tensor_info, globals())
 _save_activation_fields = _rebind_function(_ops_activations._save_activation_fields, globals())
 _stream_activation_fields = _rebind_function(_ops_activations._stream_activation_fields, globals())
