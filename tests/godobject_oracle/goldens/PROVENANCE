@@ -436,3 +436,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e3db6025b5a413a1f97b41c766de38ba95a28c01 (dirty)
 recorded: 2026-10-29T07:55:13.347476+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:24.727230+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:24.758069+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:24.779349+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:24.801535+00:00
