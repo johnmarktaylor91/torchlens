@@ -344,6 +344,41 @@ def _reown_witness_events(
         event.owner = token
 
 
+def _snapshot_arg_labels(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> list[tuple[Any, str | None]]:
+    """Record each tensor argument's live label before the forward runs."""
+
+    from ...utils.introspection import get_vars_of_type_from_obj
+    from ._tl import get_tensor_label
+
+    tensors = get_vars_of_type_from_obj(
+        (args, kwargs), torch.Tensor, subclass_exceptions=[torch.nn.Parameter], search_depth=4
+    )
+    return [(tensor, get_tensor_label(tensor)) for tensor in tensors]
+
+
+def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels: set[str]) -> None:
+    """Undo interior relabels of argument objects the collapsed forward handed back as-is.
+
+    An interior op that returns its input object (``contiguous`` on a contiguous
+    tensor; DGL's zero-copy export does exactly that) stamps the object with its own
+    label. Those ops are dropped with the interior, so the boundary op's parent edge
+    for that argument must come from the label the object carried before the forward.
+    """
+
+    from ._tl import clear_tensor_label, get_tensor_label, set_tensor_label
+
+    for tensor, label in snapshot:
+        current = get_tensor_label(tensor)
+        if current == label or current not in interior_labels:
+            continue
+        if label is None:
+            clear_tensor_label(tensor)
+        else:
+            set_tensor_label(tensor, label)
+
+
 @dataclass(frozen=True)
 class _BoundaryCall:
     """One collapsed ``Function.apply`` call, ready to be logged as the boundary op."""
@@ -447,6 +482,7 @@ def record_function_apply(
     rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
     autocast_state = log_current_autocast_state()
 
+    arg_labels = _snapshot_arg_labels(args, kwargs)
     frame_exports: set[str] = set()
     _FRAMES.append(frame_exports)
     try:
@@ -478,12 +514,13 @@ def record_function_apply(
         autocast_state=autocast_state,
     )
     replay = _make_replay_callable(cls, original_function, exits)
-    _log_boundary_op(trace, _BoundaryCall(replay, args, kwargs, out, exec_ctx, func_call_id))
     interior_labels = {
         label
         for label in (_event_label(event) for event in interior_events)
         if isinstance(label, str)
     }
+    _restore_arg_labels(arg_labels, interior_labels)
+    _log_boundary_op(trace, _BoundaryCall(replay, args, kwargs, out, exec_ctx, func_call_id))
     trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
     if witness_state is not None:
         _reown_witness_events(

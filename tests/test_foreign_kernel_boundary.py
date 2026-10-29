@@ -58,6 +58,19 @@ class _DlpackDoubleFunction(torch.autograd.Function):
         return grad_output * 2
 
 
+class _SameObjectDoubleFunction(torch.autograd.Function):
+    """DGL zero-copy shape: ``x.contiguous()`` hands back the input object before the export."""
+
+    @staticmethod
+    def forward(ctx, x):  # type: ignore[override]
+        x = x.contiguous()
+        return torch.from_numpy(x.detach().numpy() * 2)
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        return grad_output * 2
+
+
 class _WriteThroughDoubleFunction(torch.autograd.Function):
     """DGL SpMM shape: the output is allocated in torch and a foreign kernel writes into it."""
 
@@ -136,7 +149,13 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
 
 
 @pytest.mark.parametrize(
-    "function", [_NumpyDoubleFunction, _DlpackDoubleFunction, _WriteThroughDoubleFunction]
+    "function",
+    [
+        _NumpyDoubleFunction,
+        _DlpackDoubleFunction,
+        _SameObjectDoubleFunction,
+        _WriteThroughDoubleFunction,
+    ],
 )
 def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     """A Function whose forward leaves torch is one replayable boundary op."""
