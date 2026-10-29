@@ -36,8 +36,6 @@ if TYPE_CHECKING:
 CHANGED_PARAMS_RUN_KEY = "replayed_with_changed_params"
 """``Trace.last_run`` key naming the changed parameters a replay used under the opt-in."""
 
-PARAM_CHANGED_CODE = "replay_param_changed_since_capture"
-
 
 @dataclass(frozen=True)
 class ParamFingerprint:
@@ -153,7 +151,7 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
             scope.used.append(name)
         return value
     raise ReplayPreconditionError(
-        code=PARAM_CHANGED_CODE,
+        code="replay_param_changed_since_capture",
         param=name,
         op=str(getattr(pass_log, "label", None) or pass_log.layer_label),
         changed="; ".join(changes),
