@@ -1642,11 +1642,7 @@ def torch_func_decorator(
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
 
     def _call_original_redispatching(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
-        """Call the original, re-offering a declined protocol dispatch.
-
-        The fast and non-owner paths inline the same ``try`` (no extra frame).
-        """
-
+        """Call the original, re-offering a declined protocol dispatch (inlined on hot paths)."""
         try:
             return func(*args, **kwargs)
         except TypeError as exc:
@@ -1720,7 +1716,6 @@ def torch_func_decorator(
                 try:
                     out = func(*args, **kwargs)
                 except TypeError as exc:
-                    # A handler table keyed on this wrapper (a post-wrap import).
                     out = redispatch_declined_protocol(exc, wrapped_func, func_name, args, kwargs)
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
@@ -1781,8 +1776,7 @@ def torch_func_decorator(
                 _warn_functorch_region_not_logged()
             # A raw transform interior is outside the witness claim, but the witness-off
             # route retains its original logging state and avoids the context-manager cost.
-            # tensordict batches TensorDict ops under vmap, so this pass-through also
-            # carries the declined-protocol redispatch (inside the same contexts).
+            # The pass-through keeps the declined-protocol redispatch (tensordict under vmap).
             if _state._completeness_witness_mode == "shadow":
                 with _state.pause_logging():
                     if _state._escape_detector_mode == "shadow":

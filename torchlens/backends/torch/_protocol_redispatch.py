@@ -23,21 +23,30 @@ namespace read) now answers exactly as it would in an unwrapped eager process.
 Nothing changes on the success path, and a declined dispatch is side-effect
 free by the protocol's contract, so the second offer cannot double any work.
 
-Residual: a table keyed on wrappers is stale after ``unwrap_torch()`` (no
-wrapper is left on the call path to make the second offer); wrappers stay
-installed for the process lifetime unless the user unwraps explicitly.
+Unwrapped torch has no wrapper on the call path to make that second offer --
+``unwrap_torch()`` and, above all, validation's pristine-torch ground truth
+(``validation/_pristine.py`` unwraps for one forward). So unwrap first gives
+each wrapper-keyed table built during a wrap epoch the ORIGINAL key beside
+the wrapper key (:func:`alias_wrapper_keyed_tables`): module-level and
+class-level ``dict``/``set`` tables of modules imported after this one,
+torch and TorchLens excluded. That is the table an unwrapped eager import
+builds; the wrapper key stays, so the next wrap epoch dispatches on the first
+offer. Residual: a table hidden deeper (a closure, an instance attribute, a
+frozenset) is not aliased; its wrapped calls still redispatch.
 """
 
 from __future__ import annotations
 
 import re
+import sys
 from typing import Any
 
 import torch
 
+from ... import _state
 from ...utils import _torch_compat
 
-__all__ = ["redispatch_declined_protocol"]
+__all__ = ["alias_wrapper_keyed_tables", "redispatch_declined_protocol"]
 
 # The two "every handler declined" messages: torch's C argument parser
 # (C builtins and Tensor methods) and ``torch.overrides.handle_torch_function``
@@ -46,6 +55,11 @@ _DECLINED_DISPATCH_RE = re.compile(
     r"^(?:Multiple dispatch failed for|no implementation found for) '([^']+)'"
 )
 _REDISPATCHED_MARKER = "_torchlens_protocol_redispatched"
+_EXCLUDED_PACKAGES = ("torch", "torchlens")
+# Modules already imported when this module loads (never later than the first
+# wrap) keyed their tables on originals; scanning a later pre-wrap import too
+# only costs time, since a table without wrapper keys gains nothing.
+_PRE_WRAP_MODULES: frozenset[str] = frozenset(sys.modules)
 
 
 def _declined_this_function(exc: TypeError, func_name: str) -> bool:
@@ -168,3 +182,81 @@ def redispatch_declined_protocol(
             return result
     setattr(exc, _REDISPATCHED_MARKER, True)
     raise exc
+
+
+def _alias_container(container: Any, ledger: dict[int, Any]) -> int:
+    """Give every wrapper key in one ``dict``/``set`` its original beside it.
+
+    Parameters
+    ----------
+    container:
+        A ``dict`` or ``set`` (subclasses included).
+    ledger:
+        ``_state._decorated_to_orig`` (wrapper id to original callable).
+
+    Returns
+    -------
+    int
+        The number of original keys added.
+    """
+
+    added = 0
+    for key in list(container):
+        original = ledger.get(id(key))
+        if original is None or original in container:
+            continue
+        if isinstance(container, dict):
+            container[original] = container[key]
+        else:
+            container.add(original)
+        added += 1
+    return added
+
+
+def _module_tables(name: str, module: Any) -> list[Any]:
+    """Return the module- and class-level ``dict``/``set`` tables of one module."""
+
+    tables: list[Any] = []
+    for attr, value in list(vars(module).items()):
+        if attr.startswith("__"):
+            continue
+        if isinstance(value, (dict, set)):
+            tables.append(value)
+        elif isinstance(value, type) and value.__module__ == name:
+            tables.extend(v for v in vars(value).values() if isinstance(v, (dict, set)))
+    return tables
+
+
+def alias_wrapper_keyed_tables() -> int:
+    """Key post-wrap third-party tables on originals too, before an unwrap.
+
+    Called from ``identity_shims.remove_identity_shims`` at the head of every
+    ``unwrap_torch()``, under the wrapper install lock, ledger populated. A
+    namespace or table that misbehaves under iteration or insertion is skipped:
+    aliasing serves unwrapped dispatch only and is never a capture fact.
+
+    Returns
+    -------
+    int
+        The number of original keys added across all tables.
+    """
+
+    if not _state._decorated_to_orig:
+        return 0
+    ledger = _state._decorated_to_orig
+    added = 0
+    for name, module in list(sys.modules.items()):
+        if module is None or name in _PRE_WRAP_MODULES:
+            continue
+        if name.split(".", 1)[0] in _EXCLUDED_PACKAGES:
+            continue
+        try:
+            tables = _module_tables(name, module)
+        except Exception:  # noqa: BLE001 -- foreign namespace; see docstring
+            continue
+        for table in tables:
+            try:
+                added += _alias_container(table, ledger)
+            except Exception:  # noqa: BLE001 -- foreign table type; see docstring
+                continue
+    return added

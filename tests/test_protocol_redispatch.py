@@ -14,10 +14,12 @@ twice), and the real tensordict reproduction in a fresh interpreter.
 
 from __future__ import annotations
 
+import itertools
 import subprocess
 import sys
 import textwrap
-from collections.abc import Callable
+import types
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -77,20 +79,69 @@ def _stack_bags(bags: list[Any], dim: int = 0) -> torch.Tensor:
     return torch.stack([bag.tensor for bag in bags], dim) * 2
 
 
-def _relu_bag(bag: Any, inplace: bool = False) -> torch.Tensor:
-    """Table implementation of ``F.relu`` for a bag."""
+# A tensordict-shaped library: a module-level handler table filled at IMPORT
+# time by a registration decorator that reads the torch namespace.
+_POST_WRAP_LIBRARY_SOURCE = """
+import torch
+import torch.nn.functional as F
 
-    del inplace
+HANDLED = {}
+
+
+def implements(torch_function):
+    def decorator(impl):
+        HANDLED[torch_function] = impl
+        return impl
+
+    return decorator
+
+
+class Bag:
+    def __init__(self, tensor):
+        self.tensor = tensor
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        if func not in HANDLED:
+            return NotImplemented
+        return HANDLED[func](*args, **(kwargs or {}))
+
+
+@implements(torch.stack)
+def _stack(bags, dim=0):
+    return torch.stack([bag.tensor for bag in bags], dim) * 2
+
+
+@implements(F.relu)
+def _relu(bag, inplace=False):
     return F.relu(bag.tensor) + 1
+"""
+_library_ids = itertools.count()
 
 
 @pytest.fixture
-def post_wrap_bag() -> type:
-    """A bag type whose table was keyed while wrappers were installed."""
+def post_wrap_library() -> Iterator[types.ModuleType]:
+    """Import a fresh tensordict-shaped library while wrappers are installed."""
 
     _ensure_wrapped()
     assert _resolve(torch.stack) is not torch.stack, "torch.stack must be wrapped here"
-    return _make_bag_type({torch.stack: _stack_bags, F.relu: _relu_bag})
+    name = f"_tl_post_wrap_library_{next(_library_ids)}"
+    module = types.ModuleType(name)
+    sys.modules[name] = module
+    try:
+        exec(compile(_POST_WRAP_LIBRARY_SOURCE, name, "exec"), module.__dict__)
+        assert torch.stack in module.HANDLED
+        assert _resolve(torch.stack) not in module.HANDLED
+        yield module
+    finally:
+        sys.modules.pop(name, None)
+
+
+@pytest.fixture
+def post_wrap_bag(post_wrap_library: types.ModuleType) -> type:
+    """The post-wrap library's bag type."""
+
+    return post_wrap_library.Bag
 
 
 def test_post_wrap_table_dispatches_on_the_fast_path(post_wrap_bag: type) -> None:
@@ -132,8 +183,45 @@ def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: typ
     assert post_types == [op.layer_type for op in pre_trace.layer_list]
     expected = (torch.stack([x, x + 1]) * 2).sum()
     assert torch.allclose(post_trace.layer_list[-1].out, expected)
-    assert tl.validate(_bag_stacking_model(post_wrap_bag), x, scope="forward")
     assert tl.validate(_bag_stacking_model(pre_wrap_bag), x, scope="forward")
+    # Validation's pristine ground truth runs on unwrapped torch: the unwrap
+    # aliased the library's wrapper-keyed table onto the originals first.
+    assert tl.validate(_bag_stacking_model(post_wrap_bag), x, scope="forward")
+
+
+def test_unwrap_aliases_post_wrap_tables_onto_originals(
+    post_wrap_library: types.ModuleType,
+) -> None:
+    """Unwrapped torch dispatches a post-wrap table; the wrapper key stays."""
+
+    from torchlens.backends.torch.wrappers import unwrap_torch
+
+    wrapped_stack = torch.stack
+    unwrap_torch()
+    try:
+        assert torch.stack is _resolve(wrapped_stack)
+        handled = post_wrap_library.HANDLED
+        assert torch.stack in handled and wrapped_stack in handled
+        bags = [post_wrap_library.Bag(torch.ones(1)), post_wrap_library.Bag(torch.ones(1))]
+        assert torch.equal(torch.stack(bags), torch.full((2, 1), 2.0))
+    finally:
+        _ensure_wrapped()
+    assert torch.stack is wrapped_stack
+
+
+def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
+    """Dicts and sets gain the original beside each wrapper key, nothing else."""
+
+    _ensure_wrapped()
+    wrapper, original = torch.cat, _resolve(torch.cat)
+    table: dict[Any, Any] = {wrapper: "impl", "name": 1}
+    members: set[Any] = {wrapper, 3}
+    ledger = _state._decorated_to_orig
+    assert _protocol_redispatch._alias_container(table, ledger) == 1
+    assert _protocol_redispatch._alias_container(members, ledger) == 1
+    assert table == {wrapper: "impl", "name": 1, original: "impl"}
+    assert members == {wrapper, 3, original}
+    assert _protocol_redispatch._alias_container(table, ledger) == 0
 
 
 def test_original_keyed_table_is_unchanged(post_wrap_bag: type) -> None:
@@ -210,7 +298,7 @@ def test_overloaded_args_follow_torch_protocol_order() -> None:
 
 @pytest.mark.heavy
 def test_real_tensordict_imported_after_wrap_torch() -> None:
-    """tensordict imported after ``wrap_torch()`` stacks, cats and unbinds (m4387)."""
+    """tensordict imported after ``wrap_torch()`` dispatches, traces and validates (m4387)."""
 
     pytest.importorskip("tensordict")
     script = textwrap.dedent(
@@ -226,6 +314,25 @@ def test_real_tensordict_imported_after_wrap_torch() -> None:
         assert type(torch.cat([td, td])).__name__ == "TensorDict"
         assert len(torch.unbind(td, 0)) == 3
         assert type(torch.zeros_like(td)).__name__ == "TensorDict"
+
+        import torch.nn as nn
+        import torchlens as tl
+
+
+        class Model(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.lin = nn.Linear(2, 2)
+
+            def forward(self, x):
+                td = TensorDict({"a": self.lin(x)}, batch_size=[x.shape[0]])
+                return torch.cat([torch.stack([td, td]), td.unsqueeze(0)])["a"].sum(0)
+
+
+        x = torch.randn(3, 2)
+        layer_types = [op.layer_type for op in tl.trace(Model(), x).layer_list]
+        assert "stack" in layer_types and "cat" in layer_types, layer_types
+        assert tl.validate(Model(), x, scope="forward")
         print("OK")
         """
     )

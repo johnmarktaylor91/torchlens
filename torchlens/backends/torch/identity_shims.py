@@ -343,6 +343,11 @@ def remove_identity_shims() -> None:
     global _family_installed
     _family_installed = False
     _remove_import_hook()
+    # Third-party handler tables keyed on wrappers by a post-wrap import gain
+    # their original keys before the wrappers leave the call path.
+    from ._protocol_redispatch import alias_wrapper_keyed_tables
+
+    alias_wrapper_keyed_tables()
     _restore(_installed)
     _installed.clear()
     _live_shims.clear()

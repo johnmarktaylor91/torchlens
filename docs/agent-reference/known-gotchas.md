@@ -98,8 +98,10 @@
   handlers the ORIGINAL, so every handler declines. When torch reports that every handler declined
   this very function, the wrapper re-offers the same handlers the same arguments once under its own
   identity (`backends/torch/_protocol_redispatch.py`, gated on `HAS_DISABLED_TORCH_FUNCTION_IMPL`);
-  a genuine decline still raises torch's own `TypeError`. Residual: such a table stays wrapper-keyed
-  after `unwrap_torch()`, with no wrapper left to re-offer (`tests/test_protocol_redispatch.py`).
+  a genuine decline still raises torch's own `TypeError`. Unwrapped torch has no wrapper to re-offer
+  (validation's pristine ground truth unwraps), so every `unwrap_torch()` first adds the original
+  key beside each wrapper key in module- and class-level `dict`/`set` tables of modules imported
+  after the redispatch module (torch and TorchLens excluded). Tests: `tests/test_protocol_redispatch.py`.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
 - `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
