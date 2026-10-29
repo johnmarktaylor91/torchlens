@@ -22,10 +22,16 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens.agent import call_tool
 from torchlens.data_classes._trace_accessors import boundary_label_ops
 from torchlens.data_classes.op import Op
 from torchlens.report._agent_json import build_agent_json
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 
 class _LoopOverInputs(nn.Module):

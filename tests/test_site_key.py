@@ -276,9 +276,10 @@ def test_tied_loop_structural_facts() -> None:
 
 @pytest.mark.heavy
 def test_gpt2_4l_structural_facts() -> None:
-    # Pinned census facts on the gpt2_4l fixture: 199 retained ops, all four
-    # recurrent groups are within-call residual-add pairs SPANNING sites, and
-    # P1 holds (199 distinct keys, no per-instance collision).
+    # Pinned census facts on the gpt2_4l fixture: 199 retained ops, no
+    # recurrent group spans sites (the structural grouper fused each block's two
+    # residual adds into one layer; call-site grouping keeps the two source
+    # lines apart), and P1 holds (199 distinct keys, no per-instance collision).
     transformers = pytest.importorskip("transformers")
     config = transformers.GPT2Config(n_layer=4, n_head=4, n_embd=128, vocab_size=512)
     model = transformers.GPT2LMHeadModel(config)
@@ -286,7 +287,7 @@ def test_gpt2_4l_structural_facts() -> None:
     with torch.no_grad():
         log = tl.trace(model, torch.randint(0, 512, (1, 16)))
     assert len(log.op_labels) == 199
-    assert _site_spanning_recurrent_groups(log) == (4, 4)
+    assert _site_spanning_recurrent_groups(log) == (0, 0)
     keys = [log.ops[label].site_key for label in log.op_labels]
     assert len(set(keys)) == 199
 

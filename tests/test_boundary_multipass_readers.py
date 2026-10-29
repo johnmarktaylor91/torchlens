@@ -27,11 +27,17 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torchlens._fast_live_steer import fast_live_input_admission
 from torchlens._runnable_execution import _first_failed_live_input_check
 from torchlens.capture.structure_only import StructureOnlyCapabilityError, _input_geometry
 from torchlens.options import CaptureOptions
 from torchlens.runnable import ContractCheck, RunnableErrorCode
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 
 class _LoopOverInputs(nn.Module):
