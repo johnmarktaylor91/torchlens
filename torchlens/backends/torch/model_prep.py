@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from functools import wraps
-from types import ModuleType
+from types import CodeType, ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -44,6 +44,7 @@ from ...ir.op_record import (
     amend_raw_hook_intervention,
 )
 from ...quantities import Bytes
+from ...utils._call_site import register_module_boundary_code
 from ...utils.hashing import make_random_barcode
 from ...utils.introspection import (
     _get_code_context,
@@ -2613,6 +2614,14 @@ def module_forward_decorator(
             _mstack.pop_frame(trace._module_capture_ws.exhaustive_module_stack, frame)
 
     return decorated_forward
+
+
+# The wrapper's frame is the boundary between a module call and its caller in
+# call-site grouping (``torchlens.utils._call_site``).
+for _const in module_forward_decorator.__code__.co_consts:
+    if isinstance(_const, CodeType) and _const.co_name == "decorated_forward":
+        register_module_boundary_code(_const)
+del _const
 
 
 # ---------------------------------------------------------------------------
