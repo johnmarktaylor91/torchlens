@@ -9,11 +9,14 @@ edge must still fail perturbation.
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
 import torch
 from _validation_capture import _capture, _quiet_validate
 from torch import nn
 
-from torchlens.validation.core import validate_saved_outs
+from torchlens.validation.core import _check_perturbation_exemptions, validate_saved_outs
 from torchlens.validation.diagnostics import get_validation_failure
 
 
@@ -63,16 +66,47 @@ def test_set_to_source_validates() -> None:
     assert _quiet_validate(_SetToSource(), torch.rand(4)) is True
 
 
-def test_set_with_no_source_validates() -> None:
-    """``set_()`` discards the receiver's values: nothing to perturb-test there."""
+def _receiver_and_set_op(model: nn.Module) -> tuple[Any, Any, str]:
+    """Capture ``model`` and return its trace, its ``set_`` op and the receiver label."""
 
-    assert _quiet_validate(_SetToNothing(), torch.rand(4)) is True
+    trace, _ = _capture(model, torch.rand(4))
+    set_op = next(op for op in trace.layer_list if op.func_name == "set_")
+    return trace, set_op, set_op.parent_arg_positions["args"][0]
 
 
-def test_set_to_a_storage_view_validates() -> None:
-    """The storage overload replaces the receiver's values the same way."""
+@pytest.mark.parametrize("model_cls", [_SetToNothing, _SetToStorageView])
+def test_set_overloads_without_a_source_tensor_exempt_only_the_receiver(
+    model_cls: type[nn.Module],
+) -> None:
+    """``set_()`` and ``set_(storage, offset, size, stride)`` get the same arg-0 decision.
 
-    assert _quiet_validate(_SetToStorageView(), torch.rand(4)) is True
+    The wrapper logs both overloads as ``set_`` ops whose only tensor parent is
+    the receiver (a storage is not a graph tensor), and the receiver's values
+    never reach the output. Both overloads still fail end-to-end validation for
+    reasons outside the perturbation check (the no-source call changes the
+    buffer's shape, which the replay-state restore refuses; the storage
+    overload's isolated replay does not reproduce the saved view), filed
+    separately, so this pins the exemption decision itself.
+    """
+
+    trace, set_op, receiver = _receiver_and_set_op(model_cls())
+    try:
+        assert list(set_op.parents) == [receiver]
+        assert _check_perturbation_exemptions(trace, set_op, [receiver]) is True
+    finally:
+        trace.cleanup()
+
+
+def test_set_source_tensor_is_never_exempt() -> None:
+    """The arg-1 source of ``set_(source)`` stays perturbation-tested."""
+
+    trace, set_op, receiver = _receiver_and_set_op(_SetToSource())
+    try:
+        source = set_op.parent_arg_positions["args"][1]
+        assert _check_perturbation_exemptions(trace, set_op, [receiver]) is True
+        assert _check_perturbation_exemptions(trace, set_op, [source]) is False
+    finally:
+        trace.cleanup()
 
 
 def test_dead_set_source_edge_still_fails_perturbation() -> None:
