@@ -2907,3 +2907,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 36e392ef982421e38334a61a1e2fa060a782d434 (dirty)
 recorded: 2026-10-30T00:16:07.681173+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: merge of wip/batch2-train 2f0877f38 (tsboundary, buffer-prov) into the renderer rulings 7bd8fd33b: regenerate on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b438deb34b776d09e9b467fb9adc58552eaacfc1 (dirty)
+recorded: 2026-10-30T01:18:03.155285+00:00
