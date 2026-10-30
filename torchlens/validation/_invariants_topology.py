@@ -375,6 +375,53 @@ def _check_capture_edge_survival(trace: Trace) -> None:
             )
 
 
+def _check_op_label_resolution(ml: Trace) -> None:
+    """Check that every stored Op label resolves, through ``trace.ops``, to its own Op.
+
+    Graph edges, boundary lists and users name an Op by its final labels: the
+    pass-qualified ``label``, the bare ``layer_label`` of a single-pass layer, and
+    the suffixed raw label. ``Trace.__getitem__`` resolves through
+    ``layer_dict_all_keys``, while ``trace.ops`` has its own alias indexes, so the
+    two lookups can disagree. A label that ``trace.ops`` answers with a different
+    Op, or refuses because two Ops claim it, is silent corruption for every
+    consumer that reads through ``trace.ops``; this check fails on it rather than
+    letting the topology check (which resolves through ``Trace.__getitem__``)
+    pass it.
+    """
+
+    from .._errors import AmbiguousOpLookupError
+
+    name = "graph_topology"
+    ops = ml.ops
+    for entry in ml.layer_list:
+        layer_label = getattr(entry, "layer_label", None)
+        pass_index = getattr(entry, "pass_index", None)
+        num_passes = getattr(entry, "num_passes", None)
+        labels = [entry.label, entry._label_raw]
+        if isinstance(layer_label, str) and isinstance(pass_index, int):
+            labels.append(f"{layer_label}:{pass_index}")
+        if isinstance(layer_label, str) and (not isinstance(num_passes, int) or num_passes <= 1):
+            labels.append(layer_label)
+        for label in labels:
+            if not isinstance(label, str):
+                continue
+            try:
+                resolved = ops[label]
+            except (AmbiguousOpLookupError, KeyError) as exc:
+                raise MetadataInvariantError(
+                    name,
+                    f"Op {entry.label!r} label {label!r} does not resolve to it "
+                    f"through trace.ops: {exc}",
+                ) from exc
+            if resolved is not entry:
+                raise MetadataInvariantError(
+                    name,
+                    f"Op {entry.label!r} label {label!r} resolves through trace.ops "
+                    f"to a different op {resolved.label!r} (raw "
+                    f"{resolved._label_raw!r}); a final label must name its own op",
+                )
+
+
 def _check_graph_topology(ml: Trace) -> None:
     """Check C: parent-child edge bidirectionality and stored-flag consistency.
 
@@ -387,6 +434,8 @@ def _check_graph_topology(ml: Trace) -> None:
       ``parents`` (the arg map may not invent edges the graph does not have).
     - Input layers have no parents.
     - out_versions_by_child keys are a subset of children.
+    - Every Op's final labels resolve through ``trace.ops`` to that same Op
+      (``_check_op_label_resolution``).
 
     Round-26 W3-3 note: this check previously also "compared"
     ``has_parents``/``has_siblings``/``has_co_parents`` against
@@ -400,6 +449,7 @@ def _check_graph_topology(ml: Trace) -> None:
     them.
     """
     name = "graph_topology"
+    _check_op_label_resolution(ml)
     label_set = set(ml.layer_labels) | set(ml.op_labels)
     output_set = set(ml.output_layers)
 
