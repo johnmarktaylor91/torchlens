@@ -78,10 +78,11 @@ def vit_oracle(x):
     from transformers import AutoModelForImageClassification
     model = AutoModelForImageClassification.from_pretrained("facebook/deit-tiny-patch16-224").eval()
     vit = model.vit
+    blocks = vit.layers if hasattr(vit, "layers") else vit.encoder.layer
     out = {}
     h = vit.embeddings(x)
     out["embeddings"] = _rdm(h)
-    for i, layer in enumerate(vit.encoder.layer):
+    for i, layer in enumerate(blocks):
         p = f"block{i}"
         ln1 = layer.layernorm_before(h)
         out[f"{p}.ln1"] = _rdm(ln1)
@@ -92,9 +93,13 @@ def vit_oracle(x):
         out[f"{p}.add1"] = _rdm(h)
         ln2 = layer.layernorm_after(h)
         out[f"{p}.ln2"] = _rdm(ln2)
-        mh = layer.intermediate(ln2)
+        if hasattr(layer, "mlp"):
+            mh = layer.mlp.activation_fn(layer.mlp.fc1(ln2))
+            mo = layer.mlp.fc2(mh)
+        else:
+            mh = layer.intermediate(ln2)
+            mo = layer.output.dense(mh)
         out[f"{p}.mlp_hidden"] = _rdm(mh)
-        mo = layer.output.dense(mh)
         out[f"{p}.mlp_out"] = _rdm(mo)
         h = mo + h
         out[f"{p}.add2"] = _rdm(h)

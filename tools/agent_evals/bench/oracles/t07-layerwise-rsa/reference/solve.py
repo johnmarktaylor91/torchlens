@@ -70,6 +70,10 @@ def cnn_features(x):
     return rec
 
 
+def vit_blocks(vit):
+    return vit.layers if hasattr(vit, "layers") else vit.encoder.layer
+
+
 def vit_features(x):
     model = AutoModelForImageClassification.from_pretrained("facebook/deit-tiny-patch16-224").eval()
     vit = model.vit
@@ -83,29 +87,40 @@ def vit_features(x):
         return hook
 
     def save_input(name):
-        def pre(mod, args, kwargs=None):
+        def pre(mod, args):
             rec[name] = args[0].detach().clone()
         return pre
 
     handles.append(vit.embeddings.register_forward_hook(save("embeddings")))
-    for i, layer in enumerate(vit.encoder.layer):
+    blocks = vit_blocks(vit)
+    for i, layer in enumerate(blocks):
         p = f"block{i}"
         handles.append(layer.register_forward_pre_hook(save_input(f"{p}._in")))
         handles.append(layer.layernorm_before.register_forward_hook(save(f"{p}.ln1")))
         handles.append(layer.attention.register_forward_hook(save(f"{p}.attn", 0)))
         handles.append(layer.layernorm_after.register_forward_hook(save(f"{p}.ln2")))
-        handles.append(layer.intermediate.register_forward_hook(save(f"{p}.mlp_hidden")))
-        handles.append(layer.output.dense.register_forward_hook(save(f"{p}.mlp_out")))
-        handles.append(layer.output.register_forward_hook(save(f"{p}.add2")))
+        if hasattr(layer, "mlp"):  # fc1 -> activation (a plain function) -> fc2
+            handles.append(layer.mlp.fc1.register_forward_hook(save(f"{p}._fc1")))
+            handles.append(layer.mlp.fc2.register_forward_hook(save(f"{p}.mlp_out")))
+        else:  # older layout: intermediate (dense + act) and output (dense + residual)
+            handles.append(layer.intermediate.register_forward_hook(save(f"{p}.mlp_hidden")))
+            handles.append(layer.output.dense.register_forward_hook(save(f"{p}.mlp_out")))
+        handles.append(layer.register_forward_hook(save(f"{p}.add2")))
     handles.append(vit.layernorm.register_forward_hook(save("final_ln")))
     handles.append(model.classifier.register_forward_hook(save("classifier")))
     with torch.no_grad():
         model(pixel_values=x)
     for h in handles:
         h.remove()
-    for i in range(len(vit.encoder.layer)):
+    for i, layer in enumerate(blocks):
         p = f"block{i}"
+        a2 = rec[f"{p}.add2"]
+        a2 = a2[0] if isinstance(a2, (tuple, list)) else a2
+        rec[f"{p}.add2"] = a2
         rec[f"{p}.add1"] = rec[f"{p}.attn"] + rec.pop(f"{p}._in")
+        if f"{p}._fc1" in rec:
+            with torch.no_grad():
+                rec[f"{p}.mlp_hidden"] = layer.mlp.activation_fn(rec.pop(f"{p}._fc1"))
     return rec
 
 
