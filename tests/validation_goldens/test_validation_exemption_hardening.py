@@ -1092,11 +1092,16 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
 
     linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
     assert len(linear_ops) == 2
-    # The vacuousness precondition: the suffixed per-op key misses the
-    # pre-suffix trace-dict keys, while membership still resolves the group.
-    assert all(op.equivalence_class not in trace.op_equivalence_classes for op in linear_ops), (
-        "suffix mismatch precondition gone -- update or retire this regression test"
-    )
+    # Under call-site grouping the per-op class is the trace-dict key itself;
+    # under the structural grouper it carries the module suffix and misses the
+    # pre-suffix keys. Membership resolves the group either way, which is what
+    # the corruption check below depends on.
+    if trace.grouping_policy["detector"] == "callsite_v1":
+        assert all(op.equivalence_class in trace.op_equivalence_classes for op in linear_ops)
+    else:
+        assert all(op.equivalence_class not in trace.op_equivalence_classes for op in linear_ops), (
+            "suffix mismatch precondition gone -- update or retire this regression test"
+        )
     expected_group = {op.label for op in linear_ops}
     assert any(group == expected_group for group in trace.op_equivalence_classes.values())
 
