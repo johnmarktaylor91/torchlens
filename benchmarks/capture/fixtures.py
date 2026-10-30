@@ -40,10 +40,14 @@ class _Pointwise(nn.Module):
 class _Matmul(nn.Module):
     ops = 1
 
-    def __init__(self, d: int) -> None:
+    def __init__(self, d: int, weight: nn.Parameter | None = None) -> None:
         super().__init__()
-        # Orthogonal weights keep the norm fixed through thousands of matmuls.
-        self.w = nn.Parameter(torch.linalg.qr(torch.randn(d, d))[0])
+        # An orthogonal weight keeps the norm fixed through thousands of matmuls. The
+        # fixture shares one weight across its blocks (distinct modules, tied parameter):
+        # 10,000 separate 1024 x 1024 weights would need 40 GB.
+        self.w = (
+            weight if weight is not None else nn.Parameter(torch.linalg.qr(torch.randn(d, d))[0])
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.matmul(x, self.w)
@@ -210,6 +214,10 @@ def build_fixture(name: str) -> tuple[nn.Module, torch.Tensor, dict[str, Any]]:
         channels = max(4, d // 16)
         blocks = [kind.make_block(channels) for _ in range(n_blocks)]
         x = torch.randn(1, channels, 16, 16)
+    elif kind_name == "matmul":
+        weight = _Matmul(d).w
+        blocks = [_Matmul(d, weight) for _ in range(n_blocks)]
+        x = torch.randn(1, 8, d)
     else:
         blocks = [kind.make_block(d) for _ in range(n_blocks)]
         x = torch.randn(1, 8, d)
