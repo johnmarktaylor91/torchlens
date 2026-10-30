@@ -88,8 +88,10 @@ def test_rolled_collapsed_box_excludes_surfaced_exit_layers(split_trace: tl.Trac
         for name in re.findall(r'^\s*"?([\w.]+)"? \[', source, re.MULTILINE)
         if name.startswith(("relu", "conv"))
     }
-    # The recurrence-surfaced exit layers render beside the box...
-    assert visible_layers == {"relu_1_2", "relu_2_4"}
+    # The recurrence-surfaced exit layer renders beside the box. Grouping rule
+    # row 26 (and section 1: shapes are never evidence): all five calls of the
+    # one block instance are passes of one relu Layer, across the shape change.
+    assert visible_layers == {"relu_1_2"}
     # ...so the box must claim only the genuinely hidden conv layer.
     ops_rows = re.findall(r">(\d+ ops?)<", source)
     assert ops_rows == ["1 op"], f"box double-represents surfaced layers: {ops_rows}"
@@ -105,13 +107,8 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
         for name in re.findall(r'^\s*"?([\w.]+)"? \[', source, re.MULTILINE)
         if name.startswith("relu")
     }
-    assert visible_layers == {
-        "relu_1_2pass1",
-        "relu_1_2pass2",
-        "relu_1_2pass3",
-        "relu_2_4pass1",
-        "relu_2_4pass2",
-    }
+    # grouping rule row 26: the block's relu is one Layer with 5 passes.
+    assert visible_layers == {f"relu_1_2pass{index}" for index in range(1, 6)}
     ops_rows = re.findall(r">(\d+ ops?)<", source)
     assert ops_rows == ["1 op"] * 5, f"call boxes double-represent surfaced exits: {ops_rows}"
 

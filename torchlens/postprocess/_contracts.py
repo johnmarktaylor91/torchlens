@@ -807,12 +807,18 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "_label_raw",
                 "_layer_label_raw",
                 "_param_barcodes",
+                # Call-site grouping (callsite_v1): buffer versions key by
+                # buffer address and writing op, inputs and outputs are
+                # singletons.
+                "address",
                 "children",
                 "equivalence_class",
                 "equivalent_ops",
                 "func_name",
                 "is_buffer",
+                "is_input",
                 "is_orphan",
+                "is_output",
                 "modules",
                 "multi_output_index",
                 "non_tensor_kwargs",
@@ -1925,6 +1931,10 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "equivalent_ops",
                     "func_name",
                     "is_buffer",
+                    # Call-site grouping (callsite_v1) keeps the input and
+                    # output rows step 1 adds as single-pass layers.
+                    "is_input",
+                    "is_output",
                     "modules",
                     "non_tensor_kwargs",
                     "non_tensor_pos_args",
@@ -2545,6 +2555,9 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             "columns",
             frozenset(
                 (
+                    # Call-site grouping (callsite_v1) keys buffer versions by
+                    # the buffer address step 6's merge settles.
+                    "address",
                     "children",
                     "equivalent_ops",
                     "func_name",

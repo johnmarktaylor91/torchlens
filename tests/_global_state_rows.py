@@ -150,6 +150,9 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Call-site grouping: the module forward wrapper code object, registered
+        # idempotently when submodule forwards are decorated (one constant).
+        ("torchlens/utils/_call_site.py", "_BOUNDARY_CODES"),
         # torch.ops call-class recorders: originals captured at wrap_torch, restored
         # and cleared at unwrap_torch; the per-operator wrapper cache is cleared with
         # them; the shared wrapper code object is an install-time constant.
@@ -534,6 +537,9 @@ last-run slots are overwritten per run and never steer a verdict.
 
 _WEAK_SUBJECT_TABLES = frozenset(
     {
+        # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
+        # by the Trace), so re-validation of a fresh capture can re-check it.
+        ("torchlens/postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_state.py", "_log_registry"),
         # L9 runtime journals are keyed by the owning Trace and contain only
         # timing/token/finalization bookkeeping. They must disappear with
@@ -699,6 +705,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Call-site grouping per-code memos (content token, instruction map),
+        # WeakKeyDictionary keyed by the code object, bounded by live code.
+        ("torchlens/utils/_call_site.py", "_CODE_TOKENS"),
+        ("torchlens/utils/_call_site.py", "_INSTRUCTION_MAPS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP
@@ -839,6 +849,9 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        ("torchlens/postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        ("torchlens/utils/_call_site.py", "_CODE_TOKENS"),
+        ("torchlens/utils/_call_site.py", "_INSTRUCTION_MAPS"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
         # Weightsfree (F33) session registries (storage fact: WeakKeyDictionary /
         # WeakSet keyed by the owning Trace; lifecycle class is

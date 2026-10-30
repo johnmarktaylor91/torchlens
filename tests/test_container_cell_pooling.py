@@ -91,8 +91,10 @@ def test_hydration_identity_and_row_isolation(stack_trace: tl.Trace) -> None:
     """First read hydrates the exact public type, caches it back (stable
     identity), and never shares mutable state across rows."""
 
-    op_a = stack_trace["relu_1_2"]
-    op_b = stack_trace["relu_2_4"]
+    # grouping rule rows 1 and 52: the loop's one ``torch.relu`` line is one Layer
+    # with a pass per block, so the per-row ops are its passes.
+    op_a = stack_trace["relu_1_2:1"]
+    op_b = stack_trace["relu_1_2:2"]
     hydrated = op_a.annotations
     assert type(hydrated) is dict and hydrated == {}
     assert op_a.annotations is hydrated
@@ -118,8 +120,9 @@ def test_fork_never_shares_hydrated_containers(stack_trace: tl.Trace) -> None:
     """A COW fork hydrates its own containers; mutations never cross."""
 
     fork = stack_trace.fork()
-    base_op = stack_trace["relu_3_6"]
-    fork_op = fork["relu_3_6"]
+    # grouping rule rows 1 and 52: the loop's relu is one Layer, 6 passes.
+    base_op = stack_trace["relu_1_2:3"]
+    fork_op = fork["relu_1_2:3"]
     fork_notes = fork_op.annotations
     fork_notes["fork_only"] = True
     assert "fork_only" not in base_op.annotations
@@ -130,8 +133,8 @@ def test_fork_never_shares_hydrated_containers(stack_trace: tl.Trace) -> None:
 def test_pickle_round_trip_never_leaks_encoding(stack_trace: tl.Trace) -> None:
     """Op pickle state carries real containers, never PooledCell."""
 
-    layer = stack_trace["relu_4_8"]
-    op = next(op for _, op in layer.ops.items())
+    # grouping rule rows 1 and 52: the loop's relu is one Layer, 6 passes.
+    op = stack_trace["relu_1_2:4"]
     state = op.__getstate__()
     assert "annotations" in state and "func_autocast_state" in state
     for name, value in state.items():

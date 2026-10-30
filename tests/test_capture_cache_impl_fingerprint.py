@@ -170,7 +170,10 @@ def test_changed_plain_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     assert second.capture_cache_hit is False, (
         "a changed plain instance attribute must not hit the stale cached trace"
     )
-    assert len(second.layer_labels) > len(first.layer_labels)
+    # grouping rule row 3: the one-op relu loop is one layer with k passes, so
+    # Loop(5) differs from Loop(1) in op (pass) count, not layer count.
+    assert second.num_ops > first.num_ops
+    assert second[second.layer_labels[2]].num_passes == 5
     torch.manual_seed(0)
     third = tl.trace(_AttrLoop(5), x, capture=_cache_capture(tmp_path))
     assert third.capture_cache_hit is True, (

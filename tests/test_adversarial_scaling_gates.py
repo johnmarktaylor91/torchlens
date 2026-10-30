@@ -43,6 +43,7 @@ from collections.abc import Callable
 
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
@@ -170,16 +171,26 @@ def test_giant_equivalence_view_is_one_shared_object(wide_capture) -> None:
     assert log[mults[0]].equivalent_ops is log[mults[-1]].equivalent_ops
 
 
-def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
+@pytest.mark.usefixtures("legacy_structural_grouper")
+def test_giant_cohort_groups_silently_below_real_ceiling() -> None:
     """At 300 members (~45k pairs) the UNPATCHED sweep finishes with no disclosure.
 
     A pair-probe-ceiling or fixpoint-budget warning here means the real
     constants degraded on an in-band size — a scaling regression, not tuning.
     The mutually-unreachable streams must also stay ungrouped: equivalence
     never silently promotes to recurrence at scale.
+
+    The pair triangle belongs to the structural grouper (``grouper_v1``), which
+    still serves every capture without call-site evidence. Torch captures group
+    by call site, where the comprehension is one layer with a pass per stream
+    (grouping rule row 32) and no triangle runs, so this gate captures through
+    the legacy fixture.
     """
 
-    log, caught = wide_capture
+    torch.manual_seed(0)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        log = tl.trace(_ParallelStreams(N_STREAMS), torch.randn(3))
     scaling_warnings = [
         w
         for w in caught
@@ -191,6 +202,20 @@ def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
     mults = _mult_labels(log)
     assert len(log[mults[0]].recurrent_ops) == 1
     assert len(log[mults[-1]].recurrent_ops) == 1
+    log.cleanup()
+
+
+def test_giant_comprehension_is_one_layer_under_call_sites(wide_capture) -> None:
+    """Under call-site grouping the 300-stream comprehension is one layer.
+
+    grouping rule row 32: a comprehension is one place in the code, so every
+    stream is a pass of one ``mul`` layer, sharing one recurrent_ops view.
+    """
+
+    log, _ = wide_capture
+    mults = _mult_labels(log)
+    assert len(log[mults[0]].recurrent_ops) == N_STREAMS
+    assert log[mults[0]].recurrent_ops is log[mults[-1]].recurrent_ops
 
 
 def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
@@ -252,9 +277,11 @@ def test_graph_diameter_relations_exact_at_midpoint(chain_capture) -> None:
     """Parent/child tuples at op 700 of 1400 are exactly the neighbors."""
 
     log, _, _ = chain_capture
-    mid = log["add_700_700:1"]
-    assert mid.parents == ("add_699_699",)
-    assert mid.children == ("add_701_701",)
+    # grouping rule row 1: the loop line is one layer, so op k is pass k of
+    # ``add_1_1``.
+    mid = log["add_1_1:700"]
+    assert mid.parents == ("add_1_1:699",)
+    assert mid.children == ("add_1_1:701",)
 
 
 @pytest.mark.heavy
@@ -262,11 +289,14 @@ def test_graph_diameter_closures_exact_at_endpoints(chain_capture) -> None:
     """Input/output closures stay exact across the full 1400-op span."""
 
     log, _, _ = chain_capture
+    # grouping rule row 1: the loop line is one layer, so op k is pass k of
+    # ``add_1_1``.
     first = log["add_1_1:1"]
-    last = log[f"add_{N_CHAIN}_{N_CHAIN}:1"]
+    last = log[f"add_1_1:{N_CHAIN}"]
+    assert first.num_passes == N_CHAIN
     assert first.output_descendants == frozenset({"output_1"})
     assert last.input_ancestors == frozenset({"input_1"})
-    assert log["output_1:1"].parents == (f"add_{N_CHAIN}_{N_CHAIN}",)
+    assert log["output_1:1"].parents == (f"add_1_1:{N_CHAIN}",)
 
 
 def _stack_depth() -> int:
@@ -396,11 +426,13 @@ def test_wide_fanout_and_fanin_relations_exact() -> None:
     log = tl.trace(_FanOut(), (torch.randn(4), N_FANOUT))
     mults = _mult_labels(log)
     assert len(mults) == N_FANOUT
-    bare_mults = [label.split(":")[0] for label in mults]
+    # grouping rule row 32: the comprehension is one ``mul`` layer with a pass
+    # per child, so relations name the pass-qualified labels.
+    assert log[mults[0]].num_passes == N_FANOUT
     input_children = log["input_1:1"].children
     assert len(input_children) == N_FANOUT
-    assert set(input_children) == set(bare_mults)
+    assert set(input_children) == set(mults)
     stack_labels = [layer.label for layer in log.layer_list if layer.label.startswith("stack")]
     assert len(stack_labels) == 1
     stack_parents = log[stack_labels[0]].parents
-    assert list(stack_parents) == bare_mults  # arg order preserved
+    assert list(stack_parents) == mults  # arg order preserved

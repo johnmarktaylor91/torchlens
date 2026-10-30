@@ -131,7 +131,13 @@ def _state(log: tl.Trace) -> Any:
 
 
 def _varying_layer(log: tl.Trace) -> Layer:
-    return next(layer for layer in log.layer_logs.values() if len(layer.ops) > 1)
+    # grouping rule rows 6 and 49: the loop's ``x[:n]`` getitem is now also one
+    # multi-pass Layer, but it does no FLOPs; the varying population is fc's linear.
+    return next(
+        layer
+        for layer in log.layer_logs.values()
+        if len(layer.ops) > 1 and layer.layer_label.startswith("linear_")
+    )
 
 
 # ---------------------------------------------------------------------------

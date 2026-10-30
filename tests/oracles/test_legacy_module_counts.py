@@ -90,8 +90,10 @@ NEST_OP_DEPTH = {
     "linear_3_4:1": 2,  # b2 > b2.l1
     "relu_2_5:1": 1,  # b2
     "linear_4_6:1": 2,  # b2 > b2.l2
-    "linear_5_7:1": 1,  # b1.l1:2 straight from the root
-    "add_1_8:1": 0,
+    # grouping rule row 27 (fork 1, module identity): b1.l1 called again from the
+    # root is the same Layer's second pass, so its second call is linear_1_1:2.
+    "linear_1_1:2": 1,  # b1.l1:2 straight from the root
+    "add_1_7:1": 0,
     "output_1:1": 0,
 }
 # Ops consuming each parameter: b1.l1 runs twice; dead never runs.
@@ -141,7 +143,8 @@ def test_module_call_tree_counts(nest_trace) -> None:
         assert module.max_descendant_depth == max(NEST_DEPTH.get(c, 0) for c in calls)
     for op in trace.ops:
         assert op.module_call_depth == NEST_OP_DEPTH[op.label], op.label
-    for layer in trace.layers:  # every Nest Layer has one pass
+    # Layer depth reads its first pass (b1.l1's Layer spans b1.l1:1 and b1.l1:2).
+    for layer in trace.layers:
         assert layer.module_call_depth == NEST_OP_DEPTH[f"{layer.layer_label}:1"], layer.layer_label
 
 

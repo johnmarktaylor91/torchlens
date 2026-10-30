@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
@@ -80,6 +80,9 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
       and stay in the final op-label namespace.
     """
     name = "equivalence_symmetry"
+    from ._invariants_equivalence import _equivalence_classes_agree, _is_call_site_grouped
+
+    call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels) | _retained_orphan_op_labels(ml)
 
     # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
@@ -202,16 +205,33 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
                     name,
                     f"Layer {layer.layer_label}.equivalent_ops contains '{label}' not in op_labels",
                 )
-        pass_equivalent_ops = {
-            frozenset(getattr(op, "equivalent_ops", set())) for op in layer.ops.values()
-        }
+        pass_ops = list(layer.ops.values())
+        pass_equivalent_ops = {frozenset(getattr(op, "equivalent_ops", set())) for op in pass_ops}
         if len(pass_equivalent_ops) > 1:
-            raise MetadataInvariantError(
-                name,
-                f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
-                f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+            # Under callsite_v1 the passes of one layer may sit in different
+            # equivalence sets exactly when their classes differ only in what
+            # the grouping rule says is not evidence (argument/shape hash rows
+            # 49 and 50, parameter identity row 51, module path rows 30 and 31);
+            # the layer then serves one of its passes' sets.
+            narrowed = call_site_grouped and all(
+                _equivalence_classes_agree(
+                    pass_ops[0], pass_ops[0].equivalence_class, op, op.equivalence_class, True
+                )
+                for op in pass_ops
             )
-        if pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
+            if not narrowed:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
+                    f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+                )
+            if frozenset(equivalent_ops) not in pass_equivalent_ops:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} is "
+                    "none of its passes' equivalent_ops",
+                )
+        elif pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} != "
@@ -340,10 +360,38 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     - Equivalence group consistency: all members of a recurrent_ops
       group belong to the same Trace.op_equivalence_classes set.
 
+    Call-site grouping (``callsite_v1``, grouping rule section 3) replaces two
+    of these, and only for traces stamped with that detector:
+
+    - Old: layers sharing (func_name, param barcodes, equivalence_class) are
+      one layer. New: two different layers never share a call-site key
+      (contract (ii)), and every pass of a layer has one func_name and one
+      call-site key (i), and every recurrent group one key (iii). Shared
+      weights are not evidence (rows 18, 19, 25, 59).
+    - Old: every pass of a layer has one equivalence_class and one
+      op_equivalence_classes set. New: the same, except that the class may
+      differ in exactly the components the rule says are not evidence: the
+      argument/shape hash (rows 49, 50), parameter identity (row 51) and the
+      module path (rows 30, 31). Layer type, in-place marker and output index
+      must still match (:func:`_equivalence_classes_agree`).
+
+    The call-site key is internal and never persisted, so (i) to (iii) are
+    re-checked here only for a live capture that kept its side table
+    (``postprocess._call_site_contract``); otherwise they are reported as not
+    checked (validation diagnostic ``call_site_contract_unchecked``), never
+    passed. Step 7 checks them on every capture.
+
     Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
     be verified post-hoc from metadata alone.
     """
     name = "loop_detection"
+    from ._invariants_equivalence import (
+        _check_call_site_contract_post_hoc,
+        _equivalence_classes_agree,
+        _is_call_site_grouped,
+    )
+
+    call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels)
 
     # O(1) member-label resolution: inline the first steps of the
@@ -461,9 +509,11 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
                     f"(no_pass='{member.layer_label}') differ",
                 )
 
-        # All members share equivalence_class
+        # All members share equivalence_class (per component under callsite_v1)
         for member_label, member in members:
-            if member.equivalence_class != lpl.equivalence_class:
+            if not _equivalence_classes_agree(
+                lpl, lpl.equivalence_class, member, member.equivalence_class, call_site_grouped
+            ):
                 raise MetadataInvariantError(
                     name,
                     f"recurrent_ops type mismatch: '{lpl.layer_label}' "
@@ -516,8 +566,10 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # same output-specific equivalence class must share layer_label. The
     # equivalence class keeps distinct outputs of a multi-output parameterized op
     # from being collapsed into one logical layer.
+    # Under callsite_v1 call-site contract (ii) replaces it (shared weights are
+    # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
-    for lpl in ml.layer_list:
+    for lpl in [] if call_site_grouped else ml.layer_list:
         if lpl.uses_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
@@ -549,13 +601,130 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
             continue
         # All members of a same-layer group should be in the same equivalence set
         equiv_keys = set()
+        keyed_members: list[tuple[Op, str]] = []
         for member_label in slo:
             member = _resolve(member_label)
             if member.label in op_label_to_equiv_key:
                 equiv_keys.add(op_label_to_equiv_key[member.label])
+                keyed_members.append((member, op_label_to_equiv_key[member.label]))
         equiv_stems = {re.sub(r"_outindex\d+$", "", equiv_key) for equiv_key in equiv_keys}
-        if len(equiv_keys) > 1 and len(equiv_stems) > 1:
+        if call_site_grouped and keyed_members:
+            anchor, anchor_key = keyed_members[0]
+            spans = not all(
+                _equivalence_classes_agree(anchor, anchor_key, member, key, True)
+                for member, key in keyed_members
+            )
+        else:
+            spans = len(equiv_keys) > 1 and len(equiv_stems) > 1
+        if spans:
             raise MetadataInvariantError(
                 name,
                 f"recurrent_ops group {sorted(slo)} spans multiple equivalence types: {equiv_keys}",
             )
+    if call_site_grouped:
+        _check_call_site_contract_post_hoc(ml, groups_seen, member_group, _resolve)
+
+
+_OUTINDEX_TOKEN = re.compile(r"_outindex(\d+)")
+
+
+def _is_call_site_grouped(trace: Trace) -> bool:
+    """Whether step 7 grouped this trace by call site (stamp ``detector``)."""
+
+    stamp = getattr(trace, "grouping_policy", None)
+    return isinstance(stamp, dict) and stamp.get("detector") == "callsite_v1"
+
+
+def _equivalence_class_components(op: Op, equivalence_class: object) -> tuple[object, ...]:
+    """The components of an equivalence class that call-site passes must share.
+
+    Layer type, the in-place marker and the output-index tokens. The rest of
+    the class (argument/shape hash, parameter barcodes, module path) is what
+    the grouping rule says is not evidence (rows 30, 31, 49, 50, 51).
+    """
+
+    layer_type = str(getattr(op, "layer_type", ""))
+    text = str(equivalence_class)
+    return (
+        layer_type,
+        text.startswith(f"{layer_type}_"),
+        text.startswith(f"{layer_type}_inplace_"),
+        tuple(_OUTINDEX_TOKEN.findall(text)),
+    )
+
+
+def _equivalence_classes_agree(
+    anchor: Op, anchor_class: object, member: Op, member_class: object, call_site_grouped: bool
+) -> bool:
+    """Whether two passes' equivalence classes agree under the trace's grouper.
+
+    Exact equality under ``grouper_v1``. Under ``callsite_v1`` equal classes
+    agree, and different classes agree only when they differ in nothing but
+    the argument/shape hash, parameter identity and module path: layer type,
+    in-place marker and output index must match, and each class must carry
+    its op's own layer type.
+    """
+
+    if anchor_class == member_class:
+        return True
+    if not call_site_grouped:
+        return False
+    anchor_parts = _equivalence_class_components(anchor, anchor_class)
+    member_parts = _equivalence_class_components(member, member_class)
+    return anchor_parts == member_parts and bool(anchor_parts[1])
+
+
+def _check_call_site_contract_post_hoc(
+    trace: Trace,
+    groups_seen: dict[frozenset[str], list[str]],
+    member_group: dict[str, frozenset[str]],
+    resolve: Any,
+) -> None:
+    """Re-check call-site contract (i) to (iii), or report it as not checked.
+
+    The call-site key is internal and never persisted (grouping rule section
+    3), so only a live capture that kept its side table can be re-checked; a
+    loaded trace or a fork records the validation diagnostic
+    ``call_site_contract_unchecked`` instead of passing silently.
+    """
+
+    from ..postprocess._call_site_contract import (
+        CallSiteEntry,
+        call_site_classes_for,
+        call_site_contract_violation,
+    )
+    from .invariants import MetadataInvariantError
+
+    classes = call_site_classes_for(trace)
+    if classes is None:
+        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+        record_validation_diagnostic(
+            trace,
+            ValidationDiagnostic(
+                check="call_site_contract_unchecked",
+                message=(
+                    "Call-site grouping contract (i) to (iii) not checked: this trace "
+                    "carries no call-site side table (the key is never persisted; step 7 "
+                    "checked it at capture)."
+                ),
+                extra={"detector": "callsite_v1"},
+            ),
+        )
+        return
+    group_raw: dict[frozenset[str], tuple[str, ...]] = {
+        key: tuple(resolve(label)._label_raw for label in labels)
+        for key, labels in groups_seen.items()
+    }
+    entries = [
+        CallSiteEntry(
+            raw_label=op._label_raw,
+            layer=op.layer_label,
+            func_name=op.func_name,
+            group=group_raw.get(member_group.get(op.label, frozenset()), (op._label_raw,)),
+        )
+        for op in trace.layer_list
+    ]
+    violation = call_site_contract_violation(entries, classes)
+    if violation is not None:
+        raise MetadataInvariantError("loop_detection", violation)

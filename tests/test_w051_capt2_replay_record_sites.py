@@ -32,7 +32,10 @@ class _Loop(nn.Module):
         hidden = x
         for step in range(_N_PASSES):
             hidden = torch.relu(self.cell(hidden)) + float(step)
-        return hidden
+        # A single-pass layer for the single-pass record rows: the loop's
+        # ``+ float(step)`` is now one 3-pass Layer (grouping rule row 49:
+        # a varying scalar in a loop is one layer), so it no longer serves.
+        return hidden * 1.0
 
 
 @pytest.fixture(scope="module")
@@ -107,8 +110,8 @@ def test_target_spec_from_op_record_is_its_own_pass(loop) -> None:
     assert (op_spec.selector_kind, op_spec.selector_value) == ("label", "relu_1_2:2")
     layer_spec = trace._target_spec_from_site(trace["relu_1_2"], strict=False)
     assert layer_spec.selector_kind == "or"
-    single = trace._target_spec_from_site(trace["add_1_3"], strict=False)
-    assert (single.selector_kind, single.selector_value) == ("label", "add_1_3:1")
+    single = trace._target_spec_from_site(trace["mul_1_4"], strict=False)
+    assert (single.selector_kind, single.selector_value) == ("label", "mul_1_4:1")
     passthrough = trace._target_spec_from_site("relu_1_2:1", strict=True)
     assert (passthrough.selector_kind, passthrough.selector_value) == ("label", "relu_1_2:1")
     assert passthrough.strict is True
