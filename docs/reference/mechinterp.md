@@ -303,12 +303,16 @@ Circuit test cases on GPT-2 small (CPU):
   own fork and replay took 2675 s. On 20 rows of the IOI validation split a
   circuit call takes 105 to 137 s (129 s on average), about half of it in
   the replay engine's site resolution.
-- MIB IOI faithfulness (the circuit track's CPR and CMD on the validation
-  split, ranked by EAP-IG scores, compared with the MIB reference
-  implementation on the same examples): pending. A sweep runs 19
-  `patch_edges` calls per batch (the empty circuit and nine kept fractions
-  for each of the signed and absolute rankings), so the 10,000 validation
-  rows project to about 340 hours on 4 cores.
+- MIB IOI faithfulness (the circuit track's CPR and CMD, ranked by EAP-IG
+  scores, patching ablation, edge level, compared with the MIB reference
+  implementation on the same examples): on the first 200 rows of the
+  validation split TorchLens gives CPR 2.0493 and CMD 0.0384, and the MIB
+  reference run on exactly those rows gives the same values (differences
+  4e-7 and 8e-8; every point of both faithfulness curves agrees within
+  1.3e-6). A sweep runs 19 `patch_edges` calls per batch of 20 rows (the
+  empty circuit and nine kept fractions for each of the signed and absolute
+  rankings), about 19 minutes per batch on 4 cores, so the full 10,000-row
+  validation split was not run.
 - ACDC on IOI (the recipe below, tau 0.002, 20 rows): a test that patches
   only edges into `logits` takes 0.9 s and one that touches all 445
   receivers 138 s, so the full walk of 32,491 tests projects to about 450
