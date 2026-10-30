@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import torch
 from torch import nn
@@ -174,5 +176,80 @@ def test_backward_module_containment_invariant_rejects_bad_source() -> None:
         victim.module_membership_source = "guessed"
         with pytest.raises(MetadataInvariantError, match="invalid module_membership_source"):
             check_metadata_invariants(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pass() -> None:
+    """A module called twice: GradFns name the layer; live hooks see each pass's own op.
+
+    ``GradFn.op_label`` is a layer label (the backward-graph invariant and the
+    load path assume it), so both passes' ``AddmmBackward0`` nodes name the one
+    multi-pass ``linear`` layer. The live backward hook context describes the
+    exact pass each node differentiates, resolved from the pass whose recorded
+    ``grad_fn_object_id`` is that node's identity, never from the multi-pass
+    ``Layer`` (whose per-pass ``label`` refuses).
+    """
+
+    class SharedLinearTwice(nn.Module):
+        """One linear module called at one call site twice (rows 26-27)."""
+
+        def __init__(self) -> None:
+            """Initialize the shared projection."""
+
+            super().__init__()
+            self.lin = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply the shared projection twice around a ReLU."""
+
+            for _call in range(2):
+                x = torch.relu(self.lin(x))
+            return x
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        SharedLinearTwice(),
+        torch.randn(2, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
+    seen: list[tuple[str, Any, Any]] = []
+
+    def _probe(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Record the GradFn and the pass its hook context describes."""
+
+        seen.append(
+            (
+                hook.kwargs["grad_fn_handle"].label,
+                hook.layer_log["label"],
+                hook.layer_log["pass_index"],
+            )
+        )
+        return grad
+
+    try:
+        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        assert linear.num_passes == 2
+        trace.attach_hooks(
+            tl.grad_fn(type="AddmmBackward0"), tl.bwd_hook(_probe), confirm_mutation=True
+        )
+        trace[trace.output_layers[0]].out.sum().backward()
+
+        addmm = {gf.label: gf for gf in trace.grad_fns if gf.class_name == "AddmmBackward0"}
+        assert len(addmm) == 2
+        assert {gf.op_label for gf in addmm.values()} == {linear.layer_label}
+        assert all(
+            gf.op_label is None or gf.op_label in trace.layer_labels for gf in trace.grad_fns
+        )
+
+        # One record per grad_input slot; every slot of one node sees the same pass.
+        by_node = {grad_fn_label: (label, pass_index) for grad_fn_label, label, pass_index in seen}
+        assert set(by_node) == set(addmm)
+        assert sorted(by_node.values()) == [
+            (f"{linear.layer_label}:1", 1),
+            (f"{linear.layer_label}:2", 2),
+        ]
+        for grad_fn_label, (pass_label, _pass_index) in by_node.items():
+            assert trace[pass_label].grad_fn_object_id == addmm[grad_fn_label].grad_fn_object_id
     finally:
         trace.cleanup()
