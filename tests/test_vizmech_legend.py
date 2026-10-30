@@ -79,13 +79,13 @@ def test_key_sits_in_the_header_block(tmp_path: Path) -> None:
 
 
 def test_key_swatches_are_real_shapes_and_files_exist(tmp_path: Path) -> None:
-    """Input and output swatches are ovals; weights and modules are boxes."""
+    """Input and output swatches are ovals, weights are boxes, a module is a module frame."""
 
     dot = _draw_dot(tmp_path, "key_shapes", show_legend=True)
     sources = re.findall(r'IMG SRC="([^"]+)"', _graph_label(dot))
     assert sources and all(Path(src).is_absolute() and Path(src).is_file() for src in sources)
     shapes = [Path(src).name.split("-")[1] for src in sources]
-    assert shapes == ["oval", "oval", "box", "box", "box"]
+    assert shapes == ["oval", "oval", "box", "box", "frame"]
 
 
 def test_no_key_by_default(tmp_path: Path) -> None:

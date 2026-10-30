@@ -588,6 +588,8 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "trainable weights": "builtin-legend",
     "frozen weights": "builtin-legend",
     "module": "builtin-legend",
+    "edited": "interventions",
+    "changed by the edit": "interventions",
     "mutated parameter": "mutated-param",
     "backward op (grad_fn)": "backward-legend",
     "order 2+: grad-of-grad (double backprop)": "backward-legend",

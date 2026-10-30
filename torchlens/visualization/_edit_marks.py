@@ -20,8 +20,10 @@ Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -57,13 +59,17 @@ __all__ = [
 #: The Greek capital delta every edit mark starts with.
 DELTA = "Δ"
 #: SVG class on an edited node (and the as_node hook node).
-EDITED_NODE_CLASS = "tl-edited"
+EDITED_NODE_CLASS = "tl_edited"
 #: SVG class on a node the edit changed downstream (drawn only with the cone on).
-DOWNSTREAM_NODE_CLASS = "tl-downstream"
+DOWNSTREAM_NODE_CLASS = "tl_downstream"
 #: Ring width of the edited node, in points.
 EDIT_RING_PENWIDTH = 2.5
 #: The dark skin's edit purple (JMT kept this tint, 29 Oct 2026).
 _DARK_EDIT_INK = "#C084FC"
+#: Graphviz's node label size, which TorchLens op labels use (``_typography`` base size).
+_OP_LABEL_SIZE = 14.0
+#: Edit text size over delta size: JMT picked an 11 pt delta over 10 pt text.
+_TEXT_TO_DELTA = 10.0 / 11.0
 #: Edit rows drawn at one node before ``+N more``.
 _MAX_NODE_EDIT_ROWS = 3
 #: Edits named in the header before it says ``N edits (marked)``.
@@ -101,21 +107,25 @@ class EditRow(str):
     It is an ordinary string to node callbacks (``"Δ zero_ablate"``), so a
     ``node_spec_fn`` can read, drop or reorder it like any other row; the label
     builder recognises the type and draws it in ``color`` after a 4 pt gap.
+    The delta is drawn at ``size`` (the op label's size) and the edit text one
+    step smaller, in the 11 : 10 ratio of JMT's pick.
     """
 
     color: str
+    size: float
 
-    def __new__(cls, text: str, color: str) -> EditRow:
-        """Return a row with ``text`` drawn in ``color``."""
+    def __new__(cls, text: str, color: str, size: float = _OP_LABEL_SIZE) -> EditRow:
+        """Return a row with ``text`` drawn in ``color``, its delta at ``size`` points."""
 
         row = super().__new__(cls, text)
         row.color = color
+        row.size = size
         return row
 
     def __reduce__(self) -> tuple[Any, ...]:
-        """Pickle as ``EditRow(text, color)``."""
+        """Pickle as ``EditRow(text, color, size)``."""
 
-        return (EditRow, (str(self), self.color))
+        return (EditRow, (str(self), self.color, self.size))
 
 
 def edit_ink(theme: VisualizationTheme | None) -> str:
@@ -188,14 +198,27 @@ def _shown_kwargs(edit: Edit, constructor: Callable[..., Any] | None) -> list[st
 
     from ..intervention._edit_repr import _is_signature_default
 
+    order = _parameter_order(constructor)
     parts: list[str] = []
-    for key, value in edit.kwargs:
+    for key, value in sorted(edit.kwargs, key=lambda item: order.get(item[0], len(order))):
         if key in _SILENT_KWARGS or value is None:
             continue
         if constructor is not None and _is_signature_default(constructor, key, value):
             continue
         parts.append(f"{key}={_stand_in(value)}")
     return parts
+
+
+def _parameter_order(constructor: Callable[..., Any] | None) -> dict[str, int]:
+    """Return each parameter's position in the constructor's signature (empty if unknown)."""
+
+    if constructor is None:
+        return {}
+    try:
+        names = inspect.signature(constructor).parameters
+    except (TypeError, ValueError):
+        return {}
+    return {name: index for index, name in enumerate(names)}
 
 
 def short_edit_text(edit: Edit) -> str:
@@ -270,20 +293,14 @@ def _staged_entries(spec: Any) -> list[tuple[Any, Callable[[], EditMark]]]:
     entries: list[tuple[Any, Callable[[], EditMark]]] = []
     for value_spec in getattr(spec, "target_value_specs", ()) or ():
         entries.append(
-            (value_spec.site_target, lambda v=value_spec.value: _value_mark(v, detail="staged"))
+            (value_spec.site_target, partial(_value_mark, value_spec.value, detail="staged"))
         )
     for hook_spec in getattr(spec, "hook_specs", ()) or ():
         if hook_spec.helper is not None:
-            entries.append(
-                (hook_spec.site_target, lambda h=hook_spec.helper: _helper_mark(h, detail="staged"))
-            )
+            build = partial(_helper_mark, hook_spec.helper, detail="staged")
         else:
-            entries.append(
-                (
-                    hook_spec.site_target,
-                    lambda h=hook_spec.hook: _hook_mark(h, full=None, detail="staged"),
-                )
-            )
+            build = partial(_hook_mark, hook_spec.hook, full=None, detail="staged")
+        entries.append((hook_spec.site_target, build))
     recipe_level = _recipe_level_mark(spec)
     if recipe_level is not None:
         for target in getattr(spec, "targets", ()) or ():
@@ -298,11 +315,11 @@ def _recipe_level_mark(spec: Any) -> Callable[[], EditMark] | None:
     hook = getattr(spec, "hook", None)
     value = getattr(spec, "value", None)
     if hook is not None:
-        return lambda: _hook_mark(hook, full=None, detail="staged")
+        return partial(_hook_mark, hook, full=None, detail="staged")
     if helper is not None:
-        return lambda: _helper_mark(helper, detail="staged")
+        return partial(_helper_mark, helper, detail="staged")
     if value is not None:
-        return lambda: _value_mark(value, detail="staged")
+        return partial(_value_mark, value, detail="staged")
     return None
 
 
@@ -376,14 +393,14 @@ def _unique(marks: Iterable[EditMark]) -> list[EditMark]:
     return unique
 
 
-def edit_rows(marks: Iterable[EditMark], color: str) -> list[EditRow]:
+def edit_rows(marks: Iterable[EditMark], color: str, size: float = _OP_LABEL_SIZE) -> list[EditRow]:
     """Return a node's edit rows: one per edit, at most three, then ``+N more``."""
 
     unique = _unique(marks)
-    rows = [EditRow(f"{DELTA} {mark.short}", color) for mark in unique[:_MAX_NODE_EDIT_ROWS]]
+    rows = [EditRow(f"{DELTA} {mark.short}", color, size) for mark in unique[:_MAX_NODE_EDIT_ROWS]]
     hidden = len(unique) - _MAX_NODE_EDIT_ROWS
     if hidden > 0:
-        rows.append(EditRow(f"+{hidden} more", color))
+        rows.append(EditRow(f"+{hidden} more", color, size))
     return rows
 
 
@@ -397,15 +414,26 @@ def edit_tooltip(marks: Iterable[EditMark]) -> str:
     return "; ".join(parts)
 
 
-def edit_row_html(row: str, color: str) -> str:
-    """Return the HTML of one edit row: delta 11 pt, text 10 pt, bold, in the edit purple."""
+def edit_row_html(row: str, color: str, size: float = _OP_LABEL_SIZE) -> str:
+    """Return the HTML of one edit row, bold in the edit purple.
 
+    The delta takes the op label's size and the text the 10/11 step below it
+    (11 pt over 10 pt on the 11 pt mockup labels JMT chose from).
+    """
+
+    from ._typography import format_pt
+
+    delta_pt = format_pt(round(size, 1))
+    text_pt = format_pt(round(size * _TEXT_TO_DELTA, 1))
     text = str(row)
     if text.startswith(f"{DELTA} "):
         body = html_escape(text[len(DELTA) + 1 :])
-        inner = f'<FONT POINT-SIZE="11">{DELTA}</FONT><FONT POINT-SIZE="10"> {body}</FONT>'
+        inner = (
+            f'<FONT POINT-SIZE="{delta_pt}">{DELTA}</FONT>'
+            f'<FONT POINT-SIZE="{text_pt}"> {body}</FONT>'
+        )
     else:
-        inner = f'<FONT POINT-SIZE="10">{html_escape(text)}</FONT>'
+        inner = f'<FONT POINT-SIZE="{text_pt}">{html_escape(text)}</FONT>'
     return f'<FONT COLOR="{color}"><B>{inner}</B></FONT>'
 
 
@@ -452,10 +480,16 @@ def header_edit_line(
 
 
 def _site_display_label(site: Any, vis_mode: str) -> str:
-    """Return the label a site's node shows: the pass label unrolled, the layer rolled."""
+    """Return the name the site's node shows: the layer label, plus ``:N`` for a later pass.
 
-    if vis_mode == "rolled":
-        return str(getattr(site, "layer_label", "") or _op_key(site))
+    A single-pass op's node reads ``linear_1_1`` (its pass label is
+    ``linear_1_1:1``); an unrolled recurrent pass keeps its ``:N``.
+    """
+
+    layer_label = str(getattr(site, "layer_label", "") or "")
+    passes = getattr(site, "num_passes", 1)
+    if layer_label and (vis_mode == "rolled" or not isinstance(passes, int) or passes <= 1):
+        return layer_label
     return _op_key(site)
 
 

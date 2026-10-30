@@ -117,7 +117,9 @@ def render_lines_to_html(lines: list[str]) -> str:
             if not gap_drawn and index > 0:
                 rows.append(EDIT_GAP_ROW)
                 gap_drawn = True
-            rows.append(f'<TR><TD ALIGN="CENTER">{edit_row_html(line, line.color)}</TD></TR>')
+            rows.append(
+                f'<TR><TD ALIGN="CENTER">{edit_row_html(line, line.color, line.size)}</TD></TR>'
+            )
             continue
         text = escape(str(line), quote=False)
         if index == 0:
@@ -292,7 +294,7 @@ def make_intervention_node_spec_fn(
     ring (2.5 pt) and a last label row naming the edit (``Δ zero_ablate``),
     with the full spelling in its tooltip. With ``show_cone`` a node the edit
     changed downstream keeps its normal outline and only gains the
-    ``tl-downstream`` SVG class; the renderer lays the translucent
+    ``tl_downstream`` SVG class; the renderer lays the translucent
     highlighter under it and its out-edges after layout
     (:mod:`._edit_highlighter`).
 
@@ -349,6 +351,7 @@ def make_intervention_node_spec_fn(
         return user_node_spec_fn
 
     marks = edit_marks_by_site(trace, site_ops)
+    label_size = theme.typography.base_size if theme is not None else 14.0
     site_color = str(
         intervention_graph_override(graph_overrides, "intervention_site_color", edit_ink(theme))
     )
@@ -389,7 +392,7 @@ def make_intervention_node_spec_fn(
             spec = spec.replace(
                 color=site_color,
                 penwidth=site_penwidth,
-                lines=[*spec.lines, *edit_rows(node_marks, site_color)],
+                lines=[*spec.lines, *edit_rows(node_marks, site_color, label_size)],
                 tooltip=f"{spec.tooltip}; {tooltip}" if spec.tooltip else tooltip,
                 extra_attrs=_with_svg_class(spec.extra_attrs, EDITED_NODE_CLASS),
             )

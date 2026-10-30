@@ -77,13 +77,16 @@ def test_node_rows_cap_at_three_then_more() -> None:
 def test_edit_row_html_spec() -> None:
     """The edit row is the last row after a 4 pt gap: delta 11 pt, text 10 pt, bold purple."""
 
-    label = render_lines_to_html(["relu_1_1", "(2, 3)", EditRow("Δ zero_ablate", PURPLE)])
+    # On 11 pt op labels (the mockups) the row is 11 pt over 10 pt; it scales with the label.
+    label = render_lines_to_html(["relu_1_1", "(2, 3)", EditRow("Δ zero_ablate", PURPLE, 11.0)])
     assert label.index("(2, 3)") < label.index('POINT-SIZE="4"') < label.index("zero_ablate")
     assert (
         f'<FONT COLOR="{PURPLE}"><B><FONT POINT-SIZE="11">Δ</FONT>'
         '<FONT POINT-SIZE="10"> zero_ablate</FONT></B></FONT>'
     ) in label
     assert "<HR" not in label.upper()
+    default = render_lines_to_html(["relu_1_1", EditRow("Δ zero_ablate", PURPLE)])
+    assert '<FONT POINT-SIZE="14">Δ</FONT><FONT POINT-SIZE="12.7"> zero_ablate</FONT>' in default
 
 
 def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
@@ -146,12 +149,12 @@ def test_edited_node_dot(tmp_path: Path) -> None:
         )
     finally:
         trace.cleanup()
-    relu_line = next(line for line in dot.splitlines() if "tl-edited" in line)
+    relu_line = next(line for line in dot.splitlines() if "tl_edited" in line)
     assert f'color="{PURPLE}"' in relu_line or f"color={PURPLE}" in relu_line.replace('"', "")
     assert "penwidth=2.5" in relu_line.replace('"', "")
     assert "zero_ablate" in relu_line
     assert "1 edit:" in dot and "on relu_1_1" in dot
-    assert "tl-downstream" not in dot
+    assert "tl_downstream" not in dot
     assert "#FF00FF" not in dot and "#FFB3FF" not in dot
 
 
@@ -181,10 +184,10 @@ def _svg_group(svg: str, cls: str) -> str:
 
 
 _SAMPLE_SVG = """<svg><g id="graph0" class="graph"><title>G</title>
-<g id="node1" class="node tl-edited"><title>a</title>
+<g id="node1" class="node tl_edited"><title>a</title>
 <g id="a_node1"><a xlink:title="x"><polygon fill="grey" stroke="#7B1FA2" points="0,0 1,1"/></a></g>
 </g>
-<g id="node2" class="node tl-downstream"><title>b</title>
+<g id="node2" class="node tl_downstream"><title>b</title>
 <ellipse fill="white" stroke="black" cx="5" cy="5" rx="2" ry="1"/>
 </g>
 <g id="node3" class="node"><title>c</title><ellipse fill="white" stroke="black" cx="9" cy="9" rx="2" ry="1"/></g>
@@ -210,13 +213,13 @@ def test_highlight_svg_lays_underlays_where_f2_says() -> None:
     assert underlay not in edge2  # into the edited node: plain
     edge3 = out[out.index('<g id="edge3"') :]
     assert underlay in edge3  # from a downstream node, through a port
-    assert _svg_group(out, "tl-downstream").count(underlay) == 1
-    assert underlay not in _svg_group(out, "tl-edited")  # the ring is the edited mark
+    assert _svg_group(out, "tl_downstream").count(underlay) == 1
+    assert underlay not in _svg_group(out, "tl_edited")  # the ring is the edited mark
     node3 = out[out.index('<g id="node3"') : out.index('<g id="edge1"')]
     assert underlay not in node3
     assert highlight_svg(
-        _SAMPLE_SVG.replace("tl-edited", "").replace("tl-downstream", ""), style
-    ) == (_SAMPLE_SVG.replace("tl-edited", "").replace("tl-downstream", ""))
+        _SAMPLE_SVG.replace("tl_edited", "").replace("tl_downstream", ""), style
+    ) == (_SAMPLE_SVG.replace("tl_edited", "").replace("tl_downstream", ""))
 
 
 @pytest.mark.parametrize("placement", ["dot", "rank"])
@@ -242,10 +245,10 @@ def test_highlighter_in_svg_on_both_engines(tmp_path: Path, placement: str) -> N
         trace.cleanup()
     cone = (tmp_path / f"cone_{placement}.svg").read_text(encoding="utf-8")
     plain = (tmp_path / f"plain_{placement}.svg").read_text(encoding="utf-8")
-    assert "tl-downstream" in cone
+    assert "tl_downstream" in cone
     assert cone.count('stroke-opacity="0.25"') >= 3  # node outline plus two arrow shapes
     assert "stroke-opacity" not in plain
-    assert "tl-edited" in plain
+    assert "tl_edited" in plain
 
 
 def test_highlighter_dark_opacity(tmp_path: Path) -> None:
@@ -307,8 +310,8 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     finally:
         trace.cleanup()
     hook_line = next(
-        line for line in dot.splitlines() if "intervention_hook_" in line and "[" in line
+        line for line in dot.splitlines() if line.lstrip().startswith("intervention_hook_")
     )
     assert "shape=diamond" in hook_line
     assert PURPLE in hook_line and "#F3E5F5" in hook_line
-    assert "tl-edited" in hook_line
+    assert "tl_edited" in hook_line

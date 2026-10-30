@@ -4,8 +4,8 @@ With ``vis_show_cone=True`` every arrow leaving the edited node or a node the
 edit changed keeps its normal stroke and gets a wide translucent purple
 underlay, and so does each changed node's outline (option F2, JMT 29 Oct
 2026). Graphviz cannot stack two strokes on one edge, so this is an SVG step
-after layout: the node callback tags edited nodes ``tl-edited`` and changed
-ones ``tl-downstream`` (Graphviz writes the ``class`` attribute onto each SVG
+after layout: the node callback tags edited nodes ``tl_edited`` and changed
+ones ``tl_downstream`` (Graphviz writes the ``class`` attribute onto each SVG
 group), and :func:`highlight_svg` duplicates the tagged shapes underneath
 with the highlighter stroke. PDF and PNG are produced from the processed SVG
 with ``cairosvg``; without it (or for another raster format) the picture is
@@ -198,9 +198,9 @@ def _edge_tail(title: str, node_titles: set[str]) -> str | None:
 def highlight_svg(svg: str, style: HighlighterStyle) -> str:
     """Lay the highlighter under changed nodes and every arrow leaving a marked node.
 
-    A ``tl-downstream`` node gets an underlay copy of its outline (the first
+    A ``tl_downstream`` node gets an underlay copy of its outline (the first
     path, polygon or ellipse in its group); an edge whose tail node is
-    ``tl-edited`` or ``tl-downstream`` gets one for its shaft and arrowhead.
+    ``tl_edited`` or ``tl_downstream`` gets one for its shaft and arrowhead.
     The copies are inserted right after the group's ``<title>``, so they are
     painted under the originals. Everything else is left byte for byte.
     """

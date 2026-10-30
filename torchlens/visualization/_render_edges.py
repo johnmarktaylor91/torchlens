@@ -374,7 +374,7 @@ def _add_intervention_hook_nodes(
 
     Each hook is a small diamond in the edit purple (ring and a bold delta,
     pale purple fill) between the edited node and its consumers; its tooltip
-    names the site. It carries the ``tl-edited`` SVG class, so with the
+    names the site. It carries the ``tl_edited`` SVG class, so with the
     downstream highlighter on its out-edges are highlighted like the edited
     node's.
 

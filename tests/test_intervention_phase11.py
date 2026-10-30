@@ -53,8 +53,8 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
             vis_show_cone=True,
         )
         assert "#7B1FA2" in dot
-        assert 'class="tl-edited"' in dot or "class=tl-edited" in dot
-        assert "tl-downstream" in dot
+        assert 'class="tl_edited"' in dot or "class=tl_edited" in dot
+        assert "tl_downstream" in dot
         assert "#FFB3FF" not in dot and "#FF00FF" not in dot
 
         without_cone = log.draw(
@@ -65,7 +65,7 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
             vis_show_cone=False,
         )
         assert "#7B1FA2" in without_cone
-        assert "tl-downstream" not in without_cone
+        assert "tl_downstream" not in without_cone
     finally:
         log.cleanup()
 

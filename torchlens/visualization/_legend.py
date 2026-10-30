@@ -148,7 +148,7 @@ def drawn_legend_roles(
 
     A role counts only when a node was painted with it: its rendered fill
     (and, for buffers and mutated Parameters, the cylinder), or for
-    interventions the ``tl-edited`` and ``tl-downstream`` SVG classes the
+    interventions the ``tl_edited`` and ``tl_downstream`` SVG classes the
     edit marks carry.
     Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
     counts as parameterized.

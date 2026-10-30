@@ -709,17 +709,18 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="interventions",
-        title="Interventions: site and cone",
-        rule="Magenta 3 pt border is the edited site; pink 1.75 pt is its downstream cone; "
-        '"as_node" draws the hook as a diamond.',
+        title="Interventions: the edit and what it changed",
+        rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
+        "vis_show_cone=True a translucent purple underlay runs under the arrows and outlines "
+        'it changed; "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
                 "Flow",
                 capture={"intervention_ready": True},
                 intervene="zero_tanh",
-                kwargs={"vis_intervention_mode": "node_mark"},
-                label='"node_mark"',
+                kwargs={"vis_intervention_mode": "node_mark", "vis_show_cone": True},
+                label='"node_mark", vis_show_cone=True',
             ),
             Panel(
                 "b",
@@ -731,10 +732,11 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("Site: magenta border {site_color}", "node(color={site_color})"),
-            Key("Cone: pink border downstream", "node(color={cone_color})"),
-            Key("The hook as a diamond", "node(shape=diamond)", panel="b"),
-            Key("vis_show_cone=False hides the cone", None),
+            Key("Edited: purple ring {site_color}", "node(color={site_color})"),
+            Key("The edit, named in the node", "node(text~\u0394)"),
+            Key("Changed downstream: purple underlay", "node(class~tl_downstream)"),
+            Key("The hook as a purple diamond", "node(shape=diamond)", panel="b"),
+            Key("vis_show_cone=False (the default) leaves the underlay out", None),
         ),
         rows=("VN16", "VN17", "VN18"),
     ),
@@ -1479,7 +1481,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
             ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
-            ("downstream of an edit", "interventions", "a", "node(color={cone_color})"),
+            ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
             ("hook node", "interventions", "b", "node(shape=diamond)"),
             ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
         ),

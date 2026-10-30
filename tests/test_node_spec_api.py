@@ -154,7 +154,7 @@ def test_intervention_node_spec_cone_matches_short_label(
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.extra_attrs["class"] == "tl-downstream"
+    assert styled.extra_attrs["class"] == "tl_downstream"
     assert (styled.color, styled.penwidth) == ("black", 1.0)
 
 
@@ -185,7 +185,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.extra_attrs["class"] == "tl-downstream"
+    assert styled.extra_attrs["class"] == "tl_downstream"
     assert (styled.color, styled.penwidth) == ("black", 1.0)
 
     unrelated = SimpleNamespace(
