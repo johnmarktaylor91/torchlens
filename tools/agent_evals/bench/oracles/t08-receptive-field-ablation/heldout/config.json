@@ -1,0 +1,44 @@
+{
+  "weight_seed": 197,
+  "stimulus_seed": 198,
+  "n_inputs": 8,
+  "units": [
+    {
+      "layer": "relu1",
+      "channel": 0,
+      "row": 0,
+      "column": 9
+    },
+    {
+      "layer": "pool1",
+      "channel": 1,
+      "row": 14,
+      "column": 0
+    },
+    {
+      "layer": "relu2",
+      "channel": 2,
+      "row": 1,
+      "column": 14
+    },
+    {
+      "layer": "relu2",
+      "channel": 3,
+      "row": 8,
+      "column": 1
+    },
+    {
+      "layer": "relu3",
+      "channel": 1,
+      "row": 0,
+      "column": 10
+    },
+    {
+      "layer": "relu3",
+      "channel": 4,
+      "row": 9,
+      "column": 15
+    }
+  ],
+  "gradient_threshold": 1e-08
+}
