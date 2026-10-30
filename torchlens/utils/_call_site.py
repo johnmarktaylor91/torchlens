@@ -73,7 +73,7 @@ def _code_token(code: CodeType) -> tuple[str, str, int, bytes]:
 def _positions_map(code: CodeType) -> list[Any]:
     """Source span per code unit on Python 3.11+ (``co_positions``)."""
 
-    return list(code.co_positions())  # type: ignore[attr-defined]
+    return list(code.co_positions())  # type: ignore[attr-defined,unused-ignore]
 
 
 def _while_copy_map(code: CodeType) -> dict[int, int]:
@@ -85,8 +85,8 @@ def _while_copy_map(code: CodeType) -> dict[int, int]:
     instructions with jump targets ignored. Everything else keeps its offset.
     """
 
-    runs: list[tuple[int, list[Any]]] = []
-    line = None
+    runs: list[tuple[int | None, list[Any]]] = []
+    line: int | None = None
     for instruction in dis.get_instructions(code):
         if instruction.starts_line is not None:
             line = instruction.starts_line
@@ -96,6 +96,8 @@ def _while_copy_map(code: CodeType) -> dict[int, int]:
             runs.append((line, [instruction]))
 
     def _signature(run: list[Any]) -> tuple[Any, ...]:
+        """Instructions of one run with jump targets erased."""
+
         return tuple(
             "jump"
             if ins.opcode in dis.hasjabs or ins.opcode in dis.hasjrel
