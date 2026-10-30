@@ -86,7 +86,7 @@ def grade_one(rep, label, inputs, outputs, cache):
         patched_error = max_abs(got["patched_logits"], ref["patched_logits"]) if valid else float("inf")
         baseline_error = max_abs(got["baseline_logits"], ref["baseline_logits"]) if valid else float("inf")
         align_ok = alignment == expected_alignment
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

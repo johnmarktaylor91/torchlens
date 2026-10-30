@@ -54,7 +54,7 @@ def grade_one(rep, label, inputs, outputs, cache):
                    or got[key].dtype != np.float32 or not np.isfinite(got[key]).all()]
         errors = {key: rel_fro(got[key], value) for key, value in ref.items() if key not in missing}
         worst = max(errors.values()) if errors and not missing else float("inf")
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], not missing, len(ref) - len(missing), len(ref), note=f"missing={missing}")

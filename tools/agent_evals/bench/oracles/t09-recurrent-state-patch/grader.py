@@ -73,7 +73,7 @@ def grade_one(rep, label, inputs, outputs, cache):
                     and np.isfinite(got[k][np.isfinite(v)]).all() for k, v in ref.items())
         error = max(max_abs(got[k][np.isfinite(v)], v[np.isfinite(v)])
                     for k, v in ref.items()) if valid else float("inf")
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

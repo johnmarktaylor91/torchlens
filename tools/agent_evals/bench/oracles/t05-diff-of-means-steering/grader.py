@@ -106,7 +106,7 @@ def grade_one(rep, label, inputs, outputs, cache):
         projection_error = max_abs(projections, ref["projections"]) if valid else float("inf")
         nt, st = float(timing["native_seconds"]), float(timing["steered_seconds"])
         ratio = st / nt if np.isfinite(nt) and np.isfinite(st) and nt > 0 and st > 0 else float("inf")
-    except (OSError, ValueError, TypeError, KeyError, ZeroDivisionError) as exc:
+    except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

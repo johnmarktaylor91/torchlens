@@ -86,7 +86,7 @@ def grade_one(rep, label, inputs, outputs, cache):
         overlap = min(iou(a, b) for a, b in zip(grad, ref["gradient"])) if valid else 0.0
         allowance = np.where(np.abs(ref["effects"]) < 1e-2, 1e-4, .01 * np.abs(ref["effects"]))
         error = float(np.max(np.abs(effect - ref["effects"]) / allowance)) if valid else float("inf")
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)
