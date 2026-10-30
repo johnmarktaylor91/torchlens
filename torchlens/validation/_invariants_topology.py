@@ -390,7 +390,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
     """
 
     from .._errors import AmbiguousOpLookupError
-    from ..constants import is_suffixed_raw_label
+    from ..constants import _is_suffixed_raw_label
 
     name = "graph_topology"
     if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):
@@ -416,7 +416,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         num_passes = getattr(entry, "num_passes", None)
         labels = [entry.label]
         label_raw = entry._label_raw
-        if is_suffixed_raw_label(label_raw):
+        if _is_suffixed_raw_label(label_raw):
             # A suffixed raw label names exactly its op; an unsuffixed one is a
             # raw spelling that a final label may legitimately outrank.
             labels.append(label_raw)

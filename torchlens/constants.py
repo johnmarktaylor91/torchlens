@@ -37,7 +37,7 @@ from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_n
 RAW_LABEL_SUFFIX = "_raw"
 
 
-def is_suffixed_raw_label(label: object) -> TypeGuard[str]:
+def _is_suffixed_raw_label(label: object) -> TypeGuard[str]:
     """Return whether ``label`` carries the raw-capture ``_raw`` sentinel suffix.
 
     A suffixed raw label can never be a final label, so it names exactly its own
