@@ -21,6 +21,7 @@ Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 from __future__ import annotations
 
 import inspect
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
@@ -464,10 +465,11 @@ def header_edit_line(
     if not sites:
         return None
     marks = edit_marks_by_site(trace, sites)
+    edited_passes = Counter(str(getattr(site, "layer_label", "") or "") for site in sites)
     grouped: dict[str, list[str]] = {}
     total = 0
     for site in sites:
-        site_label = _site_display_label(site, vis_mode)
+        site_label = _site_display_label(site, vis_mode, edited_passes)
         for mark in _unique(marks.get(_op_key(site), ())):
             total += 1
             labels = grouped.setdefault(mark.short, [])
@@ -485,16 +487,20 @@ def header_edit_line(
     return f"{total} {noun}:&#160;" + ",&#160;".join(items)
 
 
-def _site_display_label(site: Any, vis_mode: str) -> str:
-    """Return the name the site's node shows: the layer label, plus ``:N`` for a later pass.
+def _site_display_label(site: Any, vis_mode: str, edited_passes: Mapping[str, int]) -> str:
+    """Return the name the header gives a site: the layer label, plus ``:N`` for one pass.
 
-    A single-pass op's node reads ``linear_1_1`` (its pass label is
-    ``linear_1_1:1``); an unrolled recurrent pass keeps its ``:N``.
+    A single-pass op reads ``linear_1_1`` (its pass label is ``linear_1_1:1``);
+    an unrolled multi-pass op keeps its ``:N``. Rolled, the layer's one node
+    stands for every pass, so the bare layer label is used only when every
+    pass is edited; an edit on some passes keeps the ``:N`` that says which.
     """
 
     layer_label = str(getattr(site, "layer_label", "") or "")
     passes = getattr(site, "num_passes", 1)
-    if layer_label and (vis_mode == "rolled" or not isinstance(passes, int) or passes <= 1):
+    if not layer_label or not isinstance(passes, int) or passes <= 1:
+        return layer_label or _op_key(site)
+    if vis_mode == "rolled" and edited_passes.get(layer_label, 0) >= passes:
         return layer_label
     return _op_key(site)
 

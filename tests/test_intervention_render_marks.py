@@ -407,7 +407,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
 
 
 def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
-    """Unrolled, an edit on pass 2 rings pass 2 alone and tags only what pass 2 feeds.
+    """An edit on pass 2 rings pass 2 alone, tags only what pass 2 feeds, and keeps its pass.
 
     The node slot hands an unrolled node its aggregate Layer; the ring, edit row
     and downstream class must follow the rendered pass, not the layer.
@@ -431,8 +431,16 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
             vis_show_cone=True,
             vis_outpath=str(tmp_path / "shared_fwd"),
         )
+        rolled = fork.draw(
+            vis_save_only=True,
+            vis_fileformat="dot",
+            vis_mode="rolled",
+            vis_outpath=str(tmp_path / "shared_fwd_rolled"),
+        )
     finally:
         trace.cleanup()
+    # Rolled, the one node stands for both passes; the header keeps the pass.
+    assert f"&#160;on {linear}:2" in rolled
     nodes = {
         line.split(" [", 1)[0].strip(): line
         for line in dot.splitlines()
