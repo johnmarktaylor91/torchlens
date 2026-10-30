@@ -7,6 +7,12 @@ Layer. This module adds the third agent entry point, ``torchlens_dump``, in each
 of its views: the ``full`` view is the agent record and lists both input passes;
 the ``overview`` and ``graph`` views must load and serve the same trace without
 refusing on the multi-pass Layer.
+
+Torch captures group by call site, where input nodes are singletons (grouping
+rule section 2), so only the structural grouper (``grouper_v1``, still the
+grouper for captures without call-site evidence) folds inputs. Like the sibling
+module, the trace is captured under that grouper; the saved artifact keeps its
+grouping on load.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouping
 
 import torchlens as tl
 from tests.test_trace_boundary_ops_multipass import _loop_trace
@@ -23,7 +30,9 @@ from torchlens.agent import call_tool
 
 @pytest.fixture(scope="module")
 def saved_loop(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
-    trace, inputs = _loop_trace()
+    with legacy_structural_grouping():
+        trace, inputs = _loop_trace()
+    assert trace["input_1"].num_passes == 2, "the fixture must fold its inputs"
     expected = [f"{trace['input_1'].layer_label}:{index}" for index in (1, 2)]
     for label, value in zip(expected, inputs, strict=True):
         assert torch.equal(trace[label].out, value)
