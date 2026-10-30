@@ -244,6 +244,7 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
 
         # One record per grad_input slot; every slot of one node sees the same pass.
         by_node = {grad_fn_label: (label, pass_index) for grad_fn_label, label, pass_index in seen}
+        assert len(set(seen)) == len(by_node)
         assert set(by_node) == set(addmm)
         assert sorted(by_node.values()) == [
             (f"{linear.layer_label}:1", 1),
