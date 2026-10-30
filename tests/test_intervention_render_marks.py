@@ -49,10 +49,11 @@ def _traced(intervene: Any = None) -> tl.Trace:
 def test_edit_text_rule() -> None:
     """Name alone without arguments; short literals written in; stand-ins otherwise."""
 
-    def named_fn(out: torch.Tensor) -> torch.Tensor:
+    def named_fn(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
         """Return the gradient unchanged."""
 
-        return out
+        del hook
+        return grad
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
     assert short_edit_text(tl.scale(0.5)) == "scale(0.5)"
@@ -62,7 +63,7 @@ def test_edit_text_rule() -> None:
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
     assert short_edit_text(tl.bwd_hook(named_fn)) == "bwd_hook(named_fn)"
-    assert short_edit_text(tl.bwd_hook(lambda g: g)) == "bwd_hook(fn)"
+    assert short_edit_text(tl.bwd_hook(lambda g, *, hook: g)) == "bwd_hook(fn)"
     assert short_edit_text(tl.grad_zero()) == "grad_zero"
 
 
