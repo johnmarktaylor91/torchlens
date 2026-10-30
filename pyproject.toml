@@ -21,16 +21,37 @@ requires-python = ">=3.10"
 authors = [
     {name = "JohnMark Taylor", email = "johnmarkedwardtaylor@gmail.com"},
 ]
-keywords = ["torch", "torchlens", "activations", "features", "io"]
+keywords = [
+    "interpretability",
+    "mechanistic-interpretability",
+    "activations",
+    "feature-extraction",
+    "interventions",
+    "activation-patching",
+    "computational-graph",
+    "visualization",
+    "neuroscience",
+    "neuroai",
+    "pytorch",
+    "jax",
+    "mlx",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
 ]
+# No "License ::" classifier: the license is the PEP 639 expression above, and
+# setuptools refuses a License classifier next to a license expression.
 dependencies = [
     # Runtime floors are DECLARED and EXERCISED (grind r4, b2:B6 third round:
     # numpy/packaging/tqdm/graphviz were bare names, so the metadata promised
@@ -362,7 +383,13 @@ torchlens = "torchlens.agent.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/johnmarktaylor91/torchlens"
+Documentation = "https://johnmarktaylor91.github.io/torchlens/"
 Repository = "https://github.com/johnmarktaylor91/torchlens"
+Changelog = "https://github.com/johnmarktaylor91/torchlens/blob/main/CHANGELOG.md"
+Issues = "https://github.com/johnmarktaylor91/torchlens/issues"
+Discussions = "https://github.com/johnmarktaylor91/torchlens/discussions"
+Paper = "https://doi.org/10.1038/s41598-023-40807-0"
+"Model Menagerie" = "https://modelmenagerie.ai"
 
 [tool.setuptools.packages.find]
 # Only the importable library is distributed. A broad find once shipped a

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/johnmarktaylor91/torchlens/discussions/categories/q-a
+    about: Questions about using TorchLens go to GitHub Discussions, not issues.
+  - name: Report a security vulnerability
+    url: https://github.com/johnmarktaylor91/torchlens/security/advisories/new
+    about: Report vulnerabilities privately. See SECURITY.md.
