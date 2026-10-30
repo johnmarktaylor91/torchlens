@@ -127,6 +127,25 @@ def _doc_block_params(group: str) -> list[object]:
     return params
 
 
+def _missing_imported_modules(tree: ast.AST) -> list[str]:
+    """Return the root modules the code imports that are not installed.
+
+    A doc example may demonstrate an OPTIONAL-dependency feature that is not
+    installed in every test env. This feature detect runs BEFORE execution, so a
+    missing extra is a visible skip with its module named, while any ImportError
+    raised during execution (a broken import path, a torchlens module that moved)
+    fails loudly instead of skipping.
+    """
+
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            roots.add(node.module.split(".")[0])
+    return sorted(root for root in roots if importlib.util.find_spec(root) is None)
+
+
 def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) -> None:
     """Run one Python code fence from the new docs pages.
 
@@ -154,14 +173,11 @@ def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) 
         "__name__": f"docs_snippet_{Path(file_name).stem}_{block_index}",
         "DOCS_TMPDIR": str(tmp_path),
     }
-    try:
-        exec(compile(code, synthetic_filename, "exec"), namespace)
-    except (ImportError, ModuleNotFoundError) as exc:
-        # A doc example may demonstrate an OPTIONAL-dependency feature (e.g. the xarray
-        # export) that is not installed in every test env (CI installs only core deps).
-        # The example is still correct; skip when its dependency is absent rather than
-        # fail. Users who want that feature install the extra.
-        pytest.skip(f"doc snippet requires an unavailable optional dependency: {exc}")
+    compiled = compile(code, synthetic_filename, "exec")
+    missing = _missing_imported_modules(ast.parse(code))
+    if missing:
+        pytest.skip(f"doc snippet imports uninstalled optional dependencies: {missing}")
+    exec(compiled, namespace)
 
 
 @pytest.mark.parametrize(
@@ -362,10 +378,10 @@ def test_canonical_page_python_blocks_execute(
             if missing_optional:
                 continue
             statement = ast.Module(body=[node], type_ignores=[])
-            try:
-                exec(compile(statement, source_name, "exec"), namespace)
-            except (ImportError, ModuleNotFoundError) as exc:
-                pytest.skip(f"{source_name} requires an unavailable optional dependency: {exc}")
+            missing = _missing_imported_modules(statement)
+            if missing:
+                pytest.skip(f"{source_name} imports uninstalled optional dependencies: {missing}")
+            exec(compile(statement, source_name, "exec"), namespace)
             executed_statements += 1
     assert executed_statements > 0, f"{page_name}: nothing executed"
 
