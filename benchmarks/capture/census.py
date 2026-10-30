@@ -237,6 +237,27 @@ def _validate(entry: Any, model: Any, inputs: Any) -> dict[str, Any]:
     return result
 
 
+PANEL_PREFIX = "panel:"
+
+
+def _resolve(
+    entry_id: str, build_entry: Any, corpus_entries: Any
+) -> tuple[Any, dict[str, Any], Any]:
+    """Return the entry, its descriptive fields and a zero-argument builder.
+
+    ``panel:<name>`` names a smoke-runnable real-model panel entry instead of a corpus
+    entry; it is censused the same way.
+    """
+
+    if entry_id.startswith(PANEL_PREFIX):
+        from benchmarks.capture.panel import build_panel_entry
+
+        name = entry_id[len(PANEL_PREFIX) :]
+        return None, {"tier": "panel", "module": name}, lambda: build_panel_entry(name)[:2]
+    entry = next(e for e in corpus_entries() if e.id == entry_id)
+    return entry, {"tier": entry.tier, "module": entry.module}, lambda: build_entry(entry)
+
+
 def run_entry(entry_id: str) -> dict[str, Any]:
     """Census one corpus entry in this process and return its cell.
 
@@ -257,12 +278,11 @@ def run_entry(entry_id: str) -> dict[str, Any]:
     from tests.classics_corpus._loader import build_entry, corpus_entries
 
     torch.use_deterministic_algorithms(True)
-    entry = next(e for e in corpus_entries() if e.id == entry_id)
-    base = {"tier": entry.tier, "module": entry.module}
+    entry, base, build = _resolve(entry_id, build_entry, corpus_entries)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            model, inputs = build_entry(entry)
+            model, inputs = build()
             start = time.perf_counter()
             trace = tl.trace(model, inputs)
             trace_s = time.perf_counter() - start
@@ -367,7 +387,12 @@ def run_corpus(
 
     from tests.classics_corpus._loader import corpus_entries
 
-    ids = [e.id for e in corpus_entries(tier)][: limit or None]
+    if tier == "panel":
+        from benchmarks.capture.panel import smoke_panel
+
+        ids = [PANEL_PREFIX + name for name in smoke_panel()]
+    else:
+        ids = [e.id for e in corpus_entries(tier)][: limit or None]
     doc = schema.new_document(
         "census",
         {"tier": tier, "limit": limit, "jobs": jobs, "timeout_s": timeout, "entries": len(ids)},
@@ -394,7 +419,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("census.json"))
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=ENTRY_TIMEOUT_S)
-    parser.add_argument("--tier", choices=("smoke", "comprehensive"), default=None)
+    parser.add_argument("--tier", choices=("smoke", "comprehensive", "panel"), default=None)
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
     if args.entry:

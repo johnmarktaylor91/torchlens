@@ -33,7 +33,7 @@ from benchmarks.perf_runner import (  # noqa: E402
 MIN_SAMPLES = 3
 
 
-def build_subject(name: str) -> arms.Subject:
+def build_subject(name: str, device: str = "cpu") -> arms.Subject:
     """Build a fixture (``fx-...``) or a smoke panel model as a prepared subject."""
 
     if name.startswith("fx-"):
@@ -46,7 +46,7 @@ def build_subject(name: str) -> arms.Subject:
         model, x, meta = build_panel_entry(name)
         if name == "lstm-tagger":
             meta["edit_site"] = "embed"
-    return arms.prepare_subject(name, model, x, meta)
+    return arms.prepare_subject(name, model, x, meta, device)
 
 
 def _sample_budget(fn: Any, requested: int, budget_s: float) -> tuple[int, float]:
@@ -122,7 +122,7 @@ def run_cell(args: argparse.Namespace) -> dict[str, Any]:
     _pin_threads(args.threads)
     base = {"process_index": args.process_index, "device": args.device}
     try:
-        subject = build_subject(args.subject)
+        subject = build_subject(args.subject, args.device)
         with tempfile.TemporaryDirectory(prefix="tl-bench-") as tmp:
             if args.suite == "A":
                 fields = _suite_a(args, subject)

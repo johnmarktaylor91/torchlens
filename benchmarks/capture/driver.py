@@ -70,7 +70,9 @@ AA_SUBJECT = "fx-pointwise-1000-small"
 CELL_TIMEOUT_S = 900
 
 
-def plan(smoke: bool, subjects: list[str] | None = None) -> list[tuple[str, str, str, str]]:
+def plan(
+    smoke: bool, subjects: list[str] | None = None, sweep: bool = True
+) -> list[tuple[str, str, str, str]]:
     """Return the (suite, case, arm, subject) cells of a run.
 
     Parameters
@@ -79,6 +81,8 @@ def plan(smoke: bool, subjects: list[str] | None = None) -> list[tuple[str, str,
         The CPU smoke matrix (small subjects) instead of the full CPU matrix.
     subjects:
         Override the Suite A and B subjects.
+    sweep:
+        Include the fixture sweep.
 
     Returns
     -------
@@ -90,8 +94,10 @@ def plan(smoke: bool, subjects: list[str] | None = None) -> list[tuple[str, str,
     from benchmarks.capture.panel import smoke_panel
     from benchmarks.capture.suite_b import ROWS
 
-    fixtures = fixture_matrix(smoke)
-    main = list(subjects or (SMOKE_A_SUBJECTS if smoke else (*fixtures, *smoke_panel())))
+    fixtures = fixture_matrix(smoke) if sweep else []
+    main = list(
+        subjects or (SMOKE_A_SUBJECTS if smoke else (*fixture_matrix(smoke), *smoke_panel()))
+    )
     cells = [("A", case, arm, subj) for subj in main for case in CASES for arm in SUPPORT]
     for subj in main:
         for name, row in ROWS.items():
@@ -115,6 +121,7 @@ def _spawn(cell: tuple[str, str, str, str], index: int, args: argparse.Namespace
         *("--warmups", str(args.warmups), "--samples", str(args.samples)),
         *("--memory-runs", str(args.memory_runs), "--budget-s", str(args.budget_s)),
         *("--threads", str(args.threads), "--process-index", str(index)),
+        *("--device", args.device),
     ]
     start = time.perf_counter()
     try:
@@ -198,10 +205,11 @@ def group_cells(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     """Run the matrix and write the document."""
 
-    cells = plan(args.smoke, args.subjects.split(",") if args.subjects else None)
+    cells = plan(args.smoke, args.subjects.split(",") if args.subjects else None, not args.no_sweep)
     doc = schema.new_document(
         "capture",
         {"smoke": args.smoke, "cells_planned": len(cells), "threads": args.threads},
+        device=args.device,
         protocol={
             "warmups": args.warmups,
             "samples": args.samples,
@@ -241,6 +249,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--subjects", default="")
+    parser.add_argument("--no-sweep", action="store_true", help="skip the fixture sweep")
     parser.add_argument("--out", default="capture-results.json")
     parser.add_argument("--processes", type=int, default=schema.PROTOCOL_DEFAULTS["processes"])
     parser.add_argument("--warmups", type=int, default=schema.PROTOCOL_DEFAULTS["warmups"])
@@ -248,6 +257,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--memory-runs", type=int, default=3)
     parser.add_argument("--budget-s", type=float, default=60.0)
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--noise-floor", type=float, default=0.10)
     return parser.parse_args()
 

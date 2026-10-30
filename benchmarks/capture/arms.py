@@ -536,7 +536,7 @@ class ThingsvisionArm:
         tv = _require("thingsvision")
         self.s = subject
         self.extractor = tv.get_extractor_from_model(
-            model=subject.model, device="cpu", backend="pt"
+            model=subject.model, device=str(subject.x.device), backend="pt"
         )
 
     def run(self, case: str) -> Any:
@@ -600,10 +600,15 @@ ARMS: dict[str, type] = {
 }
 
 
-def prepare_subject(name: str, model: nn.Module, x: Any, meta: dict[str, Any]) -> Subject:
-    """Fill a subject's shapes and steering direction from one hooked pass (untimed)."""
+def prepare_subject(
+    name: str, model: nn.Module, x: Any, meta: dict[str, Any], device: str = "cpu"
+) -> Subject:
+    """Move a subject to ``device`` and fill its shapes and steering direction (untimed)."""
 
-    subject = Subject(name, model, x, dict(meta), make_dataset(x))
+    model = model.to(device)
+    dataset = make_dataset(x).to(device)
+    x = x.to(device)
+    subject = Subject(name, model, x, dict(meta), dataset)
     sites = list(dict.fromkeys([subject.site, subject.edit_site, *subject.sites]))
     outs = HooksArm(subject).read(x, sites)
     shapes = {site: tuple(out.shape) for site, out in zip(sites, outs, strict=True)}
@@ -613,7 +618,7 @@ def prepare_subject(name: str, model: nn.Module, x: Any, meta: dict[str, Any]) -
     if outs[sites.index(subject.edit_site)].is_floating_point():
         gen = torch.Generator().manual_seed(11)
         direction = torch.randn(subject.edit_shape, generator=gen)
-        subject.direction = direction / direction.norm()
+        subject.direction = (direction / direction.norm()).to(device)
     return subject
 
 
