@@ -1,0 +1,7 @@
+{
+  "id": "T0",
+  "title": "Harness stub: one named module's output",
+  "public": ["public/model.py"],
+  "grade": ["{python}", "grader.py", "--work", "{work}", "--heldout", "{heldout}", "--out", "{verdict}", "--arm-python", "{arm_python}"],
+  "grade_timeout_s": 300
+}
