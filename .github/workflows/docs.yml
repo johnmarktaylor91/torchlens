@@ -1,0 +1,48 @@
+name: Docs
+
+# Build the documentation site strictly and check its links. Runs on pull
+# requests and on manual dispatch only: never on pushes to work branches.
+# There is no deploy job; publishing the site is a separate, later step.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-docs"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "requirements-docs.txt"
+
+      # Exact pins for the docs toolchain live in requirements-docs.txt.
+      - name: Install the docs toolchain
+        run: uv pip install --system -r requirements-docs.txt
+
+      - name: Agent index and llms.txt match the task cards
+        run: python tools/docs/build_agent_index.py --check
+
+      - name: Site navigation matches the site map
+        run: python tools/docs/site_nav.py --check
+
+      - name: Strict build
+        run: zensical build --strict --clean
+
+      - name: Internal links and anchors
+        run: python tools/docs/check_site_links.py site --base-path /torchlens/
