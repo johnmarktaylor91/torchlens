@@ -478,7 +478,8 @@ def header_edit_line(
         token = f'<FONT COLOR="{color}"><B>{DELTA} {html_escape(short)}</B></FONT>'
         where = html_escape(labels[0]) if len(labels) == 1 else f"{len(labels)} layers"
         items.append(f"{token}&#160;on {where}")
-    return f"{total} {noun}:&#160;" + ", ".join(items)
+    # Non-breaking: SVG drops a plain space at the edge of a text run.
+    return f"{total} {noun}:&#160;" + ",&#160;".join(items)
 
 
 def _site_display_label(site: Any, vis_mode: str) -> str:

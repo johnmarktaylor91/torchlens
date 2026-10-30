@@ -119,7 +119,7 @@ def test_header_edit_line_forms() -> None:
         PURPLE,
     )
     assert two is not None and two.startswith("2 edits:&#160;")
-    assert ", " in two and "scale(0.5)" in two
+    assert ",&#160;<FONT" in two and "scale(0.5)" in two
     four = [
         _fired_site("a_1_1", tl.zero_ablate()),
         _fired_site("b_1_1", tl.scale(0.5)),
