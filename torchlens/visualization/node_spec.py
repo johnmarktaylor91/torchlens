@@ -208,19 +208,13 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
     if not targets:
         return []
 
-    from ..data_classes.grad_fn import GradFn
     from ..intervention.resolver import resolve_sites
-    from ..ir.selector_eval import _grad_fn_forward_op
 
     by_label: dict[str, Op] = {}
     for target in targets:
         table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
         for site in table:
-            # A GradFn differentiates one pass: resolve that pass, not the
-            # multi-pass Layer its layer-label ``op`` names.
-            forward_site = (
-                _grad_fn_forward_op(site) if isinstance(site, GradFn) else getattr(site, "op", site)
-            )
+            forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so
             # recurrent passes stay DISTINCT sites. The old aggregate layer_label
             # collapsed :1/:2/:3 into one site, so resolving pass 2 later colored
@@ -234,6 +228,22 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
         _site_sort_key(op): index for index, op in enumerate(getattr(trace, "layer_list", ()))
     }
     return sorted(by_label.values(), key=lambda site: execution_order.get(_site_sort_key(site), 0))
+
+
+def _forward_site(site: Any) -> Any:
+    """Return the forward op a resolved intervention site marks, at its own pass.
+
+    A GradFn differentiates one pass: resolve that pass, not the multi-pass
+    Layer its layer-label ``op`` names. Other sites mark their ``op`` (a hook
+    site) or themselves.
+    """
+
+    from ..data_classes.grad_fn import GradFn
+    from ..ir.selector_eval import _grad_fn_forward_op
+
+    if isinstance(site, GradFn):
+        return _grad_fn_forward_op(site)
+    return getattr(site, "op", site)
 
 
 def _site_sort_key(op: Any) -> str:

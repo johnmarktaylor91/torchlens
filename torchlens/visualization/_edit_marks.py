@@ -331,6 +331,7 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     if spec is None:
         return {}
     from ..intervention.resolver import resolve_sites
+    from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}
     fanout = max(1, len(getattr(trace, "layer_list", ()) or ()))
@@ -342,7 +343,9 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
             continue
         mark = build()
         for site in table:
-            marks.setdefault(_op_key(getattr(site, "op", site)), []).append(mark)
+            # Key by the site's own pass, as ``intervention_sites_for_log`` does,
+            # so a backward edit on one pass of a multi-pass layer names that pass.
+            marks.setdefault(_op_key(_forward_site(site)), []).append(mark)
     return marks
 
 

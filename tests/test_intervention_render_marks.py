@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 import torch
 from example_models import TinyReluAdd
+from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
@@ -26,11 +27,12 @@ from torchlens.visualization._edit_marks import (
     EditMark,
     EditRow,
     edit_ink,
+    edit_marks_by_site,
     edit_rows,
     header_edit_line,
     short_edit_text,
 )
-from torchlens.visualization.node_spec import render_lines_to_html
+from torchlens.visualization.node_spec import intervention_sites_for_log, render_lines_to_html
 from torchlens.visualization.themes import THEME_PRESETS
 
 PURPLE = "#7B1FA2"
@@ -341,3 +343,62 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     assert "shape=diamond" in hook_line
     assert PURPLE in hook_line and "#F3E5F5" in hook_line
     assert "tl_edited" in hook_line
+
+
+class _SharedLinearTwice(nn.Module):
+    """One linear layer called twice, so its layer has two passes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the shared projection twice around a ReLU."""
+
+        for _call in range(2):
+            x = torch.relu(self.lin(x))
+        return x
+
+
+def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
+    """A staged backward edit on pass 2 of a two-pass layer names pass 2, and only it.
+
+    A GradFn site resolves to the one pass it differentiates (``GradFn.op`` is
+    the multi-pass Layer); the staged edit row must key by that same pass, or
+    the ringed node would read ``edit`` instead of the edit's name.
+    """
+
+    def named_backward(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        return grad
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _SharedLinearTwice(),
+        torch.randn(2, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
+    try:
+        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        assert linear.num_passes == 2
+        second = trace[f"{linear.layer_label}:2"]
+        grad_fn = next(
+            gf for gf in trace.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
+        )
+        trace.attach_hooks(
+            tl.grad_fn_label(grad_fn.label), tl.bwd_hook(named_backward), confirm_mutation=True
+        )
+        sites = intervention_sites_for_log(trace)
+        assert [site.label for site in sites] == [second.label]
+        marks = edit_marks_by_site(trace, sites)
+        assert [mark.short for mark in marks[second.label]] == ["bwd_hook(named_backward)"]
+        dot = trace.draw(
+            vis_save_only=True,
+            vis_fileformat="dot",
+            vis_mode="unrolled",
+            vis_outpath=str(tmp_path / "shared"),
+        )
+    finally:
+        trace.cleanup()
+    edited = [line for line in dot.splitlines() if "tl_edited" in line]
+    assert len(edited) == 1
+    assert "bwd_hook(named_backward)" in edited[0]
