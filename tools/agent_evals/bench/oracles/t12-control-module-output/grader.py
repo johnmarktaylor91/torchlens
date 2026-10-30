@@ -40,7 +40,7 @@ def grade_one(rep, label, inputs_dir, outputs_dir):
         return
     rep.add(f"{label}:shape", tuple(acts.shape) == ref.shape, note=f"shape={acts.shape}")
     err = max_abs(acts, ref)
-    rep.add(f"{label}:exact", err <= 1e-5, err, 1e-5)
+    rep.add(f"{label}:exact", err <= 1e-4, err, 1e-4)
 
 
 def grade(task_dir, outputs, heldout_outputs, cache):

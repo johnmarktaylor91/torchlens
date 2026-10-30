@@ -30,7 +30,7 @@ module output itself, and compares.
 | Bar | Pass |
 |---|---|
 | shape | array present with shape `[n, 64, 16, 16]` |
-| exact | max absolute difference <= 1e-5 |
+| exact | max absolute difference <= 1e-4 (float32 batch-size and kernel noise is about 1e-5 at this activation scale; every seeded wrong solution is off by more than 7) |
 
 A held-out run with a different `stimulus_seed` must also pass. This task is
 the control: a correct solution exists in every arm, so no arm should win on
