@@ -718,7 +718,7 @@
       "evidence": [
         "docs/guides/fast_paths.md"
       ],
-      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook (launch plan 3.5); refresh on the release before quoting.",
+      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook; refresh on the release before quoting.",
       "exclusions": "Capture-free: no activations recorded.",
       "date": "2026-10-29",
       "status": "train-only",
@@ -821,7 +821,7 @@
       "evidence": [
         "docs/guides/fast_paths.md"
       ],
-      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook (launch plan 3.5).",
+      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook.",
       "exclusions": "Full trace is far slower than a hook; older ratios are configuration-specific.",
       "date": "2026-10-29",
       "status": "train-only",
@@ -860,7 +860,7 @@
         "torchlens/mechinterp/_eap.py",
         "tests/test_circ2_edge_scores.py"
       ],
-      "evidence_note": "Measured on the batch-2 train: head ROC AUC 0.9263 against the 26 Wang circuit heads, 1000 MIB IOI train rows, EAP-IG m=5. Not yet rerun on a release.",
+      "evidence_note": "Measured on the development branch: head ROC AUC 0.9263 against the 26 Wang circuit heads, 1000 MIB IOI train rows, EAP-IG m=5. Not yet rerun on a release.",
       "exclusions": "Edge recall at k=182 was 0.3956.",
       "date": "2026-10-29",
       "status": "train-only",
@@ -879,7 +879,7 @@
       "evidence": [
         "docs/reference/attribution.md"
       ],
-      "evidence_note": "Measured on the batch-2 train: largest adjacency difference 8.64e-7 of the largest oracle entry, relative Frobenius 1.10e-6, CPU float32, Dallas prompt, 9,170 features. The 1.05e-6 figure in the launch plan is the spread between two circuit-tracer environments, not the TorchLens agreement.",
+      "evidence_note": "Measured on the development branch: largest adjacency difference 8.64e-7 of the largest oracle entry, relative Frobenius 1.10e-6, CPU float32, Dallas prompt, 9,170 features. A 1.05e-6 figure quoted elsewhere is the spread between two circuit-tracer environments, not the TorchLens agreement.",
       "exclusions": "One prompt; CPU float32.",
       "date": "2026-10-29",
       "status": "train-only",
