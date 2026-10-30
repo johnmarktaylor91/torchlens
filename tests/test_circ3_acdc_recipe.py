@@ -23,7 +23,7 @@ import pytest
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-PAGE = Path(__file__).resolve().parents[1] / "docs" / "recipes" / "acdc_ioi.md"
+PAGE = Path(__file__).resolve().parents[1] / "docs" / "field-guide" / "acdc_ioi.md"
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
