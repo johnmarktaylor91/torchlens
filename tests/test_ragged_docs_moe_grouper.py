@@ -229,6 +229,106 @@ def test_expert_interior_sites_are_per_occurrence(moe_episode: dict) -> None:
     )
 
 
+# Per-step expert routing for the in-test Python-loop MoE: expert 0 is hit on
+# every step, expert 1 on two of three, expert 2 never.
+LOOP_ROUTES = ([0, 1, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0])
+
+
+class _LoopExpert(nn.Module):
+    """One expert: a linear map and a relu."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x))
+
+
+class _LoopMoE(nn.Module):
+    """MoE with a Python loop over experts that skips experts with no tokens."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.experts = nn.ModuleList(_LoopExpert() for _ in range(3))
+        self.scales = nn.ParameterList(
+            nn.Parameter(torch.full((4,), 0.5 + e)) for e in range(len(self.experts))
+        )
+
+    def forward(self, x: torch.Tensor, route: list[int]) -> torch.Tensor:
+        out = torch.zeros_like(x)
+        for e, expert in enumerate(self.experts):
+            idx = [i for i, r in enumerate(route) if r == e]
+            if not idx:
+                continue
+            y = expert(x[idx]) * self.scales[e]
+            out = out.index_add(0, torch.tensor(idx), y)
+        return out
+
+
+class _LoopMoESteps(nn.Module):
+    """Calls the MoE once per route from one loop line."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.moe = _LoopMoE()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for route in LOOP_ROUTES:
+            x = torch.tanh(x + self.moe(x, route))
+        return x
+
+
+def _address(op: object) -> str:
+    """Innermost module address of an op, without its call index."""
+
+    module = getattr(op, "module", None)
+    return str(module).rsplit(":", 1)[0] if module else ""
+
+
+def test_python_loop_moe_pass_counts_show_ragged_routing() -> None:
+    """A per-expert Python loop exposes ragged routing in the pass counts.
+
+    The fused Qwen3Moe experts above run every interior op once per call, so
+    their pass counts cannot show routing. This in-test MoE restores that
+    coverage. Grouping rule rows 26 and 29: each expert is a distinct module
+    instance, so its ops are its own layers, and one pass per step it was hit
+    (an expert with no tokens has no passes at all). Rows 17 and 51: the scale
+    multiply is one place in the MoE loop, so it is one layer with one pass
+    per expert execution summed over the steps, although each pass uses a
+    different expert's parameter. Padding (every expert every step) or
+    splitting the scale multiply by parameter fails these counts.
+    """
+
+    hits = [sum(e in route for route in LOOP_ROUTES) for e in range(3)]
+    assert hits == [3, 2, 0]
+    model = _LoopMoESteps()
+    trace = tl.trace(model, torch.randn(4, 4))
+    try:
+        linear_passes = {
+            _address(op): op.num_passes for op in trace.layer_list if op.func_name == "linear"
+        }
+        assert linear_passes == {"moe.experts.0.lin": 3, "moe.experts.1.lin": 2}
+        assert not any(_address(op).startswith("moe.experts.2") for op in trace.layer_list)
+
+        moe_ops = [op for op in trace.layer_list if _address(op) == "moe"]
+        scale_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name in {"mul", "__mul__"}
+        }
+        assert list(scale_layers.values()) == [sum(hits)], scale_layers
+        add_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name == "index_add"
+        }
+        assert list(add_layers.values()) == [sum(hits)], add_layers
+        zeros_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name == "zeros_like"
+        }
+        assert list(zeros_layers.values()) == [len(LOOP_ROUTES)], zeros_layers
+    finally:
+        tl.release_model(model)
+        trace.cleanup()
+
+
 def test_pass_window_on_moe_episode_discloses(moe_episode: dict) -> None:
     """The pass-axis disclosure fires on the MoE episode with trace-true counts.
 
