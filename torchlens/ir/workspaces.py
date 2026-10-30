@@ -60,7 +60,19 @@ LEGACY_TRACE_BUILD_STATE_KEYS = frozenset(
 
 @dataclass(slots=True)
 class RawGraphWorkspace:
-    """Raw op registry owned by capture ingress + postprocess steps 0-11."""
+    """Raw op registry owned by capture ingress + postprocess steps 0-11.
+
+    Attributes
+    ----------
+    pending_call_site : tuple | None
+        Call id and code location of the torch call whose outputs are being logged.
+    call_site_index : dict
+        Each call-site key (module instance, code location, function, output slot)
+        mapped to the order it first appeared; that number names its call-site class.
+    call_site_classes : dict[str, str]
+        Each raw op label mapped to its call-site class, the internal key that
+        groups ops into layers; never saved with the trace.
+    """
 
     raw_layer_dict: dict[str, Any] = field(default_factory=OrderedDict)
     raw_layer_labels_list: list[str] = field(default_factory=list)
