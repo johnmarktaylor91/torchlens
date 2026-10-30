@@ -118,7 +118,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_renderer: VisRendererLiteral = "graphviz",
         vis_theme: str = "torchlens",
         vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
-        vis_show_cone: bool = True,
+        vis_show_cone: bool = False,
         code_panel: "CodePanelOption" = False,
         node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
         node_label_fields: list[str] | None = None,

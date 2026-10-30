@@ -1119,7 +1119,9 @@ class VisualizationOptions:
     intervention_mode:
         Intervention overlay mode.
     show_cone:
-        Whether intervention cones are highlighted.
+        Whether the nodes and arrows an intervention changed downstream get the
+        translucent purple highlighter (off by default; the edited node is
+        always marked).
     node_overlay:
         Built-in overlay name, an external label->value score mapping, or a callable
         invoked as ``fn(node)`` to compute a per-node overlay value.
@@ -1183,7 +1185,7 @@ class VisualizationOptions:
     renderer: VisRendererLiteral = "graphviz"
     theme: str = "torchlens"
     intervention_mode: VisInterventionModeLiteral = "node_mark"
-    show_cone: bool = True
+    show_cone: bool = False
     node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None
     node_label_fields: list[str] | None = None
     show_legend: bool | None = None
@@ -1296,7 +1298,7 @@ class VisualizationOptions:
             "intervention_mode": _resolve_option_value(
                 "intervention_mode", intervention_mode, "node_mark", specified_fields
             ),
-            "show_cone": _resolve_option_value("show_cone", show_cone, True, specified_fields),
+            "show_cone": _resolve_option_value("show_cone", show_cone, False, specified_fields),
             "node_overlay": _resolve_option_value(
                 "node_overlay", node_overlay, None, specified_fields
             ),

@@ -65,6 +65,8 @@ _SWATCH_VERSION = 1
 _KEY_SPACING = 3
 #: Swatches per key row before the row wraps.
 _SWATCHES_PER_ROW = 3
+#: Stroke of the key's module frame, in points (module frames run 2 to 5 pt by depth).
+_MODULE_FRAME_LINE = 3.0
 #: Node unit kinds the header counts: each draws one node with a tensor size.
 _COUNTED_UNIT_KINDS = frozenset({"raw_op", "boundary", "module_box"})
 
@@ -78,17 +80,22 @@ class KeySwatch:
     text:
         Plain words for the mark (escaped at build time).
     shape:
-        ``"oval"``, ``"box"`` or ``"cylinder"``.
+        ``"oval"``, ``"box"`` or ``"cylinder"``; ``"frame"`` for a module box
+        and ``"arrow"`` for an arrow with the downstream highlighter under it.
     fill:
-        Fill colour as the picture paints it under the active skin.
+        Fill colour as the picture paints it under the active skin (for
+        ``"arrow"``, the highlighter colour with its opacity, ``#RRGGBBAA``).
     border:
         Outline colour as the picture paints it.
+    line:
+        Outline width in points.
     """
 
     text: str
     shape: str
     fill: str
     border: str
+    line: float = 1.0
 
 
 def params_caption_detail(trace: Trace) -> str:
@@ -151,7 +158,7 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
 
 
 def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderRequest) -> str:
-    """Assemble the header body: model, counts, honesty banner, and disclosures.
+    """Assemble the header body: model, counts, edits, honesty banner, and disclosures.
 
     Returns
     -------
@@ -167,6 +174,9 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         f"<br align='left'/>{html_escape(count_line)}"
         f"<br align='left'/>{params_caption_detail(trace)}<br align='left'/>"
     )
+    edit_line = _header_edit_line(trace, request)
+    if edit_line is not None:
+        caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
     # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
@@ -202,6 +212,21 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     if reuse_note is not None:
         caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
     return caption_body
+
+
+def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | None:
+    """Return the header's edit line (``1 edit: Δ zero_ablate on linear_1_1``), if any."""
+
+    from ._edit_marks import edit_ink, header_edit_line
+    from .node_spec import intervention_sites_for_log
+    from .themes import resolve_theme
+
+    sites = intervention_sites_for_log(trace)
+    if not sites:
+        return None
+    theme = resolve_theme(request.theme, for_paper=request.for_paper)
+    color = str((request.graph_overrides or {}).get("intervention_site_color", edit_ink(theme)))
+    return header_edit_line(trace, sites, color, vis_mode=request.vis_mode)
 
 
 def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | None:
@@ -270,8 +295,10 @@ def key_swatches(
 
     Both weight greys are listed whenever any weighted node is drawn, so a
     reader can tell trainable from frozen weights. Plain operations get no
-    entry (they are the page colour); the intervention entry keeps its
-    outline swatch and appears only when the picture has an intervention.
+    entry (they are the page colour). A drawn module gets a module frame
+    swatch; an edited node adds ``edited`` (the ringed oval) and, with the
+    downstream highlighter drawn, ``changed by the edit`` (an arrow over the
+    translucent purple bar).
     """
 
     from ._render_common import (
@@ -283,35 +310,28 @@ def key_swatches(
         OUTPUT_COLOR,
         TRAINABLE_PARAMS_BG_COLOR,
     )
-    from .node_spec import INTERVENTION_SITE_COLOR, NodeSpec
+    from .node_spec import NodeSpec
     from .themes import apply_theme_to_spec
 
     has_weights = "parameterized" in drawn
     entries = (
-        ("input", "oval", INPUT_COLOR, None, "input" in drawn),
-        ("output", "oval", OUTPUT_COLOR, None, "output" in drawn),
-        ("trainable weights", "box", TRAINABLE_PARAMS_BG_COLOR, None, has_weights),
-        ("frozen weights", "box", FROZEN_PARAMS_BG_COLOR, None, has_weights),
-        ("module", "box", DEFAULT_BG_COLOR, None, has_module),
-        ("buffer", "cylinder", BUFFER_NODE_COLOR, None, "buffer" in drawn),
-        ("mutated parameter", "cylinder", TRAINABLE_PARAMS_BG_COLOR, None, mutated_parameter),
-        ("true/false test", "oval", BOOL_NODE_COLOR, None, "boolean" in drawn),
-        (
-            "intervention/cone",
-            "oval",
-            DEFAULT_BG_COLOR,
-            INTERVENTION_SITE_COLOR,
-            "intervention/cone" in drawn,
-        ),
+        ("input", "oval", INPUT_COLOR, "input" in drawn),
+        ("output", "oval", OUTPUT_COLOR, "output" in drawn),
+        ("trainable weights", "box", TRAINABLE_PARAMS_BG_COLOR, has_weights),
+        ("frozen weights", "box", FROZEN_PARAMS_BG_COLOR, has_weights),
+        ("module", "frame", DEFAULT_BG_COLOR, has_module),
+        ("buffer", "cylinder", BUFFER_NODE_COLOR, "buffer" in drawn),
+        ("mutated parameter", "cylinder", TRAINABLE_PARAMS_BG_COLOR, mutated_parameter),
+        ("true/false test", "oval", BOOL_NODE_COLOR, "boolean" in drawn),
     )
     swatches = []
-    for text, shape, fill, outline, shown in entries:
+    for text, shape, fill, shown in entries:
         if not shown:
             continue
-        spec = NodeSpec([text], shape=shape, fillcolor=fill)
-        if outline is not None:
-            spec = NodeSpec([text], shape=shape, fillcolor=fill, color=outline)
-        themed = apply_theme_to_spec(spec, theme)
+        if shape == "frame":
+            swatches.append(_module_frame_swatch(theme))
+            continue
+        themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
         swatches.append(
             KeySwatch(
                 text=text,
@@ -320,7 +340,57 @@ def key_swatches(
                 border=str(themed.color or theme.default_border),
             )
         )
+    swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
+
+
+def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
+    """Return the module entry: a real module frame, not a plain op's thin box.
+
+    The frame has the module box's page fill and ink and a thick stroke, so
+    the key matches the expanded modules in the picture (Lead, 29 Oct 2026).
+    """
+
+    from .themes import _theme_cluster_attrs
+
+    cluster = _theme_cluster_attrs(theme)
+    return KeySwatch(
+        text="module",
+        shape="frame",
+        fill=cluster.get("fillcolor", str(theme.graph.get("bgcolor", "white"))),
+        border=cluster.get("color", "black"),
+        line=_MODULE_FRAME_LINE,
+    )
+
+
+def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[KeySwatch]:
+    """Return the edit entries: a ringed oval ``edited`` and the highlighted arrow."""
+
+    from ._edit_highlighter import highlighter_rgba
+    from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink
+
+    ink = edit_ink(theme)
+    swatches = []
+    if "edited" in drawn:
+        swatches.append(
+            KeySwatch(
+                text="edited",
+                shape="oval",
+                fill=theme.default_fill,
+                border=ink,
+                line=EDIT_RING_PENWIDTH,
+            )
+        )
+    if "changed by the edit" in drawn:
+        swatches.append(
+            KeySwatch(
+                text="changed by the edit",
+                shape="arrow",
+                fill=highlighter_rgba(theme),
+                border=str(theme.edge.get("color", theme.default_border)),
+            )
+        )
+    return swatches
 
 
 def _swatch_dir() -> Path:
@@ -361,20 +431,25 @@ def _swatch_image(swatch: KeySwatch) -> str:
         value = ImageColor.getcolor(name, "RGBA")
         return value if isinstance(value, tuple) else (value, value, value, 255)
 
-    stem = "-".join(part.strip("#").lower() for part in (swatch.shape, swatch.fill, swatch.border))
+    parts = [swatch.shape, swatch.fill, swatch.border]
+    if swatch.line != 1.0:
+        parts.append(f"w{swatch.line:g}")
+    stem = "-".join(part.strip("#").lower() for part in parts)
     image_dir = _swatch_dir()
     path = image_dir / f"key-{stem}-v{_SWATCH_VERSION}.png"
     if path.is_file():
         return str(path)
     width = _SWATCH_WIDTH * _SWATCH_SCALE
     height = _SWATCH_HEIGHT * _SWATCH_SCALE
-    line = _SWATCH_SCALE
+    line = max(1, round(swatch.line * _SWATCH_SCALE))
     image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     fill, border = colour(swatch.fill), colour(swatch.border)
     left, top = line // 2, line // 2
     right, bottom = width - 1 - line // 2, height - 1 - line // 2
-    if swatch.shape == "oval":
+    if swatch.shape == "arrow":
+        _draw_arrow_swatch(draw, width, height, fill, border)
+    elif swatch.shape == "oval":
         draw.ellipse((left, top, right, bottom), fill=fill, outline=border, width=line)
     elif swatch.shape == "cylinder":
         cap = (bottom - top) // 3
@@ -390,6 +465,28 @@ def _swatch_image(swatch: KeySwatch) -> str:
     image.save(partial, format="PNG")
     os.replace(partial, path)
     return str(path)
+
+
+def _draw_arrow_swatch(
+    draw: Any, width: int, height: int, under: tuple[int, ...], ink: tuple[int, ...]
+) -> None:
+    """Draw a short arrow (1 pt line, small head) over a wide translucent bar."""
+
+    middle = height // 2
+    bar = 8 * _SWATCH_SCALE // 2
+    radius = bar
+    draw.rounded_rectangle(
+        (radius // 2, middle - bar, width - 1 - radius // 2, middle + bar),
+        radius=radius,
+        fill=under,
+    )
+    head = 3 * _SWATCH_SCALE
+    tip = width - 2 * _SWATCH_SCALE
+    draw.line((3 * _SWATCH_SCALE, middle, tip - head, middle), fill=ink, width=_SWATCH_SCALE)
+    draw.polygon(
+        ((tip, middle), (tip - head, middle - head // 2), (tip - head, middle + head // 2)),
+        fill=ink,
+    )
 
 
 @functools.lru_cache(maxsize=256)

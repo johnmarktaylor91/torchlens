@@ -434,7 +434,7 @@ def test_intervention_border_composes_with_channel_fill(tmp_path: Path) -> None:
     fill = state.colors[relu_key]
     site_line = next(line for line in dot.splitlines() if "relu" in line and "fillcolor" in line)
     assert fill in site_line
-    assert "#FF00FF" in site_line  # intervention site border color
+    assert "#7B1FA2" in site_line  # edited node ring colour
 
 
 def test_collapsed_module_boxes_not_encoded(tmp_path: Path) -> None:

@@ -525,6 +525,7 @@ def render_rank_layout(
     execution_record: dict[str, str] | None = None,
     overlay_nodes: Sequence[tuple[str | None, Mapping[str, Any]]] = (),
     overlay_edges: Sequence[Mapping[str, Any]] = (),
+    highlighter: Any = None,
 ) -> str:
     """Render a graph with the pure-Python rank layout.
 
@@ -877,12 +878,12 @@ def render_rank_layout(
         # is renamed over the final path only on success, so a failed or
         # timed-out layout can never leave a partial stub at the user's path.
         with atomic_render_target(rendered_path) as temp_rendered_path:
-            result = _run_neato_with_fallbacks(
-                rendered_path=temp_rendered_path,
-                source_path=source_path,
-                vis_fileformat=vis_fileformat,
-                spline_mode=spline_mode,
-                render_timeout=render_timeout,
+            result = _run_rank_layout(
+                temp_rendered_path,
+                source_path,
+                vis_fileformat,
+                (spline_mode, render_timeout),
+                (highlighter, dot_source, (graph_overrides or {}).get("imagepath")),
             )
         surface_layout_stderr(result.stderr, engine="neato")
         if execution_record is not None:
@@ -897,6 +898,45 @@ def render_rank_layout(
             os.remove(source_path)
 
     return dot_source
+
+
+def _run_rank_layout(
+    rendered_path: str,
+    source_path: str,
+    vis_fileformat: str,
+    routing: tuple[str, int],
+    highlight: tuple[Any, str, str | None],
+) -> Any:
+    """Run ``neato -n`` into ``rendered_path``, laying in the downstream highlighter if set.
+
+    ``routing`` is the spline mode and timeout; ``highlight`` is the
+    highlighter style (or ``None``), the DOT source and the image root. With a
+    highlighter, neato writes SVG and the requested format is written from the
+    processed SVG (``visualization._edit_highlighter``).
+    """
+
+    spline_mode, render_timeout = routing
+    style, dot_source, image_root = highlight
+
+    def run(fileformat: str, path: str) -> Any:
+        """Run neato with its fallbacks into ``path``."""
+
+        return _run_neato_with_fallbacks(
+            rendered_path=path,
+            source_path=source_path,
+            vis_fileformat=fileformat,
+            spline_mode=spline_mode,
+            render_timeout=render_timeout,
+        )
+
+    if style is None:
+        return run(vis_fileformat, rendered_path)
+    from pathlib import Path
+
+    from .._edit_highlighter import HighlightJob, render_highlighted
+
+    job = HighlightJob(vis_fileformat, style, dot_source, Path(image_root) if image_root else None)
+    return render_highlighted(lambda path: run("svg", path), rendered_path, job)
 
 
 # neato builds an rtree spatial index over node/label boxes during edge

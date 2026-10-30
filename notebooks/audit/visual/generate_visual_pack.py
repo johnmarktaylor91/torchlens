@@ -655,8 +655,8 @@ AXES: dict[str, str] = {
     "overrides:module": "vis_module_overrides dict",
     "intervention:node_mark": "vis_intervention_mode='node_mark'",
     "intervention:as_node": "vis_intervention_mode='as_node' hook nodes",
-    "cone:on": "vis_show_cone=True downstream cone styling",
-    "cone:off": "vis_show_cone=False",
+    "cone:on": "vis_show_cone=True downstream highlighter",
+    "cone:off": "vis_show_cone=False (default)",
     "input_transform_summary": "show_input_transform_summary=True input xlabel",
     "raw_io_render": "save_raw_input/save_raw_output thumbnails on boundary nodes",
     # --- draw_backward / draw_combined ---
@@ -2138,10 +2138,11 @@ SECTIONS: list[Section] = [
                     "An intervention-ready trace with a PLANNED zero intervention registered at the relu "
                     "site (trace.set(tl.func('relu'), zeros) -- the renderer visualizes planned "
                     "intervention sites). 'node_mark' (default) "
-                    "marks the intervened op node itself (magenta site styling); 'as_node' inserts explicit "
+                    "marks the edited op node itself (purple ring and a bold purple edit row such as "
+                    "'\u0394 set(v)'); 'as_node' inserts explicit "
                     "hook nodes showing where the intervention fires in the data path.\n"
-                    "CHECK: LEFT -- relu nodes carry the intervention site color; RIGHT -- separate hook "
-                    "nodes appear inline, styled distinctly from data ops."
+                    "CHECK: LEFT -- relu nodes carry the purple ring and edit row, and the header names the "
+                    "edit; RIGHT -- separate purple delta diamonds appear inline after the sites."
                 ),
                 panels=[
                     Panel(
@@ -2167,21 +2168,23 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Same planned-intervention trace as the previous page. The intervention CONE is every "
                     "op downstream of an intervention site -- the region "
-                    "whose values the intervention could have changed. vis_show_cone=True (default) tints "
-                    "it; False renders sites only.\n"
-                    "CHECK: LEFT -- everything downstream of the first intervened relu is tinted (lighter "
-                    "magenta), upstream ops are untouched; RIGHT -- cone styling gone, site marks remain."
+                    "whose values the intervention could have changed. vis_show_cone=True lays a translucent "
+                    "purple highlighter under its arrows and node outlines; False (the default) marks "
+                    "the edited sites only.\n"
+                    "CHECK: LEFT -- arrows and outlines downstream of the first edited relu carry the "
+                    "soft purple underlay over their normal black strokes, upstream ops are untouched; "
+                    "RIGHT -- highlighter gone, site marks remain."
                 ),
                 panels=[
                     Panel(
-                        "vis_show_cone=True (default)",
+                        "vis_show_cone=True",
                         "tiny_mlp",
                         kwargs={"vis_show_cone": True},
                         trace_variant="intervened",
                         trace_builder=_intervened_trace("tiny_mlp"),
                     ),
                     Panel(
-                        "vis_show_cone=False",
+                        "vis_show_cone=False (default)",
                         "tiny_mlp",
                         kwargs={"vis_show_cone": False},
                         trace_variant="intervened",

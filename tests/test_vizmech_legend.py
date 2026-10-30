@@ -117,7 +117,17 @@ def test_key_entries_follow_drawn_marks() -> None:
     assert [s.text for s in bare] == ["input", "output"]
     full = key_swatches(
         theme,
-        frozenset({"input", "output", "parameterized", "buffer", "boolean", "intervention/cone"}),
+        frozenset(
+            {
+                "input",
+                "output",
+                "parameterized",
+                "buffer",
+                "boolean",
+                "edited",
+                "changed by the edit",
+            }
+        ),
         has_module=True,
         mutated_parameter=True,
     )
@@ -125,7 +135,14 @@ def test_key_entries_follow_drawn_marks() -> None:
         "cylinder",
         "cylinder",
     ]
-    assert [s.text for s in full][-2:] == ["true/false test", "intervention/cone"]
+    assert [s.text for s in full][-3:] == ["true/false test", "edited", "changed by the edit"]
+    edited, changed = full[-2], full[-1]
+    assert (edited.shape, edited.border, edited.line) == ("oval", "#7B1FA2", 2.5)
+    assert changed.shape == "arrow"
+    assert changed.fill == "#7B1FA240"
+    module = next(s for s in full if s.text == "module")
+    assert module.shape == "frame"
+    assert module.line > 1.0
 
 
 def test_backward_key_rows_gate_on_active_styles() -> None:

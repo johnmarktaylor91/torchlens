@@ -15,6 +15,7 @@ from pathlib import Path
 
 from ..utils.display import atomic_write_text
 from . import _render_utils
+from ._edit_highlighter import HighlighterStyle, highlight_svg
 from ._render_common import (
     _SVG_IMAGE_TAG_RE,
     _SVG_ROOT_RE,
@@ -167,18 +168,22 @@ def _write_composed_code_panel(
     file_format: str,
     timeout: int,
     image_root: Path | None = None,
+    *,
+    highlighter: HighlighterStyle | None = None,
 ) -> None:
     """Render the graph and code panel separately and write the joined output.
 
     The graph is rendered to SVG without any code subgraph, composed beside a
     standalone code-panel SVG, then written in ``file_format``. SVG is written
     directly; PDF and PNG are converted from the composed SVG with ``cairosvg``
-    so vectors are preserved.
+    so vectors are preserved. With ``highlighter`` the downstream highlighter
+    is laid into the graph SVG before composition.
     """
 
-    graph_svg = _normalize_svg_root_viewbox(
-        _render_graph_only_svg(engine, source_path, timeout, image_root)
-    )
+    graph_svg = _render_graph_only_svg(engine, source_path, timeout, image_root)
+    if highlighter is not None:
+        graph_svg = highlight_svg(graph_svg, highlighter)
+    graph_svg = _normalize_svg_root_viewbox(graph_svg)
     combined_svg = _normalize_svg_root_viewbox(
         compose_graph_with_code_panel(graph_svg, source_text)
     )

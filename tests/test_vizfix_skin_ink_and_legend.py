@@ -250,7 +250,10 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
         vis_outpath=str(tmp_path / "edited"),
         show_legend=True,
     )
-    assert "intervention/cone" in _legend_rows(str(edited))
+    rows = _legend_rows(str(edited))
+    assert "edited" in rows
+    # The downstream highlighter is off by default, so its key row is absent.
+    assert "changed by the edit" not in rows
 
 
 @pytest.mark.parametrize("skin", sorted(THEME_PRESETS))

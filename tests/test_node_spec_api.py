@@ -134,7 +134,7 @@ def test_node_spec_fn_returning_none_uses_default(tmp_path: Any) -> None:
 def test_intervention_node_spec_cone_matches_short_label(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cone styling accepts short layer labels."""
+    """Downstream tagging accepts short layer labels; the outline stays as it was."""
 
     def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
         """Return a short-label cone member and no sites."""
@@ -154,14 +154,14 @@ def test_intervention_node_spec_cone_matches_short_label(
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.color == node_spec_mod.INTERVENTION_CONE_COLOR
-    assert styled.penwidth == 1.75
+    assert styled.extra_attrs["class"] == "tl-downstream"
+    assert (styled.color, styled.penwidth) == ("black", 1.0)
 
 
 def test_intervention_node_spec_cone_matches_call_labels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cone styling accepts real per-pass call labels on rolled layers."""
+    """Downstream tagging accepts real per-pass call labels on rolled layers."""
 
     def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
         """Return a per-pass cone label that matches no aggregate label."""
@@ -185,8 +185,8 @@ def test_intervention_node_spec_cone_matches_call_labels(
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.color == node_spec_mod.INTERVENTION_CONE_COLOR
-    assert styled.penwidth == 1.75
+    assert styled.extra_attrs["class"] == "tl-downstream"
+    assert (styled.color, styled.penwidth) == ("black", 1.0)
 
     unrelated = SimpleNamespace(
         layer_label="linear_1",

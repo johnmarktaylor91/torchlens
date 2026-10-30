@@ -13,6 +13,13 @@ from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
+from ._edit_highlighter import (
+    HighlighterStyle,
+    HighlightJob,
+    downstream_highlighter,
+    highlight_svg,
+    render_highlighted,
+)
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -104,6 +111,7 @@ class _ForwardRenderContext:
     graph_caption: str
     dot: graphviz.Digraph
     site_labels: set[str]
+    highlighter: HighlighterStyle | None = None
 
 
 @dataclass
@@ -291,6 +299,7 @@ def _resolve_draw_request(
         show_cone=request.show_cone,
         graph_overrides=cast(Optional[Dict[str, Any]], request.graph_overrides),
         user_node_spec_fn=request.node_spec_fn,
+        theme=theme,
     )
     return replace(request, node_spec_fn=intervention_node_spec_fn), theme, site_labels
 
@@ -564,6 +573,13 @@ def _resolve_forward_context(
         graph_caption=graph_caption,
         dot=dot,
         site_labels=site_labels,
+        highlighter=downstream_highlighter(
+            trace,
+            show_cone=request.show_cone,
+            theme=theme,
+            graph_overrides=request.graph_overrides,
+            fileformat=target.fileformat,
+        ),
     )
 
 
@@ -716,6 +732,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
             cast(graphviz.Digraph, forward_ir_builder),
             context.site_labels,
             cast(Optional[Dict[str, Any]], request.graph_overrides),
+            context.theme,
         )
     return _ForwardIRWork(
         render_ir=forward_render_ir,
@@ -941,6 +958,7 @@ def _emit_and_finish_forward(
                     for emission in work.mutated_parameter_nodes
                     for _, edge_args in emission.edges
                 ],
+                highlighter=context.highlighter,
             )
         trace._last_render_geometry = build_render_geometry_record(
             engine=rank_execution.get("engine", "neato"),
@@ -983,7 +1001,9 @@ def _emit_and_finish_forward(
 
     source_override = None
     trace._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
-    speculative = _speculative_render_for(trace, dot, target, compose_code_panel)
+    speculative = _speculative_render_for(
+        trace, dot, target, compose_code_panel or context.highlighter is not None
+    )
     if forward_render_ir.ordering_constraints:
         try:
             source_override, decision = _verify_and_apply_sibling_ordering(
@@ -1043,6 +1063,7 @@ def _emit_and_finish_forward(
             _raise_graphviz_failure("forward graph (notebook display)", notebook_source_path, error)
         if os.path.exists(notebook_source_path):
             os.remove(notebook_source_path)
+        graph_svg = _highlighted_svg(graph_svg, context.highlighter)
         if compose_code_panel:
             graph_svg = compose_graph_with_code_panel(
                 graph_svg,
@@ -1070,7 +1091,8 @@ def _speculative_render_for(
 
     The sibling-order verifier's ordered layout is the same layout the
     final render would run again; reuse needs the plain ``dot`` engine and a
-    direct (not code-panel-composed) artifact.
+    direct artifact (not code-panel-composed, not post-processed by the
+    downstream highlighter).
 
     Parameters
     ----------
@@ -1081,7 +1103,8 @@ def _speculative_render_for(
     target:
         Render target (the format to produce).
     compose_code_panel:
-        Whether the final render composes a code panel (no reuse then).
+        Whether the final render composes a code panel or post-processes the
+        SVG (no reuse then).
 
     Returns
     -------
@@ -1147,6 +1170,7 @@ def _publish_forward_render(
                     target.fileformat,
                     render_timeout,
                     render_image_root,
+                    highlighter=context.highlighter,
                 )
             else:
                 # Atomic publish (vizmech D20/D24): render into a sibling temp
@@ -1165,22 +1189,18 @@ def _publish_forward_render(
                         shutil.move(reusable, temp_rendered_path)
                         stderr_text: Any = cast(SpeculativeRender, speculative).last_stderr
                     else:
-                        cmd = [
+                        stderr_text = _run_forward_layout(
                             dot.engine,
-                            f"-T{target.fileformat}",
-                            "-o",
-                            os.path.abspath(temp_rendered_path),
-                            os.path.abspath(source_path),
-                        ]
-                        completed = _render_utils.run_bounded_subprocess(
-                            cmd,
-                            timeout=render_timeout,
-                            # T9 (grind-p3): relative node image refs resolve
-                            # against the scratch root via cwd, keeping the
-                            # per-run temp path out of the saved DOT source.
-                            cwd=str(render_image_root) if render_image_root else None,
+                            source_path,
+                            temp_rendered_path,
+                            _ForwardLayout(
+                                target.fileformat,
+                                render_timeout,
+                                render_image_root,
+                                final_source,
+                                context.highlighter,
+                            ),
                         )
-                        stderr_text = completed.stderr
                     layout_stderr = surface_layout_stderr(stderr_text, engine=dot.engine)
                     if target.fileformat == "svg":
                         _inline_svg_file_local_images(temp_rendered_path, render_image_root)
@@ -1214,6 +1234,53 @@ def _publish_forward_render(
     return final_source
 
 
+@dataclass(frozen=True)
+class _ForwardLayout:
+    """Format, bounds and post-processing of one forward layout run."""
+
+    fileformat: str
+    timeout: int
+    image_root: Path | None
+    final_source: str
+    highlighter: HighlighterStyle | None
+
+
+def _run_forward_layout(
+    engine: str, source_path: str, output_path: str, layout: _ForwardLayout
+) -> Any:
+    """Run the layout engine on the saved source into ``output_path``; return its stderr.
+
+    With the downstream highlighter on, the engine writes SVG, the highlighter
+    is laid under the changed arrows and nodes, and the requested format is
+    written from the processed SVG (:mod:`._edit_highlighter`).
+    """
+
+    def run(fileformat: str, path: str) -> Any:
+        """Run ``engine -T<fileformat> -o path source`` bounded."""
+
+        return _render_utils.run_bounded_subprocess(
+            [engine, f"-T{fileformat}", "-o", os.path.abspath(path), os.path.abspath(source_path)],
+            timeout=layout.timeout,
+            # T9 (grind-p3): relative node image refs resolve against the
+            # scratch root via cwd, keeping the per-run temp path out of the
+            # saved DOT source.
+            cwd=str(layout.image_root) if layout.image_root else None,
+        )
+
+    if layout.highlighter is None:
+        return run(layout.fileformat, output_path).stderr
+    job = HighlightJob(
+        layout.fileformat, layout.highlighter, layout.final_source, layout.image_root
+    )
+    return render_highlighted(lambda path: run("svg", path), output_path, job).stderr
+
+
+def _highlighted_svg(svg: str, highlighter: HighlighterStyle | None) -> str:
+    """Return ``svg`` with the downstream highlighter laid in, when one is drawn."""
+
+    return svg if highlighter is None else highlight_svg(svg, highlighter)
+
+
 @_with_per_draw_collapse_cache
 def draw(
     self: "Trace",
@@ -1241,7 +1308,7 @@ def draw(
     vis_renderer: VisRendererLiteral = "graphviz",
     vis_theme: str = "torchlens",
     vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
-    vis_show_cone: bool = True,
+    vis_show_cone: bool = False,
     code_panel: CodePanelOption = False,
     node_overlay: "str | OverlayScores | Callable[[Any], Any] | None" = None,
     node_label_fields: list[str] | None = None,

@@ -86,7 +86,8 @@ LEGEND_ROLES = (
     "buffer",
     "mutated parameter",
     "boolean",
-    "intervention/cone",
+    "edited",
+    "changed by the edit",
 )
 
 #: Shapes that never stand for a legend role (layout helpers, image nodes).
@@ -147,28 +148,26 @@ def drawn_legend_roles(
 
     A role counts only when a node was painted with it: its rendered fill
     (and, for buffers and mutated Parameters, the cylinder), or for
-    interventions the site or cone outline or the intervention node's fill.
+    interventions the ``tl-edited`` and ``tl-downstream`` SVG classes the
+    edit marks carry.
     Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
     counts as parameterized.
     """
 
-    from .node_spec import (
-        INTERVENTION_CONE_COLOR,
-        INTERVENTION_HOOK_FILL_COLOR,
-        INTERVENTION_SITE_COLOR,
-    )
+    from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 
     fills = _role_fills(theme)
-    marks = {INTERVENTION_SITE_COLOR.lower(), INTERVENTION_CONE_COLOR.lower()}
-    hook_fill = INTERVENTION_HOOK_FILL_COLOR.lower()
     roles: set[str] = set()
     for attrs in node_attrs:
         shape = str(attrs.get("shape", "")).lower()
         if shape in _NON_ROLE_SHAPES or "invis" in str(attrs.get("style", "")):
             continue
         fill = str(attrs.get("fillcolor", "")).lower()
-        if str(attrs.get("color", "")).lower() in marks or fill == hook_fill:
-            roles.add("intervention/cone")
+        classes = str(attrs.get("class", "")).split()
+        if EDITED_NODE_CLASS in classes:
+            roles.add("edited")
+        if DOWNSTREAM_NODE_CLASS in classes:
+            roles.add("changed by the edit")
         if shape == "cylinder":
             if fill in fills["buffer"]:
                 roles.add("buffer")

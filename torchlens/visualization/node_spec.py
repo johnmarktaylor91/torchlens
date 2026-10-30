@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from ..data_classes.layer import Layer
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
+    from .themes import VisualizationTheme
 
 __tl_layer__ = "L7"
 
@@ -91,6 +92,8 @@ def render_lines_to_html(lines: list[str]) -> str:
     """Render plain-text node rows as a Graphviz HTML-like table label.
 
     The first row is bolded as the node title; subsequent rows render plain.
+    Edit rows (:class:`._edit_marks.EditRow`) render last-row style: bold, in
+    the edit purple, after a 4 pt gap.
 
     Parameters
     ----------
@@ -103,8 +106,19 @@ def render_lines_to_html(lines: list[str]) -> str:
         A string suitable for Graphviz ``label=<...>`` syntax.
     """
 
+    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html
+
     rows = []
+    gap_drawn = False
     for index, line in enumerate(lines):
+        if isinstance(line, EditRow):
+            # An edit row: a 4 pt gap above the first one (no rule), then the
+            # bold purple delta line.
+            if not gap_drawn and index > 0:
+                rows.append(EDIT_GAP_ROW)
+                gap_drawn = True
+            rows.append(f'<TR><TD ALIGN="CENTER">{edit_row_html(line, line.color)}</TD></TR>')
+            continue
         text = escape(str(line), quote=False)
         if index == 0:
             text = f"<B>{text}</B>"
@@ -255,25 +269,45 @@ def intervention_site_and_cone_labels(
     return site_labels, cone_labels - site_labels
 
 
+def _with_svg_class(extra_attrs: dict[str, str], name: str) -> dict[str, str]:
+    """Return ``extra_attrs`` with ``name`` added to its Graphviz ``class`` list."""
+
+    classes = str(extra_attrs.get("class", "")).split()
+    if name not in classes:
+        classes.append(name)
+    return {**extra_attrs, "class": " ".join(classes)}
+
+
 def make_intervention_node_spec_fn(
     trace: Trace,
     *,
     show_cone: bool,
     graph_overrides: dict[str, Any] | None,
     user_node_spec_fn: NodeSpecFn | None,
+    theme: VisualizationTheme | None = None,
 ) -> NodeSpecFn | None:
-    """Build a node callback that applies intervention site/cone styling.
+    """Build a node callback that marks edited nodes and tags downstream ones.
+
+    An edited node keeps its fill, shape and dash and gets the edit purple
+    ring (2.5 pt) and a last label row naming the edit (``Δ zero_ablate``),
+    with the full spelling in its tooltip. With ``show_cone`` a node the edit
+    changed downstream keeps its normal outline and only gains the
+    ``tl-downstream`` SVG class; the renderer lays the translucent
+    highlighter under it and its out-edges after layout
+    (:mod:`._edit_highlighter`).
 
     Parameters
     ----------
     trace:
         Log whose intervention spec should be visualized.
     show_cone:
-        Whether downstream cone members should be styled.
+        Whether downstream nodes should be tagged for the highlighter.
     graph_overrides:
         Graph override dictionary, including optional intervention style keys.
     user_node_spec_fn:
         Existing user callback to run after TorchLens intervention styling.
+    theme:
+        Resolved skin; the dark skin draws the edit in its lighter purple.
 
     Returns
     -------
@@ -281,6 +315,17 @@ def make_intervention_node_spec_fn(
         Combined callback, or the original callback when there is no
         intervention overlay to apply.
     """
+
+    from ._edit_marks import (
+        DOWNSTREAM_NODE_CLASS,
+        EDIT_RING_PENWIDTH,
+        EDITED_NODE_CLASS,
+        edit_ink,
+        edit_marks_by_site,
+        edit_marks_for_node,
+        edit_rows,
+        edit_tooltip,
+    )
 
     # Build BOTH a pass-qualified site set (for unrolled per-pass Op nodes) and an
     # aggregate site set (for rolled multi-pass Layer nodes). cone_of_effect
@@ -290,6 +335,7 @@ def make_intervention_node_spec_fn(
     site_ops = intervention_sites_for_log(trace)
     site_pass_labels: set[str] = set()
     site_agg_labels: set[str] = set()
+    site_keys_by_layer: dict[str, list[str]] = {}
     for site_op in site_ops:
         pass_label = get_multipass_attr(site_op, "label", None, multipass=None)
         if isinstance(pass_label, str):
@@ -297,25 +343,19 @@ def make_intervention_node_spec_fn(
         agg_label = getattr(site_op, "layer_label", None)
         if isinstance(agg_label, str):
             site_agg_labels.add(agg_label)
+            site_keys_by_layer.setdefault(agg_label, []).append(_site_sort_key(site_op))
     _, cone_labels = intervention_site_and_cone_labels(trace, show_cone=show_cone)
     if not site_pass_labels and not site_agg_labels and not cone_labels:
         return user_node_spec_fn
 
+    marks = edit_marks_by_site(trace, site_ops)
     site_color = str(
-        intervention_graph_override(
-            graph_overrides, "intervention_site_color", INTERVENTION_SITE_COLOR
-        )
-    )
-    cone_color = str(
-        intervention_graph_override(
-            graph_overrides, "intervention_cone_color", INTERVENTION_CONE_COLOR
-        )
+        intervention_graph_override(graph_overrides, "intervention_site_color", edit_ink(theme))
     )
     site_penwidth = float(
-        intervention_graph_override(graph_overrides, "intervention_site_penwidth", 3.0)
-    )
-    cone_penwidth = float(
-        intervention_graph_override(graph_overrides, "intervention_cone_penwidth", 1.75)
+        intervention_graph_override(
+            graph_overrides, "intervention_site_penwidth", EDIT_RING_PENWIDTH
+        )
     )
 
     def intervention_node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec:
@@ -344,9 +384,19 @@ def make_intervention_node_spec_fn(
 
         spec = default_spec
         if is_site:
-            spec = spec.replace(color=site_color, penwidth=site_penwidth)
+            node_marks = edit_marks_for_node(marks, layer_log, site_keys_by_layer)
+            tooltip = edit_tooltip(node_marks)
+            spec = spec.replace(
+                color=site_color,
+                penwidth=site_penwidth,
+                lines=[*spec.lines, *edit_rows(node_marks, site_color)],
+                tooltip=f"{spec.tooltip}; {tooltip}" if spec.tooltip else tooltip,
+                extra_attrs=_with_svg_class(spec.extra_attrs, EDITED_NODE_CLASS),
+            )
         elif cone_match_labels & cone_labels:
-            spec = spec.replace(color=cone_color, penwidth=cone_penwidth)
+            spec = spec.replace(
+                extra_attrs=_with_svg_class(spec.extra_attrs, DOWNSTREAM_NODE_CLASS),
+            )
 
         if user_node_spec_fn is None:
             return spec
