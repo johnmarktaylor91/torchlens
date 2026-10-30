@@ -1,0 +1,80 @@
+[
+  {
+    "source": "The traveler spent a year in New Zealand before returning home.",
+    "source_span": [
+      29,
+      40
+    ],
+    "target": "The capital of New Zealand is",
+    "target_span": [
+      15,
+      26
+    ],
+    "entity": "New Zealand"
+  },
+  {
+    "source": "The report focuses on South Africa and its history.",
+    "source_span": [
+      22,
+      34
+    ],
+    "target": "The capital of South Africa is",
+    "target_span": [
+      15,
+      27
+    ],
+    "entity": "South Africa"
+  },
+  {
+    "source": "The delegation arrived from United Kingdom yesterday.",
+    "source_span": [
+      28,
+      42
+    ],
+    "target": "The capital of United Kingdom is",
+    "target_span": [
+      15,
+      29
+    ],
+    "entity": "United Kingdom"
+  },
+  {
+    "source": "They sailed toward Costa Rica during the summer.",
+    "source_span": [
+      19,
+      29
+    ],
+    "target": "The capital of Costa Rica is",
+    "target_span": [
+      15,
+      25
+    ],
+    "entity": "Costa Rica"
+  },
+  {
+    "source": "The museum displayed a map of Saudi Arabia in the gallery.",
+    "source_span": [
+      30,
+      42
+    ],
+    "target": "The capital of Saudi Arabia is",
+    "target_span": [
+      15,
+      27
+    ],
+    "entity": "Saudi Arabia"
+  },
+  {
+    "source": "Scientists gathered in South Korea for a meeting.",
+    "source_span": [
+      23,
+      34
+    ],
+    "target": "The capital of South Korea is",
+    "target_span": [
+      15,
+      26
+    ],
+    "entity": "South Korea"
+  }
+]
