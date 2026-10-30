@@ -321,6 +321,19 @@ def _render_node_label(node: GraphNode, vis_mode: str) -> str:
     return node.layer_label
 
 
+def _relation_label(node: GraphNode) -> str:
+    """Return the spelling relation fields use for ``node`` as a parent or child.
+
+    Finished traces record a multi-pass Op in ``parent_arg_positions`` and edge-use
+    records by its pass-qualified label (``add_1_1:3``) and a single-pass Op by its
+    bare layer label, so argument-label matching must compare against the same
+    spelling. Non-Op nodes keep their layer label.
+    """
+    if isinstance(node, Op) and int(getattr(node, "num_passes", 1) or 1) > 1:
+        return str(node.label)
+    return str(node.layer_label)
+
+
 def _render_node_name(node: GraphNode, vis_mode: str) -> str:
     """Return the DOT node name the renderer declares for ``node``.
 
@@ -884,6 +897,7 @@ __all__ = [
     "_SVG_VIEWBOX_RE",
     "_open_file_quietly",
     "_render_node_label",
+    "_relation_label",
     "_render_node_name",
     "_theme_annotation_ink",
     "_theme_cluster_attrs",

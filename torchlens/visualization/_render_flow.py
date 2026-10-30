@@ -1525,7 +1525,6 @@ def _render_edge_occurrences(
         uses yield multiple pairs; ordinary edges yield one pair.
     """
 
-    parent_layer_label = parent_node.layer_label
     child_layer_label = child_node.layer_label
     parent_render_label = _render_node_label(parent_node, vis_mode)
     child_render_label = _render_node_label(child_node, vis_mode)
@@ -1534,13 +1533,16 @@ def _render_edge_occurrences(
 
     parent_render_label = _render_node_label(parent_node, "unrolled")
     child_render_label = _render_node_label(child_node, "unrolled")
+    # Relation fields spell a multi-pass Op pass-qualified, a single-pass Op bare.
+    parent_relation_label = _relation_label(parent_node)
+    child_relation_label = _relation_label(child_node)
     if isinstance(child_node, Op):
         matches = [
             edge_use
             for edge_use in child_node.edge_uses
             if (
-                edge_use.parent_label == parent_layer_label
-                and edge_use.child_label == child_layer_label
+                edge_use.parent_label == parent_relation_label
+                and edge_use.child_label == child_relation_label
             )
         ]
         if matches:
@@ -1568,7 +1570,7 @@ def _render_edge_occurrences(
             if not isinstance(arg_positions, Mapping):
                 continue
             for arg_loc, arg_label in arg_positions.items():
-                if arg_label != parent_layer_label:
+                if arg_label != parent_relation_label:
                     continue
                 prefix = "arg" if arg_type == "args" else "kwarg"
                 occurrence_key = (
