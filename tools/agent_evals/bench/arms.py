@@ -71,19 +71,19 @@ class Arm:
 
 
 ARMS: dict[str, Arm] = {
-    "A": Arm("A", "plain PyTorch and numerical libraries", None, (), "plain_pytorch/INDEX.md"),
+    "A": Arm("A", "plain PyTorch and numerical libraries", None, (), "arm-a-pytorch.md"),
     "B": Arm(
         "B", "A plus the library under test and its agent index", "torchlens", ("{repo}",), None
     ),
     "C": Arm(
-        "C", "A plus nnsight, local execution only", "nnsight", ("nnsight",), "nnsight/INDEX.md"
+        "C", "A plus nnsight, local execution only", "nnsight", ("nnsight",), "nnsight/nnsight.md"
     ),
     "D": Arm(
         "D",
         "A plus TransformerLens",
         "transformer_lens",
         ("transformer_lens",),
-        "transformer_lens/INDEX.md",
+        "transformerlens/transformerlens.md",
     ),
 }
 
