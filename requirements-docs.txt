@@ -1,4 +1,8 @@
-# Documentation site build (Python >= 3.11). Exact pins; bump them together.
+# Documentation site build (Python >= 3.11). Exact pins; bump them together and
+# regenerate requirements-docs.lock (every package, with hashes) from this file:
+#   uv pip compile requirements-docs.txt --generate-hashes --python-version 3.12 \
+#     --universal -o requirements-docs.lock
+# Install with: uv pip install --require-hashes -r requirements-docs.lock
 # The docs build reads mkdocs.yml and docs/ and needs no torch install: the API
 # reference is collected from source by static analysis.
 zensical==0.0.73
@@ -6,5 +10,7 @@ mkdocstrings==1.0.8
 mkdocstrings-python==2.0.10
 griffe==2.4.1
 PyYAML==6.0.3
-# Versioned builds: the Zensical fork of mike, pinned to the 2.2.0+zensical-0.1.0 tag.
-mike @ git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3
+# Versioned builds: Zensical's fork of mike, from its published GitHub release
+# 2.2.0+zensical-0.1.0 (source archive, sha256 pinned in requirements-docs.lock).
+# The fork is not on PyPI; it is transitional until Zensical ships native versioning.
+mike @ https://github.com/squidfunk/mike/archive/refs/tags/2.2.0%2Bzensical-0.1.0.tar.gz

@@ -29,11 +29,12 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          cache-dependency-glob: "requirements-docs.txt"
+          cache-dependency-glob: "requirements-docs.lock"
 
-      # Exact pins for the docs toolchain live in requirements-docs.txt.
+      # Every package pinned with its hash; regenerate the lock from
+      # requirements-docs.txt (the command is in that file's header).
       - name: Install the docs toolchain
-        run: uv pip install --system -r requirements-docs.txt
+        run: uv pip install --system --require-hashes -r requirements-docs.lock
 
       - name: Agent index and llms.txt match the task cards
         run: python tools/docs/build_agent_index.py --check
