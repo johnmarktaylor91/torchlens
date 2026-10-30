@@ -11,10 +11,15 @@ REPO=$(pwd)
 ENVS="$OUT/envs"
 cd tools || exit 2
 status=0
+# The harness needs Python 3.10 or later; bootstrap one with uv where the system's is older.
+PY3=python3
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+  uv venv -q -p 3.10 "$OUT/harness-py" && PY3="$OUT/harness-py/bin/python"
+fi
 
 for arm in $ARMS; do
   echo "== build-env $arm"
-  if ! python3 -m agent_evals.bench build-env --arm "$arm" --dest "$ENVS/$arm" --repo "$REPO" \
+  if ! "$PY3" -m agent_evals.bench build-env --arm "$arm" --dest "$ENVS/$arm" --repo "$REPO" \
       >"$OUT/build-$arm.log" 2>&1; then
     echo "build-env $arm FAILED"; tail -n 30 "$OUT/build-$arm.log"; status=1
   else
