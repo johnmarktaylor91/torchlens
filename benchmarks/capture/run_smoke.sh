@@ -9,12 +9,12 @@ python3 -c 'import sys; sys.path.insert(0, "scripts"); import smoke_ci_parity as
 PY=.venv-ci-smoke/bin/python
 "$PY" -c 'import torch, torchvision, transformers; print(f"torch=={torch.__version__}\ntorchvision=={torchvision.__version__}\ntransformers=={transformers.__version__}")' > outputs/constraints.txt
 cat outputs/constraints.txt
+"$PY" -m pytest tests/test_capture_benchmark_harness.py -q -p no:cacheprovider 2>&1 | tail -15
 grep -v '^#' benchmarks/capture/peers.txt | grep . | while read -r peer; do
   if ! uv pip install --python "$PY" -q -c outputs/constraints.txt "$peer" > "outputs/install-${peer%%=*}.log" 2>&1; then
     echo "peer install failed: $peer"; tail -5 "outputs/install-${peer%%=*}.log"
   fi
 done
 uv pip freeze --python "$PY" | grep -i -E '^(torch|torchvision|transformers|nnsight|captum|thingsvision|transformer.lens|psutil)==' | tee outputs/peer-freeze.txt
-"$PY" -m pytest tests/test_capture_benchmark_harness.py -q -p no:cacheprovider 2>&1 | tail -15
 "$PY" benchmarks/capture/driver.py --smoke --processes "${SMOKE_PROCESSES:-1}" --warmups "${SMOKE_WARMUPS:-2}" \
   --samples "${SMOKE_SAMPLES:-10}" --budget-s 20 --out outputs/capture-smoke.json 2>&1 | tail -400

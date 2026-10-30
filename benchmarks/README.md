@@ -28,6 +28,13 @@ Supporting files:
   `TORCHLENS_BENCH_HOST_LABEL` (default `benchmark-host`), never the real hostname, and
   captured output spells the checkout as `<repo>`.
 
+## Capture benchmarks
+
+`capture/` holds the matched-contract suites (A: every arm produces the same output;
+B: what each TorchLens operation keeps), the operation fixtures, the real-model panel,
+the mech-interp workloads and the "what hooks miss" census, all writing one JSON result
+format. See `capture/README.md`.
+
 ## Intervention overhead
 
 `intervention_overhead.py` is the earlier focused benchmark for TorchLens

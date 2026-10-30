@@ -1,9 +1,12 @@
 # Peer packages for the capture benchmarks, installed only into the benchmark
 # environment, never into TorchLens's dependencies. Pins are exact; run_smoke.sh
 # installs each one under a constraint that keeps the environment's torch,
-# torchvision and transformers versions.
-nnsight
-captum
-thingsvision
-transformer_lens
-psutil
+# torchvision and transformers versions. Resolved against torch 2.13.0, torchvision
+# 0.28.0 and transformers 5.18.0 on python 3.10. transformer-lens pulls torchtyping,
+# whose pytest plugin fails to import on this torch, so tests run before the peers
+# are installed.
+nnsight==0.8.1
+captum==0.9.0
+thingsvision==2.3.6
+transformer-lens==4.3.0
+psutil==7.2.2
