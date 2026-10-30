@@ -96,7 +96,7 @@ def prompt_section(spec: str) -> str:
             break
         body.append(line)
     title = next((line for line in lines if line.startswith("# ")), "")
-    return "\n".join([title, "", *body]).strip() + "\n"
+    return "\n".join([title, "", "\n".join(body).strip()]).strip() + "\n"
 
 
 def _natives(raw: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
