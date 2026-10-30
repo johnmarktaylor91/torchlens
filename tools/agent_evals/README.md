@@ -64,3 +64,9 @@ offline tests.
 `measure_budgets.py` measures the agent surface's responses over the classics corpus against the
 budget configuration in `torchlens/agent/_budgets.py`; the method and the latest numbers are in
 `BUDGETS.md`.
+
+## Agent benchmark
+
+`bench/` holds the harness for the agent benchmark: coding agents reimplement interpretability
+methods from primitives in separate arms (plain PyTorch, or plain PyTorch plus one library),
+scored by deterministic oracles that a separate author writes. See `bench/README.md`.

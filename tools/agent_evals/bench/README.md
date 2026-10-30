@@ -14,7 +14,7 @@ CI; the tests in `tests/test_agent_bench.py` use a scripted fake agent instead.
 
 | Module | Job |
 | --- | --- |
-| `registry.py` | Loads each task directory: spec, public inputs, held-out inputs, grader command, arms |
+| `registry.py` | Loads each task directory: prompt, inputs, held-out inputs, grader, arms |
 | `arms.py` | The four arms; builds each arm's environment from one base and audits its imports |
 | `guards.py` | Import guards that disable natives; the post-run audit of the agent's code |
 | `natives.json` | Per task and arm, the native implementations the guard disables (draft) |
