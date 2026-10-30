@@ -99,7 +99,7 @@ def oracle_readout(model, tok, prompts, lens, cfg):
         row = []
         for l in src:
             h = rec.acts[l][0, -1].float()
-            logits = model.embed_out(model.gpt_neox.final_layer_norm(h @ lens[l].T))
+            logits = model.get_output_embeddings()(model.gpt_neox.final_layer_norm(h @ lens[l].T))
             row.append(torch.topk(logits, k).indices.tolist())
         top.append(row)
     return top

@@ -89,10 +89,10 @@ def readout(model, tok, prompts, lens, cfg, variant=None):
             t = J @ h
             if variant != "no_final_norm":
                 t = model.gpt_neox.final_layer_norm(t)
-            logits = model.embed_out(t)
+            logits = model.get_output_embeddings()(t)
             row.append(torch.topk(logits, k).indices.tolist())
         top.append(row)
-        model_top.append(torch.topk(model.embed_out(model.gpt_neox.final_layer_norm(h_final)), k).indices.tolist())
+        model_top.append(torch.topk(model.get_output_embeddings()(model.gpt_neox.final_layer_norm(h_final)), k).indices.tolist())
     handle.remove()
     return {"layers": src, "top10": top, "model_top10": model_top}
 
