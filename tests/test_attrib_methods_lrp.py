@@ -1,7 +1,7 @@
 """F06 B9: the epsilon-LRP litmus recipe + the SiteStash mechanism (D30-D32).
 
 The recipe below is the CLEANROOM docs recipe from
-``docs/recipes/lrp_epsilon_litmus.md`` transcribed verbatim (keep the two in
+``docs/field-guide/lrp_epsilon_litmus.md`` transcribed verbatim (keep the two in
 lockstep) -- written from the published equations, never from LGPL code.
 TorchLens ships only the pairing mechanism (``SiteStash``); rule catalogs
 remain the LRP ecosystem's territory (no registry, twice reaffirmed).
@@ -28,7 +28,7 @@ from torchlens.attribution import AttributionError, SiteStash
 # heavy + real_model (a smoke mark would combine tiers and fail the marker lint).
 pytestmark = []
 
-# --- BEGIN docs recipe (docs/recipes/lrp_epsilon_litmus.md, verbatim) -------
+# --- BEGIN docs recipe (docs/field-guide/lrp_epsilon_litmus.md, verbatim) -------
 
 
 def epsilon_lrp(

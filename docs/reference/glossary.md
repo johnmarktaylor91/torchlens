@@ -1413,7 +1413,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   and the decoder ops are trace nodes between the site and its consumers;
   `latents_site` names the latents node (`None` with logging off). The spliced
   outputs are the same with logging on and off. Recipe:
-  `docs/recipes/pretrained_saes.md`.
+  `docs/field-guide/pretrained_saes.md`.
 
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
@@ -1452,7 +1452,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
   `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
   dataset (only the retained top entries). Recipe:
-  `docs/recipes/sae_latent_export.md`.
+  `docs/field-guide/sae_latent_export.md`.
 
 **write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
 : Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
@@ -1462,7 +1462,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   carry every token's activation and give `feature_stats` `max` and
   `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
   `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
-  warns once past 256 MiB. Recipe: `docs/recipes/sae_latent_export.md`.
+  warns once past 256 MiB. Recipe: `docs/field-guide/sae_latent_export.md`.
 
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a

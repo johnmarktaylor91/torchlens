@@ -271,7 +271,7 @@ Output:
 with a wider set of class activation maps (Grad-CAM++, Smooth Grad-CAM++, Score-CAM, Layer-CAM
 and others) and its own automatic target-layer choice. TorchLens ships native Grad-CAM only and
 no torch-cam extra; use torch-cam directly when you need another CAM variant. The
-[torch-cam recipe](../recipes/torchcam.md) runs both on one model and checks that their Grad-CAM
+[torch-cam recipe](../field-guide/torchcam.md) runs both on one model and checks that their Grad-CAM
 maps agree.
 
 ## `layer_integrated_gradients`
@@ -1328,7 +1328,7 @@ result.show()
 
 To save the rendering to a file, write the payload's HTML:
 `open("tokens.html", "w").write(result.payload().to_html())`. Per-step attribution over
-generated text is a recipe: [per-step attribution for generated text](../recipes/generation_step_attribution.md).
+generated text is a recipe: [per-step attribution for generated text](../field-guide/generation_step_attribution.md).
 
 Input Integrated Gradients through HF `inputs_embeds` with every integer input held fixed;
 signed per-token scores sum-reduce the embedding width so completeness accounting survives.
@@ -1355,7 +1355,7 @@ and the convergence record.
 pairing store (`stash`/`fetch`, LIFO pairing proven on reused modules, leftovers disclosed).
 There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
 with its per-site conservation ledger lives in
-[`docs/recipes/lrp_epsilon_litmus.md`](../recipes/lrp_epsilon_litmus.md).
+[`docs/field-guide/lrp_epsilon_litmus.md`](../field-guide/lrp_epsilon_litmus.md).
 
 ### IG step batching (`step_batch_size`, `step_audit`)
 

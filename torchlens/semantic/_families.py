@@ -95,6 +95,6 @@ def family_facet_name(base: Any, index: Any) -> str:
             code="sae_latent_family_unknown",
             remedy=f"register the SAE under that name first, "
             f"tl.bridge.sae.register({base!r}, sae, site='<site>'), or use one of the "
-            "registered names; see docs/recipes/pretrained_saes.md",
+            "registered names; see docs/field-guide/pretrained_saes.md",
         )
     return cast(str, family.selector_name(index))

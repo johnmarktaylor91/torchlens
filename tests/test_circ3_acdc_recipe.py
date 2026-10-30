@@ -1,4 +1,4 @@
-"""The ACDC driver-loop recipe (``docs/recipes/acdc_ioi.md``) runs cold on CPU.
+"""The ACDC driver-loop recipe (``docs/field-guide/acdc_ioi.md``) runs cold on CPU.
 
 The page's fences run top to bottom in one namespace, each ``RESULT``
 compared with its ``# recipe-test`` header (the recipe-page convention of
@@ -45,7 +45,7 @@ def page(tmp_path_factory) -> dict[str, Any]:
             code = match.group("code")
             header = HEADER_RE.match(code.splitlines()[0])
             assert header is not None and header.group("tool") == "transformers", index
-            filename = f"docs/recipes/acdc_ioi.md:python-block-{index}"
+            filename = f"docs/field-guide/acdc_ioi.md:python-block-{index}"
             linecache.cache[filename] = (len(code), None, code.splitlines(True), filename)
             namespace["RESULT"] = None
             exec(compile(code, filename, "exec"), namespace)

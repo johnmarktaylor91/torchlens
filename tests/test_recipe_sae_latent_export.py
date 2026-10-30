@@ -1,7 +1,7 @@
 """Page-content checks for the SAE latent export recipe page (SAEDashboard and delphi files).
 
 The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
-registry lists ``docs/recipes/sae_latent_export.md``; this module keeps the page-content
+registry lists ``docs/field-guide/sae_latent_export.md``; this module keeps the page-content
 checks.
 """
 
@@ -19,7 +19,7 @@ assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
 recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
-PAGE = "docs/recipes/sae_latent_export.md"
+PAGE = "docs/field-guide/sae_latent_export.md"
 
 
 def test_sae_latent_export_recipe_names_the_consumer_pins() -> None:

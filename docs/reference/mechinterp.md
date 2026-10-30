@@ -319,7 +319,7 @@ Circuit test cases on GPT-2 small (CPU):
   8 of the 20 edges into `logits`.
 
 ACDC-style discovery is a recipe, not a TorchLens loop:
-[docs/recipes/acdc_ioi.md](../recipes/acdc_ioi.md) walks the receivers from
+[docs/field-guide/acdc_ioi.md](../field-guide/acdc_ioi.md) walks the receivers from
 the output, patches each incoming edge with `patch_edges`, prunes it when
 the metric moves by less than a threshold, and records every decision as a
 ledger verdict.
