@@ -115,7 +115,7 @@ def vit_oracle(x):
 def oracle(inputs, cache_file):
     if os.path.isfile(cache_file):
         with np.load(cache_file, allow_pickle=True) as z:
-            return {k: z[k] for k in z.files}, json.loads(str(z["_best"]))
+            return {k: z[k] for k in z.files if k != "_best"}, json.loads(str(z["_best"]))
     cfg, layers, x, labels = load_inputs(inputs)
     cat = (labels[:, None] != labels[None, :]).astype(np.float64)
     rd = {}

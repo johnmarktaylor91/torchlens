@@ -39,6 +39,9 @@ def cnn_features(x):
         return hook
 
     def save_relu(prefix):
+        # torchvision's block ReLU is shared by both activations and runs in
+        # place, so its hook input is already overwritten when the hook fires:
+        # the residual sum is rebuilt from the cloned bn2 output and the shortcut.
         count = {"n": 0}
 
         def hook(mod, inp, out):
@@ -46,9 +49,13 @@ def cnn_features(x):
             if count["n"] == 1:
                 rec[f"{prefix}.relu1"] = out.detach().clone()
             else:
-                rec[f"{prefix}.add"] = inp[0].detach().clone()  # the sum, before the final ReLU
                 rec[f"{prefix}.out"] = out.detach().clone()
         return hook
+
+    def save_block_input(prefix):
+        def pre(mod, args):
+            rec[f"{prefix}._in"] = args[0].detach().clone()
+        return pre
 
     handles.append(model.relu.register_forward_hook(save("stem.relu")))
     handles.append(model.maxpool.register_forward_hook(save("stem.maxpool")))
@@ -61,12 +68,19 @@ def cnn_features(x):
             if blk.downsample is not None:
                 handles.append(blk.downsample.register_forward_hook(save(f"{p}.downsample")))
             handles.append(blk.relu.register_forward_hook(save_relu(p)))
+            handles.append(blk.register_forward_pre_hook(save_block_input(p)))
     handles.append(model.avgpool.register_forward_hook(save("avgpool")))
     handles.append(model.fc.register_forward_hook(save("fc")))
     with torch.no_grad():
         model(x)
     for h in handles:
         h.remove()
+    for stage in (1, 2, 3, 4):
+        for b in (0, 1):
+            p = f"layer{stage}.{b}"
+            shortcut = rec[f"{p}.downsample"] if f"{p}.downsample" in rec else rec[f"{p}._in"]
+            rec[f"{p}.add"] = rec[f"{p}.bn2"] + shortcut
+            rec.pop(f"{p}._in")
     return rec
 
 
