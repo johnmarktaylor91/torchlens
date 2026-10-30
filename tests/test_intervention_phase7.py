@@ -424,7 +424,11 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
 
 class MultiPassAddBlock(torch.nn.Module):
-    """Block whose two chained adds group into one two-pass layer."""
+    """Block whose one loop-body add is one two-pass layer.
+
+    Grouping rule row 52: an add written once in a loop over modules is one Layer
+    with a pass per iteration (two adds on one line would be two Layers, row 21).
+    """
 
     def __init__(self) -> None:
         """Initialize three summed projections plus an output projection."""
@@ -436,7 +440,7 @@ class MultiPassAddBlock(torch.nn.Module):
         self.out_proj = torch.nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Sum three projections through two structurally corresponding adds.
+        """Sum three projections through one add run twice from a loop.
 
         Parameters
         ----------
@@ -449,7 +453,10 @@ class MultiPassAddBlock(torch.nn.Module):
             Projected sum.
         """
 
-        return self.out_proj(self.first(x) + self.second(x) + self.third(x))
+        total = self.first(x)
+        for proj in (self.second, self.third):
+            total = total + proj(x)
+        return self.out_proj(total)
 
 
 class MultiPassAdd(torch.nn.Module):

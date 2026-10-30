@@ -71,7 +71,9 @@ def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     from torchlens.visualization.overlays import resolve_overlay_request
 
     _, _, trace = _traced_toy()
-    selection = tl.units("relu_1_2", [(0, 0, 0, 0), (0, 1, 1, 1)]).resolve(trace)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
+    # so the selection addresses its first pass by the pass-qualified label.
+    selection = tl.units("relu_1_2:1", [(0, 0, 0, 0), (0, 1, 1, 1)]).resolve(trace)
     scores = resolve_overlay_request(trace, selection)
     assert scores == {"relu_1_2": 2}  # 2 selected elements, not "member: yes"
 
@@ -97,8 +99,10 @@ def test_cone_of_effect_op_origins_still_work():
     from torchlens.intervention.replay import cone_of_effect
 
     _, _, trace = _traced_toy()
-    cone = cone_of_effect(trace, trace["relu_1_2"].ops)
-    assert any(op.layer_label == "relu_2_4" for op in cone)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes;
+    # the cone from its first call reaches its second call downstream.
+    cone = cone_of_effect(trace, [trace["relu_1_2:1"]])
+    assert any(op.label == "relu_1_2:2" for op in cone)
 
 
 def test_do_accepts_find_sites_output():

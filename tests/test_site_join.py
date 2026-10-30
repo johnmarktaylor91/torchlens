@@ -117,14 +117,33 @@ class _Tied(nn.Module):
         return x
 
 
+class _BranchAct(nn.Module):
+    """Applies a relu written on a different line for each branch."""
+
+    def forward(self, x: torch.Tensor, branch: int) -> torch.Tensor:
+        if branch == 0:
+            return torch.relu(x)
+        if branch == 1:
+            return torch.relu(x)
+        return torch.relu(x)
+
+
 class _Shrink(nn.Module):
+    """Three same-site relus over three shapes, outside any recurrence group.
+
+    Each call takes its own branch line, so the relus are three single-pass
+    layers (grouping rule rows 41-42) that share one site key (each is the
+    first relu of its call). A reused ``nn.ReLU`` instance would instead be one
+    Layer with 3 passes (rule row 26), which the closure keeps by recurrence.
+    """
+
     def __init__(self) -> None:
         super().__init__()
-        self.act = nn.ReLU()
+        self.act = _BranchAct()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for k in (8, 4, 2):
-            x = self.act(x[:, :k])
+        for branch, k in enumerate((8, 4, 2)):
+            x = self.act(x[:, :k], branch)
         return x
 
 
@@ -297,7 +316,7 @@ def test_closure_reunites_degraded_same_site_cohorts() -> None:
 
 
 def test_closure_equivalence_guard_refuses_cross_shape_folds() -> None:
-    # The reused relu spans three shapes -> three distinct (shape-bearing)
+    # The same-site relus span three shapes -> three distinct (shape-bearing)
     # equivalence classes: the NORMATIVE guard keeps them separate. An
     # unguarded closure would mint a cross-shape group violating the live
     # shared-equivalence invariant.
@@ -337,8 +356,11 @@ def test_closure_keyless_rows_never_fold() -> None:
 
 @pytest.mark.heavy
 def test_resnet18_fold_group_census_pin() -> None:
-    # Pinned census fact (I-S3' family): the guarded closure mints exactly
-    # 8 beyond-recurrence fold groups on resnet18, all equivalence-uniform.
+    # Pinned census fact (I-S3' family). Grouping rule row 28: each
+    # BasicBlock's one ReLU module called twice is now one Layer with 2
+    # passes, so the 8 reused-relu pairs the guarded closure used to mint
+    # beyond recurrence are recurrence groups themselves, and the closure
+    # mints NO beyond-recurrence group on resnet18.
     torchvision = pytest.importorskip("torchvision")
     model = torchvision.models.resnet18()
     model.eval()
@@ -351,6 +373,10 @@ def test_resnet18_fold_group_census_pin() -> None:
         for group in set(groups.values())
         if len(group) > 1 and len(ops[next(iter(group))].recurrent_ops) != len(group)
     ]
-    assert len(beyond_recurrence) == 8
-    for group in beyond_recurrence:
+    assert len(beyond_recurrence) == 0
+    folded = [group for group in set(groups.values()) if len(group) > 1]
+    assert len(folded) == 8
+    for group in folded:
+        assert len(group) == 2
+        assert {ops[member].func_name for member in group} == {"relu"}
         assert len({ops[member].equivalence_class for member in group}) == 1

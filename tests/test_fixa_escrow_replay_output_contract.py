@@ -264,10 +264,12 @@ def test_resnet18_bare_output_negative_control_bit_identical():
     model = torchvision.models.resnet18(weights="IMAGENET1K_V1").eval()
     x = torch.randn(4, 3, 224, 224, generator=torch.Generator().manual_seed(1))
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    target = trace["conv2d_5_15"]
+    # grouping rule row 28: each BasicBlock's one ReLU module called twice is one
+    # Layer with 2 passes, so layer1.1.conv2 is the 14th Layer, not the 15th.
+    target = trace["conv2d_5_14"]
     assert target.output_of_modules == ("layer1.1.conv2",)
     fork = trace.fork()
-    _zero_ablate_whole_site(fork, "conv2d_5_15")
+    _zero_ablate_whole_site(fork, "conv2d_5_14")
 
     def zero_hook(_module, _inputs, output):
         return torch.zeros_like(output)
