@@ -1,0 +1,10 @@
+# Documentation site build (Python >= 3.11). Exact pins; bump them together.
+# The docs build reads mkdocs.yml and docs/ and needs no torch install: the API
+# reference is collected from source by static analysis.
+zensical==0.0.73
+mkdocstrings==1.0.8
+mkdocstrings-python==2.0.10
+griffe==2.4.1
+PyYAML==6.0.3
+# Versioned builds: the Zensical fork of mike, pinned to the 2.2.0+zensical-0.1.0 tag.
+mike @ git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3

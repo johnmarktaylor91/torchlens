@@ -1,0 +1,460 @@
+# Site map of the documentation: every page under docs/ appears once.
+#
+# section     where the page sits in the site map (ids below; order = navigation order)
+# publish     true when the page is in the built site now; the rest are excluded
+# group       optional sub-heading inside the section
+# moved_from  old docs-relative paths; published pages get a redirect from each
+# move_to     proposed physical location (not moved yet)
+# note        why a page sits where it does
+#
+# tools/docs/site_nav.py renders the navigation, exclusions and redirects in
+# mkdocs.yml from this file; `python tools/docs/site_nav.py --check` fails on drift.
+# Section titles live only here. "Field guide" is pencilled in: the fallback
+# "Techniques" is a one-line change to its title below.
+sections:
+  - id: home
+    title: Home
+  - id: get-started
+    title: Get started
+  - id: field-guide
+    title: Field guide
+  - id: gallery
+    title: Reproduction Gallery
+  - id: doors
+    title: Doors
+  - id: concepts
+    title: Concepts
+  - id: relation
+    title: Relation to other packages
+  - id: benchmarks
+    title: Benchmarks
+  - id: reference
+    title: Reference
+  - id: project
+    title: Project
+  - id: internal
+    title: Internal
+    internal: true
+pages:
+  - path: LIMITATIONS.md
+    section: project
+  - path: _perf_numbers.md
+    section: internal
+    note: included fragment; replaced by generated benchmark tables
+  - path: _perf_numbers_provisional.md
+    section: internal
+    note: included fragment; replaced by generated benchmark tables
+  - path: _watch_perf_numbers.md
+    section: internal
+    note: included fragment; replaced by generated benchmark tables
+  - path: acknowledgments.md
+    section: project
+  - path: activation_transform_persistence.md
+    section: concepts
+  - path: agent-reference/architecture.md
+    section: internal
+    move_to: internal/agent-reference/architecture.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/brainpipe-f20-spellings-documented-unstable.md
+    section: internal
+    move_to: internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/common-patterns.md
+    section: internal
+    move_to: internal/agent-reference/common-patterns.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/conventions.md
+    section: internal
+    move_to: internal/agent-reference/conventions.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/critical-invariants.md
+    section: internal
+    move_to: internal/agent-reference/critical-invariants.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/current-2-x-surface.md
+    section: internal
+    move_to: internal/agent-reference/current-2-x-surface.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
+    section: internal
+    move_to: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/known-gotchas.md
+    section: internal
+    move_to: internal/agent-reference/known-gotchas.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/architecture-overview.md
+    section: internal
+    move_to: internal/agent-reference/package/architecture-overview.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/files-in-this-directory.md
+    section: internal
+    move_to: internal/agent-reference/package/files-in-this-directory.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/key-concepts.md
+    section: internal
+    move_to: internal/agent-reference/package/key-concepts.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/newer-2-x-subsystems.md
+    section: internal
+    move_to: internal/agent-reference/package/newer-2-x-subsystems.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/public-surface.md
+    section: internal
+    move_to: internal/agent-reference/package/public-surface.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/subpackages.md
+    section: internal
+    move_to: internal/agent-reference/package/subpackages.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: agent-reference/package/top-level-modules.md
+    section: internal
+    move_to: internal/agent-reference/package/top-level-modules.md
+    note: agent and contributor reference; AGENTS.md points here
+  - path: backends.md
+    section: reference
+  - path: backward.md
+    section: concepts
+  - path: benchmarks/summary_performance.md
+    section: benchmarks
+  - path: buffers.md
+    section: concepts
+  - path: conditional_attribution.md
+    section: concepts
+  - path: containers.md
+    section: concepts
+  - path: facets.md
+    section: concepts
+  - path: field-guide/acdc_ioi.md
+    section: field-guide
+    moved_from: [recipes/acdc_ioi.md]
+  - path: field-guide/conditional_steering.md
+    section: field-guide
+    moved_from: [recipes/conditional_steering.md]
+  - path: field-guide/dissection.md
+    section: field-guide
+    moved_from: [recipes/dissection.md]
+  - path: field-guide/feature_visualisation.md
+    section: field-guide
+    moved_from: [recipes/feature_visualisation.md]
+  - path: field-guide/generation_step_attribution.md
+    section: field-guide
+    moved_from: [recipes/generation_step_attribution.md]
+  - path: field-guide/lrp_epsilon_litmus.md
+    section: field-guide
+    moved_from: [recipes/lrp_epsilon_litmus.md]
+  - path: field-guide/lrp_transformers_lxt.md
+    section: field-guide
+    moved_from: [recipes/lrp_transformers_lxt.md]
+  - path: field-guide/pretrained_saes.md
+    section: field-guide
+    moved_from: [recipes/pretrained_saes.md]
+  - path: field-guide/prisma_clip_sae.md
+    section: field-guide
+    moved_from: [recipes/prisma_clip_sae.md]
+  - path: field-guide/quantus.md
+    section: field-guide
+    moved_from: [recipes/quantus.md]
+  - path: field-guide/sae_crosscoder_diff.md
+    section: field-guide
+    moved_from: [recipes/sae_crosscoder_diff.md]
+  - path: field-guide/sae_latent_export.md
+    section: field-guide
+    moved_from: [recipes/sae_latent_export.md]
+  - path: field-guide/sae_trainers.md
+    section: field-guide
+    moved_from: [recipes/sae_trainers.md]
+  - path: field-guide/seeded_subsample.md
+    section: field-guide
+    publish: true
+    moved_from: [recipes/seeded_subsample.md]
+  - path: field-guide/tcav.md
+    section: field-guide
+    moved_from: [recipes/tcav.md]
+  - path: field-guide/torchcam.md
+    section: field-guide
+    moved_from: [recipes/torchcam.md]
+  - path: field-guide/trainable_backbone.md
+    section: field-guide
+    moved_from: [recipes/trainable_backbone.md]
+  - path: field-guide/training_ribbon.md
+    section: field-guide
+    moved_from: [recipes/training_ribbon.md]
+  - path: field-guide/tuned_lens.md
+    section: field-guide
+    moved_from: [recipes/tuned_lens.md]
+  - path: field-guide/weightwatcher.md
+    section: field-guide
+    moved_from: [recipes/weightwatcher.md]
+  - path: for-ai-agents.md
+    section: field-guide
+    group: Use with an agent
+  - path: gradient_contract.md
+    section: concepts
+  - path: guides/fast_paths.md
+    section: field-guide
+    group: Scale and speed
+  - path: guides/kv_cache.md
+    section: field-guide
+    group: Intervene
+  - path: guides/offline_report.md
+    section: field-guide
+    group: See and inspect
+  - path: guides/treescope_cards.md
+    section: field-guide
+    group: See and inspect
+  - path: index.md
+    section: home
+    publish: true
+  - path: intervention_api.md
+    section: reference
+  - path: intervention_explainers.md
+    section: concepts
+  - path: memory_debugging.md
+    section: field-guide
+    group: Debug numerics and training
+  - path: method_x_model_compatibility.md
+    section: reference
+  - path: migration/autocircuit.md
+    section: relation
+  - path: migration/baukit.md
+    section: relation
+  - path: migration/captum.md
+    section: relation
+  - path: migration/coming_from_torchsnooper.md
+    section: relation
+  - path: migration/from_bertviz_ecco.md
+    section: relation
+  - path: migration/from_captum.md
+    section: relation
+  - path: migration/from_fx.md
+    section: relation
+  - path: migration/from_hf_kwargs.md
+    section: relation
+  - path: migration/from_hooks.md
+    section: relation
+  - path: migration/from_intermediate_layer_getter.md
+    section: relation
+  - path: migration/from_model_zoos.md
+    section: relation
+  - path: migration/from_nnsight.md
+    section: relation
+  - path: migration/from_pyvene.md
+    section: relation
+  - path: migration/from_surgeon_pytorch.md
+    section: relation
+  - path: migration/from_thingsvision.md
+    section: relation
+  - path: migration/from_timm_features_only.md
+    section: relation
+  - path: migration/from_torchextractor.md
+    section: relation
+  - path: migration/from_torchinfo.md
+    section: relation
+  - path: migration/from_torchview.md
+    section: relation
+  - path: migration/from_torchvision_feature_extraction.md
+    section: relation
+  - path: migration/from_torchviz_hiddenlayer.md
+    section: relation
+  - path: migration/from_transformerlens.md
+    section: relation
+  - path: migration/from_transformers_interpret.md
+    section: relation
+  - path: migration/inseq.md
+    section: relation
+  - path: migration/lovely_stats_line.md
+    section: project
+  - path: migration/multi_gpu_extraction.md
+    section: relation
+  - path: migration/nnsight.md
+    section: relation
+  - path: migration/penzai.md
+    section: relation
+  - path: migration/profilers_alongside.md
+    section: relation
+  - path: migration/pyvene.md
+    section: relation
+  - path: migration/repe.md
+    section: relation
+  - path: migration/saelens.md
+    section: relation
+  - path: migration/scoped_detached_patching.md
+    section: relation
+  - path: migration/transformerlens.md
+    section: relation
+  - path: migration/v2.0_api_changes.md
+    section: project
+  - path: monitor_training.md
+    section: field-guide
+    group: Debug numerics and training
+  - path: native-torch.md
+    section: concepts
+  - path: neuroai/byo_alignment.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/demand_ledger.md
+    section: internal
+    move_to: internal/neuroai/demand_ledger.md
+    note: demand ledger, maintainer planning
+  - path: neuroai/himalaya.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/journey.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/loaders.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/netrep.md
+    section: field-guide
+    group: Neuroscience
+  - path: non_goals.md
+    section: concepts
+  - path: performance.md
+    section: field-guide
+    group: Scale and speed
+  - path: quickstart.md
+    section: get-started
+  - path: rank_layout.md
+    section: concepts
+  - path: receptive_projective_fields.md
+    section: concepts
+  - path: reference/api/dataset_extraction.md
+    section: reference
+    publish: true
+    group: API
+  - path: reference/attribution.md
+    section: reference
+  - path: reference/brain_benchmarking_seam.md
+    section: reference
+  - path: reference/capture_outcomes.md
+    section: reference
+  - path: reference/capture_spine_contract.md
+    section: internal
+    move_to: internal/reference/capture_spine_contract.md
+    note: internal engineering contract
+  - path: reference/capture_state_contract.md
+    section: internal
+    move_to: internal/reference/capture_state_contract.md
+    note: internal engineering contract
+  - path: reference/checks_kit.md
+    section: reference
+  - path: reference/collapse.md
+    section: reference
+  - path: reference/debug.md
+    section: reference
+  - path: reference/deployment_envelope.md
+    section: reference
+  - path: reference/deprecations.md
+    section: project
+  - path: reference/device_attribution.md
+    section: reference
+  - path: reference/encoding.md
+    section: reference
+  - path: reference/episode_capture.md
+    section: reference
+  - path: reference/error_refusal_contract.md
+    section: internal
+    move_to: internal/reference/error_refusal_contract.md
+    note: internal engineering contract; the public refusal-code table is generated from it (plan 3.4)
+  - path: reference/experiment_ledger.md
+    section: reference
+  - path: reference/export.md
+    section: reference
+  - path: reference/glossary.md
+    section: reference
+  - path: reference/harness_bundles.md
+    section: reference
+  - path: reference/hash.md
+    section: reference
+  - path: reference/kernel_telemetry.md
+    section: reference
+  - path: reference/lens_gallery_spec.md
+    section: internal
+    move_to: internal/reference/lens_gallery_spec.md
+    note: normative test specification
+  - path: reference/lenses.md
+    section: reference
+  - path: reference/limitations.md
+    section: project
+  - path: reference/lit_bridge.md
+    section: reference
+  - path: reference/lovely_reprs.md
+    section: reference
+  - path: reference/mechinterp.md
+    section: reference
+  - path: reference/merged_trace_contract.md
+    section: internal
+    move_to: internal/reference/merged_trace_contract.md
+    note: internal engineering contract
+  - path: reference/model_explorer.md
+    section: reference
+  - path: reference/netron_export.md
+    section: reference
+  - path: reference/neuro.md
+    section: reference
+  - path: reference/observability_substrate.md
+    section: reference
+  - path: reference/onebackward_reads.md
+    section: reference
+  - path: reference/oracle_independence.md
+    section: internal
+    move_to: internal/reference/oracle_independence.md
+    note: test-oracle table
+  - path: reference/predicate_runtime.md
+    section: internal
+    move_to: internal/reference/predicate_runtime.md
+    note: extension-point contract
+  - path: reference/report_family.md
+    section: reference
+  - path: reference/runnable_model.md
+    section: reference
+  - path: reference/runnable_tlspec_contract.md
+    section: internal
+    move_to: internal/reference/runnable_tlspec_contract.md
+    note: internal engineering contract
+  - path: reference/stats.md
+    section: reference
+  - path: reference/structure_only_capabilities.md
+    section: reference
+  - path: reference/summary.md
+    section: reference
+  - path: reference/tensor_parallel_design.md
+    section: internal
+    move_to: internal/reference/tensor_parallel_design.md
+    note: design note for an unbuilt feature
+  - path: reference/trace_core_design.md
+    section: internal
+    move_to: internal/reference/trace_core_design.md
+    note: internal engineering contract
+  - path: reference/trackers.md
+    section: reference
+  - path: reference/transforms.md
+    section: reference
+  - path: reference/tviz.md
+    section: reference
+  - path: reference/ui_regrouping_plan.md
+    section: internal
+    move_to: internal/reference/ui_regrouping_plan.md
+    note: internal engineering contract
+  - path: reference/warning_contract.md
+    section: internal
+    move_to: internal/reference/warning_contract.md
+    note: internal engineering contract
+  - path: reference/weightsfree_capture.md
+    section: reference
+  - path: sae_training_handoff.md
+    section: field-guide
+    group: Circuits and features
+  - path: semantic_io.md
+    section: concepts
+  - path: skeleton_change_recipe.md
+    section: field-guide
+    group: Save, share and reproduce
+  - path: speed_optimized_defaults.md
+    section: concepts
+  - path: stochastic_edits.md
+    section: concepts
+  - path: visibility.md
+    section: concepts
