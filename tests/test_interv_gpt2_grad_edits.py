@@ -9,9 +9,12 @@ oracle's, differs from the clean backward (the edit had an effect), and left at
 least one backward fire record. Spellings that cannot apply a gradient edit must
 refuse typed, never run as a silent no-op.
 
-The default rows use a small randomly initialised GPT-2 (two blocks), which
-already has the multi-pass residual ``add`` layers that crashed live-backward
-selector matching on real gpt2. The ``TestRealGPT2`` rows run the same checks
+The default rows use a small randomly initialised GPT-2 whose two blocks are
+ONE shared block instance called twice (ALBERT-style layer sharing), so every op
+inside it is a 2-pass layer: the multi-pass shape that crashed live-backward
+selector matching on real gpt2. (Under call-site grouping distinct blocks give
+single-pass layers, grouping rule row 29; one module called twice gives one
+layer with 2 passes, rows 26-27.) The ``TestRealGPT2`` rows run the same checks
 on the pretrained ``gpt2`` checkpoint in the offline venue.
 """
 
@@ -27,7 +30,11 @@ import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
-from torchlens.intervention.errors import BindingPreflightError, LiveModeLabelError
+from torchlens.intervention.errors import (
+    BindingPreflightError,
+    LiveModeLabelError,
+    MultiMatchWarning,
+)
 
 transformers = pytest.importorskip("transformers")
 
@@ -35,7 +42,9 @@ GradFn = Callable[[torch.Tensor], torch.Tensor]
 Grads = dict[str, torch.Tensor | None]
 
 _MLP = "transformer.h.0.mlp"
-_LN = "transformer.h.0.ln_1"
+# A single-pass layer norm for the bare-label rows: inside the shared block every
+# layer norm is a 2-pass layer, and a bare label addresses only single-pass layers.
+_LN_SINGLE = "transformer.ln_f"
 _LN_NODE = "NativeLayerNormBackward0"
 _RUNNERS = (
     "trace.backward",
@@ -89,7 +98,7 @@ class _Fixture:
         _loss(clean(ids)).backward()
         self.clean = _grads(clean)
         probe = tl.trace(self.fresh(), ids)
-        self.ln_label = probe.find_sites(tl.module("transformer.h.0.ln_1")).first().layer_label
+        self.ln_label = probe.find_sites(tl.module(_LN_SINGLE)).first().layer_label
         self.multi_pass = [layer.layer_label for layer in probe.layers if layer.num_passes > 1]
 
     def fresh(self) -> torch.nn.Module:
@@ -261,11 +270,16 @@ def _check_spelling(
 
 @pytest.fixture(scope="module")
 def tiny() -> _Fixture:
-    """Two-block random GPT-2 with multi-pass residual layers."""
+    """Random GPT-2 whose two blocks share one instance: multi-pass layers."""
 
     torch.manual_seed(0)
     config = transformers.GPT2Config(n_layer=2, n_head=2, n_embd=16, n_positions=16, vocab_size=64)
-    fixture = _Fixture(transformers.GPT2LMHeadModel(config), torch.tensor([[5, 17, 3, 42, 9]]))
+    model = transformers.GPT2LMHeadModel(config)
+    # grouping rule rows 26-27: one block instance called twice makes every op
+    # inside it one layer with 2 passes (the oracle's module hooks fire on both
+    # calls too). deepcopy in _Fixture.fresh keeps the sharing.
+    model.transformer.h[1] = model.transformer.h[0]
+    fixture = _Fixture(model, torch.tensor([[5, 17, 3, 42, 9]]))
     assert fixture.multi_pass, "fixture must carry multi-pass layers (the crash shape)"
     return fixture
 
@@ -354,7 +368,7 @@ def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
         opt_in="backward_ready",
         selector=tl.label(tiny.ln_label),
         helper=tl.grad_zero(),
-        want=tiny.oracle("module", _LN, _zero),
+        want=tiny.oracle("module", _LN_SINGLE, _zero),
     )
 
 
@@ -407,7 +421,12 @@ def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None
 
     model = tiny.fresh()
     trace = tl.trace(model, tiny.ids, capture=tl.options.CaptureOptions(backward_ready=True))
-    with pytest.raises(LiveModeLabelError) as info:
+    # grouping rule rows 26-27: the shared block's MLP runs once per block slot,
+    # so the module selector matches its 2 calls and discloses the fan-out.
+    with (
+        pytest.warns(MultiMatchWarning, match="matched 2 sites"),
+        pytest.raises(LiveModeLabelError) as info,
+    ):
         trace.do(
             tl.module(_MLP),
             tl.grad_zero(),

@@ -83,7 +83,21 @@
     `torch.autograd.grad` called inside forward is an `autogradgrad` boundary op
     (`transform_kind="autograd.grad"`, one op per returned gradient, selected by
     `tl.func_transform("autograd.grad")`); validation re-derives its gradients by replaying
-    the recorded subgraph from its `inputs` to its `outputs`, never by exemption.
+    the recorded subgraph from its `inputs` to its `outputs`, never by exemption. A custom
+    `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
+    `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
+    `as_tensor` / `asarray` op, inside its `apply`) is one
+    `autogradfunction` boundary op (`transform_kind="autograd.Function"`,
+    `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
+    3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
+    validation replays it by calling the Function's `apply` again. An ordinary custom Function
+    (interior in torch) is captured op by op exactly as before; a plain round trip outside a
+    Function is never collapsed: its `from_numpy` stays a parentless source op and the census
+    keeps reporting any unowned dispatch it makes. A `torch.jit.ScriptFunction` called from an
+    eager forward is one `jitscript` boundary op (`transform_kind="jit.script"`,
+    `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
+    `jit_script:boundary` token and replay calls the function again; a call that writes into a
+    tensor argument in place is never collapsed and stays a census gap.
 14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.

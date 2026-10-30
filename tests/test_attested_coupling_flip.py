@@ -13,6 +13,8 @@ capture/intervention digest, never by output equality alone.
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 import torch
 import torch.nn as nn
@@ -298,10 +300,16 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
         episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
-    # A growing-context refresh legitimately warns on multi-pass shape
-    # drift; the regression under test is the LEDGER, not the shapes.
-    with pytest.warns(UserWarning, match="Tensor shape changed"):
+    # The new input has the captured length, so every pass keeps its captured
+    # shape. The "Tensor shape changed" warning this row used to expect came
+    # from the refresh projector pairing ops by raw layer label, which compared
+    # every pass of a multi-pass layer (the growing-context cat) with its last
+    # pass; ops now pair positionally (lane A, projectors.py), so a same-length
+    # replay must not warn. The regression under test is the LEDGER.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         result = log.run(inputs=torch.tensor([[4, 5, 6]]))
+    assert not [w for w in caught if "Tensor shape changed" in str(w.message)]
     episode_key = result.trace.annotations.get("episode")
     assert episode_key is not None and episode_key.get("quarantined") is True
 

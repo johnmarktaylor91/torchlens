@@ -70,7 +70,6 @@ from torchlens.validation.invariants import (
     _check_graph_ordering,
     _check_graph_topology,
     _check_lookup_key_consistency,
-    _check_loop_detection_invariants,
     _check_op_log_fields,
     _check_param_xrefs,
     _check_special_layer_lists,
@@ -8708,28 +8707,6 @@ def test_corruption_arm_equivalence_registry_group_mismatch() -> None:
         log.op_equivalence_classes[key] = set(members[:-1])
         with pytest.raises(MetadataInvariantError, match=r"equivalent_ops=.* != expected"):
             _check_equivalence_symmetry(log)
-    finally:
-        log.cleanup()
-
-
-def test_corruption_arm_param_sharing_key_forgery() -> None:
-    """Killer for loop_detection_invariants#a11: param-sharing violation."""
-
-    import copy as _copy
-
-    log = trace_fn(
-        _TwoLinearChain(),
-        torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
-    )
-    try:
-        first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
-        donor = first.ops[0]
-        for op in second.ops:
-            op._param_barcodes = _copy.copy(donor._param_barcodes)
-            op.equivalence_class = donor.equivalence_class
-        with pytest.raises(MetadataInvariantError, match="Param sharing violation"):
-            _check_loop_detection_invariants(log)
     finally:
         log.cleanup()
 

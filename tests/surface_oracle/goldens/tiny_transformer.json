@@ -33242,7 +33242,7 @@
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -69121,7 +69121,7 @@
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -105076,7 +105076,7 @@
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -139727,7 +139727,7 @@
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",

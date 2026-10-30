@@ -238,7 +238,14 @@ def test_tied_multipass_matmul_substitutes_every_pass():
             self.w = nn.Parameter(torch.randn(4, 4) * 0.1)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.relu(x @ self.w) @ self.w
+            # grouping rule rows 21 and 51: the matmul must run from ONE place
+            # (a loop line) to be one two-pass layer; ``relu(x @ w) @ w`` on
+            # one line is two single-pass matmul layers (rows 21 and 25).
+            for step in range(2):
+                x = x @ self.w
+                if step == 0:
+                    x = torch.relu(x)
+            return x
 
     model = Tied()
     x = torch.randn(2, 4)

@@ -1635,6 +1635,15 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
         return None
 
 
+def buffer_version_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
+    """Return ``tensor``'s journaled ``(object_id, storage_key, buffer_version)``, or ``None``."""
+    key = storage_key(tensor)
+    version = _tensor_version(tensor)
+    if key is None or version is None:
+        return None
+    return (id(tensor), key, version)
+
+
 def _make_scoped_setattr(
     cls: type[nn.Module],
     original_setattr: Callable[[Any, str, Any], None],

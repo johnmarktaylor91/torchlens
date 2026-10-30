@@ -67,6 +67,28 @@ class RawGraphWorkspace:
     layer_counter: int = 0
     raw_layer_type_counter: dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
     input_tensor_addresses: list[str] = field(default_factory=list)
+    # Raw buffer label -> the buffer version it was logged from (object id,
+    # storage key, version counter; ``buffer_writes.buffer_version_key``).
+    # Step 6 merges two buffer nodes only when they name the same version, so
+    # buffer provenance never rests on the values the forward happened to reach:
+    # a reassignment (new object), a ``.data =``/``set_`` swap (new storage) or a
+    # tracked in-place write (version bump) is a new version whatever it wrote.
+    # ``None`` (unreadable storage or counter) never matches. The session stamp
+    # registry holds every logged buffer, so ``id(tensor)`` stays stable.
+    buffer_version_keys: dict[str, tuple[Any, ...] | None] = field(default_factory=dict)
+    #: ``(func_call_id, call-site chain)`` of the wrapped call whose outputs are
+    #: being logged (written by the shared-fields builder, read per output).
+    _pending_call_site: tuple[Any, Any] | None = None
+    #: Call-site key -> its 1-based first-appearance index in this capture; the
+    #: index names the op's call-site class (``<type>@cs<N>``).
+    _call_site_index: dict[Any, int] = field(default_factory=dict)
+    #: Raw op label -> its call-site class (``<type>@cs<N>``, plus ``_outindex<k>``
+    #: for one output slot of a multi-output call) for every op whose call site
+    #: the capture walk saw. Step 7 groups by it (``callsite_v1``) and checks the
+    #: call-site contract against it. Internal and never persisted: it goes away
+    #: with the workspace, and ``equivalence_class`` keeps its argument/parameter
+    #: fingerprint for its other consumers.
+    _call_site_classes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,11 +1,11 @@
 {
   "equivalence_partition": [
     [
-      "cat_1_7:1",
-      "cat_2_10:1"
+      "cat_1_5:1",
+      "cat_2_8:1"
     ],
     [
-      "cat_3_13:1"
+      "cat_3_11:1"
     ],
     [
       "conv2d_1_1:1"
@@ -14,16 +14,16 @@
       "conv2d_2_3:1"
     ],
     [
-      "conv2d_3_5:1"
+      "conv2d_3_4:1"
     ],
     [
-      "conv2d_4_8:1"
+      "conv2d_4_6:1"
     ],
     [
-      "conv2d_5_11:1"
+      "conv2d_5_9:1"
     ],
     [
-      "conv2d_6_14:1"
+      "conv2d_6_12:1"
     ],
     [
       "input_1:1"
@@ -33,10 +33,10 @@
     ],
     [
       "relu_1_2:1",
-      "relu_2_4:1",
-      "relu_3_6:1",
-      "relu_4_9:1",
-      "relu_5_12:1"
+      "relu_1_2:2",
+      "relu_1_2:3",
+      "relu_2_7:1",
+      "relu_3_10:1"
     ]
   ],
   "fixture_name": "branching_unet",
@@ -91,14 +91,26 @@
       "in_submodule": false,
       "label": "relu_1_2",
       "lookup_keys": [
+        "-10",
+        "-12",
         "-14",
         "2",
+        "4",
+        "6",
         "relu_1",
         "relu_1:1",
+        "relu_1:2",
+        "relu_1:3",
         "relu_1_2",
         "relu_1_2:1",
+        "relu_1_2:2",
+        "relu_1_2:3",
         "relu_1_3",
-        "relu_1_3_raw"
+        "relu_1_3_raw",
+        "relu_2_5",
+        "relu_2_5_raw",
+        "relu_3_7",
+        "relu_3_7_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -136,35 +148,15 @@
       "step_index": 3
     },
     {
-      "in_submodule": false,
-      "label": "relu_2_4",
-      "lookup_keys": [
-        "-12",
-        "4",
-        "relu_2",
-        "relu_2:1",
-        "relu_2_4",
-        "relu_2_4:1",
-        "relu_2_5",
-        "relu_2_5_raw"
-      ],
-      "module": null,
-      "module_call_depth": 0,
-      "modules": [],
-      "output_of_module_calls": [],
-      "output_of_modules": [],
-      "step_index": 4
-    },
-    {
       "in_submodule": true,
-      "label": "conv2d_3_5",
+      "label": "conv2d_3_4",
       "lookup_keys": [
         "-11",
         "5",
         "conv2d_3",
         "conv2d_3:1",
-        "conv2d_3_5",
-        "conv2d_3_5:1",
+        "conv2d_3_4",
+        "conv2d_3_4:1",
         "conv2d_3_6",
         "conv2d_3_6_raw",
         "encoders.2",
@@ -185,34 +177,14 @@
     },
     {
       "in_submodule": false,
-      "label": "relu_3_6",
-      "lookup_keys": [
-        "-10",
-        "6",
-        "relu_3",
-        "relu_3:1",
-        "relu_3_6",
-        "relu_3_6:1",
-        "relu_3_7",
-        "relu_3_7_raw"
-      ],
-      "module": null,
-      "module_call_depth": 0,
-      "modules": [],
-      "output_of_module_calls": [],
-      "output_of_modules": [],
-      "step_index": 6
-    },
-    {
-      "in_submodule": false,
-      "label": "cat_1_7",
+      "label": "cat_1_5",
       "lookup_keys": [
         "-9",
         "7",
         "cat_1",
         "cat_1:1",
-        "cat_1_7",
-        "cat_1_7:1",
+        "cat_1_5",
+        "cat_1_5:1",
         "cat_1_8",
         "cat_1_8_raw"
       ],
@@ -225,14 +197,14 @@
     },
     {
       "in_submodule": true,
-      "label": "conv2d_4_8",
+      "label": "conv2d_4_6",
       "lookup_keys": [
         "-8",
         "8",
         "conv2d_4",
         "conv2d_4:1",
-        "conv2d_4_8",
-        "conv2d_4_8:1",
+        "conv2d_4_6",
+        "conv2d_4_6:1",
         "conv2d_4_9",
         "conv2d_4_9_raw",
         "decoders.0",
@@ -253,16 +225,16 @@
     },
     {
       "in_submodule": false,
-      "label": "relu_4_9",
+      "label": "relu_2_7",
       "lookup_keys": [
         "-7",
         "9",
-        "relu_4",
-        "relu_4:1",
+        "relu_2",
+        "relu_2:1",
+        "relu_2_7",
+        "relu_2_7:1",
         "relu_4_10",
-        "relu_4_10_raw",
-        "relu_4_9",
-        "relu_4_9:1"
+        "relu_4_10_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -273,16 +245,16 @@
     },
     {
       "in_submodule": false,
-      "label": "cat_2_10",
+      "label": "cat_2_8",
       "lookup_keys": [
         "-6",
         "10",
         "cat_2",
         "cat_2:1",
-        "cat_2_10",
-        "cat_2_10:1",
         "cat_2_11",
-        "cat_2_11_raw"
+        "cat_2_11_raw",
+        "cat_2_8",
+        "cat_2_8:1"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -293,16 +265,16 @@
     },
     {
       "in_submodule": true,
-      "label": "conv2d_5_11",
+      "label": "conv2d_5_9",
       "lookup_keys": [
         "-5",
         "11",
         "conv2d_5",
         "conv2d_5:1",
-        "conv2d_5_11",
-        "conv2d_5_11:1",
         "conv2d_5_12",
         "conv2d_5_12_raw",
+        "conv2d_5_9",
+        "conv2d_5_9:1",
         "decoders.1",
         "decoders.1:1"
       ],
@@ -321,14 +293,14 @@
     },
     {
       "in_submodule": false,
-      "label": "relu_5_12",
+      "label": "relu_3_10",
       "lookup_keys": [
         "-4",
         "12",
-        "relu_5",
-        "relu_5:1",
-        "relu_5_12",
-        "relu_5_12:1",
+        "relu_3",
+        "relu_3:1",
+        "relu_3_10",
+        "relu_3_10:1",
         "relu_5_13",
         "relu_5_13_raw"
       ],
@@ -341,14 +313,14 @@
     },
     {
       "in_submodule": false,
-      "label": "cat_3_13",
+      "label": "cat_3_11",
       "lookup_keys": [
         "-3",
         "13",
         "cat_3",
         "cat_3:1",
-        "cat_3_13",
-        "cat_3_13:1",
+        "cat_3_11",
+        "cat_3_11:1",
         "cat_3_14",
         "cat_3_14_raw"
       ],
@@ -361,14 +333,14 @@
     },
     {
       "in_submodule": true,
-      "label": "conv2d_6_14",
+      "label": "conv2d_6_12",
       "lookup_keys": [
         "-2",
         "14",
         "conv2d_6",
         "conv2d_6:1",
-        "conv2d_6_14",
-        "conv2d_6_14:1",
+        "conv2d_6_12",
+        "conv2d_6_12:1",
         "conv2d_6_15",
         "conv2d_6_15_raw",
         "decoders.2",
@@ -424,17 +396,17 @@
         "conv2d_1_1:1",
         "relu_1_2:1",
         "conv2d_2_3:1",
-        "relu_2_4:1",
-        "conv2d_3_5:1",
-        "relu_3_6:1",
-        "cat_1_7:1",
-        "conv2d_4_8:1",
-        "relu_4_9:1",
-        "cat_2_10:1",
-        "conv2d_5_11:1",
-        "relu_5_12:1",
-        "cat_3_13:1",
-        "conv2d_6_14:1",
+        "relu_1_2:2",
+        "conv2d_3_4:1",
+        "relu_1_2:3",
+        "cat_1_5:1",
+        "conv2d_4_6:1",
+        "relu_2_7:1",
+        "cat_2_8:1",
+        "conv2d_5_9:1",
+        "relu_3_10:1",
+        "cat_3_11:1",
+        "conv2d_6_12:1",
         "output_1:1"
       ],
       "output_layers": [
@@ -477,13 +449,13 @@
       "forward_args_summary": "[Tensor(shape=(1, 8, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [
-        "relu_2_4"
+        "relu_1_2"
       ],
       "ops": [
-        "conv2d_3_5:1"
+        "conv2d_3_4:1"
       ],
       "output_layers": [
-        "conv2d_3_5"
+        "conv2d_3_4"
       ]
     },
     {
@@ -492,13 +464,13 @@
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [
-        "cat_1_7"
+        "cat_1_5"
       ],
       "ops": [
-        "conv2d_4_8:1"
+        "conv2d_4_6:1"
       ],
       "output_layers": [
-        "conv2d_4_8"
+        "conv2d_4_6"
       ]
     },
     {
@@ -507,13 +479,13 @@
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [
-        "cat_2_10"
+        "cat_2_8"
       ],
       "ops": [
-        "conv2d_5_11:1"
+        "conv2d_5_9:1"
       ],
       "output_layers": [
-        "conv2d_5_11"
+        "conv2d_5_9"
       ]
     },
     {
@@ -522,13 +494,13 @@
       "forward_args_summary": "[Tensor(shape=(1, 12, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [
-        "cat_3_13"
+        "cat_3_11"
       ],
       "ops": [
-        "conv2d_6_14:1"
+        "conv2d_6_12:1"
       ],
       "output_layers": [
-        "conv2d_6_14"
+        "conv2d_6_12"
       ]
     }
   ],
@@ -555,17 +527,15 @@
         "conv2d_1_1",
         "relu_1_2",
         "conv2d_2_3",
-        "relu_2_4",
-        "conv2d_3_5",
-        "relu_3_6",
-        "cat_1_7",
-        "conv2d_4_8",
-        "relu_4_9",
-        "cat_2_10",
-        "conv2d_5_11",
-        "relu_5_12",
-        "cat_3_13",
-        "conv2d_6_14",
+        "conv2d_3_4",
+        "cat_1_5",
+        "conv2d_4_6",
+        "relu_2_7",
+        "cat_2_8",
+        "conv2d_5_9",
+        "relu_3_10",
+        "cat_3_11",
+        "conv2d_6_12",
         "output_1"
       ],
       "output_layers": [
@@ -633,7 +603,7 @@
         "encoders.2:1"
       ],
       "input_layers": [
-        "relu_2_4"
+        "relu_1_2"
       ],
       "num_calls": 1,
       "num_param_tensors": 2,
@@ -641,10 +611,10 @@
       "num_params_frozen": 0,
       "num_params_trainable": 584,
       "ops": [
-        "conv2d_3_5"
+        "conv2d_3_4"
       ],
       "output_layers": [
-        "conv2d_3_5"
+        "conv2d_3_4"
       ],
       "training": true
     },
@@ -658,7 +628,7 @@
         "decoders.0:1"
       ],
       "input_layers": [
-        "cat_1_7"
+        "cat_1_5"
       ],
       "num_calls": 1,
       "num_param_tensors": 2,
@@ -666,10 +636,10 @@
       "num_params_frozen": 0,
       "num_params_trainable": 1160,
       "ops": [
-        "conv2d_4_8"
+        "conv2d_4_6"
       ],
       "output_layers": [
-        "conv2d_4_8"
+        "conv2d_4_6"
       ],
       "training": true
     },
@@ -683,7 +653,7 @@
         "decoders.1:1"
       ],
       "input_layers": [
-        "cat_2_10"
+        "cat_2_8"
       ],
       "num_calls": 1,
       "num_param_tensors": 2,
@@ -691,10 +661,10 @@
       "num_params_frozen": 0,
       "num_params_trainable": 1160,
       "ops": [
-        "conv2d_5_11"
+        "conv2d_5_9"
       ],
       "output_layers": [
-        "conv2d_5_11"
+        "conv2d_5_9"
       ],
       "training": true
     },
@@ -708,7 +678,7 @@
         "decoders.2:1"
       ],
       "input_layers": [
-        "cat_3_13"
+        "cat_3_11"
       ],
       "num_calls": 1,
       "num_param_tensors": 2,
@@ -716,10 +686,10 @@
       "num_params_frozen": 0,
       "num_params_trainable": 436,
       "ops": [
-        "conv2d_6_14"
+        "conv2d_6_12"
       ],
       "output_layers": [
-        "conv2d_6_14"
+        "conv2d_6_12"
       ],
       "training": true
     }
@@ -888,14 +858,14 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "relu_2_4:1",
+      "label": "relu_1_2:2",
       "lookup_keys": [
         "-12",
         "4",
-        "relu_2",
-        "relu_2:1",
-        "relu_2_4",
-        "relu_2_4:1",
+        "relu_1",
+        "relu_1:2",
+        "relu_1_2",
+        "relu_1_2:2",
         "relu_2_5",
         "relu_2_5_raw"
       ],
@@ -922,14 +892,14 @@
       "is_internal_source": false,
       "is_module_output": true,
       "is_orphan": false,
-      "label": "conv2d_3_5:1",
+      "label": "conv2d_3_4:1",
       "lookup_keys": [
         "-11",
         "5",
         "conv2d_3",
         "conv2d_3:1",
-        "conv2d_3_5",
-        "conv2d_3_5:1",
+        "conv2d_3_4",
+        "conv2d_3_4:1",
         "conv2d_3_6",
         "conv2d_3_6_raw",
         "encoders.2",
@@ -960,14 +930,14 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "relu_3_6:1",
+      "label": "relu_1_2:3",
       "lookup_keys": [
         "-10",
         "6",
-        "relu_3",
-        "relu_3:1",
-        "relu_3_6",
-        "relu_3_6:1",
+        "relu_1",
+        "relu_1:3",
+        "relu_1_2",
+        "relu_1_2:3",
         "relu_3_7",
         "relu_3_7_raw"
       ],
@@ -992,14 +962,14 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "cat_1_7:1",
+      "label": "cat_1_5:1",
       "lookup_keys": [
         "-9",
         "7",
         "cat_1",
         "cat_1:1",
-        "cat_1_7",
-        "cat_1_7:1",
+        "cat_1_5",
+        "cat_1_5:1",
         "cat_1_8",
         "cat_1_8_raw"
       ],
@@ -1026,14 +996,14 @@
       "is_internal_source": false,
       "is_module_output": true,
       "is_orphan": false,
-      "label": "conv2d_4_8:1",
+      "label": "conv2d_4_6:1",
       "lookup_keys": [
         "-8",
         "8",
         "conv2d_4",
         "conv2d_4:1",
-        "conv2d_4_8",
-        "conv2d_4_8:1",
+        "conv2d_4_6",
+        "conv2d_4_6:1",
         "conv2d_4_9",
         "conv2d_4_9_raw",
         "decoders.0",
@@ -1064,16 +1034,16 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "relu_4_9:1",
+      "label": "relu_2_7:1",
       "lookup_keys": [
         "-7",
         "9",
-        "relu_4",
-        "relu_4:1",
+        "relu_2",
+        "relu_2:1",
+        "relu_2_7",
+        "relu_2_7:1",
         "relu_4_10",
-        "relu_4_10_raw",
-        "relu_4_9",
-        "relu_4_9:1"
+        "relu_4_10_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},
@@ -1096,16 +1066,16 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "cat_2_10:1",
+      "label": "cat_2_8:1",
       "lookup_keys": [
         "-6",
         "10",
         "cat_2",
         "cat_2:1",
-        "cat_2_10",
-        "cat_2_10:1",
         "cat_2_11",
-        "cat_2_11_raw"
+        "cat_2_11_raw",
+        "cat_2_8",
+        "cat_2_8:1"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -1130,16 +1100,16 @@
       "is_internal_source": false,
       "is_module_output": true,
       "is_orphan": false,
-      "label": "conv2d_5_11:1",
+      "label": "conv2d_5_9:1",
       "lookup_keys": [
         "-5",
         "11",
         "conv2d_5",
         "conv2d_5:1",
-        "conv2d_5_11",
-        "conv2d_5_11:1",
         "conv2d_5_12",
         "conv2d_5_12_raw",
+        "conv2d_5_9",
+        "conv2d_5_9:1",
         "decoders.1",
         "decoders.1:1"
       ],
@@ -1168,14 +1138,14 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "relu_5_12:1",
+      "label": "relu_3_10:1",
       "lookup_keys": [
         "-4",
         "12",
-        "relu_5",
-        "relu_5:1",
-        "relu_5_12",
-        "relu_5_12:1",
+        "relu_3",
+        "relu_3:1",
+        "relu_3_10",
+        "relu_3_10:1",
         "relu_5_13",
         "relu_5_13_raw"
       ],
@@ -1200,14 +1170,14 @@
       "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
-      "label": "cat_3_13:1",
+      "label": "cat_3_11:1",
       "lookup_keys": [
         "-3",
         "13",
         "cat_3",
         "cat_3:1",
-        "cat_3_13",
-        "cat_3_13:1",
+        "cat_3_11",
+        "cat_3_11:1",
         "cat_3_14",
         "cat_3_14_raw"
       ],
@@ -1234,14 +1204,14 @@
       "is_internal_source": false,
       "is_module_output": true,
       "is_orphan": false,
-      "label": "conv2d_6_14:1",
+      "label": "conv2d_6_12:1",
       "lookup_keys": [
         "-2",
         "14",
         "conv2d_6",
         "conv2d_6:1",
-        "conv2d_6_14",
-        "conv2d_6_14:1",
+        "conv2d_6_12",
+        "conv2d_6_12:1",
         "conv2d_6_15",
         "conv2d_6_15_raw",
         "decoders.2",

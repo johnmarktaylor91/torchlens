@@ -21,6 +21,9 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # torch.ops recorder suppression depth: incremented/decremented in the
         # census redispatch's own try/finally; a survivor would silently stop
         # recording user torch.ops calls.
+        # Foreign-kernel boundary: the stack of export names seen inside each live
+        # Function.apply frame, pushed and popped around that one apply call.
+        ("torchlens/backends/torch/_function_boundary.py", "_FRAMES"),
         ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
@@ -147,6 +150,9 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Call-site grouping: the module forward wrapper code object, registered
+        # idempotently when submodule forwards are decorated (one constant).
+        ("torchlens/utils/_call_site.py", "_BOUNDARY_CODES"),
         # torch.ops call-class recorders: originals captured at wrap_torch, restored
         # and cleared at unwrap_torch; the per-operator wrapper cache is cleared with
         # them; the shared wrapper code object is an install-time constant.
@@ -216,6 +222,16 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_ENTER"),
         ("torchlens/backends/torch/backward.py", "_ORIGINAL_SAVED_TENSORS_HOOKS_INIT"),
         ("torchlens/backends/torch/backward.py", "_SAVED_TENSORS_HOOKS_INIT_PATCHED"),
+        # Foreign-kernel boundary (autograd.Function.apply wrapper and the dlpack
+        # export patches): installed by wrap_torch beside the autograd wrappers,
+        # restored identity-checked and emptied by unwrap_torch.
+        ("torchlens/backends/torch/_function_boundary.py", "_INSTALLED_APPLY"),
+        ("torchlens/backends/torch/_function_boundary.py", "_ORIGINAL_APPLY"),
+        ("torchlens/backends/torch/_function_boundary.py", "_PATCHED_EXPORTS"),
+        # TorchScript call boundary (ScriptFunction.__call__ wrapper): installed and
+        # restored identity-checked by the same pair as the Function.apply wrapper.
+        ("torchlens/backends/torch/_script_boundary.py", "_INSTALLED_CALL"),
+        ("torchlens/backends/torch/_script_boundary.py", "_ORIGINAL_CALL"),
         # Patched legacy constructor classes (torch.<dtype>Tensor, Variable):
         # installed by wrap_torch, restored and emptied by unwrap_torch.
         ("torchlens/backends/torch/legacy_ctors.py", "_INSTALLED"),
@@ -257,6 +273,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # dcd0ca9c): installed once so a post-wrap `import transformers` still
         # gets the shim, removed by the shim uninstall alongside _installed.
         ("torchlens/backends/torch/identity_shims.py", "_import_hook"),
+        # (table, original, value) rows for original keys aliased into
+        # third-party handler tables at unwrap; drained by the next wrap's shim
+        # install, so it is install bookkeeping, not capture state.
+        ("torchlens/backends/torch/_protocol_redispatch.py", "_ALIAS_JOURNAL"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed
@@ -517,6 +537,9 @@ last-run slots are overwritten per run and never steer a verdict.
 
 _WEAK_SUBJECT_TABLES = frozenset(
     {
+        # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
+        # by the Trace), so re-validation of a fresh capture can re-check it.
+        ("torchlens/postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_state.py", "_log_registry"),
         # L9 runtime journals are keyed by the owning Trace and contain only
         # timing/token/finalization bookkeeping. They must disappear with
@@ -682,6 +705,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Call-site grouping per-code memos (content token, instruction map),
+        # WeakKeyDictionary keyed by the code object, bounded by live code.
+        ("torchlens/utils/_call_site.py", "_CODE_TOKENS"),
+        ("torchlens/utils/_call_site.py", "_INSTRUCTION_MAPS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP
@@ -822,6 +849,9 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        ("torchlens/postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        ("torchlens/utils/_call_site.py", "_CODE_TOKENS"),
+        ("torchlens/utils/_call_site.py", "_INSTRUCTION_MAPS"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
         # Weightsfree (F33) session registries (storage fact: WeakKeyDictionary /
         # WeakSet keyed by the owning Trace; lifecycle class is
@@ -1073,6 +1103,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
+        ("torchlens/backends/torch/_protocol_redispatch.py", "__all__"),
         ("torchlens/backends/torch/_tl.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_transparency.py", "__all__"),

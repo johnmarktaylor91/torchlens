@@ -11,6 +11,10 @@ warning. The check now pairs each listing with its own pass through the shared
 per-listing rule. The oracles are the tensors the test passes in: equal inputs
 compare equal, and a change to either input compares unequal, as for
 single-pass inputs.
+
+Under call-site grouping input nodes are singletons (grouping rule section 2),
+so torch capture no longer folds the loop model's inputs; the module keeps the
+loop model as the multi-pass case through its loop-body relu (rule row 2).
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from torchlens.options import CaptureOptions, InterventionOptions
 
 
 class _LoopOverInputs(nn.Module):
-    """Two same-shape inputs consumed by one loop body (their input Layer folds)."""
+    """Two same-shape inputs consumed by one loop body (its relu is one 2-pass Layer)."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -65,12 +69,22 @@ def _traces(model_cls: type[nn.Module], inputs: tuple[Any, Any], other: tuple[An
 
 
 def test_folded_input_premise() -> None:
-    """Premise: the loop model folds its two inputs; the control does not."""
+    """Premise under call-site grouping: input nodes never fold.
+
+    Grouping rule section 2 (special nodes): input nodes are singletons, so the
+    loop model's two inputs are two single-pass input Layers, like the
+    control's; its loop-body relu is one 2-pass Layer (rule row 2). The
+    per-listing pairing in ``_same_rerun_inputs`` is still exercised by the
+    loop model's two listings, and the rest of this module pins the rerun on
+    the loop model's multi-pass relu.
+    """
 
     folded, _ = _traces(_LoopOverInputs, _inputs(0), _inputs(0))
     control, _ = _traces(_TwoInputs, _inputs(0), _inputs(0))
-    assert folded.input_layers == ["input_1", "input_1"]
-    assert len(folded["input_1"].ops) == 2
+    assert folded.input_layers == ["input_1", "input_2"]
+    assert all(len(folded[label].ops) == 1 for label in folded.input_layers)
+    relu_layers = [layer for layer in folded.layer_logs.values() if layer.func_name == "relu"]
+    assert [len(layer.ops) for layer in relu_layers] == [2]
     assert control.input_layers == ["input_1", "input_2"]
 
 
@@ -91,7 +105,9 @@ def test_a_changed_input_compares_unequal(model_cls: type[nn.Module], changed: i
 
 
 def _relu_pass_labels(trace: Any) -> list[str]:
-    return [str(site.layer_label) for site in trace.find_sites(tl.func("relu"), max_fanout=8)]
+    # Pass-qualified op labels: the loop model's relu is one 2-pass Layer
+    # (grouping rule row 2), so its bare layer label names no single op.
+    return [str(site.label) for site in trace.find_sites(tl.func("relu"), max_fanout=8)]
 
 
 def _intervention_case(
@@ -117,8 +133,12 @@ def _value_predicate(baseline: Any, label: str) -> Any:
 
     reference = baseline[label].out.clone()
 
+    layer_label, pass_index = label.rsplit(":", 1)
+
     def predicate(p: Any) -> bool:
-        if getattr(p, "layer_label", None) != label:
+        if getattr(p, "layer_label", None) != layer_label:
+            return False
+        if str(getattr(p, "pass_index", None)) != pass_index:
             return False
         out = getattr(p, "out", None)
         return isinstance(out, torch.Tensor) and torch.equal(out, reference)

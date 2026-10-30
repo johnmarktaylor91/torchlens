@@ -119,12 +119,16 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
     log = _ready(_ReusedModule())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # fan-out disclosure, expected here
-        labels = log.resolve_sites(site(op_type="relu")).labels()
+        table = log.resolve_sites(site(op_type="relu"))
+        # grouping rule row 28 (fork 1, module identity): the two calls of one
+        # relu instance are one Layer with 2 passes, so address them by op label.
+        assert len({op.layer_label for op in table}) == 1
+        labels = [op.label for op in table]
         assert len(labels) == 2
         keys = {log.ops[label].site_key for label in labels}
         assert len(keys) == 1, "reused-module calls share ONE structural position key"
         (shared_key,) = keys
-        assert set(log.resolve_sites(site(shared_key)).labels()) == set(labels)
+        assert {op.label for op in log.resolve_sites(site(shared_key))} == set(labels)
 
 
 # ---------------------------------------------------------------------------

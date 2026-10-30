@@ -10,6 +10,11 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from ..data_classes._site_key import SiteKeyMinter
+from ._call_site_contract import (
+    CallSiteEntry,
+    call_site_contract_violation,
+    remember_call_site_classes,
+)
 from ._grouping_stamp import build_grouping_policy_stamp
 from .loop_grouping_adapter import (
     RecurrenceAssignment,
@@ -344,7 +349,14 @@ def _group_by_shared_params(self: "Trace") -> None:
 
 
 def _detect_and_label_loops(self: "Trace") -> None:
-    """Delegate recurrence grouping to the backend-neutral implementation.
+    """Group ops into layers and passes (step 7).
+
+    A capture whose ops carry call-site classes (the torch backend's
+    exhaustive capture, ``RawGraphWorkspace._call_site_classes``) groups by
+    call site (``callsite_v1``,
+    :func:`_group_by_call_sites`). Captures without that evidence (other
+    backends, predicate-mode recordings) keep the backend-neutral structural
+    grouper (``grouper_v1``).
 
     Parameters
     ----------
@@ -353,13 +365,161 @@ def _detect_and_label_loops(self: "Trace") -> None:
     """
 
     _mint_site_keys(self)
-    grouping_graph = _build_recurrence_grouping_graph(self)
-    assignments = group_recurrent_nodes(grouping_graph)
-    _apply_recurrence_assignments(self, assignments)
+    if _has_call_site_evidence(self):
+        _group_by_call_sites(self)
+        detector = "callsite_v1"
+    else:
+        grouping_graph = _build_recurrence_grouping_graph(self)
+        assignments = group_recurrent_nodes(grouping_graph)
+        _apply_recurrence_assignments(self, assignments)
+        detector = "grouper_v1"
     self.grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=True,
         requested=getattr(self, "grouping", "structural"),
+        detector=detector,
     )
+
+
+def _has_call_site_evidence(self: "Trace") -> bool:
+    """Whether any retained op of this capture carries a call-site class."""
+
+    classes = self._raw_graph_ws._call_site_classes
+    if not classes:
+        return False
+    for label in self._raw_graph_ws.raw_layer_labels_list:
+        if label in classes and not getattr(self[label], "is_orphan", False):
+            return True
+    return False
+
+
+def _call_site_group_key(node: Any, classes: dict[str, str]) -> tuple[Any, ...]:
+    """The grouping key of one retained non-buffer op under call-site grouping.
+
+    An op with a call-site class groups with every op of the same class (same
+    innermost module instance, same call-site chain, same function and output
+    slot). Inputs and outputs stay single. Anything else (no Python frame inside
+    its module call, synthesized nodes) falls back to its ``site_key_v1``
+    position within the module call, which never fuses two positions of one
+    call and still groups a module called several times; its capture-time
+    equivalence class (type, non-tensor arguments, module) joins the fallback
+    key so a fallback layer never spans two equivalence sets. Buffer versions
+    are keyed by :func:`_buffer_group_keys`.
+    """
+
+    site_class = classes.get(node._label_raw)
+    if site_class is not None:
+        return ("call_site", site_class)
+    if node.is_input or node.is_output:
+        return ("single", node._label_raw)
+    return ("position", node.site_key, node.func_name, node.equivalence_class)
+
+
+def _buffer_group_keys(
+    buffers: list[Any], op_keys: dict[str, tuple[Any, ...]]
+) -> list[tuple[Any, tuple[Any, ...]]]:
+    """Group the versions of each registered buffer by the place that wrote them.
+
+    A version written by an op takes that op's key, so the versions one write
+    line produces across a loop are passes of one buffer layer, and versions
+    written at different places are different layers. The entry version (no
+    writer) joins the layer of the version written next when that layer
+    repeats (the loop-carried state of a loop); otherwise it stays on its own,
+    as does every version of a buffer written once.
+    """
+
+    keyed: dict[str, tuple[Any, ...]] = {}
+    entries: list[Any] = []
+    written_by_address: dict[Any, list[Any]] = defaultdict(list)
+    for node in buffers:
+        writer = next((parent for parent in node.parents if parent in op_keys), None)
+        if writer is None:
+            entries.append(node)
+            continue
+        keyed[node._label_raw] = ("buffer", node.address, op_keys[writer])
+        written_by_address[node.address].append(node)
+    sizes: dict[tuple[Any, ...], int] = defaultdict(int)
+    for key in keyed.values():
+        sizes[key] += 1
+    for node in entries:
+        later = [
+            version
+            for version in written_by_address.get(node.address, ())
+            if version.raw_index > node.raw_index
+        ]
+        first = min(later, key=lambda version: version.raw_index, default=None)
+        if first is not None and sizes[keyed[first._label_raw]] > 1:
+            keyed[node._label_raw] = keyed[first._label_raw]
+        else:
+            keyed[node._label_raw] = ("buffer", node.address, "entry", node._label_raw)
+    return [(node, keyed[node._label_raw]) for node in buffers]
+
+
+def _group_by_call_sites(self: "Trace") -> None:
+    """Partition retained ops into layers by call-site key (``callsite_v1``).
+
+    Two ops are passes of one layer exactly when their keys are equal
+    (:func:`_call_site_group_key`). Passes are numbered in capture order by
+    :func:`_rebuild_pass_assignments`. Each op keeps its own
+    ``equivalence_class`` (the argument/parameter fingerprint); the call-site
+    class lives only in the workspace side table. The finished grouping is
+    checked against the call-site contract (``_call_site_contract``) before
+    step 7 returns.
+
+    Parameters
+    ----------
+    self:
+        Trace currently running Step 7 postprocessing.
+    """
+
+    groups: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
+    keys: dict[str, tuple[Any, ...]] = {}
+    buffers: list[Any] = []
+    classes = self._raw_graph_ws._call_site_classes
+    for label in self._raw_graph_ws.raw_layer_labels_list:
+        node = self[label]
+        if getattr(node, "is_orphan", False):
+            continue
+        if node.is_buffer and node.address:
+            buffers.append(node)
+            continue
+        keys[label] = _call_site_group_key(node, classes)
+        groups[keys[label]].append(node)
+    for node, key in _buffer_group_keys(buffers, keys):
+        groups[key].append(node)
+
+    for members in groups.values():
+        leader = min(members, key=lambda member: member.raw_index)
+        for member in members:
+            member._layer_label_raw = leader._layer_label_raw
+
+    _rebuild_pass_assignments(self)
+    _check_call_site_contract(self, classes)
+    remember_call_site_classes(self, classes)
+
+
+def _check_call_site_contract(self: "Trace", classes: dict[str, str]) -> None:
+    """Raise when the finished grouping breaches the call-site contract.
+
+    Reads the side table directly, not the grouping key, so a defect in the
+    key, the partition or the pass rebuild that merges two call sites, splits
+    one, or leaves a recurrent group spanning two sites fails here.
+    """
+
+    entries = [
+        CallSiteEntry(
+            raw_label=node._label_raw,
+            layer=node._layer_label_raw,
+            func_name=node.func_name,
+            group=tuple(node.recurrent_ops or ()),
+        )
+        for node in (self[label] for label in self._raw_graph_ws.raw_layer_labels_list)
+        if not getattr(node, "is_orphan", False)
+    ]
+    violation = call_site_contract_violation(entries, classes)
+    if violation is not None:
+        from ..validation.invariants import MetadataInvariantError
+
+        raise MetadataInvariantError("call_site_contract", violation)
 
 
 def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:

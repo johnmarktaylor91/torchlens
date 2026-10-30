@@ -45,15 +45,20 @@ class _ShiftedRmsHead(_RmsHead):
 
 
 class _TwoPass(nn.Module):
-    """One Linear called twice, so the relu after it is a two-pass layer."""
+    """One Linear and relu run from a loop, so the relu is a two-pass layer.
+
+    grouping rule rows 1 and 26: the loop body is one place in the code, so
+    ``relu_1_2`` is one layer with 2 passes (two relu lines would be two
+    single-pass layers, row 14).
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = torch.relu(self.lin(x))
-        x = torch.relu(self.lin(x))
+        for _ in range(2):
+            x = torch.relu(self.lin(x))
         return x
 
 

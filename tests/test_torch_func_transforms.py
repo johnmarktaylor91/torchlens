@@ -1131,7 +1131,11 @@ def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: st
         add_ops = [op for op in trace.layer_list if op.func_name in {"__add__", "add"}]
 
         assert len(add_ops) == arity
-        assert {op.layer_label for op in add_ops} <= set(builtin.parents)
+        # grouping rule row 32: the operand comprehension is one ``add`` layer
+        # with one pass per operand, so parents name each pass.
+        operand_labels = {op.layer_label if op.num_passes == 1 else op.label for op in add_ops}
+        assert len(operand_labels) == arity
+        assert operand_labels <= set(builtin.parents)
 
 
 class _BareRawGradOverModuleModel(RawGradOverModuleModel):

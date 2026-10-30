@@ -108,7 +108,7 @@
 <text text-anchor="start" x="222" y="-799.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer3</text>
 <text text-anchor="start" x="216.5" y="-779.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text text-anchor="start" x="178.5" y="-760.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1024, 4, 4), 64.0 KB</text>
-<text text-anchor="start" x="190" y="-741.22" font-family="Helvetica,sans-Serif" font-size="14.00">62 ops + 76 buffers</text>
+<text text-anchor="start" x="190" y="-741.22" font-family="Helvetica,sans-Serif" font-size="14.00">50 ops + 76 buffers</text>
 <text text-anchor="start" x="156.5" y="-722.22" font-family="Helvetica,sans-Serif" font-size="14.00">7098368 params (all trainable)</text>
 </g>
 <!-- layer1__segment__layer2pass1&#45;&gt;layer3pass1 -->
@@ -127,7 +127,7 @@
 <text text-anchor="start" x="222" y="-951.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
 <text text-anchor="start" x="216.5" y="-931.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text text-anchor="start" x="178.5" y="-912.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 2, 2), 32.0 KB</text>
-<text text-anchor="start" x="190" y="-893.22" font-family="Helvetica,sans-Serif" font-size="14.00">32 ops + 40 buffers</text>
+<text text-anchor="start" x="190" y="-893.22" font-family="Helvetica,sans-Serif" font-size="14.00">26 ops + 40 buffers</text>
 <text text-anchor="start" x="152.5" y="-874.22" font-family="Helvetica,sans-Serif" font-size="14.00">14964736 params (all trainable)</text>
 </g>
 <!-- layer3pass1&#45;&gt;layer4pass1 -->
@@ -137,46 +137,46 @@
 <polygon fill="black" stroke="black" points="246.05,-857.69 248.5,-864.69 250.95,-857.69 246.05,-857.69"/>
 <text text-anchor="start" x="251" y="-838.02" font-family="Helvetica,sans-Serif" font-size="8.00">x2</text>
 </g>
-<!-- adaptiveavgpool2d_1_173pass1 -->
+<!-- adaptiveavgpool2d_1_141pass1 -->
 <g id="node9" class="node">
-<title>adaptiveavgpool2d_1_173pass1</title>
+<title>adaptiveavgpool2d_1_141pass1</title>
 <polygon fill="white" stroke="black" points="342.5,-1088.92 154.5,-1088.92 154.5,-1004.92 342.5,-1004.92 342.5,-1088.92"/>
 <text text-anchor="start" x="164.5" y="-1072.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_173</text>
 <text text-anchor="start" x="182" y="-1052.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 1, 1), 8.0 KB</text>
 <text text-anchor="start" x="194" y="-1033.72" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=(1, 1)</text>
 <text text-anchor="start" x="217.5" y="-1014.72" font-family="Helvetica,sans-Serif" font-size="14.00">@avgpool</text>
 </g>
-<!-- layer4pass1&#45;&gt;adaptiveavgpool2d_1_173pass1 -->
+<!-- layer4pass1&#45;&gt;adaptiveavgpool2d_1_141pass1 -->
 <g id="edge8" class="edge">
-<title>layer4pass1&#45;&gt;adaptiveavgpool2d_1_173pass1</title>
+<title>layer4pass1&#45;&gt;adaptiveavgpool2d_1_141pass1</title>
 <path fill="none" stroke="black" d="M248.5,-968.21C248.5,-977.83 248.5,-987.86 248.5,-997.41"/>
 <polygon fill="black" stroke="black" points="246.05,-997.59 248.5,-1004.59 250.95,-997.59 246.05,-997.59"/>
 </g>
-<!-- flatten_1_174pass1 -->
+<!-- flatten_1_142pass1 -->
 <g id="node10" class="node">
-<title>flatten_1_174pass1</title>
+<title>flatten_1_142pass1</title>
 <ellipse fill="white" stroke="black" cx="248.5" cy="-1158.45" rx="86.95" ry="32.55"/>
 <text text-anchor="start" x="206" y="-1165.25" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_174</text>
 <text text-anchor="start" x="197.5" y="-1145.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048), 8.0 KB</text>
 </g>
-<!-- adaptiveavgpool2d_1_173pass1&#45;&gt;flatten_1_174pass1 -->
+<!-- adaptiveavgpool2d_1_141pass1&#45;&gt;flatten_1_142pass1 -->
 <g id="edge9" class="edge">
-<title>adaptiveavgpool2d_1_173pass1&#45;&gt;flatten_1_174pass1</title>
+<title>adaptiveavgpool2d_1_141pass1&#45;&gt;flatten_1_142pass1</title>
 <path fill="none" stroke="black" d="M248.5,-1089.02C248.5,-1098.69 248.5,-1108.98 248.5,-1118.55"/>
 <polygon fill="black" stroke="black" points="246.05,-1118.71 248.5,-1125.71 250.95,-1118.71 246.05,-1118.71"/>
 </g>
-<!-- linear_1_175pass1 -->
+<!-- linear_1_143pass1 -->
 <g id="node11" class="node">
-<title>linear_1_175pass1</title>
+<title>linear_1_143pass1</title>
 <polygon fill="#d9d9d9" stroke="black" points="386.5,-1311.98 110.5,-1311.98 110.5,-1227.98 386.5,-1227.98 386.5,-1311.98"/>
 <text text-anchor="start" x="207.5" y="-1295.78" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_175</text>
 <text text-anchor="start" x="197" y="-1275.78" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
 <text text-anchor="start" x="120.5" y="-1256.78" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 2048) · bias (1000,)</text>
 <text text-anchor="start" x="236" y="-1237.78" font-family="Helvetica,sans-Serif" font-size="14.00">@fc</text>
 </g>
-<!-- flatten_1_174pass1&#45;&gt;linear_1_175pass1 -->
+<!-- flatten_1_142pass1&#45;&gt;linear_1_143pass1 -->
 <g id="edge10" class="edge">
-<title>flatten_1_174pass1&#45;&gt;linear_1_175pass1</title>
+<title>flatten_1_142pass1&#45;&gt;linear_1_143pass1</title>
 <path fill="none" stroke="black" d="M248.5,-1191.13C248.5,-1200.38 248.5,-1210.71 248.5,-1220.74"/>
 <polygon fill="black" stroke="black" points="246.05,-1220.98 248.5,-1227.98 250.95,-1220.98 246.05,-1220.98"/>
 </g>
@@ -188,9 +188,9 @@
 <text text-anchor="start" x="197.5" y="-1390.74" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
 <text text-anchor="start" x="223" y="-1371.74" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
 </g>
-<!-- linear_1_175pass1&#45;&gt;output_1pass1 -->
+<!-- linear_1_143pass1&#45;&gt;output_1pass1 -->
 <g id="edge11" class="edge">
-<title>linear_1_175pass1&#45;&gt;output_1pass1</title>
+<title>linear_1_143pass1&#45;&gt;output_1pass1</title>
 <path fill="none" stroke="black" d="M248.5,-1312.26C248.5,-1321.7 248.5,-1331.84 248.5,-1341.67"/>
 <polygon fill="black" stroke="black" points="246.05,-1341.75 248.5,-1348.75 250.95,-1341.75 246.05,-1341.75"/>
 </g>

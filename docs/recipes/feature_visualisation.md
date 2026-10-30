@@ -240,7 +240,7 @@ four (the width's square root), and the objective is unit 5 of the GELU in the
 second block's MLP, a functional op, averaged over the sequence.
 
 ```python
-# recipe-test: tool=torchlens expected=(('gelu_2_31',), True)
+# recipe-test: tool=torchlens expected=(('gelu_2_32',), True)
 class Block(nn.Module):
     def __init__(self, width=16, heads=2):
         super().__init__()

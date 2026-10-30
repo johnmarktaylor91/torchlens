@@ -437,7 +437,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # inplace=True functional mutation stamp (+10) on top of ci-fix's
     # DescriptorCompatProperty __name__ fix lands the merged tree at 3454;
     # next 50-line step above the merged measurement.
-    "torchlens/backends/torch/wrappers.py": 3500,
+    # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
+    # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
+    "torchlens/backends/torch/wrappers.py": 3400,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same

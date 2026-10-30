@@ -28,6 +28,7 @@ from ...utils.rng import log_current_rng_states
 from ...utils.tensor_utils import get_memory_amount_from_metadata
 from . import module_stack as _mstack
 from ._tl import get_tensor_meta, set_tensor_label
+from .buffer_writes import buffer_version_key
 from .completeness_witness import internal_scalar_read
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
@@ -129,6 +130,8 @@ def log_source_tensor_predicate(
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
     (self.input_layers if source == "input" else self.buffer_layers).append(tensor_label)
+    if source == "buffer":
+        self._raw_graph_ws.buffer_version_keys[tensor_label] = buffer_version_key(t)
     module_frame = state.module_stack[-1] if state.module_stack else None
     ctx = _build_record_context(
         kind="input" if source == "input" else "buffer",
@@ -506,6 +509,7 @@ def log_source_tensor_exhaustive(
     if source == "buffer":
         self.buffer_layers.append(tensor_label)
         self.internal_source_ops.append(tensor_label)
+        self._raw_graph_ws.buffer_version_keys[tensor_label] = buffer_version_key(t)
 
     # Register backward hook for sidecar capture; payload retention is decided at fire time.
     _add_tensor_backward_hook(self, t, tensor_label)

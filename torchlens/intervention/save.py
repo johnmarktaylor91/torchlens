@@ -46,7 +46,7 @@ from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
     _resolution_fanout_bound,
-    _site_key_for_label,
+    _site_keys_for_table,
     check_spec_compat,
 )
 from .types import (
@@ -1740,9 +1740,7 @@ def _build_target_manifest(
                 # identity is the structural site key; labels are display-only
                 # disclosure (ME ordinal rule). Keyless rows (backward sites,
                 # legacy captures) record None.
-                "resolved_site_keys": [
-                    _site_key_for_label(log, label) for label in resolved.labels()
-                ],
+                "resolved_site_keys": _site_keys_for_table(log, resolved),
                 "resolved_status": "resolved",
                 "graph_shape_hash": getattr(log, "graph_shape_hash", None),
                 "_address_normalized": _normalized_address(target),

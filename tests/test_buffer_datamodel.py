@@ -840,8 +840,9 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
     ``output_descendants`` union + ancestor-cone re-derivation) previously
     had ZERO content-effective coverage — an effect-neutralizing revert left
     135 targeted tests green. Here the merge SURVIVOR (the initial read)
-    feeds only an input-connected dead end, while the equal-valued duplicate
-    read reaches the output: without the repair the survivor ships
+    feeds only dead ends (an input-connected product and the slice another
+    buffer is reassigned to), while the same-version re-logged read reaches
+    the output: without the repair the survivor ships
     ``has_output_descendant=False`` and an empty ``output_descendants`` on
     an op that demonstrably feeds the model output. RED under the revert.
     """
@@ -853,8 +854,8 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
         assert list(trace.buffer_layers), "duplicate reads must merge to one buffer node"
         merged = trace[trace.buffer_layers[0]]
         op = next(iter(merged.ops.values()))
-        # The survivor owns BOTH pre-merge children (dead end + output path)...
-        assert len(op.children) == 2
+        # The survivor owns every pre-merge child (two dead ends + output path)...
+        assert len(op.children) == 3
         # ...and its child-direction reach reflects the merged edges.
         assert op.has_output_descendant is True
         assert any(label.startswith("output") for label in op.output_descendants)
@@ -863,14 +864,14 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
 
 
 def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> None:
-    """Distinct-valued same-address buffers must not pay O(G^2) torch.equal.
+    """Distinct same-address buffer versions must not pay O(G^2) value compares.
 
     Hunt-6 R52-1: step 6's dedup swept every new buffer against EVERY prior
     unique in its hash group with ``torch.equal`` -- Theta(G^2) whole-tensor
     compares for a training-mode recurrent BatchNorm whose running stats
-    differ every pass (~500k compares at x1000 passes). A cheap value
-    fingerprint now buckets the uniques, so an all-distinct group performs
-    zero merge-sweep tensor compares.
+    differ every pass (~500k compares at x1000 passes). The sweep now buckets
+    uniques by recorded buffer version, so an all-distinct group
+    performs zero merge-sweep value compares.
     """
 
     class _LoopBN(nn.Module):
@@ -891,31 +892,29 @@ def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> No
     num_passes = 12
     model = _LoopBN(num_passes).train()
 
-    import sys
+    from torchlens.postprocess import control_flow
 
     calls = {"n": 0}
-    original_equal = torch.equal
+    original_identical = control_flow._buffer_values_identical
 
-    def counting_equal(a: torch.Tensor, b: torch.Tensor) -> bool:
-        """Count tensor-equality comparisons issued by the step-6 dedup module."""
+    def counting_identical(a: torch.Tensor, b: torch.Tensor) -> bool:
+        """Count the buffer value comparisons step 6 issues."""
 
-        caller = sys._getframe(1).f_code.co_filename
-        if caller.endswith("control_flow.py"):
-            calls["n"] += 1
-        return original_equal(a, b)
+        calls["n"] += 1
+        return original_identical(a, b)
 
-    torch.equal = counting_equal
+    control_flow._buffer_values_identical = counting_identical
     try:
         trace = tl.trace(model, torch.randn(8, 4))
     finally:
-        torch.equal = original_equal
+        control_flow._buffer_values_identical = original_identical
 
     # Buffers stay distinct (running stats differ per pass), so nothing merges
     # and the merge sweep needs no tensor compares at all; the linear bound
     # covers step 6's per-buffer source-value checks.
     linear_bound = 2 * num_passes
     assert calls["n"] <= linear_bound, (
-        f"step-6 buffer dedup made {calls['n']} torch.equal calls for {num_passes} "
+        f"step-6 buffer dedup made {calls['n']} value compares for {num_passes} "
         f"distinct-value passes (linear bound {linear_bound}) -- the pairwise "
         "sweep is back"
     )

@@ -25,7 +25,10 @@ that shape). The runtime membership-container census and its reviewed
 allowlist (``torch._library.utils._RANDOM_FUNCTIONS``, the MaskedTensor
 reduce maps, the lazy-module ``_allowed_methods`` allowlist -- each safe on
 an eager-import or protocol-supplied-original basis) live in
-``tests/test_wrap_state_compat.py``; an unreviewed new table fails that gate. A fourth normalization rides along:
+``tests/test_wrap_state_compat.py``; an unreviewed new table fails that gate. A THIRD-PARTY
+handler table keyed on wrappers by a post-wrap import (tensordict) gets no
+per-library shim: the wrapper re-offers a fully declined dispatch under its
+own identity, and unwrap aliases such tables generically (``_protocol_redispatch``). A fourth normalization rides along:
 ``torch.overrides.resolve_name`` keys its cached index by the pre-warm
 originals, so a wrapper argument resolved to ``None`` -- the shim retries a
 miss with the ledger original. A fifth normalizes TorchScript's overload
@@ -293,6 +296,11 @@ def install_identity_shims() -> None:
     """
 
     global _family_installed
+    # Wrappers return to the call path: drop the original keys the last unwrap
+    # aliased into third-party handler tables (``_protocol_redispatch``).
+    from ._protocol_redispatch import undo_table_aliases
+
+    undo_table_aliases()
     if _family_installed:
         # The causal-bias site resolves only through sys.modules (lazy-import
         # belt). The import hook shims a post-wrap import the moment the
@@ -340,6 +348,11 @@ def remove_identity_shims() -> None:
     global _family_installed
     _family_installed = False
     _remove_import_hook()
+    # Third-party handler tables keyed on wrappers by a post-wrap import gain
+    # their original keys while the wrappers are off the call path.
+    from ._protocol_redispatch import alias_wrapper_keyed_tables
+
+    alias_wrapper_keyed_tables()
     _restore(_installed)
     _installed.clear()
     _live_shims.clear()

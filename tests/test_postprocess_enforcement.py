@@ -232,9 +232,13 @@ def test_buffer_duplicate_axis_actually_merges(
         # buffer_source now rides the raw->final label rename (L4's
         # _SCALAR_LABEL_FIELDS_TO_RENAME fix), so resolve the survivor's FINAL
         # label for the comparison; the removed buffer never gets a final label.
-        survivor_final = next(
-            op.label for op in trace.layer_list if op._label_raw == survivor_label
-        )
+        # Final labels follow the lookup convention parents and buffer_source
+        # use: the bare layer label for a single-pass layer, pass-qualified
+        # only for a pass of a multi-pass one. Under call-site grouping the
+        # buffer's versions are grouped by the place that wrote them
+        # (docs/guides/grouping.md), so the survivor can be single-pass.
+        survivor = next(op for op in trace.layer_list if op._label_raw == survivor_label)
+        survivor_final = survivor.layer_label if survivor.num_passes == 1 else survivor.label
         repointed = [
             op for op in trace.layer_list if op.is_buffer and op.buffer_source == survivor_final
         ]

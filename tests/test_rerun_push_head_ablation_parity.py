@@ -152,16 +152,22 @@ def test_rerun_head_ablation_equals_push_on_the_12x12_gpt2_head_set() -> None:
 
 
 class _Mlp12(nn.Module):
-    """Twelve ReLU layers: the toy substrate of the original front-door report."""
+    """Twelve ReLU layers: the toy substrate of the original front-door report.
+
+    Each block owns its ``nn.ReLU``, so the twelve relus are twelve single-pass
+    Layers (grouping rule row 29: distinct modules are separate). A bare
+    ``torch.relu`` in the loop body would be ONE Layer with 12 passes (rule
+    row 52), whose layer label names no single site.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         torch.manual_seed(0)
-        self.layers = nn.ModuleList(nn.Linear(16, 16) for _ in range(12))
+        self.layers = nn.ModuleList(nn.Sequential(nn.Linear(16, 16), nn.ReLU()) for _ in range(12))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
-            x = torch.relu(layer(x))
+            x = layer(x)
         return x
 
 

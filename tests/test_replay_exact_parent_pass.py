@@ -1,7 +1,7 @@
 """Replay resolves a template's parent to the exact op the capture recorded.
 
 Labeling renames each template parent ref to a final lookup label. When grouping fuses two
-ops of one module call into a two-pass layer, later step indices shift, so the fused
+ops of one module call into a two-pass layer (a loop body, grouping rule row 2), later step indices shift, so the fused
 layer's second pass keeps a public raw label (``add_2_5``) that is also the final label of
 the next op. Resolving the ref as a lookup key then matched both ops and replay refused as
 if they were two passes of one layer. The pass-exact label maps (``_final_to_raw_layer_labels``
@@ -21,7 +21,12 @@ from torchlens.intervention.errors import ReplayPreconditionError
 
 
 class _ResidualPair(nn.Module):
-    """Two residual adds in one call: grouping fuses them into one two-pass layer."""
+    """One residual add run twice by a loop in one call: one two-pass layer.
+
+    Grouping rule row 2: a loop in a submodule called once gives its body ops one
+    pass per iteration. (Two residual adds written on two lines are two layers,
+    row 10, and no longer fuse.)
+    """
 
     def __init__(self) -> None:
         super().__init__()
@@ -29,8 +34,10 @@ class _ResidualPair(nn.Module):
         self.b = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = x + self.a(x)
-        return h + self.b(h)
+        h = x
+        for lin in (self.a, self.b):
+            h = h + lin(h)
+        return h
 
 
 class _FusedThenAdd(nn.Module):
@@ -82,6 +89,14 @@ def test_replay_names_the_recorded_parent_when_labels_collide() -> None:
     out = str(trace.output_layers[0])
     fork = _hold_rsqrt(trace)
     assert torch.equal(fork[out].out, trace[out].out)
+
+
+def test_op_lookup_prefers_the_final_label_over_a_colliding_raw_label() -> None:
+    """``trace.ops[label]`` names the op whose final label it is, not the op it was raw."""
+
+    trace = _capture()
+    key = _colliding_label(trace)
+    assert trace.ops[key].layer_label == key
 
 
 def test_trace_without_pass_exact_maps_still_refuses() -> None:

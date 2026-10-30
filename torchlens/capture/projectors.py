@@ -280,15 +280,25 @@ class RefreshProjector:
                 refreshed,
                 self._graph_signature_mismatch_detail(refreshed),
             )
-        refreshed_by_raw = {layer._layer_label_raw: layer for layer in refreshed.layer_list}
         # B8-36: one aggregated warning per refresh. A per-layer warning with the
         # label interpolated into the message defeats Python's warning dedup
         # (hundreds of warnings on a real CNN, and ``-W error`` aborts the
         # refresh at layer one), so labels are collected during the sweep and
         # reported once.
+        #
+        # Pair the two op sequences POSITIONALLY (as
+        # ``Trace._refresh_matching_rerun_state_from`` does), never through a
+        # ``_layer_label_raw`` -> op map: every pass of a multi-pass layer shares
+        # that key, so a dict collapses an N-pass layer to its last pass and
+        # compares every earlier pass against the wrong op (a growing ``cat`` in
+        # a loop is one layer whose passes legitimately differ in shape). The
+        # signature equality checked above is the precondition that makes index
+        # i of one list the same op as index i of the other.
         shape_changed: list[str] = []
-        for layer in self.target.layer_list:
-            new_shape = refreshed_by_raw[layer._layer_label_raw].shape
+        for layer, refreshed_layer in zip(
+            self.target.layer_list, refreshed.layer_list, strict=True
+        ):
+            new_shape = refreshed_layer.shape
             if layer.shape is not None and new_shape != layer.shape:
                 shape_changed.append(
                     f"'{layer.layer_label}' (expected {layer.shape}, got {new_shape})"

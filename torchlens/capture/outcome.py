@@ -861,6 +861,10 @@ _TRAMPOLINE_SOURCE_MARKER = "out_orig = func("
 # exception raised there is the user's op failing, exactly like the trampoline.
 _WITNESS_REDISPATCH_FILE = "completeness_witness.py"
 _WITNESS_REDISPATCH_MARKER = "result = func(*args, **(kwargs or {}))"
+# The declined-protocol redispatch's re-offer to a third-party handler: an
+# exception the handler raises there is the user's op failing in library code.
+_PROTOCOL_REDISPATCH_FILE = "_protocol_redispatch.py"
+_PROTOCOL_REDISPATCH_MARKER = "result = value.__torch_function__(wrapper, types, args, kwargs)"
 # The ``torch.ops`` call-class recorder's pass-through to the original ``__call__``
 # (the census redispatch and unrecorded calls reach the operator through it).
 _TORCH_OPS_PASSTHROUGH_FILE = "_torch_ops_calls.py"
@@ -910,8 +914,8 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
     Walks the traceback from the innermost frame outward. The innermost
     attributable frame wins: user code -> USER_OP; a torchlens frame ->
-    TORCHLENS, except the wrapper trampoline and the completeness-witness
-    redispatch (each executing the user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
+    TORCHLENS, except the wrapper trampoline, the completeness-witness
+    redispatch and the declined-protocol re-offer (each executing the user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
     attributable -> UNKNOWN. Misclassification is capability-safe by
     construction -- origin never steers a gate.
     """
@@ -949,6 +953,10 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
                 or (
                     frame.filename.endswith(_WITNESS_REDISPATCH_FILE)
                     and _WITNESS_REDISPATCH_MARKER in line
+                )
+                or (
+                    frame.filename.endswith(_PROTOCOL_REDISPATCH_FILE)
+                    and _PROTOCOL_REDISPATCH_MARKER in line
                 )
                 or (
                     frame.filename.endswith(_TORCH_OPS_PASSTHROUGH_FILE)

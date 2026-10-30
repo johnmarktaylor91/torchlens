@@ -164,7 +164,18 @@ WRONG_PAYLOAD_OWNER = "A02 (semantic residual slice)"
 # every later LayerNorm reports needs_capture for it. User-visible
 # inconsistency; pinned so a fix (or a regression to all-unavailable)
 # surfaces here rather than shifting silently.
-GPT2_LN_INPUT_AVAILABLE_ADDRESSES = ("transformer.h.0.ln_1",)
+#
+# grouping rule rows 10 and 12: each residual add in a gpt2 block is its own
+# single-pass layer, so every LayerNorm's input op resolves and the
+# inconsistency is gone; the pin now holds all five LayerNorms (a regression
+# to the partial or all-unavailable state still surfaces here).
+GPT2_LN_INPUT_AVAILABLE_ADDRESSES = (
+    "transformer.h.0.ln_1",
+    "transformer.h.0.ln_2",
+    "transformer.h.1.ln_1",
+    "transformer.h.1.ln_2",
+    "transformer.ln_f",
+)
 
 # Common forward-kwarg name corpus (memo D7 class 3). The static
 # intersection check pins signature(tl.trace) INTERSECT this corpus to the

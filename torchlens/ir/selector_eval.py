@@ -1457,15 +1457,13 @@ def _grad_fn_forward_op(site: Any) -> Any:
         The paired pass-level op, or ``None`` when the GradFn has no op.
     """
 
+    from torchlens.data_classes.grad_fn import _pass_op_for_grad_fn
+
     op = site.op
-    if op is None or int(getattr(op, "num_passes", 1) or 1) <= 1:
-        return op
-    for pass_op in getattr(op, "ops", ()) or ():
-        if getattr(pass_op, "grad_fn_object_id", None) == site.grad_fn_object_id:
-            return pass_op
+    pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
     # No pass carries this autograd identity: keep the multi-pass Layer so its
     # typed per-pass refusal fires rather than silently matching nothing.
-    return op
+    return op if pass_op is None else pass_op
 
 
 def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
@@ -1491,6 +1489,8 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
         excluding the already-paired op.
     """
 
+    from torchlens.data_classes.grad_fn import _pass_op_for_grad_fn
+
     trace = site.source_trace
     if trace is None:
         return ()
@@ -1500,13 +1500,15 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     # could in principle be reused by an unrelated node after its first owner
     # was freed. An identity call's input is alive while it runs, so a child
     # of an already-accepted op that shares the node IS the same tensor.
+    # A pass-level subject (an Op, or a single-pass Layer) has a label and
+    # parents of its own; the multi-pass Layer kept when no pass carries this
+    # identity refuses both, so only its bare label is accepted.
+    pass_level = _pass_op_for_grad_fn(paired, site.grad_fn_object_id) is not None
     accepted = {str(paired_label)}
-    if paired is not None and int(getattr(paired, "num_passes", 1) or 1) <= 1:
+    if pass_level:
         accepted.add(str(getattr(paired, "label", paired_label)))
     paired_parents = (
-        {str(parent) for parent in getattr(paired, "parents", ()) or ()}
-        if paired is not None and int(getattr(paired, "num_passes", 1) or 1) <= 1
-        else set()
+        {str(parent) for parent in getattr(paired, "parents", ()) or ()} if pass_level else set()
     )
     aliases: list[Any] = []
     for layer in getattr(trace, "layer_list", ()):

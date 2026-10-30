@@ -1605,7 +1605,7 @@ def _label_node_arguments_if_needed(
         arg_labels = []
         for arg_type in ["args", "kwargs"]:
             for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
-                if parent_node.layer_label == arg_label:
+                if arg_label in (parent_node.layer_label, _relation_label(parent_node)):
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     if not arg_labels:

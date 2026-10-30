@@ -33,7 +33,7 @@ from ...capture.peak_memory import (
 )
 from ...data_classes.backward_pass import BackwardPass
 from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.grad_fn import GradFn
+from ...data_classes.grad_fn import GradFn, _paired_pass_op
 from ...data_classes.grad_fn_call import GradFnCall
 from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ...errors import ConfigurationError
@@ -907,7 +907,11 @@ def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
     return None if param_log is None else getattr(param_log, "module_address", None)
 
 
-def _op_module_address(trace: Any, op_label: str | None) -> str | None:
+def _op_module_address(
+    trace: Any,
+    op_label: str | None,
+    grad_fn_object_id: int | None = None,
+) -> str | None:
     """Return the containing module address for a paired forward op label.
 
     Parameters
@@ -915,7 +919,10 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
     trace:
         Trace containing op logs.
     op_label:
-        Forward op label paired to a grad-fn record.
+        Forward layer label paired to a grad-fn record.
+    grad_fn_object_id:
+        Autograd identity of the grad-fn node, selecting its own pass on a
+        multi-pass layer.
 
     Returns
     -------
@@ -923,9 +930,9 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
         Module address for the paired op, if known.
     """
 
-    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+    op = _paired_pass_op(trace, op_label, grad_fn_object_id)
+    if op is None:
         return None
-    op = trace.layer_dict_all_keys[op_label]
     module_address = getattr(op, "module_address", None)
     if module_address is not None:
         return cast(str, module_address)
@@ -983,10 +990,10 @@ def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
         Forward raw index, or ``None`` for parameter-only and unresolved records.
     """
 
-    op_label = grad_fn_record.op_label
-    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+    op = _paired_pass_op(trace, grad_fn_record.op_label, grad_fn_record.grad_fn_object_id)
+    if op is None:
         return None
-    return int(getattr(trace.layer_dict_all_keys[op_label], "raw_index"))
+    return int(getattr(op, "raw_index"))
 
 
 def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
@@ -1617,7 +1624,7 @@ def _materialize_backward_projections_impl(
         modules: list[str] = []
         module_address = None
         module_membership_source = None
-        op_module_address = _op_module_address(trace, event.op_label)
+        op_module_address = _op_module_address(trace, event.op_label, object_id)
         param_module_address = _param_module_address(trace, event.param_ref)
         if op_module_address is not None:
             module_address = op_module_address
@@ -2634,7 +2641,10 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     Returns
     -------
     dict[int, str]
-        Mapping from ``id(grad_fn_handle)`` to final layer label.
+        Mapping from ``id(grad_fn_handle)`` to final layer label. This is the
+        ``GradFn.op_label`` contract: always the layer label, never a
+        pass-qualified op label, also on multi-pass layers. Consumers that need
+        the exact pass resolve it with ``_paired_pass_op``.
     """
     mapping: dict[int, str] = {}
     ranks: dict[int, int] = {}
@@ -3900,9 +3910,13 @@ def _checkpoint_token_summary(
     record: dict[str, Any],
     evidence_lock: threading.Lock,
     grad_fn_logs: dict[int, Any],
-    layer_lookup: dict[str, Any],
+    trace: Any,
 ) -> dict[str, Any]:
-    """Return one checkpoint token's count, site, and backward-window summary."""
+    """Return one checkpoint token's count, site, and backward-window summary.
+
+    Each fire bracket's site key comes from the pass its grad-fn node
+    differentiates, so a multi-pass layer contributes the pass that ran.
+    """
 
     with evidence_lock:
         evidence = list(record["unpack_evidence"])
@@ -3918,7 +3932,7 @@ def _checkpoint_token_summary(
         label = getattr(grad_fn_record, "label", None)
         window_refs.append((bracket_pass_index, label, bracket_call_index))
         if grad_fn_record is not None and getattr(grad_fn_record, "has_op", False):
-            op = layer_lookup.get(grad_fn_record.op_label)
+            op = _paired_pass_op(trace, grad_fn_record.op_label, bracket_object_id)
             site_key = getattr(op, "site_key", None)
             if site_key is not None:
                 site_candidates.add(site_key)
@@ -3955,7 +3969,7 @@ def _refresh_checkpoint_witness(trace: Any) -> None:
                 record,
                 state["lock"],
                 getattr(trace, "grad_fn_logs", {}),
-                getattr(trace, "layer_dict_all_keys", {}),
+                trace,
             )
             for token, record in state["tokens"].items()
         }
@@ -4149,7 +4163,12 @@ def install_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED, _ORIGINAL_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_GRAD
+    from ._function_boundary import install_function_apply_wrapper
+
     _install_saved_tensors_hooks_scope()
+    # The foreign-kernel boundary rides the same install/teardown pair as the
+    # autograd entry wrappers (``Function.apply`` is an autograd entry point too).
+    install_function_apply_wrapper()
     if _AUTOGRAD_WRAPPERS_INSTALLED:
         return
     _ORIGINAL_AUTOGRAD_BACKWARD = torch.autograd.backward
@@ -4249,8 +4268,11 @@ def uninstall_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
+    from ._function_boundary import uninstall_function_apply_wrapper
+
     buried_sites: list[str] = []
     _uninstall_saved_tensors_hooks_scope(buried_sites)
+    uninstall_function_apply_wrapper()
     if not _AUTOGRAD_WRAPPERS_INSTALLED:
         _warn_buried_autograd_sites(buried_sites)
         return
