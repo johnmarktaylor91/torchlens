@@ -436,3 +436,73 @@ def test_check_task_wires_the_stub_grader(tmp_path: Path) -> None:
         "wrong/wrong_module": False,
         "do_nothing": False,
     }
+
+
+# --- external runner: stage, then ingest what it returns -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"exit_reason": "completed", "returncode": 0}, "finished"),
+        ({"exit_reason": "completed", "returncode": 1}, "agent_error"),
+        ({"exit_reason": "wall_cap", "returncode": None}, "wall_cap"),
+        ({"exit_reason": "output_token_cap"}, "token_cap"),
+        ({"exit_reason": "credential_in_output"}, "harness_error"),
+        ({}, "harness_error"),
+    ],
+)
+def test_external_exit_reasons_map_to_record_end_reasons(raw: dict, expected: str) -> None:
+    from agent_evals.bench import external
+
+    assert external.end_reason(raw) == expected
+
+
+def test_stage_writes_only_the_prompt_inputs_and_material(
+    stub_task: registry.BenchTask, tmp_path: Path
+) -> None:
+    from agent_evals.bench import external
+
+    material = tmp_path / "INDEX.md"
+    material.write_text("notes")
+    spec = runner.RunSpec(
+        stub_task, "A", "small", 0, Path(sys.executable), Path(sys.executable), material
+    )
+    prompt = external.stage(spec, tmp_path / "task", "AGENTS.md")
+    assert sorted(p.name for p in (tmp_path / "task").iterdir()) == [
+        "AGENTS.md",
+        "TASK.md",
+        "inputs",
+    ]
+    assert "solve.py" in prompt and "AGENTS.md" in prompt
+    assert not any(
+        p.name in {"grader.py", "reference", "heldout"} for p in (tmp_path / "task").rglob("*")
+    )
+
+
+@pytest.mark.heavy  # the fake agent's solve run plus one graded checkpoint (solve, held-out, grader)
+def test_ingest_grades_a_returned_run_into_a_valid_record(
+    stub_task: registry.BenchTask, tmp_path: Path
+) -> None:
+    from agent_evals.bench import external
+
+    spec = _spec(stub_task)
+    returned = tmp_path / "returned"
+    external.stage(spec, returned / "task")
+    reference = STUB_ROOT / "T0" / "reference" / "solve.py"
+    with (returned / "agent.jsonl").open("w") as stream:
+        subprocess.run(
+            [sys.executable, str(FAKE_AGENT), "--mode", "solve", "--solution", str(reference)],
+            cwd=returned / "task",
+            stdout=stream,
+            check=True,
+            env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin"},
+        )
+    (returned / "record.json").write_text(
+        json.dumps({"exit_reason": "completed", "returncode": 0, "elapsed_s": 12.5})
+    )
+    record = external.ingest(spec, returned, tmp_path / "graded", _config("solve"), (45,))
+    assert telemetry.validate_record(record) == []
+    assert record["end_reason"] == "finished" and record["passed"] is True
+    assert record["elapsed_s"] == 12.5 and record["tool_calls"]["total"] == 3
+    assert record["tokens"]["output"] == 150 and record["load_bearing_lines"] > 5

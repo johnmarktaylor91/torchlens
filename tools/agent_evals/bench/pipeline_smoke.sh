@@ -32,7 +32,7 @@ echo "== check-task T0"
 
 cat >"$OUT/fake-tiers.json" <<EOF
 {"tiers": {"small": {"agent_cmd": ["$PY", "$REPO/tools/agent_evals/bench/fake_agent.py",
-  "--mode", "solve", "--solution", "$REPO/tools/agent_evals/bench/stub/T0/reference.py"],
+  "--mode", "solve", "--solution", "$REPO/tools/agent_evals/bench/stub/T0/reference/solve.py"],
   "caps": {"wall_s": 300, "checkpoints_s": [60, 120, 300]}}}}
 EOF
 echo "== fake-agent run T0 arm A small"

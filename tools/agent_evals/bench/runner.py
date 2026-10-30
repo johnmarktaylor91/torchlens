@@ -420,13 +420,28 @@ def _finish(
         for label, path in sorted(snapshots.items(), key=lambda item: float(item[0][1:]))
     }
     final_label = checkpoint_label(max(caps.checkpoints_s))
-    provided = set()
+    summarize_code(record, spec, work, entries, stats)
+    record["passed"] = (
+        bool(record["checkpoints"][final_label]["passed"]) and not record["guard"]["violations"]
+    )
+
+
+def summarize_code(
+    record: dict[str, Any],
+    spec: RunSpec,
+    work: Path,
+    entries: list[str],
+    stats: telemetry.StreamStats,
+) -> None:
+    """Fill the record's code and stream fields: guard audit, lines, first call, tokens, tools."""
+
+    provided: set[str] = set()
     if spec.task.inputs is not None:
         provided = {
             f"inputs/{p.relative_to(spec.task.inputs).as_posix()}"
             for p in spec.task.inputs.rglob("*.py")
         }
-    files = telemetry.agent_python_files(work, exclude=provided)
+    files = telemetry.agent_python_files(work, exclude=provided) if work.is_dir() else []
     sources = [path.read_text(encoding="utf-8", errors="replace") for path in files]
     violations = sorted({hit for source in sources for hit in guards.audit_source(source, entries)})
     record["guard"] = {"entries": entries, "violations": violations}
@@ -443,7 +458,6 @@ def _finish(
     }
     record["executions"] = stats.executions
     record["stream_bad_lines"] = stats.bad_lines
-    record["passed"] = bool(record["checkpoints"][final_label]["passed"]) and not violations
 
 
 def _empty_record(spec: RunSpec, started: str, run_dir: Path) -> dict[str, Any]:

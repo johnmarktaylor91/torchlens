@@ -10,6 +10,8 @@ Commands::
                  [--repeats 3]
     run          --task ID --arm A --tier small --config FILE --envs DIR --out DIR
                  [--repeat 0] [--oracles DIR] [--material-root DIR]
+    stage        --task ID --arm A --tier small --envs DIR --dest DIR    (external runner)
+    ingest       --task ID --arm A --tier small --envs DIR --returned DIR --out DIR
     run-plan     --plan FILE --config FILE --envs DIR --out DIR [--limit N] [--oracles DIR]
                  [--material-root DIR]
     summarize    --results DIR
@@ -25,14 +27,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import arms, guards, registry, runner, scheduler, telemetry
+from . import arms, external, guards, registry, runner, scheduler, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MATERIAL_ROOT = registry.ORACLE_ROOT / "_material"
@@ -51,7 +52,13 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_build_env(args: argparse.Namespace) -> int:
     arm = arms.ARMS[args.arm]
     dest = Path(args.dest)
-    python = arms.build(arm, dest, Path(args.repo))
+    natives = guards.load_natives()
+    if args.tasks:
+        # A per-task environment: its fail-closed guard holds only these tasks' entries, for a
+        # runner that clears the environment (so no per-run guard file reaches the agent).
+        wanted = {guards.task_number(t) for t in args.tasks.split(",")}
+        natives = {t: v for t, v in natives.items() if t in wanted}
+    python = arms.build(arm, dest, Path(args.repo), natives=natives)
     report: dict[str, Any] = {"audit": arms.audit(arm, python), "guards": {}}
     clean_env = {"PATH": f"{python.parent}:/usr/bin:/bin", "HOME": str(dest)}
     if arm.library:
@@ -64,8 +71,10 @@ def cmd_build_env(args: argparse.Namespace) -> int:
         )
         report["library_imports_under_union"] = probe.returncode == 0
         report["union_import_error"] = probe.stderr[-1000:]
-    for task_id in guards.load_natives():
-        entries = guards.entries_for(task_id, arm.arm_id)
+    report["tasks"] = sorted(natives)
+    report["union"] = guards.union_for(arm.arm_id, natives)
+    for task_id in natives:
+        entries = guards.entries_for(task_id, arm.arm_id, natives=natives)
         if not entries:
             continue
         config = guards.write_run_config(dest / f"guard-{task_id}.json", entries)
@@ -98,8 +107,9 @@ def cmd_build_env(args: argparse.Namespace) -> int:
 def _grade_candidate(
     task: registry.BenchTask, candidate: Path, python: str, out: Path, config: runner.RunConfig
 ) -> dict[str, Any]:
-    solution = out / "solution"
-    shutil.copytree(candidate, solution)
+    # Run in place: seeded wrong solutions import the reference by its path in the task tree.
+    solution = candidate
+    out.mkdir(parents=True)
     spec = runner.RunSpec(task, "A", "small", 0, Path(python), Path(python))
     guards.write_run_config(out / "guard.json", [])
     env = runner.agent_env(spec, config, out)
@@ -203,8 +213,11 @@ def _spec(
 ) -> runner.RunSpec:
     arm = arms.ARMS[arm_id]
     envs = Path(args.envs)
-    env_report = envs / arm_id / "env.json"
-    environment = {"arm_env": str(envs / arm_id)}
+    # A per-task environment (``B-T7``) wins over the arm's shared one (``B``).
+    env_dir = envs / f"{arm_id}-{guards.task_number(task.task_id)}"
+    env_dir = env_dir if env_dir.is_dir() else envs / arm_id
+    env_report = env_dir / "env.json"
+    environment = {"arm_env": str(env_dir)}
     if env_report.exists():
         audit = json.loads(env_report.read_text())["audit"]
         environment["freeze_sha256"] = audit["freeze_sha256"]
@@ -214,7 +227,7 @@ def _spec(
         arm=arm_id,
         tier=tier,
         repeat=repeat,
-        arm_python=envs / arm_id / "bin" / "python",
+        arm_python=env_dir / "bin" / "python",
         grader_python=envs / "A" / "bin" / "python",
         material=material if material and material.exists() else None,
         library=arm.library,
@@ -284,6 +297,33 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stage(args: argparse.Namespace) -> int:
+    """Write one run's task folder and prompt for an external subject runner."""
+
+    task = _tasks(args)[args.task]
+    spec = _spec(args, task, args.arm, args.tier, args.repeat)
+    prompt = external.stage(spec, Path(args.dest), args.material_filename)
+    (Path(args.dest).parent / f"{Path(args.dest).name}.prompt.md").write_text(prompt)
+    print(
+        json.dumps(
+            {"task_folder": args.dest, "material": str(spec.material) if spec.material else None}
+        )
+    )
+    return 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """Grade an external runner's returned folder and write the run record."""
+
+    config = runner.RunConfig.load(Path(args.config)) if args.config else runner.RunConfig({}, {})
+    task = _tasks(args)[args.task]
+    spec = _spec(args, task, args.arm, args.tier, args.repeat)
+    minutes = tuple(int(m) for m in args.checkpoints.split(","))
+    record = external.ingest(spec, Path(args.returned), Path(args.out), config, minutes)
+    print(json.dumps({k: record[k] for k in ("task", "arm", "tier", "end_reason", "passed")}))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m agent_evals.bench")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -299,6 +339,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--arm", required=True, choices=sorted(arms.ARMS))
     p.add_argument("--dest", required=True)
     p.add_argument("--repo", default=str(REPO_ROOT))
+    p.add_argument("--tasks", help="limit the environment's guard to these tasks (per-task env)")
     p = add("check-task", cmd_check_task)
     p.add_argument("--task", required=True)
     p.add_argument("--python", required=True)
@@ -330,6 +371,22 @@ def build_parser() -> argparse.ArgumentParser:
         else:
             p.add_argument("--plan", required=True)
             p.add_argument("--limit", type=int)
+    for name, func in (("stage", cmd_stage), ("ingest", cmd_ingest)):
+        p = add(name, func)
+        p.add_argument("--task", required=True)
+        p.add_argument("--arm", required=True, choices=sorted(arms.ARMS))
+        p.add_argument("--tier", required=True, choices=runner.TIERS)
+        p.add_argument("--repeat", type=int, default=0)
+        p.add_argument("--envs", required=True)
+        p.add_argument("--material-root", default=str(MATERIAL_ROOT))
+        if name == "stage":
+            p.add_argument("--dest", required=True)
+            p.add_argument("--material-filename", default="AGENTS.md")
+        else:
+            p.add_argument("--returned", required=True)
+            p.add_argument("--out", required=True)
+            p.add_argument("--config")
+            p.add_argument("--checkpoints", default="10,20,45")
     p = add("summarize", cmd_summarize)
     p.add_argument("--results", required=True)
     return parser

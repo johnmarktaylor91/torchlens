@@ -156,7 +156,9 @@ def agent_python_files(work: Path, exclude: Iterable[str] = ()) -> list[Path]:
         for path in work.rglob("*.py")
         if path.relative_to(work).as_posix() not in skip
         and not path.name.startswith("test_")
-        and not any(part.startswith(".") or part == "__pycache__" for part in path.parts)
+        and not any(
+            part.startswith(".") or part == "__pycache__" for part in path.relative_to(work).parts
+        )
     )
 
 
