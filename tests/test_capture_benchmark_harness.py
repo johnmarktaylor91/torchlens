@@ -159,6 +159,29 @@ def test_fixture_names_round_trip_and_build() -> None:
         assert set(meta["sites"]) <= set(dict(model.named_modules()))
 
 
+def test_fixture_chains_stay_finite_and_nonzero() -> None:
+    from benchmarks.capture import fixtures
+
+    for kind in fixtures.KINDS:
+        model, x, _ = fixtures.build_fixture(fixtures.fixture_name(kind, 1000, "small"))
+        with torch.no_grad():
+            out = model(x)
+        assert torch.isfinite(out).all(), kind
+        assert out.abs().max() > 1e-6, kind
+
+
+def test_compare_counts_nonfinite_and_pick_falls_back_across_batch_sizes() -> None:
+    from benchmarks.capture import arms
+
+    t = torch.tensor([1.0, float("nan"), 3.0])
+    same = arms.compare(t, t.clone())
+    assert same["matched"] is True and same["nonfinite"] == 1
+    off = arms.compare(torch.tensor([1.0, float("nan"), 4.0]), t)
+    assert off["matched"] is False and off["max_abs_diff"] == 1.0
+    out, h = torch.zeros(4, 32, 8), torch.zeros(1, 4, 8)
+    assert arms._pick([h, out], (16, 32, 8)) is out
+
+
 def test_panel_generation_cells_name_entry_points() -> None:
     from benchmarks.capture import panel
 
@@ -184,7 +207,9 @@ def test_matched_contract_compare_and_hooks_reference() -> None:
     assert arms.compare(ref + 1, ref)["matched"] is False
     steered = hooks.run("repeated_steering")
     assert len(steered) == len(arms.STEER_MAGNITUDES)
-    assert hooks.run("same_site_gradient").shape == subject.site_shape
+    grad_subject = arms.grad_ready(subject)
+    assert grad_subject.x.requires_grad and not subject.x.requires_grad
+    assert arms.HooksArm(grad_subject).run("same_site_gradient").shape == subject.site_shape
     feats = hooks.run("ordered_dataset_features")
     assert feats.shape[0] == arms.DATASET_SIZE
 

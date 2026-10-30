@@ -123,6 +123,8 @@ def run_cell(args: argparse.Namespace) -> dict[str, Any]:
     base = {"process_index": args.process_index, "device": args.device}
     try:
         subject = build_subject(args.subject, args.device)
+        if args.case in ("same_site_gradient", "backward_capture"):
+            subject = arms.grad_ready(subject)
         with tempfile.TemporaryDirectory(prefix="tl-bench-") as tmp:
             if args.suite == "A":
                 fields = _suite_a(args, subject)

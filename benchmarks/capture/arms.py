@@ -18,6 +18,7 @@ is the floor, not a contract. An arm that cannot produce a contract raises
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -243,6 +244,9 @@ def _pick(cands: list[Any], shape: tuple[int, ...]) -> torch.Tensor:
     for tensor in tensors:
         if tuple(tensor.shape) == shape:
             return tensor
+    for tensor in tensors:
+        if len(shape) > 1 and tuple(tensor.shape[1:]) == shape[1:]:
+            return tensor
     if tensors:
         return tensors[-1]
     raise RuntimeError("no tensor output at the site")
@@ -265,6 +269,31 @@ class _TorchLensBase:
         ops = trace.find_sites(self.tl.module(site))
         return _pick([op.out for op in ops], self._shape(site))
 
+    def _key(self, site: str) -> str:
+        """The string lookup key for ``site`` in string-keyed entry points.
+
+        A module with a tuple output (an LSTM returns output, h and c) owns several ops,
+        so its plain name is ambiguous there; use the exact label of the op that holds
+        the tensor the hooks reference reads, found once in an untimed probe.
+        """
+
+        cache = self.__dict__.setdefault("_keys", {})
+        if site not in cache:
+            with torch.no_grad():
+                trace = self.tl.trace(
+                    self.s.model,
+                    self.s.x,
+                    save=self.tl.module(site),
+                    capture=self.CaptureOptions(inference_only=True, unwrap_when_done=False),
+                )
+            ops = list(trace.find_sites(self.tl.module(site)))
+            if len(ops) <= 1:
+                cache[site] = site
+            else:
+                want = _pick([op.out for op in ops], self._shape(site))
+                cache[site] = next(op.label for op in ops if first_tensor(op.out) is want)
+        return cache[site]
+
 
 class TLExtractArm(_TorchLensBase):
     """``tl.extract``: named module outputs from one call."""
@@ -279,14 +308,16 @@ class TLExtractArm(_TorchLensBase):
             )
         if case == "single_module_output":
             with torch.no_grad():
-                return first_tensor(tl.extract(s.model, s.x, {"f": s.site})["f"])
+                return first_tensor(tl.extract(s.model, s.x, {"f": self._key(s.site)})["f"])
         if case == "matched_retained":
+            keys = {site: self._key(site) for site in s.sites}
             with torch.no_grad():
-                got = tl.extract(s.model, s.x, {site: site for site in s.sites})
+                got = tl.extract(s.model, s.x, keys)
             return [first_tensor(got[site]) for site in s.sites]
+        key = self._key(s.site)
         with torch.no_grad():
             return torch.cat(
-                [first_tensor(tl.extract(s.model, b, {"f": s.site})["f"]) for b in s.batches()]
+                [first_tensor(tl.extract(s.model, b, {"f": key})["f"]) for b in s.batches()]
             )
 
 
@@ -419,9 +450,10 @@ class TLExtractDatasetArm(_TorchLensBase):
         if case != "ordered_dataset_features":
             raise Unsupported("dataset extraction serves the dataset contract only")
         s = self.s
+        key = self._key(s.site)
         with torch.no_grad():
             got = self.tl.extract_dataset(
-                s.model, s.dataset, [s.site], batch_size=DATASET_BATCH, progress=False
+                s.model, s.dataset, [key], batch_size=DATASET_BATCH, progress=False
             )
         return first_tensor(next(iter(got.values())))
 
@@ -622,6 +654,20 @@ def prepare_subject(
     return subject
 
 
+def grad_ready(subject: Subject) -> Subject:
+    """Return ``subject`` with an input that requires grad when nothing else does.
+
+    Parameter-free fixtures (pointwise chains, decomposed attention) build no autograd
+    graph from a plain input, so a gradient contract needs the input to require grad.
+    Every arm of a cell sees the same subject, so the comparison stays matched.
+    """
+
+    has_params = any(p.requires_grad for p in subject.model.parameters())
+    if has_params or not subject.x.is_floating_point():
+        return subject
+    return dataclasses.replace(subject, x=subject.x.detach().requires_grad_(True))
+
+
 def compare(got: Any, ref: Any) -> dict[str, Any]:
     """Compare an arm's result with the hooks reference.
 
@@ -637,15 +683,28 @@ def compare(got: Any, ref: Any) -> dict[str, Any]:
     if len(got_list) != len(ref_list):
         return {"matched": False, "shape_mismatch": f"{len(got_list)} vs {len(ref_list)} tensors"}
     worst = 0.0
+    nonfinite = 0
     identical = True
     for g, r in zip(got_list, ref_list, strict=True):
         g = first_tensor(g).detach().reshape(-1).float()
         r = first_tensor(r).detach().reshape(-1).float()
         if g.shape != r.shape:
             return {"matched": False, "shape_mismatch": f"{list(g.shape)} vs {list(r.shape)}"}
-        diff = float((g - r).abs().max()) if g.numel() else 0.0
+        finite = torch.isfinite(g) & torch.isfinite(r)
+        nonfinite += int((~finite).sum())
+        diff = float((g[finite] - r[finite]).abs().max()) if finite.any() else 0.0
         worst = max(worst, diff)
         identical = identical and bool(torch.equal(g, r))
-        if not torch.allclose(g, r, rtol=1e-5, atol=1e-6):
-            return {"matched": False, "max_abs_diff": worst, "bit_identical": False}
-    return {"matched": True, "max_abs_diff": worst, "bit_identical": identical}
+        if not torch.allclose(g, r, rtol=1e-5, atol=1e-6, equal_nan=True):
+            return {
+                "matched": False,
+                "max_abs_diff": worst,
+                "bit_identical": False,
+                "nonfinite": nonfinite,
+            }
+    return {
+        "matched": True,
+        "max_abs_diff": worst,
+        "bit_identical": identical,
+        "nonfinite": nonfinite,
+    }

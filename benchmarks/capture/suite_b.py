@@ -9,6 +9,7 @@ module outputs only, with no operation graph, no functional operations inside
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -145,9 +146,11 @@ def build_row(
     if name == "validate":
         return (lambda: tl.validate(model, x, scope="forward", random_seed=0)), facts
     if name == "save_load":
-        path = workdir / "trace.tlspec"
+        calls = itertools.count()
 
         def save_load() -> Any:
+            # A fresh path per call: saving refuses to overwrite an existing bundle.
+            path = workdir / f"trace-{next(calls)}.tlspec"
             tl.save(probe, path, level="portable")
             return tl.load(path)
 

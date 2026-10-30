@@ -42,21 +42,23 @@ class _Matmul(nn.Module):
 
     def __init__(self, d: int) -> None:
         super().__init__()
-        self.w = nn.Parameter(torch.randn(d, d) / d**0.5)
+        # Orthogonal weights keep the norm fixed through thousands of matmuls.
+        self.w = nn.Parameter(torch.linalg.qr(torch.randn(d, d))[0])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.matmul(x, self.w)
 
 
 class _Conv(nn.Module):
-    ops = 2
+    ops = 3
 
     def __init__(self, c: int) -> None:
         super().__init__()
         self.conv = nn.Conv2d(c, c, 3, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.relu(self.conv(x))
+        # The residual inside tanh keeps values bounded without decaying to zero.
+        return torch.tanh(self.conv(x) + x)
 
 
 class _Norm(nn.Module):
@@ -71,18 +73,19 @@ class _Norm(nn.Module):
 
 
 class _AttentionFused(nn.Module):
-    ops = 2
+    ops = 3
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.scaled_dot_product_attention(x, x, x) + x
+        return (F.scaled_dot_product_attention(x, x, x) + x) * 0.5
 
 
 class _AttentionDecomposed(nn.Module):
-    ops = 6
+    ops = 7
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         scores = torch.matmul(x, x.transpose(-2, -1)) * (x.shape[-1] ** -0.5)
-        return torch.matmul(torch.softmax(scores, dim=-1), x) + x
+        # Halving the residual sum keeps a chain of hundreds of blocks finite.
+        return (torch.matmul(torch.softmax(scores, dim=-1), x) + x) * 0.5
 
 
 class _ViewsInplace(nn.Module):
@@ -90,7 +93,7 @@ class _ViewsInplace(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x.transpose(-2, -1).contiguous().transpose(-2, -1)
-        return y.mul_(0.5).add_(x)
+        return y.mul_(0.5).add_(x, alpha=0.5)
 
 
 class _Reduction(nn.Module):
@@ -105,18 +108,18 @@ class _DynamicBranch(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.sum() > 0:
-            return x * 0.5
+            return x - 0.5
         return x + 0.5
 
 
 class _ClampGrad(torch.autograd.Function):
     @staticmethod
     def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
-        return x * 0.5
+        return -x
 
     @staticmethod
     def backward(ctx: Any, grad: torch.Tensor) -> torch.Tensor:
-        return grad.clamp(-1.0, 1.0) * 0.5
+        return -grad.clamp(-1.0, 1.0)
 
 
 class _CustomAutograd(nn.Module):
