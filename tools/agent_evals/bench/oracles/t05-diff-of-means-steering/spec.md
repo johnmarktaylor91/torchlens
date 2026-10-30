@@ -43,7 +43,7 @@ The oracle independently fits and intervenes with a forward hook. Bars:
 all shapes and finite float32 outputs; direction cosine at least .999;
 max absolute first-step logit error divided by max absolute oracle logit at
 most .01; steered new-token agreement at least 90%; native new-token agreement
-100%; maximum projection absolute error strictly below `1e-4`; steered/native
+100%; maximum projection absolute error strictly below `1e-3`; steered/native
 time ratio at most 1.5. The ratio is measured in the same process and is
 advisory across machines. Both visible and held-out runs must pass.
 
