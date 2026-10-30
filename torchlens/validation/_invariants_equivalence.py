@@ -80,8 +80,6 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
       and stay in the final op-label namespace.
     """
     name = "equivalence_symmetry"
-    from ._invariants_equivalence import _equivalence_classes_agree, _is_call_site_grouped
-
     call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels) | _retained_orphan_op_labels(ml)
 
@@ -385,12 +383,6 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     be verified post-hoc from metadata alone.
     """
     name = "loop_detection"
-    from ._invariants_equivalence import (
-        _check_call_site_contract_post_hoc,
-        _equivalence_classes_agree,
-        _is_call_site_grouped,
-    )
-
     call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels)
 

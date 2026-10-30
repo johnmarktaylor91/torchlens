@@ -617,6 +617,19 @@ _check_graph_ordering = _rebind_function(_invariants_equivalence._check_graph_or
 _check_loop_detection_invariants = _rebind_function(
     _invariants_equivalence._check_loop_detection_invariants, globals()
 )
+# Call-site grouping helpers (callsite_v1); rebound so the namespace push
+# leaves no second patchable copy in the child.
+_OUTINDEX_TOKEN = _invariants_equivalence._OUTINDEX_TOKEN
+_is_call_site_grouped = _rebind_function(_invariants_equivalence._is_call_site_grouped, globals())
+_equivalence_class_components = _rebind_function(
+    _invariants_equivalence._equivalence_class_components, globals()
+)
+_equivalence_classes_agree = _rebind_function(
+    _invariants_equivalence._equivalence_classes_agree, globals()
+)
+_check_call_site_contract_post_hoc = _rebind_function(
+    _invariants_equivalence._check_call_site_contract_post_hoc, globals()
+)
 from ._invariants_sites import _check_site_key_invariants  # noqa: E402
 
 _check_distance_invariants = _rebind_function(

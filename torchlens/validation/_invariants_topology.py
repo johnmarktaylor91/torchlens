@@ -390,14 +390,36 @@ def _check_op_label_resolution(ml: Trace) -> None:
     """
 
     from .._errors import AmbiguousOpLookupError
+    from ..constants import RAW_LABEL_SUFFIX
 
     name = "graph_topology"
+    if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):
+        # A duck-typed stand-in without an ops accessor (the mutant-test fakes)
+        # has no second lookup that could disagree with ``ml[label]``. A real
+        # ``Trace`` always defines ``ops``, so this never applies to one. The
+        # check is reported as not run, never passed silently.
+        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+        record_validation_diagnostic(
+            ml,
+            ValidationDiagnostic(
+                check="op_label_resolution_unchecked",
+                message="Op label resolution not checked: this object has no ops accessor.",
+                extra={"invariant": name},
+            ),
+        )
+        return
     ops = ml.ops
     for entry in ml.layer_list:
         layer_label = getattr(entry, "layer_label", None)
         pass_index = getattr(entry, "pass_index", None)
         num_passes = getattr(entry, "num_passes", None)
-        labels = [entry.label, entry._label_raw]
+        labels = [entry.label]
+        label_raw = entry._label_raw
+        if isinstance(label_raw, str) and label_raw.endswith(RAW_LABEL_SUFFIX):
+            # A suffixed raw label names exactly its op; an unsuffixed one is a
+            # raw spelling that a final label may legitimately outrank.
+            labels.append(label_raw)
         if isinstance(layer_label, str) and isinstance(pass_index, int):
             labels.append(f"{layer_label}:{pass_index}")
         if isinstance(layer_label, str) and (not isinstance(num_passes, int) or num_passes <= 1):
@@ -435,7 +457,7 @@ def _check_graph_topology(ml: Trace) -> None:
     - Input layers have no parents.
     - out_versions_by_child keys are a subset of children.
     - Every Op's final labels resolve through ``trace.ops`` to that same Op
-      (``_check_op_label_resolution``).
+      (``_check_op_label_resolution``, run last).
 
     Round-26 W3-3 note: this check previously also "compared"
     ``has_parents``/``has_siblings``/``has_co_parents`` against
@@ -449,7 +471,6 @@ def _check_graph_topology(ml: Trace) -> None:
     them.
     """
     name = "graph_topology"
-    _check_op_label_resolution(ml)
     label_set = set(ml.layer_labels) | set(ml.op_labels)
     output_set = set(ml.output_layers)
 
@@ -634,6 +655,9 @@ def _check_graph_topology(ml: Trace) -> None:
             )
 
     _check_sibling_relation_derivation(ml, name, label_aliases)
+    # Last, so every structural finding above reports its own contract first;
+    # this check compares two lookups over a structurally sound graph.
+    _check_op_label_resolution(ml)
 
 
 def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any) -> None:
