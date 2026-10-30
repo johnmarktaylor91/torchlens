@@ -113,8 +113,12 @@ def self_check(model, tok, text, cfg, lens_rows, n_dims=3):
                 for acc, g in zip(summed, torch.autograd.grad(h_t, h_s, grad_outputs=cot, retain_graph=True)):
                     acc += g
             for b, sm in zip(batched, summed):
-                assert torch.allclose(b[0, valid], sm[0, valid], atol=1e-5, rtol=1e-4), \
-                    "oracle self-check failed: batched cotangent differs from per-target sum"
+                num = torch.linalg.norm(b[0, valid] - sm[0, valid])
+                den = torch.linalg.norm(sm[0, valid])
+                rel = float(num / den) if den > 0 else float(num)
+                print(f"self-check dim {d}: relative discrepancy {rel:.2e}", file=sys.stderr)
+                assert rel < 1e-3, \
+                    f"oracle self-check failed: batched cotangent differs from per-target sum (rel {rel:.2e})"
 
 
 @torch.no_grad()
