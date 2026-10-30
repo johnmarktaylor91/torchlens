@@ -92,7 +92,10 @@ class _ViewsInplace(nn.Module):
     ops = 4
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = x.transpose(-2, -1).contiguous().transpose(-2, -1)
+        # clone, not contiguous: the previous block returns a transposed view, whose
+        # transpose is already contiguous, so contiguous() would alias x and the
+        # in-place multiply would halve the input as well.
+        y = x.transpose(-2, -1).clone().transpose(-2, -1)
         return y.mul_(0.5).add_(x, alpha=0.5)
 
 
