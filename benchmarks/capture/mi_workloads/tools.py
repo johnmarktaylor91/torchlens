@@ -375,7 +375,10 @@ class TLFastRerun:
         )
         if refused:
             raise Skip(f"fast rerun fell back: {refused}")
-        return _logits_from_trace(out, tl) if not isinstance(out, torch.Tensor) else out
+        if isinstance(out, torch.Tensor):
+            return out
+        # The rerun refreshes the saved sites on the trace itself; read the logits there.
+        return _logits_from_trace(t, tl)
 
     def grads(self, ids, sites, metric):
         raise Skip("fast rerun is an intervention path")
@@ -463,7 +466,7 @@ class NNsight:
         res = {}
         for s, (a, g) in saved.items():
             if g is None:
-                raise Skip("nnsight 0.7: .grad proxy resolved to None in this spelling")
+                raise Skip("the nnsight .grad proxy resolved to None in this spelling")
             res[s] = (a.detach(), g.detach())
         self.model.zero_grad(set_to_none=True)
         return res
@@ -482,7 +485,8 @@ class NNsight:
             ) as tracer,
         ):
             env = self._env(site)
-            with tracer.all():
+            # A bounded step range: code after an unbounded tracer.all() never runs.
+            with tracer.iter[0:n_new]:
                 out = env.output
                 if isinstance(getattr(out, "shape", None), torch.Size):
                     env.output = out + delta
@@ -492,6 +496,36 @@ class NNsight:
         return tokens
 
 
+def _load_tlens(model: nn.Module, tok: Any, model_id: str) -> Any:
+    """Load the TransformerLens model: HookedTransformer before 4.0, else the bridge.
+
+    TransformerLens 4 removed ``HookedTransformer``; its ``TransformerBridge`` wraps the
+    Hugging Face model and, in compatibility mode, serves the same hook names.
+    """
+
+    try:
+        from transformer_lens import HookedTransformer
+    except Exception:  # noqa: BLE001 - 4.x raises on this import
+        HookedTransformer = None
+    if HookedTransformer is not None:
+        return HookedTransformer.from_pretrained_no_processing(
+            model_id, hf_model=model, tokenizer=tok, device="cpu", dtype=torch.float32
+        )
+    try:
+        from transformer_lens.model_bridge import TransformerBridge
+    except Exception:  # noqa: BLE001
+        try:
+            from transformer_lens import TransformerBridge
+        except Exception as e:  # noqa: BLE001
+            raise Skip(f"transformer_lens has neither HookedTransformer nor a bridge: {e}") from e
+    bridge = TransformerBridge.boot_transformers(model_id, device="cpu")
+    try:
+        bridge.enable_compatibility_mode(no_processing=True)
+    except TypeError:
+        bridge.enable_compatibility_mode()
+    return bridge
+
+
 class TLens:
     """TransformerLens reimplements the model; speed and memory only, no bit equality."""
 
@@ -499,13 +533,9 @@ class TLens:
 
     def __init__(self, model: nn.Module, tok: Any, model_id: str) -> None:
         try:
-            from transformer_lens import HookedTransformer
-        except Exception as e:  # noqa: BLE001
-            raise Skip(f"transformer_lens not importable: {e}") from e
-        try:
-            self.ht = HookedTransformer.from_pretrained_no_processing(
-                model_id, hf_model=model, tokenizer=tok, device="cpu", dtype=torch.float32
-            )
+            self.ht = _load_tlens(model, tok, model_id)
+        except Skip:
+            raise
         except Exception as e:  # noqa: BLE001
             raise Skip(
                 f"TransformerLens cannot load {model_id}: {type(e).__name__}: {str(e)[:200]}"
