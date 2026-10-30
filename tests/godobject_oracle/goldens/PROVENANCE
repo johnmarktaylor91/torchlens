@@ -500,3 +500,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d2defdd6388075d47eeb2e797030a05a5bcdabfb (dirty)
 recorded: 2026-10-30T01:14:59.591563+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:12.294616+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:12.344587+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:12.374736+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:12.409552+00:00
