@@ -13,6 +13,7 @@ its ``resolve_canonical`` hook (exercised below with a stub).
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -107,7 +108,7 @@ def test_yaml_list_and_folder_load(tmp_path: Path) -> None:
 def test_schema_violations_are_named(tmp_path: Path, change, message: str) -> None:
     page = tmp_path / "bad.md"
     page.write_text(_page(change(VALID_CARD)), encoding="utf-8")
-    with pytest.raises(task_card.TaskCardError, match=message):
+    with pytest.raises(task_card.TaskCardError, match=re.escape(message)):
         task_card.load_cards(page)
 
 
