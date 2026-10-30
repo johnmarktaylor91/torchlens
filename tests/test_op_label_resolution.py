@@ -130,6 +130,24 @@ def test_raw_shadow_resolves_to_the_final_label_owner() -> None:
     assert accessor["to_11_117"] is owner
 
 
+def test_unsuffixed_raw_label_is_a_raw_spelling_not_a_collision() -> None:
+    """An unsuffixed ``_label_raw`` equal to another op's final label is outranked, not a clash.
+
+    The collapse-optimizer fixtures plant this shape (an op whose raw label is
+    the input's final label ``input_1``). It is a raw spelling, so the final
+    label's owner wins and nothing refuses; only a suffixed raw label is a
+    final-tier alias.
+    """
+
+    owner = _Row("input_1:1", "input_1:1", "input_1_raw", "input_1", "input_1", 0)
+    planted = _Row("linear_1_1:1", "linear_1:1", "input_1", "linear_1_1", "linear_1", 1)
+    accessor = _rows_accessor(owner, planted)
+    assert accessor["input_1"] is owner
+    assert accessor._resolve_substring_by_scan("input_1") is owner
+    assert accessor["input_1_raw"] is owner
+    assert accessor["linear_1_1"] is planted
+
+
 def test_final_label_claimed_by_two_ops_refuses() -> None:
     """Two rows sharing one final alias make every lookup of it refuse."""
 
