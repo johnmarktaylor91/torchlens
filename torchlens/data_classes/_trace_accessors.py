@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
-from ..capture._nonfinite_prefix import is_suffixed_raw_label
+from ..constants import is_suffixed_raw_label
 from ._accessor_base import Accessor, attach_source_honesty
 from .op import Op
 

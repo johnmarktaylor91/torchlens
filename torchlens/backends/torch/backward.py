@@ -33,7 +33,7 @@ from ...capture.peak_memory import (
 )
 from ...data_classes.backward_pass import BackwardPass
 from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.grad_fn import GradFn, _pass_op_for_grad_fn
+from ...data_classes.grad_fn import GradFn, _paired_pass_op
 from ...data_classes.grad_fn_call import GradFnCall
 from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ...errors import ConfigurationError
@@ -905,40 +905,6 @@ def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
         return None
     param_log = param_logs[param_ref]
     return None if param_log is None else getattr(param_log, "module_address", None)
-
-
-def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | None) -> Any:
-    """Return the forward pass a grad-fn node differentiates.
-
-    ``op_label`` is the paired LAYER label (``GradFn.op_label`` contract). On a
-    multi-pass layer that label's lookup entry is one fixed pass, so the pass
-    is chosen from per-pass evidence instead: the pass whose recorded
-    ``grad_fn_object_id`` is this node's autograd identity.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing op logs.
-    op_label:
-        Paired layer label, or ``None`` for an unpaired node.
-    grad_fn_object_id:
-        Autograd identity of the grad-fn node, if known.
-
-    Returns
-    -------
-    Any
-        The paired pass's Op, the label's lookup entry when no pass evidence
-        applies (single-pass layers, unknown identity), or ``None``.
-    """
-
-    if op_label is None:
-        return None
-    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
-    layer = getattr(trace, "layer_logs", {}).get(op_label)
-    if layer is None or grad_fn_object_id is None:
-        return entry
-    pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)
-    return entry if pass_op is None or pass_op is layer else pass_op
 
 
 def _op_module_address(

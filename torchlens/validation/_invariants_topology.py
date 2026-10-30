@@ -390,7 +390,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
     """
 
     from .._errors import AmbiguousOpLookupError
-    from ..capture._nonfinite_prefix import is_suffixed_raw_label
+    from ..constants import is_suffixed_raw_label
 
     name = "graph_topology"
     if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):

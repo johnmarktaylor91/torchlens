@@ -21,6 +21,7 @@ import functools
 import sys
 import types
 import warnings
+from typing import TypeGuard
 
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
@@ -34,6 +35,20 @@ from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_n
 # Runtime-only state belongs in per-class FIELD_POLICY / PORTABLE_STATE_SPEC.
 
 RAW_LABEL_SUFFIX = "_raw"
+
+
+def is_suffixed_raw_label(label: object) -> TypeGuard[str]:
+    """Return whether ``label`` carries the raw-capture ``_raw`` sentinel suffix.
+
+    A suffixed raw label can never be a final label, so it names exactly its own
+    op; an unsuffixed raw label has the final-label shape and may be outranked
+    by a final label. Consumers ask this question here instead of reading the
+    suffix constant themselves.
+    """
+
+    return isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX)
+
+
 RAW_LABEL_FIELD = "raw_label"
 ARG_EXPRESSIONS_FIELD = "arg_expressions"
 

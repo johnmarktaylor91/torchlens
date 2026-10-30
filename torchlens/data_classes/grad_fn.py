@@ -242,6 +242,40 @@ def _pass_op_for_grad_fn(record: Any, grad_fn_object_id: int) -> Any:
     return None
 
 
+def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | None) -> Any:
+    """Return the forward pass a grad-fn node differentiates.
+
+    ``op_label`` is the paired LAYER label (``GradFn.op_label`` contract). On a
+    multi-pass layer that label's lookup entry is one fixed pass, so the pass
+    is chosen from per-pass evidence instead: the pass whose recorded
+    ``grad_fn_object_id`` is this node's autograd identity.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing op logs.
+    op_label:
+        Paired layer label, or ``None`` for an unpaired node.
+    grad_fn_object_id:
+        Autograd identity of the grad-fn node, if known.
+
+    Returns
+    -------
+    Any
+        The paired pass's Op, the label's lookup entry when no pass evidence
+        applies (single-pass layers, unknown identity), or ``None``.
+    """
+
+    if op_label is None:
+        return None
+    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
+    layer = getattr(trace, "layer_logs", {}).get(op_label)
+    if layer is None or grad_fn_object_id is None:
+        return entry
+    pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)
+    return entry if pass_op is None or pass_op is layer else pass_op
+
+
 @dataclass
 class GradFn:
     """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
