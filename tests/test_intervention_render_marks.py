@@ -315,7 +315,7 @@ def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> No
             )
     finally:
         trace.cleanup()
-    codes = [getattr(entry.message, "code", None) for entry in record]
+    codes = [getattr(entry.message, "fields", {}).get("code") for entry in record]
     assert codes.count("viz_highlighter_not_drawn") == 1
     assert (tmp_path / "cone.jpg").exists()
 
