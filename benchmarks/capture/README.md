@@ -65,7 +65,9 @@ peak RSS, USS and device memory (`benchmarks/perf_runner.py` helpers); one torch
 default. An A/A pair (the same raw forward in two processes, first and last) sets the
 noise floor, and a cell whose spread across processes exceeds twice that floor (or 10%)
 is listed as noisy in `groups`. Peer packages live only in the benchmark environment
-(`peers.txt`), never in TorchLens's dependencies.
+(`peers.txt`), never in TorchLens's dependencies. thingsvision is listed but not installed:
+no release resolves beside the pinned torch 2.13, torchvision 0.28 and transformers 5.18,
+so its cells report unsupported with that reason.
 
 ```bash
 bash benchmarks/capture/run_smoke.sh                                   # CPU smoke end to end

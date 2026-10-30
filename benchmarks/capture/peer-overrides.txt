@@ -1,5 +1,0 @@
-# Exact versions that override a peer's own pins in the benchmark environment, for
-# packages the base environment does not install. thingsvision 2.3.6 pins scipy 1.8.1
-# (built for numpy 1) and torchtyping 0.1.4 (cannot load on torch 2.13).
-scipy==1.15.3
-torchtyping==0.1.5

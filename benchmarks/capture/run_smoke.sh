@@ -8,11 +8,9 @@ mkdir -p outputs
 python3 -c 'import sys; sys.path.insert(0, "scripts"); import smoke_ci_parity as s; s.ensure_venv(s.DEFAULT_VENV, False)' || exit 1
 PY=.venv-ci-smoke/bin/python
 "$PY" -c 'import torch, torchvision, transformers; print(f"torch=={torch.__version__}\ntorchvision=={torchvision.__version__}\ntransformers=={transformers.__version__}")' > outputs/constraints.txt
-# thingsvision pins numpy 1.22, pandas 1.4, matplotlib 3.5, scipy 1.8 and torchtyping 0.1.4
-# exactly; those builds cannot load next to numpy 2 and torch 2.13. The environment's own
-# numpy, pandas and matplotlib override them, plus the exact versions in peer-overrides.txt.
-{ uv pip freeze --python "$PY" | grep -i -E '^(numpy|pandas|matplotlib)=='
-  grep -v '^#' benchmarks/capture/peer-overrides.txt | grep .; } > outputs/overrides.txt
+# A peer's own exact pins must not swap the environment's compiled packages for builds
+# against another numpy, so the environment's versions override them.
+uv pip freeze --python "$PY" | grep -i -E '^(numpy|pandas|matplotlib|scipy|scikit-learn)==' > outputs/overrides.txt
 cat outputs/constraints.txt outputs/overrides.txt
 "$PY" -m pytest tests/test_capture_benchmark_harness.py -q -p no:cacheprovider 2>&1 | tail -15
 grep -v '^#' benchmarks/capture/peers.txt | grep . | while read -r peer; do

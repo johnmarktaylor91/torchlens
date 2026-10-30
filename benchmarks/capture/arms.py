@@ -566,7 +566,13 @@ class ThingsvisionArm:
     name = "thingsvision"
 
     def __init__(self, subject: Subject) -> None:
-        tv = _require("thingsvision")
+        try:
+            tv = _require("thingsvision")
+        except Unsupported as exc:
+            raise Unsupported(
+                "thingsvision has no release that installs beside this torch, torchvision and "
+                f"transformers (see peers.txt); {exc}"
+            ) from exc
         self.s = subject
         self.extractor = tv.get_extractor_from_model(
             model=subject.model, device=str(subject.x.device), backend="pt"
