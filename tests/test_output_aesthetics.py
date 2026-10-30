@@ -1677,10 +1677,8 @@ class TestVisualizationBugfixes:
                 vis_fileformat="dot",
                 vis_intervention_mode="as_node",
             )
-            assert "#7B1FA2" in node_mark
-            assert "tl_edited" in node_mark
-            # The downstream highlighter is off by default (JMT, 29 Oct 2026).
-            assert "tl_downstream" not in node_mark
+            assert "#7B1FA2" in node_mark and "tl_edited" in node_mark
+            assert "tl_downstream" not in node_mark  # downstream highlighter off by default
             assert "shape=diamond" in as_node
         finally:
             log.cleanup()

@@ -31,6 +31,7 @@ import torch
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
 from ..utils._multipass_access import get_multipass_attr
 from ._render_utils import html_escape
+from ._typography import EDIT_GAP_SIZE, format_pt
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
@@ -326,7 +327,7 @@ def _recipe_level_mark(spec: Any) -> Callable[[], EditMark] | None:
 def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     """Return staged edit marks keyed by pass-qualified site label."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if spec is None:
         return {}
     from ..intervention.resolver import resolve_sites
@@ -421,8 +422,6 @@ def edit_row_html(row: str, color: str, size: float = _OP_LABEL_SIZE) -> str:
     (11 pt over 10 pt on the 11 pt mockup labels JMT chose from).
     """
 
-    from ._typography import format_pt
-
     delta_pt = format_pt(round(size, 1))
     text_pt = format_pt(round(size * _TEXT_TO_DELTA, 1))
     text = str(row)
@@ -438,7 +437,9 @@ def edit_row_html(row: str, color: str, size: float = _OP_LABEL_SIZE) -> str:
 
 
 #: The 4 pt blank row above a node's first edit row (no rule).
-EDIT_GAP_ROW = '<TR><TD CELLPADDING="0"><FONT POINT-SIZE="4"> </FONT></TD></TR>'
+EDIT_GAP_ROW = (
+    f'<TR><TD CELLPADDING="0"><FONT POINT-SIZE="{format_pt(EDIT_GAP_SIZE)}"> </FONT></TD></TR>'
+)
 
 
 def header_edit_line(

@@ -145,11 +145,16 @@ def highlighter_supported(fileformat: str) -> bool:
 def _warn_unsupported(reason: str) -> None:
     """Warn that the downstream highlighter was left out, and why."""
 
+    from ..errors import TorchLensWarning
     from ..utils.display import user_stacklevel
 
     warnings.warn(
-        f"The downstream highlighter (vis_show_cone=True) was not drawn: {reason}. "
-        "The edited node is still marked; use vis_fileformat='svg' to see the highlighter.",
+        TorchLensWarning(
+            f"The downstream highlighter (vis_show_cone=True) was not drawn: {reason}. "
+            "The edited node is still marked. "
+            "Remedy: use vis_fileformat='svg', or install cairosvg for PDF and PNG",
+            code="viz_highlighter_not_drawn",
+        ),
         stacklevel=user_stacklevel(),
     )
 

@@ -719,8 +719,12 @@ SLIDES: tuple[Slide, ...] = (
                 "Flow",
                 capture={"intervention_ready": True},
                 intervene="zero_tanh",
-                kwargs={"vis_intervention_mode": "node_mark", "vis_show_cone": True},
-                label='"node_mark", vis_show_cone=True',
+                kwargs={
+                    "vis_intervention_mode": "node_mark",
+                    "vis_show_cone": True,
+                    "show_legend": True,
+                },
+                label='"node_mark", vis_show_cone=True, show_legend=True',
             ),
             Panel(
                 "b",
