@@ -5,6 +5,8 @@ associated tokenizer. Load in CPU float32, evaluation mode, with eager
 attention. Number blocks from zero. The residual after block 3 is the
 512-vector at each token position before block 4. Tokenize each text
 individually without adding special tokens, padding or truncation.
+Set `torch.set_num_threads(1)` for both generation paths. These short,
+single-sequence runs use the same fixed CPU-thread policy for their timings.
 
 `prompts.json` contains 24 positive-sentiment sentences (set A), 24
 negative-sentiment sentences (set B), and eight generation prompts, all ordered.

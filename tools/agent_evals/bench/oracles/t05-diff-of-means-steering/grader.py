@@ -14,6 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 @torch.no_grad()
 def oracle(inputs, cache_file):
+    torch.set_num_threads(1)
     if cache_file.exists():
         return load_npz(cache_file)
     cfg = load_json(Path(inputs) / "config.json")

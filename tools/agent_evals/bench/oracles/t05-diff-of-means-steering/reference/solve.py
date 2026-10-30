@@ -71,6 +71,7 @@ def generate(model, tokenizer, texts, cfg, direction=None, variant=None):
 
 
 def run(inputs, outputs, variant=None):
+    torch.set_num_threads(1)
     inputs, outputs = Path(inputs), Path(outputs)
     cfg = json.loads((inputs / "config.json").read_text())
     prompts = json.loads((inputs / "prompts.json").read_text())
