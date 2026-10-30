@@ -727,6 +727,111 @@
       "before_strengthening": "Refreshed matched measurements before quoting older ratios"
     },
     {
+      "id": "planned-any-model",
+      "category": "any-model",
+      "wording": "Architecture-general design, diverse real examples, Menagerie with hedged count",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "classics corpus; Model Menagerie",
+      "evidence": [
+        "tests/classics_corpus/README.md"
+      ],
+      "evidence_note": "The classics corpus runs capture, replay and invariants on a coverage-chosen sample; the Menagerie count is hedged.",
+      "exclusions": "Structure-only entries are not executed checks.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "menagerie-phrasing"
+      ],
+      "say_today": "Architecture-general design, diverse real examples, Menagerie with hedged count",
+      "before_strengthening": "Audited, deduplicated counts by family, backend and check"
+    },
+    {
+      "id": "planned-every-operation",
+      "category": "every-operation",
+      "wording": "Operation-level capture within supported execution boundaries",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "every captured model",
+      "evidence": [
+        "tests/test_validation.py",
+        "docs/reference/limitations.md"
+      ],
+      "evidence_note": "Capture is per torch operation; the limitations catalog names the boundaries.",
+      "exclusions": "Fused and opaque ops are one op each.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "verified-capture-scope"
+      ],
+      "say_today": "Operation-level capture within supported execution boundaries",
+      "before_strengthening": "Coverage tests plus fused and opaque op disclosures"
+    },
+    {
+      "id": "planned-validated",
+      "category": "validated",
+      "wording": "Replay checks with explicit pass, unavailable and refused cases",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "test models",
+      "evidence": [
+        "tests/test_validation.py"
+      ],
+      "evidence_note": "Forward replay validation and metadata invariants; unavailable and refused outcomes are typed.",
+      "exclusions": "Release-matched tamper controls are not on file.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "verified-capture-scope"
+      ],
+      "say_today": "Replay checks with explicit pass, unavailable and refused cases",
+      "before_strengthening": "Release-matched tamper controls"
+    },
+    {
+      "id": "planned-multiple-backends",
+      "category": "backends",
+      "wording": "Stable PyTorch and five named previews",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "backend conformance packs",
+      "evidence": [
+        "docs/backends.md",
+        "tests/test_conformance_preview_packs.py"
+      ],
+      "evidence_note": "JAX, MLX, tinygrad, Paddle and TensorFlow are previews with a capability table.",
+      "exclusions": "Per-backend, per-feature evidence is not complete.",
+      "date": "2026-10-29",
+      "status": "preview-or-partial",
+      "registry_ids": [],
+      "say_today": "Stable PyTorch and five named previews",
+      "before_strengthening": "Per-backend, per-feature evidence"
+    },
+    {
+      "id": "planned-fast",
+      "category": "speed",
+      "wording": "Bound live edits at hook speed",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "fast-path benchmarks",
+      "evidence": [
+        "docs/guides/fast_paths.md"
+      ],
+      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook (launch plan 3.5).",
+      "exclusions": "Full trace is far slower than a hook; older ratios are configuration-specific.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "perf-no-single-multiplier"
+      ],
+      "say_today": "Bound live edits at hook speed",
+      "before_strengthening": "Refreshed matched measurements before quoting older ratios"
+    },
+    {
       "id": "planned-helps-agents",
       "category": "agents",
       "wording": "TorchLens helps coding agents implement interpretability methods",
