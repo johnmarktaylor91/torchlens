@@ -141,12 +141,16 @@ def intern_view(value: Any, pool: dict[Any, Any]) -> Any:
 
     Unhashable views (tuples carrying mutable records such as
     ``ConditionalRoleRef``) are returned unpooled — still immutable at the
-    container level, just not shared.
+    container level, just not shared. A view is unhashable whenever hashing it
+    raises, not only on ``TypeError``: a foreign handle recorded as an op
+    argument may fail in its own ``__hash__`` (DGL's ``ObjectBase.__hash__``
+    raises ``AttributeError`` from a missing C symbol), and pooling is an
+    optimisation that must never decide whether a capture succeeds.
     """
 
     try:
         canonical = pool.get(value)
-    except TypeError:
+    except Exception:  # noqa: BLE001 -- any raise from __hash__ means "unpoolable"
         return value
     if canonical is None:
         pool[value] = value

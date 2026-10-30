@@ -179,7 +179,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Parameter / Buffer**
 : Registered model state. Parameters are trainable state; buffers are non-parameter state and may
-  have multiple captured versions. A training-mode `BatchNorm2d` collapse label can say
+  have multiple captured versions. Every journaled write (a reassignment, a `.data =` or `set_`
+  swap, a tracked in-place write) is its own version whatever value it wrote, so a capture records
+  the same buffer structure whatever values the buffers start from. A training-mode `BatchNorm2d` collapse label can say
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
   BatchNorm calls. An in-place op on a Parameter inside `forward`
@@ -993,7 +995,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and
+  `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
+  whose forward left torch through a numpy or dlpack round trip, with
+  `transform_kind="autograd.Function"`, and `jitscript`, one call to a
+  `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
+  `tl.output` selects model outputs, and
   `tl.output_at` / `tl.input_at` select a nested output or model-input path.
 
 **Temporal composition**
@@ -1678,6 +1684,13 @@ S2-gated*
   entry for it. Set at capture entry, read when finalization builds the root module pass, then
   cleared with the other temporary build state (`None` outside a capture). The
   `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
+
+**tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
+: Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
+  key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
+  buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
+  the field goes away with the raw-graph workspace once the trace is projected. The
+  `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
 
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable

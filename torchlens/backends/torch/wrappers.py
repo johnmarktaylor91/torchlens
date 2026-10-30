@@ -34,7 +34,6 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import CaptureContextError
 from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
-from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
@@ -63,8 +62,15 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ._callable_location import _callable_source_location
+from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
+from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
+from ._storage_overlap import (
+    _storage_overlap_byte_interval,
+    _strided_views_share_storage_elements,
+)
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
@@ -292,39 +298,6 @@ def _callable_code_location(callable_obj: Callable[..., Any]) -> str | None:
     if code is None:
         return None
     return f"{code.co_filename}:{code.co_firstlineno}"
-
-
-def _callable_source_location(callable_obj: Callable[..., Any]) -> FuncCallLocation | None:
-    """Return a lazy source location for a callable when code metadata is available.
-
-    Parameters
-    ----------
-    callable_obj:
-        Callable, partial, or bound method to inspect.
-
-    Returns
-    -------
-    FuncCallLocation | None
-        Lazy source location, or ``None`` for native/builtin callables.
-    """
-
-    target = callable_obj
-    if isinstance(target, partial):
-        target = target.func
-    target = getattr(target, "__func__", target)
-    code = getattr(target, "__code__", None)
-    if code is None:
-        return None
-    return FuncCallLocation(
-        file=code.co_filename,
-        line_number=code.co_firstlineno,
-        func_name=getattr(target, "__name__", type(target).__name__),
-        num_context_lines_requested=1,
-        _frame_func_obj=target,
-        code_firstlineno=code.co_firstlineno,
-        func_qualname=getattr(target, "__qualname__", None),
-        source_loading_enabled=True,
-    )
 
 
 def _transform_builder_config(
@@ -1206,136 +1179,6 @@ def _register_inplace_live_grad_hook(
     )
 
 
-def _storage_overlap_byte_interval(t: torch.Tensor) -> tuple[int, int]:
-    """Return the ``[start, end)`` byte interval ``t`` can address in its storage.
-
-    Conservative interval form (stride gaps ignored): a strided view's
-    addressable extent is treated as one contiguous byte range, so two views
-    with interleaved-but-disjoint elements inside the same range are treated
-    as overlapping. That errs toward LINKING a mutation to a possibly-affected
-    alias, never toward missing one. Negative strides do not exist in torch;
-    zero strides (``expand``) contribute nothing to the span.
-    """
-
-    element_size = t.element_size()
-    start = int(t.storage_offset()) * element_size
-    if t.numel() == 0:
-        return (start, start)
-    span = 1 + sum((int(size) - 1) * int(stride) for size, stride in zip(t.shape, t.stride()))
-    return (start, start + span * element_size)
-
-
-# Exact element-overlap scans are vectorized O(min(n1, n2)); above this bound
-# fall back to the conservative byte-interval answer instead of a large scan.
-_EXACT_OVERLAP_SCAN_LIMIT = 65536
-
-
-def _effective_1d_element_layout(t: torch.Tensor) -> tuple[int, int, int] | None:
-    """Return ``(start_byte, stride_bytes, count)`` when element starts form one
-    arithmetic progression.
-
-    Size-1 and stride-0 (``expand``) dims contribute no distinct addresses and
-    are dropped. A single remaining strided dim maps directly; a dense
-    (memory-contiguous) multi-dim block telescopes to stride ``element_size``.
-    Anything else (genuinely multi-strided ``as_strided`` lattices) returns
-    ``None`` so the caller keeps the conservative interval answer.
-
-    Parameters
-    ----------
-    t:
-        Live view whose element addresses are being described.
-
-    Returns
-    -------
-    tuple[int, int, int] | None
-        Progression of element start addresses in storage bytes, or ``None``
-        when the layout is not a single progression.
-    """
-
-    element_size = t.element_size()
-    start_byte = int(t.storage_offset()) * element_size
-    if t.numel() == 0:
-        return (start_byte, element_size, 0)
-    dims = [
-        (int(size), int(stride))
-        for size, stride in zip(t.shape, t.stride())
-        if size > 1 and stride != 0
-    ]
-    if not dims:
-        return (start_byte, element_size, 1)
-    if len(dims) == 1:
-        size, stride = dims[0]
-        return (start_byte, stride * element_size, size)
-    expected_stride = 1
-    total = 1
-    for size, stride in sorted(dims, key=lambda dim: dim[1]):
-        if stride != expected_stride:
-            return None
-        expected_stride = stride * size
-        total *= size
-    return (start_byte, element_size, total)
-
-
-def _strided_views_share_storage_elements(mutated: torch.Tensor, alias: torch.Tensor) -> bool:
-    """Return whether two same-storage views share at least one element's bytes.
-
-    The byte-interval intersection is kept as the exact NEGATIVE test (disjoint
-    intervals can never share bytes) and as the conservative fallback for
-    layouts the exact test cannot express. For the common case -- both views
-    reducible to one arithmetic progression of equal-width element starts --
-    the answer is computed exactly, so element-DISJOINT interleaved views
-    (``base[::2]`` vs ``base[1::2]``) no longer receive an invented mutation
-    edge (round-31 M4), while genuinely overlapping views keep theirs.
-
-    Parameters
-    ----------
-    mutated:
-        The live tensor the op wrote through.
-    alias:
-        Another live labeled tensor on the same storage.
-
-    Returns
-    -------
-    bool
-        True when the views provably or possibly share storage bytes; False
-        only on proof of disjointness.
-    """
-
-    mutated_lo, mutated_hi = _storage_overlap_byte_interval(mutated)
-    alias_lo, alias_hi = _storage_overlap_byte_interval(alias)
-    if not (alias_lo < mutated_hi and mutated_lo < alias_hi):
-        return False
-    if mutated.element_size() != alias.element_size():
-        # Different element widths break the shared start-address grid; the
-        # windows can partially overlap without equal starts. Stay conservative.
-        return True
-    mutated_layout = _effective_1d_element_layout(mutated)
-    alias_layout = _effective_1d_element_layout(alias)
-    if mutated_layout is None or alias_layout is None:
-        return True
-    start_a, stride_a, count_a = mutated_layout
-    start_b, stride_b, count_b = alias_layout
-    if count_a == 0 or count_b == 0:
-        return False
-    if count_a > count_b:
-        start_a, stride_a, count_a, start_b, stride_b, count_b = (
-            start_b,
-            stride_b,
-            count_b,
-            start_a,
-            stride_a,
-            count_a,
-        )
-    if count_a > _EXACT_OVERLAP_SCAN_LIMIT:
-        return True
-    scan_starts = start_a + torch.arange(count_a, dtype=torch.long) * stride_a
-    relative = scan_starts - start_b
-    if stride_b <= 0:
-        return True
-    hits = (relative >= 0) & (relative < count_b * stride_b) & (relative % stride_b == 0)
-    return bool(hits.any())
-
-
 def _propagate_mutation_label_to_storage_aliases(
     trace: Any, mutated: torch.Tensor, out_label: str
 ) -> None:
@@ -1580,6 +1423,9 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
+    # Decoration-time constant: only the numpy / dlpack export spellings tell a live
+    # ``autograd.Function`` frame that its forward left torch (foreign-kernel boundary).
+    is_export_func = func_name in EXPORT_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
@@ -1705,7 +1551,12 @@ def torch_func_decorator(
                         ) from exc
                     raise
             else:
-                out = func(*args, **kwargs)
+                try:
+                    out = func(*args, **kwargs)
+                except TypeError as exc:
+                    out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                    if out is STILL_DECLINED:
+                        raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)
@@ -1734,7 +1585,12 @@ def torch_func_decorator(
                 observe_nonowner_operands(args, kwargs)
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            out = func(*args, **kwargs)
+            try:
+                out = func(*args, **kwargs)
+            except TypeError as exc:
+                out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                if out is STILL_DECLINED:
+                    raise
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1760,19 +1616,20 @@ def torch_func_decorator(
                 _state._functorch_warning_emitted = True
                 trace._raw_transform_escape_detected = True
                 _warn_functorch_region_not_logged()
-            # A raw transform interior is outside the witness claim, but the witness-off
-            # route retains its original logging state and avoids the context-manager cost.
-            if _state._completeness_witness_mode == "shadow":
-                with _state.pause_logging():
-                    if _state._escape_detector_mode == "shadow":
-                        with expected_original_call(func, f"torch_func:{func_name}:functorch"):
-                            return func(*args, **kwargs)
+            # A raw transform interior is outside the witness claim; the witness-off route
+            # retains its original logging state (declined dispatches still redispatch).
+            shadow_witness = _state._completeness_witness_mode == "shadow"
+            edge_ctx: Any = nullcontext()
+            if _state._escape_detector_mode == "shadow":
+                edge_ctx = expected_original_call(func, f"torch_func:{func_name}:functorch")
+            with _state.pause_logging() if shadow_witness else nullcontext(), edge_ctx:
+                try:
                     return func(*args, **kwargs)
-            else:
-                if _state._escape_detector_mode == "shadow":
-                    with expected_original_call(func, f"torch_func:{func_name}:functorch"):
-                        return func(*args, **kwargs)
-                return func(*args, **kwargs)
+                except TypeError as exc:
+                    out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                    if out is STILL_DECLINED:
+                        raise
+                    return out
 
         # Skip logging inside a Dynamo-traced region, for the same reason as the
         # functorch guard above: TorchLens' internal operations (safe_copy,
@@ -1837,6 +1694,8 @@ def torch_func_decorator(
             trace._wrapper_runtime_ws.current_func_barcode if is_barcode_transparent else 0
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
+        if is_export_func:
+            note_function_export(func_name)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
                 wrapper_name = f"torch_func:{func_name}:not_logged"
@@ -2022,17 +1881,22 @@ def torch_func_decorator(
         )
         try:
             with mode_pause as paused_modes, frozen_receiver_ctx:
+                logged_edge_ctx: Any = nullcontext()
                 if _diagnostic_edge_armed():
-                    with expected_original_call(
+                    logged_edge_ctx = expected_original_call(
                         func,
                         f"torch_func:{func_name}:logged",
                         func_name=func_name,
                         func_call_id=func_call_id,
                         call_barcode=func_call_barcode,
-                    ) as expected_token:
+                    )
+                with logged_edge_ctx as expected_token:
+                    try:
                         out_orig = func(*args, **kwargs)
-                else:
-                    out_orig = func(*args, **kwargs)
+                    except TypeError as exc:
+                        out_orig = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+                        if out_orig is STILL_DECLINED:
+                            raise
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.

@@ -195,6 +195,18 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         refuses="the fill VALUE at arg 1, which determines every output element",
     ),
     StructuralPositionExemption(
+        func_name="set_",
+        positions=frozenset({0}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "torch's set_ contract rebinds the arg-0 receiver to the source's storage "
+            "(an empty storage with no source, a storage view for the storage "
+            "overload), so the receiver's prior values cannot reach the output"
+        ),
+        refuses=_OVERWRITTEN_DESTINATION_REFUSES,
+    ),
+    StructuralPositionExemption(
         func_name="expand_as",
         positions=frozenset({1}),
         contract=_C2,

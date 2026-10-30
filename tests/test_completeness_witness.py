@@ -19,10 +19,12 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch import completeness_witness as cw, rescue
+from torchlens.backends.torch._completeness_types import _DispatchEvent
 from torchlens.backends.torch.completeness_witness import (
     AUDITED_COMPLETENESS_BOUNDARIES,
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
 )
+from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
 from torchlens.utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
@@ -454,7 +456,10 @@ class _ScalarExtractionModel(nn.Module):
     """Use intentional scalar extraction for data-dependent control flow."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract one item and branch on another scalar tensor.
+        """Extract scalars, index with a tensor, and branch on another scalar tensor.
+
+        ``count`` reaches Python through ``Tensor.__index__`` twice: as a tuple index
+        and as a slice bound (the Menagerie rung-4 f-bedlam-cliff and f-tm2t shapes).
 
         Parameters
         ----------
@@ -468,6 +473,8 @@ class _ScalarExtractionModel(nn.Module):
         """
 
         shift = x.sum().item() + float(x.sum()) + int(x.sum())
+        count = x.sum().long()
+        shift += (0.5, 1.0, 1.5, 2.0, 2.5)[count] + float(x[:count].sum())
         if x.sum() > 0:
             return x + shift
         return x - shift
@@ -861,16 +868,18 @@ def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
 
     assert trace.completeness_witness_unaccounted_count == 0
     assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
     scalar_rows = [
         row
         for row in trace.completeness_decompositions
-        if row["owner_func_name"] in {"item", "__bool__", "__float__", "__int__"}
+        if row["owner_func_name"] in {"item", "__bool__", "__float__", "__int__", "__index__"}
     ]
     assert {row["owner_func_name"] for row in scalar_rows} == {
         "item",
         "__bool__",
         "__float__",
         "__int__",
+        "__index__",
     }
     assert all(row["scope"] == "expected_opaque" for row in scalar_rows)
     assert all(row["aten_ops"] == ("aten._local_scalar_dense.default",) for row in scalar_rows)
@@ -965,7 +974,10 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__bool__:logged",
         "torch_func:__float__:logged",
         "torch_func:__int__:logged",
+        "torch_func:__index__:logged",
         "autograd:grad",
+        "autograd_function:foreign",
+        "jit_script:boundary",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {
@@ -973,6 +985,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__bool__:logged",
         "torch_func:__float__:logged",
         "torch_func:__int__:logged",
+        "torch_func:__index__:logged",
     }
     assert {row.operator for row in scalar_rows} == {"aten._local_scalar_dense.default"}
     assert all(row.reason for row in AUDITED_COMPLETENESS_BOUNDARIES)
@@ -1154,6 +1167,44 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
     assert len(trace.completeness_diagnostics) == 1
+
+
+def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
+    """The ``__index__`` audited row is exact on its operator.
+
+    The scalar read (``aten._local_scalar_dense``) under a ``Tensor.__index__``
+    token is the excused boundary; any other aten op dispatched under that same
+    token has no captured representation and must stay an ``owner_not_captured``
+    gap that ceilings the capture.
+    """
+
+    token = ExpectedOriginalToken(
+        raw_id=1,
+        original=torch.Tensor.__index__,
+        wrapper_name="torch_func:__index__:logged",
+        wrapper_frame_id=0,
+        owner_thread_id=0,
+        func_name="__index__",
+        func_call_id=1,
+    )
+    trace = SimpleNamespace(completeness_diagnostics=[], completeness_decompositions=[])
+    state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
+    state.events.extend(
+        [
+            _DispatchEvent(operator="aten._local_scalar_dense.default", owner=token, callsite=None),
+            _DispatchEvent(operator="aten.add.Tensor", owner=token, callsite=None),
+        ]
+    )
+
+    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+        cw._finalize_census(state)
+
+    assert trace.capture_verified is False
+    assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
+    assert [
+        (report["operator"], report["reason"], report["owner_wrapper"])
+        for report in trace.completeness_diagnostics
+    ] == [("aten.add.Tensor", "owner_not_captured", "torch_func:__index__:logged")]
 
 
 def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured() -> None:

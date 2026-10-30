@@ -75,6 +75,7 @@ __all__ = [
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_DEVICE_MESH",
     "HAS_DISABLE_TORCH_FUNCTION",
+    "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_DISPATCH_MODE_STACK_QUERY",
     "HAS_DTENSOR",
     "HAS_DTENSOR_SHARD_GEOMETRY",
@@ -115,6 +116,7 @@ __all__ = [
     "HAS_NAMED_TENSOR_API",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
+    "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -185,6 +187,7 @@ __all__ = [
     "get_jit_boolean_dispatch_table",
     "get_jit_overload_resolver_module",
     "get_optional_torch_namespace",
+    "get_disabled_torch_function_impl",
     "get_torch_capability_snapshot",
     "kineto_events_from_profiler",
     "memory_profile_from_profiler",
@@ -267,19 +270,6 @@ class RunnableTorchAlias:
     recorded_min_version: tuple[int, int]
     recorded_max_version: tuple[int, int] | None
     strip_target_prefix: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class _NormalizedDynamoBreak:
-    """Version-neutral graph-break evidence from ``torch._dynamo.explain``."""
-
-    reason: str
-    source_file: str | None
-    line_number: int | None
-
-
-class _DynamoExplainOutputError(RuntimeError):
-    """Raised when a Dynamo explain result has an unsupported runtime shape."""
 
 
 _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
@@ -841,30 +831,18 @@ def _probe_named_tensor_api() -> bool:
 def _probe_cached_untyped_storage_wrapper() -> bool:
     """Return whether a tensor retains one stable untyped-storage Python wrapper.
 
-    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
-    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
-    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
-    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
-    Newer torch retains one wrapper on the tensor, which makes weak-key storage
-    registries safe for the tensor's lifetime.
-
-    The probe deliberately compares two live handles instead of constructing a
-    weakref: exercising the broken weakref destructor would itself corrupt the
-    interpreter on an unsupported runtime.
+    The probe lives in the torch-only leaf ``_untyped_storage_probe``, imported here,
+    at probe time, so this module's eager import closure does not grow.
 
     Returns
     -------
     bool
-        ``True`` when repeated calls return the same retained wrapper.
+        ``True`` when repeated ``Tensor.untyped_storage()`` calls return one wrapper.
     """
 
-    try:
-        tensor = torch.empty(0)
-        first = tensor.untyped_storage()
-        second = tensor.untyped_storage()
-    except (AttributeError, RuntimeError, TypeError):
-        return False
-    return first is second
+    from ._untyped_storage_probe import probe_cached_untyped_storage_wrapper
+
+    return probe_cached_untyped_storage_wrapper()
 
 
 def _probe_dynamo_orig_callable_marker() -> bool:
@@ -934,6 +912,14 @@ def _probe_tensor_sequence_slot_fix() -> bool:
     from ._type_sequence_slot import sequence_slot_layout_problem
 
     return sequence_slot_layout_problem(torch.Tensor, b"Tensor") is None
+
+
+def _probe_script_function_call_hook() -> bool:
+    """Return whether ``ScriptFunction.__call__`` can be replaced (leaf imported at probe time)."""
+
+    from ._script_call_slot import probe_script_function_call_hook
+
+    return probe_script_function_call_hook()
 
 
 def _probe_safe_weights_only_load() -> bool:
@@ -1359,6 +1345,21 @@ def _probe_expanded_weights_conv_picker() -> bool:
         and expanded_weight is not None
         and "__torch_function__" in vars(expanded_weight)
     )
+
+
+def _probe_disabled_torch_function_impl() -> bool:
+    """Return whether ``torch._C._disabled_torch_function_impl`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the sentinel handler torch's C protocol SKIPS exists
+        (``torch.nn.Parameter`` carries it). The declined-protocol redispatch
+        (``backends/torch/_protocol_redispatch.py``) skips what torch skips,
+        so without it the redispatch stays off.
+    """
+
+    return callable(_nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl")))
 
 
 def _probe_gradient_edge() -> bool:
@@ -1855,11 +1856,10 @@ HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = _probe_legacy_constructor_new_patch()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
-# r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published
-# capability. It tracks a user-side torch spelling limitation (torch.roll with a
-# bare 0-dim tensor `shifts`: 2.8 rejects, 2.13 accepts) on which TorchLens does
-# NOT degrade -- zero library consumers exist, so publishing it made doctor WARN
-# across most of the declared support range for nothing TorchLens does.
+HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = _probe_script_function_call_hook()
+# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
+# R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
+# a user-side limit TorchLens never degrades on, so doctor does not report it.
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
@@ -1868,6 +1868,7 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
+HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
@@ -2035,6 +2036,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_JIT_SCHEMA_ENUMERATION",
     "HAS_TENSORBASE_CLASS",
     "HAS_DISABLE_TORCH_FUNCTION",
+    "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",
@@ -2064,6 +2066,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
+    "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
@@ -2847,6 +2850,14 @@ def get_tensorbase_class() -> type[Any] | None:
             "C-level tensor-base introspection is unavailable",
         )
     return _TENSORBASE_CLASS
+
+
+def get_disabled_torch_function_impl() -> Any | None:
+    """Return ``torch._C._disabled_torch_function_impl``, or ``None`` when absent."""
+
+    if not HAS_DISABLED_TORCH_FUNCTION_IMPL:
+        return None
+    return _nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl"))
 
 
 def get_disable_torch_function_context() -> Any | None:
@@ -4262,113 +4273,6 @@ def _explain_accepts_single_callable(explain: Callable[..., Any]) -> bool:
     except TypeError:
         return False
     return True
-
-
-def _dynamo_break_source(reason: Any) -> tuple[str | None, int | None]:
-    """Extract one source location from a version-specific break reason.
-
-    Parameters
-    ----------
-    reason:
-        Dynamo break-reason object or mapping.
-
-    Returns
-    -------
-    tuple[str | None, int | None]
-        Source file and one-indexed line number when supplied by Dynamo.
-    """
-
-    user_stack = (
-        reason.get("user_stack")
-        if isinstance(reason, dict)
-        else getattr(reason, "user_stack", None)
-    )
-    for frame in user_stack or ():
-        source_file = (
-            frame.get("filename")
-            if isinstance(frame, dict)
-            else getattr(frame, "filename", getattr(frame, "file", None))
-        )
-        line_number = (
-            frame.get("lineno", frame.get("line"))
-            if isinstance(frame, dict)
-            else getattr(frame, "lineno", getattr(frame, "line", None))
-        )
-        if source_file is not None and isinstance(line_number, int):
-            return str(source_file), line_number
-    source_file = (
-        reason.get("filename") if isinstance(reason, dict) else getattr(reason, "filename", None)
-    )
-    line_number = (
-        reason.get("lineno", reason.get("line"))
-        if isinstance(reason, dict)
-        else getattr(reason, "lineno", getattr(reason, "line", None))
-    )
-    if source_file is not None and isinstance(line_number, int):
-        return str(source_file), line_number
-    return None, None
-
-
-def normalize_dynamo_explain_output(output: Any) -> tuple[_NormalizedDynamoBreak, ...]:
-    """Normalize supported Dynamo explain result shapes without version parsing.
-
-    Supported shapes are attribute objects and mappings carrying
-    ``break_reasons``, plus the historical tuple whose fourth element contains
-    break reasons. Individual reasons may be objects, mappings, or strings.
-
-    Parameters
-    ----------
-    output:
-        Raw result from :func:`run_dynamo_explain`.
-
-    Returns
-    -------
-    tuple[_NormalizedDynamoBreak, ...]
-        Version-neutral graph-break evidence.
-
-    Raises
-    ------
-    _DynamoExplainOutputError
-        If the runtime result shape cannot be interpreted safely.
-    """
-
-    break_count: Any = None
-    if isinstance(output, dict):
-        reasons = output.get("break_reasons")
-        break_count = output.get("graph_break_count")
-    elif hasattr(output, "break_reasons"):
-        reasons = getattr(output, "break_reasons")
-        break_count = getattr(output, "graph_break_count", None)
-    elif isinstance(output, tuple) and len(output) >= 4:
-        reasons = output[3]
-        break_count = output[2]
-    else:
-        raise _DynamoExplainOutputError(
-            f"unsupported torch._dynamo.explain output type {type(output).__name__}"
-        )
-    if reasons is None:
-        if break_count == 0:
-            return ()
-        raise _DynamoExplainOutputError("Dynamo explain output omitted break_reasons")
-    if not isinstance(reasons, (list, tuple)):
-        raise _DynamoExplainOutputError("Dynamo break_reasons is not a sequence")
-
-    normalized: list[_NormalizedDynamoBreak] = []
-    for item in reasons:
-        reason_text: object | None
-        if isinstance(item, str):
-            reason_text = item
-        elif isinstance(item, dict):
-            reason_text = item.get("reason")
-        else:
-            reason_text = getattr(item, "reason", None)
-        if reason_text is None:
-            raise _DynamoExplainOutputError(
-                f"unsupported Dynamo break reason type {type(item).__name__}"
-            )
-        source_file, line_number = _dynamo_break_source(item)
-        normalized.append(_NormalizedDynamoBreak(str(reason_text), source_file, line_number))
-    return tuple(normalized)
 
 
 def fix_tensor_sequence_slot() -> bool:

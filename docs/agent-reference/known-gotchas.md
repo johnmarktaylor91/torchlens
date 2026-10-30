@@ -93,6 +93,24 @@
   is a test asserting the bypass did not regress that into a silent gap. Fake/functional tensors on
   inputs or params refuse at capture entry in `_robustness.py`; never let one reach the metadata
   path, where `data_ptr()` on a FakeTensor is a torch-flagged bug.
+- A library imported while wrappers are installed keys its `__torch_function__` handler table
+  on the WRAPPER (`TD_HANDLED_FUNCTIONS[torch.stack]` in tensordict), but torch's protocol hands
+  handlers the ORIGINAL, so every handler declines. When torch reports that every handler declined
+  this very function, the wrapper re-offers the same handlers the same arguments once under its own
+  identity (`backends/torch/_protocol_redispatch.py`, gated on `HAS_DISABLED_TORCH_FUNCTION_IMPL`);
+  a genuine decline still raises torch's own `TypeError`. Unwrapped torch has no wrapper to re-offer
+  (validation's pristine ground truth unwraps), so every `unwrap_torch()` first adds the original
+  key beside each wrapper key in module- and class-level `dict`/`set` tables of modules imported
+  after the redispatch module (torch and TorchLens excluded), and the next wrap removes exactly
+  those keys. Every call of the original and every re-raise stays in the wrapper's own frame: the
+  escape detector and failure-origin classification read that frame, so never route `func` through
+  a helper. Tests: `tests/test_protocol_redispatch.py`.
+- Buffer provenance never rests on values: step 6 merges two buffer nodes only when
+  capture recorded the same buffer version for both (tensor object, storage and version counter,
+  `RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
+  version replays as `identity` of its producer only on exact NaN-equal bytes (`tensor_nanequal`).
+  Comparing buffer values with IEEE `torch.equal` made a model whose buffers reach NaN from one entry
+  state record a different graph, so validation's re-trace called it non-reproducible.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
 - `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
@@ -183,11 +201,16 @@
   A `tl.where` predicate that reads post-capture fields (`p.layer_label`) is opaque, so it still
   fails at the first op with `bind_rule_runtime_error`.
 - TorchScript and DLPack: a `torch.jit.script` function called from an eager forward runs its
-  body in the TorchScript interpreter, below the Python functions TorchLens wraps, so its
-  operations are not in the graph. The completeness witness counts them as unaccounted and the
-  capture is `capture_verified=False` (a scripted module is refused up front). The advisory
-  `scripted_function_not_captured` names the scripted function and the call line; set
-  `PYTORCH_JIT=0` in the environment before the model's code is imported
+  body in the TorchScript interpreter, below the Python functions TorchLens wraps, so each call
+  is recorded as ONE `jitscript` boundary op (`backends/torch/_script_boundary.py`, hook on
+  `ScriptFunction.__call__`, gated by `HAS_SCRIPT_FUNCTION_CALL_HOOK`; warning
+  `torchscript_boundary`): its interior ops are not in the graph, every dispatch inside it is
+  owned by the audited `jit_script:boundary` token, and validation replays it by calling the
+  function again (a scripted module is still refused up front). A call that writes into one of
+  its tensor arguments in place is NOT recorded: the witness counts its dispatches as
+  unaccounted, the capture is `capture_verified=False`, and the advisory
+  `scripted_function_not_captured` names the function and the call line. To see the interior,
+  set `PYTORCH_JIT=0` in the environment before the model's code is imported
   (`PYTORCH_JIT=0 python your_script.py`) and `torch.jit.script` returns the plain function, so
   every operation inside it is captured. A tensor handed to another library through `to_dlpack`
   runs that library's kernels outside PyTorch's Python layer; `dlpack_call_not_captured` names the

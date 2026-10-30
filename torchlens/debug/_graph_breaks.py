@@ -16,6 +16,10 @@ from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
 from ..errors._base import CompatibilityError
 from ..utils import _torch_compat
+from ..utils._dynamo_explain_shapes import (
+    _DynamoExplainOutputError,
+    normalize_dynamo_explain_output,
+)
 from ..utils.arg_handling import normalize_input_args
 
 
@@ -370,7 +374,7 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
     neither the probe nor the eager correlation trace mutates the caller's
     model. Both runs observe identical state, so a stateful branching model
     takes the same path in the probe and the correlation trace. The Dynamo
-    result is normalized through ``torchlens.utils._torch_compat`` without
+    result is normalized through ``torchlens.utils._dynamo_explain_shapes`` without
     torch-version parsing. Correlation uses recorded :class:`FuncCallLocation`
     file/line evidence; empty matches state why no correlation was possible.
 
@@ -415,8 +419,8 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
         # runs for correlation to be valid), not the probe's mutated state.
         _restore_model_state(model, snapshot)
         try:
-            normalized = _torch_compat.normalize_dynamo_explain_output(raw_explanation)
-        except _torch_compat._DynamoExplainOutputError as exc:
+            normalized = normalize_dynamo_explain_output(raw_explanation)
+        except _DynamoExplainOutputError as exc:
             raise GraphBreaksNormalizationError(str(exc)) from exc
 
         from .. import trace as capture_trace

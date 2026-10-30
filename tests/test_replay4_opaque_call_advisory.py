@@ -1,6 +1,11 @@
 """The opaque-call advisory: a witness gap whose call-site line calls a TorchScript
 function (or hands a tensor out through DLPack) is named with its line and the spelling
-that captures it, and no verdict field moves."""
+that captures it, and no verdict field moves.
+
+A scripted call is normally one ``jitscript`` boundary op with no gap
+(``tests/test_torchscript_boundary.py``); the scripted helpers here write into a tensor
+argument in place, which the boundary leaves out, so they keep the gap the advisory names.
+"""
 
 from __future__ import annotations
 
@@ -37,9 +42,10 @@ _VERDICT_FIELDS = (
 
 @torch.jit.script
 def scripted_gate(x: torch.Tensor, threshold: float) -> torch.Tensor:
-    """Scripted helper whose body the eager wrappers cannot see."""
+    """Scripted helper that writes into its argument, so no boundary op covers it."""
 
-    return (x >= threshold).to(x.dtype) * x.sin()
+    x.mul_((x >= threshold).to(x.dtype))
+    return x.sin()
 
 
 class _ScriptedCaller(nn.Module):
@@ -50,7 +56,7 @@ class _ScriptedCaller(nn.Module):
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.lin(x)
+        h = self.lin(x).clone()
         return scripted_gate(h, 0.1) + h
 
 
@@ -72,11 +78,12 @@ class _StaticScriptedCaller(nn.Module):
     @staticmethod
     @torch.jit.script
     def jit_reset(v: torch.Tensor, spike: torch.Tensor) -> torch.Tensor:
-        return v * (1.0 - spike)
+        v.mul_(1.0 - spike)
+        return v
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         spike = torch.sigmoid(x)
-        return self.jit_reset(x, spike) + 1
+        return self.jit_reset(x.clone(), spike) + 1
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +151,7 @@ def test_scripted_static_method_through_self_is_resolved() -> None:
 
     (warning,) = _advisories(caught)
     assert warning.fields["scripted_function"] == "jit_reset"
-    assert warning.line_no == _line_of("return self.jit_reset(x, spike) + 1")
+    assert warning.line_no == _line_of("return self.jit_reset(x.clone(), spike) + 1")
 
 
 @pytest.mark.parametrize("model_class", [_ScriptedCaller, _EagerTwin])
@@ -256,9 +263,14 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     def scripted_gate(x: torch.Tensor, threshold: float) -> torch.Tensor:
         return (x >= threshold).to(x.dtype) * x.sin()
 
+    @torch.jit.script
+    def scripted_write(x: torch.Tensor) -> torch.Tensor:
+        x.mul_(2.0)
+        return x.sin()
+
     class M(nn.Module):
         def forward(self, x):
-            return scripted_gate(x, 0.1) + x
+            return scripted_gate(x, 0.1) + scripted_write(x.clone())
 
     unwrap_torch()
     wrap_torch(completeness_witness=True)
@@ -291,7 +303,10 @@ def test_pytorch_jit_0_spelling_captures_the_scripted_body(
     if jit_env == "0":
         assert report["verified"] is True
         assert "sin" in report["funcs"] and "__ge__" in report["funcs"]
+        assert "jitscript" not in report["funcs"]
     else:
+        # The functional helper is one boundary op; the in-place one stays the gap.
         assert report["verified"] is False
+        assert report["funcs"].count("jitscript") == 1
         assert "sin" not in report["funcs"]
         assert "PYTORCH_JIT=0" in result.stderr

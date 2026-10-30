@@ -150,6 +150,11 @@ STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = {
     "_foreach_copy_": {0},
     "foreachcopy": {0},  # canonicalized spelling
     "fill_": {0},  # destination values are overwritten; the fill VALUE (arg 1) stays tested
+    # ``Tensor.set_(source)`` rebinds the receiver to the source's storage (or to
+    # an empty one, or to a storage view for the storage overload), so the
+    # receiver's prior values never reach the output; a SOURCE tensor at arg 1
+    # carries every output value and stays perturbation-tested.
+    "set_": {0},
     "expand_as": {1},  # shape template only; arg 0 values flow into the output
     "expandas": {1},  # canonicalized spelling
     # ``Tensor.reshape_as(other)`` is ``self.reshape(other.sizes())`` and

@@ -5,6 +5,7 @@ plus new API coverage tests.
 """
 
 import os
+import warnings
 from collections.abc import Iterator
 from os.path import join as opj
 
@@ -541,12 +542,19 @@ def test_buffer_model():
 
 
 def test_buffer_rewrite_model():
-    """A forward that reassigns its buffers is stateful: False plus the re-trace warning."""
+    """A forward that reassigns its buffers records the same graph from any entry state.
+
+    The re-trace starts from the buffers the first forward wrote, and its
+    ``buffer2 = x**2`` chain reaches NaN by the fifth call where the first trace
+    does not; buffer provenance is recorded, not inferred from values,
+    so only values differ and validation passes with no re-trace warning.
+    """
 
     model = example_models.BufferRewriteModel()
     model_input = torch.rand(12, 12)
-    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
-        assert validate_forward_pass(model, model_input) is False
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", TraceNotReproducibleWarning)
+        assert validate_forward_pass(model, model_input) is True
     show_model_graph(
         model,
         model_input,
