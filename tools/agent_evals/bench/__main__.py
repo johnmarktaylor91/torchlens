@@ -39,8 +39,18 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MATERIAL_ROOT = registry.ORACLE_ROOT / "_material"
 
 
+class _Tasks(dict):  # type: ignore[type-arg]
+    """Tasks by id that also resolve the plan's short names (``T1`` for ``t01-jacobian-lens``)."""
+
+    def __missing__(self, key: str) -> registry.BenchTask:
+        matches = [t for i, t in self.items() if guards.task_number(i) == guards.task_number(key)]
+        if len(matches) != 1:
+            raise SystemExit(f"no single task matches {key!r}; known: {sorted(self)}")
+        return matches[0]
+
+
 def _tasks(args: argparse.Namespace) -> dict[str, registry.BenchTask]:
-    return registry.load_registry(Path(args.oracles))
+    return _Tasks(registry.load_registry(Path(args.oracles)))
 
 
 def cmd_list(args: argparse.Namespace) -> int:

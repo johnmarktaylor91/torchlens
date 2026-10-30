@@ -506,3 +506,17 @@ def test_ingest_grades_a_returned_run_into_a_valid_record(
     assert record["end_reason"] == "finished" and record["passed"] is True
     assert record["elapsed_s"] == 12.5 and record["tool_calls"]["total"] == 3
     assert record["tokens"]["output"] == 150 and record["load_bearing_lines"] > 5
+
+
+def test_plan_short_names_resolve_to_oracle_directories(tmp_path: Path) -> None:
+    from agent_evals.bench.__main__ import _Tasks
+
+    for name in ("t01-jacobian-lens", "t12-control-module-output"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "spec.md").write_text("spec")
+        (tmp_path / name / "grader.py").write_text("")
+    tasks = _Tasks(registry.load_registry(tmp_path))
+    assert tasks["T1"].task_id == "t01-jacobian-lens"
+    assert tasks["t12-control-module-output"].task_id == "t12-control-module-output"
+    with pytest.raises(SystemExit, match="no single task"):
+        tasks["T5"]
