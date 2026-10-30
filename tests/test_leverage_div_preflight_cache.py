@@ -34,21 +34,27 @@ def test_cone_preflight_membership_equals_actual_replay_cone():
     """The exact oracle: predicted replay membership EQUALS actual."""
 
     trace = _armed_trace()
-    plan = cone_preflight(trace, trace["relu_1_2"].ops)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
+    # so the origin is its first pass, addressed pass-qualified.
+    plan = cone_preflight(trace, [trace["relu_1_2:1"]])
     assert plan["replay_ready"]
     fork = trace.fork()
-    fork.do("relu_1_2", tl.zero_ablate())
+    fork.do("relu_1_2:1", tl.zero_ablate())
     assert fork.last_run["engine"] == "replay"
+
     # Replay disclosures spell single-pass ops bare; the preflight is
-    # pass-qualified throughout. Compare in bare-label space for this
-    # single-pass fixture.
-    planned_bare = tuple(label.rsplit(":", 1)[0] for label in plan["planned_replay_labels"])
-    assert planned_bare == tuple(fork.last_run["cone"])
+    # pass-qualified throughout. Compare in pass-qualified space.
+    def _qualified(label: str) -> str:
+        return label if ":" in label else f"{label}:1"
+
+    planned = tuple(_qualified(label) for label in plan["planned_replay_labels"])
+    assert planned == tuple(_qualified(label) for label in fork.last_run["cone"])
 
 
 def test_cone_preflight_discloses_engine_assumptions():
     trace = _armed_trace()
-    plan = cone_preflight(trace, trace["relu_2_4"].ops)
+    # grouping rule row 28: the second relu call is pass 2 of relu_1_2.
+    plan = cone_preflight(trace, [trace["relu_1_2:2"]])
     assert plan["cone_size"] < plan["total_ops"]
     assert plan["live_lane_ops"] == plan["total_ops"]  # live always runs the full forward
     notes = " ".join(plan["notes"])

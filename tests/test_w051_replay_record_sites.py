@@ -30,7 +30,10 @@ class _Loop(nn.Module):
         hidden = x
         for step in range(_N_PASSES):
             hidden = torch.relu(self.cell(hidden)) + float(step)
-        return hidden
+        # A single-pass layer for the single-pass record rows: the loop's
+        # ``+ float(step)`` is now one 3-pass Layer (grouping rule row 49:
+        # a varying scalar in a loop is one layer), so it no longer serves.
+        return hidden * 1.0
 
 
 @pytest.fixture(scope="module")
@@ -96,8 +99,8 @@ def test_do_layer_record_is_the_all_passes_spelling(loop) -> None:
 def test_do_single_pass_layer_record(loop) -> None:
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(fork["add_1_3"], tl.zero_ablate())
-    assert bool((fork["add_1_3"].out == 0).all())
+    fork.do(fork["mul_1_4"], tl.zero_ablate())
+    assert bool((fork["mul_1_4"].out == 0).all())
 
 
 def test_attach_hooks_op_record_then_push(loop) -> None:
@@ -132,8 +135,8 @@ def test_lower_record_site_target_shapes(loop) -> None:
         "relu_1_2:2",
         "relu_1_2:3",
     ]
-    single = lower_record_site_target(trace["add_1_3"])
-    assert isinstance(single, LabelSelector) and single.selector_value == "add_1_3:1"
+    single = lower_record_site_target(trace["mul_1_4"])
+    assert isinstance(single, LabelSelector) and single.selector_value == "mul_1_4:1"
     selector = tl.label("relu_1_2:1")
     assert lower_record_site_target(selector) is selector
     assert lower_record_site_target("relu_1_2:1") == "relu_1_2:1"

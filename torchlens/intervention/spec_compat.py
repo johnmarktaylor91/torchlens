@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple
 
 from .errors import GraphShapeMismatchError, SiteResolutionError
-from .resolver import resolve_sites
+from .resolver import SiteTable, _site_record, resolve_sites
 from .types import InterventionSpec
 
 __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]
@@ -72,6 +72,21 @@ def _site_key_for_label(log: Any, label: str) -> str | None:
         return None
     key = getattr(op, "site_key", None)
     return key if isinstance(key, str) else None
+
+
+def _site_keys_for_table(log: Any, table: SiteTable) -> list[str | None]:
+    """Return each resolved site's structural key, in table order.
+
+    Keys are looked up by each site record's own pass-qualified label, never by
+    ``SiteTable.labels()``: those are layer labels, which a multi-pass layer
+    repeats once per pass and which name no single op.
+    """
+
+    keys: list[str | None] = []
+    for site in table:
+        label = getattr(_site_record(site), "label", None)
+        keys.append(_site_key_for_label(log, label) if isinstance(label, str) else None)
+    return keys
 
 
 def _resolution_fanout_bound(log: Any, *, min_required: int = 1) -> int:
@@ -133,23 +148,18 @@ def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _Ent
     hash_matches = entry.get("graph_shape_hash") == graph_hash
     selector = _target_spec_from_json(entry["selector"])
     try:
-        resolved_labels = list(
-            resolve_sites(
-                new_log,
-                selector,
-                strict=True,
-                max_fanout=_resolution_fanout_bound(new_log, min_required=len(saved_labels)),
-            ).labels()
+        table = resolve_sites(
+            new_log,
+            selector,
+            strict=True,
+            max_fanout=_resolution_fanout_bound(new_log, min_required=len(saved_labels)),
         )
     except SiteResolutionError as exc:
         return _EntryFacts(
             saved_labels, saved_keys, keys_complete, hash_matches, None, [], str(exc)
         )
-    resolved_keys = [
-        key
-        for key in (_site_key_for_label(new_log, label) for label in resolved_labels)
-        if isinstance(key, str)
-    ]
+    resolved_labels = list(table.labels())
+    resolved_keys = [key for key in _site_keys_for_table(new_log, table) if isinstance(key, str)]
     return _EntryFacts(
         saved_labels, saved_keys, keys_complete, hash_matches, resolved_labels, resolved_keys, None
     )
