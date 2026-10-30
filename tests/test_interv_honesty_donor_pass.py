@@ -30,15 +30,20 @@ R0_DIR = str(Path(__file__).resolve().parent / "real_model" / "r0")
 
 
 class _TwoPass(nn.Module):
-    """Minimal weight-reused module: one Linear called twice."""
+    """Minimal weight-reused module: one Linear and relu run twice from a loop.
+
+    grouping rule rows 1 and 26: the loop body is one place in the code, so
+    ``relu_1_2`` is one layer with 2 passes (two relu lines would be two
+    single-pass layers, row 14).
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = torch.relu(self.lin(x))
-        x = torch.relu(self.lin(x))
+        for _ in range(2):
+            x = torch.relu(self.lin(x))
         return x
 
 

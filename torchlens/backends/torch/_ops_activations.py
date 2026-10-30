@@ -67,7 +67,10 @@ __all__ = (
 def _call_site_equivalence_class(
     trace: "Trace", fields_dict: dict[str, Any], i: int, layer_type: str
 ) -> str | None:
-    """Return ``<type>@cs<N>`` for an op whose call site the capture walk saw.
+    """Return the call-site class ``<type>@cs<N>`` for an op whose call site the walk saw.
+
+    The class goes into the raw-graph workspace side table
+    (``RawGraphWorkspace.call_site_classes``), never into ``equivalence_class``.
 
     The key is ``(innermost module address, call-site chain, func_name, output
     slot)``; ``N`` is its first-appearance index in this capture, so equal keys
@@ -239,13 +242,14 @@ def _log_output_tensor_info(
         fields_dict["pass_index"] = 1
 
     # Call-site grouping (step 7, ``callsite_v1``): when the capture walk saw
-    # where this op ran, the call site IS its equivalence class, replacing the
-    # argument/parameter fingerprint above (which stays the provisional
-    # parameter pass counter only).
+    # where this op ran, record its call-site class in the raw-graph workspace
+    # side table that step 7 groups by. The class is internal and never
+    # persisted (grouping rule section 3): ``equivalence_class`` above keeps the
+    # argument/parameter fingerprint, so ``equivalent_ops`` and
+    # ``op_equivalence_classes`` keep their own meaning.
     site_class = _call_site_equivalence_class(self, fields_dict, i, layer_type)
     if site_class is not None:
-        base_equivalence_class = site_class
-        fields_dict["equivalence_class"] = site_class
+        self._raw_graph_ws.call_site_classes[_label_raw] = site_class
 
     # equivalent_ops is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.

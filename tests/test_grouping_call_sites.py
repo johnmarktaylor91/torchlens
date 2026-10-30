@@ -1118,20 +1118,19 @@ class ChildLoop(Holder):
         return x
 
 
+@pytest.mark.skipif(
+    not hasattr(torch.jit, "trace"), reason="torch.jit.trace is retired on this torch"
+)
 def test_row63_torchscript_submodule_in_loop() -> None:
-    """Row 63: a TorchScript submodule called in a loop gives one boundary op Np."""
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            scripted = torch.jit.trace(ScriptChild(), _x())
-    except Exception as exc:  # TorchScript missing or retired on this torch
-        pytest.skip(f"torch.jit.trace unavailable: {type(exc).__name__}")
-    try:
-        shape = _shape(lambda: ChildLoop(child=scripted))
-    except RuntimeError as exc:
-        if "ScriptModule" not in str(exc):
-            raise
-        pytest.skip("this build refuses TorchScript submodules (no boundary op yet)")
+    """Row 63: a TorchScript submodule called in a loop gives one boundary op Np.
+
+    Feature-detected up front, never skipped from an except handler (a cold
+    cache would hide the skip; proofnet memo D4): a refusal fails loudly.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        scripted = torch.jit.trace(ScriptChild(), _x())
+    shape = _shape(lambda: ChildLoop(child=scripted))
     assert len(shape) == 1 and sum(shape.values()) == 1
     ((_func_name, passes),) = shape
     assert passes == 3
