@@ -1,8 +1,9 @@
 # Peer packages for the capture benchmarks, installed only into the benchmark
 # environment, never into TorchLens's dependencies. Pins are exact; run_smoke.sh
 # installs each one under a constraint that keeps the environment's torch,
-# torchvision and transformers versions, and with the environment's numpy, pandas,
-# matplotlib and scipy overriding thingsvision's exact pins on them. Resolved against torch 2.13.0, torchvision
+# torchvision and transformers versions; the environment's numpy, pandas and
+# matplotlib and the versions in peer-overrides.txt override thingsvision's exact
+# pins on them. Resolved against torch 2.13.0, torchvision
 # 0.28.0 and transformers 5.18.0 on python 3.10. transformer-lens pulls torchtyping,
 # whose pytest plugin fails to import on this torch, so tests run before the peers
 # are installed.
