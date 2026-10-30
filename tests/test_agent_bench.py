@@ -121,6 +121,22 @@ def test_guard_blocks_a_module_and_stubs_an_attribute(guarded_site: tuple[Path, 
     assert kept.returncode == 0 and kept.stdout.strip() == "kept"
 
 
+def test_guard_wildcard_disables_every_public_callable_of_an_eager_module(
+    guarded_site: tuple[Path, dict],
+) -> None:
+    root, env = guarded_site
+    pkg = root / "site" / "fakelib"
+    (pkg / "__init__.py").write_text("from . import tools\nfrom .api import jacobian_lens, keep\n")
+    (pkg / "tools.py").write_text(
+        "def patch_all():\n    return 1\n\ndef patch_one():\n    return 2\n"
+    )
+    run_file = guards.write_run_config(root / "run.json", ["fakelib.tools:*"])
+    env = {**env, guards.ENV_VAR: str(run_file)}
+    assert guards.selftest(sys.executable, ["fakelib.tools:*"], env)[0]["outcome"] == "blocked"
+    proc = _probe(env, "import fakelib\nprint(fakelib.keep())\nfakelib.tools.patch_one()")
+    assert proc.stdout.strip() == "kept" and guards.MARKER in proc.stderr
+
+
 def test_guard_stubs_a_method_on_a_class(guarded_site: tuple[Path, dict]) -> None:
     root, env = guarded_site
     run_file = guards.write_run_config(root / "run.json", ["fakelib.api:Layer.readout"])
@@ -162,10 +178,13 @@ def test_guard_with_an_empty_run_file_blocks_nothing(guarded_site: tuple[Path, d
         ),
         ("import fakelib\nfakelib.keep()\nname = 'jacobian_lens.json'", []),
         ("not python (", []),
+        ("from fakelib import tools\ntools.patch_all()", ["tools.patch_all"]),
+        ("from fakelib.tools import patch_all", ["from fakelib.tools import patch_all"]),
+        ("import fakelib.tools", []),
     ],
 )
 def test_audit_finds_guarded_names_in_agent_code(source: str, expected: list[str]) -> None:
-    entries = ["fakelib.api:jacobian_lens", "fakelib.patching"]
+    entries = ["fakelib.api:jacobian_lens", "fakelib.patching", "fakelib.tools:*"]
     assert guards.audit_source(source, entries) == expected
 
 
@@ -293,7 +312,7 @@ def test_fake_agent_solving_the_stub_passes_with_a_complete_record(
     assert record["load_bearing_lines"] > 5
     assert [b["passed"] for b in record["checkpoints"]["t1"]["bars"]] == [True, True]
     work = tmp_path / "run" / "work"
-    assert sorted(p.name for p in work.iterdir() if not p.name.startswith(".")) == [
+    assert sorted(p.name for p in work.iterdir() if p.name[0] not in "._") == [
         "TASK.md",
         "model.py",
         "outputs.pt",

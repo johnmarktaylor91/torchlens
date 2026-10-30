@@ -4,7 +4,8 @@ The primary track builds each method from primitives, so every arm disables any 
 implementation of the target method. A guard entry is either a module (``pkg.sub``: importing it,
 or anything under it, raises ``ImportError``) or an attribute (``pkg.sub:name`` or
 ``pkg.sub:Class.method``: the object is replaced by a stub that raises ``RuntimeError`` when
-called, so the rest of the module keeps working).
+called, so the rest of the module keeps working; ``pkg.sub:*`` does this for every public
+callable the module defines, for a module the library imports at package import).
 
 The guard is installed into an arm environment as ``_agent_bench_guard.py`` plus a ``.pth`` line
 that imports it at interpreter start. It reads the run's entries from the JSON file named by the
@@ -61,7 +62,18 @@ def _stub(name):
         raise RuntimeError(name + " is " + _MARKER + "; build the method from primitives")
 
     disabled.__name__ = name.rsplit(".", 1)[-1].rsplit(":", 1)[-1]
+    disabled._agent_bench_disabled = True
     return disabled
+
+
+def _public_callables(module):
+    return [
+        name
+        for name, obj in list(vars(module).items())
+        if not name.startswith("_")
+        and callable(obj)
+        and getattr(obj, "__module__", None) == module.__name__
+    ]
 
 
 class _Loader(importlib.abc.Loader):
@@ -75,6 +87,10 @@ class _Loader(importlib.abc.Loader):
     def exec_module(self, module):
         self._inner.exec_module(module)
         for attr in self._attrs:
+            if attr == "*":
+                for name in _public_callables(module):
+                    setattr(module, name, _stub(module.__name__ + ":" + name))
+                continue
             owner = module
             parts = attr.split(".")
             for part in parts[:-1]:
@@ -189,23 +205,29 @@ for entry in json.loads(sys.argv[1]):
         obj = importlib.import_module(mod)
         if not attr:
             outcome = "not blocked"
+        elif attr == "*":
+            public = [n for n in dir(obj) if not n.startswith("_") and callable(getattr(obj, n))]
+            stubbed = [n for n in public if getattr(getattr(obj, n), "_agent_bench_disabled", False)]
+            own = [n for n in public if getattr(getattr(obj, n), "__module__", None) == mod]
+            outcome = "blocked" if stubbed and not own else "not blocked"
+            detail = str(len(stubbed)) + " callables disabled, " + str(len(own)) + " left"
         else:
             for part in attr.split("."):
                 obj = getattr(obj, part)
             try:
                 obj()
             except RuntimeError as exc:
-                outcome, detail = ("blocked" if %(marker)r in str(exc) else "not blocked"), str(exc)
+                outcome, detail = ("blocked" if __MARKER__ in str(exc) else "not blocked"), str(exc)
             except Exception as exc:
                 outcome, detail = "not blocked", type(exc).__name__ + ": " + str(exc)
     except ImportError as exc:
-        outcome = "blocked" if %(marker)r in str(exc) else "absent"
+        outcome = "blocked" if __MARKER__ in str(exc) else "absent"
         detail = str(exc)
     except AttributeError as exc:
         outcome, detail = "absent", str(exc)
     results.append({"entry": entry, "outcome": outcome, "detail": detail[:300]})
 print(json.dumps(results))
-""" % {"marker": MARKER}
+""".replace("__MARKER__", repr(MARKER))
 
 
 def selftest(
@@ -279,7 +301,7 @@ def audit_source(source: str, entries: Sequence[str]) -> list[str]:
                 hits += [
                     f"from {node.module} import {alias.name}"
                     for mod, attr in attrs
-                    if node.module == mod and alias.name == attr.split(".")[0]
+                    if node.module == mod and (attr == "*" or alias.name == attr.split(".")[0])
                 ]
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute):
@@ -289,7 +311,13 @@ def audit_source(source: str, entries: Sequence[str]) -> list[str]:
             head, _, rest = dotted.partition(".")
             resolved = f"{aliases.get(head, head)}.{rest}" if rest else aliases.get(head, head)
             for mod, attr in attrs:
-                if resolved == f"{mod}.{attr}" or resolved.endswith(f".{mod}.{attr}"):
+                if (
+                    resolved == f"{mod}.{attr}"
+                    or resolved.endswith(f".{mod}.{attr}")
+                    or attr == "*"
+                    and resolved.startswith(f"{mod}.")
+                    and resolved != mod
+                ):
                     hits.append(dotted)
             hits += [dotted for m in modules if under(resolved, m)]
         elif (

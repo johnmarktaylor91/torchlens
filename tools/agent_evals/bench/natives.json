@@ -1,12 +1,12 @@
 {
-  "about": "Ready-made implementations of each task's target method, disabled per arm by the import guard. Entries are 'module' (import fails) or 'module:attribute' (calling it fails). Arm B entries use the library's current names and are re-derived after its rename; peer-capable reviewers approve each arm's list before the pilot.",
+  "about": "Ready-made implementations of each task's target method, disabled per arm by the import guard. Entries are 'module' (import fails) 'module:attribute' (calling it fails) or 'module:*' (every public callable the module defines fails; for modules the library imports eagerly). Arm B entries use the library's current names and are re-derived after its rename; peer-capable reviewers approve each arm's list before the pilot.",
   "status": "draft",
   "tasks": {
     "T1": {"B": [], "C": [], "D": []},
     "T2": {"B": [], "C": [], "D": []},
     "T3": {
       "B": ["torchlens.viz:causal_trace_heatmap", "torchlens.semantic.patching"],
-      "D": ["transformer_lens.patching"]
+      "D": ["transformer_lens.patching:*"]
     },
     "T4": {
       "B": [
@@ -14,7 +14,7 @@
         "torchlens.experiment:head_ablation_candidates",
         "torchlens.experiment._head_sugar:head_ablation_candidates"
       ],
-      "D": ["transformer_lens.patching"]
+      "D": ["transformer_lens.patching:*"]
     },
     "T5": {
       "B": [
@@ -29,7 +29,7 @@
         "torchlens.experiment:head_ablation_candidates",
         "torchlens.experiment._head_sugar:head_ablation_candidates"
       ],
-      "D": ["transformer_lens.patching"]
+      "D": ["transformer_lens.patching:*"]
     },
     "T7": {
       "B": [
@@ -38,13 +38,11 @@
         "torchlens.repgeom:rdm_evolution",
         "torchlens.repgeom._geometry:rdm",
         "torchlens.repgeom._geometry:rdm_compare",
-        "torchlens.neuro:rdms",
         "torchlens.neuro._rdms:rdms"
       ]
     },
     "T8": {
       "B": [
-        "torchlens:receptive_field",
         "torchlens.receptive_field",
         "torchlens.data_classes.layer:Layer.receptive_field",
         "torchlens.data_classes.op:Op.receptive_field"
