@@ -195,6 +195,43 @@ def _edge_tail(title: str, node_titles: set[str]) -> str | None:
     return head if head in node_titles else None
 
 
+@dataclass(frozen=True)
+class _ScannedGroup:
+    """One node or edge group: where its title ends, its shapes, and what it is."""
+
+    title_end: int
+    shapes: tuple[str, ...]
+    title: str
+    is_node: bool
+
+
+def _scan(svg: str) -> tuple[list[_ScannedGroup], set[str], set[str], set[str]]:
+    """Return the groups, every node title, the marked node titles and the downstream ones."""
+
+    scanned: list[_ScannedGroup] = []
+    node_titles: set[str] = set()
+    marked: set[str] = set()
+    downstream: set[str] = set()
+    for start, end, open_tag in _groups(svg):
+        body = svg[start:end]
+        title_match = _TITLE_RE.search(body)
+        if title_match is None:
+            continue
+        title = html.unescape(title_match.group(1))
+        classes = _CLASS_RE.search(open_tag)
+        names = classes.group(1).split() if classes is not None else []
+        is_node = names[:1] == ["node"]
+        if is_node:
+            node_titles.add(title)
+            if EDITED_NODE_CLASS in names or DOWNSTREAM_NODE_CLASS in names:
+                marked.add(title)
+            if DOWNSTREAM_NODE_CLASS in names:
+                downstream.add(title)
+        shapes = tuple(_SHAPE_RE.findall(body[title_match.end() :]))
+        scanned.append(_ScannedGroup(start + title_match.end(), shapes, title, is_node))
+    return scanned, node_titles, marked, downstream
+
+
 def highlight_svg(svg: str, style: HighlighterStyle) -> str:
     """Lay the highlighter under changed nodes and every arrow leaving a marked node.
 
@@ -205,36 +242,16 @@ def highlight_svg(svg: str, style: HighlighterStyle) -> str:
     painted under the originals. Everything else is left byte for byte.
     """
 
-    groups = _groups(svg)
-    node_titles: set[str] = set()
-    marked: set[str] = set()
-    downstream: set[str] = set()
-    parsed = []
-    for start, end, open_tag in groups:
-        body = svg[start:end]
-        title_match = _TITLE_RE.search(body)
-        if title_match is None:
-            continue
-        title = html.unescape(title_match.group(1))
-        classes = _CLASS_RE.search(open_tag)
-        names = classes.group(1).split() if classes is not None else []
-        if names[:1] == ["node"]:
-            node_titles.add(title)
-            if EDITED_NODE_CLASS in names or DOWNSTREAM_NODE_CLASS in names:
-                marked.add(title)
-            if DOWNSTREAM_NODE_CLASS in names:
-                downstream.add(title)
-        parsed.append((start, title_match.end(), body, title, names[:1] == ["node"]))
+    scanned, node_titles, marked, downstream = _scan(svg)
     insertions: list[tuple[int, str]] = []
-    for start, title_end, body, title, is_node in parsed:
-        shapes = _SHAPE_RE.findall(body[title_end:])
-        if is_node:
-            if title in downstream and shapes:
-                insertions.append((start + title_end, _underlay(shapes[0], style)))
-        elif _edge_tail(title, node_titles) in marked and shapes:
-            insertions.append((start + title_end, "".join(_underlay(s, style) for s in shapes)))
-    if not insertions:
-        return svg
+    for group in scanned:
+        if not group.shapes:
+            continue
+        if group.is_node and group.title in downstream:
+            insertions.append((group.title_end, _underlay(group.shapes[0], style)))
+        elif not group.is_node and _edge_tail(group.title, node_titles) in marked:
+            underlays = "".join(_underlay(shape, style) for shape in group.shapes)
+            insertions.append((group.title_end, underlays))
     pieces = []
     cursor = 0
     for position, text in sorted(insertions):

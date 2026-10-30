@@ -560,6 +560,9 @@ def render_rank_layout(
             ``(module_region_key | None, node_args)`` (see
             ``_rank_overlay_entries``).
         overlay_edges: Edge arguments for the synthesized nodes.
+        highlighter: Downstream highlighter style (``vis_show_cone=True``), or
+            ``None``; when set, neato writes SVG and the requested format is
+            written from the highlighted SVG.
 
     Returns:
         The generated DOT source string.

@@ -18,7 +18,7 @@ import torch
 from example_models import TinyReluAdd
 
 import torchlens as tl
-from torchlens.intervention.types import FireRecord
+from torchlens.intervention.types import Edit, FireRecord
 from torchlens.options import VisualizationOptions
 from torchlens.visualization._edit_highlighter import HighlighterStyle, highlight_svg
 from torchlens.visualization._edit_marks import (
@@ -59,7 +59,8 @@ def test_edit_text_rule() -> None:
     assert short_edit_text(tl.clamp(min=0, max=1)) == "clamp(min=0, max=1)"
     assert short_edit_text(tl.noise(0.1)) == "noise(0.1)"
     assert short_edit_text(tl.steer(torch.ones(3))) == "steer(v)"
-    assert short_edit_text(tl.swap_with("relu_2_1")) == "swap_with(relu_2_1)"
+    # A label argument is written in (built directly: swap_with refuses a bare label at run time).
+    assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
     assert short_edit_text(tl.bwd_hook(named_fn)) == "bwd_hook(named_fn)"
     assert short_edit_text(tl.bwd_hook(lambda g: g)) == "bwd_hook(fn)"
     assert short_edit_text(tl.grad_zero()) == "grad_zero"
@@ -310,7 +311,9 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     finally:
         trace.cleanup()
     hook_line = next(
-        line for line in dot.splitlines() if line.lstrip().startswith("intervention_hook_")
+        line
+        for line in dot.splitlines()
+        if line.lstrip().startswith("intervention_hook_") and "->" not in line
     )
     assert "shape=diamond" in hook_line
     assert PURPLE in hook_line and "#F3E5F5" in hook_line
