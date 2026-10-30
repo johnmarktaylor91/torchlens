@@ -162,6 +162,26 @@ def rdm_correlation(a, b):
     return pearson(upper_tri(a), upper_tri(b))
 
 
+def inputs_hash(*paths):
+    """Short digest of the contents of files and directories (and the grader
+    itself when passed), so an oracle cache is never reused for changed inputs."""
+    import hashlib
+    h = hashlib.sha256()
+    for root in paths:
+        if os.path.isdir(root):
+            for dp, dns, fns in os.walk(root):
+                dns.sort()
+                for fn in sorted(fns):
+                    fp = os.path.join(dp, fn)
+                    h.update(os.path.relpath(fp, root).encode())
+                    with open(fp, "rb") as f:
+                        h.update(f.read())
+        elif os.path.isfile(root):
+            with open(root, "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()[:12]
+
+
 def grader_main(task_id, grade_fn):
     """Standard CLI for graders: grade_fn(task_dir, outputs, heldout_outputs, cache) -> Report."""
     import argparse

@@ -173,6 +173,10 @@ def run(inputs, outputs, variant=None):
             t = feats[lid].numpy()
             if variant == "inplace_alias" and lid.endswith(".bn2"):
                 t = feats[lid.replace(".bn2", ".add")].numpy()  # what an un-cloned hook would hold
+            if variant == "bn1_alias" and lid.endswith(".bn1"):
+                t = feats[lid.replace(".bn1", ".relu1")].numpy()  # bn1 overwritten by the in-place ReLU
+            if variant == "drop_cls" and net == "vit" and t.ndim == 3 and t.shape[1] == 197:
+                t = t[:, 1:, :]  # patch tokens only
             if variant == "transpose":
                 t = np.ascontiguousarray(t.reshape(t.shape[0], -1).T).reshape(t.shape[0], -1)
             rdms[lid] = rdm(t)

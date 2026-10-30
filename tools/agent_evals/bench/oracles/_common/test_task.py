@@ -51,10 +51,10 @@ def main():
         hout = os.path.join(work, name.replace("/", "_"), "heldout_outputs") if heldout else None
         if not a.skip_run:
             run([sys.executable, os.path.join(HERE, "run_solution.py"), solve,
-                 os.path.join(task, "inputs"), out, "--timeout", str(timeout)])
+                 os.path.join(task, "inputs"), out, "--timeout", str(timeout), "--task-dir", task])
             if heldout:
                 run([sys.executable, os.path.join(HERE, "run_solution.py"), solve,
-                     heldout, hout, "--timeout", str(timeout)])
+                     heldout, hout, "--timeout", str(timeout), "--task-dir", task])
         cmd = [sys.executable, os.path.join(task, "grader.py"), "--task-dir", task,
                "--outputs", out, "--cache", cache]
         if heldout:

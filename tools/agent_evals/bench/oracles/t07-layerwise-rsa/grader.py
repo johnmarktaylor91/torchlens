@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_common"))
-from grade_utils import Report, grader_main, load_json, load_npz, rdm_correlation  # noqa: E402
+from grade_utils import Report, grader_main, inputs_hash, load_json, load_npz, max_abs, rdm_correlation  # noqa: E402
 
 
 def load_inputs(inputs):
@@ -115,26 +115,31 @@ def vit_oracle(x):
 def oracle(inputs, cache_file):
     if os.path.isfile(cache_file):
         with np.load(cache_file, allow_pickle=True) as z:
-            return {k: z[k] for k in z.files if k != "_best"}, json.loads(str(z["_best"]))
+            return ({k: z[k] for k in z.files if not k.startswith("_")},
+                    json.loads(str(z["_best"])), json.loads(str(z["_scores"])))
     cfg, layers, x, labels = load_inputs(inputs)
     cat = (labels[:, None] != labels[None, :]).astype(np.float64)
     rd = {}
     best = {}
+    scores = {}
     for net, o in (("cnn", cnn_oracle(x)), ("vit", vit_oracle(x))):
-        scores = {}
+        sc = {}
         for item in layers[net]:
             lid = item["id"]
             rd[f"{net}/{lid}"] = o[lid]
-            scores[lid] = rdm_correlation(o[lid], cat)
-        best[net] = max(scores, key=scores.get)
-    np.savez(cache_file, _best=np.array(json.dumps(best)), **rd)
-    return rd, best
+            sc[lid] = rdm_correlation(o[lid], cat)
+        best[net] = max(sc, key=sc.get)
+        scores[net] = sc
+    np.savez(cache_file, _best=np.array(json.dumps(best)), _scores=np.array(json.dumps(scores)), **rd)
+    return rd, best, scores
+
+
+BEST_TOL = 1e-3   # a layer whose category match is within this of the maximum also counts as best
 
 
 def grade_one(rep, label, task_dir, inputs, outputs, cache):
-    tag = os.path.basename(inputs)
-    ref, ref_best = oracle(inputs, os.path.join(cache, f"t07_oracle_{tag}.npz"))
-    layers = json.load(open(os.path.join(inputs, "layers.json")))
+    key = inputs_hash(inputs, os.path.abspath(__file__))
+    ref, ref_best, ref_scores = oracle(inputs, os.path.join(cache, f"t07_oracle_{key}.npz"))
     names = [f"{label}:layers_present", f"{label}:rdm_agreement", f"{label}:best_layer"]
     try:
         agent = {}
@@ -150,10 +155,16 @@ def grade_one(rep, label, task_dir, inputs, outputs, cache):
     rep.add(names[0], not missing, len(ref) - len(missing), len(ref),
             note=f"missing={missing[:5]}" if missing else "")
     corrs = {k: rdm_correlation(agent[k], ref[k]) for k in ref if k not in missing}
+    absd = {k: max_abs(agent[k], ref[k]) for k in ref if k not in missing}
     worst = min(corrs.values()) if corrs else float("nan")
     worst_k = min(corrs, key=corrs.get) if corrs else None
-    rep.add(names[1], (not missing) and worst >= 0.999, worst, 0.999, note=f"worst layer {worst_k}")
-    rep.add(names[2], best == ref_best, note=f"agent={best} oracle={ref_best}")
+    worst_abs = max(absd.values()) if absd else float("inf")
+    ok = (not missing) and worst >= 0.999 and worst_abs <= 1e-3
+    rep.add(names[1], ok, worst, 0.999,
+            note=f"worst corr layer {worst_k}; max abs diff {worst_abs:.2e} (bar 1e-3)")
+    accept = {net: [l for l, v in sc.items() if v >= max(sc.values()) - BEST_TOL] for net, sc in ref_scores.items()}
+    best_ok = isinstance(best, dict) and all(best.get(net) in accept[net] for net in accept)
+    rep.add(names[2], best_ok, note=f"agent={best} oracle={ref_best} accepted={accept}")
 
 
 def grade(task_dir, outputs, heldout_outputs, cache):

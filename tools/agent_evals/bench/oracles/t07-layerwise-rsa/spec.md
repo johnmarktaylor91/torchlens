@@ -44,11 +44,14 @@ Required outputs (in `--outputs`):
   the id string, shape `[N, N]`.
 - `best_layer.json`: `{"cnn": "<layer id>", "vit": "<layer id>"}`.
 
-Pitfalls the solution must get right: the two ReLUs inside a residual block
-are the same module applied twice; the residual addition is performed in place
-on the second batch norm's output, so a recorded tensor that is not copied is
-later overwritten; the transformer's residual additions are plain tensor sums
-inside the block's forward.
+Pitfalls the solution must get right (disclosed to every arm on purpose): the
+two ReLUs inside a residual block are the same module applied twice and run in
+place, so the first batch norm's output and the residual sum are overwritten
+unless copied at the moment they exist; the residual addition is performed in
+place on the second batch norm's output; the transformer's residual additions
+are plain tensor sums inside the block's forward (the second one is also the
+block's output). Every token, including the class token, belongs to a
+transformer layer's feature vector.
 
 ## Oracle and pass bars
 
@@ -59,7 +62,7 @@ graph) on the same stimuli and compares.
 | Bar | Pass |
 |---|---|
 | layers present | every id in `layers.json` has an array of shape `[N, N]` |
-| rdm agreement | Pearson correlation of upper triangles between agent RDM and oracle RDM >= 0.999 for every layer (minimum over layers is reported) |
-| best layer | agent's best layer equals the oracle's for both networks |
+| rdm agreement | for every layer, Pearson correlation of upper triangles between agent RDM and oracle RDM >= 0.999 and maximum absolute entry difference <= 1e-3 (worst values reported) |
+| best layer | for both networks, the agent's best layer is the oracle's best layer or one whose match is within 1e-3 of the oracle's maximum |
 
 The held-out run uses a different stimulus seed and the same bars.

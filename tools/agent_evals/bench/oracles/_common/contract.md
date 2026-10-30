@@ -27,3 +27,14 @@ prints one JSON object on its last stdout line:
 
 A missing or malformed output file fails every bar that depends on it. The
 grader never calls a judge model; every bar is a deterministic computation.
+
+Isolation: the runner copies the inputs and the solution into a fresh temporary
+workspace outside the task tree before running, so held-out inputs, the grader
+and its oracle cache are not reachable by a relative path. The harness that runs
+subject agents must add real filesystem isolation (a container or a sandbox
+user) on top of this.
+
+Toolkit use: in every arm a solution may use plain PyTorch for any part of the
+task; the library arms are not required to route everything through the
+library. A solution may write a free-form `approach.txt` into its outputs saying
+which parts used the library; the harness records it and no grader reads it.

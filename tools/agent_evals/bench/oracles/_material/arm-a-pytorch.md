@@ -28,7 +28,8 @@ hs = [blocks[i].register_forward_hook(save(f"resid_post.{i}")) for i in range(12
 hs.append(blocks[5].attn.register_forward_hook(save("attn_out.5")))
 hs.append(blocks[5].mlp.register_forward_hook(save("mlp_out.5")))
 with torch.no_grad():
-    out = model(ids, output_hidden_states=True)   # out.hidden_states[i+1] == block i output
+    out = model(ids, output_hidden_states=True)   # hidden_states[i+1] == block i output, except the
+                                                  # last entry, which GPT-2 returns after ln_f
 for h in hs: h.remove()
 ```
 
@@ -73,6 +74,8 @@ model.requires_grad_(False)             # no parameter gradients needed
 captured = {}
 def keep(mod, inp, out):
     t = out[0] if isinstance(out, (tuple, list)) else out
+    if not t.requires_grad:              # frozen model: make this tensor the graph root
+        t.requires_grad_(True)
     t.retain_grad(); captured["t"] = t   # keep the graph tensor, do not detach
 h = blocks[6].register_forward_hook(keep)
 logits = model(ids).logits

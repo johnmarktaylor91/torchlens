@@ -12,8 +12,10 @@ at token position p (the vector that enters block l+1; after block 5 it is the
 vector that enters the final layer norm). The *final block* is block 5.
 
 Fitting. For each text in `corpus.jsonl`, in file order: tokenise it without
-adding special tokens and truncate it to `max_seq_len` tokens, giving T
-tokens. Let the valid positions be `V = {skip_first_positions, ..., T-2}`
+adding special tokens (no beginning-of-sequence token; the published code
+prepends one by default, and this task deliberately does not) and truncate it to
+`max_seq_len` tokens, giving T tokens. A text with no valid position (fewer
+than `skip_first_positions + 2` tokens) is skipped; none in this corpus is. Let the valid positions be `V = {skip_first_positions, ..., T-2}`
 (the first 16 positions are excluded because of attention-sink statistics and
 the last position because it has no next-token target). For each source layer
 l in `source_layers`, the per-text Jacobian estimate is the 512 x 512 matrix
@@ -52,7 +54,10 @@ Required outputs (in `--outputs`):
 ## Oracle and pass bars
 
 The oracle is a port of the published reference estimator (companion code of
-the July 2026 Jacobian lens paper) run on the same model, corpus and settings.
+the July 2026 Jacobian lens paper) run on the same model, corpus and settings,
+with an internal consistency check against per-target-position vector-Jacobian
+products on one text. The held-out run uses the same corpus and different
+readout prompts.
 Held-out readout prompts, never shown to the solution, are used for the
 readout bars.
 
@@ -60,7 +65,8 @@ readout bars.
 |---|---|
 | shapes | the five matrices and the readout lists are present with the right shapes |
 | jacobian | for every source layer, `||J_agent - J_oracle||_F / ||J_oracle||_F < 1e-3` (maximum over layers reported) |
-| readout (visible prompts) | mean over prompts and layers of `|top10_agent & top10_oracle| / 10` >= 0.9 |
+| readout (visible prompts) | mean over prompts and layers of `|top10_agent & top10_oracle| / 10` >= 0.9 (set overlap; the recorded order is not graded) |
+| model top-10 (visible prompts) | the model's own top-10 set equals the oracle's for every prompt |
 | readout (held-out prompts) | same statistic on the held-out prompts >= 0.9 |
 
 Reference: Gurnee, Sofroniew et al., "Verbalizable Representations Form a
