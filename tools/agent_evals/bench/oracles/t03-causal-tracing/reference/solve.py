@@ -107,6 +107,11 @@ def run(inputs, outputs, variant=None):
         result["attn"], result["mlp"] = result["mlp"], result["attn"]
     if variant == "reversed_roles":
         clean_prob, corrupt_prob = corrupt_prob, clean_prob
+    if variant == "transpose":
+        result = {key: value.transpose(0, 2, 1) for key, value in result.items()}
+    if variant == "stimulus_order":
+        result = {key: value[::-1].copy() for key, value in result.items()}
+        clean_prob, corrupt_prob = clean_prob[::-1], corrupt_prob[::-1]
     os.makedirs(outputs, exist_ok=True)
     np.savez(os.path.join(outputs, "heatmap.npz"), **result,
              clean_prob=np.array(clean_prob, np.float32), corrupt_prob=np.array(corrupt_prob, np.float32))
