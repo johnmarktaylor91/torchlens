@@ -127,6 +127,26 @@ def _doc_block_params(group: str) -> list[object]:
     return params
 
 
+#: TorchLens entry points that need an optional extra the docs demonstrate, with
+#: the module each one imports lazily. A doc fence that calls one is skipped by
+#: feature detect when the module is absent; a new extra-gated entry point in the
+#: docs must be added here, or its fence fails loudly.
+_OPTIONAL_EXTRA_CALLS: dict[str, str] = {
+    "tl.export.wandb": "wandb",
+    "tl.export.xarray": "xarray",
+}
+
+
+def _missing_extra_modules(code: str) -> list[str]:
+    """Return modules the code needs through an extra-gated TorchLens call."""
+
+    return sorted(
+        module
+        for call, module in _OPTIONAL_EXTRA_CALLS.items()
+        if call in code and importlib.util.find_spec(module) is None
+    )
+
+
 def _missing_imported_modules(tree: ast.AST) -> list[str]:
     """Return the root modules the code imports that are not installed.
 
@@ -174,7 +194,7 @@ def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) 
         "DOCS_TMPDIR": str(tmp_path),
     }
     compiled = compile(code, synthetic_filename, "exec")
-    missing = _missing_imported_modules(ast.parse(code))
+    missing = _missing_imported_modules(ast.parse(code)) + _missing_extra_modules(code)
     if missing:
         pytest.skip(f"doc snippet imports uninstalled optional dependencies: {missing}")
     exec(compiled, namespace)
@@ -378,7 +398,9 @@ def test_canonical_page_python_blocks_execute(
             if missing_optional:
                 continue
             statement = ast.Module(body=[node], type_ignores=[])
-            missing = _missing_imported_modules(statement)
+            missing = _missing_imported_modules(statement) + _missing_extra_modules(
+                ast.unparse(statement)
+            )
             if missing:
                 pytest.skip(f"{source_name} imports uninstalled optional dependencies: {missing}")
             exec(compile(statement, source_name, "exec"), namespace)
