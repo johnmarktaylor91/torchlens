@@ -9516,7 +9516,7 @@
   "field": "pass_index",
   "file": "torchlens/validation/_invariants_topology.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
