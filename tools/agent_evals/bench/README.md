@@ -55,8 +55,8 @@ a JSON verdict on its last stdout line: `passed` and a list of bars (`name`, `pa
 failing bar all fail the run; the harness never loosens a bar. `check-task` grades the
 reference, every seeded wrong solution and `_common/do_nothing` through this path: the reference
 must pass and every other candidate must fail. `models.json` lists the pretrained weights each
-task loads; `prefetch` downloads them into a model cache, and agents and solutions run offline
-against it.
+task loads; `prefetch` downloads them into a model cache (`hf/` for `HF_HOME`, `torch/` for
+`TORCH_HOME`), and agents and solutions run offline against it.
 
 ## A run
 

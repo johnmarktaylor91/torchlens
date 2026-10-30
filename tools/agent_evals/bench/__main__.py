@@ -183,7 +183,7 @@ def cmd_prefetch(args: argparse.Namespace) -> int:
     """Download every task's pretrained weights into the model cache (needs network)."""
 
     cache = Path(args.cache).resolve()
-    env = {**os.environ, "HF_HOME": str(cache), "TORCH_HOME": str(cache / "torch")}
+    env = {**os.environ, **runner.cache_env(cache)}
     table = json.loads(MODELS_FILE.read_text())["tasks"]
     wanted = args.tasks.split(",") if args.tasks else sorted(table)
     status = 0

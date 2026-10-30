@@ -335,6 +335,12 @@ def grade(
     return verdict
 
 
+def cache_env(cache: Path) -> dict[str, str]:
+    """Return the variables that point the model hubs at ``cache`` (``hf/`` and ``torch/``)."""
+
+    return {"HF_HOME": str(cache / "hf"), "TORCH_HOME": str(cache / "torch")}
+
+
 def agent_env(spec: RunSpec, config: RunConfig, run_dir: Path) -> dict[str, str]:
     """Return the agent's environment: the arm's interpreter first on PATH, the guard file set."""
 
@@ -354,7 +360,7 @@ def agent_env(spec: RunSpec, config: RunConfig, run_dir: Path) -> dict[str, str]
         **config.env,
     }
     if config.model_cache is not None:
-        env.update(HF_HOME=str(config.model_cache), TORCH_HOME=str(config.model_cache / "torch"))
+        env.update(cache_env(config.model_cache))
     return env
 
 
