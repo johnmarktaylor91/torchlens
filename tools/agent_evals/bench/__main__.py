@@ -4,7 +4,8 @@ Commands::
 
     list         [--oracles DIR]
     build-env    --arm A --dest DIR [--repo DIR] [--oracles DIR]
-    check-task   --task ID --python PY [--oracles DIR] [--out DIR]
+    prefetch     --cache DIR --python PY [--tasks T1,T7]
+    check-task   --task ID --python PY [--oracles DIR] [--out DIR] [--model-cache DIR]
     plan         --out FILE --seed N [--pilot | --tasks T1,T7 --arms A,B --tiers small,mid]
                  [--repeats 3]
     run          --task ID --arm A --tier small --config FILE --envs DIR --out DIR
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -137,6 +139,47 @@ def cmd_check_task(args: argparse.Namespace) -> int:
     (out / "check.json").write_text(json.dumps(results, indent=2, default=str))
     print(json.dumps(summary))
     return 0 if ok else 1
+
+
+MODELS_FILE = Path(__file__).resolve().parent / "models.json"
+PREFETCH = """
+import json, os, sys
+item = json.loads(sys.argv[1])
+if item["kind"] == "hf":
+    from huggingface_hub import snapshot_download
+    print(snapshot_download(item["id"]))
+elif item["kind"] == "torchvision":
+    import torchvision
+    holder, name = item["weights"].split(".")
+    weights = getattr(getattr(torchvision.models, holder), name)
+    getattr(torchvision.models, item["builder"])(weights=weights)
+    print(os.environ["TORCH_HOME"])
+else:
+    raise SystemExit("unknown model kind " + item["kind"])
+"""
+
+
+def cmd_prefetch(args: argparse.Namespace) -> int:
+    """Download every task's pretrained weights into the model cache (needs network)."""
+
+    cache = Path(args.cache).resolve()
+    env = {**os.environ, "HF_HOME": str(cache), "TORCH_HOME": str(cache / "torch")}
+    table = json.loads(MODELS_FILE.read_text())["tasks"]
+    wanted = args.tasks.split(",") if args.tasks else sorted(table)
+    status = 0
+    for task in wanted:
+        for item in table.get(guards.task_number(task), []):
+            proc = subprocess.run(
+                [args.python, "-c", PREFETCH, json.dumps(item)],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            print(json.dumps({"task": task, "model": item, "ok": proc.returncode == 0}))
+            if proc.returncode != 0:
+                print(proc.stderr[-1500:], file=sys.stderr)
+                status = 1
+    return status
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
@@ -261,6 +304,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--python", required=True)
     p.add_argument("--out")
     p.add_argument("--model-cache")
+    p = add("prefetch", cmd_prefetch)
+    p.add_argument("--cache", required=True)
+    p.add_argument("--python", required=True)
+    p.add_argument("--tasks")
     p = add("plan", cmd_plan)
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, required=True)

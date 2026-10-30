@@ -1,0 +1,10 @@
+{
+  "about": "Pretrained weights each task loads. 'prefetch' downloads them into the model cache while building environments; agents and solutions then run offline against that cache.",
+  "tasks": {
+    "T1": [{"kind": "hf", "id": "EleutherAI/pythia-70m"}],
+    "T7": [
+      {"kind": "torchvision", "builder": "resnet18", "weights": "ResNet18_Weights.IMAGENET1K_V1"},
+      {"kind": "hf", "id": "facebook/deit-tiny-patch16-224"}
+    ]
+  }
+}
