@@ -2555,6 +2555,9 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             "columns",
             frozenset(
                 (
+                    # Call-site grouping (callsite_v1) keys buffer versions by
+                    # the buffer address step 6's merge settles.
+                    "address",
                     "children",
                     "equivalent_ops",
                     "func_name",
