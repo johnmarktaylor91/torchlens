@@ -217,6 +217,17 @@ class _LogitsOnly(nn.Module):
         return self.inner(input_ids=input_ids).logits
 
 
+class _HiddenOnly(nn.Module):
+    """An encoder wrapped to its bare last-hidden-state tensor."""
+
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self.inner = inner
+
+    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+        return self.inner(input_ids=input_ids).last_hidden_state
+
+
 def _multipass_add_sites(trace) -> list[str]:
     sites = []
     for layer in trace.layers:
@@ -226,28 +237,42 @@ def _multipass_add_sites(trace) -> list[str]:
     return sites
 
 
+def _hidden_add_sites(trace) -> list[str]:
+    """Every add layer whose first pass is a (batch, seq, hidden) activation."""
+
+    sites = []
+    for layer in trace.layers:
+        ops = getattr(layer, "ops", None)
+        first = ops[0] if ops else layer
+        if "add" in first.label and first.out is not None and first.out.dim() == 3:
+            sites.append(first.label.split(":")[0])
+    return sites
+
+
 @pytest.mark.heavy  # measured 7.0-11.1s across CI rows (round-2/3 CI triage,
 # 2026-10-01): consistently over the smoke ceiling (a real distilgpt2 capture plus
 # a multi-fork pass-qualified edit/donor round trip), not a one-off load spike.
-def test_pass_qualification_pin_on_distilgpt2_two_pass_adds():
+def test_pass_qualification_pin_on_albert_two_pass_adds():
     """The OPUS-Q5 pin: pass-qualified edits land on exactly the addressed pass.
 
-    A plain shrunk distilgpt2 forward (use_cache=False) carries 2-pass
-    residual-add sites -- no ALBERT, no generation loop needed. Bare labels
-    refuse; the pass-1 edit changes pass 1, recomputes downstream, and an
-    identity donor patch is a no-op.
+    grouping rule rows 12 and 26: a distilgpt2 ``ModuleList`` of distinct
+    blocks has single-pass residual adds (row 12), so the 2-pass residual-add
+    sites now come from ALBERT, whose encoder calls ONE shared layer module
+    once per depth (row 26: each add inside it is one layer with a pass per
+    call). Bare labels refuse; the pass-1 edit changes pass 1, recomputes
+    downstream, and an identity donor patch is a no-op.
     """
 
     import torchlens as tl
 
-    spec = FAMILY_BY_NAME["distilgpt2"]
+    spec = FAMILY_BY_NAME["albert"]
     torch.manual_seed(SEED)
-    model = _LogitsOnly(spec.build("sdpa")).eval()
+    model = _HiddenOnly(spec.build("sdpa")).eval()
     ids = spec.input_kwargs()["input_ids"]
     trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
     sites = _multipass_add_sites(trace)
     assert len(sites) >= 2, (
-        f"expected 2-pass residual-add sites on the 2-layer distilgpt2, found {sites}"
+        f"expected 2-pass residual-add sites on the 2-layer shared ALBERT, found {sites}"
     )
     site = sites[0]
     # Bare label refuses typed on a multi-pass site.
@@ -306,7 +331,10 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     trace = tl.trace(
         model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
-    sites = _multipass_add_sites(trace)
+    # grouping rule row 12: distilgpt2's residual adds are single-pass layers;
+    # the container path needs only an edited hidden-state add, so any one serves.
+    sites = _hidden_add_sites(trace)
+    assert sites, "no hidden-state add site on the distilgpt2 capture"
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{sites[0]}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True

@@ -80,6 +80,9 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
       and stay in the final op-label namespace.
     """
     name = "equivalence_symmetry"
+    from ._invariants_equivalence import _equivalence_classes_agree, _is_call_site_grouped
+
+    call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels) | _retained_orphan_op_labels(ml)
 
     # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
@@ -202,16 +205,33 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
                     name,
                     f"Layer {layer.layer_label}.equivalent_ops contains '{label}' not in op_labels",
                 )
-        pass_equivalent_ops = {
-            frozenset(getattr(op, "equivalent_ops", set())) for op in layer.ops.values()
-        }
+        pass_ops = list(layer.ops.values())
+        pass_equivalent_ops = {frozenset(getattr(op, "equivalent_ops", set())) for op in pass_ops}
         if len(pass_equivalent_ops) > 1:
-            raise MetadataInvariantError(
-                name,
-                f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
-                f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+            # Under callsite_v1 the passes of one layer may sit in different
+            # equivalence sets exactly when their classes differ only in what
+            # the grouping rule says is not evidence (argument/shape hash rows
+            # 49 and 50, parameter identity row 51, module path rows 30 and 31);
+            # the layer then serves one of its passes' sets.
+            narrowed = call_site_grouped and all(
+                _equivalence_classes_agree(
+                    pass_ops[0], pass_ops[0].equivalence_class, op, op.equivalence_class, True
+                )
+                for op in pass_ops
             )
-        if pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
+            if not narrowed:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
+                    f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+                )
+            if frozenset(equivalent_ops) not in pass_equivalent_ops:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} is "
+                    "none of its passes' equivalent_ops",
+                )
+        elif pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} != "

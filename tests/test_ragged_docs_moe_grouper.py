@@ -201,20 +201,31 @@ def test_always_on_interior_site_counts_per_call(moe_episode: dict) -> None:
 def test_expert_interior_sites_are_per_occurrence(moe_episode: dict) -> None:
     """Expert-interior sites count their OWN occurrences; nothing is padded.
 
-    A grouper that invented rectangularity would stamp every expert-interior
-    site with one pass per episode step; the honest record keeps ragged
-    sites below the step count (and never above it).
+    grouping rule rows 17 and 51: the fused experts module's loop over the hit
+    experts is one place in its code, so each op in the loop body is one layer
+    with one pass per expert execution, summed over every step (a different
+    expert weight per pass is not evidence); ops outside that loop run once per
+    call, one pass per step. A grouper that invented rectangularity would
+    stamp a loop-body site with ``N_STEPS * max hits`` passes (or one per step);
+    the honest record carries the eager ground truth's exact execution count.
     """
 
     log = moe_episode["log"]
+    hits = moe_episode["hits"]
+    total_hits = sum(len(step_hits) for step_hits in hits)
+    assert total_hits not in {N_STEPS, N_STEPS * max(len(step_hits) for step_hits in hits)}
     expert_ops = [
         op for op in log if any("experts" in str(module) for module in (op.modules or ()))
     ]
     assert expert_ops, "expected op records inside the fused experts module"
-    assert all(op.num_passes <= N_STEPS for op in expert_ops)
-    assert any(op.num_passes < N_STEPS for op in expert_ops), (
-        "every expert-interior site claims one pass per episode step on a "
-        "RAGGED capture — the grouper is inventing rectangularity"
+    counts = {op.num_passes for op in expert_ops}
+    assert total_hits in counts, (
+        f"no expert-interior site carries the {total_hits} recorded expert executions: {counts}"
+    )
+    assert counts <= {N_STEPS, total_hits}, (
+        f"expert-interior pass counts {counts} are neither per-call ({N_STEPS}) nor the "
+        f"recorded per-occurrence execution count ({total_hits}) — the grouper is "
+        "inventing rectangularity"
     )
 
 

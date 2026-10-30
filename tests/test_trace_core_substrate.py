@@ -726,10 +726,27 @@ def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     """
 
     import torchlens as tl
-    from benchmarks.godobject_m0_probes import _ScaleModel
+
+    class _TwoReluSites(torch.nn.Module):
+        """Linear+relu blocks written out by hand: one equivalence class, many layers.
+
+        grouping rule rows 14 and 52: a relu inside a loop over a ``ModuleList``
+        is ONE layer (one place in the code), so a class spanning several layers
+        needs the same functional op written at several places.
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.layers = torch.nn.ModuleList(torch.nn.Linear(8, 8) for _ in range(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = torch.relu(self.layers[0](x))
+            x = torch.relu(self.layers[1](x))
+            x = torch.relu(self.layers[2](x))
+            return x
 
     torch.manual_seed(0)
-    trace = tl.trace(_ScaleModel(5), torch.zeros(1, 8))
+    trace = tl.trace(_TwoReluSites(), torch.zeros(1, 8))
     fork = trace.fork()
     multi_member = {
         equivalence_class

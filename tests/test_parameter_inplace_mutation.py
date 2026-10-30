@@ -568,13 +568,13 @@ def test_materialized_lazy_parameter_mutation_is_captured() -> None:
     eager_out, eager_state = _eager_output_and_state(model, x)
 
     trace = tl.trace(copy.deepcopy(model), x)
-    mutations = _ops_by_type(trace, "mul")
-    assert len(mutations) == 1, [layer.label for layer in trace.layers]
-    mutation = mutations[0]
-    assert [p.address for p in mutation.params] == ["lazy.weight"]
     # grouping rule row 27: one weighted module called from two lines is one
     # layer with 2 passes, so the two linear calls are the two passes (ops) of
-    # one layer; address them per op.
+    # one layer; address every op per pass.
+    mutations = [op for op in trace.layer_list if op.type == "mul"]
+    assert len(mutations) == 1, [op.label for op in trace.layer_list]
+    mutation = mutations[0]
+    assert [p.address for p in mutation.params] == ["lazy.weight"]
     linears = [op for op in trace.layer_list if op.type == "linear"]
     assert len(linears) == 2
     assert len({op.layer_label for op in linears}) == 1

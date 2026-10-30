@@ -1931,6 +1931,10 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "equivalent_ops",
                     "func_name",
                     "is_buffer",
+                    # Call-site grouping (callsite_v1) keeps the input and
+                    # output rows step 1 adds as single-pass layers.
+                    "is_input",
+                    "is_output",
                     "modules",
                     "non_tensor_kwargs",
                     "non_tensor_pos_args",

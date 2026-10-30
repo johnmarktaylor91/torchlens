@@ -1122,18 +1122,20 @@ class ChildLoop(Holder):
     not hasattr(torch.jit, "trace"), reason="torch.jit.trace is retired on this torch"
 )
 def test_row63_torchscript_submodule_in_loop() -> None:
-    """Row 63: a TorchScript submodule called in a loop gives one boundary op Np.
+    """Row 63: a TorchScript submodule in a loop is refused typed, never captured.
 
-    Feature-detected up front, never skipped from an except handler (a cold
-    cache would hide the skip; proofnet memo D4): a refusal fails loudly.
+    Row 63's "boundary op Np" presumes TorchLens captures a TorchScript submodule
+    as a boundary op. It does not: logging TorchScript artifacts is out of
+    contract (AGENTS.md anti-patterns) and capture refuses the submodule up
+    front. Feature-detected, never skipped from an except handler (proofnet
+    memo D4): the refusal is pinned, so a capture that starts accepting
+    TorchScript fails here and must pin the row's pass count instead.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         scripted = torch.jit.trace(ScriptChild(), _x())
-    shape = _shape(lambda: ChildLoop(child=scripted))
-    assert len(shape) == 1 and sum(shape.values()) == 1
-    ((_func_name, passes),) = shape
-    assert passes == 3
+    with pytest.raises(RuntimeError, match="does not support torch.jit ScriptModule"):
+        _shape(lambda: ChildLoop(child=scripted))
 
 
 class NoPythonFrame(Holder):
