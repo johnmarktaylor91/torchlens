@@ -245,15 +245,17 @@ def _resolve(
 ) -> tuple[Any, dict[str, Any], Any]:
     """Return the entry, its descriptive fields and a zero-argument builder.
 
-    ``panel:<name>`` names a smoke-runnable real-model panel entry instead of a corpus
-    entry; it is censused the same way.
+    ``panel:<name>`` names a smoke-runnable real-model panel entry (or an operation
+    fixture) instead of a corpus entry; it is censused the same way.
     """
 
     if entry_id.startswith(PANEL_PREFIX):
+        from benchmarks.capture.fixtures import build_fixture
         from benchmarks.capture.panel import build_panel_entry
 
         name = entry_id[len(PANEL_PREFIX) :]
-        return None, {"tier": "panel", "module": name}, lambda: build_panel_entry(name)[:2]
+        builder = build_fixture if name.startswith("fx-") else build_panel_entry
+        return None, {"tier": "panel", "module": name}, lambda: builder(name)[:2]
     entry = next(e for e in corpus_entries() if e.id == entry_id)
     return entry, {"tier": entry.tier, "module": entry.module}, lambda: build_entry(entry)
 
@@ -390,7 +392,8 @@ def run_corpus(
     if tier == "panel":
         from benchmarks.capture.panel import smoke_panel
 
-        ids = [PANEL_PREFIX + name for name in smoke_panel()]
+        probes = ["fx-custom_autograd-100-small", "fx-attention_fused-100-small"]
+        ids = [PANEL_PREFIX + name for name in (*smoke_panel(), *probes)]
     else:
         ids = [e.id for e in corpus_entries(tier)][: limit or None]
     doc = schema.new_document(
