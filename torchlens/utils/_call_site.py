@@ -17,6 +17,7 @@ from __future__ import annotations
 import dis
 import sys
 import weakref
+from collections.abc import Callable
 from types import CodeType
 from typing import Any
 
@@ -35,7 +36,7 @@ CALL_SITE_CLASS_MARKER = "@cs"
 _HAS_CO_POSITIONS = sys.version_info >= (3, 11)
 
 # Code objects of TorchLens's module forward wrappers (``decorated_forward``),
-# registered by the torch backend at import. A frame running one of them is the
+# registered by the torch backend when it decorates submodule forwards. A frame running one of them is the
 # boundary between a module call and the code that called the module.
 _BOUNDARY_CODES: set[CodeType] = set()
 
@@ -47,10 +48,17 @@ _CODE_TOKENS: weakref.WeakKeyDictionary[CodeType, tuple[str, str, int, bytes]] =
 )
 
 
-def register_module_boundary_code(code: CodeType) -> None:
-    """Mark ``code`` as a module forward wrapper (a call-site chain boundary)."""
+def register_module_boundary_wrapper(factory: Callable[..., Any], inner_name: str) -> None:
+    """Mark the wrapper ``factory`` builds (its nested ``inner_name``) as a boundary.
 
-    _BOUNDARY_CODES.add(code)
+    A frame running that code is the boundary between a module call and the
+    code that called the module. Idempotent: the code object is a constant of
+    ``factory``.
+    """
+
+    for const in factory.__code__.co_consts:
+        if isinstance(const, CodeType) and const.co_name == inner_name:
+            _BOUNDARY_CODES.add(const)
 
 
 def is_module_boundary_code(code: CodeType) -> bool:
@@ -117,7 +125,7 @@ def _while_copy_map(code: CodeType) -> dict[int, int]:
             and (last.opcode in dis.hasjabs or last.opcode in dis.hasjrel)
         )
         if earlier is not None and backward:
-            for copy, original in zip(run, earlier):
+            for copy, original in zip(run, earlier, strict=True):
                 folded[copy.offset] = original.offset
         elif earlier is None:
             first_by_signature[key] = run

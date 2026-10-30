@@ -22,16 +22,36 @@ Argument values, tensor shapes, shared weights and the shape of the graph are ne
 either way.
 
 **A loop written out by hand is N separate layers, not one layer with N passes, and that is
-intended.** If you write
+intended.** The two models below compute the same thing:
 
 ```python
-x = torch.tanh(x) * 0.5
-x = torch.tanh(x) * 0.5
+import torch
+import torchlens as tl
+
+
+class Unrolled(torch.nn.Module):
+    def forward(self, x):
+        x = torch.tanh(x) * 0.5
+        x = torch.tanh(x) * 0.5
+        return x
+
+
+class Looped(torch.nn.Module):
+    def forward(self, x):
+        for _ in range(2):
+            x = torch.tanh(x) * 0.5
+        return x
+
+
+x = torch.ones(2, 4)
+for model in (Unrolled(), Looped()):
+    trace = tl.trace(model, x)
+    layers = [layer for layer in trace.layer_logs.values() if layer.func_name == "tanh"]
+    print(type(model).__name__, [(layer.layer_label, layer.num_passes) for layer in layers])
 ```
 
-you get four single-pass layers (two `tanh`, two `mul`), because those are two places in your code.
-Write the same body inside `for _ in range(2):` and you get one `tanh` layer and one `mul` layer,
-two passes each.
+`Unrolled` has four single-pass layers (two `tanh`, two `mul`), because its body is written at two
+places in the code. `Looped` has one `tanh` layer and one `mul` layer, two passes each.
 
 ## The rule, precisely
 

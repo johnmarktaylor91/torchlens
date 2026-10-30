@@ -14,6 +14,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | File | Steps | Purpose |
 |------|-------|---------|
 | `__init__.py` | orchestrator | `postprocess()` prologue/epilogue, audit helpers, re-exports |
+| `_call_site_contract.py` | 7 support | Call-site grouping side table (call-site class per raw label, never persisted) and the grouping contract checked at step 7 and by validation |
 | `_contracts.py` | contracts | Step contracts, frozen rank, pinned-pair corpus, capture baseline |
 | `_executor.py` | derivation + executor | Edge derivation, rank-keyed Kahn, import checks, StepSpec registry, run_pipeline |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
@@ -26,6 +27,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists (field reordering was REMOVED — see step 10 note below) |
 | `finalization.py` | 12-20 | Undecorate, params, layers, modules, streaming finalization/eviction. Steps it orchestrates but does NOT implement: the step-16.5 hash lives in `utils/hashing.py` (`compute_graph_shape_hash`), the step-20 ref release in `data_classes/_trace_validation.py` (`release_param_refs`), and the step-13 CUDA cache clear inline in the executor (`_executor.py`) |
 | `_ingest_contract.py` | 0 support | Step-0 ingest contract helpers |
+| `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers |
 | `incremental.py` | fastlog enrichment | Adds module paths to sparse recordings; `add_param_addresses` is DEAD on current builds (ActivationRecord carries no `parent_param_addresses` field, so it always raises `RecordingConfigError`) |

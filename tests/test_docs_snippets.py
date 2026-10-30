@@ -54,6 +54,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "migration/from_hooks.md",
         "native-torch.md",
         "recipes/lrp_epsilon_litmus.md",
+        "guides/grouping.md",
     ),
     "reference_tooling": (
         "reference/debug.md",

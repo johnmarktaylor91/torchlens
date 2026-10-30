@@ -202,8 +202,10 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Submodule ``forward`` attributes are replaced in place.
     """
 
+    from ...utils._call_site import register_module_boundary_wrapper
     from .model_prep import module_forward_decorator
 
+    register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")
     installed = trace._module_capture_ws.session_forward_wrappers
     for module in model.modules():
         if module is model:

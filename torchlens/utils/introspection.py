@@ -864,28 +864,35 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _call_site_chain(
-    survivors: list[tuple[FrameType, CodeType, int, int]],
-    inner_boundary_pos: int,
-    outer_boundary_pos: int,
-    last_forward_pos: int,
-    context_cache: _CodeContextCache | None,
-    hook_scopes: list[tuple[int, Any]] | tuple[()] = (),
-) -> tuple[Any, ...]:
-    """Return the call-site chain of the frames inside the op's module call.
+def _call_site_boundary(
+    inner_boundary_pos: int, outer_boundary_pos: int, last_forward_pos: int
+) -> int:
+    """How many survivors (innermost first) belong to the op's call-site chain.
 
-    ``survivors`` runs innermost first. Under ``MODULE_CALL_IS_PASS`` the chain
-    stops at the innermost module forward wrapper; otherwise it runs up to the
-    root model's forward (the outermost wrapper or ``forward`` survivor),
-    keeping every caller frame. Without any wrapper frame it runs up to the
-    outermost ``forward`` survivor. Each ``hook_scopes`` entry (a module whose
-    hook the op runs in) becomes a module token at its place in the chain.
+    Under ``MODULE_CALL_IS_PASS`` the chain stops at the innermost module
+    forward wrapper; otherwise it runs up to the root model's forward (the
+    outermost wrapper or ``forward`` survivor), keeping every caller frame.
+    Without any wrapper frame it runs up to the outermost ``forward`` survivor.
     """
 
     if _call_site.MODULE_CALL_IS_PASS and inner_boundary_pos >= 0:
-        boundary = inner_boundary_pos
-    else:
-        boundary = max(outer_boundary_pos, last_forward_pos + 1)
+        return inner_boundary_pos
+    return max(outer_boundary_pos, last_forward_pos + 1)
+
+
+def _call_site_chain(
+    survivors: list[tuple[FrameType, CodeType, int, int]],
+    boundary: int,
+    context_cache: _CodeContextCache | None,
+    hook_scopes: list[tuple[int, Any]] | tuple[()] = (),
+) -> tuple[Any, ...]:
+    """Return the call-site chain of the first ``boundary`` survivors.
+
+    ``survivors`` runs innermost first (see :func:`_call_site_boundary`). Each
+    ``hook_scopes`` entry (a module whose hook the op runs in) becomes a module
+    token at its place in the chain.
+    """
+
     if boundary <= 0:
         return ()
     raw_frames: list[tuple[Any, int]] = []
@@ -1024,9 +1031,7 @@ def _get_code_context(
         call_site_out.append(
             _call_site_chain(
                 survivors,
-                inner_boundary_pos,
-                outer_boundary_pos,
-                last_forward_pos,
+                _call_site_boundary(inner_boundary_pos, outer_boundary_pos, last_forward_pos),
                 context_cache,
                 hook_scopes,
             )

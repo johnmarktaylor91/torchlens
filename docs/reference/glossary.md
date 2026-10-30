@@ -1697,6 +1697,24 @@ S2-gated*
   the field goes away with the raw-graph workspace once the trace is projected. The
   `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
 
+**tl.ir.RawGraphWorkspace.pending_call_site** — *unstable — no deprecation shim owed*
+: The `(func_call_id, call-site chain)` of the wrapped torch call whose outputs are being logged,
+  written when the call's shared fields are built and read once per output to name its call-site
+  class (`None` between calls). The chain is the place in the module's code the op ran at (see
+  `docs/guides/grouping.md`). The `RawGraphWorkspace(..., pending_call_site=...)` keyword sets the
+  same field.
+
+**tl.ir.RawGraphWorkspace.call_site_index** — *unstable — no deprecation shim owed*
+: Call-site key (innermost module instance, call-site chain, function, output slot) to its
+  1-based first-appearance index in this capture; the index names the op's call-site class. The
+  `RawGraphWorkspace(..., call_site_index=...)` keyword sets the same field.
+
+**tl.ir.RawGraphWorkspace.call_site_classes** — *unstable — no deprecation shim owed*
+: Raw op label to its call-site class (`<type>@cs<N>`), the key step 7 groups layers by. It is
+  never persisted and never written into a public field (`equivalence_class` keeps its argument
+  and parameter fingerprint); it goes away with the raw-graph workspace. The
+  `RawGraphWorkspace(..., call_site_classes=...)` keyword sets the same field.
+
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
   signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:

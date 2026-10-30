@@ -224,7 +224,6 @@ class StraightChainLines(nn.Module):
         return x
 
 
-@pytest.mark.smoke
 def test_row04_hand_unrolled_statement_on_two_lines() -> None:
     """Row 4: the 2-op statement written on two lines gives 4 single layers."""
     assert _shape(StraightChainLines) == _expect("tanh:1x2 __mul__:1x2")
@@ -291,7 +290,6 @@ def test_row09_two_residual_adds_at_root() -> None:
     assert _shape(ResidualPair) == _expect("linear:1x2 __add__:1x2")
 
 
-@pytest.mark.smoke
 def test_row10_two_residual_adds_in_block_called_once() -> None:
     """Row 10: two residual adds in a block called once are 2 single layers."""
     assert _shape(lambda: Wrap(body=ResidualPair())) == _expect("linear:1x2 __add__:1x2")
@@ -308,7 +306,6 @@ def test_row11_block_called_three_times_keeps_adds_apart() -> None:
         assert [str(op.modules[-1]) for op in ops] == ["block:1", "block:2", "block:3"]
 
 
-@pytest.mark.smoke
 def test_row12_modulelist_of_three_blocks() -> None:
     """Row 12: a ModuleList of 3 residual blocks (HF decoder shape) gives 6 single adds."""
     build = lambda: BlocksLoop(blocks=nn.ModuleList([ResidualPair() for _ in range(3)]))  # noqa: E731
@@ -479,7 +476,6 @@ class ManualUnrollSharedParam(Holder):
         return h
 
 
-@pytest.mark.smoke
 def test_row25_one_raw_parameter_on_two_lines() -> None:
     """Row 25: `x @ W` on two lines gives 2 single matmuls and a separate tanh after each."""
     shape = _shape(lambda: ManualUnrollSharedParam(w=_w()))
@@ -531,7 +527,6 @@ class ReLUModuleReused(Holder):
         return x
 
 
-@pytest.mark.smoke
 @FORK
 def test_row28_one_relu_instance_on_three_lines(
     monkeypatch: pytest.MonkeyPatch, module_call_is_pass: bool
@@ -772,7 +767,7 @@ def test_row41_branch_taken_on_some_iterations() -> None:
 class CondDifferentBranches(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         for i in range(4):
-            if i % 2 == 0:
+            if i % 2 == 0:  # noqa: SIM108 -- the case is two lines, two call sites
                 x = torch.relu(x) + 0.1
             else:
                 x = torch.sigmoid(x)
@@ -1027,7 +1022,7 @@ def test_row58_identical_compiled_functions_from_two_sites() -> None:
 class StepZeroSpecial(Holder):
     def forward(self, x: Tensor) -> Tensor:
         for t in range(3):
-            if t == 0:
+            if t == 0:  # noqa: SIM108 -- the case is two lines, two call sites
                 h = torch.tanh(x[:, t] @ self.w)
             else:
                 h = torch.tanh(x[:, t] @ self.w + h)
