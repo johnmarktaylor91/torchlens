@@ -30,7 +30,11 @@ import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
-from torchlens.intervention.errors import BindingPreflightError, LiveModeLabelError
+from torchlens.intervention.errors import (
+    BindingPreflightError,
+    LiveModeLabelError,
+    MultiMatchWarning,
+)
 
 transformers = pytest.importorskip("transformers")
 
@@ -417,7 +421,12 @@ def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None
 
     model = tiny.fresh()
     trace = tl.trace(model, tiny.ids, capture=tl.options.CaptureOptions(backward_ready=True))
-    with pytest.raises(LiveModeLabelError) as info:
+    # grouping rule rows 26-27: the shared block's MLP runs once per block slot,
+    # so the module selector matches its 2 calls and discloses the fan-out.
+    with (
+        pytest.warns(MultiMatchWarning, match="matched 2 sites"),
+        pytest.raises(LiveModeLabelError) as info,
+    ):
         trace.do(
             tl.module(_MLP),
             tl.grad_zero(),
