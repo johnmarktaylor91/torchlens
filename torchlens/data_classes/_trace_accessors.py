@@ -371,10 +371,10 @@ class TraceOpAccessor(Accessor[Op]):
         """Build the alias reverse indexes once, or report them unavailable.
 
         The scanning form of ``_resolve_substring`` returns the FIRST Op in list
-        order any of whose aliases equals the key, where the alias set is the union
-        of the two per-Op match conditions. ``setdefault`` over both conditions in
-        list order therefore stores exactly that minimum-index winner for every
-        alias, and the second index reproduces the bare-parent-label match list in
+        order any of whose final aliases equals the key (its labels, and its layer
+        labels when the layer has one pass), else the first whose raw label does.
+        ``setdefault`` over the final aliases in list order, then the raw labels,
+        therefore stores exactly that winner for every alias, and the second index reproduces the bare-parent-label match list in
         the same order -- so the indexed lookup is result-identical to the scan,
         ``AmbiguousOpLookupError`` message included.
 
@@ -401,13 +401,19 @@ class TraceOpAccessor(Accessor[Op]):
             for op in self._list:
                 layer_label = op.layer_label
                 layer_label_short = op.layer_label_short
-                for alias in (op.label, op.label_short, op._label_raw, op.raw_label):
+                for alias in (op.label, op.label_short):
                     alias_index.setdefault(alias, op)
                 if layer_num_calls.get(layer_label, 0) == 1:
                     for alias in (layer_label, layer_label_short):
                         alias_index.setdefault(alias, op)
                 for alias in {layer_label, layer_label_short}:
                     layer_alias_index.setdefault(alias, []).append(op)
+            # Raw labels only fill what no final label names: a multi-pass layer
+            # shifts later ordinals, so one op's raw label can be another op's
+            # final label, and the final label wins (as in ``Trace[key]``).
+            for op in self._list:
+                for alias in (op._label_raw, op.raw_label):
+                    alias_index.setdefault(alias, op)
         except Exception:
             self._alias_index_unavailable = True
             return None
@@ -419,12 +425,15 @@ class TraceOpAccessor(Accessor[Op]):
         """Resolve by linear scan, used when the alias indexes are unavailable."""
 
         for op in self._list:
-            if key in {op.label, op.label_short, op._label_raw, op.raw_label}:
+            if key in {op.label, op.label_short}:
                 return op
             if self._layer_num_calls.get(op.layer_label, 0) == 1 and key in {
                 op.layer_label,
                 op.layer_label_short,
             }:
+                return op
+        for op in self._list:
+            if key in {op._label_raw, op.raw_label}:
                 return op
         parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
         return self._resolve_parent_matches(parent_matches)

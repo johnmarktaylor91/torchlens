@@ -91,6 +91,14 @@ def test_replay_names_the_recorded_parent_when_labels_collide() -> None:
     assert torch.equal(fork[out].out, trace[out].out)
 
 
+def test_op_lookup_prefers_the_final_label_over_a_colliding_raw_label() -> None:
+    """``trace.ops[label]`` names the op whose final label it is, not the op it was raw."""
+
+    trace = _capture()
+    key = _colliding_label(trace)
+    assert trace.ops[key].layer_label == key
+
+
 def test_trace_without_pass_exact_maps_still_refuses() -> None:
     """An older trace (no pass-exact maps) refuses rather than guess."""
 
