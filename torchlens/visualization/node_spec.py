@@ -10,6 +10,7 @@ render node internals and may not ride a vocabulary module under Rule V3).
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
@@ -51,6 +52,13 @@ __all__ = [
     "make_intervention_node_spec_fn",
     "render_lines_to_html",
 ]
+
+#: The rendered node (per-pass Op on unrolled nodes, else the Layer) while a
+#: node-spec callback runs; the callback itself receives the aggregate Layer.
+#: Defined here, not in ``_render_nodes``, so building the intervention callback
+#: never imports the render modules: they bind this module's helpers by value at
+#: import time, and a first import while a helper is patched would keep the patch.
+_SPEC_SLOT_RENDERED_NODE: ContextVar[Any] = ContextVar("spec_slot_rendered_node", default=None)
 
 
 def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
@@ -401,7 +409,6 @@ def make_intervention_node_spec_fn(
     cone_pass_labels = (
         _cone_pass_labels(trace, site_ops, site_pass_labels) if cone_labels and site_ops else set()
     )
-    from ._render_nodes import _SPEC_SLOT_RENDERED_NODE
 
     marks = edit_marks_by_site(trace, site_ops)
     label_size = theme.typography.base_size if theme is not None else 14.0

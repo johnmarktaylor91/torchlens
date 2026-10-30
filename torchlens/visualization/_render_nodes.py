@@ -3,7 +3,6 @@
 # ruff: noqa: F403, F405
 
 import re as _re
-from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
@@ -15,13 +14,11 @@ from .modes import CollapsedModeScope
 
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
 # file under its ratchet ceiling; re-exported here for existing importers.
-from .node_spec import _annotation_image_path_for_node
+# The spec-slot context lives there too, so the intervention callback reads it
+# without importing this module.
+from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
-
-#: The rendered node (per-pass Op on unrolled nodes, else the Layer) while a
-#: node-spec callback runs; the callback itself receives the aggregate Layer.
-_SPEC_SLOT_RENDERED_NODE: ContextVar[Any] = ContextVar("spec_slot_rendered_node", default=None)
 
 
 def _tooltip_repr(value: Any) -> str:

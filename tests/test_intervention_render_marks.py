@@ -9,6 +9,8 @@ as an SVG step after layout on both layout engines.
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -452,3 +454,44 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
     assert "tl_downstream" in nodes[f"{relu}pass2"]
     assert "tl_downstream" not in nodes[f"{relu}pass1"]
     assert "tl_downstream" not in nodes[f"{linear}pass1"]
+
+
+_PATCHED_IMPORT_PROBE = """
+import sys
+from torchlens.visualization import node_spec
+if "torchlens.visualization._render_common" in sys.modules:
+    print("PRELOADED")
+    raise SystemExit(0)
+real = node_spec.intervention_site_and_cone_labels
+node_spec.intervention_site_and_cone_labels = lambda trace, *, show_cone: (set(), {"x"})
+try:
+    node_spec.make_intervention_node_spec_fn(
+        object(), show_cone=True, graph_overrides=None, user_node_spec_fn=None
+    )
+finally:
+    node_spec.intervention_site_and_cone_labels = real
+from torchlens.visualization import _render_common
+print("BOUND_REAL" if _render_common.intervention_site_and_cone_labels is real else "BOUND_PATCH")
+"""
+
+
+def test_building_the_edit_callback_imports_no_render_module() -> None:
+    """Building the intervention callback never first-imports the render modules.
+
+    The render modules bind ``node_spec``'s helpers by value when imported, so a
+    first import while a helper is patched (``test_node_spec_api`` monkeypatches
+    ``intervention_site_and_cone_labels``) kept the patch for the rest of the
+    process: later ``as_node`` renders lost their hook node. A fresh interpreter
+    makes the first import deterministic.
+    """
+
+    result = subprocess.run(
+        [sys.executable, "-c", _PATCHED_IMPORT_PROBE],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    outcome = result.stdout.strip().splitlines()[-1]
+    if outcome == "PRELOADED":
+        pytest.skip("importing node_spec already loads the render modules")
+    assert outcome == "BOUND_REAL"
