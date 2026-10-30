@@ -1,0 +1,17 @@
+{
+  "model": "gpt2",
+  "prompt_seed": 61029,
+  "n_prompts": 32,
+  "names": [
+    "Mary",
+    "John",
+    "Alice",
+    "Bob",
+    "Tom",
+    "Michael",
+    "Sarah",
+    "James"
+  ],
+  "corruption": "third_name",
+  "random_score_seed": 6006
+}
