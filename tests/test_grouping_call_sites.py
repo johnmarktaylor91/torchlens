@@ -1342,3 +1342,11 @@ def test_row74_buffer_versions_group_by_writing_line() -> None:
     assert _buffer_passes(BufferOnce) == [1, 1]
     assert _buffer_passes(BufferTwoSites) == [1, 1, 1]
     assert _buffer_passes(BufferLoop) == [4]
+
+
+def test_row74_batchnorm_running_stats_stay_separate_layers() -> None:
+    """Row 74: BatchNorm writes each running stat once, so each version is its own layer."""
+    trace = _capture(lambda: nn.BatchNorm1d(4).train(), _x())
+    buffers = {op.layer_label: op for op in trace.layer_list if op.is_buffer}
+    assert buffers, "BatchNorm in train mode logs its running stats"
+    assert {int(op.num_passes or 1) for op in buffers.values()} == {1}
