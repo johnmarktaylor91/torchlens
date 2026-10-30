@@ -80,12 +80,14 @@ def test_generator_renders_cards_in_tier_order(tmp_path: Path) -> None:
     assert outputs == index_tool.render_all(cards, "https://example.org/docs/", "9.x")
 
 
+#: Messages are matched loosely: cards are validated through the shared schema
+#: module when it sits beside the generator, else through the generator's own check.
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
         ("tier", "core\nextra: 1", "unknown"),
-        ("tier", "basic", "tier must be one of"),
-        ("doors", "[mechinterp, astronomy]", "unknown doors"),
+        ("tier", "basic", "tier"),
+        ("doors", "[mechinterp, astronomy]", "unknown"),
         ("related", "[nowhere]", "related names no carded page"),
         ("canonical", '""', "non-empty string"),
     ],
@@ -102,6 +104,33 @@ def test_generator_refuses_malformed_cards(
     page.write_text("\n".join(lines) + "\n")
     with pytest.raises(index_tool.CardError, match=message):
         index_tool.load_cards(folder)
+
+
+def test_generator_validates_through_the_shared_schema_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[dict[str, object]] = []
+
+    class FakeSchema:
+        @staticmethod
+        def card_problems(meta: dict[str, object]) -> list[str]:
+            seen.append(meta)
+            return ["rejected by the shared schema"] if meta["task"] == "Edit a run" else []
+
+    monkeypatch.setattr(index_tool, "_schema_module", lambda: FakeSchema)
+    with pytest.raises(index_tool.CardError, match="rejected by the shared schema"):
+        index_tool.load_cards(_write_cards(tmp_path / "cards"))
+    assert "Edit a run" in {meta["task"] for meta in seen}
+
+
+def test_field_guide_label_agrees_with_the_shared_schema() -> None:
+    schema = index_tool._schema_module()
+    if schema is None:
+        pytest.skip("tools/docs/task_card.py is not on this branch yet")
+    site_map = site_nav.load_site_map()
+    assert site_map.sections["field-guide"] == schema.SECTION_LABEL, (
+        "the Field guide label differs between docs/_site_map.yaml and tools/docs/task_card.py"
+    )
 
 
 def test_generator_enforces_the_index_size_limit(tmp_path: Path) -> None:

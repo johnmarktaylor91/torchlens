@@ -30,10 +30,13 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import yaml
@@ -96,10 +99,54 @@ def split_front_matter(text: str) -> tuple[dict[str, Any] | None, str]:
     return meta, text[end + 5 :].lstrip("\n")
 
 
-def _string_list(slug: str, key: str, value: Any) -> tuple[str, ...]:
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-        raise CardError(f"{slug}: {key} must be a list of strings")
-    return tuple(value)
+@cache
+def _schema_module() -> ModuleType | None:
+    """Return the shared task-card schema module beside this script, if present."""
+    path = Path(__file__).with_name("task_card.py")
+    if not path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("_task_card_schema", path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _fallback_problems(meta: dict[str, Any]) -> list[str]:
+    """Check the card fields when the shared schema module is absent."""
+    missing = [key for key in REQUIRED if key not in meta]
+    unknown = sorted(set(meta) - set(REQUIRED) - set(OPTIONAL))
+    if missing or unknown:
+        return [f"missing {missing}, unknown {unknown}"]
+    problems = [
+        f"{key} must be a non-empty string"
+        for key in ("task", "one_liner", "canonical", "avoid")
+        if not isinstance(meta[key], str) or not meta[key].strip()
+    ]
+    if meta["tier"] not in TIERS:
+        problems.append(f"tier must be one of {TIERS}")
+    for key in ("doors", "related", "tags"):
+        value = meta.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            problems.append(f"{key} must be a list of strings")
+    if not problems and not set(meta["doors"]) <= DOORS:
+        problems.append(f"unknown doors {sorted(set(meta['doors']) - DOORS)}")
+    return problems
+
+
+def card_problems(meta: dict[str, Any]) -> list[str]:
+    """Return every field-contract problem of one card.
+
+    Validates through the shared schema module (``tools/docs/task_card.py``)
+    when it is present, and through a local check of the same field list
+    otherwise.
+    """
+    schema = _schema_module()
+    if schema is not None:
+        return list(schema.card_problems(meta))
+    return _fallback_problems(meta)
 
 
 def card_from_meta(slug: str, meta: dict[str, Any], body: str) -> Card:
@@ -124,18 +171,9 @@ def card_from_meta(slug: str, meta: dict[str, Any], body: str) -> Card:
     CardError
         On a missing, unknown or ill-typed field.
     """
-    missing = [key for key in REQUIRED if key not in meta]
-    unknown = sorted(set(meta) - set(REQUIRED) - set(OPTIONAL))
-    if missing or unknown:
-        raise CardError(f"{slug}: missing {missing}, unknown {unknown}")
-    for key in ("task", "one_liner", "canonical", "avoid"):
-        if not isinstance(meta[key], str) or not meta[key].strip():
-            raise CardError(f"{slug}: {key} must be a non-empty string")
-    if meta["tier"] not in TIERS:
-        raise CardError(f"{slug}: tier must be one of {TIERS}")
-    doors = _string_list(slug, "doors", meta["doors"])
-    if not set(doors) <= DOORS:
-        raise CardError(f"{slug}: unknown doors {sorted(set(doors) - DOORS)}")
+    problems = card_problems(meta)
+    if problems:
+        raise CardError(f"{slug}: " + "; ".join(problems))
     return Card(
         slug=slug,
         task=meta["task"].strip(),
@@ -143,9 +181,9 @@ def card_from_meta(slug: str, meta: dict[str, Any], body: str) -> Card:
         canonical=meta["canonical"].strip(),
         avoid=meta["avoid"].strip(),
         tier=meta["tier"],
-        doors=doors,
-        related=_string_list(slug, "related", meta["related"]),
-        tags=_string_list(slug, "tags", meta.get("tags", [])),
+        doors=tuple(meta["doors"]),
+        related=tuple(meta["related"]),
+        tags=tuple(meta.get("tags", [])),
         body=body,
     )
 
