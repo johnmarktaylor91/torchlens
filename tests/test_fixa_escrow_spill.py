@@ -317,6 +317,12 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
     ``CLIPOutput.image_embeds`` is L2-normalized in transformers 5.x, so the
     independent oracle is the eager ``visual_projection`` module output (the
     raw projected embedding the memo's claim is about).
+
+    The memo's label was ``linear_73_288``; under call-site grouping the same op
+    is ``linear_73_300`` (grouping rule rows 10 and 12: each of the 12 vision
+    encoder layers' two residual adds are now two layers, not one 2-pass layer,
+    so the step index moves by 12). The ``output_of_modules`` check below pins
+    that it is still the visual projection.
     """
 
     _require_hf_snapshot("models--openai--clip-vit-base-patch32")
@@ -332,10 +338,10 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
     oracle = _eager_module_output(model, "visual_projection", **kwargs)
 
     log = tl.trace(
-        model, (), kwargs, capture=tl.options.CaptureOptions(layers_to_save=["linear_73_288"])
+        model, (), kwargs, capture=tl.options.CaptureOptions(layers_to_save=["linear_73_300"])
     )
-    op = log["linear_73_288"]
+    op = log["linear_73_300"]
     assert op.output_of_modules == ("visual_projection",)
     assert torch.equal(op.out, oracle), (
-        "CLIP linear_73_288 escrow payload is not bit-equal to the projected image embedding"
+        "CLIP linear_73_300 escrow payload is not bit-equal to the projected image embedding"
     )

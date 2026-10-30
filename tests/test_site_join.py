@@ -378,5 +378,5 @@ def test_resnet18_fold_group_census_pin() -> None:
     assert len(folded) == 8
     for group in folded:
         assert len(group) == 2
-        assert {ops[member].func_name for member in group} == {"relu"}
+        assert {ops[member].func_name for member in group} == {"relu_"}  # ReLU(inplace=True)
         assert len({ops[member].equivalence_class for member in group}) == 1
