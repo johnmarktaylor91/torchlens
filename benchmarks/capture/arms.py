@@ -465,7 +465,8 @@ def _require(module: str) -> Any:
     try:
         return importlib.import_module(module)
     except Exception as exc:  # noqa: BLE001 - an absent peer is a visible unsupported cell
-        raise Unsupported(f"{module} not importable: {type(exc).__name__}") from exc
+        detail = str(exc).splitlines()[0][:160] if str(exc) else ""
+        raise Unsupported(f"{module} not importable: {type(exc).__name__}: {detail}") from exc
 
 
 class NNsightArm:

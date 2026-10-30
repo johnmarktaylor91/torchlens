@@ -15,6 +15,9 @@ grep -v '^#' benchmarks/capture/peers.txt | grep . | while read -r peer; do
     echo "peer install failed: $peer"; tail -5 "outputs/install-${peer%%=*}.log"
   fi
 done
+for mod in captum.attr thingsvision nnsight transformer_lens; do
+  "$PY" -c "import $mod" > "outputs/import-$mod.log" 2>&1 && echo "import ok: $mod" || { echo "import failed: $mod"; tail -3 "outputs/import-$mod.log"; }
+done | tee outputs/peer-imports.txt
 uv pip freeze --python "$PY" | grep -i -E '^(torch|torchvision|transformers|nnsight|captum|thingsvision|transformer.lens|psutil)==' | tee outputs/peer-freeze.txt
 "$PY" benchmarks/capture/driver.py --smoke --processes "${SMOKE_PROCESSES:-1}" --warmups "${SMOKE_WARMUPS:-2}" \
-  --samples "${SMOKE_SAMPLES:-10}" --budget-s 20 --out outputs/capture-smoke.json 2>&1
+  --samples "${SMOKE_SAMPLES:-10}" --budget-s 20 ${SMOKE_EXTRA:-} --out outputs/capture-smoke.json 2>&1
