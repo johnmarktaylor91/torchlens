@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
-from ..constants import RAW_LABEL_SUFFIX
+from ..capture._nonfinite_prefix import is_suffixed_raw_label
 from ._accessor_base import Accessor, attach_source_honesty
 from .op import Op
 
@@ -482,7 +482,7 @@ class TraceOpAccessor(Accessor[Op]):
         # Only a SUFFIXED raw label is final-tier: ``x_raw`` cannot be a final
         # label. An unsuffixed ``_label_raw`` has the raw-spelling shape and is
         # served by the raw tier (``Op.raw_label`` returns it unchanged).
-        if isinstance(label_raw, str) and label_raw.endswith(RAW_LABEL_SUFFIX):
+        if is_suffixed_raw_label(label_raw):
             aliases.append(label_raw)
         if self._layer_num_calls.get(op.layer_label, 0) == 1:
             aliases.extend((op.layer_label, op.layer_label_short))

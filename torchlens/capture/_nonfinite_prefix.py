@@ -43,7 +43,7 @@ logic outside its definition (``constants.py``) and ``Op.raw_label``
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from ..constants import RAW_LABEL_SUFFIX
 from ..utils._exception_notes import annotate_guarded
@@ -117,6 +117,18 @@ def strip_raw_label_suffix(label: str) -> str:
     if label.endswith(RAW_LABEL_SUFFIX):
         return label[: -len(RAW_LABEL_SUFFIX)]
     return label
+
+
+def is_suffixed_raw_label(label: object) -> TypeGuard[str]:
+    """Return whether ``label`` carries the raw-capture ``_raw`` sentinel suffix.
+
+    A suffixed raw label can never be a final label, so it names exactly its own
+    op; an unsuffixed raw label has the final-label shape and may be outranked
+    by a final label. Consumers ask this question here instead of reading the
+    suffix constant themselves.
+    """
+
+    return isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX)
 
 
 def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
