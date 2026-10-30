@@ -361,7 +361,7 @@ class _SharedLinearTwice(nn.Module):
 
 
 def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
-    """A staged backward edit on pass 2 of a two-pass layer names pass 2, and only it.
+    """A backward edit staged on pass 2 of a two-pass layer names pass 2, and only it.
 
     A GradFn site resolves to the one pass it differentiates (``GradFn.op`` is
     the multi-pass Layer); the staged edit row must key by that same pass, or
@@ -381,6 +381,8 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         second = trace[f"{linear.layer_label}:2"]
+        # GradFn records exist once a backward pass has run.
+        trace[trace.output_layers[0]].out.sum().backward()
         grad_fn = next(
             gf for gf in trace.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
         )
@@ -402,3 +404,43 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
     assert len(edited) == 1
     assert "bwd_hook(named_backward)" in edited[0]
+
+
+def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
+    """Unrolled, an edit on pass 2 rings pass 2 alone and tags only what pass 2 feeds.
+
+    The node slot hands an unrolled node its aggregate Layer; the ring, edit row
+    and downstream class must follow the rendered pass, not the layer.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _SharedLinearTwice(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
+    try:
+        fork = trace.fork("edited")
+        layers = {layer.layer_type: layer.layer_label for layer in fork.layer_logs.values()}
+        linear, relu = layers["linear"], layers["relu"]
+        fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
+        dot = fork.draw(
+            vis_save_only=True,
+            vis_fileformat="dot",
+            vis_mode="unrolled",
+            vis_show_cone=True,
+            vis_outpath=str(tmp_path / "shared_fwd"),
+        )
+    finally:
+        trace.cleanup()
+    nodes = {
+        line.split(" [", 1)[0].strip(): line
+        for line in dot.splitlines()
+        if " [label=" in line and "->" not in line
+    }
+    edited = sorted(name for name, line in nodes.items() if "tl_edited" in line)
+    assert edited == [f"{linear}pass2"]
+    assert "zero_ablate" not in nodes[f"{linear}pass1"]
+    assert "tl_downstream" in nodes[f"{relu}pass2"]
+    assert "tl_downstream" not in nodes[f"{relu}pass1"]
+    assert "tl_downstream" not in nodes[f"{linear}pass1"]

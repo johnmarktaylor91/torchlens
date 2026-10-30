@@ -287,6 +287,14 @@ def intervention_site_and_cone_labels(
     return site_labels, cone_labels - site_labels
 
 
+def _cone_pass_labels(trace: Trace, sites: list[Op], site_pass_labels: set[str]) -> set[str]:
+    """Return the pass-qualified labels downstream of ``sites``, sites excluded."""
+
+    from ..intervention.replay import cone_of_effect
+
+    return {_site_sort_key(op) for op in cone_of_effect(trace, sites)} - site_pass_labels
+
+
 def _with_svg_class(extra_attrs: dict[str, str], name: str) -> dict[str, str]:
     """Return ``extra_attrs`` with ``name`` added to its Graphviz ``class`` list."""
 
@@ -365,6 +373,10 @@ def make_intervention_node_spec_fn(
     _, cone_labels = intervention_site_and_cone_labels(trace, show_cone=show_cone)
     if not site_pass_labels and not site_agg_labels and not cone_labels:
         return user_node_spec_fn
+    cone_pass_labels = (
+        _cone_pass_labels(trace, site_ops, site_pass_labels) if cone_labels and site_ops else set()
+    )
+    from ._render_nodes import _SPEC_SLOT_RENDERED_NODE
 
     marks = edit_marks_by_site(trace, site_ops)
     label_size = theme.typography.base_size if theme is not None else 14.0
@@ -380,30 +392,39 @@ def make_intervention_node_spec_fn(
     def intervention_node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec:
         """Apply intervention styling before any user node-spec callback."""
 
+        # The slot hands an unrolled node its aggregate Layer; the rendered
+        # per-pass Op rides the slot's context, so read the pass from it.
+        rendered = _SPEC_SLOT_RENDERED_NODE.get()
+        target = layer_log if rendered is None else rendered
         # A per-pass Op resolves a pass-qualified ``label`` -> match the
         # pass-qualified site set so a single-pass intervention colors ONLY its own
         # pass in unrolled mode. A rolled aggregate Layer has no single pass
         # (``label`` would trip the multi-pass tripwire, so get_multipass_attr
         # returns None) -> match its layer_label against the aggregate set, coloring
         # the one rolled node when any of its passes is a site.
-        pass_label = get_multipass_attr(layer_log, "label", None, multipass=None)
+        pass_label = get_multipass_attr(target, "label", None, multipass=None)
         node_agg_label = str(getattr(layer_log, "layer_label", ""))
         if isinstance(pass_label, str):
             is_site = pass_label in site_pass_labels
         else:
             is_site = node_agg_label in site_agg_labels
 
-        cone_match_labels = {
-            node_agg_label,
-            str(getattr(layer_log, "layer_label_short", "")),
-        }
-        cone_match_labels.update(
-            str(label) for label in getattr(layer_log, "call_labels", ()) or ()
-        )
+        if target is not layer_log and isinstance(pass_label, str):
+            # One pass of an unrolled layer: downstream only if that pass is.
+            is_downstream = pass_label in cone_pass_labels
+        else:
+            cone_match_labels = {
+                node_agg_label,
+                str(getattr(layer_log, "layer_label_short", "")),
+            }
+            cone_match_labels.update(
+                str(label) for label in getattr(layer_log, "call_labels", ()) or ()
+            )
+            is_downstream = bool(cone_match_labels & cone_labels)
 
         spec = default_spec
         if is_site:
-            node_marks = edit_marks_for_node(marks, layer_log, site_keys_by_layer)
+            node_marks = edit_marks_for_node(marks, target, site_keys_by_layer)
             tooltip = edit_tooltip(node_marks)
             spec = spec.replace(
                 color=site_color,
@@ -412,7 +433,7 @@ def make_intervention_node_spec_fn(
                 tooltip=f"{spec.tooltip}; {tooltip}" if spec.tooltip else tooltip,
                 extra_attrs=_with_svg_class(spec.extra_attrs, EDITED_NODE_CLASS),
             )
-        elif cone_match_labels & cone_labels:
+        elif is_downstream:
             spec = spec.replace(
                 extra_attrs=_with_svg_class(spec.extra_attrs, DOWNSTREAM_NODE_CLASS),
             )
