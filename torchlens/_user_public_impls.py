@@ -873,23 +873,35 @@ def show_bundle_graph(
         DOT source, or ``None`` when ``vis_mode='none'``.
     """
 
-    from .visualization._bundle_graph import render_bundle_graph
+    if nodes not in {"ops", "members"}:
+        raise ValueError("nodes must be 'ops' or 'members'.")
+    if nodes == "members" and direction != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if vis_mode == "none":
+        return None
+    if vis_mode not in {"rolled", "unrolled"}:
+        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
+    if direction not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
 
-    return render_bundle_graph(
-        bundle,
-        vis_outpath=vis_outpath,
+    from .visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
+    from .visualization._render_utils import direction_to_rankdir
+
+    options = BundlePictureOptions(
+        outpath=vis_outpath,
         vis_mode=vis_mode,
         direction=direction,
-        vis_direction=vis_direction,
-        vis_graph_overrides=vis_graph_overrides,
-        vis_node_overrides=vis_node_overrides,
-        vis_edge_overrides=vis_edge_overrides,
-        vis_save_only=vis_save_only,
-        vis_fileformat=vis_fileformat,
+        rankdir=direction_to_rankdir(vis_direction),
+        graph_overrides=vis_graph_overrides,
+        node_overrides=vis_node_overrides,
+        edge_overrides=vis_edge_overrides,
+        save_only=vis_save_only,
+        fileformat=vis_fileformat,
         nodes=nodes,
         theme_name=theme,
-        show_legend=show_legend,
+        show_legend=show_legend is True,
     )
+    return render_bundle_graph(bundle, options)
 
 
 def validate_forward_pass(

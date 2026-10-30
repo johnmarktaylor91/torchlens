@@ -2,12 +2,13 @@
 
 These walk a bundle's forward supergraph (and, when present, its backward
 graph) and add nodes, module clusters and edges to a Graphviz digraph. The
-public entry point and its argument handling stay in
+public entry point and its argument checks stay in
 :mod:`torchlens._user_public_impls`.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -126,7 +127,6 @@ def _add_bundle_forward_nodes(
     vis_mode: str,
     node_styles: dict[str, Any] | None,
     theme: VisualizationTheme | None = None,
-    rankdir: str | None = None,
 ) -> None:
     """Add forward supergraph nodes to a Graphviz digraph.
 
@@ -142,8 +142,8 @@ def _add_bundle_forward_nodes(
         Optional per-node style overrides.
     theme:
         Resolved skin; ``None`` uses the default ``torchlens`` skin.
-    rankdir:
-        Graphviz rank direction, so module captions land top left on the page.
+        Module captions read ``dot``'s rank direction, so they land top left
+        on the page.
 
     Returns
     -------
@@ -159,6 +159,7 @@ def _add_bundle_forward_nodes(
     from .themes import THEME_PRESETS, _theme_cluster_attrs
 
     theme = theme if theme is not None else THEME_PRESETS["torchlens"]
+    rankdir = dot.graph_attr.get("rankdir")
     all_members = frozenset(str(name) for name in bundle.names)
     module_groups = _bundle_module_groups(bundle)
     grouped_nodes = {node for nodes in module_groups.values() for node in nodes}
@@ -437,52 +438,39 @@ def bundle_header_label(
     return header_block_label(caption, swatches, (note,), theme)
 
 
-def render_bundle_graph(
-    bundle: Any,
-    *,
-    vis_outpath: str,
-    vis_mode: str,
-    direction: str,
-    vis_direction: Any,
-    vis_graph_overrides: dict[str, Any] | None,
-    vis_node_overrides: dict[str, Any] | None,
-    vis_edge_overrides: dict[tuple[str, str], Any] | None,
-    vis_save_only: bool,
-    vis_fileformat: str,
-    nodes: str,
-    theme_name: str,
-    show_legend: bool | None,
-) -> str | None:
+@dataclass(frozen=True)
+class BundlePictureOptions:
+    """The checked ``tl.show_bundle_graph`` arguments the bundle picture needs."""
+
+    outpath: str
+    vis_mode: str
+    direction: str
+    rankdir: str
+    graph_overrides: dict[str, Any] | None
+    node_overrides: dict[str, Any] | None
+    edge_overrides: dict[tuple[str, str], Any] | None
+    save_only: bool
+    fileformat: str
+    nodes: str
+    theme_name: str
+    show_legend: bool
+
+
+def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | None:
     """Build and render the bundle picture behind ``tl.show_bundle_graph``.
 
-    Arguments are documented on :func:`torchlens.show_bundle_graph`.
+    Arguments are documented on :func:`torchlens.show_bundle_graph`, which
+    checks them first.
 
     Returns
     -------
     str | None
-        DOT source, or ``None`` when ``vis_mode='none'``.
+        DOT source.
     """
-
-    if nodes not in {"ops", "members"}:
-        raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
-    if vis_mode == "none":
-        return None
-    if vis_mode not in {"rolled", "unrolled"}:
-        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
 
     import graphviz
 
-    from ._render_utils import direction_to_rankdir, render_dot_to_file, strip_known_extension
-
-    dot = graphviz.Digraph(
-        name="TorchLens_Bundle",
-        comment="TorchLens bundle graph",
-        format=vis_fileformat,
-    )
+    from ._render_utils import render_dot_to_file, strip_known_extension
     from .themes import (
         resolve_theme,
         theme_edge_attrs,
@@ -490,44 +478,49 @@ def render_bundle_graph(
         theme_node_attrs,
     )
 
-    theme = resolve_theme(theme_name)
-    title = "members" if nodes == "members" else f"{vis_mode}, {direction}"
+    dot = graphviz.Digraph(
+        name="TorchLens_Bundle",
+        comment="TorchLens bundle graph",
+        format=options.fileformat,
+    )
+    theme = resolve_theme(options.theme_name)
+    draws_forward = options.direction in {"forward", "both", "overlay"}
+    title = "members" if options.nodes == "members" else f"{options.vis_mode}, {options.direction}"
     graph_attrs = {
-        "rankdir": direction_to_rankdir(vis_direction),
+        "rankdir": options.rankdir,
         "labelloc": "t",
         "labeljust": "left",
         "compound": "true",
-        **theme_graph_attrs(theme, fileformat=vis_fileformat),
+        **theme_graph_attrs(theme, fileformat=options.fileformat),
     }
+    dot.graph_attr["rankdir"] = options.rankdir
     dot.node_attr.update(theme_node_attrs(theme))
     dot.edge_attr.update(theme_edge_attrs(theme))
 
     header_lines = [f"TorchLens bundle graph ({title})"]
-    if nodes == "members":
+    if options.nodes == "members":
         opaque = _add_bundle_member_graph(
-            dot, bundle, vis_node_overrides, vis_edge_overrides, theme
+            dot, bundle, options.node_overrides, options.edge_overrides, theme
         )
         if opaque:
             header_lines.append(f"{opaque} opaque relation row(s) not drawn")
-    elif direction in {"forward", "both", "overlay"}:
-        _add_bundle_forward_nodes(
-            dot, bundle, vis_mode, vis_node_overrides, theme, graph_attrs["rankdir"]
-        )
-        _add_bundle_forward_edges(dot, bundle, vis_edge_overrides, theme)
-    if nodes == "ops" and direction in {"backward", "both", "overlay"}:
+    elif draws_forward:
+        _add_bundle_forward_nodes(dot, bundle, options.vis_mode, options.node_overrides, theme)
+        _add_bundle_forward_edges(dot, bundle, options.edge_overrides, theme)
+    if options.nodes == "ops" and options.direction in {"backward", "both", "overlay"}:
         _add_bundle_backward_graph(dot, bundle)
     graph_attrs["label"] = bundle_header_label(
         bundle,
         header_lines,
         theme,
-        show_legend=show_legend is True,
-        draws_ops=nodes == "ops" and direction in {"forward", "both", "overlay"},
+        show_legend=options.show_legend,
+        draws_ops=options.nodes == "ops" and draws_forward,
     )
-    graph_attrs.update({key: str(value) for key, value in (vis_graph_overrides or {}).items()})
+    graph_attrs.update({key: str(value) for key, value in (options.graph_overrides or {}).items()})
     dot.graph_attr.update(graph_attrs)
-    outpath = strip_known_extension(vis_outpath)
-    source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
-    if vis_fileformat == "svg" and show_legend is True and Path(f"{outpath}.svg").is_file():
+    outpath = strip_known_extension(options.outpath)
+    source = render_dot_to_file(dot, outpath, options.fileformat, options.save_only)
+    if options.fileformat == "svg" and options.show_legend and Path(f"{outpath}.svg").is_file():
         # Embed the key's swatch images, so the saved SVG stands alone.
         from ._svg_compose import _inline_svg_file_local_images
 

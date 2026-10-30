@@ -408,7 +408,6 @@ def _build_graphviz_shell(
     request: ResolvedRenderRequest,
     target: RenderTarget,
     theme: VisualizationTheme,
-    rankdir: str,
     node_universe: "NodeUniverse",
 ) -> tuple[str, graphviz.Digraph]:
     """Build the caption and configured Graphviz graph shell.
@@ -431,7 +430,7 @@ def _build_graphviz_shell(
         format=target.fileformat,
     )
     graph_args = {
-        "rankdir": rankdir,
+        "rankdir": direction_to_rankdir(request.direction),
         "label": graph_caption,
         "labelloc": "t",
         "labeljust": "left",
@@ -547,9 +546,7 @@ def _resolve_forward_context(
         f"Rendering {request.vis_mode} graph ({num_nodes} nodes, format={target.fileformat})",
     )
     _vprint(trace, f"Layout engine: {engine} (estimated cost={layout_cost})")
-    graph_caption, dot = _build_graphviz_shell(
-        trace, request, target, theme, rankdir, node_universe
-    )
+    graph_caption, dot = _build_graphviz_shell(trace, request, target, theme, node_universe)
     return _ForwardRenderContext(
         request=request,
         target=target,
