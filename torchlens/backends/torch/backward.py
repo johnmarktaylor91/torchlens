@@ -2634,7 +2634,11 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     Returns
     -------
     dict[int, str]
-        Mapping from ``id(grad_fn_handle)`` to final layer label.
+        Mapping from ``id(grad_fn_handle)`` to the op's final lookup label: the
+        bare layer label for a single-pass layer, the pass-qualified op label
+        (``layer:pass``) for a multi-pass one. A bare label names the whole
+        Layer, so every pass's GradFn would resolve ``GradFn.op`` to the Layer
+        instead of its own Op.
     """
     mapping: dict[int, str] = {}
     ranks: dict[int, int] = {}
@@ -2646,7 +2650,8 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
         current_rank = ranks.get(grad_fn_object_id)
         if current_rank is not None and current_rank <= candidate_rank:
             continue
-        mapping[grad_fn_object_id] = layer.layer_label
+        multi_pass = int(getattr(layer, "num_passes", 1) or 1) > 1
+        mapping[grad_fn_object_id] = layer.label if multi_pass else layer.layer_label
         ranks[grad_fn_object_id] = candidate_rank
     return mapping
 
