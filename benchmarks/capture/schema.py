@@ -26,7 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 from benchmarks.host_label import benchmark_host_label  # noqa: E402
 
 SCHEMA_ID = "torchlens.bench.capture.v1"
-SUITES = ("A", "B", "fixtures", "panel", "census", "aa")
+SUITES = ("capture", "A", "B", "fixtures", "panel", "census", "aa")
 STATUSES = ("ok", "unsupported", "refused", "error", "timeout", "noisy", "mismatch")
 NON_OK_NEEDS_REASON = frozenset(STATUSES) - {"ok"}
 GIT_SHA_ENV = "TL_BENCH_GIT_SHA"

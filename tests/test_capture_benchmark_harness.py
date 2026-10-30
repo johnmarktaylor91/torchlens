@@ -141,3 +141,66 @@ def test_census_fields_on_a_real_trace() -> None:
     assert counts["computations"] == 4
     assert counts["missed_funcs"] == {"relu": 1}
     assert counts["unreachable_output_hooks"] == 2
+
+
+def test_fixture_names_round_trip_and_build() -> None:
+    from benchmarks.capture import fixtures
+
+    names = fixtures.fixture_matrix(smoke=True)
+    assert len(names) == len(fixtures.KINDS) * len(fixtures.SMOKE_OP_COUNTS)
+    for kind in fixtures.KINDS:
+        name = fixtures.fixture_name(kind, 100, "small")
+        assert fixtures.parse_fixture_name(name) == (kind, 100, "small")
+        model, x, meta = fixtures.build_fixture(name)
+        with torch.no_grad():
+            out = model(x)
+        assert out.shape == x.shape
+        assert meta["site"] in dict(model.named_modules())
+        assert set(meta["sites"]) <= set(dict(model.named_modules()))
+
+
+def test_panel_generation_cells_name_entry_points() -> None:
+    from benchmarks.capture import panel
+
+    rows = panel.generation_cells(panel.PANEL_BY_NAME["gpt2"])
+    assert {r["steps"] for r in rows} == set(panel.GENERATION_STEPS)
+    refused = [r for r in rows if r["status"] == "refused"]
+    assert refused and all(r["entry_point"] == "full_trace" and r["reason"] for r in refused)
+    assert all(r["steps"] > panel.FULL_TRACE_STEP_LIMIT for r in refused)
+    assert panel.generation_cells(panel.PANEL_BY_NAME["resnet18"]) == []
+    assert {"resnet18", "lstm-tagger", "encoder-small", "dynamic-router"} == set(
+        panel.smoke_panel()
+    )
+
+
+def test_matched_contract_compare_and_hooks_reference() -> None:
+    from benchmarks.capture import arms, fixtures
+
+    model, x, meta = fixtures.build_fixture("fx-pointwise-100-small")
+    subject = arms.prepare_subject("fx-pointwise-100-small", model, x, meta)
+    hooks = arms.HooksArm(subject)
+    ref = hooks.run("replacement_edit")
+    assert arms.compare(ref, ref)["bit_identical"] is True
+    assert arms.compare(ref + 1, ref)["matched"] is False
+    steered = hooks.run("repeated_steering")
+    assert len(steered) == len(arms.STEER_MAGNITUDES)
+    assert hooks.run("same_site_gradient").shape == subject.site_shape
+    feats = hooks.run("ordered_dataset_features")
+    assert feats.shape[0] == arms.DATASET_SIZE
+
+
+def test_driver_plan_keeps_unsupported_cells_visible() -> None:
+    from benchmarks.capture import driver
+
+    cells = driver.plan(smoke=True)
+    a_cells = [c for c in cells if c[0] == "A"]
+    static = [driver._static_unsupported(c) for c in a_cells]
+    unsupported = [row for row in static if row is not None]
+    assert unsupported and all(row["reason"] for row in unsupported)
+    assert any(c[0] == "B" and c[1] == "bundle_compare" for c in cells)
+    assert any(c[0] == "fixtures" for c in cells)
+    aa = driver.aa_noise([{"status": "ok", "timing": {"median_ms": 10.0}}] * 2)
+    rows = [
+        {"cell_id": "A/x/hooks/s", "status": "ok", "timing": {"median_ms": m}} for m in (10.0, 20.0)
+    ]
+    assert driver.group_cells(rows, aa, 0.1)[0]["noisy"] is True
