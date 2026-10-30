@@ -18,6 +18,7 @@ import torch
 from example_models import TinyReluAdd
 
 import torchlens as tl
+from torchlens.errors import TorchLensWarning
 from torchlens.intervention.types import Edit, FireRecord
 from torchlens.options import VisualizationOptions
 from torchlens.visualization._edit_highlighter import HighlighterStyle, highlight_svg
@@ -298,6 +299,25 @@ def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
         # The translucent purple over white is a pale violet no other mark uses.
         assert any(r > g + 20 and b > g + 20 and r > 180 and b > 180 for r, g, b in pixels)
     assert not list(tmp_path.glob("*.highlight.svg"))
+
+
+def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> None:
+    """A raster format other than PDF or PNG draws without the highlighter and says so."""
+
+    trace = _traced()
+    try:
+        with pytest.warns(TorchLensWarning) as record:
+            trace.draw(
+                vis_save_only=True,
+                vis_fileformat="jpg",
+                vis_outpath=str(tmp_path / "cone"),
+                vis_show_cone=True,
+            )
+    finally:
+        trace.cleanup()
+    codes = [getattr(entry.message, "code", None) for entry in record]
+    assert codes.count("viz_highlighter_not_drawn") == 1
+    assert (tmp_path / "cone.jpg").exists()
 
 
 def test_as_node_hook_is_purple(tmp_path: Path) -> None:
