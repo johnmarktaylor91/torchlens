@@ -33,7 +33,7 @@ from ...capture.peak_memory import (
 )
 from ...data_classes.backward_pass import BackwardPass
 from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.grad_fn import GradFn
+from ...data_classes.grad_fn import GradFn, _pass_op_for_grad_fn
 from ...data_classes.grad_fn_call import GradFnCall
 from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ...errors import ConfigurationError
@@ -907,7 +907,45 @@ def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
     return None if param_log is None else getattr(param_log, "module_address", None)
 
 
-def _op_module_address(trace: Any, op_label: str | None) -> str | None:
+def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | None) -> Any:
+    """Return the forward pass a grad-fn node differentiates.
+
+    ``op_label`` is the paired LAYER label (``GradFn.op_label`` contract). On a
+    multi-pass layer that label's lookup entry is one fixed pass, so the pass
+    is chosen from per-pass evidence instead: the pass whose recorded
+    ``grad_fn_object_id`` is this node's autograd identity.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing op logs.
+    op_label:
+        Paired layer label, or ``None`` for an unpaired node.
+    grad_fn_object_id:
+        Autograd identity of the grad-fn node, if known.
+
+    Returns
+    -------
+    Any
+        The paired pass's Op, the label's lookup entry when no pass evidence
+        applies (single-pass layers, unknown identity), or ``None``.
+    """
+
+    if op_label is None:
+        return None
+    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
+    layer = getattr(trace, "layer_logs", {}).get(op_label)
+    if layer is None or grad_fn_object_id is None:
+        return entry
+    pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)
+    return entry if pass_op is None or pass_op is layer else pass_op
+
+
+def _op_module_address(
+    trace: Any,
+    op_label: str | None,
+    grad_fn_object_id: int | None = None,
+) -> str | None:
     """Return the containing module address for a paired forward op label.
 
     Parameters
@@ -915,7 +953,10 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
     trace:
         Trace containing op logs.
     op_label:
-        Forward op label paired to a grad-fn record.
+        Forward layer label paired to a grad-fn record.
+    grad_fn_object_id:
+        Autograd identity of the grad-fn node, selecting its own pass on a
+        multi-pass layer.
 
     Returns
     -------
@@ -923,9 +964,9 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
         Module address for the paired op, if known.
     """
 
-    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+    op = _paired_pass_op(trace, op_label, grad_fn_object_id)
+    if op is None:
         return None
-    op = trace.layer_dict_all_keys[op_label]
     module_address = getattr(op, "module_address", None)
     if module_address is not None:
         return cast(str, module_address)
@@ -983,10 +1024,10 @@ def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
         Forward raw index, or ``None`` for parameter-only and unresolved records.
     """
 
-    op_label = grad_fn_record.op_label
-    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+    op = _paired_pass_op(trace, grad_fn_record.op_label, grad_fn_record.grad_fn_object_id)
+    if op is None:
         return None
-    return int(getattr(trace.layer_dict_all_keys[op_label], "raw_index"))
+    return int(getattr(op, "raw_index"))
 
 
 def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
@@ -1617,7 +1658,7 @@ def _materialize_backward_projections_impl(
         modules: list[str] = []
         module_address = None
         module_membership_source = None
-        op_module_address = _op_module_address(trace, event.op_label)
+        op_module_address = _op_module_address(trace, event.op_label, object_id)
         param_module_address = _param_module_address(trace, event.param_ref)
         if op_module_address is not None:
             module_address = op_module_address
@@ -2634,11 +2675,10 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     Returns
     -------
     dict[int, str]
-        Mapping from ``id(grad_fn_handle)`` to the op's final lookup label: the
-        bare layer label for a single-pass layer, the pass-qualified op label
-        (``layer:pass``) for a multi-pass one. A bare label names the whole
-        Layer, so every pass's GradFn would resolve ``GradFn.op`` to the Layer
-        instead of its own Op.
+        Mapping from ``id(grad_fn_handle)`` to final layer label. This is the
+        ``GradFn.op_label`` contract: always the layer label, never a
+        pass-qualified op label, also on multi-pass layers. Consumers that need
+        the exact pass resolve it with ``_paired_pass_op``.
     """
     mapping: dict[int, str] = {}
     ranks: dict[int, int] = {}
@@ -2650,8 +2690,7 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
         current_rank = ranks.get(grad_fn_object_id)
         if current_rank is not None and current_rank <= candidate_rank:
             continue
-        multi_pass = int(getattr(layer, "num_passes", 1) or 1) > 1
-        mapping[grad_fn_object_id] = layer.label if multi_pass else layer.layer_label
+        mapping[grad_fn_object_id] = layer.layer_label
         ranks[grad_fn_object_id] = candidate_rank
     return mapping
 
@@ -3905,9 +3944,13 @@ def _checkpoint_token_summary(
     record: dict[str, Any],
     evidence_lock: threading.Lock,
     grad_fn_logs: dict[int, Any],
-    layer_lookup: dict[str, Any],
+    trace: Any,
 ) -> dict[str, Any]:
-    """Return one checkpoint token's count, site, and backward-window summary."""
+    """Return one checkpoint token's count, site, and backward-window summary.
+
+    Each fire bracket's site key comes from the pass its grad-fn node
+    differentiates, so a multi-pass layer contributes the pass that ran.
+    """
 
     with evidence_lock:
         evidence = list(record["unpack_evidence"])
@@ -3923,7 +3966,7 @@ def _checkpoint_token_summary(
         label = getattr(grad_fn_record, "label", None)
         window_refs.append((bracket_pass_index, label, bracket_call_index))
         if grad_fn_record is not None and getattr(grad_fn_record, "has_op", False):
-            op = layer_lookup.get(grad_fn_record.op_label)
+            op = _paired_pass_op(trace, grad_fn_record.op_label, bracket_object_id)
             site_key = getattr(op, "site_key", None)
             if site_key is not None:
                 site_candidates.add(site_key)
@@ -3960,7 +4003,7 @@ def _refresh_checkpoint_witness(trace: Any) -> None:
                 record,
                 state["lock"],
                 getattr(trace, "grad_fn_logs", {}),
-                getattr(trace, "layer_dict_all_keys", {}),
+                trace,
             )
             for token, record in state["tokens"].items()
         }

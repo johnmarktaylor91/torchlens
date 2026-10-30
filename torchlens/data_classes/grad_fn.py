@@ -208,6 +208,40 @@ def _clone_grad_value(value: Any) -> Any:
     return value
 
 
+def _pass_op_for_grad_fn(record: Any, grad_fn_object_id: int) -> Any:
+    """Return the forward pass one GradFn differentiates, from per-pass evidence.
+
+    ``GradFn.op_label`` is the paired LAYER label, so on a multi-pass layer it
+    resolves to the whole ``Layer``, whose per-pass fields (``label``) refuse by
+    design. A GradFn belongs to exactly one pass: the pass whose recorded
+    ``grad_fn_object_id`` is this GradFn's autograd identity.
+
+    Parameters
+    ----------
+    record:
+        The Op or Layer the GradFn's ``op_label`` resolves to, or ``None``.
+    grad_fn_object_id:
+        The GradFn's autograd node identity.
+
+    Returns
+    -------
+    Any
+        ``record`` itself when it is already one pass (an Op or a single-pass
+        Layer), the matching pass of a multi-pass Layer, or ``None`` when no
+        pass of a multi-pass Layer carries this autograd identity.
+    """
+
+    if record is None:
+        return None
+    passes = tuple(getattr(record, "ops", None) or ())
+    if len(passes) <= 1:
+        return record
+    for pass_op in passes:
+        if getattr(pass_op, "grad_fn_object_id", None) == grad_fn_object_id:
+            return pass_op
+    return None
+
+
 @dataclass
 class GradFn:
     """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
@@ -484,7 +518,7 @@ class GradFn:
         # L1 narrowing (r3): a lookup miss/ambiguity or a collected owner means
         # "no live handle" (None); any other exception is a bug and propagates.
         try:
-            op = self.op
+            op = _pass_op_for_grad_fn(self.op, self.grad_fn_object_id)
         except (AmbiguousOpLookupError, RecordBindingError, KeyError, ValueError):
             op = None
         if op is None:
