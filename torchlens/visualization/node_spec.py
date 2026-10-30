@@ -295,6 +295,31 @@ def _cone_pass_labels(trace: Trace, sites: list[Op], site_pass_labels: set[str])
     return {_site_sort_key(op) for op in cone_of_effect(trace, sites)} - site_pass_labels
 
 
+def _is_downstream(
+    layer_log: Any,
+    target: Any,
+    pass_label: Any,
+    *,
+    cone_pass_labels: set[str],
+    cone_labels: set[str],
+) -> bool:
+    """Return whether a drawn node lies downstream of the edit.
+
+    One pass of an unrolled layer (``target`` is its rendered Op) is downstream
+    only if that pass is. A rolled node matches the aggregate cone by its layer
+    label, short label or any per-pass call label.
+    """
+
+    if target is not layer_log and isinstance(pass_label, str):
+        return pass_label in cone_pass_labels
+    cone_match_labels = {
+        str(getattr(layer_log, "layer_label", "")),
+        str(getattr(layer_log, "layer_label_short", "")),
+    }
+    cone_match_labels.update(str(label) for label in getattr(layer_log, "call_labels", ()) or ())
+    return bool(cone_match_labels & cone_labels)
+
+
 def _with_svg_class(extra_attrs: dict[str, str], name: str) -> dict[str, str]:
     """Return ``extra_attrs`` with ``name`` added to its Graphviz ``class`` list."""
 
@@ -409,18 +434,13 @@ def make_intervention_node_spec_fn(
         else:
             is_site = node_agg_label in site_agg_labels
 
-        if target is not layer_log and isinstance(pass_label, str):
-            # One pass of an unrolled layer: downstream only if that pass is.
-            is_downstream = pass_label in cone_pass_labels
-        else:
-            cone_match_labels = {
-                node_agg_label,
-                str(getattr(layer_log, "layer_label_short", "")),
-            }
-            cone_match_labels.update(
-                str(label) for label in getattr(layer_log, "call_labels", ()) or ()
-            )
-            is_downstream = bool(cone_match_labels & cone_labels)
+        is_downstream = _is_downstream(
+            layer_log,
+            target,
+            pass_label,
+            cone_pass_labels=cone_pass_labels,
+            cone_labels=cone_labels,
+        )
 
         spec = default_spec
         if is_site:
