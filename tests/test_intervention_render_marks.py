@@ -84,11 +84,13 @@ def test_edit_row_html_spec() -> None:
     assert label.index("(2, 3)") < label.index('POINT-SIZE="4"') < label.index("zero_ablate")
     assert (
         f'<FONT COLOR="{PURPLE}"><B><FONT POINT-SIZE="11">Δ</FONT>'
-        '<FONT POINT-SIZE="10"> zero_ablate</FONT></B></FONT>'
+        '<FONT POINT-SIZE="10">&#160;zero_ablate</FONT></B></FONT>'
     ) in label
     assert "<HR" not in label.upper()
     default = render_lines_to_html(["relu_1_1", EditRow("Δ zero_ablate", PURPLE)])
-    assert '<FONT POINT-SIZE="14">Δ</FONT><FONT POINT-SIZE="12.7"> zero_ablate</FONT>' in default
+    assert (
+        '<FONT POINT-SIZE="14">Δ</FONT><FONT POINT-SIZE="12.7">&#160;zero_ablate</FONT>' in default
+    )
 
 
 def _fired_site(label: str, *edits: Any) -> SimpleNamespace:

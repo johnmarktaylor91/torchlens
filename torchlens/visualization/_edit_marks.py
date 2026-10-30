@@ -429,7 +429,8 @@ def edit_row_html(row: str, color: str, size: float = _OP_LABEL_SIZE) -> str:
         body = html_escape(text[len(DELTA) + 1 :])
         inner = (
             f'<FONT POINT-SIZE="{delta_pt}">{DELTA}</FONT>'
-            f'<FONT POINT-SIZE="{text_pt}"> {body}</FONT>'
+            # A non-breaking space: SVG drops a text run's leading plain space.
+            f'<FONT POINT-SIZE="{text_pt}">&#160;{body}</FONT>'
         )
     else:
         inner = f'<FONT POINT-SIZE="{text_pt}">{html_escape(text)}</FONT>'
