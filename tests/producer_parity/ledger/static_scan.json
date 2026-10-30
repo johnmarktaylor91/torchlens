@@ -9697,6 +9697,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_bundle_graph.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "params",
   "file": "torchlens/visualization/_bundle_graph.py",
   "has_default": false,
@@ -9792,6 +9800,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/visualization/_header_block.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_header_block.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "layer_type",
   "file": "torchlens/visualization/_label_format.py",
@@ -9852,7 +9876,7 @@
   "field": "modules",
   "file": "torchlens/visualization/_render_dot.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {

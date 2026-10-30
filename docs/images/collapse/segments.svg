@@ -10,13 +10,13 @@
 <title>ResNet</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-1508.9 501,-1508.9 501,4 -4,4"/>
 <text text-anchor="start" x="8" y="-1490.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ResNet</text>
-<text text-anchor="start" x="8" y="-1476.7" font-family="Helvetica,sans-Serif" font-size="14.00">389 tensors total (12.2 MB)</text>
-<text text-anchor="start" x="8" y="-1462.7" font-family="Helvetica,sans-Serif" font-size="14.00">25557032 params (all trainable, 97.5 MB)</text>
+<text text-anchor="start" x="8" y="-1476.7" font-family="Helvetica,sans-Serif" font-size="14.00">13 ops (1.4 MB)</text>
+<text text-anchor="start" x="8" y="-1462.7" font-family="Helvetica,sans-Serif" font-size="14.00">25557032 params (97.5 MB, all trainable)</text>
 <text text-anchor="start" x="8" y="-1448.7" font-family="Helvetica,sans-Serif" font-size="14.00">this model reuses 16 modules across 48 calls; vis_mode=&#39;rolled&#39; shows the loop</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#009e73" stroke="black" cx="248.5" cy="-45.96" rx="108.38" ry="45.92"/>
+<ellipse fill="#98fb98" stroke="black" cx="248.5" cy="-45.96" rx="108.38" ry="45.92"/>
 <text text-anchor="start" x="224.5" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
 <text text-anchor="start" x="182.5" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 64, 64), 48.0 KB</text>
 <text text-anchor="start" x="221.5" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
@@ -24,7 +24,7 @@
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="400.5,-231.92 96.5,-231.92 96.5,-128.92 400.5,-128.92 400.5,-231.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="400.5,-231.92 96.5,-231.92 96.5,-128.92 400.5,-128.92 400.5,-231.92"/>
 <text text-anchor="start" x="209.5" y="-215.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
 <text text-anchor="start" x="174.5" y="-195.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
 <text text-anchor="start" x="106.5" y="-176.22" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(7, 7), stride=(2, 2), padding=(3, 3)</text>
@@ -41,7 +41,7 @@
 <g id="node3" class="node">
 <title>batchnorm_1_2pass1</title>
 <g id="a_node3"><a xlink:title="Hidden buffers: bn1.running_mean, bn1.running_var">
-<polygon fill="#56b4e9" stroke="black" points="355,-375.92 142,-375.92 142,-272.92 355,-272.92 355,-375.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="355,-375.92 142,-375.92 142,-272.92 355,-272.92 355,-375.92"/>
 <polygon fill="none" stroke="black" points="359,-379.92 138,-379.92 138,-268.92 359,-268.92 359,-379.92"/>
 <text text-anchor="start" x="198.5" y="-359.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_1_2</text>
 <text text-anchor="start" x="175" y="-339.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
@@ -101,7 +101,7 @@
 <!-- layer3pass1 -->
 <g id="node7" class="node">
 <title>layer3pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="350.5,-815.92 150.5,-815.92 146.5,-811.92 146.5,-712.92 346.5,-712.92 350.5,-716.92 350.5,-815.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="350.5,-815.92 150.5,-815.92 146.5,-811.92 146.5,-712.92 346.5,-712.92 350.5,-716.92 350.5,-815.92"/>
 <polyline fill="none" stroke="black" points="346.5,-811.92 146.5,-811.92 "/>
 <polyline fill="none" stroke="black" points="346.5,-811.92 346.5,-712.92 "/>
 <polyline fill="none" stroke="black" points="346.5,-811.92 350.5,-815.92 "/>
@@ -120,7 +120,7 @@
 <!-- layer4pass1 -->
 <g id="node8" class="node">
 <title>layer4pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="354.5,-967.92 146.5,-967.92 142.5,-963.92 142.5,-864.92 350.5,-864.92 354.5,-868.92 354.5,-967.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="354.5,-967.92 146.5,-967.92 142.5,-963.92 142.5,-864.92 350.5,-864.92 354.5,-868.92 354.5,-967.92"/>
 <polyline fill="none" stroke="black" points="350.5,-963.92 142.5,-963.92 "/>
 <polyline fill="none" stroke="black" points="350.5,-963.92 350.5,-864.92 "/>
 <polyline fill="none" stroke="black" points="350.5,-963.92 354.5,-967.92 "/>
@@ -168,7 +168,7 @@
 <!-- linear_1_175pass1 -->
 <g id="node11" class="node">
 <title>linear_1_175pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="386.5,-1311.98 110.5,-1311.98 110.5,-1227.98 386.5,-1227.98 386.5,-1311.98"/>
+<polygon fill="#d9d9d9" stroke="black" points="386.5,-1311.98 110.5,-1311.98 110.5,-1227.98 386.5,-1227.98 386.5,-1311.98"/>
 <text text-anchor="start" x="207.5" y="-1295.78" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_175</text>
 <text text-anchor="start" x="197" y="-1275.78" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
 <text text-anchor="start" x="120.5" y="-1256.78" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 2048) · bias (1000,)</text>
@@ -183,7 +183,7 @@
 <!-- output_1pass1 -->
 <g id="node12" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#d55e00" stroke="black" cx="248.5" cy="-1394.94" rx="86.95" ry="45.92"/>
+<ellipse fill="#ff9999" stroke="black" cx="248.5" cy="-1394.94" rx="86.95" ry="45.92"/>
 <text text-anchor="start" x="220" y="-1410.74" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text text-anchor="start" x="197.5" y="-1390.74" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
 <text text-anchor="start" x="223" y="-1371.74" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
