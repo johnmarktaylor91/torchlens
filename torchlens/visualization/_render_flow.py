@@ -1533,9 +1533,7 @@ def _render_edge_occurrences(
 
     parent_render_label = _render_node_label(parent_node, "unrolled")
     child_render_label = _render_node_label(child_node, "unrolled")
-    # Relation fields spell a multi-pass Op pass-qualified, a single-pass Op bare.
-    parent_relation_label = _relation_label(parent_node)
-    child_relation_label = _relation_label(child_node)
+    parent_relation_label, child_relation_label = map(_relation_label, (parent_node, child_node))
     if isinstance(child_node, Op):
         matches = [
             edge_use

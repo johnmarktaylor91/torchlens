@@ -18,11 +18,11 @@ The contract, for every op whose call site the capture walk saw:
 
 from __future__ import annotations
 
+import weakref
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from weakref import WeakKeyDictionary
 
 __all__ = (
     "CallSiteEntry",
@@ -33,7 +33,7 @@ __all__ = (
 
 #: Live Trace -> raw op label -> call-site class. Weak, in memory only: the
 #: entry dies with the Trace and never reaches a saved artifact.
-_CALL_SITE_CLASSES: WeakKeyDictionary[Any, dict[str, str]] = WeakKeyDictionary()
+_CALL_SITE_CLASSES: weakref.WeakKeyDictionary[Any, dict[str, str]] = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,8 +109,16 @@ def call_site_contract_violation(
     for key, layers in key_layers.items():
         if len(layers) > 1:
             return f"(ii) call site '{key}' is split across layers {sorted(layers)}"
-    # Each group is checked once, at its first member; group symmetry (every
-    # member names the same group) is the loop-detection invariant's own check.
+    return _group_contract_violation(entries, classes)
+
+
+def _group_contract_violation(entries: list[CallSiteEntry], classes: dict[str, str]) -> str | None:
+    """Contract (iii): the first recurrent group spanning two call sites, or None.
+
+    Each group is checked once, at its first member; group symmetry (every
+    member names the same group) is the loop-detection invariant's own check.
+    """
+
     checked: set[str] = set()
     for entry in entries:
         if entry.raw_label in checked:
