@@ -62,6 +62,14 @@ LEGACY_TRACE_BUILD_STATE_KEYS = frozenset(
 class RawGraphWorkspace:
     """Raw op registry owned by capture ingress + postprocess steps 0-11.
 
+    Parameters
+    ----------
+    call_site_index : dict, optional
+        Starting call-site numbering (call-site key to first-appearance order).
+    call_site_classes : dict[str, str], optional
+        Starting map from raw op label to call-site class, the internal key that
+        groups ops into layers.
+
     Attributes
     ----------
     pending_call_site : tuple | None
