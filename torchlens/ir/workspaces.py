@@ -60,27 +60,7 @@ LEGACY_TRACE_BUILD_STATE_KEYS = frozenset(
 
 @dataclass(slots=True)
 class RawGraphWorkspace:
-    """Raw op registry owned by capture ingress + postprocess steps 0-11.
-
-    Parameters
-    ----------
-    call_site_index : dict, optional
-        Starting call-site numbering (call-site key to first-appearance order).
-    call_site_classes : dict[str, str], optional
-        Starting map from raw op label to call-site class, the internal key that
-        groups ops into layers.
-
-    Attributes
-    ----------
-    pending_call_site : tuple | None
-        Call id and code location of the torch call whose outputs are being logged.
-    call_site_index : dict
-        Each call-site key (module instance, code location, function, output slot)
-        mapped to the order it first appeared; that number names its call-site class.
-    call_site_classes : dict[str, str]
-        Each raw op label mapped to its call-site class, the internal key that
-        groups ops into layers; never saved with the trace.
-    """
+    """Raw op registry owned by capture ingress + postprocess steps 0-11."""
 
     raw_layer_dict: dict[str, Any] = field(default_factory=OrderedDict)
     raw_layer_labels_list: list[str] = field(default_factory=list)
@@ -98,17 +78,17 @@ class RawGraphWorkspace:
     buffer_version_keys: dict[str, tuple[Any, ...] | None] = field(default_factory=dict)
     #: ``(func_call_id, call-site chain)`` of the wrapped call whose outputs are
     #: being logged (written by the shared-fields builder, read per output).
-    pending_call_site: tuple[Any, Any] | None = None
+    _pending_call_site: tuple[Any, Any] | None = None
     #: Call-site key -> its 1-based first-appearance index in this capture; the
     #: index names the op's call-site class (``<type>@cs<N>``).
-    call_site_index: dict[Any, int] = field(default_factory=dict)
+    _call_site_index: dict[Any, int] = field(default_factory=dict)
     #: Raw op label -> its call-site class (``<type>@cs<N>``, plus ``_outindex<k>``
     #: for one output slot of a multi-output call) for every op whose call site
     #: the capture walk saw. Step 7 groups by it (``callsite_v1``) and checks the
     #: call-site contract against it. Internal and never persisted: it goes away
     #: with the workspace, and ``equivalence_class`` keeps its argument/parameter
     #: fingerprint for its other consumers.
-    call_site_classes: dict[str, str] = field(default_factory=dict)
+    _call_site_classes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

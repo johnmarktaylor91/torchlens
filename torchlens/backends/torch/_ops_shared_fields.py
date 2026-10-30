@@ -173,7 +173,7 @@ def _build_shared_fields_dict(
         context_cache=code_context_cache,
         call_site_out=call_site_out,
     )
-    self._raw_graph_ws.pending_call_site = (func_call_id, call_site_out[0])
+    self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
     fields_dict["var_names"] = []
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states

@@ -3,7 +3,7 @@
 Grouping rule section 3 keeps the call-site key internal: it is never persisted
 and never written into a public field, so ``equivalence_class`` keeps its
 argument/parameter fingerprint for its other consumers. Step 7 groups by the
-raw-graph workspace side table (``RawGraphWorkspace.call_site_classes``) and then
+raw-graph workspace side table (``RawGraphWorkspace._call_site_classes``) and then
 checks the contract against it; a weak per-trace registry keeps that table for
 the life of the live Trace so re-validation of a fresh capture can re-check it.
 A loaded trace has no table, and re-validation reports the contract as not

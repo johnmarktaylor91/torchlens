@@ -352,7 +352,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
     """Group ops into layers and passes (step 7).
 
     A capture whose ops carry call-site classes (the torch backend's
-    exhaustive capture, ``RawGraphWorkspace.call_site_classes``) groups by
+    exhaustive capture, ``RawGraphWorkspace._call_site_classes``) groups by
     call site (``callsite_v1``,
     :func:`_group_by_call_sites`). Captures without that evidence (other
     backends, predicate-mode recordings) keep the backend-neutral structural
@@ -383,7 +383,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
 def _has_call_site_evidence(self: "Trace") -> bool:
     """Whether any retained op of this capture carries a call-site class."""
 
-    classes = self._raw_graph_ws.call_site_classes
+    classes = self._raw_graph_ws._call_site_classes
     if not classes:
         return False
     for label in self._raw_graph_ws.raw_layer_labels_list:
@@ -474,7 +474,7 @@ def _group_by_call_sites(self: "Trace") -> None:
     groups: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
     keys: dict[str, tuple[Any, ...]] = {}
     buffers: list[Any] = []
-    classes = self._raw_graph_ws.call_site_classes
+    classes = self._raw_graph_ws._call_site_classes
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
         if getattr(node, "is_orphan", False):

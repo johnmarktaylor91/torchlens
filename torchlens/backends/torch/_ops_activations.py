@@ -70,7 +70,7 @@ def _call_site_equivalence_class(
     """Return the call-site class ``<type>@cs<N>`` for an op whose call site the walk saw.
 
     The class goes into the raw-graph workspace side table
-    (``RawGraphWorkspace.call_site_classes``), never into ``equivalence_class``.
+    (``RawGraphWorkspace._call_site_classes``), never into ``equivalence_class``.
 
     The key is ``(innermost module address, call-site chain, func_name, output
     slot)``; ``N`` is its first-appearance index in this capture, so equal keys
@@ -79,17 +79,17 @@ def _call_site_equivalence_class(
     """
 
     ws = trace._raw_graph_ws
-    pending = ws.pending_call_site
+    pending = ws._pending_call_site
     if pending is None or pending[0] != fields_dict["func_call_id"] or not pending[1]:
         return None
     modules = fields_dict["modules"]
     scope = modules[-1][0] if modules else ""
     slot = i if fields_dict["in_multi_output"] else None
     key = (scope, pending[1], fields_dict["func_name"], slot)
-    index = ws.call_site_index.get(key)
+    index = ws._call_site_index.get(key)
     if index is None:
-        index = len(ws.call_site_index) + 1
-        ws.call_site_index[key] = index
+        index = len(ws._call_site_index) + 1
+        ws._call_site_index[key] = index
     site_class = f"{layer_type}{CALL_SITE_CLASS_MARKER}{index}"
     if slot is not None:
         site_class += f"_outindex{slot}"
@@ -249,7 +249,7 @@ def _log_output_tensor_info(
     # ``op_equivalence_classes`` keep their own meaning.
     site_class = _call_site_equivalence_class(self, fields_dict, i, layer_type)
     if site_class is not None:
-        self._raw_graph_ws.call_site_classes[_label_raw] = site_class
+        self._raw_graph_ws._call_site_classes[_label_raw] = site_class
 
     # equivalent_ops is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.
