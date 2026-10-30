@@ -30,14 +30,20 @@ from pathlib import Path
 from typing import IO, Any
 
 from . import guards, telemetry
-from .registry import BenchTask, normalize_verdict
+from .registry import BenchTask, parse_verdict
 
 TIERS: tuple[str, ...] = ("small", "mid", "frontier")
 PREAMBLE = """You are working in the current folder, which is your whole workspace.
-The task is in TASK.md. {material_line}
+The task is in TASK.md, and its inputs are in inputs/. {material_line}
+
+Write your solution as solve.py in this folder. It will be run from this folder as
+`python solve.py --inputs INPUTS_DIR --outputs OUTPUTS_DIR`, on inputs/ and again on inputs you
+have not seen, so it must compute everything from the inputs it is given. It must create
+OUTPUTS_DIR if needed and write only there, the files TASK.md names in the formats it names.
+
 Python is available as `python`, with the packages this environment provides; nothing else can be
-installed and there is no network access. You may write, run and test code as you like. Write the
-outputs exactly where and in the format TASK.md asks. Stop when you are done.
+installed and there is no network access. You may write, run and test code as you like. Stop when
+solve.py is done.
 """
 
 
@@ -69,6 +75,10 @@ class RunConfig:
     non_substantive_tools: frozenset[str] = frozenset()
     env: Mapping[str, str] = field(default_factory=dict)
     grade_prefix: tuple[str, ...] = ()
+    #: Read-only model cache (weights the tasks use); the agent and solve.py run offline.
+    model_cache: Path | None = None
+    #: Where graders keep their computed oracles between runs, per task.
+    oracle_cache: Path | None = None
 
     @classmethod
     def load(cls, path: Path) -> RunConfig:
@@ -96,6 +106,8 @@ class RunConfig:
             non_substantive_tools=frozenset(raw.get("non_substantive_tools", [])),
             env=dict(raw.get("env", {})),
             grade_prefix=tuple(raw.get("grade_prefix", ())),
+            model_cache=Path(raw["model_cache"]) if raw.get("model_cache") else None,
+            oracle_cache=Path(raw["oracle_cache"]) if raw.get("oracle_cache") else None,
         )
 
 
@@ -120,13 +132,9 @@ def prepare_work(spec: RunSpec, run_dir: Path, config: RunConfig) -> tuple[Path,
 
     work = run_dir / "work"
     work.mkdir(parents=True)
-    shutil.copy2(spec.task.spec, work / "TASK.md")
-    for path in spec.task.public:
-        target = work / path.name
-        if path.is_dir():
-            shutil.copytree(path, target)
-        else:
-            shutil.copy2(path, target)
+    (work / "TASK.md").write_text(spec.task.prompt(), encoding="utf-8")
+    if spec.task.inputs is not None:
+        shutil.copytree(spec.task.inputs, work / "inputs")
     material_line = "There is no agent material file."
     if spec.material is not None:
         shutil.copy2(spec.material, work / config.material_filename)
@@ -251,41 +259,79 @@ def checkpoint_label(seconds: float) -> str:
     return f"t{round(seconds / 60, 2):g}"
 
 
-def grade(
-    spec: RunSpec, snapshot: Path, out_dir: Path, prefix: Sequence[str] = ()
+def run_solve(
+    spec: RunSpec, solution: Path, inputs: Path, outputs: Path, env: Mapping[str, str]
 ) -> dict[str, Any]:
-    """Run the task's grader on one snapshot and return its normalized verdict."""
+    """Run ``solve.py`` from ``solution`` on ``inputs``, as the contract says; return exit facts."""
+
+    outputs.mkdir(parents=True, exist_ok=True)
+    argv = [str(spec.arm_python), "solve.py", "--inputs", str(inputs), "--outputs", str(outputs)]
+    start = time.monotonic()
+    log = outputs.parent / f"{outputs.name}.log"
+    with log.open("w", encoding="utf-8") as sink:
+        try:
+            proc = subprocess.run(
+                argv,
+                cwd=solution,
+                env=dict(env),
+                stdin=subprocess.DEVNULL,
+                stdout=sink,
+                stderr=subprocess.STDOUT,
+                timeout=spec.task.solve_timeout_s,
+                check=False,
+                start_new_session=True,
+            )
+            returncode: int | None = proc.returncode
+        except subprocess.TimeoutExpired:
+            returncode = None
+    return {"returncode": returncode, "seconds": round(time.monotonic() - start, 1)}
+
+
+def grade(
+    spec: RunSpec, solution: Path, out_dir: Path, env: Mapping[str, str], config: RunConfig
+) -> dict[str, Any]:
+    """Run the solution on the visible (and held-out) inputs, then the task's grader.
+
+    The solution runs with the agent's environment (the arm's interpreter, the guard, offline);
+    the grader runs with the grader's interpreter. Returns the normalized verdict, with the
+    solution's exit facts under ``solve`` and the grader's exit code under ``grader_exit``.
+    """
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    verdict_path = out_dir / "verdict.json"
-    argv = spec.task.grade_argv(
-        {
-            "python": str(spec.grader_python),
-            "arm_python": str(spec.arm_python),
-            "work": str(snapshot),
-            "heldout": str(spec.task.heldout or ""),
-            "verdict": str(verdict_path),
-            "task_dir": str(spec.task.root),
+    if not (solution / "solve.py").is_file():
+        verdict: dict[str, Any] = {"passed": False, "bars": [], "error": "solve.py missing"}
+    else:
+        task = spec.task
+        solve = {
+            "visible": run_solve(spec, solution, task.inputs or solution, out_dir / "outputs", env)
         }
-    )
-    try:
-        proc = subprocess.run(
-            [*prefix, *argv],
-            cwd=spec.task.root,
-            capture_output=True,
-            text=True,
-            timeout=spec.task.grade_timeout_s,
-            check=False,
+        heldout_out = None
+        if task.heldout is not None:
+            heldout_out = out_dir / "heldout_outputs"
+            solve["heldout"] = run_solve(spec, solution, task.heldout, heldout_out, env)
+        cache = (
+            (config.oracle_cache / task.task_id)
+            if config.oracle_cache
+            else out_dir / "oracle_cache"
         )
-    except subprocess.TimeoutExpired:
-        return {"passed": False, "bars": [], "error": "grader timed out"}
-    (out_dir / "grader.log").write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr)
-    if not verdict_path.exists():
-        return {"passed": False, "bars": [], "error": f"no verdict (exit {proc.returncode})"}
-    verdict = normalize_verdict(json.loads(verdict_path.read_text(encoding="utf-8")))
-    if proc.returncode != 0:
-        verdict["passed"] = False
-        verdict["error"] = f"grader exit {proc.returncode}"
+        cache.mkdir(parents=True, exist_ok=True)
+        argv = task.grade_argv(str(spec.grader_python), out_dir / "outputs", heldout_out, cache)
+        try:
+            proc = subprocess.run(
+                [*config.grade_prefix, *argv],
+                cwd=task.root,
+                capture_output=True,
+                text=True,
+                timeout=task.grade_timeout_s,
+                check=False,
+            )
+            (out_dir / "grader.log").write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr)
+            verdict = parse_verdict(proc.stdout)
+            verdict["grader_exit"] = proc.returncode
+        except subprocess.TimeoutExpired:
+            verdict = {"passed": False, "bars": [], "error": "grader timed out"}
+        verdict["solve"] = solve
+    (out_dir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str))
     return verdict
 
 
@@ -302,8 +348,13 @@ def agent_env(spec: RunSpec, config: RunConfig, run_dir: Path) -> dict[str, str]
         "MPLBACKEND": "Agg",
         guards.ENV_VAR: str(run_dir / "guard.json"),
         "VIRTUAL_ENV": str(spec.arm_python.parent.parent),
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_DATASETS_OFFLINE": "1",
         **config.env,
     }
+    if config.model_cache is not None:
+        env.update(HF_HOME=str(config.model_cache), TORCH_HOME=str(config.model_cache / "torch"))
     return env
 
 
@@ -363,13 +414,19 @@ def _finish(
         label = checkpoint_label(seconds)
         if label not in snapshots:
             snapshots[label] = _snapshot(work, run_dir / "checkpoints" / label)
+    env = agent_env(spec, config, run_dir)
     record["checkpoints"] = {
-        label: grade(spec, path, run_dir / "grades" / label, config.grade_prefix)
+        label: grade(spec, path, run_dir / "grades" / label, env, config)
         for label, path in sorted(snapshots.items(), key=lambda item: float(item[0][1:]))
     }
     final_label = checkpoint_label(max(caps.checkpoints_s))
-    public = {path.name for path in spec.task.public}
-    files = telemetry.agent_python_files(work, exclude=public)
+    provided = set()
+    if spec.task.inputs is not None:
+        provided = {
+            f"inputs/{p.relative_to(spec.task.inputs).as_posix()}"
+            for p in spec.task.inputs.rglob("*.py")
+        }
+    files = telemetry.agent_python_files(work, exclude=provided)
     sources = [path.read_text(encoding="utf-8", errors="replace") for path in files]
     violations = sorted({hit for source in sources for hit in guards.audit_source(source, entries)})
     record["guard"] = {"entries": entries, "violations": violations}

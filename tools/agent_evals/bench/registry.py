@@ -1,37 +1,36 @@
 """Load benchmark tasks from their oracle directories.
 
-A task directory (``oracles/<task-id>/``) holds the spec the agent reads, the inputs it may see,
-and the private oracle material it must never see: the reference solution, the grader, held-out
-inputs and seeded wrong solutions. An optional ``task.json`` manifest names each part; without
-one the conventional names below apply. Directories whose names start with ``_`` or ``.`` (shared
-material, caches) are not tasks.
+A task directory (``oracles/<task-id>/``) follows the oracle authors' solution contract
+(``oracles/_common/contract.md``): ``spec.md`` (its "Prompt to the agent" section is what the
+agent reads), ``inputs/`` (the inputs the agent may see), and private material the agent never
+sees: ``reference/solve.py``, ``grader.py``, ``heldout/`` (inputs in the same layout, for a second
+run) and seeded wrong solutions under ``wrong/<name>/solve.py``. A solution is a folder holding
+``solve.py``, run as ``python solve.py --inputs DIR --outputs DIR`` from that folder. The grader
+runs as ``python grader.py --task-dir TASK --outputs OUT [--heldout-outputs HOUT] [--cache DIR]``
+and prints one JSON verdict on its last stdout line. Directories whose names start with ``_`` or
+``.`` (shared material, caches) are not tasks.
 
-Manifest fields (all optional)::
+``task.json`` fields (all optional)::
 
     {
-      "id": "T12",                        # default: the directory name
-      "title": "Control: one module's output",
-      "spec": "spec.md",                  # the prompt shown to the agent
-      "public": ["public"],               # files or folders copied into the agent's work folder
-      "heldout": "heldout",               # private inputs the grader may use
-      "grade": ["{python}", "grader.py", "--work", "{work}", "--heldout", "{heldout}",
-                "--out", "{verdict}"],    # grader command, run from the task directory
-      "arms": ["A", "B", "C", "D"],       # arms the task applies to
-      "natives": {"B": ["pkg.module", "pkg.api:attribute"]},  # ready-made implementations to disable
-      "grade_timeout_s": 900
+      "id": "t12-control-module-output",   # default: the directory name
+      "title": "...",
+      "timeout_s": 600,                     # limit for one solve.py run
+      "heldout": true,                      # run solve.py again on heldout/ and grade both
+      "arms": ["A", "B", "C", "D"],         # arms the task applies to
+      "natives": {"B": ["pkg.module"]},     # extra ready-made implementations to disable
+      "grade_timeout_s": 1800
     }
 
-Grade placeholders: ``{python}`` the grader's interpreter, ``{arm_python}`` the arm's interpreter
-(for running the agent's code), ``{work}`` the work folder or checkpoint snapshot, ``{heldout}``,
-``{verdict}`` the JSON file the grader writes, ``{task_dir}``. The verdict holds ``passed`` and a
-list of bars (``bars`` or ``checks``), each with ``name``, ``passed`` and optionally ``value`` and
-``threshold``. A grader that exits nonzero, writes no verdict or omits ``passed`` fails the run.
+The verdict holds ``passed`` and a list of bars, each with ``name``, ``passed`` and optionally
+``value`` and ``threshold``. A verdict that is missing, unparsable or has no boolean ``passed``
+fails the run, as does any failing bar. The grader's exit code is recorded, not trusted.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,20 +39,7 @@ from typing import Any
 ORACLE_ROOT = Path(__file__).resolve().parent / "oracles"
 #: Every arm the benchmark knows.
 ALL_ARMS: tuple[str, ...] = ("A", "B", "C", "D")
-DEFAULT_GRADE: tuple[str, ...] = (
-    "{python}",
-    "grader.py",
-    "--work",
-    "{work}",
-    "--heldout",
-    "{heldout}",
-    "--out",
-    "{verdict}",
-)
-#: Names that are private by convention even when a manifest does not list them.
-PRIVATE_NAMES = frozenset(
-    {"reference", "reference.py", "grader.py", "heldout", "wrong", "seeded", "tests", "task.json"}
-)
+PROMPT_HEADING = "## Prompt to the agent"
 
 
 @dataclass(frozen=True)
@@ -64,44 +50,57 @@ class BenchTask:
     title: str
     root: Path
     spec: Path
-    public: tuple[Path, ...]
+    inputs: Path | None
     heldout: Path | None
-    grade: tuple[str, ...]
     arms: tuple[str, ...]
     natives: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    grade_timeout_s: float = 900.0
+    solve_timeout_s: float = 1800.0
+    grade_timeout_s: float = 1800.0
 
     def prompt(self) -> str:
-        """Return the spec text the agent reads."""
+        """Return what the agent reads: the spec's prompt section (the whole spec if it has none).
 
-        return self.spec.read_text(encoding="utf-8")
+        The rest of the spec (oracle method, pass bars, held-out design) stays with the grader.
+        """
+
+        return prompt_section(self.spec.read_text(encoding="utf-8"))
 
     def applies_to(self, arm: str) -> bool:
         """Return whether the task is run in ``arm`` (others are reported not applicable)."""
 
         return arm in self.arms
 
-    def grade_argv(self, values: Mapping[str, str]) -> list[str]:
-        """Fill the grade command's placeholders from ``values``."""
+    def grade_argv(
+        self, python: str, outputs: Path, heldout_outputs: Path | None, cache: Path
+    ) -> list[str]:
+        """Return the grader command for one graded solution."""
 
-        return [part.format(**values) for part in self.grade]
+        argv = [python, str(self.root / "grader.py"), "--task-dir", str(self.root)]
+        argv += ["--outputs", str(outputs), "--cache", str(cache)]
+        if heldout_outputs is not None:
+            argv += ["--heldout-outputs", str(heldout_outputs)]
+        return argv
 
 
-def _as_paths(root: Path, names: Sequence[str]) -> tuple[Path, ...]:
-    paths = []
-    for name in names:
-        path = (root / name).resolve()
-        if root.resolve() not in path.parents and path != root.resolve():
-            raise ValueError(f"{root.name}: public path {name!r} leaves the task directory")
-        if path.name in PRIVATE_NAMES:
-            raise ValueError(f"{root.name}: {name!r} is oracle material and cannot be public")
-        if path.exists():
-            paths.append(path)
-    return tuple(paths)
+def prompt_section(spec: str) -> str:
+    """Return the text under ``## Prompt to the agent`` up to the next level-2 heading."""
+
+    lines = spec.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.strip() == PROMPT_HEADING)
+    except StopIteration:
+        return spec
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    title = next((line for line in lines if line.startswith("# ")), "")
+    return "\n".join([title, "", *body]).strip() + "\n"
 
 
 def _natives(raw: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
-    unknown = sorted(set(raw) - set(ALL_ARMS))
+    unknown = sorted(set(raw) - {"*", *ALL_ARMS})
     if unknown:
         raise ValueError(f"natives names unknown arms {unknown}")
     return {arm: tuple(str(item) for item in items) for arm, items in raw.items()}
@@ -113,7 +112,7 @@ def load_task(root: Path) -> BenchTask:
     Parameters
     ----------
     root:
-        The task directory; it must hold the spec (``spec.md`` unless the manifest names another).
+        The task directory; it must hold ``spec.md`` and ``grader.py``.
 
     Returns
     -------
@@ -125,25 +124,28 @@ def load_task(root: Path) -> BenchTask:
     manifest: dict[str, Any] = {}
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    spec = root / manifest.get("spec", "spec.md")
-    if not spec.is_file():
-        raise FileNotFoundError(f"{root.name}: no spec at {spec.name}")
-    heldout_name = manifest.get("heldout", "heldout")
-    heldout = root / heldout_name if (root / heldout_name).exists() else None
+    for required in ("spec.md", "grader.py"):
+        if not (root / required).is_file():
+            raise FileNotFoundError(f"{root.name}: no {required}")
     arms = tuple(manifest.get("arms", ALL_ARMS))
     if not set(arms) <= set(ALL_ARMS):
         raise ValueError(f"{root.name}: unknown arms in {arms}")
+    heldout = root / "heldout"
+    use_heldout = bool(manifest.get("heldout", heldout.is_dir()))
+    if use_heldout and not heldout.is_dir():
+        raise FileNotFoundError(f"{root.name}: task.json asks for heldout/ but it is missing")
+    inputs = root / "inputs"
     return BenchTask(
         task_id=str(manifest.get("id", root.name)),
         title=str(manifest.get("title", root.name)),
         root=root.resolve(),
-        spec=spec.resolve(),
-        public=_as_paths(root, manifest.get("public", ["public"])),
-        heldout=heldout.resolve() if heldout else None,
-        grade=tuple(manifest.get("grade", DEFAULT_GRADE)),
+        spec=(root / "spec.md").resolve(),
+        inputs=inputs.resolve() if inputs.is_dir() else None,
+        heldout=heldout.resolve() if use_heldout else None,
         arms=arms,
         natives=_natives(manifest.get("natives", {})),
-        grade_timeout_s=float(manifest.get("grade_timeout_s", 900.0)),
+        solve_timeout_s=float(manifest.get("timeout_s", 1800.0)),
+        grade_timeout_s=float(manifest.get("grade_timeout_s", 1800.0)),
     )
 
 
@@ -167,6 +169,21 @@ def load_registry(root: Path = ORACLE_ROOT) -> dict[str, BenchTask]:
             raise ValueError(f"duplicate task id {task.task_id} in {child.name}")
         tasks[task.task_id] = task
     return tasks
+
+
+def parse_verdict(stdout: str) -> dict[str, Any]:
+    """Return the normalized verdict from a grader's stdout (its last non-empty line)."""
+
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        return {"passed": False, "bars": [], "error": "grader printed nothing"}
+    try:
+        raw = json.loads(lines[-1])
+    except ValueError:
+        return {"passed": False, "bars": [], "error": "grader's last line is not JSON"}
+    if not isinstance(raw, Mapping):
+        return {"passed": False, "bars": [], "error": "grader's verdict is not an object"}
+    return normalize_verdict(raw)
 
 
 def normalize_verdict(raw: Mapping[str, Any]) -> dict[str, Any]:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -142,6 +143,13 @@ def load_natives(path: Path = NATIVES_FILE) -> dict[str, dict[str, list[str]]]:
     return {task: dict(arms) for task, arms in raw.get("tasks", {}).items()}
 
 
+def task_number(task_id: str) -> str:
+    """Return the plan's short task name (``T1``) for a task directory id (``t01-jacobian-lens``)."""
+
+    match = re.match(r"[tT]0*(\d+)", task_id)
+    return f"T{match.group(1)}" if match else task_id
+
+
 def entries_for(
     task_id: str,
     arm: str,
@@ -154,7 +162,7 @@ def entries_for(
     """
 
     table = load_natives() if natives is None else natives
-    per_task = table.get(task_id, {})
+    per_task = table.get(task_number(task_id), table.get(task_id, {}))
     found = [*per_task.get("*", []), *per_task.get(arm, [])]
     if manifest_natives:
         found += [*manifest_natives.get("*", []), *manifest_natives.get(arm, [])]

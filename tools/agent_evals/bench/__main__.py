@@ -94,36 +94,48 @@ def cmd_build_env(args: argparse.Namespace) -> int:
 
 
 def _grade_candidate(
-    task: registry.BenchTask, candidate: Path, python: str, out: Path
+    task: registry.BenchTask, candidate: Path, python: str, out: Path, config: runner.RunConfig
 ) -> dict[str, Any]:
-    work = out / "work"
-    work.mkdir(parents=True)
-    for path in task.public:
-        (shutil.copytree if path.is_dir() else shutil.copy2)(path, work / path.name)
-    shutil.copy2(candidate, work / "solution.py")
-    subprocess.run(
-        [python, "solution.py"], cwd=work, capture_output=True, timeout=1800, check=False
-    )
+    solution = out / "solution"
+    shutil.copytree(candidate, solution)
     spec = runner.RunSpec(task, "A", "small", 0, Path(python), Path(python))
-    return runner.grade(spec, work, out / "grade")
+    guards.write_run_config(out / "guard.json", [])
+    env = runner.agent_env(spec, config, out)
+    return runner.grade(spec, solution, out / "grade", env, config)
 
 
 def cmd_check_task(args: argparse.Namespace) -> int:
+    """Grade the task's reference, every seeded wrong solution and the do-nothing solution.
+
+    This checks the harness's wiring of the oracle authors' graders: the reference must pass and
+    every other candidate must fail.
+    """
+
     task = _tasks(args)[args.task]
     out = Path(args.out or tempfile.mkdtemp(prefix=f"check-{task.task_id}-"))
-    results = {
-        "reference": _grade_candidate(
-            task, task.root / "reference.py", args.python, out / "reference"
-        )
+    config = runner.RunConfig(
+        agent_cmd={},
+        caps={},
+        model_cache=Path(args.model_cache) if args.model_cache else None,
+        oracle_cache=out / "oracle_cache",
+    )
+    candidates = {"reference": task.root / "reference"}
+    candidates |= {
+        f"wrong/{d.name}": d for d in sorted((task.root / "wrong").glob("*")) if d.is_dir()
     }
-    for wrong in sorted((task.root / "wrong").glob("*.py")):
-        results[f"wrong/{wrong.name}"] = _grade_candidate(
-            task, wrong, args.python, out / wrong.stem
-        )
+    do_nothing = Path(args.oracles) / "_common" / "do_nothing"
+    if do_nothing.is_dir():
+        candidates["do_nothing"] = do_nothing
+    results = {
+        name: _grade_candidate(task, path, args.python, out / name.replace("/", "-"), config)
+        for name, path in candidates.items()
+    }
     ok = results["reference"]["passed"] and not any(
         v["passed"] for k, v in results.items() if k != "reference"
     )
-    print(json.dumps({k: v["passed"] for k, v in results.items()} | {"ok": ok}))
+    summary = {k: v["passed"] for k, v in results.items()} | {"ok": ok}
+    (out / "check.json").write_text(json.dumps(results, indent=2, default=str))
+    print(json.dumps(summary))
     return 0 if ok else 1
 
 
@@ -248,6 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--task", required=True)
     p.add_argument("--python", required=True)
     p.add_argument("--out")
+    p.add_argument("--model-cache")
     p = add("plan", cmd_plan)
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, required=True)

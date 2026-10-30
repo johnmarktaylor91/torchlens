@@ -35,19 +35,30 @@ def test_registry_loads_the_stub_with_private_material_kept_out(
     stub_task: registry.BenchTask,
 ) -> None:
     assert stub_task.task_id == "T0"
-    assert [p.name for p in stub_task.public] == ["model.py"]
+    assert stub_task.inputs is not None and stub_task.inputs.name == "inputs"
     assert stub_task.heldout is not None and stub_task.heldout.name == "heldout"
-    assert "{arm_python}" in stub_task.grade
+    assert stub_task.solve_timeout_s == 300
     assert stub_task.applies_to("A") and stub_task.applies_to("D")
+    prompt = stub_task.prompt()
+    assert "Record the output of the submodule" in prompt
+    assert "Oracle and pass bars" not in prompt and "grader" not in prompt
 
 
-def test_registry_refuses_oracle_material_as_public(tmp_path: Path) -> None:
-    task = tmp_path / "T9"
+def test_prompt_section_falls_back_to_the_whole_spec() -> None:
+    assert registry.prompt_section("# T\n\nDo it.\n") == "# T\n\nDo it.\n"
+    spec = "# T\n\n## Prompt to the agent\n\nDo it.\n\n## Oracle\n\nSecret.\n"
+    assert registry.prompt_section(spec) == "# T\n\nDo it.\n"
+
+
+def test_registry_refuses_a_missing_heldout_or_grader(tmp_path: Path) -> None:
+    task = tmp_path / "t09"
     task.mkdir()
     (task / "spec.md").write_text("spec")
+    with pytest.raises(FileNotFoundError, match="grader.py"):
+        registry.load_task(task)
     (task / "grader.py").write_text("")
-    (task / "task.json").write_text(json.dumps({"public": ["grader.py"]}))
-    with pytest.raises(ValueError, match="oracle material"):
+    (task / "task.json").write_text(json.dumps({"heldout": True}))
+    with pytest.raises(FileNotFoundError, match="heldout"):
         registry.load_task(task)
 
 
@@ -55,11 +66,35 @@ def test_registry_skips_shared_folders_and_refuses_duplicate_ids(tmp_path: Path)
     for name in ("_material", "T1", "T1-copy"):
         (tmp_path / name).mkdir()
         (tmp_path / name / "spec.md").write_text("spec")
+        (tmp_path / name / "grader.py").write_text("")
     (tmp_path / "T1-copy" / "task.json").write_text(json.dumps({"id": "T1"}))
     with pytest.raises(ValueError, match="duplicate task id T1"):
         registry.load_registry(tmp_path)
     (tmp_path / "T1-copy" / "task.json").unlink()
     assert sorted(registry.load_registry(tmp_path)) == ["T1", "T1-copy"]
+
+
+@pytest.mark.parametrize(
+    ("stdout", "passed", "error"),
+    [
+        ('log line\n{"passed": true, "bars": [{"name": "a", "passed": true}]}\n', True, None),
+        ("", False, "grader printed nothing"),
+        ("Traceback ...\n", False, "grader's last line is not JSON"),
+        ("[1, 2]", False, "grader's verdict is not an object"),
+    ],
+)
+def test_verdict_is_the_graders_last_json_line(
+    stdout: str, passed: bool, error: str | None
+) -> None:
+    verdict = registry.parse_verdict(stdout)
+    assert verdict["passed"] is passed and verdict.get("error") == error
+
+
+def test_task_numbers_map_oracle_directories_to_plan_names() -> None:
+    assert guards.task_number("t01-jacobian-lens") == "T1"
+    assert guards.task_number("t12-control-module-output") == "T12"
+    assert guards.task_number("T0") == "T0"
+    assert guards.entries_for("t04-attribution-patching", "D") == ["transformer_lens.patching:*"]
 
 
 @pytest.mark.parametrize(
@@ -281,7 +316,7 @@ def test_plan_keeps_not_applicable_rows(tmp_path: Path) -> None:
 
 
 def _config(mode: str, *extra: str, caps: runner.Caps | None = None) -> runner.RunConfig:
-    reference = str(STUB_ROOT / "T0" / "reference.py")
+    reference = str(STUB_ROOT / "T0" / "reference" / "solve.py")
     argv = (sys.executable, str(FAKE_AGENT), "--mode", mode, "--solution", reference, *extra)
     return runner.RunConfig(
         agent_cmd={"small": argv},
@@ -310,14 +345,19 @@ def test_fake_agent_solving_the_stub_passes_with_a_complete_record(
     assert record["executions"] == 1
     assert record["tokens"]["input_cache_write"] == 200
     assert record["load_bearing_lines"] > 5
-    assert [b["passed"] for b in record["checkpoints"]["t1"]["bars"]] == [True, True]
+    verdict = record["checkpoints"]["t1"]
+    assert [b["passed"] for b in verdict["bars"]] == [True, True]
+    assert verdict["solve"]["visible"]["returncode"] == 0
+    assert verdict["solve"]["heldout"]["returncode"] == 0
     work = tmp_path / "run" / "work"
     assert sorted(p.name for p in work.iterdir() if p.name[0] not in "._") == [
         "TASK.md",
-        "model.py",
-        "outputs.pt",
-        "solution.py",
+        "inputs",
+        "out",
+        "solve.py",
     ]
+    assert "Oracle and pass bars" not in (work / "TASK.md").read_text()
+    assert not (work / "inputs" / "grader.py").exists()
     assert json.loads((tmp_path / "run" / "record.json").read_text())["run_id"] == record["run_id"]
 
 
@@ -355,10 +395,10 @@ def test_wall_cap_stops_the_agent_and_early_checkpoints_are_snapshots(
 def test_agent_code_using_a_guarded_name_fails_the_run(
     stub_task: registry.BenchTask, tmp_path: Path
 ) -> None:
-    natives = stub_task.natives | {"A": ("model:build_model",)}
+    natives = dict(stub_task.natives) | {"A": ("torch:no_grad",)}
     task = registry.BenchTask(**{**stub_task.__dict__, "natives": natives})
     record = runner.run_one(_spec(task), tmp_path / "run", _config("solve"))
-    assert record["guard"]["violations"] == ["from model import build_model"]
+    assert record["guard"]["violations"] == ["torch.no_grad"]
     assert record["passed"] is False
 
 
@@ -381,3 +421,18 @@ def test_run_config_loads_tiers_and_refuses_unknown_ones(tmp_path: Path) -> None
     path.write_text(json.dumps({"tiers": {"huge": {"agent_cmd": []}}}))
     with pytest.raises(ValueError, match="unknown tiers"):
         runner.RunConfig.load(path)
+
+
+@pytest.mark.heavy  # three candidates, each a solve run, a held-out run and a grader run
+def test_check_task_wires_the_stub_grader(tmp_path: Path) -> None:
+    from agent_evals.bench.__main__ import main
+
+    out = tmp_path / "check"
+    argv = ["check-task", "--oracles", str(STUB_ROOT), "--task", "T0", "--python", sys.executable]
+    assert main([*argv, "--out", str(out)]) == 0
+    results = json.loads((out / "check.json").read_text())
+    assert {k: v["passed"] for k, v in results.items()} == {
+        "reference": True,
+        "wrong/wrong_module": False,
+        "do_nothing": False,
+    }

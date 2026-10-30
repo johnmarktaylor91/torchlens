@@ -4,7 +4,7 @@ It writes the event stream a headless coding agent writes (JSON lines on stdout)
 the work folder, so the whole pipeline (environment, guard, runner, grader, telemetry) runs with
 no model call. Modes:
 
-``solve``     copy ``--solution`` to ``solution.py`` in the work folder and run it once
+``solve``     copy ``--solution`` to ``solve.py`` in the work folder and run it once on inputs/
 ``nothing``   end without writing anything
 ``loop``      keep making tool calls (``--calls``) with ``--sleep`` seconds between them
 ``import``    write and run a script that imports ``--module`` (a guard check)
@@ -46,10 +46,10 @@ def tool_call(index: int, name: str, tool_input: dict, usage: dict | None = None
     )
 
 
-def run_python(script: str) -> subprocess.CompletedProcess[str]:
+def run_python(*argv: str) -> subprocess.CompletedProcess[str]:
     """Run ``python script`` from PATH (the arm's interpreter), as the agent's shell would."""
 
-    return subprocess.run(["python", script], capture_output=True, text=True, check=False)
+    return subprocess.run(["python", *argv], capture_output=True, text=True, check=False)
 
 
 def main() -> int:
@@ -64,10 +64,10 @@ def main() -> int:
     tool_call(0, "Read", {"file_path": "TASK.md"})
     if args.mode == "solve":
         source = Path(args.solution).read_text(encoding="utf-8")
-        tool_call(1, "Write", {"file_path": "solution.py", "content": source})
-        shutil.copy2(args.solution, "solution.py")
-        tool_call(2, "Bash", {"command": "python solution.py"})
-        proc = run_python("solution.py")
+        tool_call(1, "Write", {"file_path": "solve.py", "content": source})
+        shutil.copy2(args.solution, "solve.py")
+        tool_call(2, "Bash", {"command": "python solve.py --inputs inputs --outputs out"})
+        proc = run_python("solve.py", "--inputs", "inputs", "--outputs", "out")
         emit(
             {
                 "type": "user",

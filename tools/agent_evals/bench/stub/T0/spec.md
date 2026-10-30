@@ -2,9 +2,13 @@
 
 This stub exercises the benchmark harness; it is not a benchmark task.
 
-`model.py` defines `build_model()` and `make_inputs(seed)`. Write `solution.py` that, run as
-`python solution.py --seed SEED --out PATH`, builds the model, makes the inputs for `SEED`, and
-saves with `torch.save` a single tensor: the output of the submodule named `fc2` for every input
-row, stacked in input order. Then run it once with `--seed 0 --out outputs.pt`.
+## Prompt to the agent
 
-Pass bar: exact equality with the module's output on the visible seed and on a held-out seed.
+`model.py` (in `--inputs`) defines `build_model()` and `make_inputs(seed)`; `config.json` names
+the `seed`. Record the output of the submodule named `fc2` for every input row, in input order,
+and save it to `outputs.npz` (in `--outputs`) as one float32 array named `out`.
+
+## Oracle and pass bars
+
+The grader recomputes the module output directly and requires exact equality, on the visible
+inputs and on a held-out seed.
