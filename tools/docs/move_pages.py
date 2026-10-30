@@ -139,6 +139,8 @@ def rewrite_text(text: str, path: str, moves: dict[str, str]) -> str:
     inverse = {new: old for old, new in moves.items()}
     here_old = inverse.get(path, path)
     for old, new in moves.items():
+        if _docs_rel(old) not in text:
+            continue  # cheap filter: both patterns below contain the docs-relative path
         text = re.sub(rf"(?<![\w./-]){re.escape(old)}\b", new, text)
         old_rel, new_rel = _docs_rel(old), _docs_rel(new)
         text = re.sub(rf"(?<=[\"'`]){re.escape(old_rel)}(?=[\"'`#])", new_rel, text)
