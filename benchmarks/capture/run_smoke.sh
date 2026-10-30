@@ -17,4 +17,4 @@ grep -v '^#' benchmarks/capture/peers.txt | grep . | while read -r peer; do
 done
 uv pip freeze --python "$PY" | grep -i -E '^(torch|torchvision|transformers|nnsight|captum|thingsvision|transformer.lens|psutil)==' | tee outputs/peer-freeze.txt
 "$PY" benchmarks/capture/driver.py --smoke --processes "${SMOKE_PROCESSES:-1}" --warmups "${SMOKE_WARMUPS:-2}" \
-  --samples "${SMOKE_SAMPLES:-10}" --budget-s 20 --out outputs/capture-smoke.json 2>&1 | tail -400
+  --samples "${SMOKE_SAMPLES:-10}" --budget-s 20 --out outputs/capture-smoke.json 2>&1

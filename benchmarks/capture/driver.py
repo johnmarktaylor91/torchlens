@@ -6,7 +6,9 @@ sweep. Cells an arm cannot serve are written as ``unsupported`` rows without sta
 process, so they stay visible. The process index loop is outermost, so slow drift on the
 host spreads across arms instead of landing on one. An A/A pair (the same raw forward
 measured in two separate processes, at the start and at the end) gives the noise floor;
-a cell group whose spread across processes exceeds it is listed as noisy.
+a cell group whose spread across processes exceeds it is listed as noisy. Each finished
+cell is also appended to ``<out>.cells.jsonl`` as it completes, so a stopped run keeps
+the cells it measured.
 
     python benchmarks/capture/driver.py --smoke --out outputs/capture-smoke.json
 """
@@ -220,6 +222,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
     )
     doc["suites_included"] = ["A", "B", "fixtures"]
+    partial = Path(f"{args.out}.cells.jsonl")
+    partial.write_text("", encoding="utf-8")
     aa_rows = [_spawn(("aa", "raw_forward", "reference", AA_SUBJECT), 0, args)]
     for index in range(args.processes):
         for cell in cells:
@@ -230,6 +234,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 continue
             row = _spawn(cell, index, args)
             doc["cells"].append(row)
+            with partial.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row, default=str) + "\n")
             print(
                 f"{row['cell_id']}#{index}: {row['status']} {row.get('reason', '')[:120]}",
                 flush=True,
