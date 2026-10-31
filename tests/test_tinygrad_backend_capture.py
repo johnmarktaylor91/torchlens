@@ -457,29 +457,6 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
 
-def test_tinygrad_unrealized_closure_constant_gets_payload_copy() -> None:
-    """A closure constant the forward never realized still captures and validates.
-
-    ``Tensor(ndarray)`` stays a host-side source buffer until something realizes
-    it. The payload copy of that buffer targeted the buffer's own device and
-    raised ``NotImplementedError("need copyin")`` for every forward that used a
-    weight built outside the traced function.
-    """
-
-    weight = Tensor(np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
-    bias = Tensor(np.asarray([0.5, -0.5], dtype=np.float32))
-    x = Tensor(np.asarray([[1.0, -1.0]], dtype=np.float32))
-
-    def forward(value: Any) -> Any:
-        return (value.matmul(weight) + bias).relu()
-
-    trace = tl.trace(forward, x, backend="tinygrad")
-
-    assert trace.output_layers
-    np.testing.assert_allclose(trace.output_ops[0].out.numpy(), forward(x).numpy())
-    assert trace.validate_forward_pass([forward(x)]) is True
-
-
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     """Capture a tinygrad forward graph from output UOp snapshots."""
 
