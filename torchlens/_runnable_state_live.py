@@ -31,6 +31,7 @@ from ._runnable_state import (
     declared_state_versions,
     write_back_slot,
 )
+from ._storage_bindings import rebind_if_moved, record_storage_binding
 
 __all__ = (
     "CaptureObserverHandle",
@@ -162,7 +163,10 @@ class CaptureObserverSnapshot:
 
     ``buffers`` holds one ``(module, local_name, original)`` row per buffer
     registration and ``buffer_clones`` one value clone per distinct buffer
-    object. ``modes`` holds every module's ``training`` flag, ``rng`` the
+    object; ``buffer_bindings`` holds the storage binding of each distinct
+    rebindable buffer (see ``torchlens._storage_bindings``), so a buffer the
+    forward moved with ``Tensor.set_`` goes back onto its own storage before
+    its value is restored. ``modes`` holds every module's ``training`` flag, ``rng`` the
     global torch (CPU and live CUDA devices), Python and NumPy generator
     states, ``attrs`` each module's plain instance attributes (objects plus
     value snapshots, see ``_capture_attr_observer``) and ``paths`` every
@@ -176,6 +180,7 @@ class CaptureObserverSnapshot:
     rng: dict[str, Any]
     attrs: tuple[ModuleAttrSnapshot, ...]
     paths: tuple[tuple[str, Any], ...]
+    buffer_bindings: dict[int, torch.Tensor]
 
 
 def _observed_modules(model: Any) -> list[tuple[str, Any]]:
@@ -205,6 +210,7 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
     buffers: list[tuple[Any, str, torch.Tensor]] = []
     clones: dict[int, torch.Tensor] = {}
     versions: dict[int, int | None] = {}
+    bindings: dict[int, torch.Tensor] = {}
     with _state.pause_logging(), torch.no_grad():
         for _path, module in modules:
             for local_name, value in module._buffers.items():
@@ -214,6 +220,9 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
                 if id(value) not in clones:
                     clones[id(value)] = value.detach().clone()
                     versions.update(declared_state_versions((value,)))
+                    binding = record_storage_binding(value)
+                    if binding is not None:
+                        bindings[id(value)] = binding
         attrs = snapshot_module_attrs(modules)
     return CaptureObserverSnapshot(
         buffers=tuple(buffers),
@@ -223,6 +232,7 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
         rng=log_current_rng_states(),
         attrs=attrs,
         paths=tuple(modules),
+        buffer_bindings=bindings,
     )
 
 
@@ -235,6 +245,13 @@ def _restore_observer_buffers(snapshot: CaptureObserverSnapshot, trace: Any = No
         if not declared_slot_unchanged(snapshot_buffer, snapshot.buffer_clones[id(snapshot_buffer)])
     ]
     _unalias_trace_payloads(trace, changed)
+    # Every moved buffer goes back onto its own storage before any value is
+    # written: a buffer the forward pointed into another buffer's storage would
+    # otherwise copy its snapshot through that alias.
+    for _module, _name, original in snapshot.buffers:
+        binding = snapshot.buffer_bindings.get(id(original))
+        if binding is not None:
+            rebind_if_moved(original, binding)
     restored: set[int] = set()
     for module, local_name, original in snapshot.buffers:
         key = id(original)
