@@ -92,7 +92,7 @@ class IntegerOps(nn.Module):
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         y = x + 1
-        y = y * 2 - x
+        y = y * 2 + x  # addition, not subtraction: bool tensors reject ``-``
         return y.sum(dim=-1), y.max()
 
 

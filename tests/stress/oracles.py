@@ -129,6 +129,10 @@ def snapshot_torch() -> TorchSnapshot:
 RNG_STREAMS = ("torch", "random", "numpy", "numpy_tail")
 
 
+RNG_RESTORING_STAGES: frozenset[str] = frozenset({"trace", "save", "load"})
+"""Stages whose documented contract restores the global RNG streams (not ``validate``)."""
+
+
 def rng_difference(before: tuple[bytes, ...], after: tuple[bytes, ...]) -> list[str]:
     """Name the global streams whose state differs between two readings."""
 
@@ -536,19 +540,29 @@ def _snapshot_differences(before: TorchSnapshot, after: TorchSnapshot) -> list[s
 def torch_clean_after_cell(result: CellResult) -> Verdict:
     """After the cell torch is clean: no held slots, hooks or modes; RNG restored.
 
-    Capture documents that it snapshots the global RNG streams and restores
-    them on every exit path, so every TorchLens stage (trace, save, load,
-    validate) must leave the torch, ``random`` and NumPy streams exactly as it
-    found them, pass or fail. Wrappers install lazily on the first capture and
-    stay installed by design, so the oracle accepts an install but never an
-    uninstall or a swap.
+    Each stage is held to its documented RNG contract. Capture documents that
+    it snapshots the global RNG streams and restores them on every exit path,
+    so trace, save and load must leave the torch, ``random`` and NumPy streams
+    exactly as they found them, pass or fail. ``tl.validate`` documents the
+    opposite for its ``random_seed``: it "reseeds the process-global RNG
+    engines without restoring them", so its RNG effect is recorded in
+    ``CellResult.rng_changed`` but is not a failure here; the trace-versus-
+    validate inconsistency is a filed finding, and ``RNG_RESTORING_STAGES``
+    grows to include ``validate`` when validate adopts the trace contract.
+    Wrappers install lazily on the first capture and stay installed by design,
+    so the oracle accepts an install but never an uninstall or a swap. A cell
+    whose eager forward itself raised ran no TorchLens stage, so there is
+    nothing to judge.
     """
 
     if result.after is None:
         return Verdict.not_applicable("cell never finished")
+    if result.eager_error is not None:
+        return Verdict.not_applicable("eager forward raised; no TorchLens stage ran")
     problems = _snapshot_differences(result.before, result.after)
     for stage, streams in result.rng_changed.items():
-        problems.append(f"{stage} changed the global RNG state of {streams}")
+        if stage in RNG_RESTORING_STAGES:
+            problems.append(f"{stage} changed the global RNG state of {streams}")
     if problems:
         return Verdict.failed("; ".join(problems))
     return Verdict.passed()
