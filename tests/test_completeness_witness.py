@@ -1161,13 +1161,14 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
             }
         ],
         _health_completeness_decompositions=[],
+        _options_mode=None,
     )
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=2)
 
     cw._finalize_census(state)
 
-    assert trace.provenance.verified is False
-    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace._provenance_verified is False
+    assert trace._provenance_verification_reason == "dispatch_witness_unaccounted_ops"
     assert len(trace.completeness_diagnostics) == 1
 
 
@@ -1189,7 +1190,9 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
         func_name="__index__",
         func_call_id=1,
     )
-    trace = SimpleNamespace(completeness_diagnostics=[], _health_completeness_decompositions=[])
+    trace = SimpleNamespace(
+        completeness_diagnostics=[], _health_completeness_decompositions=[], _options_mode=None
+    )
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
     state.events.extend(
         [
@@ -1201,8 +1204,8 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         cw._finalize_census(state)
 
-    assert trace.provenance.verified is False
-    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace._provenance_verified is False
+    assert trace._provenance_verification_reason == "dispatch_witness_unaccounted_ops"
     assert [
         (report["operator"], report["reason"], report["owner_wrapper"])
         for report in trace.completeness_diagnostics

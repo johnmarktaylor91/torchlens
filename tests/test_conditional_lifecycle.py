@@ -10,6 +10,7 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
+from torchlens._data_classes._trace_groups import TraceGraph  # noqa: E402
 from torchlens._data_classes.cleanup import _remove_log_entry_references  # noqa: E402
 from torchlens._data_classes.trace import ConditionalEvent, Trace  # noqa: E402
 from torchlens._postprocess.labeling import (  # noqa: E402
@@ -50,12 +51,12 @@ class _StubTrace:
         self._layers_where_internal_branches_merge_with_input: list[str] = []
 
         self.layers_with_params: dict[str, list[str]] = {}
-        self.op_equivalence_classes: dict[str, set] = {}
+        self._graph_op_equivalence_classes: dict[str, set] = {}
 
-        self.conditional_branch_edges = []
-        self.conditional_arm_entry_edges = {}
-        self.conditional_edge_call_indices = {}
-        self.conditional_records: list[ConditionalEvent] = []
+        self._graph_conditional_branch_edges = []
+        self._graph_conditional_arm_entry_edges = {}
+        self._graph_conditional_edge_call_indices = {}
+        self._graph_conditional_records: list[ConditionalEvent] = []
 
         self._raw_to_final_layer_labels: dict[str, str] = {}
         self._raw_to_final_parent_layer_labels: dict[str, str] = {}
@@ -71,6 +72,12 @@ class _StubTrace:
             module_build_data={"module_layer_argnames": {}}
         )
         self._wrapper_runtime_ws = WrapperRuntimeWorkspace()
+
+    @property
+    def graph(self) -> TraceGraph:
+        """Return the graph group view over the stub's stored keys."""
+
+        return TraceGraph(self)  # type: ignore[arg-type]
 
     def __iter__(self) -> Iterator[SimpleNamespace]:
         """Iterate over surviving pass-level entries."""

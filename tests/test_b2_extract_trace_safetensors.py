@@ -73,11 +73,17 @@ _SOURCE_FILE_FIELDS = {
     "init_source_file",
     "forward_source_file",
     "backward_source_file",
+    # The Trace stores its source group under private keys.
+    "_source_class_file",
+    "_source_init_file",
+    "_source_forward_file",
 }
 _PRIVACY_FIELDS = _SOURCE_FILE_FIELDS | {
     "init_signature",
     "forward_signature",
     "backward_signature",
+    "_source_init_signature",
+    "_source_forward_signature",
     "annotations",
     "_source_code_blob",
 }

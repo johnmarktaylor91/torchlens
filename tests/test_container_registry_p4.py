@@ -165,7 +165,7 @@ def test_flag_off_container_persistence_is_semantically_neutral(
         assert len(records) == 1, records
         roles = {snapshot.role for snapshot in records[0].snapshots}
         assert roles and roles <= {Role.MODEL_OUTPUT, Role.CALL_OUTPUT}
-    assert baseline.provenance.fingerprint == explicit_false.graph_shape_hash
+    assert baseline.provenance.fingerprint == explicit_false.provenance.fingerprint
     assert _semantic_digest(baseline) == _semantic_digest(explicit_false)
     assert _semantic_digest(explicit_false) == _semantic_digest(round_tripped)
 
@@ -263,7 +263,7 @@ def test_capture_container_structure_rename_and_cache_key(tmp_path: Path) -> Non
             capture_container_structure=True,
         ),
     )
-    assert off.capture_cache_key != on.capture_cache_key
+    assert off.provenance.cache_key != on.provenance.cache_key
 
 
 def test_after_save_tensor_fill_is_best_effort(tmp_path: Path) -> None:

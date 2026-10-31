@@ -389,13 +389,13 @@ def test_retention_does_not_change_completeness_census_counts(
         armed = tl.trace(_TwoOpModel(), torch.randn(4))
 
     fields = (
-        "completeness_witness_event_count",
-        "completeness_witness_accounted_count",
-        "completeness_witness_expected_opaque_count",
-        "completeness_witness_unaccounted_count",
+        "num_witness_events",
+        "num_accounted_witness_events",
+        "num_expected_opaque_witness_events",
+        "num_unaccounted_witness_events",
     )
-    assert tuple(getattr(plain, name) for name in fields) == tuple(
-        getattr(armed, name) for name in fields
+    assert tuple(getattr(plain.health, name) for name in fields) == tuple(
+        getattr(armed.health, name) for name in fields
     )
 
 

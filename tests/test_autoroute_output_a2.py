@@ -241,8 +241,10 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
         x,
     )
     assert ambiguous._decoded_output is None
-    assert ambiguous.output_postprocessor is not None
-    assert "pass output_style=/output_head=" in ambiguous.output_postprocessor.description
+    assert ambiguous.provenance.output_postprocessor is not None
+    assert (
+        "pass output_style=/output_head=" in ambiguous.provenance.output_postprocessor.description
+    )
 
 
 def test_generic_1000_width_tensor_without_verified_metadata_does_not_decode() -> None:

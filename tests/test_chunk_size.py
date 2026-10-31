@@ -99,7 +99,7 @@ def _assert_equivalent_chunked_trace(actual: tl.Trace, expected: tl.Trace) -> No
     assert [layer._layer_label_raw for layer in actual._layer_list] == [
         layer._layer_label_raw for layer in expected._layer_list
     ]
-    assert actual.graph_shape_hash == expected.graph_shape_hash
+    assert actual.provenance.fingerprint == expected.provenance.fingerprint
     assert actual.output_layers == expected.output_layers
     for label in actual.layer_labels:
         actual_layer = actual[label]
@@ -142,7 +142,7 @@ def test_chunk_size_default_matches_plain_trace() -> None:
     )
 
     _assert_equivalent_chunked_trace(default, plain)
-    assert default.chunked_forward is False
+    assert default.options.chunk_size is False
     assert default._append_history == plain._append_history
 
 
@@ -307,7 +307,7 @@ def test_chunk_size_edges() -> None:
     large = tl.trace(
         model, x, chunk_size=20, capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    assert large.chunked_forward is False
+    assert large.options.chunk_size is False
     assert large._append_history == []
 
     with pytest.raises(ChunkedForwardConfigError, match="positive integer"):
@@ -444,5 +444,5 @@ def test_chunked_forward_marker_survives_tlspec(tmp_path: Path) -> None:
     chunked.save(chunked_path)
     plain.save(plain_path)
 
-    assert tl.load(chunked_path).chunked_forward is True
-    assert tl.load(plain_path).chunked_forward is False
+    assert tl.load(chunked_path).options.chunk_size is True
+    assert tl.load(plain_path).options.chunk_size is False

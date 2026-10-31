@@ -260,7 +260,7 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
     replay_output.backward()
 
     assert replayed is not corrupt
-    assert corrupt.has_backward_pass is False
+    assert corrupt.autograd.has_backward_pass is False
     assert replay_relu.layer_label in replayed._replay_frontier
     assert replayed._replay_frontier[replay_relu.layer_label].is_leaf
     assert replayed._replay_frontier[replay_relu.layer_label].requires_grad

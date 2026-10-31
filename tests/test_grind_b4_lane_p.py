@@ -74,13 +74,13 @@ def test_capture_cache_separates_training_and_nonpersistent_state(tmp_path: Path
 
     model.train()
     training = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert training.capture_cache_hit is False
+    assert training.provenance.cache_hit is False
 
     model.offset.fill_(3)
     changed_buffer = tl.trace(
         model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
     )
-    assert changed_buffer.capture_cache_hit is False
+    assert changed_buffer.provenance.cache_hit is False
     assert torch.equal(changed_buffer[changed_buffer.output_layers[0]].out, torch.tensor([4.0]))
 
 

@@ -99,7 +99,7 @@ def test_annotations_fields_do_not_share_dict_state_between_logs() -> None:
 
 def test_annotations_fields_are_in_field_order_constants() -> None:
     """New fields should be present in each class's canonical FIELD_ORDER."""
-    assert "input_annotations" in MODEL_LOG_FIELD_ORDER
+    assert "_provenance_input_annotations" in MODEL_LOG_FIELD_ORDER
     assert "annotations" in LAYER_PASS_LOG_FIELD_ORDER
     assert "annotations" in LAYER_LOG_FIELD_ORDER
 

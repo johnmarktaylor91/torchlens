@@ -131,7 +131,7 @@ def test_warm_cache_semantic_flip_recaptures(
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     flipped = _trace(model, x, str(tmp_path), **{field_name: flip_value})
-    assert flipped.capture_cache_hit is False, (
+    assert flipped.provenance.cache_hit is False, (
         f"warm cache served a capture that never armed {field_name}={flip_value!r}"
     )
 
@@ -190,7 +190,7 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     wrongly_served = _trace(model, x, str(tmp_path), raise_on_nan=True)
-    assert wrongly_served.capture_cache_hit is True, (
+    assert wrongly_served.provenance.cache_hit is True, (
         "the plant did not reproduce the historical wrong-serve; the sweep is "
         "no longer the mechanism keying semantic options -- update this control"
     )
@@ -218,4 +218,4 @@ def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
     flipped = _trace(model, input_ids, str(tmp_path), raise_on_nan=True)
     assert cold.provenance.cache_hit is False
     assert warm.provenance.cache_hit is True
-    assert flipped.capture_cache_hit is False
+    assert flipped.provenance.cache_hit is False

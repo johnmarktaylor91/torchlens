@@ -193,7 +193,7 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
 
     # The collision premise the audit exists for: persisted object ids are
     # NOT unique across loaded artifacts.
-    assert loaded["m1x1"].model_object_id == loaded["m2x1"].model_object_id
+    assert loaded["m1x1"].provenance.model_object_id == loaded["m2x1"].provenance.model_object_id
 
     identity_ranks = {Relationship.SAME_OBJECT, Relationship.SAME_MODEL_OBJECT_AT_CAPTURE}
     names = list(captures)

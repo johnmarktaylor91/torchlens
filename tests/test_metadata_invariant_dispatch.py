@@ -114,7 +114,7 @@ def test_metadata_invariant_dispatch_preserves_torch_sequence(
     """Assert torch dispatch executes the pre-refactor torch check sequence."""
 
     executed = _install_dispatch_spies(monkeypatch)
-    trace = SimpleNamespace(backend="torch")
+    trace = SimpleNamespace(_provenance_backend="torch")
 
     assert invariants.check_metadata_invariants(trace)
 
@@ -128,7 +128,7 @@ def test_metadata_invariant_dispatch_preserves_non_torch_sequence(
     """Assert non-torch dispatch executes the pre-refactor non-torch subset."""
 
     executed = _install_dispatch_spies(monkeypatch)
-    trace = SimpleNamespace(backend="mlx")
+    trace = SimpleNamespace(_provenance_backend="mlx")
 
     assert invariants.check_metadata_invariants(trace)
 

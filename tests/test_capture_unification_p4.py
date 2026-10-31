@@ -148,7 +148,7 @@ class CustomTensorBox:
 class VersionSnapshotTraceStub:
     """Minimal trace stub for version-snapshot helper tests."""
 
-    save_arg_values = True
+    _options_save_args = True
 
 
 def _conv_ops(log: tl.Trace) -> list[tl.Op]:

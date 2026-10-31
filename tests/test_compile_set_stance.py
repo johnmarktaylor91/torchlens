@@ -140,7 +140,7 @@ def test_compiled_attribute_interior_is_logged_with_full_verified_semantics() ->
     assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
     control = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
-    assert trace.provenance.verified == control.capture_verified
+    assert trace.provenance.verified == control.provenance.verified
 
     with torch.no_grad():
         expected = torch.relu(torch.sin(model.fc(x))) + 1
