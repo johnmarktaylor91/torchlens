@@ -261,7 +261,9 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     failure = last_validation_failure()
     # The verdict is whatever the base tree gives (True today); the only thing the
     # boundary may never do is turn this plain round trip into a boundary op.
-    assert base_verdict is True or (failure is not None and failure.check == CHECK_COMPLETENESS)
+    assert base_verdict is True or (
+        failure is not None and failure.check_name == CHECK_COMPLETENESS
+    )
 
 
 class _ForeignHandle:

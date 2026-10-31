@@ -428,7 +428,9 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     assert get_backend_spec("torch").capabilities.output_container_structure == "full_spec"
 
     assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
-    assert mlx_spec.capabilities.validation_replay == mlx_capabilities.supports_validation_replay
+    assert (
+        mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
+    )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
     assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
     assert (
@@ -457,7 +459,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_backward_capture
     )
     assert (
-        tinygrad_spec.capabilities.validation_replay
+        tinygrad_spec.capabilities.has_validation_replay
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
@@ -490,7 +492,8 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         paddle_spec.capabilities.backward_capture == paddle_capabilities.supports_backward_capture
     )
     assert (
-        paddle_spec.capabilities.validation_replay == paddle_capabilities.supports_validation_replay
+        paddle_spec.capabilities.has_validation_replay
+        == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
     assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention

@@ -156,7 +156,7 @@ def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
 
     card = capability_card(partial_trace)
     assert card.object_kind == "partial_trace"
-    refused = {row.key: row for row in card.rows if not row.available}
+    refused = {row.key: row for row in card.rows if not row.is_available}
     assert "summary" in refused
     assert "explain" not in refused  # explain degrades, never refuses
     assert "audit" in str(refused["summary"].reason) or "explain" in str(refused["summary"].reason)

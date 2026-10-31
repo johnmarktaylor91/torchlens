@@ -1228,7 +1228,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     spec = get_backend_spec("jax")
 
     assert spec.capabilities.backward_capture is False
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True

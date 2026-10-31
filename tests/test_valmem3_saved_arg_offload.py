@@ -125,11 +125,11 @@ def _validation_capture(
 
     def observe(trace: Any) -> None:
         failure = get_validation_failure(trace) if trace is not None else None
-        failures.append(None if failure is None else failure.check)
+        failures.append(None if failure is None else failure.check_name)
         failures.extend(
-            item.check
+            item.check_name
             for item in get_validation_diagnostics(trace) or ()
-            if item.check == arg_references.FALLBACK_CHECK
+            if item.check_name == arg_references.FALLBACK_CHECK
         )
 
     with (

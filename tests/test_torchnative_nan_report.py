@@ -45,7 +45,7 @@ def test_posthoc_report_names_origin_free() -> None:
     assert report.source_line and ":" in report.source_line
     assert report.cost_tier.startswith("free")
     assert report.coverage_basis != "unavailable"
-    assert report.checked > 0
+    assert report.num_checked_ops > 0
     # Defer-by-name INSIDE the output: the authority recipe is verbatim.
     text = report.summary()
     assert "set_detect_anomaly" in text

@@ -213,7 +213,7 @@ def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
     assert not failing, failing
     assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
     assert card.highest_tier == "C2"
-    assert "conformant" not in card.to_canonical_json().lower()
+    assert "conformant" not in card.to_json().lower()
 
 
 @pytest.mark.heavy

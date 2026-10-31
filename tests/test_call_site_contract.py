@@ -203,7 +203,9 @@ def test_contract_and_narrowed_invariants_hold_on_rule_rows(model_cls: type[nn.M
     assert contract.call_site_classes_for(trace) is not None
     assert check_metadata_invariants(trace) is True
     assert not [
-        d for d in get_validation_diagnostics(trace) if d.check == "call_site_contract_unchecked"
+        d
+        for d in get_validation_diagnostics(trace)
+        if d.check_name == "call_site_contract_unchecked"
     ]
 
 

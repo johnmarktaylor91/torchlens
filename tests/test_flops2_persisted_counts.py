@@ -51,7 +51,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert status.uncounted_op_counts == live.uncounted_op_counts
         assert status.unattributed_flops == live.unattributed_flops
         assert _row_facts(status) == _row_facts(live)
-        (attribution,) = status.attributions
+        (attribution,) = status.flops_attributions
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
         (record,) = loaded.backward_passes
         assert record.dispatched_ops is None

@@ -173,11 +173,11 @@ def test_validate_intervention_scope_returns_report(
         "consistency",
         "locality",
     }
-    assert report.invariance is True
-    assert report.specificity is False
-    assert report.completeness is False
-    assert report.consistency is False
-    assert report.locality is False
+    assert report.is_invariant is True
+    assert report.is_specific is False
+    assert report.is_complete is False
+    assert report.is_consistent is False
+    assert report.is_local is False
     assert bool(report) is False
 
 

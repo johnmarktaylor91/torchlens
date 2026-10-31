@@ -256,7 +256,7 @@ def test_scan_counts_are_exact_on_fp16() -> None:
 
     (row,) = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert (row.num_nan, row.num_posinf, row.n_neginf) == (3, 1, 1)
+    assert (row.num_nan, row.num_posinf, row.num_neginf) == (3, 1, 1)
     assert row.finite_min == -1.25 and row.finite_max == 2.5 and row.abs_max == 2.5
     assert row.zero_fraction == pytest.approx(993 / 1000)
     assert row.dtype_max == pytest.approx(65504.0)

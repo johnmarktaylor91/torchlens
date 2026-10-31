@@ -37,10 +37,10 @@ def _assert_conserved(trace: Any) -> Any:
     status = backward_status(trace)
     assert status.state == "backward_observed"
     assert status.executed_flops is not None, status.reason
-    assert len(status.attributions) == len(trace.backward_passes)
+    assert len(status.flops_attributions) == len(trace.backward_passes)
     total = 0
     for attribution, (pass_index, pass_count) in zip(
-        status.attributions, status.executed_flops_per_pass, strict=True
+        status.flops_attributions, status.executed_flops_per_pass, strict=True
     ):
         assert attribution.pass_index == pass_index
         rows = sum(row.flops for row in attribution.rows)
@@ -48,7 +48,7 @@ def _assert_conserved(trace: Any) -> Any:
         assert all(isinstance(row.flops, int) for row in attribution.rows)
         total += pass_count
     assert total == status.executed_flops
-    assert status.unattributed_flops == sum(a.unattributed_flops for a in status.attributions)
+    assert status.unattributed_flops == sum(a.unattributed_flops for a in status.flops_attributions)
     return status
 
 
@@ -266,7 +266,7 @@ def test_backward_pass_reads_its_own_attribution() -> None:
     try:
         (record,) = trace.backward_passes
         attribution = record.flops_attribution
-        assert attribution == backward_status(trace).attributions[0]
+        assert attribution == backward_status(trace).flops_attributions[0]
         assert attribution.source == "census"
         by_op = attribution.flops_by_op()
         attributed = sum(value for value in by_op.values() if value)

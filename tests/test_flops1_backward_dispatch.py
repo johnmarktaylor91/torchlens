@@ -147,7 +147,7 @@ def test_matmul_family_backward_equals_flop_counter_mode(case: str) -> None:
             assert row["fcm_bwd"] == 0 and row["closed_bwd"] > 0
             assert status.executed_flops == MV_DISCLOSED[case], status
             if "a_grad=True" in case:
-                assert ("mul", 1) in status.uncounted_ops
+                assert ("mul", 1) in status.uncounted_op_counts
             return
         assert status.executed_flops == row["fcm_bwd"] == row["closed_bwd"], status
         assert status.executed_evidence == "formula_exact"
@@ -337,7 +337,7 @@ def test_uncounted_ops_are_named_never_zeroed() -> None:
     trace = _traced_backward(model, inputs)
     try:
         status = backward_status(trace)
-        names = dict(status.uncounted_ops)
+        names = dict(status.uncounted_op_counts)
         assert "_softmax_backward_data" in names
         assert all(count > 0 for count in names.values())
         assert "outside those families not counted" in status.status_line
@@ -393,7 +393,7 @@ def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
         assert status.executed_flops == live.executed_flops is not None
         assert status.executed_evidence == "formula_exact"
         assert status.executed_flops_per_pass == live.executed_flops_per_pass
-        assert status.attributions[0].rows == live.attributions[0].rows
+        assert status.flops_attributions[0].rows == live.flops_attributions[0].rows
         assert status.unattributed_flops == live.unattributed_flops
     finally:
         trace.cleanup()

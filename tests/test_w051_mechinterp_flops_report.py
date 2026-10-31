@@ -159,7 +159,7 @@ def test_breakdown_top_k_remainder_keeps_the_partition_exact() -> None:
     """With top_k below the sibling count the hidden mass lands in a remainder row."""
 
     torch.manual_seed(0)
-    report = flops_report(_Outer().eval(), torch.randn(4, 8), breakdown_top_k=1)
+    report = flops_report(_Outer().eval(), torch.randn(4, 8), breakdown_k=1)
     numbers = _breakdown_numbers(report)
     assert sum(numbers) == report.forward_flops
     assert any("more call" in line for line in report.breakdown)

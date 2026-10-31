@@ -291,7 +291,7 @@ def test_membership_and_train_eval_disclosures() -> None:
     # The frozen param is NEVER named by the no-gradient detector: without
     # the membership disclosure it would name every frozen param (D4).
     no_grad_names = {
-        f.names[0] for f in report.findings if f.check_name == "param_received_no_gradient"
+        f.param_names[0] for f in report.findings if f.check_name == "param_received_no_gradient"
     }
     assert "0.weight" not in no_grad_names
 

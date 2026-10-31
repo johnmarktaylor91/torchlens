@@ -45,7 +45,7 @@ def test_mlx_validation_registered_spec_dispatches() -> None:
     from torchlens.backends import get_backend_spec
 
     spec = get_backend_spec("mlx")
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.validate_trace(_healthy_trace()) is True
 
 
