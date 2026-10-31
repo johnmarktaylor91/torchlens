@@ -114,6 +114,7 @@ _LAZY_ATTRS = {
     "steer": ("torchlens.intervention.helpers", "steer"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "trace": ("torchlens._user_funcs", "trace"),
+    "draw": ("torchlens._user_funcs", "draw"),
     # Built-in activation transforms (transforms memo s7 home; the submodule
     # spelling tl.transforms is DOCUMENTED-UNSTABLE — the collision with the
     # input-side transform= slot is a named naming-sprint item).
@@ -677,6 +678,7 @@ def extract(
 
 __all__ = [
     "trace",
+    "draw",
     "release_model",
     "clear_cache",
     "export",
