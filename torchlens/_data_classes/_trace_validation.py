@@ -1301,7 +1301,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
+                "Use trace.autograd.derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import log_backward as _impl
@@ -1349,7 +1349,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
+                "Use trace.autograd.derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import recording_backward as _impl

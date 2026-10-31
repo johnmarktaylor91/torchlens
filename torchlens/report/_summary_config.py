@@ -40,7 +40,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
         "the summary footer carries the memory totals"
     ),
     "control_flow": (
-        "trace._graph_conditional_records and the conditional_* columns of trace.to_pandas() "
+        "trace.graph.conditional_records and the conditional_* columns of trace.to_pandas() "
         "(multi-pass layers: num_passes)"
     ),
     "waterfall": (

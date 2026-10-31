@@ -52,13 +52,13 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
     "conditional_then_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
     "conditional_elif_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
     "conditional_else_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
 }
 
