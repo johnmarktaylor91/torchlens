@@ -1,0 +1,1274 @@
+# import-linter contracts for torchlens: the layer separations that hold today.
+#
+# Layers come from torchlens/_architecture.py (L0 lowest .. L9 highest). Each
+# layered package gets up to two "forbidden" contracts against the higher-layer
+# packages it does not import:
+#   <pkg>-no-path    no import chain at all, direct or indirect;
+#   <pkg>-no-direct  no direct import (allow_indirect_imports), for higher
+#                    packages reached today only through other packages.
+# In-function (deferred) imports count; TYPE_CHECKING imports do not.
+# Layer pairs that already import upward directly are the layering backlog and
+# have no contract yet. Contracts are only added or tightened (a no-direct
+# target moves to no-path), never removed or loosened.
+#
+# Run: lint-imports --config .importlinter (or python scripts/checks/run_all.py).
+
+[importlinter]
+root_package = torchlens
+exclude_type_checking_imports = true
+
+[importlinter:contract:_data_substrate-no-path]
+name = _data_substrate (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._data_substrate
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.debug
+    torchlens.examples
+    torchlens.export
+    torchlens.intervention
+    torchlens.neuro
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.repgeom
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.trackers
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+
+[importlinter:contract:_extraction-no-path]
+name = _extraction (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._extraction
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:_extraction-no-direct]
+name = _extraction (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._extraction
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:_io-no-path]
+name = _io (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._io
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:_io-no-direct]
+name = _io (L1) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._io
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.debug
+    torchlens.distributed
+    torchlens.fastlog
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens.receptive_field
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:_registry-no-path]
+name = _registry (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._registry
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.backends
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.callbacks
+    torchlens.capture
+    torchlens.checks
+    torchlens.compat
+    torchlens.debug
+    torchlens.distributed
+    torchlens.examples
+    torchlens.export
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens.neuro
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.repgeom
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.trackers
+    torchlens.transforms
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+
+[importlinter:contract:_trace_core-no-path]
+name = _trace_core (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._trace_core
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.backends
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.callbacks
+    torchlens.capture
+    torchlens.checks
+    torchlens.compat
+    torchlens.debug
+    torchlens.distributed
+    torchlens.examples
+    torchlens.export
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens.neuro
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.repgeom
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.trackers
+    torchlens.transforms
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+
+[importlinter:contract:_vocab-no-path]
+name = _vocab (L0) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._vocab
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens._io
+    torchlens._registry
+    torchlens._trace_core
+    torchlens.appliances
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.backends
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.callbacks
+    torchlens.capture
+    torchlens.checks
+    torchlens.compat
+    torchlens._data_classes
+    torchlens.debug
+    torchlens.distributed
+    torchlens.examples
+    torchlens.export
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens.neuro
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.repgeom
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.trackers
+    torchlens.transforms
+    torchlens._utils
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+
+[importlinter:contract:accessors-no-path]
+name = accessors (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.appliances
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:accessors-no-direct]
+name = accessors (L1) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.appliances
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.backends
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.capture
+    torchlens.debug
+    torchlens.distributed
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:attribution-no-path]
+name = attribution (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.attribution
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:attribution-no-direct]
+name = attribution (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.attribution
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+allow_indirect_imports = true
+
+[importlinter:contract:autoroute-no-path]
+name = autoroute (L4) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._autoroute
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:autoroute-no-direct]
+name = autoroute (L4) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._autoroute
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:backends-no-path]
+name = backends (L2) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.backends
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:backends-no-direct]
+name = backends (L2) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.backends
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens._merged
+    torchlens._notebook
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:bridge-no-path]
+name = bridge (L8) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.bridge
+forbidden_modules =
+    torchlens.examples
+
+[importlinter:contract:bundle-no-path]
+name = bundle (L4) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.bundle
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:bundle-no-direct]
+name = bundle (L4) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.bundle
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens.bridge
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:callbacks-no-path]
+name = callbacks (L8) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.callbacks
+forbidden_modules =
+    torchlens.examples
+
+[importlinter:contract:capture-no-path]
+name = capture (L2) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.capture
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:capture-no-direct]
+name = capture (L2) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.capture
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.distributed
+    torchlens._merged
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.validation
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:checks-no-path]
+name = checks (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.checks
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:checks-no-direct]
+name = checks (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.checks
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:compat-no-path]
+name = compat (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.compat
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:compat-no-direct]
+name = compat (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.compat
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.intervention
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:data_classes-no-path]
+name = data_classes (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._data_classes
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:data_classes-no-direct]
+name = data_classes (L1) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._data_classes
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens.bundle
+    torchlens.distributed
+    torchlens.fastlog
+    torchlens._merged
+    torchlens._observability
+    torchlens._partial
+    torchlens.transforms
+allow_indirect_imports = true
+
+[importlinter:contract:debug-no-path]
+name = debug (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.debug
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:debug-no-direct]
+name = debug (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.debug
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.semantic
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:distributed-no-path]
+name = distributed (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.distributed
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:distributed-no-direct]
+name = distributed (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.distributed
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.intervention
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:errors-no-path]
+name = errors (L0) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.errors
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens._io
+    torchlens._registry
+    torchlens._trace_core
+    torchlens.appliances
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.backends
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.callbacks
+    torchlens.capture
+    torchlens.checks
+    torchlens.compat
+    torchlens._data_classes
+    torchlens.debug
+    torchlens.distributed
+    torchlens.examples
+    torchlens.export
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens.neuro
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.repgeom
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.trackers
+    torchlens.transforms
+    torchlens._utils
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+
+[importlinter:contract:export-no-path]
+name = export (L7) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.export
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.trackers
+
+[importlinter:contract:export-no-direct]
+name = export (L7) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.export
+forbidden_modules =
+    torchlens.bridge
+allow_indirect_imports = true
+
+[importlinter:contract:fastlog-no-path]
+name = fastlog (L2) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.fastlog
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:fastlog-no-direct]
+name = fastlog (L2) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.fastlog
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.distributed
+    torchlens._merged
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.validation
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:intervention-no-path]
+name = intervention (L4) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.intervention
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:intervention-no-direct]
+name = intervention (L4) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.intervention
+forbidden_modules =
+    torchlens._extraction
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.stats
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:ir-no-path]
+name = ir (L2) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._ir
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:ir-no-direct]
+name = ir (L2) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._ir
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.distributed
+    torchlens._merged
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:merged-no-path]
+name = merged (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._merged
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:merged-no-direct]
+name = merged (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._merged
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens.intervention
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:neuro-no-path]
+name = neuro (L6) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.neuro
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.trackers
+
+[importlinter:contract:neuro-no-direct]
+name = neuro (L6) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.neuro
+forbidden_modules =
+    torchlens.bridge
+    torchlens.report
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:notebook-no-path]
+name = notebook (L6) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._notebook
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.trackers
+
+[importlinter:contract:notebook-no-direct]
+name = notebook (L6) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._notebook
+forbidden_modules =
+    torchlens.report
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:observability-no-path]
+name = observability (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._observability
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:observability-no-direct]
+name = observability (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._observability
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:partial-no-path]
+name = partial (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._partial
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:partial-no-direct]
+name = partial (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._partial
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bundle
+    torchlens.intervention
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:postprocess-no-path]
+name = postprocess (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._postprocess
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:postprocess-no-direct]
+name = postprocess (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._postprocess
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:receptive_field-no-path]
+name = receptive_field (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.receptive_field
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:receptive_field-no-direct]
+name = receptive_field (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.receptive_field
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+allow_indirect_imports = true
+
+[importlinter:contract:repgeom-no-path]
+name = repgeom (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.repgeom
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:repgeom-no-direct]
+name = repgeom (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.repgeom
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+allow_indirect_imports = true
+
+[importlinter:contract:report-no-path]
+name = report (L7) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.report
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.trackers
+
+[importlinter:contract:report-no-direct]
+name = report (L7) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.report
+forbidden_modules =
+    torchlens.bridge
+allow_indirect_imports = true
+
+[importlinter:contract:semantic-no-path]
+name = semantic (L6) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.semantic
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.trackers
+
+[importlinter:contract:semantic-no-direct]
+name = semantic (L6) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.semantic
+forbidden_modules =
+    torchlens.bridge
+    torchlens.report
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:stats-no-path]
+name = stats (L5) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.stats
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.trackers
+
+[importlinter:contract:stats-no-direct]
+name = stats (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.stats
+forbidden_modules =
+    torchlens.bridge
+    torchlens._notebook
+    torchlens.report
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:trackers-no-path]
+name = trackers (L8) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.trackers
+forbidden_modules =
+    torchlens.examples
+
+[importlinter:contract:transforms-no-path]
+name = transforms (L4) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.transforms
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:transforms-no-direct]
+name = transforms (L4) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.transforms
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens.bridge
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.receptive_field
+    torchlens.report
+    torchlens.semantic
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:utils-no-path]
+name = utils (L1) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens._utils
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.compat
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:utils-no-direct]
+name = utils (L1) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._utils
+forbidden_modules =
+    torchlens._data_substrate
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.capture
+    torchlens.debug
+    torchlens.distributed
+    torchlens.fastlog
+    torchlens.intervention
+    torchlens._ir
+    torchlens._merged
+    torchlens._notebook
+    torchlens._observability
+    torchlens._partial
+    torchlens._postprocess
+    torchlens.receptive_field
+    torchlens.semantic
+    torchlens.transforms
+    torchlens.validation
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:validation-no-path]
+name = validation (L3) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.validation
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.checks
+    torchlens.examples
+    torchlens.export
+    torchlens.neuro
+    torchlens.repgeom
+    torchlens.trackers
+
+[importlinter:contract:validation-no-direct]
+name = validation (L3) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.validation
+forbidden_modules =
+    torchlens._extraction
+    torchlens.attribution
+    torchlens._autoroute
+    torchlens.bridge
+    torchlens.bundle
+    torchlens.debug
+    torchlens._notebook
+    torchlens._observability
+    torchlens.report
+    torchlens.semantic
+    torchlens.stats
+    torchlens.transforms
+    torchlens.visualization
+    torchlens.viz
+allow_indirect_imports = true
+
+[importlinter:contract:visualization-no-path]
+name = visualization (L7) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.visualization
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.trackers
+
+[importlinter:contract:visualization-no-direct]
+name = visualization (L7) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.visualization
+forbidden_modules =
+    torchlens.bridge
+allow_indirect_imports = true
+
+[importlinter:contract:viz-no-path]
+name = viz (L7) does not import higher layers
+type = forbidden
+source_modules =
+    torchlens.viz
+forbidden_modules =
+    torchlens.callbacks
+    torchlens.examples
+    torchlens.trackers
+
+[importlinter:contract:viz-no-direct]
+name = viz (L7) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens.viz
+forbidden_modules =
+    torchlens.bridge
+allow_indirect_imports = true
