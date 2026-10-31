@@ -78,6 +78,7 @@ class _TraceStub:
     _grad_fn_logs: dict[int, GradFn]
     _grad_op_nums_to_save: str = "all"
     last_run: dict[str, Any] | None = None
+    _num_backward_passes: int = 0
     # A live trace always owns its capture event stream; hooks refuse typed
     # when it is absent, so the stub must model ownership explicitly.
     _capture_events: CaptureEvents = field(default_factory=CaptureEvents)
