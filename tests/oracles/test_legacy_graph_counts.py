@@ -265,7 +265,7 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
 def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
     trace = graph_trace
     modules = {module.address: module for module in trace.modules}
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     fc = modules["fc"]
     # fc holds both linear passes: one Layer; internal edge pass1 -> pass2,
     # input edge x -> pass1, output edge pass2 -> mul.
