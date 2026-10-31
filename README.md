@@ -532,7 +532,7 @@ from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
     for step in range(2):                    # your optimizer loop
-        rec.log(torch.rand(1, 3, 64, 64))    # sparse capture of this step
+        rec(torch.rand(1, 3, 64, 64))        # sparse capture of this step
 
 print(list_modules(model)[:3])               # every module address + class
 print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward

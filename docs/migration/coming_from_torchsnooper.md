@@ -18,7 +18,7 @@ recording = tl.record(model, x, narrate=True)          # the one-liner replaceme
 | torchsnooper construct | TorchLens equivalent |
 | --- | --- |
 | `@torchsnooper.snoop()` on a forward | `tl.record(model, x, narrate=True)` -- op-granular lines, module structure included |
-| `with torchsnooper.snoop():` around a training step | `with tl.fastlog.Recorder(model, narrate=tl.options.NarrationOptions(...)) as r: r.log(batch)` |
+| `with torchsnooper.snoop():` around a training step | `with tl.fastlog.Recorder(model, narrate=tl.options.NarrationOptions(...)) as r: r(batch)` |
 | `snoop(output='file.log')` | `NarrationOptions(sink='file.log')` -- flushed per line, so bytes survive a hard death |
 | `snoop(depth=N)` | module-depth indentation is built in; scope with `tl.in_module(...)` |
 | `snoop(prefix=...)` per-line prefix | callable sink (`NarrationOptions(sink=my_logger)`) -- the seam to loggers/trackers |
