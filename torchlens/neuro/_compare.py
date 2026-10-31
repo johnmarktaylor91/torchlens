@@ -404,7 +404,7 @@ def _analysis_runners(
             matrix,
             target,
             alphas=settings["ridge_alphas"],
-            num_folds=settings["n_folds"],
+            n_folds=settings["n_folds"],
             seed=settings["seed"],
         )
         point = _mean_column_r(predicted, target)

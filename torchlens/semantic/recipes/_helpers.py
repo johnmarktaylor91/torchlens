@@ -447,7 +447,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
         Computed read-only ``FacetSpec`` or absence reason.
     """
 
-    value = sdpa_reconstruction_spec(module, facet, function_id=recipe_id)
+    value = sdpa_reconstruction_spec(module, facet, recipe_id=recipe_id)
     if isinstance(value, MissingFacet):
         return needs_capture(
             value.reason,

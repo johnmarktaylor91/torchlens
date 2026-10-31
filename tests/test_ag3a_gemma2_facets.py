@@ -95,13 +95,13 @@ class TestGemma2Facets:
             _equal(value, by_label.constants[name])
 
     def test_facet_that_is_not_one_op_refuses(self) -> None:
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("result")])
         assert info.value.fields["code"] == "attribution_graph_frozen_facet_unsupported"
         assert "tl.facet('result')" in str(info.value)
 
     def test_facet_no_module_serves_refuses(self) -> None:
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("no_such_facet")])
         assert info.value.fields["code"] == "attribution_graph_site_not_found"
         assert "trace.modules[name].facets.keys()" in str(info.value)

@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 
 class _MixedReluNet(nn.Module):

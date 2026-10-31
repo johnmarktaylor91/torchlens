@@ -251,4 +251,4 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
         "noise_std": float(noise_std),
         "seed": seed,
     }
-    return dataclasses.replace(result, metric="road", settings=settings)
+    return dataclasses.replace(result, kind="road", settings=settings)

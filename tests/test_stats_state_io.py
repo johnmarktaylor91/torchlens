@@ -56,7 +56,7 @@ def _batches(data: torch.Tensor, batch_size: int) -> list[torch.Tensor]:
 
 
 def _accumulators() -> dict[str, Callable[[], Any]]:
-    """Every accumulator ``tl.aggregate`` folds, pooled and per unit."""
+    """Every accumulator ``tl.stats.aggregate`` folds, pooled and per unit."""
 
     return {
         "mean": tl.stats.Mean,
@@ -201,7 +201,7 @@ def _rewrite(path: Path, *, metadata: dict[str, str] | None = None, bump: bool =
 def test_unknown_format_version_refuses(tmp_path: Path) -> None:
     path = tl.stats.save_fitted(tl.stats.Mean(), tmp_path / "mean.safetensors")
     _rewrite(path, metadata={"schema": "tl_stats_state_v99"})
-    with pytest.raises(tl.stats.FittedArtifactError) as info:
+    with pytest.raises(tl.errors.FittedArtifactError) as info:
         tl.stats.load_fitted(path)
     assert info.value.fields["code"] == "stats_state_version_unknown"
     assert "tl.stats.save_fitted(stat, path)" in str(info.value)
@@ -212,7 +212,7 @@ def test_digest_mismatch_refuses(tmp_path: Path) -> None:
     stat.update(_acts()[:3])
     path = tl.stats.save_fitted(stat, tmp_path / "top.safetensors")
     _rewrite(path, bump=True)
-    with pytest.raises(tl.stats.FittedArtifactError) as info:
+    with pytest.raises(tl.errors.FittedArtifactError) as info:
         tl.stats.load_fitted(path)
     assert info.value.fields["code"] == "stats_state_digest_mismatch"
 
@@ -221,7 +221,7 @@ def test_malformed_state_refuses(tmp_path: Path) -> None:
     path = tl.stats.save_fitted(tl.stats.Mean(), tmp_path / "mean.safetensors")
     forged = '{"attrs":[],"cls":"NotAnAccumulator","encoders":[],"t":"obj"}'
     _rewrite(path, metadata={"state": forged, "digest": _state_io.state_digest(forged, {})})
-    with pytest.raises(tl.stats.FittedArtifactError) as info:
+    with pytest.raises(tl.errors.FittedArtifactError) as info:
         tl.stats.load_fitted(path)
     assert info.value.fields["code"] == "stats_state_invalid"
 
@@ -232,7 +232,7 @@ def test_encoder_must_match_saved(case: str, tmp_path: Path) -> None:
     stat = tl.stats.TopK(3, unit_axis=-1, encoder=encoder)
     stat.update(_acts()[:2])
     path = tl.stats.save_fitted(stat, tmp_path / "top.safetensors")
-    with pytest.raises(tl.stats.FittedArtifactError) as info:
+    with pytest.raises(tl.errors.FittedArtifactError) as info:
         tl.stats.load_fitted(path, encoder=None if case == "missing" else SAE.encode)
     assert info.value.fields["code"] == "stats_state_encoder_mismatch"
     remedy = info.value.fields["remedy"]
@@ -243,10 +243,10 @@ def test_encoder_must_match_saved(case: str, tmp_path: Path) -> None:
 def test_save_refuses_unsupported_state(tmp_path: Path) -> None:
     stat = tl.stats.Mean()
     stat.extra = object()  # type: ignore[attr-defined]
-    with pytest.raises(tl.stats.FittedArtifactError) as info:
+    with pytest.raises(tl.errors.FittedArtifactError) as info:
         tl.stats.save_fitted(stat, tmp_path / "mean.safetensors")
     assert info.value.fields["code"] == "stats_state_unsupported"
     assert not list(tmp_path.iterdir())
-    with pytest.raises(tl.stats.FittedArtifactError) as other:
+    with pytest.raises(tl.errors.FittedArtifactError) as other:
         tl.stats.save_fitted(object(), tmp_path / "x.safetensors")
     assert other.value.fields["code"] == "pca_fitted_record_invalid"

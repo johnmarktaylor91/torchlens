@@ -44,7 +44,8 @@ absorption rather than calling it exact conservation.
 ```python
 import torch
 from torch import Tensor, nn
-from torchlens.attribution import AttributionError, SiteStash
+from torchlens.attribution import SiteStash
+from torchlens.errors import AttributionError
 from typing import Any
 
 

@@ -145,7 +145,7 @@ def _target_values(
 def _lens_footer(trajectory: PredictionTrajectory) -> list[str]:
     """Return the trajectory's honesty footer lines."""
 
-    validated = "numerically validated" if trajectory.is_validated else "UNVALIDATED"
+    validated = "numerically validated" if trajectory.validated else "UNVALIDATED"
     lines = [
         f"lens: {trajectory.lens_source} ({validated}); probabilities use the "
         "full-vocabulary denominator",

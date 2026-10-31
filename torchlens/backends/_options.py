@@ -17,7 +17,7 @@ from .registry import (
 TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = {
     "intervene": "interventions",
     "halt": "interventions",
-    "recipes": "interventions",
+    "facets": "interventions",
     "storage": "streaming",
     "streaming": "streaming",
     "save_grads": "backward_capture",
@@ -198,7 +198,7 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         {
             "halt",
             "intervene",
-            "recipes",
+            "facets",
             "save",
             "stop_after",
             "storage",
@@ -245,7 +245,7 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
         "paddle backend preview does not support these options: {names}. "
-        "Live trace(intervene=...), trace(halt=...), recipes=, and static-label "
+        "Live trace(intervene=...), trace(halt=...), facets=, and static-label "
         "save= selectors are supported on the eager Paddle preview; streaming, "
         "storage=, and the remaining torch-only runtime options are not. Use "
         "the PyTorch backend for streaming and stop-early capture shaping."
@@ -271,7 +271,7 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend.
 
-``intervene``, ``halt``, and ``recipes`` are absent because the Paddle
+``intervene``, ``halt``, and ``facets`` are absent because the Paddle
 capture path pops and dispatches them before extra-kwarg rejection runs; the
 ``interventions`` capability flag owns all three.
 """
@@ -301,7 +301,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "stop_after": None,
         "raise_on_nan": False,
         "profile": False,
-        "recipes": None,
+        "facets": None,
         "payload_policy": None,
         "save_preview": None,
         "chunk_size": None,
@@ -340,7 +340,7 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the TensorFlow preview backend.
 
-``intervene``/``halt``/``recipes`` left this table when tf lifted the
+``intervene``/``halt``/``facets`` left this table when tf lifted the
 ``interventions`` capability: ``intervene=`` dispatches for real, and the two
 unimplemented spellings refuse typed inside the tf capture path (a declarative
 rejection here would classify the True flag as a self-contradictory

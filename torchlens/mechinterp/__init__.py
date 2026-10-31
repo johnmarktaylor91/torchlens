@@ -33,7 +33,6 @@ from ._edges import (
     ComponentSender,
     component_graph,
 )
-from ._errors import MechInterpError
 from ._factored import FactoredMatrix
 from ._faithfulness import circuit_model_difference, circuit_performance_ratio
 from ._grids import PatchGrid, patch_grid, patch_heads_grid, patch_residual_grid
@@ -63,7 +62,6 @@ __all__ = [
     "HeadScores",
     "HeadWeightViews",
     "PatchedRun",
-    "MechInterpError",
     "PatchGrid",
     "ProjectionSource",
     "PromptInspection",

@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.semantic import MissingFacetError
+from torchlens.errors import MissingFacetError
 
 pytest.importorskip("transformers")
 

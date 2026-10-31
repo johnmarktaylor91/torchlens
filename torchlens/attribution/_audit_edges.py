@@ -273,7 +273,8 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
 def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
     """Return the audit's trace, its component graph and the corrupted run's graph."""
 
-    from torchlens.mechinterp import MechInterpError, component_graph
+    from torchlens.mechinterp import component_graph
+    from torchlens.mechinterp._errors import MechInterpError
 
     trace = _edge_trace(request, request.inputs)
     try:
@@ -444,6 +445,6 @@ def _plan_edge_audit(request: _AuditRequest) -> _EdgesPlan:
             "trace": trace,
         },
         graph=graph,
-        corrupted_graph=corrupt,
+        corrupt=corrupt,
         names=names,
     )

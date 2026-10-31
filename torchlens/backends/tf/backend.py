@@ -962,7 +962,7 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
     """Refuse intervention-gated options the tf preview does not implement.
 
     The ``interventions`` capability flag admits ``intervene=``, ``halt=``, and
-    ``recipes=`` through the shared option gate, so the two unimplemented
+    ``facets=`` through the shared option gate, so the two unimplemented
     spellings keep their typed refusals here in the capture path instead of in
     the declarative policy tables (where a True flag would classify them as
     self-contradictory registrations).
@@ -985,10 +985,10 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
             "partial-forward finalization semantics the tf preview does not "
             "implement. Use the PyTorch backend for predicate-time halt."
         )
-    recipes_value = kwargs.pop("recipes", None)
+    recipes_value = kwargs.pop("facets", None)
     if recipes_value is not None and not is_missing(recipes_value):
         raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(recipes=...) "
+            "tf backend interventions support intervene= only; trace(facets=...) "
             "replay recipes are torch-only. Use the PyTorch backend for recipes."
         )
 

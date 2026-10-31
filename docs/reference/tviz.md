@@ -141,11 +141,11 @@ cells are blank, never zero, and the figure prints "measured N of M".
 
 Under grouped-query attention a key or value site holds one tensor per KV
 group, read by several query heads, so a grid over that site
-(`mi.grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
+(`mi.patch_grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
 query heads. Pass the grouping and the receipt becomes a kv-group receipt:
 
 ```python
-gqa = tviz.GqaInfo(n_query_heads=14, num_kv_heads=2)
+gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
 receipt = tviz.receipt_from_patch_grid(
     v_grid, layer="model.layers.0.self_attn", negative_control=neg,
     positive_control=pos, joint_effect=joint, kv_groups=gqa,

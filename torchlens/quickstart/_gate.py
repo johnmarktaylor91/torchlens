@@ -55,7 +55,7 @@ def is_gold(trace: Any) -> bool:
     provenance = trace_input_provenance(trace)
     if provenance is None:
         return True
-    return bool(provenance.values_semantic)
+    return bool(provenance.has_semantic_values)
 
 
 def require_gold(trace: Any, claim: str) -> None:
@@ -134,7 +134,7 @@ def warn_on_raw_read(trace: Any, *, site: str) -> None:
     if trace is None or id(trace) in _WARNED_TRACE_IDS:
         return
     provenance = trace_input_provenance(trace)
-    if provenance is None or provenance.values_semantic:
+    if provenance is None or provenance.has_semantic_values:
         return
     _WARNED_TRACE_IDS.add(id(trace))
     import weakref

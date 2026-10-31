@@ -44,7 +44,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     dla = mi.direct_logit_contributions(log, answer=paris, vs=london)
     assert dla.identity_receipt["result"] == "verified"  # noqa: S101 -- the demo IS its own gate
     print("DLA (' Paris' - ' London') top contributors:")
-    for label, score in dla.top(5):
+    for label, score in dla.topk(5):
         print(f"  {label}: {score:+.3f}")
 
     inspection = mi.inspect_prompt(log, answer=paris, tokenizer=tokenizer)

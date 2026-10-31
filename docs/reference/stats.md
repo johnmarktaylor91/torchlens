@@ -1,8 +1,8 @@
-# Streaming statistics: `tl.stats` and `tl.aggregate`
+# Streaming statistics: `tl.stats` and `tl.stats.aggregate`
 
 `tl.stats` computes dataset-level statistics of activations or gradients in
 constant memory: each accumulator folds one batch at a time and never retains
-per-batch tensors. `tl.aggregate` is the one-call door that drives those
+per-batch tensors. `tl.stats.aggregate` is the one-call door that drives those
 accumulators across a whole dataloader. Both are shipped, tested surface --
 promoted into `torchlens.__all__` by the completeness work (they were
 previously reachable but undeclared). Spellings are DOCUMENTED-UNSTABLE
@@ -32,10 +32,10 @@ the finalized value equals the full-data linear CKA of Kornblith et al.
 (2019) computed in one shot -- it is not a minibatch approximation that
 depends on batch boundaries. `tl.stats.cka(a, b)` is the one-shot form.
 
-## `tl.aggregate`: statistics across a dataloader
+## `tl.stats.aggregate`: statistics across a dataloader
 
 Map layer selectors (any `log[...]` spelling, or `"output"` for the model
-output) to accumulators; `tl.aggregate` runs the captures and streams every
+output) to accumulators; `tl.stats.aggregate` runs the captures and streams every
 batch through them:
 
 ```python
@@ -43,7 +43,7 @@ batch through them:
 import torch
 import torchlens as tl
 
-results = tl.aggregate(
+results = tl.stats.aggregate(
     model,
     [torch.rand(2, 3, 16, 16) for _ in range(4)],   # any iterable of inputs
     metrics={
@@ -58,7 +58,7 @@ Gradient statistics stream the same way: pass `target="grad"` and a
 `loss_fn=` used to build the backward pass from `(output, *batch_tail)`:
 
 ```python
-grad_results = tl.aggregate(
+grad_results = tl.stats.aggregate(
     model,
     [(torch.rand(2, 3, 16, 16),) for _ in range(2)],
     metrics={"relu_1_2": tl.stats.Norm()},
@@ -84,7 +84,7 @@ position, a spatial location).
 - `TopK(k, unit_axis=-1).compute()` is a `tl.stats.UnitTopK`: `values`
   (`float64 [units, k]`, descending), `example_ids` (`int64 [units, k]`) and
   `positions` (`int64 [units, k, position_axes]`, one column per position
-  axis). Under `tl.aggregate` an example id is the example's index in the
+  axis). Under `tl.stats.aggregate` an example id is the example's index in the
   dataloader's iteration order, which is the dataset index for an unshuffled
   loader; outside it, `update(batch, example_ids=...)` names the examples.
   Ties break toward the lowest example id, then the lowest position, so the
@@ -117,7 +117,7 @@ stimuli = [torch.randn(3, 4) for _ in range(3)]  # 9 examples, ragged batches we
 relu_label = next(
     op.layer_label for op in tl.trace(mlp, stimuli[0]).layer_list if op.layer_type == "relu"
 )
-per_unit = tl.aggregate(
+per_unit = tl.stats.aggregate(
     mlp,
     stimuli,
     metrics={
@@ -177,7 +177,7 @@ does not read (`stats_state_version_unknown`) and an `encoder=` that does not
 match how the state was saved (`stats_state_encoder_mismatch`). Nothing in
 the file is unpickled or imported.
 
-`tl.aggregate(..., cache=True)` keys the run and, when the same run was
+`tl.stats.aggregate(..., cache=True)` keys the run and, when the same run was
 cached before, restores each accumulator's saved final state in place and
 returns its results without running the model. The key covers the torchlens
 and torch versions; the model's tensor contents, `requires_grad` and
@@ -221,11 +221,11 @@ with tempfile.TemporaryDirectory() as folder:
 
     # A rerun of the same run reads the cache and skips the forward passes.
     batches = [torch.rand(2, 3, 16, 16) for _ in range(3)]
-    first = tl.aggregate(
+    first = tl.stats.aggregate(
         model, batches, {"relu_1_2": tl.stats.TopK(3, unit_axis=1)},
         cache=True, cache_dir=folder,
     )
-    again = tl.aggregate(
+    again = tl.stats.aggregate(
         model, batches, {"relu_1_2": tl.stats.TopK(3, unit_axis=1)},
         cache=True, cache_dir=folder,
     )
@@ -350,7 +350,7 @@ print(traj.compute_stats("target_rank")["blocks.1"].mean)
 - Install both: lovely-tensors for any tensor at a REPL, TorchLens for the
   numbers of a whole model's run (this page across a dataset, the stats line on
   each op of a trace).
-- `tl.aggregate` captures with the ordinary verified `tl.trace` engine; for
+- `tl.stats.aggregate` captures with the ordinary verified `tl.trace` engine; for
   tight training loops that only need a few sites, `tl.fastlog.Recorder`
   (built once, `.log()` per step) is the cheaper repeated-capture door.
 - The observability kernels (`Spine`, `Histogram`) have one implementation

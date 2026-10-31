@@ -289,7 +289,7 @@ def _resolve_draw_request(
     )
     request = replace(
         request,
-        show_buffers=show_buffer_layers,
+        show_buffer_layers=show_buffer_layers,
         node_overlay=cast("str | OverlayScores | None", node_overlay),
         overrides=overrides,
     )
@@ -1367,7 +1367,7 @@ def draw(
     stack_channel_spec = resolve_stack_by(stack_by, vis_mode)
     request = ResolvedRenderRequest(
         vis_mode=vis_mode,
-        show_buffers=cast(BufferVisibilityLiteral, show_buffer_layers),
+        show_buffer_layers=cast(BufferVisibilityLiteral, show_buffer_layers),
         show_containers=show_containers,
         engine=vis_node_placement,
         skip_fn=skip_fn,

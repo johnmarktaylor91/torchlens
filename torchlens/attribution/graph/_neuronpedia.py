@@ -258,12 +258,12 @@ def _schema_node(
         )
     if index < layout.logit:
         return _node(
-            f"E_{node.token}_{position}",
+            f"E_{node.token_id}_{position}",
             position,
             "E",
             position,
             "embedding",
-            f"E_{node.token}-{position}",
+            f"E_{node.token_id}-{position}",
             influence=influence,
         )
     return _logit_node(graph, index - layout.logit, layout.logit_layer, tokenizer)
@@ -347,7 +347,7 @@ def _check_arguments(
 def _check_graph(graph: AttributionGraph) -> None:
     """Refuse graphs the schema cannot express."""
 
-    if any(graph.nodes[i].token is None for i in graph.node_indices("token")):
+    if any(graph.nodes[i].token_id is None for i in graph.node_indices("token")):
         raise _export_refusal(
             "The graph's token nodes carry no token ids (the embedding input was not "
             "integer ids), so the schema's prompt tokens and token node ids cannot be "

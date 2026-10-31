@@ -182,7 +182,7 @@
   spelling.
 - EPISODE CAPTURE (torch-only; every spelling DOCUMENTED-UNSTABLE): one wrapped multi-step
   generation run is ONE product — `tl.trace(episode_root, x,
-  episode=tl.options.EpisodeSpec(stepped_module=model, num_steps=N))` stamps
+  episode=tl.options.EpisodeSpec(stepped_module=model, n_steps=N))` stamps
   `capture_kind=episode` and lands the per-step status ledger (GRAMMAR v2 as of the
   C07X amendment, `episode_ledger_version=2` family-local: header carries the declared
   `step_output_kind` tokens|digest|none + the `step_output_from` source disclosure /
@@ -1414,10 +1414,10 @@
   `Quantile(..., unit_axis=-1).compute()` maps each quantile to a `float64 [units]`
   tensor; per-unit `TopK` returns `tl.stats.UnitTopK` (`values`, `example_ids`,
   `positions`, `unit_axis`), ties broken toward the lowest example id, then position;
-  under `tl.aggregate` an example id is its index in the dataloader's iteration
+  under `tl.stats.aggregate` an example id is its index in the dataloader's iteration
   order. `encoder=` maps each batch (an SAE encoder) before folding, so neurons and
   latents share one top-k-over-a-dataset tool; `TopK.update(..., example_ids=...)`
-  names examples outside `tl.aggregate`. State: `8 * reservoir_size` B per unit
+  names examples outside `tl.stats.aggregate`. State: `8 * reservoir_size` B per unit
   (Quantile), `k * (16 + 8 * position_axes)` B per unit (TopK); past 256 MiB the
   `stats_per_unit_state_large` warning fires once per session. Doc of record:
   `docs/reference/stats.md`, Per-unit statistics.
@@ -1428,7 +1428,7 @@
   an object that keeps folding as if never interrupted (unit layout kept; `encoder=` is
   not stored and must be passed back). Refusals: `stats_state_unsupported`,
   `stats_state_version_unknown`, `stats_state_digest_mismatch`, `stats_state_invalid`,
-  `stats_state_encoder_mismatch`. `tl.aggregate(..., cache=True, cache_dir=None)` keys
+  `stats_state_encoder_mismatch`. `tl.stats.aggregate(..., cache=True, cache_dir=None)` keys
   the run by value (versions, model contents and code, every batch, each metric's
   starting state and encoder, `target=`, `loss_fn=`) and on a hit restores the saved
   states in place and skips the loop; an unkeyable run refuses with

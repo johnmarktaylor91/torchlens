@@ -229,7 +229,7 @@ def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None
     FittedPCA | StreamingStat | dict
         The rehydrated fitted payload; for an accumulator state, an
         accumulator that keeps folding as if never interrupted (a
-        ``tl.aggregate`` cache entry loads as a ``{metric: accumulator}``
+        ``tl.stats.aggregate`` cache entry loads as a ``{metric: accumulator}``
         dict).
 
     Raises

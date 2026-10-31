@@ -89,7 +89,7 @@ def build_source_graph(trace: Trace, request: ResolvedRenderRequest) -> SourceGr
         trace,
         entries_to_plot,
         vis_mode=request.vis_mode,
-        show_buffers=show_buffer_layers,
+        show_buffer_layers=show_buffer_layers,
         skip_fn=request.skip_fn,
     )
     return SourceGraph(

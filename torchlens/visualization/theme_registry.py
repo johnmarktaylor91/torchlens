@@ -262,7 +262,7 @@ OVERVIEW_LENS = register_lens(
             "collapse": "auto",
             "fold_repeats": None,
             "node_mode": "default",
-            "show_buffer_layers": "meaningful",
+            "show_buffers": "meaningful",
             "show_containers": "auto",
             "show_legend": None,
         },
@@ -285,7 +285,7 @@ BLUEPRINT_LENS = register_lens(
             "collapse": "none",
             "fold_repeats": False,
             "show_containers": False,
-            "show_buffer_layers": "meaningful",
+            "show_buffers": "meaningful",
         },
         disclosure=(
             "full detail at every scale; a graph too large to draw is refused "

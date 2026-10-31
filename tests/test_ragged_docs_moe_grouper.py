@@ -146,7 +146,7 @@ def moe_episode():
     log = tl.trace(
         runner,
         torch.tensor(PROMPT),
-        episode=EpisodeSpec(stepped_module=capture_model, num_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=capture_model, n_steps=N_STEPS),
     )
     try:
         yield {"log": log, "hits": hits, "eager_tokens": eager_tokens, "seed": seed}

@@ -212,11 +212,11 @@ class Direction:
         return upload_vector(
             self.vector,
             api_key=api_key,
-            model_id=model_id,
+            scan=model_id,
             layer=self.library_layer(layer),
             hook_type=hook_type,
-            name=name,
-            default_steering_strength=default_steering_strength,
+            vector_label=name,
+            steer_strength=default_steering_strength,
         )
 
     def to_dialz(self, *, layer: int | None = None, model_type: str | None = None) -> Any:

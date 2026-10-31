@@ -13,7 +13,8 @@ import torch
 from torch import Tensor, nn
 
 import torchlens as tl
-from torchlens.attribution import AttributionError, SiteTarget
+from torchlens.attribution import SiteTarget
+from torchlens.errors import AttributionError
 
 _ATOL = 1e-6
 _UNIT = 4

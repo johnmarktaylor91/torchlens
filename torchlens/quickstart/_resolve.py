@@ -234,7 +234,7 @@ def attach_provenance(trace: Any, provenance: InputProvenance) -> None:
 
     from ._provenance import provenance_to_record
 
-    if provenance.values_semantic:
+    if provenance.has_semantic_values:
         return
     existing = getattr(trace, "input_preprocessor", None)
     if existing is not None and getattr(existing, "source", "") != (

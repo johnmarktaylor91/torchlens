@@ -129,7 +129,9 @@ def test_aggregate_rejects_unknown_target() -> None:
     """aggregate() refuses targets other than 'out' and 'grad'."""
 
     with pytest.raises(ValueError, match="'out' or 'grad'"):
-        tl.aggregate(nn.Linear(2, 1), [torch.ones(1, 2)], {"output": tl.stats.Mean()}, target="w")
+        tl.stats.aggregate(
+            nn.Linear(2, 1), [torch.ones(1, 2)], {"output": tl.stats.Mean()}, target="w"
+        )
 
 
 @pytest.mark.smoke
@@ -143,7 +145,7 @@ def test_aggregate_unmatched_selector_raises_key_error() -> None:
         pytest.raises(KeyError, match="no_such_layer"),
         pytest.warns(UserWarning, match="matched zero layers"),
     ):
-        tl.aggregate(model, [torch.ones(1, 2)], {"no_such_layer": tl.stats.Mean()})
+        tl.stats.aggregate(model, [torch.ones(1, 2)], {"no_such_layer": tl.stats.Mean()})
 
 
 def test_aggregate_eval_fast_path_matches_exact_full_trace_path() -> None:
@@ -161,7 +163,7 @@ def test_aggregate_eval_fast_path_matches_exact_full_trace_path() -> None:
 
     def _run() -> dict[str, float]:
         metrics = {"relu": tl.stats.Mean(), "output": tl.stats.Norm()}
-        return tl.aggregate(model, list(batches), metrics)
+        return tl.stats.aggregate(model, list(batches), metrics)
 
     model.train()
     exact = _run()
@@ -206,7 +208,9 @@ def test_aggregate_fast_path_falls_back_exactly_on_fingerprint_drift() -> None:
     negative = -torch.ones(1, 3)
     batches = [positive, positive, negative, positive]
 
-    result = tl.aggregate(model, batches, {"relu": tl.stats.Mean(), "output": tl.stats.Mean()})
+    result = tl.stats.aggregate(
+        model, batches, {"relu": tl.stats.Mean(), "output": tl.stats.Mean()}
+    )
 
     expected_relu = torch.cat([torch.relu(batch).reshape(-1) for batch in batches]).to(
         dtype=torch.float64
@@ -226,7 +230,7 @@ def test_aggregate_grad_accepts_list_batches_and_unmatched_grad_selector_raises(
     model = nn.Linear(3, 1)
     batch = [torch.randn(2, 3), torch.zeros(2, 1)]
 
-    result = tl.aggregate(
+    result = tl.stats.aggregate(
         model,
         [batch],
         {"linear": tl.stats.Norm()},
@@ -238,7 +242,7 @@ def test_aggregate_grad_accepts_list_batches_and_unmatched_grad_selector_raises(
     # save_grads= validates selectors at capture entry, so an unmatched grad
     # metric fails there with the typed lookup error naming the selector.
     with pytest.raises((KeyError, ValueError), match="no_such_layer"):
-        tl.aggregate(
+        tl.stats.aggregate(
             model,
             [batch],
             {"no_such_layer": tl.stats.Mean()},

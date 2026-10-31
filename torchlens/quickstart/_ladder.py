@@ -39,7 +39,7 @@ _LADDER_DEFAULTS: dict[str, Any] = {
     "storage": None,
     "streaming": None,
     "profile": MISSING,
-    "recipes": MISSING,
+    "facets": MISSING,
     "grouping": MISSING,
     "jax_static_argnums": MISSING,
     "grad_options": MISSING,

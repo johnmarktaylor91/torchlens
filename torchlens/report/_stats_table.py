@@ -202,14 +202,12 @@ class StatsTable:
                     "state": row.state,
                     "n": None if stats is None else stats.numel,
                     "mean": None if stats is None else stats.mean,
-                    "sd": None if stats is None else stats.sd,
+                    "sd": None if stats is None else stats.std,
                     "min": None if stats is None else stats.finite_min,
                     "max": None if stats is None else stats.finite_max,
                     "zero_count": None if stats is None else stats.num_zero,
-                    "nan_count": None if stats is None else stats.nan_count,
-                    "inf_count": (
-                        None if stats is None else stats.posinf_count + stats.neginf_count
-                    ),
+                    "nan_count": None if stats is None else stats.num_nan,
+                    "inf_count": (None if stats is None else stats.num_posinf + stats.num_neginf),
                     "sampled": None if stats is None else stats.std_evidence.is_sampled,
                     "same_as_parent": row.parent_mark,
                     "relation_basis": row.relation_basis,

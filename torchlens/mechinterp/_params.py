@@ -569,9 +569,9 @@ def _kv_for_query_heads(views: HeadWeightViews, weight: torch.Tensor) -> torch.T
             remedy="report the attention class; uneven KV grouping has no defined "
             "per-query-head circuit",
             num_q_heads=views.num_q_heads,
-            n_kv_heads=views.n_kv_heads,
+            n_kv_heads=views.num_kv_heads,
         )
-    return weight.repeat_interleave(views.num_q_heads // views.n_kv_heads, dim=0)
+    return weight.repeat_interleave(views.num_q_heads // views.num_kv_heads, dim=0)
 
 
 def _views_for(trace: Any, attention: Any) -> HeadWeightViews:

@@ -7,7 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import LogitLensError, logit_lens
+from torchlens.errors import LogitLensError
+from torchlens.semantic import logit_lens
 from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE
 
 _requires_rmsnorm = pytest.mark.skipif(

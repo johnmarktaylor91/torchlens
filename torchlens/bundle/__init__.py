@@ -1731,12 +1731,12 @@ class Bundle:
         if kwargs.get("vis_mode") == "none":
             return dict.fromkeys(self._members)
 
-        base_outpath = kwargs.get("vis_outpath")
+        base_outpath = kwargs.get("path")
         results: dict[str, str | None] = {}
         for name, member in self._members.items():
             member_kwargs = dict(kwargs)
             if isinstance(base_outpath, str):
-                member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
+                member_kwargs["path"] = f"{base_outpath}_{name}"
             if method == "repr":
                 results[name] = repr(member)
             elif method == "html":

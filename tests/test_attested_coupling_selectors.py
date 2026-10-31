@@ -52,7 +52,7 @@ def _episode_trace(model: Root, x: torch.Tensor, **kwargs) -> tl.Trace:
         model,
         x,
         episode=EpisodeSpec(
-            stepped_module=model.step, num_steps=model.n_steps, step_output_kind="digest"
+            stepped_module=model.step, n_steps=model.n_steps, step_output_kind="digest"
         ),
         **kwargs,
     )

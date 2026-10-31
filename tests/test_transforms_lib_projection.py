@@ -16,7 +16,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.stats import PCA, FittedArtifactError, FittedPCA, load_fitted, save_fitted
+from torchlens.errors import FittedArtifactError
+from torchlens.stats import PCA, FittedPCA, load_fitted, save_fitted
 from torchlens.transforms import (
     TensorSpec,
     TransformContractError,

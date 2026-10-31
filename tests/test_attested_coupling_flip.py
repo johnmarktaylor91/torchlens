@@ -297,7 +297,7 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, num_steps=3),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
     # The new input has the captured length, so every pass keeps its captured
@@ -379,7 +379,7 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, num_steps=4),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=4),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         halt=stop_at_third_step,
         capture=tl.options.CaptureOptions(random_seed=SEED),
@@ -409,7 +409,7 @@ def test_selective_save_couples_and_keeps_evidence():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, num_steps=3),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
         intervene=tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)),
         save=tl.func("tanh"),
         capture=tl.options.CaptureOptions(random_seed=SEED),
@@ -461,7 +461,7 @@ def test_exogenous_join_couples_with_per_segment_facts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, num_steps=5),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=5),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
@@ -499,7 +499,7 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
         tl.trace(
             runner,
             _ids(),
-            episode=EpisodeSpec(stepped_module=model, num_steps=4),
+            episode=EpisodeSpec(stepped_module=model, n_steps=4),
             intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
             capture=tl.options.CaptureOptions(random_seed=SEED),
         )

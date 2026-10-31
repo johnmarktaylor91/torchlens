@@ -150,7 +150,7 @@ class FacetRegistrySnapshot:
         Monotonic global registry version at snapshot construction time.
     provenance_id:
         Stable digest of the recipe identities and their source tier.
-    recipes:
+    functions:
         Immutable active recipe entries.
     """
 
@@ -573,7 +573,7 @@ class FacetSpec(_SelectionOperand):
             raise TypeError("Facet scatter_update requires a tensor edited slice.")
         view_part = self._view_part()
         updated = home_out.clone(memory_format=torch.preserve_format)
-        target = view_part.apply(updated)
+        target = view_part.apply_transforms(updated)
         if target.untyped_storage().data_ptr() != updated.untyped_storage().data_ptr():
             # A primitive in the transform chain (typically "reshape"/"heads" on a
             # non-contiguous tensor) silently fell back to a copy instead of
@@ -613,7 +613,7 @@ class FacetSpec(_SelectionOperand):
         if not isinstance(home_out, torch.Tensor):
             raise TypeError("Facet write masks require a tensor home output.")
         mask = torch.zeros_like(home_out, dtype=torch.bool, device=home_out.device)
-        target = self._view_part().apply(mask)
+        target = self._view_part().apply_transforms(mask)
         target.fill_(True)
         if not bool(mask.any()):
             raise RuntimeError(
@@ -863,15 +863,13 @@ class MissingFacetError(KeyError):
         name = self.name
         if self.reason.status == "declared_not_produced":
             detail = self.reason.detail or "declared by a matching recipe but not produced"
-            hint = (
-                self.reason.save_hint or "inspect facets.declared() for the full declaration status"
-            )
+            hint = self.reason.remedy or "inspect facets.declared() for the full declaration status"
             return f"Facet {name!r} is unavailable: {detail}. Unknown cause; {hint}."
         if self.reason.status == "structurally_absent":
             detail = self.reason.detail or "this record has no such facet"
-            hint = self.reason.save_hint or "inspect facets.declared() for the facets it declares"
+            hint = self.reason.remedy or "inspect facets.declared() for the facets it declares"
             return f"Facet {name!r} is not available here: {detail}. To add it, {hint}."
-        hint = self.reason.save_hint or "re-run with save=... including the required activation"
+        hint = self.reason.remedy or "re-run with save=... including the required activation"
         detail = self.reason.detail or "required payload was not captured"
         return f"Facet {name!r} is unavailable: {detail}. Re-run with {hint}."
 
@@ -1659,7 +1657,7 @@ def _merge_missing(
     menu[name] = FacetMenuItem(
         status=_menu_status_from_absence(reason),
         recipe=recipe.public.name,
-        save_hint=reason.save_hint,
+        save_hint=reason.remedy,
         detail=reason.detail,
     )
 
@@ -1989,7 +1987,6 @@ __all__ = [
     "FacetSpec",
     "FacetView",
     "MissingFacet",
-    "MissingFacetError",
     "MissingGrad",
     "enable_transformer_lens_aliases",
     "info",

@@ -129,7 +129,7 @@ class _AuditPlan:
         fork = self.trace.fork(name="attribution_causal_audit")
         try:
             with torch.no_grad():
-                for selection, edit in self.build_interventions(units):
+                for selection, edit in self.intervention(units):
                     fork.do(selection, edit)
                 return self.score(fork)
         finally:

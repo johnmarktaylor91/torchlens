@@ -73,7 +73,7 @@ def test_unknown_step_input_name_records_step_input_not_found() -> None:
         x,
         episode=EpisodeSpec(
             stepped_module=model.cell,
-            num_steps=3,
+            n_steps=3,
             step_output_kind="none",
             step_input_from="no_such_kwarg",
         ),

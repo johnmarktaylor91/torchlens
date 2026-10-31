@@ -1217,7 +1217,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._runnable_state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
-    # tl.aggregate(cache=True) key builder: raised while hashing a run's inputs
+    # tl.stats.aggregate(cache=True) key builder: raised while hashing a run's inputs
     # and caught by run_cached, which raises stats_aggregate_cache_unkeyable.
     "torchlens.stats._aggregate_cache._Unkeyable": (
         "internal key-builder carrier; surfaced as stats_aggregate_cache_unkeyable"
@@ -1441,8 +1441,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "KeyError outside the taxonomy — rebase/registration is that surface's decision"
     ),
     "torchlens.semantic.facets.MissingFacetError": (
-        "public home is torchlens.semantic.__all__ (provisional surface); plain KeyError "
-        "outside the taxonomy"
+        "public home is torchlens.errors (provisional surface); plain KeyError outside the taxonomy"
     ),
     "torchlens.utils._multipass_access.MultiPassAmbiguityError": (
         "multi-pass access refusal raised via record accessors; plain ValueError outside "

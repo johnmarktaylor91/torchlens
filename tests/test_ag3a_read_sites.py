@@ -166,7 +166,7 @@ class TestOpLabelReadSite:
         model = _model()
         trace = _trace(model)
         tc = _transcoders()["model.layers.0.mlp"]
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             tl.attribution.build_graph(
                 trace, {"mul_999_999": tc}, embedding_module="model.embed_tokens", frozen=()
             )
@@ -182,7 +182,7 @@ class TestOpLabelReadSite:
         trace = _trace(model)
         ops = _pre_gain_ops(trace)
         tc = _transcoders()["model.layers.0.mlp"]
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(model, {ops[1]: tc}, trace)
         assert _code(info) == "attribution_graph_read_site_not_upstream"
         message = str(info.value)
@@ -200,7 +200,7 @@ class TestOpLabelReadSite:
         tc = copy.copy(_transcoders()["model.layers.0.mlp"])
         tc.W_dec = next(iter(tc.W_dec.values()))
         tc.b_dec = next(iter(tc.b_dec.values()))
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(model, {ops[0]: tc}, trace)
         assert _code(info) == "attribution_graph_transcoder_invalid"
         assert "W_dec={'model.layers.0.mlp': W_dec}" in str(info.value)

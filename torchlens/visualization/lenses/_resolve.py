@@ -530,7 +530,7 @@ def _budget_stage(
     # render (the measured rolled-x-float mispricing cell).
     budget_context = ResolvedRenderRequest(
         vis_mode=build.view,  # type: ignore[arg-type]
-        show_buffers=build.effective.get("show_buffer_layers", "meaningful"),
+        show_buffer_layers=build.effective.get("show_buffer_layers", "meaningful"),
         show_containers=build.effective.get("show_containers", False),
     )
     budget = resolve_budget(trace, values=channel_values, context=budget_context)

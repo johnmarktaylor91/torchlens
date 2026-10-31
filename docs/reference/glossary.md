@@ -1282,7 +1282,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   persistence path (`tl.stats.save_fitted` / `tl.stats.load_fitted`) for fitted PCA and,
   DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`; a reload
   keeps folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an
-  `encoder=` callable, which is not stored). `tl.aggregate(model,
+  `encoder=` callable, which is not stored). `tl.stats.aggregate(model,
   dataloader, metrics)` streams activations (`target="out"`) or gradients
   (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
   dataloader without retaining per-batch tensors; `cache=True` (with `cache_dir=`, as
@@ -1297,7 +1297,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   latents, with ties broken toward the lowest example id, then position;
   `encoder=` maps each batch (for example through an SAE encoder) before it is
   folded; `TopK.update(..., example_ids=...)` names examples outside
-  `tl.aggregate`. Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x,
+  `tl.stats.aggregate`. Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x,
   save="stats")` folds every op's out into a `tl.stats.RunningStats` during the forward and
   keeps no payload (one 16-slot float64 vector per op); `tl.stats.site_stats(trace)`
   returns `{op label: Spine}`, payload reads refuse `activation_reduced_to_stats`, and

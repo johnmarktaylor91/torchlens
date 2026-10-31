@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.semantic import MissingFacetError
+from torchlens.errors import MissingFacetError
 
 pytest.importorskip("transformers")
 

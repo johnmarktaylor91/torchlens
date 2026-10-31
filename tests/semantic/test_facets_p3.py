@@ -11,8 +11,9 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
+from torchlens.errors import MissingFacetError
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import MissingFacet, MissingFacetError, facets as facets_mod
+from torchlens.semantic import MissingFacet, facets as facets_mod
 from torchlens.semantic.recipes import activate_entrypoint_recipes
 
 
@@ -269,7 +270,7 @@ def test_transformerlens_aliases_are_opt_in() -> None:
     )
     assert "hook_pattern" not in log.modules["attn"].facets.keys()
 
-    facets_mod.enable_transformerlens_aliases(True)
+    facets_mod.enable_transformer_lens_aliases(True)
     try:
         aliased = tl.trace(
             model,
@@ -281,7 +282,7 @@ def test_transformerlens_aliases_are_opt_in() -> None:
         assert "hook_pattern" in view.keys()
         assert torch.allclose(view["hook_pattern"], view.pattern)
     finally:
-        facets_mod.enable_transformerlens_aliases(False)
+        facets_mod.enable_transformer_lens_aliases(False)
 
 
 def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
@@ -290,7 +291,7 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
     model = _AttentionWrapper(LlamaSdpaAttention())
     x = torch.randn(2, 3, 8)
 
-    facets_mod.enable_transformerlens_aliases(True)
+    facets_mod.enable_transformer_lens_aliases(True)
     try:
         log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
         view = log.modules["attn"].facets
@@ -304,7 +305,7 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
         with pytest.raises(MissingFacetError, match="save_arg_values=True"):
             view["hook_pattern"]
     finally:
-        facets_mod.enable_transformerlens_aliases(False)
+        facets_mod.enable_transformer_lens_aliases(False)
 
 
 def test_entrypoint_activation_warns_and_skips_broken_plugin(

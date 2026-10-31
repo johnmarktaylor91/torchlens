@@ -394,7 +394,7 @@ def logit_lens(
         entries=tuple(entries),
         facet=facet,
         lens_source=setup.lens_source,
-        is_validated=setup.is_validated,
+        is_validated=setup.validated,
         final_logits=setup.final_logits,
     )
 
@@ -518,7 +518,7 @@ def logit_lens_predictions(
         k=k,
         facet=facet,
         lens_source=setup.lens_source,
-        is_validated=setup.is_validated,
+        is_validated=setup.validated,
     )
 
 
@@ -578,7 +578,7 @@ def _prepare_lens(trace: Any, request: _LensRequest) -> _LensSetup:
     :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
     """
 
-    facet, layers, lens = request.facet, request.module_addresses, request.lens
+    facet, layers, lens = request.facet, request.layers, request.lens
     validate, rtol, atol = request.validate, request.rtol, request.atol
 
     head = _find_default_head(trace)

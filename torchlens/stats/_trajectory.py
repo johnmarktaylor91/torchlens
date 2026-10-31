@@ -126,7 +126,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         Model whose blocks expose ``facet`` and whose head the lens is
         built from (the same facet recipes ``logit_lens`` reads).
     data:
-        Iterable of batches, as for ``tl.aggregate``: a batch is the model
+        Iterable of batches, as for ``tl.stats.aggregate``: a batch is the model
         input, or a tuple ``(model_input, targets)`` whose ``targets`` is an
         integer tensor ``[batch, positions]`` of the token each position
         should predict. A bare tensor is one batch.
@@ -165,7 +165,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         )
     from ..semantic.logit_lens import _LensRequest
 
-    request = _LensRequest(facet=facet, layers=layers, lens=lens, verify=verify)
+    request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify)
     folder = _TrajectoryFolder(statistics)
     for batch in batches:
         folder.fold_batch(model, _split_batch(batch), request, mask_input)
@@ -287,17 +287,17 @@ class _TrajectoryFolder:
                 values = trajectory_values(work, final, targets, names)
                 del work, logits
                 self._fold_layer(address, values)
-            self.examples += int(next(iter(values.values())).shape[0]) if setup.addresses else 0
+            self.num_examples += int(next(iter(values.values())).shape[0]) if setup.addresses else 0
         finally:
             log.cleanup()
 
     def _start(self, addresses: tuple[str, ...], lens_source: str, validated: bool) -> None:
         """Record the layer list on the first batch; refuse a different one later."""
 
-        if self.layers is None:
-            self.layers = addresses
+        if self.module_addresses is None:
+            self.module_addresses = addresses
             self.lens_source, self.validated = lens_source, validated
-        elif self.layers != addresses:
+        elif self.module_addresses != addresses:
             raise InvalidArgumentError(
                 "tl.stats.measure_trajectory: a later batch exposes different layers "
                 f"({list(addresses)}) than the first ({list(self.module_addresses)})",

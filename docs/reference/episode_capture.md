@@ -26,7 +26,7 @@ class GreedyRunner(torch.nn.Module):
 
 log = tl.trace(
     GreedyRunner(model, 20), prompt_ids,
-    episode=EpisodeSpec(stepped_module=model, num_steps=20),
+    episode=EpisodeSpec(stepped_module=model, n_steps=20),
 )
 ledger_payload = log.annotations["episode"]     # header + per-step rows
 ```
@@ -83,7 +83,7 @@ episode-declared and undeclared runs of the same seeded fixture.
 `nn.Module` whose successive top-level calls define step boundaries. It must
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
 (F41, the ruled root contract: `tl.trace(model.generate, ids,
-episode=EpisodeSpec(num_steps=N))` — the owner resolves via
+episode=EpisodeSpec(n_steps=N))` — the owner resolves via
 `method.__self__` and registers as a submodule of the TL-authored wrapper
 root) `stepped_module` DEFAULTS to the owner; on a module root it is
 required, and `None` refuses typed (`episode_declaration_invalid`) — wrap

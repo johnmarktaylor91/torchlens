@@ -46,7 +46,7 @@ coarsening); floating fields merge with a documented stable pairwise algorithm
   `sketch_descriptor_mismatch`.
 
 Both implement the `torchlens.stats` `StreamingStat` protocol and are
-re-exported as `tl.stats.RunningStats` / `tl.stats.Histogram`, so `tl.aggregate`
+re-exported as `tl.stats.RunningStats` / `tl.stats.Histogram`, so `tl.stats.aggregate`
 gets dataset-mode histograms free. Neither consumes RNG; half/bf16 inputs
 reduce in float32-or-wider with the reduction dtype recorded; complex dtypes
 refuse `stat_dtype_unsupported`.

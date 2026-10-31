@@ -297,7 +297,8 @@ def _site_render(tensor: Any) -> tuple[str | None, str | None]:
 
     line: str | None = None
     try:
-        from ..stats import render_core_line, tensor_stats
+        from ..stats import tensor_stats
+        from ..stats._stats_render import render_core_line
 
         line = render_core_line(tensor_stats(tensor))
     except Exception:  # noqa: BLE001 - the grid may still render
@@ -379,8 +380,8 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
                 "vis_save_only": True,
-                "vis_outpath": outpath,
-                "vis_fileformat": "svg",
+                "path": outpath,
+                "file_format": "svg",
             }
             if vis_call_depth is not None:
                 kwargs["vis_call_depth"] = vis_call_depth

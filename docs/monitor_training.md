@@ -154,7 +154,7 @@ peak memory) run on a dedicated GPU via the C-EXPLORER row and no GPU claim
 is made until they pass.
 
 `torchlens.stats` note: the spine and Histogram kernels implement the
-`StreamingStat` protocol, so `tl.aggregate` gets dataset-mode histograms
+`StreamingStat` protocol, so `tl.stats.aggregate` gets dataset-mode histograms
 with the same grid for free -- `aggregate` is the dataset-mode sibling of
 the watch (it drives its own dataloader once; the watch rides your live
 training loop).

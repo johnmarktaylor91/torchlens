@@ -109,7 +109,7 @@ class HistoryView:
             )
             for block in reader.step_blocks()
         )
-        return cls(run_record=reader.run_record, sites=dict(reader.sites), blocks=blocks)
+        return cls(run_record=reader.run, sites=dict(reader.sites), blocks=blocks)
 
     @classmethod
     def from_blocks(
@@ -127,7 +127,7 @@ class HistoryView:
         """Read the live collector's RAM ring (session-side spelling)."""
 
         return cls(
-            run_record=collector.run_record,
+            run_record=collector.run,
             sites=collector.site_catalog,
             blocks=collector.ring.blocks,
         )
@@ -171,7 +171,7 @@ class HistoryView:
                         step_hi=committed.step_hi,
                         block=committed.block,
                         observation=obs,
-                        is_coarsened=committed.is_coarsened,
+                        is_coarsened=committed.coarsened,
                     )
                 )
         if phase is None and len(phases_seen) > 1:
@@ -551,7 +551,7 @@ def render_fan(
     svg.text(margin_l, 12, f"{site.display_label} [{stream}/{resolved_phase}]", size=11)
     caption = (
         f"median + p25-75/p5-95 derived from sketch (approximate; "
-        f"bpo={view.run.descriptor.bins_per_octave}); min/max exact"
+        f"bpo={view.run_record.descriptor.bins_per_octave}); min/max exact"
     )
     if gaps:
         caption += f"; {gaps} presence gap(s)"
@@ -658,7 +658,7 @@ def render_waterfall(
     plot_w = width - margin_l - margin_r
     plot_h = height - margin_t - margin_b
     svg.image_png(margin_l, margin_t, plot_w, plot_h, png)
-    desc = view.run.descriptor
+    desc = view.run_record.descriptor
     row_h = plot_h / n_rows
     labels = (
         (0, "nonfinite"),
@@ -668,7 +668,7 @@ def render_waterfall(
     )
     for row_index, label in labels:
         svg.text(margin_l - 4, margin_t + (row_index + 0.7) * row_h, label, size=7, anchor="end")
-    coarse_cols = [i for i, p in enumerate(points) if p.coarsened]
+    coarse_cols = [i for i, p in enumerate(points) if p.is_coarsened]
     col_w = plot_w / n_cols
     for i in coarse_cols:
         svg.rect(margin_l + i * col_w, margin_t - 4, col_w, 3, _C_COARSE)
@@ -823,7 +823,9 @@ def render_contact_sheet(
     rows_needed = max(1, math.ceil(len(subset) / cols))
     height = int(rows_needed * (tile_h + 8) + 60)
     svg = _Svg(width, height)
-    svg.text(12, 16, f"watch contact sheet -- run {view.run.run_id[:12]} [{stream}]", size=12)
+    svg.text(
+        12, 16, f"watch contact sheet -- run {view.run_record.run_id[:12]} [{stream}]", size=12
+    )
     for index, ranked_row in enumerate(subset):
         row, col = divmod(index, cols)
         _draw_tile(
@@ -893,7 +895,7 @@ def render_detail(
             disclosures.append(f"{gaps} gap(s)")
         if nonfinite:
             disclosures.append(f"{nonfinite} nonfinite")
-        cadence = view.run.cadences.get(stream)
+        cadence = view.run_record.cadences.get(stream)
         if cadence and cadence > 1:
             disclosures.append(f"cadence {cadence}")
         svg.text(12, y0 + 48, "; ".join(disclosures) if disclosures else "no disclosures", size=7)

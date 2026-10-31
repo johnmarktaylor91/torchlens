@@ -305,7 +305,7 @@ class TestRefusals:
 
     def test_frozen_is_required(self) -> None:
         model = fx.build_model(2)
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.build_graph(
                 _trace(model), fx.exact_transcoders(model), embedding_module="embed"
             )
@@ -314,7 +314,7 @@ class TestRefusals:
 
     def test_unknown_site(self) -> None:
         model = fx.build_model(2)
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.build_graph(
                 _trace(model), fx.exact_transcoders(model), embedding_module="embedding", frozen=()
             )
@@ -322,7 +322,7 @@ class TestRefusals:
 
     def test_transcoder_without_weights(self) -> None:
         model = fx.build_model(2)
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.build_graph(
                 _trace(model), {"blocks.0.mlp": object()}, embedding_module="embed", frozen=()
             )
@@ -331,7 +331,7 @@ class TestRefusals:
     def test_batch_of_two_is_unsupported(self) -> None:
         model = fx.build_model(2)
         trace = tl.trace(model, torch.tensor([fx.TOKENS, fx.TOKENS]))
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.build_graph(
                 trace, fx.exact_transcoders(model), embedding_module="embed", frozen=()
             )
@@ -339,6 +339,6 @@ class TestRefusals:
 
     def test_bad_target(self) -> None:
         model = fx.build_model(2)
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             _build(model, fx.exact_transcoders(model), 2, target=[99])
         assert self._code(excinfo) == "attribution_graph_target_invalid"

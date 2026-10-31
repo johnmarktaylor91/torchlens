@@ -500,7 +500,7 @@ class TopK:
     With ``unit_axis=``, ``compute()`` is a :class:`UnitTopK`: per unit, its
     ``k`` largest values with the example id and position each came from.
     The example id defaults to the example's index in the update stream
-    (under ``tl.aggregate``, its index in the dataloader's iteration order;
+    (under ``tl.stats.aggregate``, its index in the dataloader's iteration order;
     the dataset index for an unshuffled loader); ``update(example_ids=...)``
     names them instead. Ties break toward the lowest example id, then the
     lowest position, so results do not depend on batch boundaries. NaN

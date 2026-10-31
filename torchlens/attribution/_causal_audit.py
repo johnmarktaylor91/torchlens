@@ -234,7 +234,7 @@ class CausalAudit:
 
         top = self.set_of("top")
         return (
-            f"CausalAuditResult(layer={self.module_address!r}, units={len(self.indices)}, "
+            f"CausalAuditResult(layer={self.module_address!r}, units={len(self.units)}, "
             f"rank_agreement={self.rank_agreement!r}, "
             f"top_measured_effect={top[0].measured_effect if top else None!r})"
         )
@@ -349,11 +349,11 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         claim=claim,
         target=target,
         k=k,
-        edit=edit,
+        ablation=edit,
         controls=controls,
-        num_random_draws=num_random_draws,
+        random_draws=num_random_draws,
         seed=seed,
-        corrupted_input=corrupted_input,
+        corrupted=corrupted_input,
         metric=metric,
         edges=edges,
     )
@@ -369,7 +369,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     agreement = _spearman(claimed, measured) if len(rows) > 1 else None
     random_effects = [item.measured_effect for item in sets if item.kind == "random"]
     return CausalAudit(
-        module_address=plan.module_address,
+        module_address=plan.layer,
         site=plan.label,
         original_score=original,
         units=rows,
@@ -460,11 +460,11 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
         One row per unit, in index order.
     """
 
-    if len(plan.indices) > _PER_UNIT_WARN_COUNT:
+    if len(plan.units) > _PER_UNIT_WARN_COUNT:
         warnings.warn(
             AttributionWarning(
-                f"causal_audit is ablating each of the {len(plan.indices)} units of "
-                f"{plan.module_address or 'the claim'!r} alone ({len(plan.indices)} replays). Remedy: "
+                f"causal_audit is ablating each of the {len(plan.units)} units of "
+                f"{plan.layer or 'the claim'!r} alone ({len(plan.units)} replays). Remedy: "
                 f"{EDGES_REMEDY if plan.claim_kind == 'edge_table' else _PER_UNIT_REMEDY}. "
                 f"{_AUDIT_DOCS_POINTER}",
                 code="attribution_audit_units_many",
@@ -481,7 +481,7 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
             component=plan.component_of(unit),
             _plan=plan,
         )
-        for unit in plan.indices
+        for unit in plan.units
     )
 
 
@@ -508,7 +508,7 @@ def _ablated_sets(
     """
 
     order = sorted(
-        plan.indices, key=lambda unit: (-abs(plan.claimed_of(unit)), plan.indices.index(unit))
+        plan.units, key=lambda unit: (-abs(plan.claimed_of(unit)), plan.units.index(unit))
     )
     chosen: list[tuple[str, int, tuple[tuple[int, ...], ...]]] = [
         ("top", 0, tuple(order[: request.k]))

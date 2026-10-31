@@ -437,11 +437,11 @@ def test_overlay_accepts_mappings_reduces_and_refuses_unknown_keys() -> None:
         )
         assert color_by(trace["conv2d_2_3"]) == pytest.approx(1.0)
         assert color_by(trace["relu_1_2"]) == pytest.approx(0.5)
-        with pytest.raises(tl.attribution.AttributionError, match="matches no module"):
+        with pytest.raises(tl.errors.AttributionError, match="matches no module"):
             tl.attribution.overlay(trace, {"not_a_layer": 1.0})
-        with pytest.raises(tl.attribution.AttributionError, match="reduce must be"):
+        with pytest.raises(tl.errors.AttributionError, match="reduce must be"):
             tl.attribution.overlay(trace, {"2": 1.0}, reduce="median")
-        with pytest.raises(tl.attribution.AttributionError, match="no extra\\['layer'\\]"):
+        with pytest.raises(tl.errors.AttributionError, match="no extra\\['layer'\\]"):
             tl.attribution.overlay(
                 trace,
                 [tl.attribution.saliency(model, inputs, target=0)],

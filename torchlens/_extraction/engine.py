@@ -1916,5 +1916,5 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
             run_state["intervention_fire_counts"],
         )
     )
-    writer.finalize(n_shards=n_committed, num_stimuli=row_start)
+    writer.finalize(n_shards=n_committed, n_stimuli=row_start)
     return container_paths

@@ -592,10 +592,10 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     return _build(
         trace,
         transcoders,
-        embedding_module=embedding_module,
+        embedding=embedding_module,
         target=target,
-        max_num_logits=max_num_logits,
-        logit_probability_coverage=logit_probability_coverage,
+        max_n_logits=max_num_logits,
+        desired_logit_prob=logit_probability_coverage,
         demeaned_logits=demeaned_logits,
         logits_at=logits_at,
         frozen=frozen,

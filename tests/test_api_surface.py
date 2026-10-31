@@ -125,7 +125,7 @@ TARGET_ALL = [
     "stable_across_passes",
     "pass_variance",
     "subspace",
-    # F39 unhide (conflict-ledger row 8): tl.stats / tl.aggregate promoted
+    # F39 unhide (conflict-ledger row 8): tl.stats / tl.stats.aggregate promoted
     # from reachable-but-undeclared lazy names to declared surface = 116.
     "stats",
     "aggregate",

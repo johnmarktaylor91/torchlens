@@ -230,10 +230,10 @@ class AttributionGraph:
         return graph_to_neuronpedia(
             self,
             slug=slug,
-            model_id=model_id,
+            scan=model_id,
             tokenizer=tokenizer,
             prompt=prompt,
-            node_influence_coverage=node_influence_coverage,
-            edge_influence_coverage=edge_influence_coverage,
+            node_threshold=node_influence_coverage,
+            edge_threshold=edge_influence_coverage,
             path=path,
         )

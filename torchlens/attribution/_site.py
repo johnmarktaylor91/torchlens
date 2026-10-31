@@ -225,21 +225,21 @@ class _SiteRoute:
         call = 0 if target.call is None else target.call
         if not firings:
             raise _firing_invalid(
-                target.layer,
+                target.module_address,
                 "it did not run in the forward pass",
                 target,
                 code="attribution_site_firing_invalid",
             )
         if target.call is None and len(firings) > 1:
             raise _firing_invalid(
-                target.layer,
+                target.module_address,
                 f"it ran {len(firings)} times",
                 replace(target, call=0),
                 code="attribution_site_firing_invalid",
             )
         if call >= len(firings):
             raise _firing_invalid(
-                target.layer,
+                target.module_address,
                 f"call={call} was asked for but it ran {len(firings)} times",
                 replace(target, call=len(firings) - 1),
                 code="attribution_site_firing_invalid",
@@ -247,7 +247,7 @@ class _SiteRoute:
         output = firings[call]
         if not isinstance(output, Tensor):
             raise _firing_invalid(
-                target.layer,
+                target.module_address,
                 f"its output is a {type(output).__name__}, not a tensor",
                 target,
                 code="attribution_site_firing_invalid",
@@ -329,7 +329,7 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
     if isinstance(unit, int):
         if activation.ndim < 2 or not -shape[-1] <= unit < shape[-1]:
             raise _unit_invalid(
-                target.layer,
+                target.module_address,
                 f"unit={unit} is outside the last axis of its output of shape {shape}",
                 _first_unit(target, shape),
                 code="attribution_site_unit_invalid",
@@ -339,7 +339,7 @@ def _select_unit(activation: Tensor, target: SiteTarget) -> Tensor:
         not -size <= index < size for index, size in zip(unit, shape[1:], strict=False)
     ):
         raise _unit_invalid(
-            target.layer,
+            target.module_address,
             f"unit={unit} does not index the axes after the batch axis of its output of "
             f"shape {shape}",
             _first_unit(target, shape),

@@ -1721,9 +1721,7 @@ def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
         for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
             func = getattr(owner, method_name)
             saved.append((func, func.__defaults__))
-            func.__defaults__ = _defaults_with_replacement(
-                func, "vis_outpath", str(tmp_path / basename)
-            )
+            func.__defaults__ = _defaults_with_replacement(func, "path", str(tmp_path / basename))
         yield
     finally:
         for func, defaults in reversed(saved):

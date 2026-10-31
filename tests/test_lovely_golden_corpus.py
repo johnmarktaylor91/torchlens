@@ -15,7 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.stats import degrade, glance, render_core_line, tensor_stats
+from torchlens.stats import glance, tensor_stats
+from torchlens.stats._stats_render import degrade, render_core_line
 
 
 def _arange(*shape: int, offset: float = 0.0) -> torch.Tensor:

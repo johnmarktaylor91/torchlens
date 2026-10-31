@@ -114,7 +114,7 @@ class _SitesPlan:
         fork = self.trace.fork(name="attribution_causal_audit")
         try:
             with torch.no_grad():
-                for selection, edit in self.build_interventions(keys):
+                for selection, edit in self.intervention(keys):
                     fork.do(selection, edit)
                 return self.score(fork)
         finally:

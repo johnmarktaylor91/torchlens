@@ -168,7 +168,7 @@ class SurgeryDiff:
 def surgery_census_text_for_diff(diff: SurgeryDiff) -> str:
     """The sidecar text for one diff export: diff rows + subject census."""
 
-    return diff.to_markdown() + "\n" + _subject_census_text(diff)
+    return diff.to_text() + "\n" + _subject_census_text(diff)
 
 
 def _subject_census_text(diff: SurgeryDiff) -> str:

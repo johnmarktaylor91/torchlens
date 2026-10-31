@@ -59,11 +59,11 @@ _CURATED_KWARGS = frozenset(
 #: its underlying spelling is a collision, not an override.
 _CURATED_TARGETS = frozenset(
     {
-        "vis_theme",
+        "theme",
         "collapse",
         "vis_call_depth",
-        "vis_outpath",
-        "vis_fileformat",
+        "path",
+        "file_format",
         "vis_save_only",
         "module",
     }
@@ -381,13 +381,13 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     call_kwargs: dict[str, Any] = dict(draw_kwargs)
     call_kwargs["collapse"] = resolved_collapse
     if theme is not None:
-        call_kwargs["vis_theme"] = theme
+        call_kwargs["theme"] = theme
     if module is not None:
         call_kwargs["module"] = module
     if depth is not None:
         call_kwargs["vis_call_depth"] = depth
     call_kwargs["vis_save_only"] = True  # never auto-open (D14); view= is handled below
-    call_kwargs["vis_fileformat"] = fileformat
+    call_kwargs["file_format"] = fileformat
 
     target: Path | None
     data: bytes | None = None
@@ -402,7 +402,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
 
     if target is None:
         with tempfile.TemporaryDirectory(prefix="tl-render-") as tmpdir:
-            call_kwargs["vis_outpath"] = str(Path(tmpdir) / "graph")
+            call_kwargs["path"] = str(Path(tmpdir) / "graph")
             dot = str(trace.draw(**call_kwargs))
             rendered = Path(tmpdir) / f"graph.{fileformat}"
             data = rendered.read_bytes() if rendered.exists() else None
@@ -410,7 +410,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
         outpath = str(target)
         if outpath.endswith(f".{fileformat}"):
             outpath = outpath[: -(len(fileformat) + 1)]
-        call_kwargs["vis_outpath"] = outpath
+        call_kwargs["path"] = outpath
         dot = str(trace.draw(**call_kwargs))
         print(f"TorchLens graph written to {target}")
         if view:

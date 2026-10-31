@@ -1,7 +1,7 @@
 """F39 unhide gates: promoted surface pins + the unhide teaching ratchet.
 
 Lane F39 (WALKTHROUGH B-IV) promotes the shipped-but-hidden surfaces into the
-declared story: ``tl.stats``/``tl.aggregate`` enter ``__all__`` (conflict-ledger
+declared story: ``tl.stats``/``tl.stats.aggregate`` enter ``__all__`` (conflict-ledger
 row 8 -- the promotion five memos claimed), and README/docs surface
 ``trace.profile()``, ``emit_nvtx=True``, ``register_op_rule``,
 ``fastlog.Recorder``, ``utils.list_modules``/``list_ops``, the
@@ -33,7 +33,7 @@ def test_stats_and_aggregate_are_declared_surface() -> None:
     import torchlens.stats as stats_module
 
     assert tl.stats is stats_module
-    assert tl.aggregate is stats_module.aggregate
+    assert tl.stats.aggregate is stats_module.aggregate
 
 
 def test_stats_namespace_serves_the_advertised_accumulators() -> None:
@@ -68,7 +68,7 @@ def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
 
     readme = (_REPO / "README.md").read_text(encoding="utf-8")
     for claim in (
-        "tl.aggregate",
+        "tl.stats.aggregate",
         "tl.stats",
         ".profile(",
         "honesty()",

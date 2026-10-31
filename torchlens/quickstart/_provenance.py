@@ -191,7 +191,7 @@ def provenance_for_plan(  # noqa: PLR0913 -- each kwarg is one NAMED evidence fi
         has_semantic_values=gold,
         call_structure=_call_structure(plan),
         tensors=_tensor_facts(plan),
-        facets=recipes,
+        recipes=recipes,
         strategy=strategy,
         attempts=attempts,
         constraining_op=constraining_op,
@@ -232,7 +232,7 @@ def provenance_to_record(provenance: InputProvenance) -> ResolvedPreprocessing:
     return ResolvedPreprocessing(
         source="torchlens.quickstart.input_resolver",
         identifier=f"rung{provenance.rung}:{provenance.origin}",
-        verified=provenance.values_semantic,
+        verified=provenance.has_semantic_values,
         config=config,
         description=provenance.describe(),
     )

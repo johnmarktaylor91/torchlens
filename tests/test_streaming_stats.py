@@ -108,7 +108,7 @@ def test_aggregate_smoke_on_small_dataloader() -> None:
 
     model = torch.nn.Linear(2, 1)
     batches = [torch.ones(1, 2), torch.zeros(1, 2)]
-    result = tl.aggregate(model, batches, {"output": tl.stats.Mean()})
+    result = tl.stats.aggregate(model, batches, {"output": tl.stats.Mean()})
     with torch.no_grad():
         expected_values = torch.cat([model(batch).reshape(-1) for batch in batches])
     assert result["output"] == pytest.approx(
@@ -131,7 +131,7 @@ def test_aggregate_warns_on_ambiguous_saved_output_selector_and_uses_first_match
     trace.cleanup()
 
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        result = tl.aggregate(model, [batch], {"linear": tl.stats.Mean()})
+        result = tl.stats.aggregate(model, [batch], {"linear": tl.stats.Mean()})
 
     assert result["linear"] == pytest.approx(expected)
 

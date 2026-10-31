@@ -227,7 +227,7 @@ def test_bad_settings_refuse_typed(kwargs, code) -> None:
     """Unknown method, steps with EAP, bad steps or reduction, a non-scalar metric, shapes."""
 
     call = {"corrupted": CORRUPT, "metric": fixture_metric, **kwargs}
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         torchlens.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
     assert caught.value.fields["code"] == code
 
@@ -243,9 +243,9 @@ def test_shared_norm_and_unshiftable_input_refuse_typed() -> None:
         "a0.h0<q>": SimpleNamespace(norm_address="ln", module_address="attn"),
         "m0": SimpleNamespace(norm_address="ln", module_address="mlp"),
     }
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         _eap._refuse_shared_norms(SimpleNamespace(receivers=receivers))
     assert caught.value.fields["code"] == "mi_edge_scores_shared_norm"
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         _eap._input_write_module(None, SimpleNamespace(_input_writes=()))
     assert caught.value.fields["code"] == "mi_edge_scores_input_unresolvable"

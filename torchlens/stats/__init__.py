@@ -31,7 +31,7 @@ __tl_layer__ = "FACADE"
 # public lovely surfaces on these.
 # C06 observability substrate (explorer D18): the always-on scalar Spine and
 # the fixed signed-log2 Histogram implement StreamingStat, closing the
-# tl.stats Histogram gap -- tl.aggregate gets dataset-mode histograms free.
+# tl.stats Histogram gap -- tl.stats.aggregate gets dataset-mode histograms free.
 # One implementation home (torchlens/observability/_kernels.py); spellings
 # DOCUMENTED-UNSTABLE pending naming-session ratification.
 from ..observability._kernels import (  # noqa: E402
@@ -47,7 +47,6 @@ from ..observability._kernels import (  # noqa: E402
 # batches. Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 from ._capture_stats import site_stats  # noqa: E402
 from ._fitted import (  # noqa: E402
-    FittedArtifactError,
     FittedPCA,
     load_fitted,
     save_fitted,
@@ -58,16 +57,8 @@ from ._glance import glance  # noqa: E402
 # Quantile and TopK, with UnitTopK carrying example ids and positions.
 # Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 from ._per_unit import Quantile, TopK, UnitTopK  # noqa: E402
-from ._seams import NarrationObserver, narrate, summary_cell, treescope_card_fields  # noqa: E402
-from ._stats_render import (  # noqa: E402
-    GLYPH_RAMP_ASCII,
-    GLYPH_RAMP_UNICODE,
-    degrade,
-    format_sig,
-    render_core_line,
-)
+from ._seams import NarrationObserver, narrate  # noqa: E402
 from ._tensor_stats import (  # noqa: E402
-    TENSOR_STATS_SCHEMA_VERSION,
     FamilyEvidence,
     TensorStats,
     tensor_stats,
@@ -86,10 +77,7 @@ __all__ = [
     "CrossCovariance",
     "NarrationObserver",
     "FamilyEvidence",
-    "FittedArtifactError",
     "FittedPCA",
-    "GLYPH_RAMP_ASCII",
-    "GLYPH_RAMP_UNICODE",
     "Histogram",
     "HistogramDescriptor",
     "HistogramResult",
@@ -101,23 +89,17 @@ __all__ = [
     "RunningStats",
     "RunningStatsResult",
     "StreamingStat",
-    "TENSOR_STATS_SCHEMA_VERSION",
     "TensorStats",
     "TopK",
     "TrajectoryStats",
     "UnitTopK",
     "aggregate",
     "cka",
-    "degrade",
     "narrate",
-    "format_sig",
     "glance",
     "load_fitted",
     "measure_trajectory",
-    "render_core_line",
     "save_fitted",
     "site_stats",
-    "summary_cell",
     "tensor_stats",
-    "treescope_card_fields",
 ]

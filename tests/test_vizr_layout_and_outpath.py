@@ -66,7 +66,7 @@ def _shipped_draw_default() -> Iterator[None]:
     ]
     defaults = list(saved or ())
     first_defaulted = len(positional) - len(defaults)
-    index = [p.name for p in positional].index("vis_outpath") - first_defaulted
+    index = [p.name for p in positional].index("path") - first_defaulted
     defaults[index] = None
     func.__defaults__ = tuple(defaults)
     try:

@@ -68,7 +68,7 @@ def test_distilgpt2_fresh_run_product_never_carries_foreign_ledger():
     trace = tl.trace(
         runner,
         x1,
-        episode=EpisodeSpec(stepped_module=runner.model, num_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS),
     )
     ledger = episode_ledger_for(trace)
     assert ledger is not None

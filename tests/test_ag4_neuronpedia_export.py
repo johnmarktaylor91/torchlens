@@ -321,7 +321,7 @@ def test_bos_position_nodes_are_exported(graphs) -> None:
 )
 def test_refuses_invalid_arguments(graphs, kwargs) -> None:
     settings = {"slug": "fixture", "scan": "tiny", "tokenizer": TOKENIZER, **kwargs}
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         graphs["F1"].to_neuronpedia(**settings)
     assert excinfo.value.fields["code"] == "attribution_graph_export_argument_invalid"
     assert "Remedy:" in str(excinfo.value)
@@ -362,7 +362,7 @@ def _with_cycle(graph):
     ids=["no_token_ids", "unaligned_layers", "non_finite", "no_influence", "cycle"],
 )
 def test_refuses_graphs_the_schema_cannot_express(graphs, change) -> None:
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         _export(change(graphs["F1"]))
     assert excinfo.value.fields["code"] == "attribution_graph_export_unsupported"
     assert "Remedy:" in str(excinfo.value)
@@ -400,7 +400,7 @@ def test_contract_check_refuses_broken_exports(graphs) -> None:
         "bool_weight",
     )
     for change in changes:
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             check_contract(_broken(exported, change))
         assert excinfo.value.fields["code"] == "attribution_graph_contract_invalid", change
         assert "Remedy:" in str(excinfo.value), change

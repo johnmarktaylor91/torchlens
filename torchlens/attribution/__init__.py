@@ -10,7 +10,6 @@ from torchlens.attribution._causal_audit import (
 )
 from torchlens.attribution._core import (
     Attribution,
-    AttributionError,
     input_x_grad,
     integrated_gradients,
     saliency,
@@ -45,7 +44,6 @@ from torchlens.attribution._viz import overlay
 from torchlens.attribution.graph import AttributionGraph, GraphNode, build_graph
 from torchlens.attribution.onebackward import (
     DEFAULT,
-    ReadError,
     ReadRow,
     ReadTable,
     load_read_table,
@@ -54,7 +52,6 @@ from torchlens.attribution.onebackward import (
 )
 
 __all__ = [
-    "AttributionError",
     "AttributionGraph",
     "Attribution",
     "CausalAudit",
@@ -64,7 +61,6 @@ __all__ = [
     "PerturbationCurve",
     "CurveStep",
     "DEFAULT",
-    "ReadError",
     "ReadRow",
     "ReadTable",
     "build_graph",

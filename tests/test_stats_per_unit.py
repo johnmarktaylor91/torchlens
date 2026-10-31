@@ -126,7 +126,7 @@ def test_topk_neurons_match_oracle(batch_size: int) -> None:
     model = _MLP().eval()
     data = _inputs(N_EXAMPLES, 4)
     label = _relu_label(model, data[:2])
-    results = tl.aggregate(
+    results = tl.stats.aggregate(
         model,
         _batches(data, batch_size),
         metrics={label: tl.stats.TopK(k=4, unit_axis=-1)},
@@ -145,7 +145,7 @@ def test_topk_latents_match_oracle(batch_size: int) -> None:
     sae = _SAE()
     data = _inputs(N_EXAMPLES, TOKENS, 4)
     label = _relu_label(model, data[:2])
-    results = tl.aggregate(
+    results = tl.stats.aggregate(
         model,
         _batches(data, batch_size),
         metrics={label: tl.stats.TopK(k=6, unit_axis=-1, encoder=sae.encode)},
@@ -169,7 +169,7 @@ def test_quantile_per_unit_exact_under_reservoir(site: str) -> None:
     label = _relu_label(model, data[:2])
     encoder = sae.encode if site == "latents" else None
     levels = (0.1, 0.5, 0.9)
-    results = tl.aggregate(
+    results = tl.stats.aggregate(
         model,
         _batches(data, 3),
         metrics={label: tl.stats.Quantile(levels, unit_axis=-1, encoder=encoder)},

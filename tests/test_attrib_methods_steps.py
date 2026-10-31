@@ -14,8 +14,8 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
 from torchlens.attribution._steps import _midpoint_alphas, _midpoint_schedule
+from torchlens.errors import AttributionError
 
 
 class _SmoothMlp(nn.Module):

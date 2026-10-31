@@ -22,7 +22,8 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError, SiteStash
+from torchlens.attribution import SiteStash
+from torchlens.errors import AttributionError
 
 # Per-test tiers: everything here is smoke EXCEPT the squeezenet row, which is
 # heavy + real_model (a smoke mark would combine tiers and fail the marker lint).

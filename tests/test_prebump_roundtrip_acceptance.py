@@ -419,7 +419,7 @@ def _episode_trace(n_steps: int = 2) -> tl.Trace:
         return tl.trace(
             runner,
             torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeSpec(stepped_module=lm, num_steps=n_steps),
+            episode=tl.options.EpisodeSpec(stepped_module=lm, n_steps=n_steps),
         )
 
 
@@ -817,7 +817,7 @@ def test_combination_episode_structure_only_refuses() -> None:
         tl.trace(
             runner,
             torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeSpec(stepped_module=lm, num_steps=2),
+            episode=tl.options.EpisodeSpec(stepped_module=lm, n_steps=2),
             capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"

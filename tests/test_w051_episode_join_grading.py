@@ -75,7 +75,7 @@ def test_one_edited_context_position_counts_one() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1, 2, 3, 4, 5, 6, 7]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=3),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=3),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "exogenous", "continuous"]
@@ -135,7 +135,7 @@ def test_forced_episode_returning_predictions_is_not_a_break() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=3, forced_tokens=(5, 9, 13)),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=3, forced_tokens=(5, 9, 13)),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "forced", "forced"]
@@ -170,7 +170,7 @@ def test_forced_declaration_that_does_not_match_the_feed_grades_exogenous() -> N
     log = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=3, forced_tokens=(9, 9, 9)),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=3, forced_tokens=(9, 9, 9)),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "exogenous", "exogenous"]
@@ -203,7 +203,7 @@ def test_multi_token_decoding_refuses_instead_of_misattributing() -> None:
         tl.trace(
             model,
             torch.tensor([[1]]),
-            episode=EpisodeSpec(stepped_module=model.step, num_steps=3),
+            episode=EpisodeSpec(stepped_module=model.step, n_steps=3),
         )
     assert info.value.fields["code"] == "episode_declaration_invalid"
     message = str(info.value)
@@ -231,7 +231,7 @@ def test_prompt_plus_completion_shape_stays_licensed() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1, 2, 3, 4]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=3),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=3),
     )
     ledger = episode_ledger_for(log)
     assert ledger is not None

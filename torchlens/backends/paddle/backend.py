@@ -409,7 +409,7 @@ class PaddleBackend:
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
-        facet_recipes = _default_if_missing(extra_kwargs.pop("recipes", None), None)
+        facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
         if grad_options is not None and (intervene is not None or halt is not None):
             raise BackendUnsupportedError(
                 "paddle backend preview cannot combine grad_options with "
@@ -508,11 +508,11 @@ class PaddleBackend:
                 recipe_tuple = tuple(facet_recipes)
             except TypeError as exc:
                 raise BackendUnsupportedError(
-                    "paddle backend trace(recipes=...) requires an iterable of recipe callables."
+                    "paddle backend trace(facets=...) requires an iterable of recipe callables."
                 ) from exc
             if not all(callable(recipe) for recipe in recipe_tuple):
                 raise BackendUnsupportedError(
-                    "paddle backend trace(recipes=...) requires recipe callables."
+                    "paddle backend trace(facets=...) requires recipe callables."
                 )
             from ...semantic import facets as facets_mod
 

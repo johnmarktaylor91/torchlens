@@ -19,7 +19,7 @@ built from:
   format change.
 
 Both kernels implement the ``torchlens.stats`` ``StreamingStat`` protocol
-(``update`` / ``result``), so ``tl.aggregate`` gets dataset-mode histograms
+(``update`` / ``result``), so ``tl.stats.aggregate`` gets dataset-mode histograms
 free (D18). Neither kernel consumes RNG (model or global), and half/bf16
 inputs reduce in float32-or-wider with the reduction dtype recorded.
 

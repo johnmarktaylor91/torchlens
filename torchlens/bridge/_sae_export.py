@@ -4,7 +4,7 @@ Two writers, one per consumer, each taking the latents of one batch (a dense
 ``[examples, sequence, latents]`` tensor such as ``SpliceResult.latents``) or a
 per-latent top-k over a whole dataset (the ``UnitTopK`` that
 ``tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)`` returns from
-``tl.aggregate``), together with the token ids of the examples:
+``tl.stats.aggregate``), together with the token ids of the examples:
 
 - ``write_delphi`` writes the latent cache delphi's ``LatentDataset`` loads
   (eai-delphi 0.1.3): one folder per site holding ``{start}_{end}.safetensors``
@@ -87,7 +87,7 @@ def _dense_latents(writer: str, latents: Any, tokens: torch.Tensor) -> torch.Ten
             f"latents]) or a tl.stats.TopK(..., unit_axis=-1) result; got {shape}",
             code="sae_export_latents_invalid",
             remedy="pass SpliceResult.latents, sae.encode(activations), or the UnitTopK that "
-            f"tl.aggregate returns for tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode); see {_DOCS}",
+            f"tl.stats.aggregate returns for tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode); see {_DOCS}",
         )
     dense = latents.detach().to(device="cpu", dtype=torch.float64)
     if dense.ndim == 2:
@@ -130,7 +130,7 @@ def _topk_entries(
             f"{writer}: the top-k names example {int(example.max())} and position "
             f"{int(position.max())}, outside tokens shaped {tuple(tokens.shape)}",
             code="sae_export_tokens_invalid",
-            remedy="pass the token ids of the whole dataset in the order tl.aggregate saw it "
+            remedy="pass the token ids of the whole dataset in the order tl.stats.aggregate saw it "
             "(row i is example id i)",
         )
     return example, position, latent, value

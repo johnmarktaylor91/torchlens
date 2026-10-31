@@ -69,7 +69,7 @@ def _capture(runner_cls, **spec_kwargs):
     return tl.trace(
         runner_cls(model, 4),
         torch.tensor([[1, 2, 3]]),
-        episode=EpisodeSpec(stepped_module=model, num_steps=4, **spec_kwargs),
+        episode=EpisodeSpec(stepped_module=model, n_steps=4, **spec_kwargs),
     )
 
 

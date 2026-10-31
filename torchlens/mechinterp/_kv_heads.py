@@ -155,7 +155,7 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
         baseline_seconds = (time.perf_counter() - started) / 2.0
         baselines = _baseline_metrics(clean_log, corrupted_log, metric)
         expansions = _locate_all(clean_log, corrupted_log, site)
-        n_q = expansions[0].num_q_heads
+        n_q = expansions[0].n_q_heads
         head_list = _head_list(heads, n_q)
         n_cells = _disclose_cost_and_enforce_budget(
             [len(expansions), len(head_list)], baseline_seconds, budget
@@ -361,7 +361,7 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
         raw_label=str(op.raw_label),
         func_name=str(op.func_name),
         clean_value=op.out.detach().clone(),
-        num_q_heads=n_q,
+        n_q_heads=n_q,
         n_kv_heads=n_kv,
     )
 

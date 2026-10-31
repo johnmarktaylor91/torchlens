@@ -16,7 +16,7 @@ import torch
 from torch import Tensor, nn
 
 import torchlens as tl
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 _ATOL = 1e-6
 

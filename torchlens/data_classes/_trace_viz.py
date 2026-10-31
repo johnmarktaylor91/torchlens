@@ -604,14 +604,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            path=path,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             vis_node_mode=vis_node_mode,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            file_format=file_format,
+            vis_fileformat=file_format,
             direction=vis_direction,
             code_panel=code_panel,
             vis_mode=vis_mode,

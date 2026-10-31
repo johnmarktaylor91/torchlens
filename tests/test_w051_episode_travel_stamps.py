@@ -61,7 +61,7 @@ def _episode(model: _Greedy, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
         **extra,
     )
 

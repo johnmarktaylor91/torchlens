@@ -19,8 +19,8 @@ from torch import Tensor, nn
 
 import torchlens as tl
 from torchlens import attribution
-from torchlens.attribution import AttributionError
 from torchlens.attribution._occlusion import occlusion
+from torchlens.errors import AttributionError
 
 
 class _ImageScale(nn.Module):

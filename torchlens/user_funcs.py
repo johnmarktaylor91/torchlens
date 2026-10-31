@@ -948,7 +948,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # Idempotent when the registry entry already resolved it; load-bearing for
     # direct/autoroute callers so the internal flat keys are honored, not dropped.
     # intervene=/halt= are DISPATCHED options on MLX (static-label live
-    # interventions); recipes= is refused typed by the capture path below.
+    # interventions); facets= is refused typed by the capture path below.
     # None of the three may flow through the capability-gated reject helper:
     # with interventions=True that would raise the never-dispatches
     # conformance error instead of running or refusing them properly.
@@ -996,11 +996,11 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             allowed=_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS,
             backend_name="MLX",
         )
-    recipes_value = kwargs.get("recipes", MISSING)
+    recipes_value = kwargs.get("facets", MISSING)
     if recipes_value is not MISSING and recipes_value is not None:
         raise BackendUnsupportedError(
             "MLX backend supports interventions only through static-label "
-            "trace(intervene=tl.when(...)) predicates; recipe specs (recipes=) "
+            "trace(intervene=tl.when(...)) predicates; recipe specs (facets=) "
             "are not supported. Use the PyTorch backend for intervention recipes."
         )
     # N5 fix: every name below except the genuine top-level ``trace()``
@@ -2685,7 +2685,7 @@ def trace(
     profile:
         If True, explicitly marks the returned trace as profiled. Phase timings are
         always populated on ``trace._phase_timings``.
-    recipes:
+    facets:
         Per-trace additive facet recipes captured into the immutable
         registry snapshot for the returned trace.
     grouping:
@@ -2830,7 +2830,7 @@ def trace(
                 "storage": storage,
                 "streaming": streaming,
                 "profile": profile,
-                "recipes": facets,
+                "facets": facets,
                 "episode": episode,
                 "grouping": grouping,
                 "echo": echo,
@@ -2961,7 +2961,7 @@ def _trace_torch_model(
     module_identity_mode: str | None | MissingType = MISSING,
     payload_policy: str | None | MissingType = MISSING,
     save_preview: bool | MissingType = MISSING,
-    recipes: (
+    facets: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
         | None
@@ -3297,7 +3297,7 @@ def _trace_torch_model(
     verbose = capture_options.verbose
     name = capture_options.name
     cache_enabled = capture_options.cache
-    facet_recipes = None if isinstance(recipes, MissingType) else recipes
+    facet_recipes = None if isinstance(facets, MissingType) else facets
     if capture_options.stop_after is not None and halt is not None:
         raise ArgumentConflictError(
             "Both stop_after= and halt= were configured; they compile into the same "

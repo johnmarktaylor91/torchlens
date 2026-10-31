@@ -304,10 +304,10 @@ def test_grid_refusals_are_typed(r0_models):
 
     clean = torch.randint(0, 500, (1, 6))
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
     assert excinfo.value.fields["code"] == "mi_grid_engine_unsupported"
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
     assert excinfo.value.fields["code"] == "mi_grid_axes_invalid"
 
 
@@ -354,17 +354,19 @@ def test_grid_budget_length_and_flatness(r0_models):
         return anchor_module.facets["logits"].value[0, -1, 42]
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
+        mi.patch_grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
     assert excinfo.value.fields["code"] == "mi_grid_budget_exceeded"
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",))
+        mi.patch_grid(
+            model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",)
+        )
     assert excinfo.value.fields["code"] == "mi_grid_length_mismatch"
 
     # Self-patch: every fire replaces an identical value and every metric is
     # flat -- the campaign AND grid disclosures both warn (mikit D21).
     with pytest.warns(UserWarning) as caught:
-        flat = mi.grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
+        flat = mi.patch_grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
     assert bool((flat.values == flat.values.reshape(-1)[0]).all())
     codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "mi_grid_all_identical" in codes  # D21: flatness DISCLOSES, never refuses

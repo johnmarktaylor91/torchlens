@@ -99,7 +99,8 @@ def _stats_line(tensor: Any) -> str | None:
         import importlib
 
         stats = importlib.import_module("torchlens.stats")
-        return str(stats.render_core_line(stats.tensor_stats(tensor)))
+        render = importlib.import_module("torchlens.stats._stats_render")
+        return str(render.render_core_line(stats.tensor_stats(tensor)))
     except Exception:  # noqa: BLE001 - stats are cosmetic on a card; degrade
         return None
 

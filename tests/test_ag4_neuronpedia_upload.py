@@ -202,7 +202,7 @@ def _too_small(graph: dict) -> dict:
 def test_graph_upload_refuses_an_invalid_graph_before_any_request(
     fake, exported, change, code
 ) -> None:
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.graph.upload_to_neuronpedia(change(exported), api_key=KEY)
     assert excinfo.value.fields["code"] == code
     assert "Remedy:" in str(excinfo.value)
@@ -213,7 +213,7 @@ def test_graph_upload_refuses_a_file_over_the_size_cap_before_any_request(
     fake, exported, monkeypatch
 ) -> None:
     monkeypatch.setattr(up, "_MAX_GRAPH_BYTES", 2048)
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
     assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"
     assert "2,048" in str(excinfo.value)
@@ -223,7 +223,7 @@ def test_graph_upload_refuses_a_file_over_the_size_cap_before_any_request(
 @pytest.mark.parametrize("kind", ["graph", "vector"])
 def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     for key in (None, "", "   "):
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             if kind == "graph":
                 tl.attribution.graph.upload_to_neuronpedia(exported, api_key=key)
             else:
@@ -252,7 +252,7 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
 
         monkeypatch.setattr(up.urllib.request, "urlopen", unreachable)
         monkeypatch.setattr(up, "_make_transport", _REAL_TRANSPORT)
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
         assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
         assert step in str(excinfo.value) and excinfo.value.__cause__ is None
@@ -265,7 +265,7 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
         assert _REAL_TRANSPORT().send(request) == up._Response(403, b"no")
         return
     fake.script = list(script)
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
     assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
     assert step in str(excinfo.value)
@@ -275,7 +275,7 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
 def test_graph_upload_refuses_a_response_without_its_fields(fake, exported) -> None:
     for answer in ({"url": SIGNED}, {"putRequestId": "p", "url": "http://plain/x.json"}, b"[]"):
         fake.script, fake.sent = [(200, answer)], []
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
         assert excinfo.value.fields["code"] == "neuronpedia_upload_response_invalid"
         assert len(fake.sent) == 1
@@ -288,7 +288,7 @@ def test_api_key_and_signature_never_appear_in_errors_or_logs(fake, exported, ca
         _graph_answers()[0],
         (403, f"<Error>SignatureDoesNotMatch {signature} key={KEY}</Error>".encode()),
     ]
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
     error = excinfo.value
     texts = [str(error), repr(error), str(error.args), repr(error.fields), caplog.text]
@@ -297,7 +297,7 @@ def test_api_key_and_signature_never_appear_in_errors_or_logs(fake, exported, ca
         assert KEY not in text and signature not in text
     assert error.__cause__ is None
     fake.script, fake.sent = [(500, f"echo {KEY}".encode())], []
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         _direction().upload_to_neuronpedia(api_key=KEY, model_id="tiny", name="v")
     assert KEY not in str(excinfo.value) and "<api key>" in str(excinfo.value)
 
@@ -350,7 +350,7 @@ def _with_vector(vector: torch.Tensor) -> tl.intervention.Direction:
 )
 def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction, settings) -> None:
     arguments = {"api_key": KEY, "scan": "tiny", "vector_label": "v", **settings}
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         direction().upload_to_neuronpedia(**arguments)
     assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"
     assert "Remedy:" in str(excinfo.value)
@@ -359,7 +359,7 @@ def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction
 
 def test_vector_upload_http_error(fake) -> None:
     fake.script = [(400, {"message": "Vector dimension does not match model dimension"})]
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         _direction().upload_to_neuronpedia(api_key=KEY, model_id="tiny", name="v")
     assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
     assert "Vector dimension does not match" in str(excinfo.value)

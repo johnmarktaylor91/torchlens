@@ -14,8 +14,8 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
 from torchlens.attribution._result import AttributionWarning
+from torchlens.errors import AttributionError
 
 
 class _Linear(nn.Module):

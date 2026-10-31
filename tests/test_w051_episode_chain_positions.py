@@ -100,7 +100,7 @@ def _header(trace: tl.Trace) -> dict:
 
 def _trace(model: nn.Module, **spec) -> tl.Trace:
     return tl.trace(
-        model, PROMPT, episode=EpisodeSpec(stepped_module=model.step, num_steps=3, **spec)
+        model, PROMPT, episode=EpisodeSpec(stepped_module=model.step, n_steps=3, **spec)
     )
 
 

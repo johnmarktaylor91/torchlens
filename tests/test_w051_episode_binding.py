@@ -69,7 +69,7 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[prompt]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
         capture=CaptureOptions(random_seed=0),
         **extra,
     )
@@ -178,7 +178,7 @@ def test_value_free_ledger_binds_with_the_basis_disclosed() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"),
+        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, step_output_kind="none"),
         save=tl.in_module("step.emb"),
     )
     attestation = log.episode_coupling

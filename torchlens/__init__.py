@@ -70,7 +70,6 @@ _LAZY_ATTRS = {
     "Recording": ("torchlens.fastlog", "Recording"),
     "Trace": ("torchlens.data_classes.trace", "Trace"),
     "add": ("torchlens.intervention", "add"),
-    "aggregate": ("torchlens.stats", "aggregate"),
     "assert_unchanged": ("torchlens.hash", "assert_unchanged"),
     "attribution": ("torchlens.attribution", None),
     # r7 R81 (sol b2): docs/semantic_io.md documents tl.autoroute.output.*
@@ -255,6 +254,7 @@ def _resolve_top_level(name: str) -> _Any:
 # docs/reference/deprecations.md teaches the same names in prose.
 _REDIRECTS: dict[str, str] = {
     "ActivationPostfunc": "use torchlens.types.ActivationPostfunc",
+    "aggregate": "use torchlens.stats.aggregate",
     "batched_extract": "use torchlens.extract_dataset",
     "Buffer": "use torchlens.types.Buffer",
     "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
@@ -883,7 +883,6 @@ __all__ = [
     # the streaming-statistics namespace and its dataloader aggregation door
     # were shipped, documented-unstable, and root-reachable but undeclared.
     "stats",
-    "aggregate",
 ]
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

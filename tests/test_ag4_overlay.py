@@ -124,7 +124,7 @@ def test_graph_overlay_reduce_applies_across_a_site(built) -> None:
 
 def test_graph_overlay_refuses_an_unknown_graph_value(built) -> None:
     trace, graph = built["F1"]
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.overlay(trace, graph, graph_value="gradient")
     assert excinfo.value.fields["code"] == "attribution_overlay_argument_invalid"
     assert "Remedy:" in str(excinfo.value)
@@ -133,7 +133,7 @@ def test_graph_overlay_refuses_an_unknown_graph_value(built) -> None:
 def test_graph_value_is_refused_for_other_sources(built) -> None:
     trace, _graph = built["F1"]
     label = trace.layer_labels[1]
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.overlay(trace, {label: 1.0}, graph_value="influence")
     assert excinfo.value.fields["code"] == "attribution_overlay_argument_invalid"
     assert tl.attribution.overlay(trace, {label: 1.0})(trace[label]) == 1.0
@@ -142,7 +142,7 @@ def test_graph_value_is_refused_for_other_sources(built) -> None:
 def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     _trace, graph = built["F1"]
     other = tl.trace(nn.Sequential(nn.Linear(2, 2)), torch.ones(1, 2))
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         tl.attribution.overlay(other, graph)
     assert excinfo.value.fields["code"] == "attribution_overlay_graph_mismatch"
     assert "Remedy:" in str(excinfo.value)

@@ -139,7 +139,7 @@ def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
         n_components=k,
         formula="dense_jl_l2_heuristic",
         version=1,
-        num_samples=num_samples,
+        n_samples=num_samples,
         eps=eps,
         note=(
             "dense-JL Euclidean heuristic (sklearn johnson_lindenstrauss_min_dim "

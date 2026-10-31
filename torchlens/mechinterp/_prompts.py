@@ -234,7 +234,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         dla = direct_logit_contributions(
             trace, answer=answer_ids[0], vs=int(vs) if vs is not None else None, positions=pos
         )
-        contribution_rows = dla.top(5)
+        contribution_rows = dla.topk(5)
 
     pieces = None
     if tokenizer is not None and input_ids:

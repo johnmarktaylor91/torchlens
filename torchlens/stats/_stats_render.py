@@ -198,7 +198,7 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
         special = "no_finite_values"
     elif stats.is_all_zero:
         special = "all_zero"
-    elif constant is not None and stats.sd == 0:
+    elif constant is not None and stats.std == 0:
         special = f"constant={value_token(constant)}"
     if special is not None:
         return [special]
@@ -236,11 +236,11 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
             parts.append(f"{label}={format_sig(stats.mean)}")
     elif stats.mean_evidence.policy == "unavailable" and stats.mean_evidence.reason:
         parts.append(f"{label}=unavailable({stats.mean_evidence.reason})")
-    if stats.sd is not None:
+    if stats.std is not None:
         if stats.std_evidence.is_sampled:
-            parts.append(f"{sd_label}=~{format_sampled(stats.sd, stats.std_se)}")
+            parts.append(f"{sd_label}=~{format_sampled(stats.std, stats.std_se)}")
         else:
-            parts.append(f"{sd_label}={format_sig(stats.sd)}")
+            parts.append(f"{sd_label}={format_sig(stats.std)}")
     return parts
 
 

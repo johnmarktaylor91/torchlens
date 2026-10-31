@@ -18,9 +18,9 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
 from torchlens.attribution._result import AttributionWarning
 from torchlens.attribution._text import _dual_criterion_met
+from torchlens.errors import AttributionError
 
 _VOCAB = ["<pad>", "the", "eiffel", "tower", "is", "in", "paris", "france", "cat", "sat"]
 

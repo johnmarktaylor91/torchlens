@@ -3,7 +3,7 @@
 One voice for the value-bearing records: ``repr(x)`` is ONE envelope+core
 line and ``str(x)`` is a bounded card whose first line IS the repr (D15).
 The core bytes come from the C02 sound kernel through
-:func:`torchlens.stats.render_core_line`; the envelope affixes provenance
+``torchlens.stats._stats_render.render_core_line``; the envelope affixes provenance
 (memo 4.2); honesty tokens are the shared vocabulary of memo 4.4 and are
 never laundered. Multi-pass layers show per-pass cores or a count, never
 a pooled statistic (D32).
@@ -109,7 +109,8 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
         return f"{_metadata_core(record)} {FREED}"
     if not isinstance(payload, torch.Tensor):
         return f"{_metadata_core(record)} {PREVIEW_BACKEND}"
-    from ..stats import render_core_line, tensor_stats
+    from ..stats import tensor_stats
+    from ..stats._stats_render import render_core_line
 
     return render_core_line(tensor_stats(payload, identity=identity), max_width=max_width)
 
@@ -334,8 +335,9 @@ def param_repr_line(param: Any) -> str:
 
     import torch
 
-    from ..stats import render_core_line, tensor_stats
+    from ..stats import tensor_stats
     from ..stats._envelope import envelope_line
+    from ..stats._stats_render import render_core_line
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     if isinstance(live, torch.Tensor):
@@ -395,7 +397,8 @@ def buffer_repr_line(buffer: Any) -> str:
 
     initial = getattr(buffer, "initial_value", None)
     if isinstance(initial, torch.Tensor):
-        from ..stats import render_core_line, tensor_stats
+        from ..stats import tensor_stats
+        from ..stats._stats_render import render_core_line
 
         core = render_core_line(tensor_stats(initial, identity=getattr(buffer, "address", None)))
         basis = "snapshot at capture"

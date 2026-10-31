@@ -67,7 +67,7 @@ def _normalize_buffer_visibility(
         f"received {show_buffer_layers!r}",
         code="buffer_visibility_invalid",
         remedy="pass show_buffer_layers='never', 'meaningful', or 'always'",
-        argument="show_buffer_layers",
+        argument="show_buffers",
     )
 
 
