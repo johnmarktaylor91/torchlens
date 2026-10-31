@@ -855,7 +855,7 @@ def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> N
     previously interpolated raw container-path text into a Graphviz
     HTML-like edge label. A ``DictKey``/``HFKey`` output-dict key containing
     ``&``, ``<``, or ``>`` is a realistic shape -- container path components
-    render as ``str(component.key)`` (``_container_component_role`` in
+    render as ``str(component._key)`` (``_container_component_role`` in
     ``_render_leaf.py``) -- and previously broke Graphviz's HTML-like label
     parser, raising ``GraphvizRenderError`` on ``draw()``. Now the text is
     escaped before interpolation. Renders to an actual SVG file (not just

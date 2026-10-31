@@ -108,11 +108,11 @@ def normalize_output_path(
         if isinstance(component, TupleIndex):
             normalized.append(component.index)
         elif isinstance(component, DictKey):
-            normalized.append(component.key)
+            normalized.append(component._key)
         elif isinstance(component, NamedField | DataclassField):
-            normalized.append(component.name)
+            normalized.append(component._name)
         elif isinstance(component, HFKey):
-            normalized.append(component.key)
+            normalized.append(component._key)
         else:
             normalized.append(component)
     return tuple(normalized)

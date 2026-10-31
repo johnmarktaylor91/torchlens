@@ -477,9 +477,9 @@ def _output_path_component_matches(saved_component: Any, requested_component: An
     if isinstance(saved_component, TupleIndex):
         return saved_component.index == requested_component
     if isinstance(saved_component, (DictKey, HFKey)):
-        return saved_component.key == requested_component
+        return saved_component._key == requested_component
     if isinstance(saved_component, (NamedField, DataclassField)):
-        return saved_component.name == requested_component
+        return saved_component._name == requested_component
     return saved_component == requested_component
 
 

@@ -4939,13 +4939,13 @@ def _normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...]:
             # accounting instead of silently vanishing. A non-grammar key still raises
             # (the caller's refusal/skip semantics are unchanged).
             try:
-                normalized.append(encode_mapping_key(component.key))
+                normalized.append(encode_mapping_key(component._key))
             except ValueError as exc:
                 raise ValueError(
                     "Runnable container paths require grammar-encodable mapping keys."
                 ) from exc
         elif isinstance(component, (NamedField, DataclassField)):
-            normalized.append(component.name)
+            normalized.append(component._name)
         elif isinstance(component, (str, int)):
             normalized.append(component)
         else:

@@ -192,11 +192,11 @@ def _path_component_key(component: Any) -> Any:
     if component_type == "TupleIndex":
         return component.index
     if component_type == "DictKey":
-        return component.key
+        return component._key
     if component_type == "HFKey":
-        return component.key
+        return component._key
     if component_type in {"NamedField", "DataclassField"}:
-        return component.name
+        return component._name
     return component
 
 

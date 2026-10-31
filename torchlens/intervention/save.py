@@ -1063,16 +1063,16 @@ def _serialize_output_path_component(
     if isinstance(value, DictKey):
         return {
             "__output_path_component__": "dict_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, HFKey):
         return {
             "__output_path_component__": "hf_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, NamedField):
-        return {"__output_path_component__": "named_field", "name": value.name}
-    return {"__output_path_component__": "dataclass_field", "name": value.name}
+        return {"__output_path_component__": "named_field", "name": value._name}
+    return {"__output_path_component__": "dataclass_field", "name": value._name}
 
 
 def _serialize_helper(

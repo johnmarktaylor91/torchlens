@@ -101,10 +101,10 @@ def _component_values(paths: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
         for component in path:
             if hasattr(component, "index"):
                 path_values.append(component.index)
-            elif hasattr(component, "key"):
-                path_values.append(component.key)
-            elif hasattr(component, "name"):
-                path_values.append(component.name)
+            elif hasattr(component, "_key"):
+                path_values.append(component._key)
+            elif hasattr(component, "_name"):
+                path_values.append(component._name)
             else:
                 path_values.append(component)
         values.append(tuple(path_values))

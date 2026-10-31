@@ -169,10 +169,10 @@ def _hashable_path_component(component: Any) -> Any:
     component_type = type(component).__name__
     if component_type == "TupleIndex" and hasattr(component, "index"):
         return {"type": type(component).__name__, "index": component.index}
-    if component_type in {"DictKey", "HFKey"} and hasattr(component, "key"):
-        return {"type": type(component).__name__, "key": repr(component.key)}
-    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "name"):
-        return {"type": type(component).__name__, "name": component.name}
+    if component_type in {"DictKey", "HFKey"} and hasattr(component, "_key"):
+        return {"type": type(component).__name__, "key": repr(component._key)}
+    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "_name"):
+        return {"type": type(component).__name__, "name": component._name}
     return {"type": type(component).__name__, "value": repr(component)}
 
 

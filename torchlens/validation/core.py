@@ -2670,13 +2670,13 @@ def _index_recomputed_output_component(output: Any, component: OutputPathCompone
     if isinstance(component, TupleIndex):
         return output[component.index]
     if isinstance(component, DictKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, NamedField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, DataclassField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, HFKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, int):
         return output[component]
     if isinstance(component, str):
