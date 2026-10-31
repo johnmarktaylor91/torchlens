@@ -34,7 +34,10 @@ def policy_fields(cls: type) -> list[str]:
         Field names in table order; empty when the class has no such table.
     """
 
-    table = vars(cls).get("_FIELD_POLICY")
+    # A base ref older than the v11 privatisation spells the table ``FIELD_POLICY``;
+    # read either so a cross-ref check compares the same declared fields.
+    namespace = vars(cls)
+    table = namespace.get("_FIELD_POLICY", namespace.get("FIELD_POLICY"))
     if not isinstance(table, Mapping):
         return []
     return [
