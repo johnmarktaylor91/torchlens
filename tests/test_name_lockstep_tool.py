@@ -168,7 +168,7 @@ def test_diff_lists_new_removed_and_renamed() -> None:
     assert ("member:m:Trace.layer_list", "member:m:Trace.ops", "declared") in [
         (r.old_id, r.new_id, r.basis) for r in declared.renamed
     ]
-    assert declared.to_json()["counts"] == {"new": 1, "removed": 2, "renamed": 2}
+    assert declared.to_json()["counts"] == {"new": 1, "removed": 2, "renamed": 2, "moved": 0}
 
 
 def test_renamed_id_and_proposal_map() -> None:

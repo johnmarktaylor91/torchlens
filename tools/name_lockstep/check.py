@@ -10,7 +10,11 @@ use it. This module turns that rule into findings:
   reference, ``notebooks/audit/`` or ``examples/``.
 
 A ``contextual`` old spelling (``.member``, ``kw=``) counts as residue only when no
-head row still uses that leaf, so a member that another class keeps is not flagged.
+head row still uses that leaf, so a member that another class keeps is not flagged, and
+only when ``attribution`` cannot show the text belongs to something else: a live head
+name at that position, an imported third-party object, a URL, or an assignment target.
+A name whose defining module moved but whose public spelling is unchanged (``moved``)
+is neither new nor removed; it keeps the glossary-entry obligation only.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import spelling
+from name_lockstep import attribution, spelling
 from name_lockstep.diff import SurfaceDiff
 
 DEFAULT_GLOSSARY = ("docs/reference/glossary.md",)
@@ -44,7 +48,7 @@ class Finding:
     row_id
         Stable id of the name (the head id for new and renamed names).
     change
-        ``new``, ``renamed`` or ``removed``.
+        ``new``, ``renamed``, ``moved`` or ``removed``.
     place
         ``glossary``, ``agent-reference``, ``notebooks/audit`` or ``examples``.
     problem
@@ -91,6 +95,30 @@ class Corpus:
 
     root: Path
     files: dict[str, list[tuple[str, str]]]
+    _imports: dict[tuple[str, str], dict[str, str]] = dataclasses.field(
+        default_factory=dict, repr=False, compare=False
+    )
+
+    def imports(self, place: str, path: str) -> dict[str, str]:
+        """Return the import bindings of one file, computed once.
+
+        Parameters
+        ----------
+        place
+            Place label.
+        path
+            The file's label within the place.
+
+        Returns
+        -------
+        dict[str, str]
+            Bound name to top-level package.
+        """
+
+        if (place, path) not in self._imports:
+            text = dict(self.files[place])[path]
+            self._imports[(place, path)] = attribution.imports(text)
+        return self._imports[(place, path)]
 
     @classmethod
     def read(cls, root: Path, glossaries: Iterable[Path], snippets: bool = False) -> Corpus:
@@ -177,7 +205,9 @@ def _present(corpus: Corpus, place: str, row: dict[str, Any]) -> bool:
     )
 
 
-def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[tuple[str, str]]:
+def _stale(
+    corpus: Corpus, row: dict[str, Any], head_leaves: set[str], claims: attribution.Claims
+) -> list[tuple[str, str]]:
     """Return every place and ``path:line`` that still spells a gone name.
 
     Parameters
@@ -188,6 +218,8 @@ def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[t
         Base row of a renamed or removed name.
     head_leaves
         Leaf names still used by head rows of the same kind.
+    claims
+        Live head spellings that can own a contextual hit.
 
     Returns
     -------
@@ -202,9 +234,57 @@ def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[t
     found: list[tuple[str, str]] = []
     for place in ("glossary", *(label for label, _, _ in PLACES)):
         for path, text in corpus.files.get(place, []):
-            for line, *_ in spelling.find(text, patterns, strengths, prose=False):
+            lines: list[str] | None = None
+            for line, start, end, strength in spelling.find(text, patterns, strengths, prose=False):
+                if strength == spelling.CONTEXTUAL:
+                    lines = lines if lines is not None else text.splitlines()
+                    bound = corpus.imports(place, path)
+                    if _explained(row, lines, line, start, end, claims, bound):
+                        continue
                 found.append((place, f"{path}:{line}"))
     return sorted(set(found))
+
+
+def _explained(
+    row: dict[str, Any],
+    lines: list[str],
+    number: int,
+    start: int,
+    end: int,
+    claims: attribution.Claims,
+    bound: dict[str, str],
+) -> bool:
+    """Return whether a contextual hit belongs to something other than the gone name.
+
+    Parameters
+    ----------
+    row
+        Base row of the gone name.
+    lines
+        The file's lines.
+    number, start, end
+        Hit position: 1-based line, leaf offsets.
+    claims
+        Live head spellings.
+    bound
+        The file's import bindings.
+
+    Returns
+    -------
+    bool
+        True when the text is a live name, a third-party attribute, a URL, or (for a
+        keyword) an assignment target.
+    """
+
+    line = lines[number - 1]
+    leaf = str(row["name"])
+    if claims.owns(line, leaf, start, end) or attribution.in_url(line, start):
+        return True
+    if row["kind"] == "member":
+        return attribution.third_party(line, start, bound)
+    if row["kind"] == "param":
+        return attribution.is_assignment(lines, number, start)
+    return False
 
 
 def is_private(row: dict[str, Any]) -> bool:
@@ -272,17 +352,20 @@ def check_lockstep(
     leaves: dict[str, set[str]] = {}
     for row in head_rows.values():
         leaves.setdefault(row["kind"], set()).add(row["name"])
+    claims = attribution.Claims.from_rows(head_rows.values())
     findings: list[Finding] = []
     for row in surface_diff.new:
         findings += _missing(corpus, row, "new")
+    for move in surface_diff.moved:
+        findings += _missing(corpus, head_rows[move.new_id], "moved")
     for rename in surface_diff.renamed:
         new_row = head_rows[rename.new_id]
         findings += _missing(corpus, new_row, "renamed")
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
         old_row["path"] = str(new_row["path"])[: -len(rename.new_name)] + rename.old_name
-        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves)
+        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves, claims)
     for row in surface_diff.removed:
-        findings += _residue(corpus, row, row["id"], "removed", leaves)
+        findings += _residue(corpus, row, row["id"], "removed", leaves, claims)
     return sorted(findings, key=dataclasses.astuple)
 
 
@@ -312,7 +395,12 @@ def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
 
 
 def _residue(
-    corpus: Corpus, row: dict[str, Any], report_id: str, change: str, leaves: dict[str, set[str]]
+    corpus: Corpus,
+    row: dict[str, Any],
+    report_id: str,
+    change: str,
+    leaves: dict[str, set[str]],
+    claims: attribution.Claims,
 ) -> list[Finding]:
     """Return a finding per place and line that still spells a gone name.
 
@@ -328,6 +416,8 @@ def _residue(
         ``renamed`` or ``removed``.
     leaves
         Head leaf names per kind.
+    claims
+        Live head spellings.
 
     Returns
     -------
@@ -337,5 +427,5 @@ def _residue(
 
     return [
         Finding(report_id, change, place, "stale", location, str(row["path"]))
-        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()))
+        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()), claims)
     ]

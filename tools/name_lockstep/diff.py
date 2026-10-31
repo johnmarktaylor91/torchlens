@@ -19,8 +19,9 @@ class Rename:
     old_name, new_name
         Leaf spellings.
     basis
-        ``declared`` (from a rename map) or ``fingerprint`` (same owner, kind, signature
-        and docstring line, unique on both sides).
+        ``declared`` (from a rename map), ``fingerprint`` (same owner, kind, signature
+        and docstring line, unique on both sides) or ``moved`` (the same kind and public
+        spelling under another defining module, unique on both sides).
     """
 
     old_id: str
@@ -42,11 +43,15 @@ class SurfaceDiff:
         Base rows with no head counterpart, sorted by id.
     renamed
         Pairs of a removed and a new row that are one name respelled.
+    moved
+        Pairs of a removed and a new row that are one public spelling whose defining
+        module changed (``Owner.member`` kept, ``member:<module>:`` id changed).
     """
 
     new: tuple[dict[str, Any], ...]
     removed: tuple[dict[str, Any], ...]
     renamed: tuple[Rename, ...]
+    moved: tuple[Rename, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
         """Return a JSON-serialisable summary.
@@ -54,7 +59,7 @@ class SurfaceDiff:
         Returns
         -------
         dict[str, Any]
-            ``counts``, ``new``, ``removed`` and ``renamed`` lists.
+            ``counts``, ``new``, ``removed``, ``renamed`` and ``moved`` lists.
         """
 
         return {
@@ -62,10 +67,12 @@ class SurfaceDiff:
                 "new": len(self.new),
                 "removed": len(self.removed),
                 "renamed": len(self.renamed),
+                "moved": len(self.moved),
             },
             "new": [_brief(row) for row in self.new],
             "removed": [_brief(row) for row in self.removed],
             "renamed": [dataclasses.asdict(rename) for rename in self.renamed],
+            "moved": [dataclasses.asdict(rename) for rename in self.moved],
         }
 
 
@@ -144,6 +151,64 @@ def _declared_renames(
     return found
 
 
+def _spelling_key(row: dict[str, Any]) -> tuple[str, str, tuple[str, ...]]:
+    """Return what the public spelling of a row depends on.
+
+    Parameters
+    ----------
+    row
+        An inventory row.
+
+    Returns
+    -------
+    tuple[str, str, tuple[str, ...]]
+        Kind, path and the owner names the spelling is written through.
+    """
+
+    return (row["kind"], str(row["path"]), tuple(sorted(row.get("owner_names", ()))))
+
+
+def _moved_pairs(base: Rows, head: Rows, removed: set[str], new: set[str]) -> list[Rename]:
+    """Pair rows that keep their public spelling under another defining module.
+
+    A member's id carries its defining module (``member:<module>:Owner.leaf``), so a
+    class that moves module leaves a removed row and a new row with the same
+    ``Owner.leaf``. Those are one public name; neither a glossary residue check nor a
+    legibility guess applies. A pair is taken only when the spelling is unique on both
+    sides, so two owners of the same leaf never pair across modules.
+
+    Parameters
+    ----------
+    base, head
+        Inventories keyed on id.
+    removed, new
+        Unpaired ids; paired ids are discarded from both sets.
+
+    Returns
+    -------
+    list[Rename]
+        Moved pairs with basis ``moved``.
+    """
+
+    def index(rows: Rows, ids: set[str]) -> dict[tuple[str, str, tuple[str, ...]], list[str]]:
+        groups: dict[tuple[str, str, tuple[str, ...]], list[str]] = {}
+        for row_id in ids:
+            groups.setdefault(_spelling_key(rows[row_id]), []).append(row_id)
+        return groups
+
+    old_groups, new_groups = index(base, removed), index(head, new)
+    found: list[Rename] = []
+    for key in sorted(set(old_groups) & set(new_groups)):
+        if len(old_groups[key]) == 1 and len(new_groups[key]) == 1:
+            old_id, new_id = old_groups[key][0], new_groups[key][0]
+            found.append(
+                Rename(old_id, new_id, base[old_id]["name"], head[new_id]["name"], "moved")
+            )
+            removed.discard(old_id)
+            new.discard(new_id)
+    return found
+
+
 def _fingerprint_renames(base: Rows, head: Rows, removed: set[str], new: set[str]) -> list[Rename]:
     """Pair rows whose spelling-free fingerprint is unique on both sides.
 
@@ -190,22 +255,26 @@ def diff_inventories(base: Rows, head: Rows, declared: dict[str, str] | None = N
         Inventories keyed on id (``load_inventory``).
     declared
         Optional rename map: old id to proposed leaf spelling or full new id. Declared
-        pairs win over fingerprint pairs.
+        pairs win over moved pairs, which win over fingerprint pairs.
 
     Returns
     -------
     SurfaceDiff
-        New, removed and renamed names.
+        New, removed, renamed and moved names.
     """
 
     removed = set(base) - set(head)
     new = set(head) - set(base)
     renamed = _declared_renames(base, head, removed, new, declared or {})
-    renamed += _fingerprint_renames(base, head, removed, new)
+    moved = _moved_pairs(base, head, removed, new)
+    for pair in _fingerprint_renames(base, head, removed, new):
+        # A fingerprint pair that keeps its leaf is a move, not a respelling.
+        (moved if pair.old_name == pair.new_name else renamed).append(pair)
     return SurfaceDiff(
         new=tuple(head[row_id] for row_id in sorted(new)),
         removed=tuple(base[row_id] for row_id in sorted(removed)),
         renamed=tuple(sorted(renamed, key=lambda rename: rename.old_id)),
+        moved=tuple(sorted(moved, key=lambda rename: rename.old_id)),
     )
 
 
