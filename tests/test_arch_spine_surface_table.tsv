@@ -24,7 +24,6 @@ torchlens.backends	torchlens.backends	L2	core	0	0
 torchlens.between	torchlens._selection_graph	L4	core	1	0
 torchlens.bridge	torchlens.bridge	L8	bridge	0	1
 torchlens.callbacks	torchlens.callbacks	L8	bridge	0	1
-torchlens._captured_run	torchlens._captured_run	L3	core	0	0
 torchlens.changed	torchlens._selection_compare	L4	core	1	0
 torchlens.clamp	torchlens.intervention.helpers	L4	core	1	0
 torchlens.clamp_grad	torchlens.intervention.helpers	L4	core	1	0
@@ -43,7 +42,6 @@ torchlens.extract	torchlens	FACADE	facade	1	0
 torchlens.extract_dataset	torchlens.dataset_extraction	L5	core	1	0
 torchlens.facet	torchlens.intervention.selectors	L4	core	1	0
 torchlens.facets	torchlens._semantic	L6	appliance	1	1
-torchlens.recording	torchlens.recording	L2	core	1	0
 torchlens.fingerprint	torchlens.fingerprint	L1	core	1	0
 torchlens.followed_by	torchlens.intervention.selectors	L4	core	1	0
 torchlens.func	torchlens.intervention.selectors	L4	core	1	0
@@ -83,6 +81,7 @@ torchlens.project_out	torchlens.intervention.helpers	L4	core	1	0
 torchlens.random_like	torchlens._selection	L4	core	1	0
 torchlens.receptive_field	torchlens.receptive_field	L5	core	0	0
 torchlens.record	torchlens.recording._record_one_shot	L2	core	1	0
+torchlens.recording	torchlens.recording	L2	core	1	0
 torchlens.release_model	torchlens._user_funcs	FACADE	facade	1	0
 torchlens.repgeom	torchlens.repgeom	L5	core	0	0
 torchlens.replace_with	torchlens.intervention.predicates	L4	core	1	0
@@ -108,10 +107,8 @@ torchlens.trace	torchlens._user_funcs	FACADE	facade	1	0
 torchlens.transforms	torchlens.transforms	L4	core	0	0
 torchlens.types	torchlens.types	FACADE	facade	0	0
 torchlens.units	torchlens._selection	L4	core	1	0
-torchlens._user_funcs	torchlens._user_funcs	FACADE	facade	0	0
 torchlens.validate	torchlens.validation.consolidated	L3	core	1	0
 torchlens.validation	torchlens.validation	L3	core	0	0
-torchlens._visualization	torchlens._visualization	L7	present	0	1
 torchlens.viz	torchlens.viz	L7	present	0	1
 torchlens.when	torchlens.intervention.spec	L4	core	1	0
 torchlens.where	torchlens.intervention.selectors	L4	core	1	0
