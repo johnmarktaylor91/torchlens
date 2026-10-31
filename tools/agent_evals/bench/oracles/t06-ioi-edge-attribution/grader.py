@@ -1,4 +1,5 @@
 """Independent oracle with separate residual inputs for every receiving head."""
+
 import hashlib
 import importlib.util
 import json
@@ -11,10 +12,38 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_common"))
 from grade_utils import Report, grader_main, load_npz, roc_auc, spearman
 
-IOI_HEADS = [(9, 9), (9, 6), (10, 0), (10, 7), (11, 10),
-             (7, 3), (7, 9), (8, 6), (8, 10), (5, 5), (5, 8), (5, 9), (6, 9),
-             (0, 1), (0, 10), (3, 0), (2, 2), (4, 11),
-             (9, 0), (9, 7), (10, 1), (10, 2), (10, 6), (10, 10), (11, 2), (11, 9)]
+IOI_HEADS = [
+    (9, 9),
+    (9, 6),
+    (10, 0),
+    (10, 7),
+    (11, 10),
+    (7, 3),
+    (7, 9),
+    (8, 6),
+    (8, 10),
+    (5, 5),
+    (5, 8),
+    (5, 9),
+    (6, 9),
+    (0, 1),
+    (0, 10),
+    (3, 0),
+    (2, 2),
+    (4, 11),
+    (9, 0),
+    (9, 7),
+    (10, 1),
+    (10, 2),
+    (10, 6),
+    (10, 10),
+    (11, 2),
+    (11, 9),
+]
+CHUNK = 32
+# Any one prompt alone reaches rank correlation <= 0.965 with the all-prompt mean
+# (3,584 prompts, seven seeds), so 0.98 rejects a one-prompt shortcut.
+RANK_BAR = 0.98
 
 
 def head_attention(block, separate):
@@ -51,34 +80,14 @@ def manual_forward(model, ids, positive, negative):
     return logits[batch, positive] - logits[batch, negative], results, receivers, state
 
 
-def oracle(inputs, cache):
-    digest = hashlib.sha256()
-    for name in ("config.json", "prompts.py"):
-        with open(os.path.join(inputs, name), "rb") as f:
-            digest.update(f.read())
-    path = os.path.join(cache, "t06-v1-" + digest.hexdigest()[:16] + ".npz")
-    if os.path.isfile(path):
-        return load_npz(path)["scores"]
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
-    spec = importlib.util.spec_from_file_location("oracle_prompts", os.path.join(inputs, "prompts.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    rows = module.make_prompts(cfg["prompt_seed"], cfg["n_prompts"], cfg["names"])
-    tokenizer = AutoTokenizer.from_pretrained(cfg["model"])
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg["model"], torch_dtype=torch.float32, attn_implementation="eager").eval().requires_grad_(False)
-    clean, corrupt = [torch.tensor([tokenizer.encode(row[key], add_special_tokens=False) for row in rows])
-                      for key in ("clean", "corrupt")]
-    targets = [[tokenizer.encode(row[key], add_special_tokens=False) for row in rows]
-               for key in ("positive_token", "negative_token")]
-    if any(len(ids) != 1 for batch in targets for ids in batch):
-        raise ValueError("names must be one token")
-    positive, negative = [torch.tensor([ids[0] for ids in batch]) for batch in targets]
+def chunk_importance(model, clean, corrupt, positive, negative):
+    """Summed per-prompt importance over one chunk of prompts."""
     with torch.no_grad():
         _, bad, _, _ = manual_forward(model, corrupt, positive, negative)
         actual = model.lm_head(model.transformer(clean, use_cache=False).last_hidden_state[:, -1])
-        actual_metric = actual[torch.arange(len(clean)), positive] - actual[torch.arange(len(clean)), negative]
+        actual_metric = (
+            actual[torch.arange(len(clean)), positive] - actual[torch.arange(len(clean)), negative]
+        )
     metric, good, receiver_inputs, final = manual_forward(model, clean, positive, negative)
     if not torch.allclose(metric, actual_metric, atol=1e-4, rtol=1e-4):
         raise AssertionError("independent attention disagrees with model metric")
@@ -96,8 +105,52 @@ def oracle(inputs, cache):
                 incoming = grads[receiver].permute(1, 0, 2, 3).reshape(len(clean), 12, -1)
                 edge = sender @ incoming.transpose(-1, -2)
                 value += edge.abs().sum(-1)
-            scores.append(value.mean(0))
-    result = torch.stack(scores).numpy()
+            scores.append(value.sum(0))
+    return torch.stack(scores)
+
+
+def oracle(inputs, cache):
+    digest = hashlib.sha256()
+    for name in ("config.json", "prompts.py"):
+        with open(os.path.join(inputs, name), "rb") as f:
+            digest.update(f.read())
+    path = os.path.join(cache, "t06-v2-" + digest.hexdigest()[:16] + ".npz")
+    if os.path.isfile(path):
+        return load_npz(path)["scores"]
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    spec = importlib.util.spec_from_file_location(
+        "oracle_prompts", os.path.join(inputs, "prompts.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rows = module.make_prompts(cfg["prompt_seed"], cfg["n_prompts"], cfg["names"])
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model"])
+    model = (
+        AutoModelForCausalLM.from_pretrained(
+            cfg["model"], torch_dtype=torch.float32, attn_implementation="eager"
+        )
+        .eval()
+        .requires_grad_(False)
+    )
+    clean, corrupt = [
+        torch.tensor([tokenizer.encode(row[key], add_special_tokens=False) for row in rows])
+        for key in ("clean", "corrupt")
+    ]
+    targets = [
+        [tokenizer.encode(row[key], add_special_tokens=False) for row in rows]
+        for key in ("positive_token", "negative_token")
+    ]
+    if any(len(ids) != 1 for batch in targets for ids in batch):
+        raise ValueError("names must be one token")
+    positive, negative = [torch.tensor([ids[0] for ids in batch]) for batch in targets]
+    total = torch.zeros(12, 12)
+    # Importance is a per-prompt quantity, so chunks only bound peak memory.
+    for start in range(0, len(clean), CHUNK):
+        part = slice(start, start + CHUNK)
+        total += chunk_importance(model, clean[part], corrupt[part], positive[part], negative[part])
+    result = (total / len(clean)).numpy()
     np.savez(path, scores=result)
     return result
 
@@ -126,7 +179,7 @@ def grade(task_dir, outputs, heldout_outputs, cache):
         auc = roc_auc(agent, labels()) if shape else float("nan")
         correlation = spearman(agent, ref) if shape else float("nan")
         rep.add("membership_auc", shape and auc >= 0.85, auc, 0.85)
-        rep.add("oracle_rank", shape and correlation >= 0.8, correlation, 0.8)
+        rep.add("oracle_rank", shape and correlation >= RANK_BAR, correlation, RANK_BAR)
     except (OSError, KeyError, ValueError, TypeError) as exc:
         rep.fail_all(["shape", "membership_auc", "oracle_rank"], str(exc))
     return rep

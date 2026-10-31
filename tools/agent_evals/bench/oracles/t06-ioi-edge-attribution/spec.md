@@ -1,8 +1,9 @@
 # T6: indirect-object circuit scores from outgoing residual-edge attribution
 
 Use pretrained `gpt2`, CPU float32, evaluation mode and no cache. The input
-`config.json` supplies a name list, seed and 32-example count. Generate examples
-with `prompts.py:make_prompts`. Templates alternate ABBA and BABA: A is the
+`config.json` supplies a name list, seed and 256-example count. Generate examples
+with `prompts.py:make_prompts`, which draws a sentence template, place and
+object for each example. Examples alternate ABBA and BABA: A is the
 indirect object, B the repeated subject, and the final A is the next-token
 answer. The corrupt prompt replaces the repeated subject occurrence by a
 third, distinct name, destroying the duplicate-name relation while preserving
@@ -33,7 +34,7 @@ For each prompt compute the direct edge and all later attention-head edges:
     e_direct(l,h) = sum_{p,d} Delta c[l,h,p,d] * G_final[p,d]
     e(l,h,j,k) = sum_{p,d} Delta c[l,h,p,d] * G[j,k,p,d], for j > l
     importance(l,h) = abs(e_direct(l,h)) + sum_{j>l,k} abs(e(l,h,j,k))
-    scores[l,h] = mean over all 32 prompts of importance(l,h)
+    scores[l,h] = mean over all 256 prompts of importance(l,h)
 
 This is a sum of magnitudes of outgoing first-order residual-edge effects.
 Receiver derivatives are evaluated through one receiver head at a time;
@@ -51,7 +52,7 @@ The grader computes its own scores using independent per-head residual inputs,
 and asserts its own scores reach ROC AUC >= 0.85 against the published IOI head
 set, including name movers, negative name movers, S-inhibition, induction,
 duplicate-token, previous-token and backup-name-mover heads. The output must
-also have membership AUC >= 0.85 and Spearman correlation >= 0.8 with the
+also have membership AUC >= 0.85 and Spearman correlation >= 0.98 with the
 oracle scores. The membership labels are used only for grading, never to
 compute the score. There is no second input set for this task.
 
