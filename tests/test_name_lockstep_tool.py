@@ -247,6 +247,94 @@ def test_contextual_residue_skips_a_leaf_another_row_keeps(tmp_path: Path) -> No
     assert [f.place for f in findings if f.problem == "stale"] == []
 
 
+def test_removed_member_residue_skips_an_owner_that_still_reaches_the_leaf(
+    tmp_path: Path,
+) -> None:
+    """A member moved between mixins of ``Trace`` leaves ``Trace.leaf`` current.
+
+    Only the gone defining class's own spelling is stale.
+    """
+
+    corpus = _lockstep_repo(
+        tmp_path,
+        glossary="**Trace.provenance**\n: The view.\n",
+        example="trace.provenance\nVizMixin.provenance\n",
+    )
+    base = {
+        "member:m:VizMixin.provenance": _row(
+            "member:m:VizMixin.provenance",
+            "member",
+            "provenance",
+            "VizMixin.provenance",
+            "f-method",
+            owner_names=["Trace", "VizMixin"],
+        )
+    }
+    head = {
+        "member:m:StatsMixin.provenance": _row(
+            "member:m:StatsMixin.provenance",
+            "member",
+            "provenance",
+            "StatsMixin.provenance",
+            "f-property",
+            owner_names=["StatsMixin", "Trace"],
+        )
+    }
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    stale = [(f.row_id, f.location) for f in findings if f.problem == "stale"]
+    assert stale == [("member:m:VizMixin.provenance", "examples/demo.py:2")]
+
+
+def test_renamed_member_and_keyword_residue_skip_root_names_and_assignments(
+    tmp_path: Path,
+) -> None:
+    """``tl.changed`` is a root name and ``changed = x`` a local, not the old spellings.
+
+    The old keyword in a call and the old member on an object stay stale, and the
+    old keyword's path renders as the old spelling.
+    """
+
+    corpus = _lockstep_repo(
+        tmp_path,
+        glossary="`Effect.has_changes` and `has_changes=`; see `tl.changed`.\n",
+        example=(
+            "changed = not same\nreport(changed=True)\nreport(a, changed = True)\n"
+            "effect.changed\nresult = tl.changed(a, b)\n"
+        ),
+    )
+    base = {
+        "member:m:Effect.changed": _row(
+            "member:m:Effect.changed",
+            "member",
+            "changed",
+            "Effect.changed",
+            "f-member",
+            owner_names=["Effect"],
+        ),
+        "param:changed": _row("param:changed", "param", "changed", "changed=", "f-param"),
+    }
+    head = {
+        "member:m:Effect.has_changes": _row(
+            "member:m:Effect.has_changes",
+            "member",
+            "has_changes",
+            "Effect.has_changes",
+            "f-member",
+            owner_names=["Effect"],
+        ),
+        "param:has_changes": _row(
+            "param:has_changes", "param", "has_changes", "has_changes=", "f-param"
+        ),
+    }
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    stale = sorted((f.row_id, f.location, f.spelling) for f in findings if f.problem == "stale")
+    assert stale == [
+        ("member:m:Effect.has_changes", "examples/demo.py:4", "Effect.changed"),
+        ("param:has_changes", "examples/demo.py:2", "changed="),
+        ("param:has_changes", "examples/demo.py:3", "changed="),
+    ]
+
+
 def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     """Each new or renamed name gets a call site and the glossary meaning."""
 

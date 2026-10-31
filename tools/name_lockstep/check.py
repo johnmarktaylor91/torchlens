@@ -177,7 +177,9 @@ def _present(corpus: Corpus, place: str, row: dict[str, Any]) -> bool:
     )
 
 
-def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[tuple[str, str]]:
+def _stale(
+    corpus: Corpus, row: dict[str, Any], head_leaves: set[str], live_owners: set[str]
+) -> list[tuple[str, str]]:
     """Return every place and ``path:line`` that still spells a gone name.
 
     Parameters
@@ -188,6 +190,9 @@ def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[t
         Base row of a renamed or removed name.
     head_leaves
         Leaf names still used by head rows of the same kind.
+    live_owners
+        Classes through which a head member of the same leaf is still reached; their
+        ``Owner.leaf`` spells that current member, so it is not stale.
 
     Returns
     -------
@@ -198,7 +203,7 @@ def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[t
     strengths: tuple[str, ...] = (spelling.QUALIFIED,)
     if row["name"] not in head_leaves:
         strengths += (spelling.CONTEXTUAL,)
-    patterns = spelling.spellings(row)
+    patterns = spelling.spellings(row, exclude_owners=live_owners)
     found: list[tuple[str, str]] = []
     for place in ("glossary", *(label for label, _, _ in PLACES)):
         for path, text in corpus.files.get(place, []):
@@ -270,8 +275,13 @@ def check_lockstep(
     """
 
     leaves: dict[str, set[str]] = {}
+    owners: dict[str, set[str]] = {}
     for row in head_rows.values():
         leaves.setdefault(row["kind"], set()).add(row["name"])
+        if row["kind"] == "member":
+            owners.setdefault(row["name"], set()).update(
+                {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
+            )
     findings: list[Finding] = []
     for row in surface_diff.new:
         findings += _missing(corpus, row, "new")
@@ -279,10 +289,11 @@ def check_lockstep(
         new_row = head_rows[rename.new_id]
         findings += _missing(corpus, new_row, "renamed")
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
-        old_row["path"] = str(new_row["path"])[: -len(rename.new_name)] + rename.old_name
-        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves)
+        head, _, tail = str(new_row["path"]).rpartition(rename.new_name)
+        old_row["path"] = head + rename.old_name + tail
+        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves, owners)
     for row in surface_diff.removed:
-        findings += _residue(corpus, row, row["id"], "removed", leaves)
+        findings += _residue(corpus, row, row["id"], "removed", leaves, owners)
     return sorted(findings, key=dataclasses.astuple)
 
 
@@ -312,7 +323,12 @@ def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
 
 
 def _residue(
-    corpus: Corpus, row: dict[str, Any], report_id: str, change: str, leaves: dict[str, set[str]]
+    corpus: Corpus,
+    row: dict[str, Any],
+    report_id: str,
+    change: str,
+    leaves: dict[str, set[str]],
+    owners: dict[str, set[str]],
 ) -> list[Finding]:
     """Return a finding per place and line that still spells a gone name.
 
@@ -328,6 +344,8 @@ def _residue(
         ``renamed`` or ``removed``.
     leaves
         Head leaf names per kind.
+    owners
+        Head member leaf to the classes that reach it.
 
     Returns
     -------
@@ -335,7 +353,8 @@ def _residue(
         Stale-spelling findings.
     """
 
+    live_owners = owners.get(row["name"], set()) if row["kind"] == "member" else set()
     return [
         Finding(report_id, change, place, "stale", location, str(row["path"]))
-        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()))
+        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()), live_owners)
     ]
