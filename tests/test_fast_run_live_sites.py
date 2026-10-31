@@ -6,6 +6,8 @@ fast rerun of a deterministic model, where the full run succeeds.
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 import torch
 from torch import nn
@@ -237,8 +239,12 @@ def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> 
     """A collapsed opaque boundary is refused as unpairable, not as a changed structure."""
 
     model = DistributionOutput()
-    trace = tl.trace(model, torch.arange(6.0).view(2, 3))
-    with pytest.raises(RunCapabilityUnavailableError) as info:
-        trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
+    # Capture's own advisory for an unsupported output container (the BFS
+    # fallback) is the documented behaviour here, not the subject.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        trace = tl.trace(model, torch.arange(6.0).view(2, 3))
+        with pytest.raises(RunCapabilityUnavailableError) as info:
+            trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "Normal" in str(info.value)
