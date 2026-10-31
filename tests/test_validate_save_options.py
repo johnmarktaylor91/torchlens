@@ -262,7 +262,7 @@ def test_cuda_model_validates_with_host_saved_activations(scope: str) -> None:
 
     model, x = _net_and_input("cuda")
     result = tl.validate(model, x, scope=scope, output_device="cpu")
-    assert bool(result) if scope != "intervention" else result.invariance
+    assert bool(result) if scope != "intervention" else result.is_invariant
 
 
 @_CUDA
