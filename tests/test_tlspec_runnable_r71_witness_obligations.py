@@ -307,19 +307,34 @@ def test_r71_registry_closure_meta() -> None:
             assert spec.site_prefix == f"{family}:", family
         else:
             assert spec.site_prefix is None, family
-    # Named runtime consumers must exist (replay-consumed, never decorative).
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_output_contracts as output_contracts
-    import torchlens._runnable_state as state
+    # Named runtime consumers must exist (replay-consumed, never decorative):
+    # each is defined in exactly one runnable module (its home), never only as
+    # a from-import copy on a hub.
+    import importlib
+    import pkgutil
 
-    homes = (execution, state, output_contracts)
+    import torchlens
+    import torchlens._runnable_execution  # noqa: F401  (loads every runnable split)
+
+    runnable_modules = [
+        importlib.import_module(f"torchlens.{info.name}")
+        for info in pkgutil.iter_modules(torchlens.__path__)
+        if info.name.startswith("_runnable")
+    ]
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
         if spec.runtime_consumer in symbolic:
             continue
-        assert any(hasattr(home, spec.runtime_consumer) for home in homes), (
-            f"{family}: runtime consumer {spec.runtime_consumer!r} does not exist"
+        homes = [
+            module.__name__
+            for module in runnable_modules
+            if getattr(module.__dict__.get(spec.runtime_consumer), "__module__", None)
+            == module.__name__
+        ]
+        assert len(homes) == 1, (
+            f"{family}: runtime consumer {spec.runtime_consumer!r} must be defined in "
+            f"exactly one runnable module, found {homes}"
         )
     # Closed gap registry: every kind registered, every source family resolvable.
     assert set(WitnessGapKind) == set(WITNESS_GAP_REGISTRY)
