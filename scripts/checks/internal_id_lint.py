@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import io
 import re
+import sys
 import tokenize
-from pathlib import Path
 
-_PACKAGE = Path(__file__).resolve().parent.parent / "torchlens"
+from _harness import PACKAGE_ROOT, run_checks
+
+_PACKAGE = PACKAGE_ROOT
 
 #: Each refused id family, with an example it matches.
 _ID_PATTERNS: dict[str, str] = {
@@ -66,7 +68,7 @@ def _ids_in_source(source: str) -> list[tuple[int, str]]:
     return found
 
 
-def test_no_walk_or_tracker_id_in_package_text() -> None:
+def check_no_walk_or_tracker_id_in_package_text() -> None:
     """No docstring, string or comment under ``torchlens/`` carries a private id."""
 
     offenders = [
@@ -80,7 +82,7 @@ def test_no_walk_or_tracker_id_in_package_text() -> None:
     )
 
 
-def test_lint_is_red_capable() -> None:
+def check_lint_is_red_capable() -> None:
     """Every family is caught in a docstring, a message and a comment; lookalikes pass."""
 
     source = '''
@@ -97,3 +99,19 @@ def g():
     return "v2.37.1"  # names.py
 '''
     assert _ids_in_source(clean) == []
+
+
+CHECKS = (
+    check_no_walk_or_tracker_id_in_package_text,
+    check_lint_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every internal_id_lint check and return the exit status."""
+
+    return run_checks("internal_id_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
