@@ -175,8 +175,11 @@ def _call_prefix(request: _AuditRequest) -> str:
 
     target = "" if request.target is None else f", {_target_spelling(request.target)}"
     edge_inputs = "".join(
-        f", {name}={name}"
-        for name, value in (("corrupted", request.corrupted), ("metric", request.metric))
+        f", {keyword}={name}"
+        for keyword, name, value in (
+            ("corrupted_input", "corrupted", request.corrupted),
+            ("metric", "metric", request.metric),
+        )
         if value is not None
     )
     return f"tl.attribution.causal_audit(model, x, claim=claim{target}{edge_inputs}"

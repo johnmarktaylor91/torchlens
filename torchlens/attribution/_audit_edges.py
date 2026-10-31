@@ -228,7 +228,7 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
     if request.corrupted is None or request.metric is None:
         missing = [
             name
-            for name, value in (("corrupted", request.corrupted), ("metric", request.metric))
+            for name, value in (("corrupted_input", request.corrupted), ("metric", request.metric))
             if value is None
         ]
         raise _edge_refusal(

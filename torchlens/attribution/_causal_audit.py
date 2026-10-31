@@ -428,7 +428,7 @@ def _refuse_edge_inputs(request: _AuditRequest) -> None:
     given = [
         name
         for name, value in (
-            ("corrupted", request.corrupted),
+            ("corrupted_input", request.corrupted),
             ("metric", request.metric),
             ("edges", request.edges),
         )
