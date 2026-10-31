@@ -211,6 +211,32 @@ class _ResizeBuffer(nn.Module):
         return x * 2
 
 
+class _UnsqueezeBuffer(nn.Module):
+    """``unsqueeze_`` changes a buffer's shape on its own storage."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.unsqueeze_(0)
+        return x + self.b[0]
+
+
+class _TransposeBuffer(nn.Module):
+    """``transpose_`` changes a buffer's shape and strides on its own storage."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(2, 2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.transpose_(0, 1)
+        return x + self.b.reshape(4)
+
+
 class _SetToStorageViewThenOverwrite(_SetToStorageView):
     """The storage overload, then a write to the source storage after the read."""
 
@@ -234,6 +260,7 @@ _SHAPE_CHANGING = [
 # records the later read of the buffer differently and reports the model as
 # stateful; see test_stateful_set_overloads_return_a_verdict_on_the_copy_path.
 _RETRACE_STATEFUL = [_SetToNothing, _SetToStorageView, _SetToWholeStorage]
+
 _VALIDATING_CASES = [
     (model_cls, copy_fails)
     for model_cls in _SHAPE_CHANGING
@@ -330,7 +357,9 @@ def test_stateful_set_overloads_return_a_verdict_on_the_copy_path(
     _assert_restored(model, objects, values)
 
 
-@pytest.mark.parametrize("model_cls", [*_SHAPE_CHANGING, _ResizeBuffer])
+@pytest.mark.parametrize(
+    "model_cls", [*_SHAPE_CHANGING, _ResizeBuffer, _UnsqueezeBuffer, _TransposeBuffer]
+)
 def test_restore_rebinds_a_moved_tensor_before_loading_values(model_cls: type[nn.Module]) -> None:
     """The snapshot restore puts a ``set_``-moved tensor back on its own storage."""
 
@@ -444,3 +473,23 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
         assert failure.op_label is not None and failure.op_label.startswith("set_")
     finally:
         trace.cleanup()
+
+
+@pytest.mark.parametrize("model_cls", [_UnsqueezeBuffer, _TransposeBuffer])
+def test_in_place_geometry_writes_return_a_verdict_and_restore(
+    model_cls: type[nn.Module], failing_model_deepcopy: list[type]
+) -> None:
+    """Other in-place metadata writes reach the same restore and must not raise it.
+
+    On the live fallback the caller's buffer itself changes shape or strides;
+    the restore puts it back on its recorded geometry.
+    """
+
+    failing_model_deepcopy.append(model_cls)
+    torch.manual_seed(0)
+    model = model_cls()
+    objects = _state_by_name(model)
+    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
+    assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
+    _assert_restored(model, objects, values)
+    assert model.b.stride() == values["b"].stride()
