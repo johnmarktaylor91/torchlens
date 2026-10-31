@@ -312,6 +312,7 @@ PRIVATE_ORDERED_PERSISTED_FIELDS: frozenset[str] = frozenset(
         "Trace._num_backward_passes",
         "Trace._num_ops",
         "Trace._num_layers_with_params",
+        "BackwardPass._executed_flops_record",
         "Op._label_raw",
         "Op._layer_label_raw",
         "Op._tracing_finished",
@@ -1171,7 +1172,7 @@ def test_the_axis_sweep_is_not_vacuous() -> None:
     """
 
     names = _postprocess_axis_names()
-    assert "is_stopped" in names
+    assert "halted" in names
     assert "intervention" in names
     assert len(names) >= 20
 

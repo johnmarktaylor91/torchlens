@@ -630,6 +630,7 @@ _equivalence_classes_agree = _rebind_function(
 _check_call_site_contract_post_hoc = _rebind_function(
     _invariants_equivalence._check_call_site_contract_post_hoc, globals()
 )
+from .._record_type import record_type  # noqa: E402,F401  (rebound equivalence helpers read it)
 from ._invariants_sites import _check_site_key_invariants  # noqa: E402
 
 _check_distance_invariants = _rebind_function(

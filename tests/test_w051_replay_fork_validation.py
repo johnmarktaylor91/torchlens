@@ -23,6 +23,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._record_type import first_op
 from torchlens.intervention.replay import REPLAY_CAPTURE_DIGESTS_KEY
 from torchlens.validation._edge_boundary import _check_edge_intervention_boundary
 
@@ -128,7 +129,7 @@ def test_tampered_snapshot_at_recomputed_parent_slot_fails(two) -> None:
     _a, b = _parts(model, x)
     fork = trace.fork()
     fork.do(tl.label("relu_1_2"), tl.zero_ablate())
-    child = fork[_add_op(trace).label].ops[0]
+    child = first_op(fork[_add_op(trace).label])
     saved = list(child.saved_args)
     saved[0] = saved[0] + 1.0
     child._internal_set("saved_args", saved)
@@ -141,7 +142,7 @@ def test_swapped_parent_positions_on_recomputed_child_fails(two) -> None:
     _a, b = _parts(model, x)
     fork = trace.fork()
     fork.do(tl.label("relu_1_2"), tl.zero_ablate())
-    child = fork[_add_op(trace).label].ops[0]
+    child = first_op(fork[_add_op(trace).label])
     positions = child.parent_arg_positions["args"]
     child._internal_set(
         "parent_arg_positions",
@@ -175,7 +176,7 @@ def test_stamp_digest_mismatch_fails_the_boundary_and_the_validation(two) -> Non
     fork = trace.fork()
     edge = _edge(trace, 0)
     fork.do(edge.__selection__(), tl.zero_ablate())
-    child = fork[_add_op(trace).label].ops[0]
+    child = first_op(fork[_add_op(trace).label])
     key = (edge.arg_kind, edge.arg_path)
     store = dict(child.edge_substitutions)
     store[key] = {**store[key], "value": store[key]["value"] + 1.0}

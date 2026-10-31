@@ -411,7 +411,7 @@ def test_retained_slots_resolve_op_labels_like_bind() -> None:
     from torchlens._runnable_retention import _retained_output_slot_ids
 
     saved = types.SimpleNamespace(label="add_1", has_saved_activation=True)
-    trace = types.SimpleNamespace(layer_dict_all_keys={}, layer_list=[saved])
+    trace = types.SimpleNamespace(_layer_dict_all_keys={}, _layer_list=[saved])
     call = types.SimpleNamespace(output_slot_ids=("slot:add",), op_labels=("add_1",))
     descriptor = types.SimpleNamespace(tensor_slots=(), calls=(call,))
     assert _retained_output_slot_ids(trace, descriptor) == frozenset({"slot:add"})

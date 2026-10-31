@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._record_type import first_op
 from torchlens.errors import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
@@ -412,7 +413,7 @@ def test_fire_record_and_store_mark_param_kind(capture):
     model, x, trace = capture
     fork = trace.fork()
     fork.do(tl.param("fc1.weight"), tl.scale(0.5))
-    child = fork["fc1"].ops[0]
+    child = first_op(fork["fc1"])
     (store_key,) = child.edge_substitutions.keys()
     payload = child.edge_substitutions[store_key]
     assert payload["substitution_kind"] == "param"
@@ -428,7 +429,7 @@ def test_validation_boundary_corroborates(capture):
     model, x, trace = capture
     fork = trace.fork()
     fork.do(tl.param("fc1.weight"), tl.scale(0.5))
-    child = fork["fc1"].ops[0]
+    child = first_op(fork["fc1"])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None
     assert verdict.decision == "edge_intervention_boundary"  # DISTINCT term, never "exempted"
@@ -442,7 +443,7 @@ def test_validation_tamper_strip_fire_record_fails(capture):
     model, x, trace = capture
     fork = trace.fork()
     fork.do(tl.param("fc1.weight"), tl.scale(0.5))
-    child = fork["fc1"].ops[0]
+    child = first_op(fork["fc1"])
     child._internal_set("edits", [r for r in child.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed

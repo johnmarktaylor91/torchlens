@@ -3158,7 +3158,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
         ),
         ("15.5", "16"): PinnedPair(
             "tokens",
-            frozenset(("token:layer_logs",)),
+            frozenset(("token:_layer_logs",)),
             "Module.layers references the Layer keys step 15.5 builds",
         ),
         ("15.5", "18"): PinnedPair(

@@ -155,7 +155,7 @@ def warn_zero_match_save_predicate(backend_name: str, *, stacklevel: int = 3) ->
     warnings.warn(
         f"{backend_name} trace(save=...) predicate matched zero operations; "
         "the returned trace retains no saved activation payloads. Check the "
-        "selector against the captured op labels (trace._layer_list) -- a "
+        "selector against the captured op labels (trace.ops) -- a "
         "mistyped label or function name silently saves nothing.",
         stacklevel=stacklevel,
     )

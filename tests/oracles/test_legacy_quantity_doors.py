@@ -78,8 +78,9 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     by_name = {param.address: param for param in trace.params}
     assert int(by_name["weight"].num_params) == 8 * 16
     assert int(by_name["bias"].num_params) == 16
-    for value in (trace, module, call):
-        assert len(value.params) == A_TENSORS
+    assert len(trace.params) == A_TENSORS
+    assert len(module.params) == A_TENSORS
+    assert int(call.num_param_tensors) == A_TENSORS
 
     trace, report = fixture_b
     layers = {layer.layer_label: layer for layer in trace.layers.compute}

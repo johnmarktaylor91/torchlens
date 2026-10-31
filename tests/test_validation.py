@@ -2357,7 +2357,7 @@ def test_completeness_backstop_never_claims_match_on_empty_census() -> None:
         SimpleNamespace(
             _validation_dispatch_op_count=dispatch,
             _validation_captured_dispatchable_op_count=captured,
-            num_ops=5,
+            _num_ops=5,
         )
     )
     assert result.decision == "unverified"
@@ -2619,7 +2619,7 @@ def _dispatch_backstop_probe(
     probe = SimpleNamespace(
         _validation_dispatch_op_count=dispatch,
         _validation_captured_dispatchable_op_count=captured,
-        num_ops=captured,
+        _num_ops=captured,
     )
     if pruned is not None:
         probe._validation_pruned_dispatchable_op_count = pruned
@@ -2698,7 +2698,7 @@ def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None
             _validation_dispatch_op_count=dispatch,
             _validation_captured_dispatchable_op_count=captured,
             _validation_pruned_dispatchable_op_count=probe._validation_pruned_dispatchable_op_count,
-            num_ops=captured,
+            _num_ops=captured,
         )
     )
     assert not result.failed
@@ -2719,7 +2719,7 @@ def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None
             _validation_pruned_dispatchable_op_count=(
                 genuine_drop._validation_pruned_dispatchable_op_count
             ),
-            num_ops=drop_captured,
+            _num_ops=drop_captured,
         )
     )
     assert drop_result.failed
@@ -2815,7 +2815,7 @@ def test_completeness_backstop_buffer_write_count_is_apples_to_apples() -> None:
             _validation_buffer_write_dispatch_op_count=(
                 probe._validation_buffer_write_dispatch_op_count
             ),
-            num_ops=captured,
+            _num_ops=captured,
         )
     )
     assert result.failed
@@ -6500,7 +6500,7 @@ def test_module_call_boundary_rejects_output_outside_ops() -> None:
     try:
         victim = log.modules["fc"].ops["fc:1"]
         external_input = victim.input_ops[0]
-        assert external_input not in victim.ops
+        assert external_input is not victim
 
         victim.output_ops = [external_input]
 

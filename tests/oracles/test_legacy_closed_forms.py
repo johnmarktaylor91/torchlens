@@ -423,7 +423,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
         "output_1:1": 24,
     }
     for label, nbytes in expected.items():
-        assert int(ops[label].grad_memory) == nbytes, label
+        assert int(ops[label].gradient_memory) == nbytes, label
     # save_grads keeps one gradient record per Op per backward pass
     # (``Op.grads``), so the trace holds every pass's gradients.
     assert int(trace.saved_gradient_memory) == passes * (96 + 96 + 24)

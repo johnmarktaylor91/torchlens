@@ -355,7 +355,7 @@ def test_h9_intervention_colors_only_intervened_pass():
         _intervention_spec=SimpleNamespace(
             targets=("pass2",), target_value_specs=(), hook_specs=()
         ),
-        layer_list=ops,
+        _layer_list=ops,
     )
     original = resolver.resolve_sites
     resolver.resolve_sites = lambda trace, target, max_fanout: [ops[1]]  # resolve pass 2 only

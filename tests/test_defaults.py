@@ -21,6 +21,9 @@ class _DummyLog:
         self.cleanup_calls = 0
         self._layer_logs: dict[str, Any] = {}
         self.num_saved_ops = 0
+        self.saved_ops: list[Any] = []
+        self.saved_ops: list[Any] = []
+        self.saved_ops: list[Any] = []
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"

@@ -332,7 +332,7 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
     assert isinstance(restored._layer_list, list)
     assert hasattr(restored._layer_logs, "values")
     assert isinstance(restored.op_labels, list)
-    assert isinstance(restored.by_pass, dict)
+    assert isinstance(restored._by_pass, dict)
     assert isinstance(restored.conditional_records, list)
     # The exact crash sites from __setstate__ must be iterable now.
     assert list(restored._layer_logs.values()) == []

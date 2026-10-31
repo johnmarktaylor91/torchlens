@@ -307,7 +307,7 @@ def test_ingest_inputs_v1_reserves_aten_lane_and_covers_step0_reads() -> None:
         "buffer_initial_values",
         "op_equivalence_classes",
         "source_model_ref",
-        "_param_logs",
+        "param_logs",
         "owning_trace",
         "op_row_store",
         "trace_core",  # ppdag 9.1 orchestrator row
@@ -338,7 +338,7 @@ def test_ingest_inputs_v1_reserves_aten_lane_and_covers_step0_reads() -> None:
             "_buffer_initial_values": "buffer_initial_values",
             "op_equivalence_classes": "op_equivalence_classes",
             "_source_model_ref": "source_model_ref",
-            "_param_logs": "_param_logs",
+            "param_logs": "param_logs",
             "input_layers": "input_layers_initial",
             "_trace_core": "trace_core",
             "_phase_timings": "timing_sink",

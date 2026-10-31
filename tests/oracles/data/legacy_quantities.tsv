@@ -199,7 +199,6 @@ TraceGraph.max_ops_per_layer	int	quantity	max_layer_op_count	green	tests/oracles
 TraceGraph.max_out_degree	int	quantity	max_out_degree	green	tests/test_edge_counts.py::test_residual_reuse_counts_skip_edge (I2)	-
 Trace.model_object_id	int	identifier	-	-	-	id/index/line
 TraceAutograd.num_backward_edges	int	quantity	num_backward_edges	green	tests/oracles/test_legacy_closed_forms.py::test_backward_graph_counts_match_a_raw_recount (I2)	-
-Trace.num_backward_passes	int	quantity	num_backward_passes	green	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
 TraceGraph.num_buffer_edges	int	quantity	num_buffer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_layers	int	quantity	num_buffer_layers	green	tests/oracles/test_legacy_module_counts.py::test_buffer_layer_counts (I2)	-
 TraceGraph.num_compute_edges	int	quantity	num_compute_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-

@@ -1586,7 +1586,9 @@ def _scrub_raw_value_for_save(
         Scrubbed raw value, a bounded placeholder, or ``None``.
     """
 
-    policy_name = f"save_{field_name}"
+    policy_name = {"input": "save_raw_input", "transformed_output": "save_raw_output"}.get(
+        field_name, f"save_{field_name}"
+    )
     policy = getattr(owner, policy_name, "small")
     if policy is False:
         return None

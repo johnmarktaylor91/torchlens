@@ -3219,6 +3219,13 @@ describe each surface in depth.
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
+| `num_finite=` | keyword of `RunningStatsResult` (was `count_finite=`) |
+| `num_negative=` | keyword of `RunningStatsResult` (was `count_negative=`) |
+| `can_intervene=` | keyword of `BackendCapabilities` (was `interventions=`) |
+| `has_changes=` | keyword of `PreHookEffect` (was `changed=`) |
+| `is_capture_complete=` | keyword of `ModuleInputSnapshot` (was `capture_complete=`) |
+| `mutation_version=` | keyword of `TensorInputObservation` (was `version=`) |
+| `python_object_id=` | keyword of `TensorInputObservation` (was `object_id=`) |
 | `num_neginf=` | keyword of `tl.stats.TensorStats` |
 | `num_ops=` | keyword of `tl._quickstart.Drawing` |
 | `num_posinf=` | keyword of `tl.stats.TensorStats` |

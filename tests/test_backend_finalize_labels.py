@@ -29,7 +29,7 @@ def _stub_trace() -> SimpleNamespace:
     """Return a minimal trace stub with the lookup indexes finalize touches."""
 
     return SimpleNamespace(
-        layer_list=[],
+        _layer_list=[],
         layer_dict_main_keys={},
         layer_dict_all_keys={},
         op_labels=[],
