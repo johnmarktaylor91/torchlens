@@ -111,6 +111,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "port-equivalence leg (F16): the slice-then-convert adapter comparison",
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
+    "_pytest.nodeid": (
+        TEST_EXTRA,
+        "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"
+        " pytest 8, but CI resolves 9.2+, and the restamp plugin is not needed on 8",
+    ),
     "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
     "brainscore_core.metrics": (
         OPTIONAL_PREVIEW,
