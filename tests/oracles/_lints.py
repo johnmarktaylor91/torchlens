@@ -313,7 +313,7 @@ def declared_ledger_constant() -> int:
     Returns
     -------
     int
-        ``PUBLIC_SURFACE_SIZE`` from tests/test_docs_lockstep_names.py --
+        ``PUBLIC_SURFACE_SIZE`` from scripts/checks/docs_lockstep_names.py --
         the declared lockstep gate this reachable gate CITES (never forks).
 
     Raises
@@ -322,10 +322,10 @@ def declared_ledger_constant() -> int:
         When the constant is not found.
     """
 
-    text = (REPO_ROOT / "tests/test_docs_lockstep_names.py").read_text()
+    text = (REPO_ROOT / "scripts/checks/docs_lockstep_names.py").read_text()
     match = re.search(r"^PUBLIC_SURFACE_SIZE = (\d+)$", text, flags=re.MULTILINE)
     if match is None:
-        raise ValueError("PUBLIC_SURFACE_SIZE not found in tests/test_docs_lockstep_names.py")
+        raise ValueError("PUBLIC_SURFACE_SIZE not found in scripts/checks/docs_lockstep_names.py")
     return int(match.group(1))
 
 

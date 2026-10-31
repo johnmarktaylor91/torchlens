@@ -22,9 +22,11 @@ the bug.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+import sys
 
-_TESTS_ROOT = Path(__file__).resolve().parent
+from _harness import TESTS_DIR, run_checks
+
+_TESTS_ROOT = TESTS_DIR
 
 #: Filename stems carrying a sprint-round token (r7 R80 census, 2026-08-16).
 #: SHRINK-ONLY: never add a row -- name new files after subsystem + contract.
@@ -192,7 +194,7 @@ def _census() -> tuple[set[str], set[str]]:
     return token_files, grab_bag_files
 
 
-def test_no_new_sprint_token_filenames() -> None:
+def check_no_new_sprint_token_filenames() -> None:
     """New test files must not carry sprint-round tokens (ledger is shrink-only)."""
 
     token_files, grab_bag_files = _census()
@@ -208,7 +210,7 @@ def test_no_new_sprint_token_filenames() -> None:
     )
 
 
-def test_sprint_token_ledger_has_no_stale_rows() -> None:
+def check_sprint_token_ledger_has_no_stale_rows() -> None:
     """A renamed/deleted file leaves the ledger, so the census only shrinks."""
 
     token_files, grab_bag_files = _census()
@@ -220,7 +222,7 @@ def test_sprint_token_ledger_has_no_stale_rows() -> None:
     )
 
 
-def test_naming_lint_is_red_capable() -> None:
+def check_naming_lint_is_red_capable() -> None:
     """The matchers fire on each disease and spare descriptive names."""
 
     assert _SPRINT_TOKEN.search("test_r99_new_thing")
@@ -230,3 +232,20 @@ def test_naming_lint_is_red_capable() -> None:
     assert _GRAB_BAG.match("test_grind_b9_lane_q.py")
     assert _GRAB_BAG.match("test_fixwave_leftovers.py")
     assert not _GRAB_BAG.match("test_gradient_flow.py")
+
+
+CHECKS = (
+    check_no_new_sprint_token_filenames,
+    check_sprint_token_ledger_has_no_stale_rows,
+    check_naming_lint_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every filename_convention_lint check and return the exit status."""
+
+    return run_checks("filename_convention_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

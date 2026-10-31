@@ -31,10 +31,12 @@ from __future__ import annotations
 import ast
 import functools
 import re
+import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-PACKAGE_ROOT = REPO / "torchlens"
+from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks
+
+REPO = REPO_ROOT
 
 #: The declared-vocabulary census (frozen; grow only with a V3-clean module).
 DECLARED_VOCABULARY: frozenset[str] = frozenset(
@@ -184,7 +186,7 @@ def _eager_closure(start: str) -> set[str]:
     return seen
 
 
-def test_vocabulary_census_is_pinned() -> None:
+def check_vocabulary_census_is_pinned() -> None:
     """The declared set is frozen contract data; growth is a reviewed act."""
 
     live = _declared_vocabulary_modules()
@@ -195,7 +197,7 @@ def test_vocabulary_census_is_pinned() -> None:
     )
 
 
-def test_vocabulary_is_born_at_basis_or_product() -> None:
+def check_vocabulary_is_born_at_basis_or_product() -> None:
     """Memo 3.3: NEW vocabulary shared downward is born at L0/L1."""
 
     misplaced = []
@@ -210,7 +212,7 @@ def test_vocabulary_is_born_at_basis_or_product() -> None:
     )
 
 
-def test_v3_no_eager_behavior_imports() -> None:
+def check_v3_no_eager_behavior_imports() -> None:
     """V3: a vocabulary module may not eagerly import behavior."""
 
     offenders: dict[str, list[str]] = {}
@@ -234,7 +236,7 @@ def test_v3_no_eager_behavior_imports() -> None:
     )
 
 
-def test_v3_no_deferred_behavior_smuggling() -> None:
+def check_v3_no_deferred_behavior_smuggling() -> None:
     """V3: function bodies in vocabulary modules may not defer torchlens imports."""
 
     offenders: dict[str, int] = {}
@@ -262,7 +264,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
 }
 
 
-def test_vocabulary_closure_sizes_only_shrink() -> None:
+def check_vocabulary_closure_sizes_only_shrink() -> None:
     lines = []
     regressions = {}
     for module in sorted(_declared_vocabulary_modules()):
@@ -277,3 +279,22 @@ def test_vocabulary_closure_sizes_only_shrink() -> None:
         "the vocabulary graph is itself a cross-layer DAG; publish the new closure "
         "size by shrinking it, never by silently dragging more modules"
     )
+
+
+CHECKS = (
+    check_vocabulary_census_is_pinned,
+    check_vocabulary_is_born_at_basis_or_product,
+    check_v3_no_eager_behavior_imports,
+    check_v3_no_deferred_behavior_smuggling,
+    check_vocabulary_closure_sizes_only_shrink,
+)
+
+
+def main() -> int:
+    """Run every arch_tail_vocab_lint check and return the exit status."""
+
+    return run_checks("arch_tail_vocab_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

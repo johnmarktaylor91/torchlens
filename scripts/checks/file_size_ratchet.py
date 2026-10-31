@@ -35,10 +35,13 @@ re-key practice; this makes the practice structural).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_PACKAGE_ROOT = _PROJECT_ROOT / "torchlens"
+from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks
+
+_PROJECT_ROOT = REPO_ROOT
+_PACKAGE_ROOT = PACKAGE_ROOT
 
 #: Hard line cap for any module not in the ledger below.
 _NEW_FILE_LINE_CAP = 2000
@@ -760,7 +763,7 @@ def _overslack_rows(
     return overslack
 
 
-def test_no_package_module_exceeds_its_size_ceiling() -> None:
+def check_no_package_module_exceeds_its_size_ceiling() -> None:
     """Every torchlens module respects the cap or its frozen ledger ceiling."""
 
     violations = _ratchet_violations(_line_counts(), _GOD_FILE_CEILINGS)
@@ -770,7 +773,7 @@ def test_no_package_module_exceeds_its_size_ceiling() -> None:
     )
 
 
-def test_no_test_module_exceeds_its_size_ceiling() -> None:
+def check_no_test_module_exceeds_its_size_ceiling() -> None:
     """Every tests/ module respects the cap or its frozen ledger ceiling."""
 
     violations = _ratchet_violations(_line_counts(_PROJECT_ROOT / "tests"), _TEST_FILE_CEILINGS)
@@ -780,7 +783,7 @@ def test_no_test_module_exceeds_its_size_ceiling() -> None:
     )
 
 
-def test_god_file_ledger_has_no_stale_rows() -> None:
+def check_god_file_ledger_has_no_stale_rows() -> None:
     """A ledger row must leave when its file shrinks below the cap or vanishes."""
 
     stale = _stale_ledger_rows(_line_counts(), _GOD_FILE_CEILINGS)
@@ -788,7 +791,7 @@ def test_god_file_ledger_has_no_stale_rows() -> None:
     assert not stale, "stale god-file ledger rows:\n  " + "\n  ".join(stale)
 
 
-def test_ledger_rows_carry_no_excess_slack() -> None:
+def check_ledger_rows_carry_no_excess_slack() -> None:
     """Ceilings follow files down: no row may hoard more than the slack budget."""
 
     overslack = _overslack_rows(_line_counts(), _GOD_FILE_CEILINGS)
@@ -798,7 +801,7 @@ def test_ledger_rows_carry_no_excess_slack() -> None:
     )
 
 
-def test_file_size_ratchet_is_red_capable() -> None:
+def check_file_size_ratchet_is_red_capable() -> None:
     """Planted censuses trip each violation class (red-capability self-test)."""
 
     ceilings = {"torchlens/ledgered.py": 2500}
@@ -817,3 +820,22 @@ def test_file_size_ratchet_is_red_capable() -> None:
     assert len(overslack) == 1 and "re-key" in overslack[0] and "2400" in overslack[0]
     # A shrunken-below-cap file is the staleness check's finding, never slack.
     assert _overslack_rows({"torchlens/ledgered.py": 1500}, {"torchlens/ledgered.py": 2500}) == []
+
+
+CHECKS = (
+    check_no_package_module_exceeds_its_size_ceiling,
+    check_no_test_module_exceeds_its_size_ceiling,
+    check_god_file_ledger_has_no_stale_rows,
+    check_ledger_rows_carry_no_excess_slack,
+    check_file_size_ratchet_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every file_size_ratchet check and return the exit status."""
+
+    return run_checks("file_size_ratchet", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
