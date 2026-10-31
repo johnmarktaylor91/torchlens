@@ -148,7 +148,7 @@ def test_noise_tunnel_seeded_determinism_and_aggregations() -> None:
             target=0,
             num_samples=4,
             stdevs=0.2,
-            aggregation=aggregation,
+            reduce=aggregation,
             noise_bank=bank,
         )
         torch.testing.assert_close(result.values, expected, rtol=1e-12, atol=1e-12)
@@ -308,7 +308,7 @@ def test_smoothgrad_is_the_thin_alias_with_absolute_before_mean() -> None:
         num_samples=25,
         stdevs=0.1,
         seed=123,
-        aggregation="mean",
+        reduce="mean",
     )
     torch.testing.assert_close(legacy.values, tunneled.values, rtol=0, atol=0)
     assert legacy.method == "smoothgrad"

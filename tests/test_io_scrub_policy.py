@@ -464,7 +464,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # over resolve_sites + recorded geometry; executable=False always.
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
-        "show": lambda t: t.show(method="graph", path=str(out / "shown")),
+        "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
         "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
         "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
         "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),

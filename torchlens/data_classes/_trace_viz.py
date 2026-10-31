@@ -61,13 +61,13 @@ def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
 class TraceVisualizationMixin(_TraceMixinBase):
     """``Trace`` visualization surface: ``draw``, ``show``, and collapse diagnostics."""
 
-    def show(self: "Trace", method: str = "graph", **kwargs: Any) -> str | None:
+    def show(self: "Trace", kind: str | None = None, **kwargs: Any) -> str | None:
         """Render this trace using a lightweight notebook-friendly dispatcher.
 
         Parameters
         ----------
-        method:
-            Display method. ``"graph"`` delegates to :meth:`draw`, ``"repr"``
+        kind:
+            Picture kind. ``None`` or ``"graph"`` delegates to :meth:`draw`, ``"repr"``
             returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
         **kwargs:
             Visualization keyword arguments forwarded to :meth:`draw`.
@@ -81,9 +81,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         if kwargs.get("vis_mode") == "none":
             return None
-        if method == "repr":
+        if kind == "repr":
             return repr(self)
-        if method == "html":
+        if kind == "html":
             return self._repr_html_()
         return cast("str | None", self.draw(**kwargs))
 

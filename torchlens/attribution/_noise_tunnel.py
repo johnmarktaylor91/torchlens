@@ -191,7 +191,7 @@ def noise_tunnel(
     num_samples: int = 25,
     stdevs: float | Sequence[float],
     seed: int | None = None,
-    aggregation: str = "mean",
+    reduce: str = "mean",
     noise_bank: Sequence[Sequence[Tensor]] | None = None,
 ) -> Attribution:
     """Run an attribution method on ``n_samples`` noised inputs and aggregate.
@@ -230,7 +230,7 @@ def noise_tunnel(
         Optional deterministic seed (per-device generators, seeded on first
         use). For a stochastic child with no explicit child seed, independent
         per-sample child substreams are derived from this seed and disclosed.
-    aggregation
+    reduce
         ``"mean"``, ``"mean_square"``, or population ``"variance"``.
     noise_bank
         Optional stored unit-scale draws (``noise_bank[sample][unique_leaf]``)
@@ -254,9 +254,9 @@ def noise_tunnel(
     """
 
     _validate_positive_int("n_samples", num_samples)
-    if aggregation not in _AGGREGATIONS:
+    if reduce not in _AGGREGATIONS:
         raise AttributionError(
-            f"aggregation must be one of {_AGGREGATIONS}; got {aggregation!r}. "
+            f"reduce must be one of {_AGGREGATIONS}; got {reduce!r}. "
             "Remedy: choose 'mean', 'mean_square', or 'variance'.",
             code="noise_aggregation_invalid",
         )
@@ -306,12 +306,12 @@ def noise_tunnel(
         return method(model, child_inputs, child_kwargs, target=target, **settings)
 
     run = _run_serial_samples(num_samples, _call_sample)
-    aggregated = _aggregate_value_trees([result.values for result in run.results], aggregation)
+    aggregated = _aggregate_value_trees([result.values for result in run.results], reduce)
 
     extra: dict[str, Any] = {
         "child_method": bound.method_name,
         "method_kwargs": dict(bound.settings),
-        "aggregation": aggregation,
+        "reduce": reduce,
         "n_samples": num_samples,
         "stdevs_resolved": list(scales),
         "seed": seed,

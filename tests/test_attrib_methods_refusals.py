@@ -107,7 +107,7 @@ def test_noise_aggregation_invalid_provoked() -> None:
             model=nn.Linear(3, 2, dtype=torch.float64),
             target=0,
             stdevs=0.1,
-            aggregation="median",
+            reduce="median",
         )
     assert excinfo.value.fields["code"] == "noise_aggregation_invalid"
 

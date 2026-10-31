@@ -273,12 +273,12 @@ class PartialTrace:
         lines.append("}")
         return "\n".join(lines)
 
-    def show(self, method: Literal["graph", "repr", "html"] = "graph", **kwargs: Any) -> str:
+    def show(self, kind: Literal["graph", "repr", "html"] | None = None, **kwargs: Any) -> str:
         """Display this partial log using a small set of inspection modes.
 
         Parameters
         ----------
-        method:
+        kind:
             ``"graph"`` returns DOT, ``"repr"`` returns ``repr(self)``, and
             ``"html"`` returns a compact HTML fragment.
         **kwargs:
@@ -290,13 +290,14 @@ class PartialTrace:
             Rendered graph, representation, or HTML fragment.
         """
 
-        if method == "graph":
+        kind = kind or "graph"
+        if kind == "graph":
             return self.draw(**kwargs)
-        if method == "repr":
+        if kind == "repr":
             return repr(self)
-        if method == "html":
+        if kind == "html":
             return self._repr_html_()
-        raise ValueError("method must be 'graph', 'repr', or 'html'.")
+        raise ValueError("kind must be 'graph', 'repr', or 'html'.")
 
     def _repr_html_(self) -> str:
         """Return a compact notebook HTML representation.

@@ -739,7 +739,7 @@ NA_AXES: dict[str, str] = {
     "plumbing": "vis_outpath / vis_fileformat / vis_save_only / return_graph / "
     "vis_graph_overrides and the draw() short-form params (view, depth, renderer, "
     "layout, node_style) have no visual identity of their own.",
-    "show:dispatcher": "Trace.show(method='graph'/'repr') dispatches to draw()/repr(). "
+    "show:dispatcher": "Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). "
     "method='html' returns Trace._repr_html_() -- see the html_repr entry.",
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "

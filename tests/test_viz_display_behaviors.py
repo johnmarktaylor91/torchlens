@@ -170,10 +170,10 @@ def test_layer_show_auto_routes_by_dimensionality() -> None:
     fig = conv_layer.show()  # 4-d, channel dim 4 -> hist fallback
     assert fig is not None and hasattr(fig, "axes")
 
-    fig_heatmap = conv_layer.show(method="heatmap")
+    fig_heatmap = conv_layer.show(kind="heatmap")
     assert fig_heatmap.axes[0].images
 
-    fig_channels = conv_layer.show(method="channels")
+    fig_channels = conv_layer.show(kind="channels")
     assert len(fig_channels.axes) >= 2
 
     rgb_input = log["input_1"]
@@ -181,7 +181,7 @@ def test_layer_show_auto_routes_by_dimensionality() -> None:
     assert fig_rgb.axes[0].images
 
     with pytest.raises(ValueError, match="method must be"):
-        conv_layer.show(method="sideways")
+        conv_layer.show(kind="sideways")
 
 
 @pytest.mark.smoke
@@ -220,7 +220,7 @@ def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
         aggregate.show()
 
     single_pass = log["linear_1_1:1"]
-    fig = single_pass.show(method="heatmap")
+    fig = single_pass.show(kind="heatmap")
     assert fig.axes[0].images
 
 
