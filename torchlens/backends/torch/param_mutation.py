@@ -62,7 +62,10 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     lazy module's ``UninitializedParameter`` has no value when the pass starts:
     its in-forward materialization (``materialize`` then ``reset_parameters``'s
     ``uniform_`` family) creates the Parameter's first value rather than mutating
-    a prepared one, so those writes keep the plain-capture treatment (no ops).
+    a prepared one, so those writes keep the plain-capture treatment (logged
+    against a snapshot output and orphan-pruned, never a prepared-state mutation
+    whose label the Parameter carries forward). A parameter registered late for a
+    lazy module built inside forward carries the same flag.
 
     Parameters
     ----------
@@ -264,13 +267,21 @@ def parameter_mutation_output_for_logging(
     A prepared model Parameter mutated in place (``with torch.no_grad():
     self.temp.clamp_(lo, hi)``) is converted too: the op is logged with the
     Parameter as its parameter input, and the live Parameter then carries the op's
-    label so every later read in the pass consumes the op's output. Two prepared
-    cases are NOT converted and keep the plain-capture treatment: a
+    label so every later read in the pass consumes the op's output. One prepared
+    case is NOT converted and keeps the plain-capture treatment: a
     storage-rebinding ``param.data = rhs`` setter (still visible to the
-    completeness tripwire) and the in-forward initialization of a lazy module's
-    Parameter (see ``is_prepared_parameter_receiver``). Both capture modes
-    classify alike: predicate capture reads its per-pass identity registry
-    (``_prepared_parameter_lazy_flag``).
+    completeness tripwire). The in-forward initialization of a lazy module's
+    Parameter (``reset_parameters`` after torch materialized the pending slot; see
+    ``is_prepared_parameter_receiver``) IS converted like the initialization of a
+    module created inside ``forward``: the op is logged against a snapshot output
+    that no later read consumes (the Parameter does not take the op's label, so
+    consumers read it as prepared state), the postprocess orphan-prunes it, and
+    the dispatch census still owns its ``uniform_`` dispatch. Returning the
+    Parameter here instead left that mutating dispatch with no captured op
+    (``owner_not_captured``), which failed forward validation's completeness
+    backstop for every lazy module. Both capture modes classify alike through
+    ``_prepared_parameter_lazy_flag``; predicate capture (``tl.record``) keeps
+    the final-graph view and records no op for it.
 
     Parameters
     ----------
@@ -295,6 +306,10 @@ def parameter_mutation_output_for_logging(
     if not was_inplace or not isinstance(source, torch.nn.Parameter):
         return value
     lazy_at_prep = _prepared_parameter_lazy_flag(trace, source)
-    if lazy_at_prep is not None and (is_storage_rebind or lazy_at_prep):
+    if lazy_at_prep is not None and is_storage_rebind:
+        return value
+    if lazy_at_prep and getattr(trace, "capture_mode", None) == "predicate":
+        # Predicate capture keeps the final-graph view: the trace's copy of this
+        # op is orphan-pruned below, so ``tl.record`` records nothing here.
         return value
     return _plain_parameter_snapshot(value)

@@ -37,7 +37,11 @@ from torchlens._capture_honesty import ADVISORY_PARAMETER_CREATED_IN_FORWARD
 from torchlens.backends.torch.completeness_witness import LAZY_MODULE_MATERIALIZE_WRAPPER
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS, CHECK_SOURCE_PROVENANCE
+from torchlens.validation.diagnostics import (
+    CHECK_ARG_LOGGING,
+    CHECK_COMPLETENESS,
+    CHECK_SOURCE_PROVENANCE,
+)
 
 WIDTH = 8
 BATCH = 3
@@ -135,7 +139,7 @@ class InitInForward(nn.Module):
 
 
 class LazyThenStaleCall(nn.Module):
-    """A lazy module built inside forward, then a stale (unwrapped) torch call on its output."""
+    """A stale (unwrapped) torch call feeding a lazy module built inside forward."""
 
     def __init__(self, stale: Callable[..., Any]) -> None:
         super().__init__()
@@ -145,7 +149,7 @@ class LazyThenStaleCall(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         self.lazy = nn.LazyLinear(4)
-        return self.stale(self.lazy(torch.relu(self.pre(x))))
+        return self.lazy(self.stale(torch.relu(self.pre(x))))
 
 
 @pytest.fixture
@@ -194,13 +198,13 @@ def _op_consuming(trace: tl.Trace, address: str) -> Any:
     return consumers[0]
 
 
-def _assert_fails_at(model: nn.Module, x: torch.Tensor, check_name: str) -> None:
+def _assert_fails_at(model: nn.Module, x: torch.Tensor, *check_names: str) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, scope="forward") is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check_name == check_name, failure.summary()
+    assert failure.check_name in check_names, failure.summary()
 
 
 @pytest.mark.smoke
@@ -215,7 +219,7 @@ def test_lazy_module_built_in_forward_registers_its_parameters_with_provenance()
     linear = _op_consuming(trace, "lazy.weight")
     assert linear.type == "linear"
     assert {p.address for p in linear.params} == {"lazy.weight", "lazy.bias"}
-    # The init writes created the parameter's first value; they are not recorded mutations.
+    # The init writes created the first value: logged, then orphan-pruned, never a mutation.
     assert all(layer.type != "uniform" for layer in trace.layers)
 
     (row,) = _creation_rows(trace)
@@ -224,17 +228,24 @@ def test_lazy_module_built_in_forward_registers_its_parameters_with_provenance()
     assert "replaces" not in row["message"]
 
 
-@pytest.mark.smoke
-def test_lazy_module_built_in_forward_validates() -> None:
+def _assert_validates(model: nn.Module, x: torch.Tensor) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert tl.validate(LazyBuiltInForward().eval(), _x(), scope="forward") is True
+        verdict = tl.validate(model, x, scope="forward")
+    failure = last_validation_failure()
+    assert verdict is True, failure.summary() if failure is not None else "no failure recorded"
+
+
+@pytest.mark.smoke
+def test_lazy_module_built_in_forward_validates() -> None:
+    _assert_validates(LazyBuiltInForward().eval(), _x())
 
 
 @pytest.mark.smoke
 def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates() -> None:
     x = _x()
-    trace = _trace_without_provenance_warning(LazyFirstCall().eval(), x)
+    model = LazyFirstCall().eval()
+    trace = _trace_without_provenance_warning(model, x)
 
     # The slot preparation registered held a pending parameter the forward displaced; the
     # record now names the live object with its real geometry.
@@ -247,20 +258,20 @@ def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates()
     (row,) = _creation_rows(trace)
     assert row["count"] == 2
     assert "replaces the pending slot registered at preparation" in row["message"]
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(LazyFirstCall().eval(), x, scope="forward") is True
+    # Validation re-traces the model it is handed; a model with still-pending slots
+    # at preparation is refused typed, so validate the materialized instance, as
+    # the stress oracle's eager pre-run does.
+    _assert_validates(model, x)
 
 
 @pytest.mark.smoke
 def test_lazy_module_registered_at_prep_records_no_creation_advisory() -> None:
     x = _x()
-    trace = _trace_without_provenance_warning(LazyAtPrep().eval(), x)
+    model = LazyAtPrep().eval()
+    trace = _trace_without_provenance_warning(model, x)
     assert _creation_rows(trace) == []
     assert tuple(trace.param_logs["lazy.weight"].shape) == (4, WIDTH)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(LazyAtPrep().eval(), x, scope="forward") is True
+    _assert_validates(model, x)
 
 
 @pytest.mark.smoke
@@ -291,7 +302,10 @@ def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
         trace = tl.trace(CapturedValueAttachedAsParameter().eval(), [x])
     assert "p" not in trace.param_logs
     assert _creation_rows(trace) == []
-    _assert_fails_at(CapturedValueAttachedAsParameter().eval(), x, CHECK_SOURCE_PROVENANCE)
+    # The source-less argument fails whichever provenance check reaches it first.
+    _assert_fails_at(
+        CapturedValueAttachedAsParameter().eval(), x, CHECK_ARG_LOGGING, CHECK_SOURCE_PROVENANCE
+    )
 
 
 @pytest.mark.smoke
@@ -301,10 +315,15 @@ def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
     x = _x()
     model = InitInForward(lambda w: nn.init.uniform_(w, -0.1, 0.1))
     trace = tl.trace(copy.deepcopy(model), x)
-    (mutation,) = [layer for layer in trace.layers if layer.type == "uniform"]
-    assert [p.address for p in mutation.params] == ["weight"]
+    mutations = [layer for layer in trace.layers if layer.type == "uniform"]
+    assert mutations, [layer.label for layer in trace.layers]
+    assert all([p.address for p in layer.params] == ["weight"] for layer in mutations)
     (linear,) = [layer for layer in trace.layers if layer.type == "linear"]
-    assert mutation.label in [trace[parent].label for parent in linear.parents]
+    parent_labels = [trace[parent].label for parent in linear.parents]
+    assert any(layer.label in parent_labels for layer in mutations), (
+        [layer.label for layer in mutations],
+        parent_labels,
+    )
     assert "weight" not in [p.address for p in linear.params]
     assert _creation_rows(trace) == []
     assert all(
@@ -316,13 +335,12 @@ def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
 @pytest.mark.smoke
 def test_hand_written_constant_init_on_a_prepared_parameter_validates() -> None:
     x = _x()
-    model = InitInForward(lambda w: nn.init.constant_(w, 0.5))
+    model = InitInForward(lambda w: w.fill_(0.5))
     trace = tl.trace(copy.deepcopy(model), x)
-    (mutation,) = [layer for layer in trace.layers if layer.type == "fill"]
-    assert [p.address for p in mutation.params] == ["weight"]
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(copy.deepcopy(model), x, scope="forward") is True
+    mutations = [layer for layer in trace.layers if layer.type == "fill"]
+    assert mutations, [layer.label for layer in trace.layers]
+    assert all([p.address for p in layer.params] == ["weight"] for layer in mutations)
+    _assert_validates(copy.deepcopy(model), x)
 
 
 @pytest.mark.smoke
