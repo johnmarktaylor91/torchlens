@@ -830,6 +830,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
     """
 
     if trace.param_source != "none":
+        trace._num_param_tensors = len(trace._param_logs)
         trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
             param.num_params for param in trace._param_logs if param.is_trainable

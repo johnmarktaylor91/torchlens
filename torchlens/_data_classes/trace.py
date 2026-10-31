@@ -1364,9 +1364,11 @@ class Trace(
         "total_backward_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
         "pinned_autograd_memory": FieldPolicy.DROP,  # live graph only
+        "_num_saved_ops": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
         "_param_logs": FieldPolicy.KEEP,
+        "_num_param_tensors": FieldPolicy.KEEP,
         "_num_layers_with_params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
@@ -1890,11 +1892,13 @@ class Trace(
         self.total_backward_memory: Bytes = Bytes(0)
         self.total_autograd_memory: Bytes | None = None
         self.pinned_autograd_memory: Bytes | None = None  # pinned-autograd disclosure
+        self._num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: Bytes = Bytes(0)
         self.saved_gradient_memory: Bytes = Bytes(0)
 
         # Param info:
         self._param_logs: ParamAccessor = ParamAccessor({})
+        self._num_param_tensors: int = 0
         self._num_layers_with_params: int = 0
         self.num_params: int = 0
         self.num_params_trainable: int = 0
@@ -3633,6 +3637,7 @@ class Trace(
             "graph_shape_hash",
             "_raw_event_shape_hash",
             "_raw_call_fingerprint",
+            "_num_saved_ops",
             "saved_activation_memory",
             "total_activation_memory",
             "saved_gradient_memory",

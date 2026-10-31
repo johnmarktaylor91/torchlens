@@ -311,7 +311,7 @@ def test_runnable_dead_model_fallback_refuses_non_tensor_state_typed() -> None:
             capture_state={"weight": torch.zeros(2), "running_junk": "not-a-tensor"},
             embedded_state=None,
         ),
-        param_logs=(),
+        _param_logs=(),
     )
     with pytest.raises(ArtifactError, match="non-tensor persistent-buffer"):
         runnable_mod._add_persistent_buffer_slot_drafts(stub_trace, {})

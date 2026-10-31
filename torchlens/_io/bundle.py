@@ -3747,6 +3747,9 @@ def _apply_skipped_blobs_to_scrubbed_state(
         grad_labels = [
             layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
+        scrubbed_state["_num_saved_ops"] = sum(
+            1 for layer in layer_list if bool(getattr(layer, "has_saved_activation", False))
+        )
         scrubbed_state["saved_activation_memory"] = sum(
             int(getattr(layer, "activation_memory", 0) or 0)
             for layer in layer_list

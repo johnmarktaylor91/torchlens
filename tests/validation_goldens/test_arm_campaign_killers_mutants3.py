@@ -127,7 +127,7 @@ def test_backend_neutral_graph_topology_fires_on_parent_outside_labels() -> None
     layer = SimpleNamespace(
         layer_label="relu_1", label="relu_1", parents=["missing_parent"], children=[]
     )
-    fake_trace = _FakeTrace(layer_list=[layer])
+    fake_trace = _FakeTrace(_layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match="has parent .*outside trace labels"):
         _check_backend_neutral_graph_topology(fake_trace)  # type: ignore[arg-type]
 
@@ -137,7 +137,7 @@ def test_backend_neutral_graph_topology_fires_on_missing_reciprocal_child() -> N
 
     parent = SimpleNamespace(layer_label="conv_1", label="conv_1", parents=[], children=[])
     child = SimpleNamespace(layer_label="relu_1", label="relu_1", parents=["conv_1"], children=[])
-    fake_trace = _FakeTrace(layer_list=[parent, child])
+    fake_trace = _FakeTrace(_layer_list=[parent, child])
     with pytest.raises(MetadataInvariantError, match="reciprocal child is missing"):
         _check_backend_neutral_graph_topology(fake_trace)  # type: ignore[arg-type]
 
@@ -148,7 +148,7 @@ def test_backend_neutral_graph_topology_fires_on_child_outside_labels() -> None:
     layer = SimpleNamespace(
         layer_label="relu_1", label="relu_1", parents=[], children=["missing_child"]
     )
-    fake_trace = _FakeTrace(layer_list=[layer])
+    fake_trace = _FakeTrace(_layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match="has child .*outside trace labels"):
         _check_backend_neutral_graph_topology(fake_trace)  # type: ignore[arg-type]
 
@@ -182,7 +182,7 @@ def test_distance_invariants_fires_on_inverted_output_distance_bounds() -> None:
         max_distance_to_output=2,
     )
     fake_trace = SimpleNamespace(
-        mark_layer_depths=True, input_layers=[], output_layers=[], layer_list=[layer]
+        mark_layer_depths=True, input_layers=[], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="min_distance_to_output=5"):
         _check_distance_invariants(fake_trace)  # type: ignore[arg-type]
@@ -203,7 +203,7 @@ def test_distance_invariants_fires_on_output_descendant_flag_mismatch() -> None:
         output_descendants=set(),
     )
     fake_trace = SimpleNamespace(
-        mark_layer_depths=True, input_layers=[], output_layers=[], layer_list=[layer]
+        mark_layer_depths=True, input_layers=[], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="has_output_descendant=True"):
         _check_distance_invariants(fake_trace)  # type: ignore[arg-type]
@@ -224,7 +224,7 @@ def test_distance_invariants_fires_on_input_ancestors_outside_input_layers() -> 
         output_descendants=set(),
     )
     fake_trace = SimpleNamespace(
-        mark_layer_depths=True, input_layers=[], output_layers=[], layer_list=[layer]
+        mark_layer_depths=True, input_layers=[], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="input_ancestors contains labels not in"):
         _check_distance_invariants(fake_trace)  # type: ignore[arg-type]
@@ -242,7 +242,7 @@ def test_edge_use_parent_arg_consistency_fires_on_invalid_arg_kind() -> None:
         edge_use="arg", arg_kind="not_a_real_kind", parent_label="p", child_label="c"
     )
     layer = SimpleNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
-    fake_trace = SimpleNamespace(layer_list=[layer], layer_dict_all_keys={})
+    fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="invalid edge arg_kind"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -254,7 +254,7 @@ def test_edge_use_parent_arg_consistency_fires_on_unresolved_edge_use_parent() -
         edge_use="arg", arg_kind="positional", parent_label="ghost_parent", child_label="c"
     )
     layer = SimpleNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
-    fake_trace = SimpleNamespace(layer_list=[layer], layer_dict_all_keys={})
+    fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="unresolved parent"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -265,7 +265,7 @@ def test_edge_use_parent_arg_consistency_fires_on_non_mapping_parent_arg_positio
     layer = SimpleNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions=["not", "a", "map"]
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], layer_dict_all_keys={})
+    fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="non-mapping parent_arg_positions"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -276,7 +276,7 @@ def test_edge_use_parent_arg_consistency_fires_on_non_mapping_arg_domain_entries
     layer = SimpleNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions={"args": ["not", "a", "map"]}
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], layer_dict_all_keys={})
+    fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="is not a mapping"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -287,7 +287,7 @@ def test_edge_use_parent_arg_consistency_fires_on_non_string_arg_position_value(
     layer = SimpleNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions={"args": {0: 12345}}
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], layer_dict_all_keys={})
+    fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="is not a label string"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -303,8 +303,8 @@ def test_equivalence_symmetry_fires_on_non_set_equivalence_class_value() -> None
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         op_equivalence_classes={"type_a": ["relu_1"]},
-        layer_list=[],
-        layer_logs={},
+        _layer_list=[],
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="is not a set"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -327,8 +327,8 @@ def test_equivalence_symmetry_fires_on_whole_trace_label_cross_check() -> None:
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         op_equivalence_classes=_ShiftingEquivalenceClasses({"type_a": {"relu_1"}}),
-        layer_list=[],
-        layer_logs={},
+        _layer_list=[],
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="contains labels not in op_labels"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -339,7 +339,7 @@ def test_equivalence_symmetry_fires_on_non_set_op_equivalent_ops() -> None:
 
     op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops=["op_1_1"])
     fake_trace = SimpleNamespace(
-        op_labels=["op_1_1"], op_equivalence_classes={}, layer_list=[op], layer_logs={}
+        op_labels=["op_1_1"], op_equivalence_classes={}, _layer_list=[op], _layer_logs={}
     )
     with pytest.raises(MetadataInvariantError, match="equivalent_ops is not a set"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -350,7 +350,7 @@ def test_equivalence_symmetry_fires_on_op_equivalent_ops_outside_op_labels() -> 
 
     op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
-        op_labels=["op_1_1"], op_equivalence_classes={}, layer_list=[op], layer_logs={}
+        op_labels=["op_1_1"], op_equivalence_classes={}, _layer_list=[op], _layer_logs={}
     )
     with pytest.raises(MetadataInvariantError, match=r"op_1_1\.equivalent_ops contains"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -361,7 +361,7 @@ def test_equivalence_symmetry_fires_on_non_set_layer_equivalent_ops() -> None:
 
     layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops=["not", "a", "set"])
     fake_trace = SimpleNamespace(
-        op_labels=[], op_equivalence_classes={}, layer_list=[], layer_logs={"layer_1": layer}
+        op_labels=[], op_equivalence_classes={}, _layer_list=[], _layer_logs={"layer_1": layer}
     )
     with pytest.raises(MetadataInvariantError, match="Layer layer_1.equivalent_ops is not a set"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -372,7 +372,7 @@ def test_equivalence_symmetry_fires_on_layer_equivalent_ops_outside_op_labels() 
 
     layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
-        op_labels=[], op_equivalence_classes={}, layer_list=[], layer_logs={"layer_1": layer}
+        op_labels=[], op_equivalence_classes={}, _layer_list=[], _layer_logs={"layer_1": layer}
     )
     with pytest.raises(MetadataInvariantError, match="Layer layer_1.equivalent_ops contains"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -387,8 +387,8 @@ def test_equivalence_symmetry_fires_on_pass_disagreement() -> None:
     fake_trace = SimpleNamespace(
         op_labels=["op_1_1", "op_1_2"],
         op_equivalence_classes={},
-        layer_list=[],
-        layer_logs={"layer_1": layer},
+        _layer_list=[],
+        _layer_logs={"layer_1": layer},
     )
     with pytest.raises(MetadataInvariantError, match="ops disagree on equivalent_ops"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -410,7 +410,7 @@ def test_func_call_id_consistency_fires_on_non_integer_func_call_id() -> None:
         func_name="relu",
         func_call_id="not_an_int",
     )
-    fake_trace = SimpleNamespace(layer_list=[layer])
+    fake_trace = SimpleNamespace(_layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match="non-integer func_call_id"):
         check_func_call_id_invariant(fake_trace)  # type: ignore[arg-type]
 
@@ -436,7 +436,7 @@ def test_graph_connectivity_fires_on_internal_source_consuming_unattributed_data
         layer_labels=["mystery_op"],
         input_layers=[],
         buffer_layers=[],
-        layer_list=[layer],
+        _layer_list=[layer],
         _orphan_labels=[],
     )
     with pytest.raises(MetadataInvariantError, match="consumed unattributed tensor data"):
@@ -451,7 +451,7 @@ def test_graph_connectivity_fires_on_leaked_retained_orphan() -> None:
         layer_labels=["retained_op"],
         input_layers=[],
         buffer_layers=[],
-        layer_list=[],
+        _layer_list=[],
         _orphan_labels=[],
         _orphan_logs=[orphan],
         op_labels=["retained_op"],
@@ -470,7 +470,7 @@ def test_graph_ordering_fires_on_duplicate_raw_index() -> None:
 
     layer1 = SimpleNamespace(layer_label="a", raw_index=1)
     layer2 = SimpleNamespace(layer_label="b", raw_index=1)
-    fake_trace = SimpleNamespace(layer_list=[layer1, layer2])
+    fake_trace = SimpleNamespace(_layer_list=[layer1, layer2])
     with pytest.raises(MetadataInvariantError, match="Duplicate raw_index"):
         _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
 
@@ -480,7 +480,7 @@ def test_graph_ordering_fires_on_non_monotonic_raw_index() -> None:
 
     layer1 = SimpleNamespace(layer_label="a", raw_index=5)
     layer2 = SimpleNamespace(layer_label="b", raw_index=3)
-    fake_trace = SimpleNamespace(layer_list=[layer1, layer2])
+    fake_trace = SimpleNamespace(_layer_list=[layer1, layer2])
     with pytest.raises(MetadataInvariantError, match="not monotonically increasing"):
         _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
 
@@ -512,7 +512,7 @@ def test_graph_topology_fires_on_parent_label_not_canonical() -> None:
 
     layer = _topology_layer(layer_label="relu_1", parents=["ghost_parent"])
     fake_trace = _FakeTrace(
-        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], layer_list=[layer]
+        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="not a canonical layer or op label"):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -527,7 +527,7 @@ def test_graph_topology_fires_on_missing_reciprocal_parent_for_child() -> None:
         layer_labels=["conv_1", "relu_1"],
         op_labels=["conv_1", "relu_1"],
         output_layers=[],
-        layer_list=[parent, child],
+        _layer_list=[parent, child],
     )
     with pytest.raises(MetadataInvariantError, match="does not list .* as parent"):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -542,7 +542,7 @@ def test_graph_topology_fires_on_has_children_flag_mismatch() -> None:
         layer_labels=["conv_1", "relu_1"],
         op_labels=["conv_1", "relu_1"],
         output_layers=[],
-        layer_list=[parent, child],
+        _layer_list=[parent, child],
     )
     with pytest.raises(MetadataInvariantError, match="has_children="):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -553,7 +553,7 @@ def test_graph_topology_fires_on_foreign_parent_arg_position_domain() -> None:
 
     layer = _topology_layer(layer_label="relu_1", parent_arg_positions={"ghost_domain": {}})
     fake_trace = _FakeTrace(
-        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], layer_list=[layer]
+        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="foreign top-level"):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -568,7 +568,7 @@ def test_graph_topology_fires_on_input_layer_with_parents() -> None:
         layer_labels=["conv_1", "input_1"],
         op_labels=["conv_1", "input_1"],
         output_layers=[],
-        layer_list=[parent, layer],
+        _layer_list=[parent, layer],
     )
     with pytest.raises(MetadataInvariantError, match="has parents="):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -579,7 +579,7 @@ def test_graph_topology_fires_on_out_versions_by_child_outside_children() -> Non
 
     layer = _topology_layer(layer_label="relu_1", out_versions_by_child={"ghost_child": 1})
     fake_trace = _FakeTrace(
-        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], layer_list=[layer]
+        layer_labels=["relu_1"], op_labels=["relu_1"], output_layers=[], _layer_list=[layer]
     )
     with pytest.raises(MetadataInvariantError, match="out_versions_by_child has keys"):
         _check_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -595,7 +595,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch() -> None:
 
     op = SimpleNamespace(pass_index=2, layer_label="relu_1")
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match=r"pass key=1 but Op.pass_index=2"):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
@@ -605,7 +605,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_op_layer_label_mismatch() -> None:
 
     op = SimpleNamespace(pass_index=1, layer_label="wrong_label")
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match="parent Layer.layer_label"):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
@@ -678,10 +678,10 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         pass_index=2,
     )
     fake_trace = SimpleNamespace(
-        layer_list=[layer1, layer2],
+        _layer_list=[layer1, layer2],
         op_labels=["relu_1:1", "relu_1:2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="recurrent_ops func mismatch"):
@@ -716,10 +716,10 @@ def test_loop_detection_invariants_fires_on_shortcut_num_passes_mismatch() -> No
         pass_index=2,
     )
     fake_trace = SimpleNamespace(
-        layer_list=[layer1, layer2],
+        _layer_list=[layer1, layer2],
         op_labels=["relu_1:1", "relu_1:2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="num_passes=99"):
@@ -731,10 +731,10 @@ def test_loop_detection_invariants_fires_on_unknown_recurrent_ops_member() -> No
 
     op = SimpleNamespace(label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "ghost_op"])
     fake_trace = SimpleNamespace(
-        layer_list=[op],
+        _layer_list=[op],
         op_labels=["relu_1"],
-        layer_logs={},
-        layer_dict_all_keys={},
+        _layer_logs={},
+        _layer_dict_all_keys={},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="not in op_labels"):
@@ -749,10 +749,10 @@ def test_loop_detection_invariants_fires_on_asymmetric_recurrent_ops() -> None:
     )
     other = SimpleNamespace(label="relu_2", layer_label="relu_1", recurrent_ops=["relu_2"])
     fake_trace = SimpleNamespace(
-        layer_list=[anchor],
+        _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="Asymmetric recurrent_ops"):
@@ -775,10 +775,10 @@ def test_loop_detection_invariants_fires_on_equivalence_class_mismatch() -> None
         equivalence_class="type_b",
     )
     fake_trace = SimpleNamespace(
-        layer_list=[anchor],
+        _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="type mismatch"):
@@ -806,10 +806,10 @@ def test_loop_detection_invariants_fires_on_full_path_func_mismatch() -> None:
         func_name="sigmoid",
     )
     fake_trace = SimpleNamespace(
-        layer_list=[anchor],
+        _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
         op_equivalence_classes={},
     )
     with pytest.raises(MetadataInvariantError, match="recurrent_ops func mismatch"):
@@ -842,10 +842,10 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
         has_params=False,
     )
     fake_trace = SimpleNamespace(
-        layer_list=[anchor],
+        _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1": anchor, "relu_2": other},
         op_equivalence_classes={"relu_type_x": {"relu_1"}, "sigmoid_type_y": {"relu_2"}},
     )
     with pytest.raises(MetadataInvariantError, match="spans multiple equivalence types"):
@@ -864,7 +864,7 @@ def test_module_containment_logic_fires_on_leaf_module_mismatch() -> None:
         address="self", address_parent=None, address_depth=0, address_children=[]
     )
     layer = SimpleNamespace(layer_label="relu_1", modules=["encoder"], module="decoder")
-    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), layer_list=[layer])
+    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), _layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match="last nested module"):
         _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
 
@@ -876,7 +876,7 @@ def test_module_containment_logic_fires_on_unknown_nested_module_address() -> No
         address="self", address_parent=None, address_depth=0, address_children=[]
     )
     layer = SimpleNamespace(layer_label="relu_1", modules=["ghost_module"], module="ghost_module")
-    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), layer_list=[layer])
+    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), _layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match="unknown module address"):
         _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
 
@@ -984,8 +984,8 @@ def test_module_layer_containment_fires_on_num_layers_mismatch() -> None:
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
         layer_labels=["relu_1"],
-        layer_logs={"relu_1": SimpleNamespace()},
-        layer_list=[],
+        _layer_logs={"relu_1": SimpleNamespace()},
+        _layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="num_layers=5"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
@@ -1000,8 +1000,8 @@ def test_module_layer_containment_fires_on_invalid_modulecall_op_label() -> None
         modules=_AddrIndexed([mod]),
         op_labels=[],
         layer_labels=[],
-        layer_logs={},
-        layer_list=[],
+        _layer_logs={},
+        _layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="ops contains"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
@@ -1018,9 +1018,9 @@ def test_module_layer_containment_fires_on_modulecall_num_layers_mismatch() -> N
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
         layer_labels=[],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1": SimpleNamespace(layer_label="relu_1")},
-        layer_list=[],
+        _layer_logs={},
+        _layer_dict_all_keys={"relu_1": SimpleNamespace(layer_label="relu_1")},
+        _layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="num_layers=5"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
@@ -1034,8 +1034,8 @@ def test_module_layer_containment_fires_on_unresolvable_layer_module() -> None:
         modules=_AddrIndexed([]),
         op_labels=[],
         layer_labels=[],
-        layer_logs={},
-        layer_list=[layer],
+        _layer_logs={},
+        _layer_list=[layer],
     )
     with pytest.raises(MetadataInvariantError, match="not found in module accessor"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
@@ -1049,7 +1049,7 @@ def test_module_layer_containment_fires_on_unresolvable_layer_module() -> None:
 def test_non_torch_backward_inert_fires_on_grad_fn_order() -> None:
     """Arm 2: a non-torch trace must not populate grad_fn_order."""
 
-    fake_trace = SimpleNamespace(has_backward_pass=False, grad_fn_logs=None, grad_fn_order=["x"])
+    fake_trace = SimpleNamespace(has_backward_pass=False, _grad_fn_logs=None, grad_fn_order=["x"])
     with pytest.raises(MetadataInvariantError, match="grad_fn_order"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
 
@@ -1058,7 +1058,7 @@ def test_non_torch_backward_inert_fires_on_backward_pass_logs() -> None:
     """Arm 3: a non-torch trace must not populate backward_pass_logs."""
 
     fake_trace = SimpleNamespace(
-        has_backward_pass=False, grad_fn_logs=None, grad_fn_order=None, backward_pass_logs=["x"]
+        has_backward_pass=False, _grad_fn_logs=None, grad_fn_order=None, _backward_pass_logs=["x"]
     )
     with pytest.raises(MetadataInvariantError, match="_backward_pass_logs"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
@@ -1069,9 +1069,9 @@ def test_non_torch_backward_inert_fires_on_backward_root_grad_fn_object_ids() ->
 
     fake_trace = SimpleNamespace(
         has_backward_pass=False,
-        grad_fn_logs=None,
+        _grad_fn_logs=None,
         grad_fn_order=None,
-        backward_pass_logs=None,
+        _backward_pass_logs=None,
         backward_root_grad_fn_object_ids=[123],
     )
     with pytest.raises(MetadataInvariantError, match="backward_root_grad_fn_object_ids"):
@@ -1113,7 +1113,7 @@ def test_op_log_fields_fires_on_pass_index_below_one() -> None:
     layer = SimpleNamespace(
         layer_label="relu_1", has_saved_activation=False, out=None, pass_index=0, num_passes=1
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], _loaded_from_bundle=False)
+    fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="pass_index=0"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
@@ -1124,7 +1124,7 @@ def test_op_log_fields_fires_on_num_passes_below_pass_index() -> None:
     layer = SimpleNamespace(
         layer_label="relu_1", has_saved_activation=False, out=None, pass_index=3, num_passes=1
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], _loaded_from_bundle=False)
+    fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="num_passes=1"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
@@ -1146,7 +1146,7 @@ def test_op_log_fields_fires_on_empty_func_name() -> None:
         is_output=False,
         is_buffer=False,
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], _loaded_from_bundle=False)
+    fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="func_name is empty"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
@@ -1175,7 +1175,7 @@ def test_op_log_fields_fires_on_raw_index_below_one() -> None:
         module_call_depth=0,
         label="relu_1",
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], _loaded_from_bundle=False)
+    fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="raw_index=0"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
@@ -1204,7 +1204,7 @@ def test_op_log_fields_fires_on_multipass_label_without_colon() -> None:
         module_call_depth=0,
         label="relu_1",
     )
-    fake_trace = SimpleNamespace(layer_list=[layer], _loaded_from_bundle=False)
+    fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="has no ':'"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
@@ -1224,7 +1224,7 @@ def test_param_xrefs_fires_on_used_by_ops_outside_op_labels() -> None:
         all_addresses={"layer.weight"},
     )
     fake_trace = SimpleNamespace(
-        param_logs=[param], layer_labels=[], op_labels=[], layer_list=[], layers_with_params={}
+        _param_logs=[param], layer_labels=[], op_labels=[], _layer_list=[], layers_with_params={}
     )
     with pytest.raises(MetadataInvariantError, match="used_by_ops contains"):
         _check_param_xrefs(fake_trace)  # type: ignore[arg-type]
@@ -1235,7 +1235,7 @@ def test_param_xrefs_fires_on_uses_params_without_param_logs() -> None:
 
     layer = SimpleNamespace(layer_label="relu_1", has_params=True, _param_logs=[])
     fake_trace = SimpleNamespace(
-        param_logs=[], layer_labels=[], op_labels=[], layer_list=[layer], layers_with_params={}
+        _param_logs=[], layer_labels=[], op_labels=[], _layer_list=[layer], layers_with_params={}
     )
     with pytest.raises(MetadataInvariantError, match="_param_logs is empty"):
         _check_param_xrefs(fake_trace)  # type: ignore[arg-type]
@@ -1245,10 +1245,10 @@ def test_param_xrefs_fires_on_layers_with_params_outside_layer_labels() -> None:
     """Arm 4: layers_with_params values must be valid layer labels."""
 
     fake_trace = SimpleNamespace(
-        param_logs=[],
+        _param_logs=[],
         layer_labels=[],
         op_labels=[],
-        layer_list=[],
+        _layer_list=[],
         layers_with_params={"layer.weight": ["ghost_layer"]},
     )
     with pytest.raises(MetadataInvariantError, match="contains 'ghost_layer'"):
@@ -1265,7 +1265,7 @@ def test_pass_count_consistency_fires_on_op_pass_index_mismatch() -> None:
 
     op = SimpleNamespace(pass_index=2, num_passes=1, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
     with pytest.raises(MetadataInvariantError, match="stores op with pass_index=2"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
@@ -1275,7 +1275,7 @@ def test_pass_count_consistency_fires_on_op_num_passes_mismatch() -> None:
 
     op = SimpleNamespace(pass_index=1, num_passes=99, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
     with pytest.raises(MetadataInvariantError, match="num_passes=99"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
@@ -1284,7 +1284,7 @@ def test_pass_count_consistency_fires_on_layer_num_calls_mismatch() -> None:
     """Arm 3: layer_num_calls must match Layer.num_passes."""
 
     layer_log = SimpleNamespace(ops={}, num_passes=0)
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={"relu_1": 5})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={"relu_1": 5})
     with pytest.raises(MetadataInvariantError, match="Layer.num_passes=0"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
@@ -1298,10 +1298,10 @@ def test_recurrence_invariants_fires_on_is_recurrent_mismatch() -> None:
     """Arm 0: is_recurrent must match whether any layer has more than one pass."""
 
     fake_trace = SimpleNamespace(
-        layer_num_calls={"relu_1": 3},
+        _layer_num_calls={"relu_1": 3},
         graph=SimpleNamespace(is_recurrent=False),
         layer_labels=["relu_1"],
-        layer_logs={},
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="graph.is_recurrent=False"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1311,10 +1311,10 @@ def test_recurrence_invariants_fires_on_max_layer_op_count_mismatch() -> None:
     """Arm 1: max_layer_op_count must equal max(layer_num_calls)."""
 
     fake_trace = SimpleNamespace(
-        layer_num_calls={"relu_1": 3},
+        _layer_num_calls={"relu_1": 3},
         graph=SimpleNamespace(is_recurrent=True, max_ops_per_layer=99),
         layer_labels=["relu_1"],
-        layer_logs={},
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="graph.max_ops_per_layer=99"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1324,10 +1324,10 @@ def test_recurrence_invariants_fires_on_unknown_layer_num_calls_key() -> None:
     """Arm 2: layer_num_calls keys must be valid layer_labels."""
 
     fake_trace = SimpleNamespace(
-        layer_num_calls={"ghost_layer": 1},
+        _layer_num_calls={"ghost_layer": 1},
         graph=SimpleNamespace(is_recurrent=False),
         layer_labels=[],
-        layer_logs={},
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="not in layer_labels"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1338,10 +1338,10 @@ def test_recurrence_invariants_fires_on_layer_log_pass_keys_mismatch() -> None:
 
     layer_log = SimpleNamespace(num_passes=2, ops={1: object()})
     fake_trace = SimpleNamespace(
-        layer_num_calls={},
+        _layer_num_calls={},
         graph=SimpleNamespace(is_recurrent=False),
         layer_labels=[],
-        layer_logs={"relu_1": layer_log},
+        _layer_logs={"relu_1": layer_log},
     )
     with pytest.raises(MetadataInvariantError, match="ops keys="):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1364,7 +1364,7 @@ def test_special_layer_lists_fires_on_input_layers_outside_layer_labels() -> Non
         internal_sink_ops=[],
         op_labels=["relu_1"],
         layer_labels=["relu_1"],
-        layer_list=[layer],
+        _layer_list=[layer],
     )
     with pytest.raises(
         MetadataInvariantError, match="input_layers contains labels not in layer_labels"
@@ -1380,7 +1380,7 @@ def test_special_layer_lists_fires_on_input_layers_outside_layer_labels() -> Non
 def test_trace_self_consistency_fires_on_op_labels_length_mismatch() -> None:
     """Arm 0: len(op_labels) must equal len(layer_list)."""
 
-    fake_trace = SimpleNamespace(op_labels=["a", "b"], layer_list=[SimpleNamespace()])
+    fake_trace = SimpleNamespace(op_labels=["a", "b"], _layer_list=[SimpleNamespace()])
     with pytest.raises(MetadataInvariantError, match=r"len\(op_labels\)=2"):
         _check_trace_self_consistency(fake_trace)  # type: ignore[arg-type]
 
@@ -1389,7 +1389,7 @@ def test_trace_self_consistency_fires_on_duplicate_op_labels() -> None:
     """Arm 1: op_labels must not contain duplicates."""
 
     fake_trace = SimpleNamespace(
-        op_labels=["relu_1", "relu_1"], layer_list=[SimpleNamespace(), SimpleNamespace()]
+        op_labels=["relu_1", "relu_1"], _layer_list=[SimpleNamespace(), SimpleNamespace()]
     )
     with pytest.raises(MetadataInvariantError, match="Duplicate op_labels"):
         _check_trace_self_consistency(fake_trace)  # type: ignore[arg-type]
@@ -1401,10 +1401,10 @@ def test_trace_self_consistency_fires_on_num_param_tensors_mismatch() -> None:
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[],
-        num_param_tensors=5,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[],
+        _num_param_tensors=5,
         _orphan_logs=(),
     )
     with pytest.raises(MetadataInvariantError, match="num_param_tensors=5"):
@@ -1418,10 +1418,10 @@ def test_trace_self_consistency_fires_on_num_params_mismatch() -> None:
     param = SimpleNamespace(num_params=10)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[param],
-        num_param_tensors=1,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[param],
+        _num_param_tensors=1,
         num_params=99,
         _orphan_logs=(),
     )
@@ -1435,10 +1435,10 @@ def test_trace_self_consistency_fires_on_trainable_frozen_sum_mismatch() -> None
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[],
-        num_param_tensors=0,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[],
+        _num_param_tensors=0,
         num_params=0,
         num_params_trainable=3,
         num_params_frozen=4,
@@ -1454,10 +1454,10 @@ def test_trace_self_consistency_fires_on_negative_capture_duration() -> None:
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[],
-        num_param_tensors=0,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[],
+        _num_param_tensors=0,
         num_params=0,
         num_params_trainable=0,
         num_params_frozen=0,
@@ -1475,10 +1475,10 @@ def test_trace_self_consistency_fires_on_start_after_end_time() -> None:
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[],
-        num_param_tensors=0,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[],
+        _num_param_tensors=0,
         num_params=0,
         num_params_trainable=0,
         num_params_frozen=0,
@@ -1505,10 +1505,10 @@ def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = _SizedNamespace(
         op_labels=["relu_1"],
-        layer_list=[layer],
-        num_ops=1,
-        param_logs=[],
-        num_param_tensors=0,
+        _layer_list=[layer],
+        _num_ops=1,
+        _param_logs=[],
+        _num_param_tensors=0,
         num_params=0,
         num_params_trainable=0,
         num_params_frozen=0,
@@ -1517,7 +1517,7 @@ def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
         capture_start_time=0,
         capture_end_time=1,
         size=0,
-        num_saved_ops=5,
+        _num_saved_ops=5,
         _orphan_logs=(),
     )
     with pytest.raises(MetadataInvariantError, match=r"len\(trace\)=0"):

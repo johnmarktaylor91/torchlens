@@ -1535,6 +1535,7 @@ class JAXBackend:
             param.trace = trace
             param_logs[address] = param
         trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
@@ -1566,6 +1567,7 @@ class JAXBackend:
         else:
             param_logs = nnx_param_logs(tree, trace)
         trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = sum(
             param.num_params for param in param_logs.values() if param.is_trainable
@@ -2162,6 +2164,7 @@ class JAXBackend:
             # ``trace_self_consistency`` invariant's
             # ``num_param_tensors != len(param_logs)`` check (same fix as
             # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
+            trace._num_param_tensors = len(trace._param_logs)
             trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
                 param.num_params for param in trace._param_logs if param.is_trainable
@@ -2285,6 +2288,7 @@ class JAXBackend:
         # ``_jax_recurrence_assignments``'s sibling counter block above):
         # a per-layer-label dedup sum still double-counts a param shared
         # across more than one layer.
+        trace._num_param_tensors = len(trace._param_logs)
         trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
             param.num_params for param in trace._param_logs if param.is_trainable

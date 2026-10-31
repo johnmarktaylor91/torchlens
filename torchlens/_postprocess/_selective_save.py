@@ -289,6 +289,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
         for op in getattr(trace, "_layer_list", ())
         if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
     ]
+    trace._num_saved_ops = len(saved_ops)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
     # explorer P4 memory truth (reduce-only captures count the retained
@@ -298,7 +299,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     trace.saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
     refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
     refresh_pinned_autograd_memory(trace, saved_ops)
-    trace._layers_saved = len(saved_ops) == len(getattr(trace, "_layer_list", ()))
+    trace._layers_saved = trace._num_saved_ops == len(getattr(trace, "_layer_list", ()))
 
 
 def _reject_non_static_save_predicate(

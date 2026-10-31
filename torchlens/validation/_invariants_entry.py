@@ -387,7 +387,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
     valid_param_sources = {"native-module", "pytree-derived", "none"}
     if param_source not in valid_param_sources:
         raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
-    if param_source == "none" and len(getattr(trace, "params", ())) != 0:
+    if param_source == "none" and getattr(trace, "_num_param_tensors", 0) != 0:
         raise MetadataInvariantError(
             name,
             "param_source='none' requires num_param_tensors=0",

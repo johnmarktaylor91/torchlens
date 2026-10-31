@@ -680,6 +680,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
+    self._num_saved_ops = len(saved_layers)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
     # explorer P4 memory truth (reduce-only captures count the retained

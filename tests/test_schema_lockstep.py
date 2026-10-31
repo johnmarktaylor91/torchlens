@@ -311,6 +311,8 @@ PRIVATE_ORDERED_PERSISTED_FIELDS: frozenset[str] = frozenset(
         "Trace._backward_pass_logs",
         "Trace._num_backward_passes",
         "Trace._num_ops",
+        "Trace._num_param_tensors",
+        "Trace._num_saved_ops",
         "Trace._num_layers_with_params",
         "BackwardPass._executed_flops_record",
         "Op._label_raw",

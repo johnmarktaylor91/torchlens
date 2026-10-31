@@ -69,9 +69,7 @@ class _DummyLog:
 
         self.verbose = False
         self._layer_logs: dict[str, Any] = {}
-        self.num_saved_ops = 0
-        self.saved_ops: list[Any] = []
-        self.saved_ops: list[Any] = []
+        self._num_saved_ops = 0
         self.saved_ops: list[Any] = []
         self.total_activation_memory = "0 B"
         self.render_calls: list[dict[str, Any]] = []

@@ -298,10 +298,12 @@ MODEL_LOG_FIELD_ORDER = [
     "total_backward_memory",
     "total_autograd_memory",
     "pinned_autograd_memory",
+    "_num_saved_ops",
     "saved_activation_memory",
     "saved_gradient_memory",
     # Param info
     "_param_logs",
+    "_num_param_tensors",
     "_num_layers_with_params",
     "num_params",
     "num_params_trainable",

@@ -87,7 +87,7 @@ def test_backend_identity_invariants_fires_on_invalid_param_source() -> None:
         backend="torch",
         module_identity_mode="torch_module",
         param_source="bogus_source",
-        num_param_tensors=0,
+        _num_param_tensors=0,
     )
 
     with pytest.raises(MetadataInvariantError, match=r"param_source=.*is invalid"):
