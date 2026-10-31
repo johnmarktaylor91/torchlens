@@ -616,13 +616,13 @@ def test_layer_to_layer_composition_law() -> None:
     mid, final = convs[0], convs[1]
     source = sole_input(trace)
     for out_pos in range(int(final.shape[-1])):
-        full_box = final.receptive_field.at((out_pos,), input=source)
+        full_box = final.receptive_field.at((out_pos,), input_op=source)
         mid_box = final.receptive_field.at((out_pos,), source=mid)
         mid_axis = mid_box.axes[-1]
         assert mid_axis.clipped_start is not None
         starts, stops = [], []
         for mid_pos in range(mid_axis.clipped_start, mid_axis.clipped_stop):
-            inner = mid.receptive_field.at((mid_pos,), input=source)
+            inner = mid.receptive_field.at((mid_pos,), input_op=source)
             inner_axis = inner.axes[-1]
             starts.append(inner_axis.clipped_start)
             stops.append(inner_axis.clipped_stop)
@@ -790,7 +790,7 @@ def test_multi_target_projective_raises_target_error() -> None:
             getattr(source.projective_field, accessor)
         assert not isinstance(exc_info.value, AmbiguousInputError)
         message = str(exc_info.value)
-        assert "target=" in message and "input=" not in message
+        assert "target=" in message and "input_op=" not in message
 
     class TwoIn(nn.Module):
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -798,7 +798,7 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace_in = tl.trace(TwoIn(), (torch.randn(1, 3), torch.randn(1, 3)))
     add = op_named(trace_in, "add")
-    with pytest.raises(AmbiguousInputError, match="input="):
+    with pytest.raises(AmbiguousInputError, match="input_op="):
         _ = add.receptive_field.status
 
 

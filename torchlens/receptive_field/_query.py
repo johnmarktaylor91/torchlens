@@ -335,7 +335,7 @@ def box_for_unit(
     op: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: Op | None = None,
     clip: bool = True,
     complete_unit: Sequence[int] | None = None,
@@ -351,7 +351,7 @@ def box_for_unit(
     unit:
         Coordinates over the target's derived windowed output axes, ordered
         by ascending output axis (the target's own grid order).
-    input:
+    input_op:
         Optional input operation or exact IO role/operation label.
     source:
         Optional source operation for a source-seeded solution. Its output grid is the
@@ -362,7 +362,7 @@ def box_for_unit(
         Optional complete target index used internally to route structural axes.
 
     """
-    if input is not None and source is not None:
+    if input_op is not None and source is not None:
         raise TypeError("input and source cannot be supplied together.")
     descriptors = solution.per_op.get(op.label)
     if not descriptors:
@@ -370,7 +370,7 @@ def box_for_unit(
         raise ReceptiveFieldError(
             f"No receptive-field solution is available from {endpoint} to {op.label}."
         )
-    descriptor = _select_descriptor(descriptors, source if source is not None else input)
+    descriptor = _select_descriptor(descriptors, source if source is not None else input_op)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)

@@ -162,12 +162,12 @@ class ReceptiveFieldView:
                 return descriptor
         raise KeyError(key)
 
-    def _descriptor(self, input: Op | str | None = None) -> ReceptiveField:
+    def _descriptor(self, input_op: Op | str | None = None) -> ReceptiveField:
         """Resolve one descriptor and reject ambiguous convenience access.
 
         Parameters
         ----------
-        input:
+        input_op:
             Optional exact IO role or graph endpoint operation.
 
         Returns
@@ -188,7 +188,7 @@ class ReceptiveFieldView:
         """
 
         projective = self._direction is ReceptiveFieldDirection.PROJECTIVE
-        if input is None:
+        if input_op is None:
             if len(self.per_input) > 1:
                 roles = ", ".join(self.per_input)
                 if projective:
@@ -198,7 +198,7 @@ class ReceptiveFieldView:
                     )
                 raise AmbiguousInputError(
                     f"Target {self._op.label!r} has multiple reachable inputs: {roles}. "
-                    "Select one with view[input_op] or input=<io_role>."
+                    "Select one with view[input_op] or input_op=<io_role>."
                 )
             if not self.per_input:
                 if projective:
@@ -210,9 +210,9 @@ class ReceptiveFieldView:
                 )
             return next(iter(self.per_input.values()))
         try:
-            return self[input]
+            return self[input_op]
         except KeyError as exc:
-            identity = input if isinstance(input, str) else input.label
+            identity = input_op if isinstance(input_op, str) else input_op.label
             if projective:
                 raise ReceptiveFieldError(
                     f"Target {identity!r} is not reachable from source {self._op.label!r}."
@@ -277,7 +277,7 @@ class ReceptiveFieldView:
         self,
         unit: tuple[int, ...] | Literal["center"],
         *,
-        input: Op | str | None = None,
+        input_op: Op | str | None = None,
         source: object | None = None,
         direction: ReceptiveFieldDirection | str | None = None,
         target: object | None = None,
@@ -291,7 +291,7 @@ class ReceptiveFieldView:
             Windowed-axis coordinates, or ``"center"`` for their midpoint.
             Coordinates must be non-negative and in range; unlike ``.gradient()``
             and ``.check()``, negative indices are rejected rather than wrapped.
-        input:
+        input_op:
             Optional exact IO role or model-input operation.
         source:
             Optional ancestor graph point. When given, the returned box is in the
@@ -312,10 +312,10 @@ class ReceptiveFieldView:
         """
 
         resolved_direction = self._direction_for(direction)
-        if input is not None and source is not None:
+        if input_op is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
         if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
-            if input is not None or source is not None:
+            if input_op is not None or source is not None:
                 raise TypeError("Projective queries select their far endpoint with target=.")
             from ._forward_query import _select_target_descriptor, box_for_source_unit
 
@@ -351,7 +351,7 @@ class ReceptiveFieldView:
 
         source_op: Op | None = None
         solution = self._solution
-        selected_input = input
+        selected_input = input_op
         if source is not None:
             source_op = resolve_graph_point(self._op.source_trace, source)
             require_path(source_op, self._op, "receptive")
@@ -388,7 +388,7 @@ class ReceptiveFieldView:
             cast("_ReceptiveFieldSolution", solution),
             self._op,
             selected,
-            input=selected_input,
+            input_op=selected_input,
             source=source_op,
             clip=clip,
         )
@@ -397,7 +397,7 @@ class ReceptiveFieldView:
         self,
         unit: tuple[int, ...],
         *,
-        input: Op | str | None = None,
+        input_op: Op | str | None = None,
         source: object | None = None,
         direction: ReceptiveFieldDirection | str | None = None,
         target: object | None = None,
@@ -411,7 +411,7 @@ class ReceptiveFieldView:
         ----------
         unit:
             Complete target output-element index.
-        input:
+        input_op:
             Optional exact IO role or model-input operation.
         source:
             Reserved ancestor graph point for layer-to-layer receptive probes.
@@ -434,10 +434,10 @@ class ReceptiveFieldView:
 
         resolved_direction = self._direction_for(direction)
 
-        if input is not None and source is not None:
+        if input_op is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
         if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
-            if input is not None or source is not None:
+            if input_op is not None or source is not None:
                 raise TypeError("Projective queries select their far endpoint with target=.")
             projective_gradient = _optional_callable(
                 "._gradient_forward", "projective_gradient_for_unit", "projective gradient support"
@@ -469,7 +469,7 @@ class ReceptiveFieldView:
         return gradient_for_unit(
             self._op,
             unit,
-            input=input,
+            input_op=input_op,
             atol=atol,
             rtol=rtol,
             retain_graph=retain_graph,
@@ -479,7 +479,7 @@ class ReceptiveFieldView:
         self,
         unit: tuple[int, ...],
         *,
-        input: Op | str | None = None,
+        input_op: Op | str | None = None,
         source: object | None = None,
         direction: ReceptiveFieldDirection | str | None = None,
         target: object | None = None,
@@ -493,7 +493,7 @@ class ReceptiveFieldView:
         ----------
         unit:
             Complete target output-element index.
-        input:
+        input_op:
             Optional exact IO role or model-input operation.
         source:
             Optional ancestor graph point for layer-to-layer receptive validation.
@@ -518,7 +518,7 @@ class ReceptiveFieldView:
         """
 
         resolved_direction = self._direction_for(direction)
-        if input is not None and source is not None:
+        if input_op is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
         check_for_unit = _optional_callable("._validation", "check_for_unit", "validation")
         return cast(
@@ -526,7 +526,7 @@ class ReceptiveFieldView:
             check_for_unit(
                 self._op,
                 unit,
-                input=input,
+                input_op=input_op,
                 source=source,
                 direction=resolved_direction,
                 target=target,
@@ -540,7 +540,7 @@ class ReceptiveFieldView:
         self,
         *,
         batch_index: int | None = None,
-        input: Op | str | None = None,
+        input_op: Op | str | None = None,
     ) -> tuple[int, ...]:
         """Resolve the complete centered output index without guessing a sample.
 
@@ -548,7 +548,7 @@ class ReceptiveFieldView:
         ----------
         batch_index:
             Required index for the derived batch-like output axis.
-        input:
+        input_op:
             Optional exact IO role or model-input operation.
 
         Returns
@@ -562,7 +562,7 @@ class ReceptiveFieldView:
             If batch semantics are unknown or ``batch_index`` is invalid or omitted.
         """
 
-        descriptor = self._descriptor(input)
+        descriptor = self._descriptor(input_op)
         state = self._solution.states.get((self._op.label, descriptor.io_role))
         if state is None or state.axes is None or state.batch_axis is None:
             raise ReceptiveFieldError(
@@ -594,7 +594,7 @@ class ReceptiveFieldView:
         self,
         unit: tuple[int, ...] | None = None,
         *,
-        input: Op | str | None = None,
+        input_op: Op | str | None = None,
         direction: ReceptiveFieldDirection | str | None = None,
         target: object | None = None,
         image: object | None = None,
@@ -611,7 +611,7 @@ class ReceptiveFieldView:
         ----------
         unit:
             Optional complete target output-element index.
-        input:
+        input_op:
             Optional exact IO role or model-input operation.
         direction:
             Optional per-call receptive/projective direction override. ``None``
@@ -649,7 +649,7 @@ class ReceptiveFieldView:
             show(
                 self,
                 unit,
-                input=input,
+                input_op=input_op,
                 direction=self._direction_for(direction),
                 target=target,
                 image=cast("Image.Image | None", image),

@@ -355,7 +355,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
 def _select_inputs(
     trace: Trace,
     descriptors: Mapping[str, ReceptiveField],
-    input: Op | str | None,
+    input_op: Op | str | None,
 ) -> tuple[tuple[str, Op, ReceptiveField | None], ...]:
     """Resolve requested input operations and their reachability descriptors.
 
@@ -365,7 +365,7 @@ def _select_inputs(
         Owning trace.
     descriptors:
         Geometrically reachable inputs for the target operation.
-    input:
+    input_op:
         Optional exact IO role or input-operation handle.
 
     Returns
@@ -380,7 +380,7 @@ def _select_inputs(
     """
 
     inputs_by_role = _input_ops_by_role(trace)
-    if input is None:
+    if input_op is None:
         selected: list[tuple[str, Op, ReceptiveField | None]] = []
         for role, descriptor in descriptors.items():
             op = next(
@@ -399,11 +399,11 @@ def _select_inputs(
             selected.append((role, op, descriptor))
         return tuple(selected)
 
-    if isinstance(input, str):
-        role = input
+    if isinstance(input_op, str):
+        role = input_op
         op = inputs_by_role.get(role)
     else:
-        requested = input
+        requested = input_op
         role = str(getattr(requested, "io_role", None) or getattr(requested, "label", ""))
         requested_label = str(getattr(requested, "label", ""))
         candidate = inputs_by_role.get(role)
@@ -729,7 +729,7 @@ def gradient_for_unit(
     target: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
@@ -743,7 +743,7 @@ def gradient_for_unit(
         Target operation with a live saved output tensor.
     unit:
         Complete output-element index, including every target axis.
-    input:
+    input_op:
         Optional model-input Op or exact IO role. ``None`` probes every
         geometrically reachable model input in one autograd call.
     source:
@@ -771,15 +771,15 @@ def gradient_for_unit(
 
     if atol < 0 or rtol < 0:
         raise ReceptiveFieldConfigurationError("atol and rtol must be non-negative.")
-    if input is not None and source is not None:
-        raise TypeError("input= and source= cannot be used together.")
+    if input_op is not None and source is not None:
+        raise TypeError("input_op= and source= cannot be used together.")
     trace = target.source_trace
     if source is not None:
         _source_op = resolve_graph_point(trace, source)
         if bool(getattr(_source_op, "is_input", False)):
             # A model input passed as source= is exactly the legacy input query;
             # route it through the input path so the result is byte-identical.
-            input = _source_op
+            input_op = _source_op
             source = None
     spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
     if not spec.capabilities.backward_capture:
@@ -851,7 +851,7 @@ def gradient_for_unit(
     with _builtin_rules_when_registry_empty():
         solution = _engine.solve(trace)
         descriptors = _engine.lookup(trace, target)
-    selected = _select_inputs(trace, descriptors, input)
+    selected = _select_inputs(trace, descriptors, input_op)
     if not selected:
         raise ReceptiveFieldUnavailableError(
             f"Target op {target.label!r} has no geometrically reachable model input."
@@ -893,7 +893,7 @@ def gradient_for_unit(
             unit_shape=tuple(target_tensor.shape),
         )
 
-    if input is not None:
+    if input_op is not None:
         return next(iter(results.values()))
     return MappingProxyType(results)
 

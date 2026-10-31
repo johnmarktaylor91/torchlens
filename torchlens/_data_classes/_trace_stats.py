@@ -783,7 +783,7 @@ class TraceStatsMixin(_TraceMixinBase):
         self: "Trace",
         level: Literal["op", "layer", "call", "module"] = "op",
         *,
-        input: "Op | None" = None,
+        input_op: "Op | None" = None,
         statuses: "Collection[ReceptiveFieldStatus] | None" = None,
         sort_by: str | None = None,
         ascending: bool = True,
@@ -795,7 +795,7 @@ class TraceStatsMixin(_TraceMixinBase):
         ----------
         level:
             Table granularity: operation, layer, module invocation, or module.
-        input:
+        input_op:
             Optional model-input ``Op`` handle. String layer names are rejected.
         statuses:
             Optional typed receptive-field-status filter.
@@ -815,7 +815,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return build_rf_profile(
             self,
             level=level,
-            input=input,
+            input_op=input_op,
             statuses=statuses,
             sort_by=sort_by,
             ascending=ascending,
@@ -826,7 +826,7 @@ class TraceStatsMixin(_TraceMixinBase):
         self: "Trace",
         level: Literal["op", "layer", "call", "module"] = "op",
         *,
-        input: "Op | None" = None,
+        input_op: "Op | None" = None,
         statuses: "Collection[ReceptiveFieldStatus] | None" = None,
         sort_by: str | None = None,
         ascending: bool = True,
@@ -835,7 +835,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return self.receptive_fields(
             level=level,
-            input=input,
+            input_op=input_op,
             statuses=statuses,
             sort_by=sort_by,
             ascending=ascending,

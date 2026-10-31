@@ -58,7 +58,7 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
         for parameter in model.parameters()
     )
 
-    gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+    gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
     assert trace.num_backward_passes == before_passes
     assert trace.has_gradients is before_has_gradients
@@ -93,7 +93,7 @@ def test_probe_does_not_mutate_the_class_level_field_policy_tables() -> None:
     assert "_tl_rf_probe_active" in before_spec
 
     _, trace, target, input_op = _conv_trace()
-    gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+    gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
     assert dict(Trace.PORTABLE_STATE_SPEC) == before_spec
     assert dict(Trace.FIELD_POLICY) == before_policy
@@ -135,7 +135,7 @@ def test_suppression_restores_absent_flag_after_mid_probe_autograd_failure(
 
     monkeypatch.setattr(torch.autograd, "grad", failing_grad)
     with pytest.raises(RuntimeError, match="mid-probe autograd failure"):
-        gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+        gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
     monkeypatch.setattr(torch.autograd, "grad", original_grad)
 
     assert "_tl_rf_probe_active" not in trace.__dict__

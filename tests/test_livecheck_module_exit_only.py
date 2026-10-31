@@ -389,7 +389,7 @@ def _entry(
     )
 
 
-_INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input": "in"})
+_INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input_route": "in"})
 
 
 @pytest.mark.parametrize(

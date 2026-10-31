@@ -238,8 +238,8 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), scramble_elements(seed=0)),
     ),
     "splice_module_in": (
-        lambda: (_subspace_sel(), splice_module(nn.Identity(), input="in")),
-        lambda: (_subspace_sel(), splice_module(nn.Identity(), input="out")),
+        lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="in")),
+        lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="out")),
     ),
     "grad_zero": (
         lambda: (_subspace_sel(), grad_zero()),

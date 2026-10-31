@@ -71,9 +71,9 @@ def test_logging_off_is_the_replayed_fork_with_no_latent_nodes(setup) -> None:
     assert _labels(explicit_off.spliced) == _labels(default.spliced)
     for left, right in zip(default.spliced_outputs, explicit_off.spliced_outputs, strict=True):
         assert torch.equal(left, right)
-    # The replayed fork is the base mechanism: splice_module(input="out") at the site.
+    # The replayed fork is the base mechanism: splice_module(input_route="out") at the site.
     fork = default.clean.fork("by_hand")
-    fork.attach_hooks(tl.label("linear_1_1:1"), tl.splice_module(_Recon(sae), input="out"))
+    fork.attach_hooks(tl.label("linear_1_1:1"), tl.splice_module(_Recon(sae), input_route="out"))
     fork.push()
     assert torch.equal(fork[fork.output_layers[0]].out, default.spliced_outputs[0])
 
@@ -145,7 +145,7 @@ class _Transcoder(nn.Module):
 
 
 def test_transcoder_splices_keep_working_beside_a_logged_splice() -> None:
-    """``splice_module(transcoder, input="in")`` is unchanged after a logged splice ran."""
+    """``splice_module(transcoder, input_route="in")`` is unchanged after a logged splice ran."""
 
     torch.manual_seed(3)
     model, x, transcoder = _Block().eval(), torch.randn(3, 4), _Transcoder().eval()
@@ -156,7 +156,7 @@ def test_transcoder_splices_keep_working_beside_a_logged_splice() -> None:
             x,
             capture=tl.options.CaptureOptions(
                 intervention_ready=True,
-                hooks={tl.module("mlp"): tl.splice_module(transcoder, input="in")},
+                hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="in")},
             ),
         )
 

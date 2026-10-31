@@ -541,7 +541,7 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         and ``b_dec`` as mappings naming the MLP outputs it writes, and must
         run before them. The transcoder is an object with
         ``encode``, ``W_enc``, ``b_enc``, ``W_dec`` and ``b_dec``, the same
-        object ``tl.splice_module(transcoder, input="in")`` would splice in.
+        object ``tl.splice_module(transcoder, input_route="in")`` would splice in.
         A cross-layer transcoder gives ``W_dec`` and ``b_dec`` as mappings
         from MLP module names to tensors.
     embedding

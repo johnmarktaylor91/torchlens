@@ -253,7 +253,7 @@ def test_region_do_round_trips(chain_fork, tmp_path) -> None:
 
 
 def test_region_splice_module_lowering(chain_fork) -> None:
-    """splice_module(input='in') maps region ENTRY values to exit values."""
+    """splice_module(input_route='in') maps region ENTRY values to exit values."""
 
     model, _x, fork = chain_fork
 
@@ -266,7 +266,7 @@ def test_region_splice_module_lowering(chain_fork) -> None:
             return torch.ones_like(value) * 2.0
 
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
-    fork.do(target, tl.splice_module(_Sub(), input="in"))
+    fork.do(target, tl.splice_module(_Sub(), input_route="in"))
     assert torch.allclose(fork["linear_3_5"].out, model.fc3(torch.full((3, 4), 2.0)), atol=1e-6)
     (fact,) = _region_fact_rows(fork)
     assert fact["edit"] == "splice_module"
@@ -643,5 +643,5 @@ def test_region_splice_arity_mismatch_refuses() -> None:
             return torch.zeros_like(value)
 
     with pytest.raises(RegionError) as excinfo:
-        fork.do(target, tl.splice_module(_OneOut(), input="in"))
+        fork.do(target, tl.splice_module(_OneOut(), input_route="in"))
     assert excinfo.value.fields["code"] == "region_splice_arity_mismatch"

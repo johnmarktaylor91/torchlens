@@ -1064,7 +1064,7 @@ attention patterns and normalisation scales held at their captured values. Docum
 
 - `transcoders` maps each MLP module name to a transcoder: an object with `encode(x)`, `W_enc`
   `(d_in, n_features)`, `b_enc`, `W_dec` `(n_features, d_out)` and `b_dec`, the object
-  `tl.splice_module(transcoder, input="in")` splices in for that MLP. A cross-layer transcoder
+  `tl.splice_module(transcoder, input_route="in")` splices in for that MLP. A cross-layer transcoder
   gives `W_dec` and `b_dec` as mappings from MLP module names to tensors, one per MLP output its
   features write.
 - `frozen` names the modules (or op labels) held at their captured values: every attention

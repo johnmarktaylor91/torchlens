@@ -176,7 +176,7 @@ def _box_for_descriptor(
                 cast(Any, solution),
                 owner,
                 windowed,
-                input=None if endpoint is not None else descriptor.io_role,
+                input_op=None if endpoint is not None else descriptor.io_role,
                 source=endpoint,
                 clip=True,
                 complete_unit=complete_unit,
@@ -567,7 +567,7 @@ def _exact_box_adjoint_violations(
                     cast(Any, reverse_solution),
                     far,
                     corner,
-                    input=owner,
+                    input_op=owner,
                     clip=True,
                     complete_unit=far_unit,
                 )
@@ -769,7 +769,7 @@ def _check_for_unit(
     target: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None,
+    input_op: Op | str | None,
     source: object | None,
     direction: ReceptiveFieldDirection | str,
     result_target: object | None,
@@ -790,20 +790,20 @@ def _check_for_unit(
     if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and result_target is not None:
         raise TypeError("target= is only valid with direction='projective'.")
     if normalized_direction is ReceptiveFieldDirection.PROJECTIVE and (
-        input is not None or source is not None
+        input_op is not None or source is not None
     ):
-        raise TypeError("input= and source= are only valid with direction='receptive'.")
+        raise TypeError("input_op= and source= are only valid with direction='receptive'.")
     complete_unit = _normalize_complete_unit(target, unit)
     endpoint: Op | None = None
     solution: Any
     try:
         if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
-            if input is not None and source is not None:
-                raise TypeError("input= and source= cannot be used together.")
+            if input_op is not None and source is not None:
+                raise TypeError("input_op= and source= cannot be used together.")
             if source is None:
                 solution = _engine.solve(target.source_trace)
                 view = ReceptiveFieldView(target, solution)
-                descriptors = _selected_descriptors(view, input)
+                descriptors = _selected_descriptors(view, input_op)
             else:
                 endpoint = resolve_graph_point(target.source_trace, source)
                 solution = _engine.solve_from(target.source_trace, endpoint)
@@ -867,7 +867,7 @@ def _check_for_unit(
             probed = gradient_for_unit(
                 target,
                 complete_unit,
-                input=input,
+                input_op=input_op,
                 source=source,
                 atol=0.0,
                 rtol=0.0,
@@ -905,7 +905,7 @@ def check_for_unit(
     owner: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
     target: object | None = None,
@@ -919,7 +919,7 @@ def check_for_unit(
     ----------
     owner, unit:
         Seed-owner operation and complete output-element index.
-    input:
+    input_op:
         Optional model-input operation or exact IO role.
     source:
         Optional receptive-direction ancestor graph point.
@@ -948,7 +948,7 @@ def check_for_unit(
     return _check_for_unit(
         owner,
         unit,
-        input=input,
+        input_op=input_op,
         source=source,
         direction=direction,
         result_target=target,
@@ -962,7 +962,7 @@ def check(
     view: ReceptiveFieldView,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
     target: object | None = None,
@@ -976,7 +976,7 @@ def check(
     ----------
     view, unit:
         Receptive-field view and complete output-element index.
-    input:
+    input_op:
         Optional model-input operation or exact IO role.
     source:
         Optional receptive-direction ancestor graph point.
@@ -1000,7 +1000,7 @@ def check(
     return check_for_unit(
         view._op,
         unit,
-        input=input,
+        input_op=input_op,
         source=source,
         direction=direction,
         target=target,
@@ -1311,7 +1311,7 @@ def validate_receptive_field_trace(
                 result = _check_for_unit(
                     owner,
                     unit,
-                    input=cast("Op | str | None", selected_input),
+                    input_op=cast("Op | str | None", selected_input),
                     source=selected_source,
                     direction=normalized_direction,
                     result_target=(

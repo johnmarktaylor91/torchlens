@@ -1324,7 +1324,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
   from each op's two-term compute record; refuses typed with
   `flop_convention_unavailable` when an op has no MAC split). Accepted by
-  `summary(...)` and `tl._utils.flop_count(...)`; the removed `count_fma_as_two=`
+  `summary(...)`; the removed `count_fma_as_two=`
   spelling refuses typed naming it.
 
 **Autograd-saved bytes**
@@ -1382,8 +1382,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   conflicts.
 
 **Merge vocabularies**
-: `MergeAlignment`, `BoundaryConsistency`, `MergeValueStatus`, and `MergedErrorCode` are
-  frozen vocabularies in `torchlens._merged`, release-gated against
+: `MergeAlignment` and `MergeValueStatus` are frozen vocabularies in `tl.types`,
+  release-gated against
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.distributed_scope** — *unstable — no deprecation shim owed*
@@ -1685,20 +1685,6 @@ S2-gated*
   `structure_only_{save,runnable,replay,validation,backward,episode}_unsupported`,
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
-
-**tl._ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
-: The root call's `(args, kwargs)`, kept on a capture's module workspace while the capture
-  runs: the root forward is never decorated, so the per-module forward-argument table has no
-  entry for it. Set at capture entry, read when finalization builds the root module pass, then
-  cleared with the other temporary build state (`None` outside a capture). The
-  `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
-
-**tl._ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
-: Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
-  key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
-  buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
-  the field goes away with the raw-graph workspace once the trace is projected. The
-  `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
 
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens._ir.predicate_registry.PredicateProtocol` — the frozen callable
@@ -2344,24 +2330,6 @@ shim owed*
   `[derived: logging_steps=N]` or `[default]`. Resolved values and sources stay
   on `callback.settings`; `hist_every=` is a constructor argument too. A
   malformed variable refuses `watch_env_config_invalid`.
-
-**StepBlockRecord.trace_ref (torchlens._observability)** — *unstable — no deprecation shim owed*
-: Nullable pointer (path or URI) from a history step block to a retained
-  `Trace` for that step; there is no raw-tensor snapshot tier. History schema
-  version 2 (`HISTORY_SCHEMA_VERSION`); version-1 artifacts load with
-  `trace_ref=None`; a non-string or empty pointer refuses
-  `history_trace_ref_invalid`. `OpTierCollector.settle_open_block(...)`
-  sets it (and the optimizer truth) for the open op-tier block;
-  `OpTierCollector.instrumented_forward(...)` runs the per-step pass without
-  committing a block.
-
-**WatchSettings(sketch_embeddings=, artifact_budget_bytes=) (torchlens._observability)** — *unstable — no deprecation shim owed*
-: `sketch_embeddings=False` (default) reduces embedding-table parameters with
-  at least `EMBEDDING_SKETCH_CAP_NUMEL` (2**20) elements spine-only and says
-  so in the plan table; `True` sketches them. `artifact_budget_bytes` (default
-  256 MiB, `None` disables) caps the disk history artifact: the block that
-  would cross it refuses `history_artifact_budget_exceeded` before any of its
-  bytes are written.
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless

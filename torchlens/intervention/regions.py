@@ -681,15 +681,15 @@ def _evaluate_instance(
         exit_values[label] = _consumed_value(trace, graph.ops[edge.parent], graph.ops[edge.child])
 
     is_splice = isinstance(edit, Edit) and edit.helper_name == "splice_module"
-    if is_splice and dict(edit.metadata).get("input") == "in":
+    if is_splice and dict(edit.metadata).get("input_route") == "in":
         module = edit.args[0]
         entries = _entry_values(trace, graph, instance)
         if not entries:
             raise RegionError(
-                f"splice_module(input='in') on region instance {instance.index} "
+                f"splice_module(input_route='in') on region instance {instance.index} "
                 "has no derivable entry values",
                 code="region_splice_arity_mismatch",
-                remedy="use splice_module(input='out') to transform the exit value instead",
+                remedy="use splice_module(input_route='out') to transform the exit value instead",
             )
         from .._state import pause_logging
 
@@ -740,7 +740,7 @@ def _evaluate_instance(
             code="region_edit_multi_exit_unsupported",
             remedy="pass a region callable fn(exit_values_tuple, *, hook) "
             "returning one tensor per exit op, or tl.splice_module(module, "
-            "input='in') mapping entries to exits",
+            "input_route='in') mapping entries to exits",
         )
     context = make_hook_context(
         name=getattr(edit, "__name__", "region_edit"),

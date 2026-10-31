@@ -1275,7 +1275,7 @@
   `ce_loss_recovered` and `kl_divergence`. `bridge.sae_lens.reconstruct(log, site, sae)`
   replaces the removed `decode`. Pretrained SAEs (Gemma Scope 1 and 2) load with SAELens
   and run here (`docs/recipes/pretrained_saes.md`); a transcoder splices with
-  `tl.splice_module(transcoder, input="in")` on its MLP module. `log_latents=True` (live
+  `tl.splice_module(transcoder, input_route="in")` on its MLP module. `log_latents=True` (live
   model only) makes `spliced` a fresh capture with the SAE run inside the model, so the
   encoder ops, the latents node (`SpliceResult.latents_site`) and the decoder ops are trace
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`

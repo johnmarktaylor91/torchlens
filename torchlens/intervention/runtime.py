@@ -488,7 +488,7 @@ def _apply_live_hooks(
             if _is_plain_module_selector(normalized_entry.site_target):
                 continue
             raise HookValueError(
-                "splice_module(input='in') with a module-scoped op selector is ambiguous. "
+                "splice_module(input_route='in') with a module-scoped op selector is ambiguous. "
                 "Use tl.module(...)/tl.in_module(...) alone for one module-call splice, or use "
                 "an op selector without tl.in_module(...) for op-level splicing."
             )
@@ -1053,13 +1053,13 @@ def _helper_routes_inputs(helper: Any | None) -> bool:
     Returns
     -------
     bool
-        Whether the helper is ``splice_module(input='in')``.
+        Whether the helper is ``splice_module(input_route='in')``.
     """
 
     if helper is None or getattr(helper, "name", None) != "splice_module":
         return False
     metadata = dict(getattr(helper, "metadata", ()))
-    return metadata.get("input") == "in"
+    return metadata.get("input_route") == "in"
 
 
 def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
@@ -1132,7 +1132,7 @@ def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> 
     if helper is None or helper.name != "splice_module":
         return None
     helper_metadata = dict(helper.metadata)
-    if helper_metadata.get("input") != "in":
+    if helper_metadata.get("input_route") != "in":
         return None
     return _module_scope_address(site_target)
 
@@ -1170,7 +1170,7 @@ def _module_scope_address(site_target: Any) -> str | None:
 def _whole_call_site_view(site: Any) -> Any:
     """Return ``site`` as a whole-module-call site for input-splice matching.
 
-    ``splice_module(input="in")`` replaces a module call as a whole, so its
+    ``splice_module(input_route="in")`` replaces a module call as a whole, so its
     ``tl.in_module`` target fires at the boundary even when an op inside the
     call produced the output; drop the boundary's inner-alias mark (which
     otherwise keeps ``tl.in_module`` from re-firing there) for that match.

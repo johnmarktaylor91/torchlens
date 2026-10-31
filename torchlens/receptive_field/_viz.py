@@ -36,7 +36,7 @@ def show(
     view: ReceptiveFieldView,
     unit: Sequence[int] | None = None,
     *,
-    input: Any | None = None,
+    input_op: Any | None = None,
     direction: ReceptiveFieldDirection = ReceptiveFieldDirection.RECEPTIVE,
     target: Any | None = None,
     image: Image.Image | None = None,
@@ -55,7 +55,7 @@ def show(
         Receptive-field view for the target operation.
     unit:
         Complete output-element index, required when ``gradient`` is true.
-    input:
+    input_op:
         Input operation handle or exact IO role.
     image:
         Optional base image overriding the captured raw stimulus.
@@ -88,7 +88,7 @@ def show(
 
     if not 0.0 <= alpha <= 1.0:
         raise ReceptiveFieldConfigurationError("alpha must be between 0 and 1.")
-    selected = target if direction is ReceptiveFieldDirection.PROJECTIVE else input
+    selected = target if direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _select_descriptor(view, selected)
     if gradient and unit is None:
         raise ReceptiveFieldError("gradient=True requires an explicit complete output unit.")
@@ -163,7 +163,7 @@ def node_spec(
     op: Op,
     *,
     unit: Sequence[int] | None = None,
-    input: Any | None = None,
+    input_op: Any | None = None,
     direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
     target: Any | None = None,
     cone: bool = True,
@@ -197,7 +197,7 @@ def node_spec(
 
     _ = overlay, gradient, box_color, alpha, cmap
     resolved_direction = ReceptiveFieldDirection(direction)
-    selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input
+    selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _descriptor_for_op(op, selected, resolved_direction)
     trace = op.source_trace
     cone_labels = (
@@ -260,12 +260,12 @@ def _view_box(
     )
     try:
         if direction is ReceptiveFieldDirection.RECEPTIVE:
-            return cast(ReceptiveFieldBox, view.at(coordinates, input=selected))
+            return cast(ReceptiveFieldBox, view.at(coordinates, input_op=selected))
         if direction is ReceptiveFieldDirection.PROJECTIVE:
             return cast(
                 ReceptiveFieldBox, view.at(coordinates, direction=direction, target=selected)
             )
-        return cast(ReceptiveFieldBox, view.at(coordinates, direction=direction, input=selected))
+        return cast(ReceptiveFieldBox, view.at(coordinates, direction=direction, input_op=selected))
     except TypeError as exc:
         raise ReceptiveFieldError(
             "ReceptiveFieldView.at() must support the complete-unit show() contract."
@@ -284,7 +284,7 @@ def _view_gradient(
 
     assert unit is not None
     if direction is ReceptiveFieldDirection.RECEPTIVE:
-        result = view.gradient(tuple(unit), input=selected, retain_graph=retain_graph)
+        result = view.gradient(tuple(unit), input_op=selected, retain_graph=retain_graph)
     else:
         result = view.gradient(
             tuple(unit), direction=direction, target=selected, retain_graph=retain_graph
