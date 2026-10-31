@@ -65,7 +65,6 @@ from .save import (
     check_spec_compat,
 )
 from .selectors import (
-    facet,
     label_contains,
     label_matches,
     model_input,
@@ -114,7 +113,6 @@ __all__ = [
     "label_contains",
     "Direction",
     "fit_direction",
-    "facet",
     "model_input",
     "label_matches",
     "permute_batch",

@@ -71,9 +71,9 @@ import torchlens.transformer as tviz
 log = tl.trace(model, input_ids)  # eager attention captures the real pattern
 views = tviz.attention_views(log, tokens=tokens)
 
-tviz.render_attention(views[0], "layer0.pdf")            # per-head grid, paged
-tviz.render_attention(views[0].head_view(9), "h9.svg")   # one square panel
-tviz.render_attention_atlas(views, "atlas.pdf")           # overview + detail pages
+tl.viz.attention(views[0], "layer0.pdf")            # per-head grid, paged
+tl.viz.attention(views[0].head_view(9), "h9.svg")   # one square panel
+tl.viz.attention_atlas(views, "atlas.pdf")           # overview + detail pages
 
 # Streaming lens pictures (probabilities always full-vocabulary denominator)
 from torchlens.semantic.logit_lens import logit_lens_predictions
@@ -84,15 +84,15 @@ tviz.render_answer_trajectory(traj, "answer.pdf")
 
 # Layers-by-positions heatmap over the full logit-lens result
 from torchlens.semantic.logit_lens import logit_lens
-tviz.render_logit_lens_heatmap(logit_lens(log), "lens.pdf", tokens=tokens, tokenizer=tok)
+tl.viz.logit_lens(logit_lens(log), "lens.pdf", tokens=tokens, tokenizer=tok)
 
 # Loss + entropy strips from ONE logits source (alignment proof travels)
 loss, entropy = tviz.token_metrics(logits, input_ids[0], token_strings)
-tviz.render_metric_strip(loss, "loss.pdf")
+tl.viz.metric_strip(loss, "loss.pdf")
 
 # Colored tokens from the attribution kit's payload
 scores = tviz.TokenScores.from_attribution(result.payload())
-tviz.render_token_strip(scores, "tokens.pdf")
+tl.viz.token_strip(scores, "tokens.pdf")
 print(tviz.token_strip_html(scores))  # zero-dependency notebook path
 ```
 
@@ -113,9 +113,9 @@ receipt = tviz.receipt_from_patch_grid(
     positive_control=pos,     # measured large perturbation (must move)
     joint_effect=joint,       # one extra run: all heads patched together, as a delta
 )
-tviz.render_receipt_grid(receipt, "receipts.pdf")
+tl.viz.ablation_grid(receipt, "receipts.pdf")
 ann = tviz.Annotation.from_receipt(receipt)
-tviz.render_attention(views[0], "annotated.pdf", annotation=ann)
+tl.viz.attention(views[0], "annotated.pdf", annotation=ann)
 ```
 
 A grid's `values` are the metric of each patched run. Its receipts also
@@ -141,7 +141,7 @@ cells are blank, never zero, and the figure prints "measured N of M".
 
 Under grouped-query attention a key or value site holds one tensor per KV
 group, read by several query heads, so a grid over that site
-(`mi.grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
+(`mi.patch_grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
 query heads. Pass the grouping and the receipt becomes a kv-group receipt:
 
 ```python
@@ -151,7 +151,7 @@ receipt = tviz.receipt_from_patch_grid(
     positive_control=pos, joint_effect=joint, kv_groups=gqa,
 )
 receipt.sharing_lines()  # ("kv group 1 of 2, shared by query heads 0-6", ...)
-tviz.render_receipt_grid(receipt, "kv_receipts.pdf")
+tl.viz.ablation_grid(receipt, "kv_receipts.pdf")
 ```
 
 The grid labels each column `kv g` over its query-head range and prints that
@@ -246,7 +246,7 @@ record = tviz.TokenScores(
     ),
     provenance="NMF recipe (docs/reference/tviz.md)",
 )
-tviz.render_token_strip(record, "factors.pdf")
+tl.viz.token_strip(record, "factors.pdf")
 ```
 
 The last footer line is not optional: factors are descriptive, order is

@@ -570,6 +570,9 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "CheckConfigError": (),
     "CheckLifecycleError": (),
     "CheckViolationError": (),
+    "AttributionError": ("ValueError",),
+    "LogitLensError": ("RuntimeError",),
+    "MissingFacetError": ("KeyError",),
     "ReadError": ("ValueError",),
     "ReadInternalError": ("RuntimeError",),
     "GradFnWalkError": (),
@@ -1232,7 +1235,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._runnable_state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
-    # tl.aggregate(cache=True) key builder: raised while hashing a run's inputs
+    # tl.stats.aggregate(cache=True) key builder: raised while hashing a run's inputs
     # and caught by run_cached, which raises stats_aggregate_cache_unkeyable.
     "torchlens.stats._aggregate_cache._Unkeyable": (
         "internal key-builder carrier; surfaced as stats_aggregate_cache_unkeyable"
@@ -1388,19 +1391,9 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.receptive_field._errors.AmbiguousInputError": (
         "public home is the lazy tl.receptive_field submodule"
     ),
-    "torchlens.attribution._result.AttributionError": (
-        "public home is torchlens.attribution.__all__; now based on "
-        "ConfigurationError + ValueError (F06 rebase for the S-17 coded-refusal "
-        "contract) but its registration home stays that surface's own review "
-        "decision"
-    ),
     "torchlens.attribution._result.AttributionWarning": (
         "public home is the torchlens.attribution surface; a TorchLensWarning "
         "subclass carrying the S-18 coded metric/text disclosures (F06)"
-    ),
-    "torchlens.semantic.facets.MissingFacetError": (
-        "public home is torchlens.semantic.__all__ (provisional surface); plain KeyError "
-        "outside the taxonomy"
     ),
     "torchlens._utils._multipass_access.MultiPassAmbiguityError": (
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
@@ -1422,10 +1415,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.streaming_async.AsyncWriteFailedError": (
         "raised by to_disk(async_writes=True) when a background write fails; "
         "errors-namespace registration deferred to the UI/API naming slate"
-    ),
-    "torchlens.semantic.logit_lens.LogitLensError": (
-        "logit_lens refusal (it refuses rather than mislabel a non-standard final "
-        "norm); registration deferred to the UI/API naming slate"
     ),
     "torchlens.semantic.patching.PatchApplicationError": (
         "activation-patching ineffective-rerun refusal (patch_ineffective); "

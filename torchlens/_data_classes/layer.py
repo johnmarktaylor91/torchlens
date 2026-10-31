@@ -1748,15 +1748,15 @@ class Layer(_SelectionOperand):
 
     def show(
         self,
-        method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
+        kind: Literal["auto", "heatmap", "channels", "rgb", "hist"] | None = None,
         **kwargs: Any,
     ) -> Any:
         """Display this layer's saved out.
 
         Parameters
         ----------
-        method:
-            Display method. ``"auto"`` chooses from tensor shape.
+        kind:
+            Picture kind. ``None`` (the default) or ``"auto"`` chooses from tensor shape.
         **kwargs:
             Forwarded to the tensor display helper.
 
@@ -1769,7 +1769,7 @@ class Layer(_SelectionOperand):
 
         from ..viz._tensor_display import show_tensor
 
-        return show_tensor(self, method=method, **kwargs)
+        return show_tensor(self, method=kind or "auto", **kwargs)
 
     def _source_trace_or_error(self) -> "Trace":
         """Return the owning Trace, or raise a detached-log error.

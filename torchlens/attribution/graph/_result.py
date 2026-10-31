@@ -41,8 +41,8 @@ class GraphNode:
     kind: str
     site: str
     position: int
-    feature: int | None = None
-    token: int | None = None
+    feature_index: int | None = None
+    token_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -117,17 +117,17 @@ class AttributionGraph:
     adjacency_matrix: torch.Tensor
     node_values: torch.Tensor
     constants: dict[str, torch.Tensor]
-    active_features: torch.Tensor
-    activation_values: torch.Tensor
+    active_feature_indices: torch.Tensor
+    feature_activations: torch.Tensor
     transcoder_sites: tuple[str, ...]
     error_sites: tuple[str, ...]
     error_vectors: torch.Tensor
-    input_tokens: torch.Tensor
-    logit_tokens: torch.Tensor
+    input_token_ids: torch.Tensor
+    logit_token_ids: torch.Tensor
     logit_probabilities: torch.Tensor
-    demeaned_logits: bool
-    frozen: tuple[str, ...]
-    capture_outcome: str | None
+    has_demeaned_logits: bool
+    frozen_sites: tuple[str, ...]
+    capture_status: str | None
     disclosures: tuple[str, ...] = field(default=())
 
     @property
@@ -159,11 +159,11 @@ class AttributionGraph:
         self,
         *,
         slug: str,
-        scan: str,
+        model_id: str,
         tokenizer: Any,
         prompt: str | None = None,
-        node_threshold: float = 0.8,
-        edge_threshold: float = 0.98,
+        node_influence_coverage: float = 0.8,
+        edge_influence_coverage: float = 0.98,
         path: str | Path | None = None,
     ) -> dict[str, Any]:
         """Return the pruned graph in Neuronpedia's attribution-graph schema.
@@ -230,10 +230,10 @@ class AttributionGraph:
         return graph_to_neuronpedia(
             self,
             slug=slug,
-            scan=scan,
+            scan=model_id,
             tokenizer=tokenizer,
             prompt=prompt,
-            node_threshold=node_threshold,
-            edge_threshold=edge_threshold,
+            node_threshold=node_influence_coverage,
+            edge_threshold=edge_influence_coverage,
             path=path,
         )

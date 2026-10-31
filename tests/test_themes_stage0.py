@@ -44,8 +44,8 @@ def speed_render(tmp_path_factory: Any) -> Any:
     resolution = lenses.resolve_lens(log, "speed")
     graph = log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(out_dir / "speed"),
-        vis_fileformat="svg",
+        path=str(out_dir / "speed"),
+        file_format="svg",
         vis_save_only=True,
         return_graph=True,
     )
@@ -120,8 +120,8 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     bare = lenses.resolve_lens(log, "blueprint")
     bare_graph = log.draw(
         **bare.draw_kwargs,
-        vis_outpath=svg_path.replace(".svg", "-bare"),
-        vis_fileformat="svg",
+        path=svg_path.replace(".svg", "-bare"),
+        file_format="svg",
         vis_save_only=True,
         return_graph=True,
     )
@@ -142,8 +142,8 @@ def test_compaction_non_identity_is_checkable(speed_render: Any) -> None:
     if collapsed.budget is not None and collapsed.budget.draw_kwargs.get("collapse") != "none":
         collapsed_graph = log.draw(
             **collapsed.draw_kwargs,
-            vis_outpath=svg_path.replace(".svg", "-ov"),
-            vis_fileformat="svg",
+            path=svg_path.replace(".svg", "-ov"),
+            file_format="svg",
             vis_save_only=True,
             return_graph=True,
         )
@@ -177,8 +177,8 @@ def test_geometry_baseline_over_the_toy_corpus(tmp_path: Any) -> None:
                     continue  # typed subject refusals are legitimate on some toys
                 graph = log.draw(
                     **resolution.draw_kwargs,
-                    vis_outpath=str(tmp_path / f"{member.name}-{lens_name}"),
-                    vis_fileformat="svg",
+                    path=str(tmp_path / f"{member.name}-{lens_name}"),
+                    file_format="svg",
                     vis_save_only=True,
                     return_graph=True,
                 )

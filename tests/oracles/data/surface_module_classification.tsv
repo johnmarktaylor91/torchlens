@@ -25,13 +25,11 @@ add	declared
 add_grad_noise	declared
 add_noise	declared
 agent	submodule
-aggregate	declared
 assert_unchanged	declared
 attribution	submodule
 autoroute	submodule
 backends	submodule
 between	declared
-brainpipe	submodule
 bridge	submodule
 bundle	declared
 callbacks	submodule

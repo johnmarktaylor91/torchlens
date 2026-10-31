@@ -109,7 +109,7 @@ convention at both versions -- no scipy dependency):
 The modes reject mixed arguments. `rdm_descriptors` additionally carry
 `measure_convention` -- the formula in words -- because rsatoolbox's
 `"euclidean"` equals torchlens's euclidean SQUARED and divided by
-`n_features` (a Pearson-visible discrepancy produced by nothing but a
+`num_features` (a Pearson-visible discrepancy produced by nothing but a
 convention), and rsatoolbox has NO cosine RDM method (ours is real and
 tested; their `calc_rdm(method="cosine")` raises `NotImplementedError`, and
 a pinned test fails loudly if that ever changes). Source mode also records
@@ -167,8 +167,8 @@ result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"), num_re
 `neuro.compare` needs no extra (it is numpy-only). It reads each site's
 activations once from what the source already holds -- a Trace with saved
 activations, a `LoadedExtraction` or extraction directory, or a
-`{site: [n_stimuli, ...]}` mapping -- and never re-runs the model. `brain`
-is any `[n_stimuli, ...]` target for the same stimuli in the same order
+`{site: [num_stimuli, ...]}` mapping -- and never re-runs the model. `brain`
+is any `[num_stimuli, ...]` target for the same stimuli in the same order
 (recordings, or another model's features). Every score is a descriptive
 similarity on these stimuli:
 
@@ -176,7 +176,7 @@ similarity on these stimuli:
   rdm_metric), rsa_method)`; defaults `rdm_metric="correlation"`,
   `rsa_method="spearman"`.
 - `"ridge"`: a cross-validated ridge score. The stimuli are split into
-  `n_folds` folds (default 5) by a permutation seeded with `seed`. On each
+  `num_folds` folds (default 5) by a permutation seeded with `seed`. On each
   training fold, features and target are centred by the training means and
   one penalty for all target columns is chosen from `ridge_alphas` (absolute,
   on unscaled features; default 1e-2 to 1e8) by the exact leave-one-out
@@ -253,7 +253,7 @@ print(report.table())
 
 | Function | Estimator | Precision | Inputs | Degenerate case |
 |---|---|---|---|---|
-| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x n_features]` pairs (rows are observations; mismatched row counts refuse; NaN/Inf input refuses `cka_input_nonfinite`, as `tl.repgeom.rdm` does) | zero-variance input returns `NaN` with a `cka_zero_variance` warning |
+| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x num_features]` pairs (rows are observations; mismatched row counts refuse; NaN/Inf input refuses `cka_input_nonfinite`, as `tl.repgeom.rdm` does) | zero-variance input returns `NaN` with a `cka_zero_variance` warning |
 
 Reference values are pinned in `tests/test_neuro_pkg_geometry.py`; an
 estimator change fails the literals. RBF/debiased estimators are

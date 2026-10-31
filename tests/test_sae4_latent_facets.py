@@ -27,7 +27,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 X = [[1.0, 2.0, -1.0, 3.0], [2.0, -1.0, 4.0, 0.0]]
 W_ENC = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -0.5, 1.0], [0.0, 0.0, 0.5]]

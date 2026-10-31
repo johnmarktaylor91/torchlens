@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 import torch
 
+import torchlens
 import torchlens.errors
-import torchlens.transformer as tviz
-from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
+from torchlens.semantic.logit_lens import LogitLens, LogitLensEntry
 from torchlens.transformer._lens_heatmap import (
     MAX_HEATMAP_POSITIONS,
     _clip,
@@ -32,7 +32,7 @@ class _Tokenizer:
         return [f"w{token_id}" if token_id != 3 else "averyverylongtoken" for token_id in ids]
 
 
-def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> LogitLensResult:
+def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> LogitLens:
     """Deterministic synthetic lens with a sharpening answer across layers."""
 
     generator = torch.Generator().manual_seed(0)
@@ -45,11 +45,11 @@ def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> Logit
                 address=f"h.{layer}", layer_index=layer, facet="resid_post", logits=logits
             )
         )
-    return LogitLensResult(
+    return LogitLens(
         entries=tuple(entries),
         facet="resid_post",
         lens_source="model_head",
-        validated=validated,
+        is_validated=validated,
         final_logits=None,
     )
 
@@ -71,7 +71,7 @@ def test_cells_match_an_independent_softmax() -> None:
 def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     """SVG output is vector-only and the footer states what each row is."""
 
-    artifact = tviz.render_logit_lens_heatmap(
+    artifact = torchlens.viz.logit_lens(
         _result(validated=False),
         tmp_path / "lens.svg",
         tokens=["The", "cat", "sat", "on", "the"],
@@ -107,7 +107,7 @@ def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
 def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
     """``target_prob`` colors by the tracked token and says which one."""
 
-    artifact = tviz.render_logit_lens_heatmap(
+    artifact = torchlens.viz.logit_lens(
         _result(),
         tmp_path / "lens.pdf",
         value="target_prob",
@@ -140,7 +140,7 @@ def test_out_of_contract_requests_refuse(tmp_path: Path, kwargs: dict) -> None:
     """Bad requests refuse typed before anything is drawn."""
 
     with pytest.raises(torchlens.errors.RenderError) as caught:
-        tviz.render_logit_lens_heatmap(_result(), tmp_path / "x.png", **kwargs)
+        torchlens.viz.logit_lens(_result(), tmp_path / "x.png", **kwargs)
     assert caught.value.fields["code"] == "tv_record_invalid"
     assert not (tmp_path / "x.png").exists()
 
@@ -160,8 +160,8 @@ def test_wide_lens_refuses_rather_than_cropping(tmp_path: Path) -> None:
 
     wide = _result(n_layers=1, seq=MAX_HEATMAP_POSITIONS + 1)
     with pytest.raises(torchlens.errors.RenderError, match="never crops silently"):
-        tviz.render_logit_lens_heatmap(wide, tmp_path / "x.png")
-    artifact = tviz.render_logit_lens_heatmap(wide, tmp_path / "x.png", positions=range(10))
+        torchlens.viz.logit_lens(wide, tmp_path / "x.png")
+    artifact = torchlens.viz.logit_lens(wide, tmp_path / "x.png", positions=range(10))
     assert artifact.paths[0].exists()
 
 
@@ -171,12 +171,12 @@ def test_positionless_lens_refuses(tmp_path: Path) -> None:
     entry = LogitLensEntry(
         address="h.0", layer_index=0, facet="resid_post", logits=torch.randn(1, 5)
     )
-    result = LogitLensResult(
+    result = LogitLens(
         entries=(entry,),
         facet="resid_post",
         lens_source="classifier_head",
-        validated=True,
+        is_validated=True,
         final_logits=None,
     )
     with pytest.raises(torchlens.errors.RenderError, match="needs \\[batch, positions, vocab\\]"):
-        tviz.render_logit_lens_heatmap(result, tmp_path / "x.png")
+        torchlens.viz.logit_lens(result, tmp_path / "x.png")

@@ -1597,13 +1597,13 @@ class Bundle:
 
         return fn(self)
 
-    def show(self, method: str = "graph", **kwargs: Any) -> dict[str, str | None]:
+    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
 
         Parameters
         ----------
-        method:
-            Display method forwarded to each member's :meth:`Trace.show`.
+        kind:
+            Picture kind forwarded to each member's :meth:`Trace.show`.
         **kwargs:
             Forwarded to each member's :meth:`Trace.show`. When an output
             path is supplied, member names are appended to produce one artifact
@@ -1620,15 +1620,15 @@ class Bundle:
         if kwargs.get("vis_mode") == "none":
             return dict.fromkeys(self._members)
 
-        base_outpath = kwargs.get("vis_outpath")
+        base_outpath = kwargs.get("path")
         results: dict[str, str | None] = {}
         for name, member in self._members.items():
             member_kwargs = dict(kwargs)
             if isinstance(base_outpath, str):
-                member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
-            if method == "repr":
+                member_kwargs["path"] = f"{base_outpath}_{name}"
+            if kind == "repr":
                 results[name] = repr(member)
-            elif method == "html":
+            elif kind == "html":
                 results[name] = member._repr_html_()
             else:
                 results[name] = member.draw(**member_kwargs)
@@ -1655,7 +1655,7 @@ class Bundle:
         self,
         baseline: str | Trace | None = None,
         *,
-        top_k: int = 10,
+        k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
     ) -> list[tuple[str, float]]:
         """Rank sites by out distance from a baseline (the SITE axis).
@@ -1733,7 +1733,7 @@ class Bundle:
             if distances:
                 scored.append((str(site.layer_label), sum(distances) / len(distances)))
         scored.sort(key=lambda row: row[1], reverse=True)
-        return scored[:top_k]
+        return scored[:k]
 
     def diff_pair(self, a: Any, b: Any) -> Any:
         """Return out differences between two members or at one site.

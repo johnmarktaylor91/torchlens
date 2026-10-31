@@ -96,7 +96,7 @@ def _fixture_scores(**kwargs) -> dict[str, float]:
 
     model = Fixture().eval()
     table = torchlens.mechinterp.edge_scores(
-        model, CLEAN, corrupted=CORRUPT, metric=fixture_metric, **kwargs
+        model, CLEAN, corrupted_input=CORRUPT, metric=fixture_metric, **kwargs
     )
     graph = torchlens.mechinterp.component_graph(tl.trace(model, CLEAN))
     names = {node.name: node.module_address or "input" for node in graph.nodes.values()}
@@ -181,7 +181,7 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
     for method, steps in cases:
         extra = {} if method == "eap" else {"steps": steps}
         table = torchlens.mechinterp.edge_scores(
-            model, clean, corrupted=corrupt, metric=_logit_difference, method=method, **extra
+            model, clean, corrupted_input=corrupt, metric=_logit_difference, method=method, **extra
         )
         got = {address[0]: row.score for (_t, _k, address), row in table.items()}
         for edge, value in want[(method, steps)].items():
@@ -195,7 +195,7 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
     table = torchlens.mechinterp.edge_scores(
         Fixture().eval(),
         torch.tensor([[0], [0]]),
-        corrupted=torch.tensor([[1], [1]]),
+        corrupted_input=torch.tensor([[1], [1]]),
         metric=fixture_metric,
         method="eap",
         example_reduction="sum",
@@ -220,14 +220,14 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
         ({"steps": 0}, "mi_edge_scores_setting_invalid"),
         ({"example_reduction": "median"}, "mi_edge_scores_setting_invalid"),
         ({"metric": lambda logits: logits[:, -1]}, "mi_edge_scores_metric_invalid"),
-        ({"corrupted": torch.tensor([[1, 1]])}, "mi_edge_scores_inputs_mismatched"),
+        ({"corrupted_input": torch.tensor([[1, 1]])}, "mi_edge_scores_inputs_mismatched"),
     ],
 )
 def test_bad_settings_refuse_typed(kwargs, code) -> None:
     """Unknown method, steps with EAP, bad steps or reduction, a non-scalar metric, shapes."""
 
-    call = {"corrupted": CORRUPT, "metric": fixture_metric, **kwargs}
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    call = {"corrupted_input": CORRUPT, "metric": fixture_metric, **kwargs}
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         torchlens.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
     assert caught.value.fields["code"] == code
 
@@ -243,9 +243,9 @@ def test_shared_norm_and_unshiftable_input_refuse_typed() -> None:
         "a0.h0<q>": SimpleNamespace(norm_address="ln", module_address="attn"),
         "m0": SimpleNamespace(norm_address="ln", module_address="mlp"),
     }
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         _eap._refuse_shared_norms(SimpleNamespace(receivers=receivers))
     assert caught.value.fields["code"] == "mi_edge_scores_shared_norm"
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         _eap._input_write_module(None, SimpleNamespace(_input_writes=()))
     assert caught.value.fields["code"] == "mi_edge_scores_input_unresolvable"

@@ -1458,18 +1458,18 @@ def draw(
                 code="dagua_renderer_not_opted_in",
                 remedy="opt in via `from torchlens.experimental import dagua` first",
             )
-        from ..experimental.dagua import render_trace_with_dagua
+        from ..experimental.dagua._bridge import render_trace_with_dagua
 
         return render_trace_with_dagua(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=resolved_outpath,
+            path=resolved_outpath,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
-            vis_buffers=show_buffer_layers == "always",
+            file_format=vis_fileformat,
+            show_buffers=show_buffer_layers == "always",
             vis_direction=direction,
-            vis_theme=vis_theme,
+            theme=vis_theme,
         )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 

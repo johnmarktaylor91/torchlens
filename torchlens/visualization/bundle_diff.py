@@ -32,9 +32,9 @@ def bundle_diff(
     right: str | Trace | None = None,
     baseline: str | Trace | None = None,
     on: DiffTensorField = "out",
-    vis_outpath: str = "bundle_diff",
+    path: str = "bundle_diff",
     vis_save_only: bool = False,
-    vis_fileformat: str = "svg",
+    file_format: str = "svg",
     theme: str = "paper",
     max_pairs: int | None = 16,
     include_unmatched: bool = False,
@@ -117,11 +117,11 @@ def bundle_diff(
         theme_name=theme,
         include_unmatched=include_unmatched,
     )
-    outpath = strip_known_extension(vis_outpath)
-    source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
-    if vis_fileformat == "svg":
+    outpath = strip_known_extension(path)
+    source = render_dot_to_file(dot, outpath, file_format, vis_save_only)
+    if file_format == "svg":
         _add_svg_accessibility(
-            f"{outpath}.{vis_fileformat}",
+            f"{outpath}.{file_format}",
             _aria_label(left_name, right_name, _metric_display_name(metric), on),
         )
     return source

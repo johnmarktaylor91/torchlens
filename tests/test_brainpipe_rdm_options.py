@@ -116,7 +116,7 @@ def test_cka_gains_placement_through_one_seam() -> None:
     acc = CKA(dtype=torch.float32)
     acc.update(a[:12], b[:12])
     acc.update(a[12:], b[12:])
-    assert acc.result() == pytest.approx(legacy, abs=1e-4)
+    assert acc.compute() == pytest.approx(legacy, abs=1e-4)
     with pytest.raises(ValueError, match="floating"):
         cka(a, b, dtype=torch.int64)
 

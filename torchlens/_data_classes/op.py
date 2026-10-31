@@ -3466,7 +3466,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         cache = self._slot("_facets_cache")
         if cache is None:
-            from ..semantic import FacetView
+            from ..semantic.facets import FacetView
 
             cache = FacetView(self)
             object.__setattr__(self, "_facets_cache", cache)
@@ -4229,15 +4229,15 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     def show(
         self,
-        method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
+        kind: Literal["auto", "heatmap", "channels", "rgb", "hist"] | None = None,
         **kwargs: Any,
     ) -> Any:
         """Display this pass's saved out.
 
         Parameters
         ----------
-        method:
-            Display method. ``"auto"`` chooses from tensor shape.
+        kind:
+            Picture kind. ``None`` (the default) or ``"auto"`` chooses from tensor shape.
         **kwargs:
             Forwarded to the tensor display helper.
 
@@ -4250,7 +4250,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         from ..viz._tensor_display import show_tensor
 
-        return show_tensor(self, method=method, **kwargs)
+        return show_tensor(self, method=kind or "auto", **kwargs)
 
     @property
     def params(self) -> Any:

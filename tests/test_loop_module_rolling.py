@@ -612,8 +612,8 @@ def _render_source(
     return trace.draw(
         vis_mode="rolled",
         vis_save_only=True,
-        vis_fileformat=file_format,
-        vis_outpath=str(tmp_path / name),
+        file_format=file_format,
+        path=str(tmp_path / name),
         **kwargs,
     )
 
@@ -796,7 +796,7 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
     """Rolled buffer nodes use the module-address colon range form."""
 
     trace = _trace(BufferRewriteLoops())
-    dot = _render_dot(trace, tmp_path, "buffers", show_buffer_layers="always")
+    dot = _render_dot(trace, tmp_path, "buffers", show_buffers="always")
     assert "@state:1-6" in dot
     assert "@state v1-6" not in dot
     assert "buffer_versions" not in dot
@@ -882,9 +882,7 @@ def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> 
     instead of a head/tail label.
     """
 
-    dot = _render_dot(
-        _trace(BufferRewriteLoops()), tmp_path, "buffer_edges", show_buffer_layers="always"
-    )
+    dot = _render_dot(_trace(BufferRewriteLoops()), tmp_path, "buffer_edges", show_buffers="always")
 
     read_edges = _dot_edge_attrs(dot, "buffer_1", "add_1_1")
     assert len(read_edges) == 1
@@ -1005,7 +1003,7 @@ def test_render_loop_module_rolling_demos() -> None:
         (
             "buffer_loop",
             BufferRewriteLoops(),
-            {"show_buffer_layers": "always"},
+            {"show_buffers": "always"},
             "init+forward",
         ),
         ("nested_loop", NestedLoopBlock(), {"vis_call_depth": 1}, "init+forward"),
@@ -1023,8 +1021,8 @@ def test_render_loop_module_rolling_demos() -> None:
             dot = trace.draw(
                 vis_mode="rolled",
                 vis_save_only=True,
-                vis_fileformat=file_format,
-                vis_outpath=str(OUTPUT_DIR / name),
+                file_format=file_format,
+                path=str(OUTPUT_DIR / name),
                 code_panel=code_panel,
                 **kwargs,
             )

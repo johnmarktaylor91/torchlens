@@ -629,7 +629,7 @@ class Manifest:
                 )
             if not isinstance(raw_disclosure.get("included"), bool):
                 raise _schema_refuse(
-                    "Manifest custom_attributes_disclosure.included must be a boolean."
+                    "Manifest custom_attributes_disclosure.is_included must be a boolean."
                 )
             raw_count = raw_disclosure.get("module_count")
             if not isinstance(raw_count, int) or raw_count < 0:
@@ -651,7 +651,7 @@ class Manifest:
                 )
             if not isinstance(raw_buffer_disclosure.get("included"), bool):
                 raise _schema_refuse(
-                    "Manifest buffer_values_disclosure.included must be a boolean."
+                    "Manifest buffer_values_disclosure.is_included must be a boolean."
                 )
             raw_buffer_count = raw_buffer_disclosure.get("buffer_count")
             if not isinstance(raw_buffer_count, int) or raw_buffer_count < 0:

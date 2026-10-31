@@ -131,7 +131,7 @@ def test_cat_edges_carry_argument_labels(tmp_path) -> None:
     # 3-way cat: the D14 regression row. Argument-order labels must SHOW on
     # cat's incoming edges now that the false commutativity claim is gone.
     log = tl.trace(_CatModel(), torch.randn(1, 4))
-    source = log.draw(vis_outpath=str(tmp_path / "cat"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "cat"), vis_save_only=True, file_format="svg")
     assert "arg (0, 0)" in source
     assert "arg (0, 1)" in source
     assert "arg (0, 2)" in source
@@ -144,7 +144,7 @@ def test_wide_cat_regression_row(tmp_path) -> None:
             return torch.cat([x + i for i in range(40)], dim=1)
 
     log = tl.trace(WideCat(), torch.randn(1, 2))
-    source = log.draw(vis_outpath=str(tmp_path / "wcat"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "wcat"), vis_save_only=True, file_format="svg")
     assert "arg (0, 0)" in source
     assert "arg (0, 39)" in source
 
@@ -153,7 +153,7 @@ def test_argument_labels_use_padded_nonbold_builder(tmp_path) -> None:
     # D9: the argument channel routes through the tuned one-cell-table
     # builder (padding 6 / 8 pt / non-bold), not the raw bold 10-pt label.
     log = tl.trace(_CatModel(), torch.randn(1, 4))
-    source = log.draw(vis_outpath=str(tmp_path / "pad"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "pad"), vis_save_only=True, file_format="svg")
     assert 'CELLPADDING="6"' in source
     assert "<b>arg" not in source.lower().replace("</b>", "<b>")
 
@@ -189,7 +189,7 @@ def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", exploding_subprocess)
     with pytest.raises(GraphvizRenderError):
-        log.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="svg")
+        log.draw(path=str(outpath), vis_save_only=True, file_format="svg")
     assert not (tmp_path / "boom.svg").exists()
     leftovers = [name for name in os.listdir(tmp_path) if "tl-partial" in name]
     assert leftovers == []
@@ -197,7 +197,7 @@ def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
 
 def test_geometry_record_populated_on_dot_path(tmp_path) -> None:
     log = _toy_trace()
-    log.draw(vis_outpath=str(tmp_path / "geo"), vis_save_only=True, vis_fileformat="svg")
+    log.draw(path=str(tmp_path / "geo"), vis_save_only=True, file_format="svg")
     record = log._last_render_geometry
     assert record.layout_path == "dot"
     assert record.engine == "dot"
@@ -211,18 +211,14 @@ def test_dpi_is_raster_only_cross_format(tmp_path) -> None:
     # D23: dpi must not touch vector coordinate space. The SVG declared size
     # is invariant under dpi; PNG pixels scale with it.
     log = _toy_trace()
-    log.draw(vis_outpath=str(tmp_path / "svg72"), vis_save_only=True, vis_fileformat="svg")
+    log.draw(path=str(tmp_path / "svg72"), vis_save_only=True, file_format="svg")
     base = log._last_render_geometry.declared_size_points
-    log.draw(
-        vis_outpath=str(tmp_path / "svg300"), vis_save_only=True, vis_fileformat="svg", dpi=300
-    )
+    log.draw(path=str(tmp_path / "svg300"), vis_save_only=True, file_format="svg", dpi=300)
     scaled = log._last_render_geometry.declared_size_points
     assert base == scaled
-    log.draw(vis_outpath=str(tmp_path / "png96"), vis_save_only=True, vis_fileformat="png", dpi=96)
+    log.draw(path=str(tmp_path / "png96"), vis_save_only=True, file_format="png", dpi=96)
     png_small = log._last_render_geometry.raster_size_pixels
-    log.draw(
-        vis_outpath=str(tmp_path / "png192"), vis_save_only=True, vis_fileformat="png", dpi=192
-    )
+    log.draw(path=str(tmp_path / "png192"), vis_save_only=True, file_format="png", dpi=192)
     png_big = log._last_render_geometry.raster_size_pixels
     assert png_small is not None and png_big is not None
     assert png_big[0] > png_small[0] * 1.5
@@ -265,7 +261,7 @@ def test_exit_zero_stderr_is_surfaced(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", noisy_subprocess)
     with pytest.warns(TorchLensWarning, match="Scaling by 0.5"):
-        log.draw(vis_outpath=str(tmp_path / "noisy"), vis_save_only=True, vis_fileformat="svg")
+        log.draw(path=str(tmp_path / "noisy"), vis_save_only=True, file_format="svg")
     assert log._last_render_geometry.scaled_by == pytest.approx(0.5)
     assert log._last_render_geometry.effective_text_scale == pytest.approx(0.5)
 
@@ -290,11 +286,11 @@ def test_rank_layout_renders_batchnorm_buffers_all_modes(tmp_path, mode) -> None
     log = _bn_trace()
     out = tmp_path / f"bn_{mode}"
     log.draw(
-        vis_outpath=str(out),
+        path=str(out),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_node_placement="rank",
-        show_buffer_layers=mode,
+        show_buffers=mode,
     )
     artifact = tmp_path / f"bn_{mode}.svg"
     assert artifact.exists() and artifact.stat().st_size > 0

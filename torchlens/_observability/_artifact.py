@@ -39,7 +39,7 @@ import numpy as np
 
 from .._io._json import read_bounded
 from ._errors import HistoryArtifactError
-from ._kernels import HistogramDescriptor, HistogramResult, SpineResult
+from ._kernels import HistogramDescriptor, HistogramResult, RunningStatsResult
 from ._schema import (
     HISTORY_SCHEMA_VERSION,
     ObservationRecord,
@@ -241,7 +241,7 @@ class RamRing:
         self._blocks.append(block)
 
 
-def _spine_to_row(spine: SpineResult | None) -> dict[str, Any]:
+def _spine_to_row(spine: RunningStatsResult | None) -> dict[str, Any]:
     """Flatten one spine (or absence) into nullable column cells."""
 
     if spine is None:
@@ -253,12 +253,12 @@ def _spine_to_row(spine: SpineResult | None) -> dict[str, Any]:
     return row
 
 
-def _spine_from_row(row: dict[str, Any]) -> SpineResult | None:
+def _spine_from_row(row: dict[str, Any]) -> RunningStatsResult | None:
     """Rebuild one spine from column cells (None cells = absent spine)."""
 
     if row["count_total"] is None:
         return None
-    return SpineResult(
+    return RunningStatsResult(
         count_total=int(row["count_total"]),
         count_finite=int(row["count_finite"]),
         count_zero=int(row["count_zero"]),
@@ -535,7 +535,7 @@ class HistoryReader:
         return step is None or int(data["global_step"][i]) == step
 
     @staticmethod
-    def _decode_spine(data: Any, i: int) -> SpineResult | None:
+    def _decode_spine(data: Any, i: int) -> RunningStatsResult | None:
         """Decode row ``i``'s persisted spine columns (absent spine -> None)."""
 
         spine_row: dict[str, Any] = {}

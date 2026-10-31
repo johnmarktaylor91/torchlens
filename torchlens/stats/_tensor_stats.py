@@ -40,7 +40,7 @@ class FamilyEvidence:
     reason: str | None = None
 
     @property
-    def sampled(self) -> bool:
+    def is_sampled(self) -> bool:
         """Whether this family rode the seeded gathered sample."""
 
         return self.policy == "sampled"
@@ -61,27 +61,27 @@ class TensorStats:
     numel: int
     nbytes: int | None
     #: Exact nonfinite census (D17): silence is a proof on supported paths.
-    nan_count: int
-    posinf_count: int
-    neginf_count: int
+    num_nan: int
+    num_posinf: int
+    num_neginf: int
     nonfinite_evidence: FamilyEvidence
-    zero_count: int | None
-    true_count: int | None
+    num_zero: int | None
+    num_true: int | None
     finite_min: float | None
     finite_max: float | None
     extrema_evidence: FamilyEvidence
     mean: float | None
     mean_evidence: FamilyEvidence
     mean_se: float | None
-    sd: float | None
-    sd_evidence: FamilyEvidence
-    sd_se: float | None
+    std: float | None
+    std_evidence: FamilyEvidence
+    std_se: float | None
     histogram_counts: tuple[int, ...] | None
     histogram_edges: tuple[float, ...] | None
     histogram_evidence: FamilyEvidence
     #: True when moments describe |z| magnitudes (D12: complex stats are
     #: explicitly magnitude-labeled, never presented as value stats).
-    magnitude_basis: bool
+    is_magnitude_based: bool
     #: Live tensor ``_version`` at computation; a mutated tensor invalidates
     #: the cache and the next render says so (D30).
     tensor_version: int | None
@@ -112,16 +112,16 @@ class TensorStats:
         )
 
     @property
-    def nonfinite_count(self) -> int:
+    def num_nonfinite(self) -> int:
         """Total nonfinite elements."""
 
-        return self.nan_count + self.posinf_count + self.neginf_count
+        return self.num_nan + self.num_posinf + self.num_neginf
 
     @property
-    def finite_count(self) -> int:
+    def num_finite(self) -> int:
         """Elements with finite values."""
 
-        return self.numel - self.nonfinite_count
+        return self.numel - self.num_nonfinite
 
     @property
     def is_empty(self) -> bool:
@@ -130,10 +130,10 @@ class TensorStats:
         return self.numel == 0
 
     @property
-    def all_zero(self) -> bool:
+    def is_all_zero(self) -> bool:
         """Whether every element is exactly zero (exact claim)."""
 
-        return self.numel > 0 and self.zero_count == self.numel
+        return self.numel > 0 and self.num_zero == self.numel
 
     @property
     def constant_value(self) -> float | None:
@@ -141,7 +141,7 @@ class TensorStats:
 
         if (
             self.numel > 1
-            and self.nonfinite_count == 0
+            and self.num_nonfinite == 0
             and self.finite_min is not None
             and self.finite_min == self.finite_max
         ):
@@ -149,22 +149,22 @@ class TensorStats:
         return None
 
     @property
-    def all_true(self) -> bool:
+    def is_all_true(self) -> bool:
         """bool family: every element true (exact)."""
 
-        return self.true_count is not None and self.true_count == self.numel and self.numel > 0
+        return self.num_true is not None and self.num_true == self.numel and self.numel > 0
 
     @property
-    def all_false(self) -> bool:
+    def is_all_false(self) -> bool:
         """bool family: every element false (exact)."""
 
-        return self.true_count == 0 and self.numel > 0
+        return self.num_true == 0 and self.numel > 0
 
     @property
-    def no_finite_values(self) -> bool:
+    def has_no_finite_values(self) -> bool:
         """Whether no element is finite (the fully poisoned case)."""
 
-        return self.numel > 0 and self.finite_count == 0 and self.true_count is None
+        return self.numel > 0 and self.num_finite == 0 and self.num_true is None
 
 
 def _dtype_token(dtype: torch.dtype) -> str:
@@ -238,25 +238,25 @@ def _record_from_kernel(
         device=str(tensor.device),
         numel=result.numel,
         nbytes=nbytes,
-        nan_count=result.nan_count,
-        posinf_count=result.posinf_count,
-        neginf_count=result.neginf_count,
+        num_nan=result.nan_count,
+        num_posinf=result.posinf_count,
+        num_neginf=result.neginf_count,
         nonfinite_evidence=nonfinite_evidence,
-        zero_count=result.zero_count,
-        true_count=result.true_count,
+        num_zero=result.zero_count,
+        num_true=result.true_count,
         finite_min=result.finite_min,
         finite_max=result.finite_max,
         extrema_evidence=extrema_evidence,
         mean=result.mean,
         mean_evidence=mean_evidence,
         mean_se=result.mean_se,
-        sd=result.sd,
-        sd_evidence=sd_evidence,
-        sd_se=result.sd_se,
+        std=result.sd,
+        std_evidence=sd_evidence,
+        std_se=result.sd_se,
         histogram_counts=result.histogram_counts,
         histogram_edges=result.histogram_edges,
         histogram_evidence=histogram_evidence,
-        magnitude_basis=result.magnitude_basis,
+        is_magnitude_based=result.magnitude_basis,
         tensor_version=version,
         small_values=small_values,
     )

@@ -239,7 +239,7 @@ class _SAEFamily:
 
         codec = _LatentCodec(self.name, self.sae, index)
         primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
-        home = FacetSpec.from_home(record, recipe_id=f"sae:{self.name}")
+        home = FacetSpec.from_home(record, function_id=f"sae:{self.name}")
         return home._append(primitive)
 
     def _check_range(self, index: int | tuple[int, ...], record: Any) -> None:

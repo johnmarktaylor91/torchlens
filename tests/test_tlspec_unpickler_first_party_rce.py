@@ -176,16 +176,16 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
     try:
         facets_mod.reset()
         snapshot = facets_mod.snapshot()
-        assert snapshot.recipes, "expected built-in recipes in the registry snapshot"
-        recipe_names = {r.public.recipe_name for r in snapshot.recipes}
+        assert snapshot.functions, "expected built-in recipes in the registry snapshot"
+        recipe_names = {r.public.name for r in snapshot.functions}
         assert "transformer_residuals" in recipe_names, "residual recipe (private predicate)"
 
         blob = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)
         restored = SafeBundleUnpickler(io.BytesIO(blob)).load()
 
         assert isinstance(restored, facets_mod.FacetRegistrySnapshot)
-        assert len(restored.recipes) == len(snapshot.recipes)
-        for orig, roundtripped in zip(snapshot.recipes, restored.recipes):
+        assert len(restored.functions) == len(snapshot.functions)
+        for orig, roundtripped in zip(snapshot.functions, restored.functions):
             assert roundtripped.func is orig.func
             assert roundtripped.predicate is orig.predicate
     finally:

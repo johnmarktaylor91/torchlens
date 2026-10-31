@@ -176,9 +176,9 @@ def _max_dot_source(trace: tl.Trace, tmp_path: object) -> str:
 
     return str(
         trace.draw(
-            vis_outpath=str(tmp_path / "max"),  # type: ignore[operator]
+            path=str(tmp_path / "max"),  # type: ignore[operator]
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_node_placement="dot",
             collapse="max",
         )

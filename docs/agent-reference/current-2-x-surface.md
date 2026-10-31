@@ -170,7 +170,7 @@
   sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
   verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
-  keeps `"none"`), detached `RenderResult` (owns DOT/bytes/path/provenance/receipt,
+  keeps `"none"`), detached `Drawing` (owns DOT/bytes/path/provenance/receipt,
   `save()` re-renders without the trace), never auto-opens a viewer, collision-safe
   `<ModelClass>-graph.<fmt>` default filename in scripts (fork F1 branch A constant).
   Lazy completion: gold/declared rungs materialize executed lazy modules during the ONE
@@ -342,7 +342,7 @@
   legacy default discloses `sweep_baseline_absent` at construction).
   `torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
   retain=, engine="live_hook", model=, x=)` is the ONE candidate engine
-  (serial, extract-before-cleanup, rolling `top_k` retention, byte
+  (serial, extract-before-cleanup, rolling `k` retention, byte
   preflight via `retention_projection_over_budget`); candidates execute in
   site-key coordinates and undeclared multi-site candidates (incl. the
   unscoped `tl.head(i)` broadcast) become REFUSED effect rows; the complete
@@ -1152,7 +1152,7 @@
   `Annotation` grammar lets only a valid receipt mint `intervention_effect`, and
   effects never recolor attention cells). Bridges: `circuitsvis_attention`
   (payload-bounded, dormancy disclosed) and the `bertviz_tuple` parity oracle.
-  FIX-H shipped in `tl.viz.render_heatmap`: nearest-neighbor discrete cells, separate
+  FIX-H shipped in `tl.viz.heatmap`: nearest-neighbor discrete cells, separate
   `row_labels=`/`col_labels=`, omission marker computed AFTER final overlap selection.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
 - MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming
@@ -1166,7 +1166,7 @@
   `PatchGrid` results), `patch_query_heads_grid` (per-query-head k/v
   patching under grouped-query attention at the op that expands each
   key/value group; SDPA with `enable_gqa` refuses typed),
-  `lowered_counterfactual` (patch one head on a FUSED
+  `patch_head` (patch one head on a FUSED
   SDPA model via exact implementation-independent lowering),
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
@@ -1176,7 +1176,7 @@
   `torchlens.mechinterp.ComponentGraph` (read-only `nodes`, `receivers`, `edges` keyed by
   the MIB/EAP-IG names: nodes `input`/`a{L}.h{H}`/`b{L}`/`m{L}`, receivers
   `a{L}.h{H}<q|k|v>`/`m{L}`/`logits`, edges `"s->t"`) of
-  `torchlens.mechinterp.ComponentNode`, `torchlens.mechinterp.ComponentReceiver` and
+  `torchlens.mechinterp.ComponentSender`, `torchlens.mechinterp.ComponentReceiver` and
   `torchlens.mechinterp.ComponentEdge` records (nodes and receivers carry `layer_index`
   and `head`); every receiver's pre-norm input is
   checked equal to the sum of its edges' contributions in the API, and an edge
@@ -1269,9 +1269,9 @@
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.
-- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.hf.register_attention(model=None)`
+- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function (the
-  mask trap: an attention function without one gets no mask); `tl.bridge.hf.record_attention(model,
+  mask trap: an attention function without one gets no mask); `tl.bridge.transformers.record_attention(model,
   check_sdpa=False)` yields an `AttentionRecording` of per-head probabilities per attention module,
   no trace. Full `(batch, heads, q, kv)` matrix per call: 32 GiB per 4096-token Llama-2-7B-shape
   sequence in bf16. Refusal codes `hf_attention_*`.
@@ -1310,7 +1310,7 @@
   `bridge.sae.write_delphi(latents, tokens, site=, model_name=, n_splits=5, directory=)`
   (DOCUMENTED-UNSTABLE) write a splice's `latents` or a dataset's
   `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` result as the files SAEDashboard
-  0.8.0 and delphi 0.1.3 load (`docs/recipes/sae_latent_export.md`). `bridge.brain_score`
+  0.8.0 and delphi 0.1.3 load (`docs/facets/sae_latent_export.md`). `bridge.brain_score`
   additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model
@@ -1351,9 +1351,9 @@
   `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
-- BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
+- BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.neuro` is the
   whole-model extraction planner over the extraction artifact --
-  `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, output_transform=,
+  `plan_extraction(model, probe_inputs, sites=, num_stimuli=, batch_size=, output_transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
   total-scaled), executes the transform chain LIVE at the probe, and keys the plan to
@@ -1427,13 +1427,13 @@
 - Per-unit streaming statistics (DOCUMENTED-UNSTABLE): `tl.stats.Quantile` and
   `tl.stats.TopK` take a keyword-only `unit_axis=` (axis 0 is the example axis) and
   keep one reservoir or top-k list per unit (neuron, channel, SAE latent).
-  `Quantile(..., unit_axis=-1).result()` maps each quantile to a `float64 [units]`
+  `Quantile(..., unit_axis=-1).compute()` maps each quantile to a `float64 [units]`
   tensor; per-unit `TopK` returns `tl.stats.UnitTopK` (`values`, `example_ids`,
   `positions`, `unit_axis`), ties broken toward the lowest example id, then position;
-  under `tl.aggregate` an example id is its index in the dataloader's iteration
+  under `tl.stats.aggregate` an example id is its index in the dataloader's iteration
   order. `encoder=` maps each batch (an SAE encoder) before folding, so neurons and
   latents share one top-k-over-a-dataset tool; `TopK.update(..., example_ids=...)`
-  names examples outside `tl.aggregate`. State: `8 * reservoir_size` B per unit
+  names examples outside `tl.stats.aggregate`. State: `8 * reservoir_size` B per unit
   (Quantile), `k * (16 + 8 * position_axes)` B per unit (TopK); past 256 MiB the
   `stats_per_unit_state_large` warning fires once per session. Doc of record:
   `docs/reference/stats.md`, Per-unit statistics.
@@ -1444,7 +1444,7 @@
   an object that keeps folding as if never interrupted (unit layout kept; `encoder=` is
   not stored and must be passed back). Refusals: `stats_state_unsupported`,
   `stats_state_version_unknown`, `stats_state_digest_mismatch`, `stats_state_invalid`,
-  `stats_state_encoder_mismatch`. `tl.aggregate(..., cache=True, cache_dir=None)` keys
+  `stats_state_encoder_mismatch`. `tl.stats.aggregate(..., cache=True, cache_dir=None)` keys
   the run by value (versions, model contents and code, every batch, each metric's
   starting state and encoder, `target=`, `loss_fn=`) and on a hit restores the saved
   states in place and skips the loop; an unkeyable run refuses with
@@ -1452,20 +1452,20 @@
   folding passes warns once (`stats_aggregate_cache_data_unstable`) and stores nothing.
   Doc of record: `docs/reference/stats.md`, Save, reload and cache.
 - Reduce-and-discard capture (DOCUMENTED-UNSTABLE): `tl.trace(model, x, save="stats")` is a
-  save level beside `"all"` and `"none"`: every op's out folds into a `tl.stats.Spine` during
+  save level beside `"all"` and `"none"`: every op's out folds into a `tl.stats.RunningStats` during
   the forward (the summary-transform seam with `save_raw_activations=False`; no raw clone, one
-  16-slot float64 vector per op) and no payload is kept. `tl.stats.site_spines(trace)` returns
+  16-slot float64 vector per op) and no payload is kept. `tl.stats.site_stats(trace)` returns
   `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
   `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
   `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
-  `stats_capture_not_reduced` (`site_spines` on another trace). Doc of record:
+  `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
-- Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.stats.measure_trajectory(model, data, *,
+- Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
   statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
-  validate=True)` traces each batch, projects the logit lens one layer at a time and folds
+  verify=True)` traces each batch, projects the logit lens one layer at a time and folds
   `entropy`, `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
-  `cross_entropy` and `target_rank` into `tl.stats.TrajectoryStats` (`position_means`,
-  `spines`, `summary(statistic)`); refusals `stats_trajectory_*`.
+  `cross_entropy` and `target_rank` into `tl.mechinterp.TrajectoryStats` (`position_means`,
+  `running_stats`, `summary(statistic)`); refusals `stats_trajectory_*`.
   `torchlens.semantic.logit_lens_predictions(..., mask_input=False)` bans the input's own
   token ids before its reductions (`logit_lens_mask_input_unavailable`). Doc of record:
   `docs/reference/stats.md`, Trajectory statistics.
@@ -1550,7 +1550,7 @@
   `attribution_site_firing_invalid`, `attribution_site_independent_of_input`,
   `attribution_site_sae_invalid`, `attribution_site_target_unsupported`. Doc of record: `docs/reference/attribution.md`.
 - Attribution graphs (DOCUMENTED-UNSTABLE): `tl.attribution.build_graph(trace,
-  transcoders, *, embedding, target=None, max_n_logits=10, desired_logit_prob=0.95,
+  transcoders, *, embedding, target=None, max_num_logits=10, logit_probability_coverage=0.95,
   demeaned_logits=True, logits_at=None, frozen)` builds one prompt's attribution graph:
   feature nodes (active transcoder features; `transcoders` maps read sites to objects
   with `encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`, cross-layer when `W_dec`/`b_dec` are
@@ -1564,10 +1564,10 @@
   reads. `tl.attribution.AttributionGraph` (`nodes` of `tl.attribution.GraphNode`,
   `adjacency_matrix` rows targets, `node_values`, `constants` `encoder_bias`/`decoder_bias`/
   `other` so each feature and logit node equals its incoming edges plus constants,
-  `error_vectors`, `active_features`, `activation_values`, `logit_tokens`,
+  `error_vectors`, `active_feature_indices`, `feature_activations`, `logit_token_ids`,
   `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`,
-  `to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
-  edge_threshold=0.98, path=None)`, which returns the graph pruned by circuit-tracer's
+  `to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_influence_coverage=0.8,
+  edge_influence_coverage=0.98, path=None)`, which returns the graph pruned by circuit-tracer's
   influence rule as a dict in Neuronpedia's published attribution-graph schema and writes it to
   `path` when given). Refusals `attribution_graph_frozen_required`, `attribution_graph_site_not_found`,
   `attribution_graph_transcoder_invalid`, `attribution_graph_input_unsupported`,
@@ -1584,7 +1584,7 @@
   `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
-  layer=None, hook_type="resid_post", steer_strength=1.0)` publishes a vector through "Create
+  layer=None, hook_type="resid_post", default_steering_strength=1.0)` publishes a vector through "Create
   Vector". Standard library only; every field is checked before the first request and the key
   never enters a message. Refusals `attribution_overlay_argument_invalid`,
   `attribution_overlay_graph_mismatch`, `attribution_graph_contract_invalid`,
@@ -1592,38 +1592,38 @@
   `neuronpedia_upload_response_invalid`. Doc of record: `docs/reference/attribution.md`.
 - Attribution evaluation (DOCUMENTED-UNSTABLE): `tl.attribution.deletion_curve` and
   `tl.attribution.insertion_curve(model, inputs, input_kwargs=None, *, target, attribution,
-  baseline="zeros", n_steps=20, features="auto", patch_size=8)` remove or reveal the
+  baseline="zeros", num_steps=20, features="auto", patch_size=8)` remove or reveal the
   most-attributed input features (elements, pixels, patches or tokens) in steps and return a
-  `tl.attribution.CurveResult` (`fractions`, `scores`, `area`, `aopc`, `steps`); every
-  `tl.attribution.CurveStep.intervention` holds `(tl.units(...), tl.replace_with(...))` pairs,
+  `tl.attribution.PerturbationCurve` (`fractions`, `scores`, `area`, `aopc`, `steps`); every
+  `tl.attribution.CurveStep.build_interventions` holds `(tl.units(...), tl.replace_with(...))` pairs,
   replayed by `trace.fork().do(selection, edit)`. `tl.attribution.road_curve(model, inputs,
-  input_kwargs=None, *, target, attribution, ranking="most_relevant_first", n_steps=20,
+  input_kwargs=None, *, target, attribution, ranking="most_relevant_first", num_steps=20,
   features="auto", patch_size=8, noise_std=0.01, seed=0)` is ROAD (Rong et al., 2022): the
   deletion curve with removed pixels filled by noisy linear imputation from their 8 neighbours,
   `metric="road"`, every step's `intervention` holding its imputed values; image inputs only.
   `tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
-  method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)`
+  method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_values=True)`
   re-initializes layers top down on deep copies and reports Spearman and SSIM similarity per
-  step (`tl.attribution.RandomizationResult`, `tl.attribution.RandomizationStep`). Both accept
+  step (`tl.attribution.RandomizationTest`, `tl.attribution.RandomizationStep`). Both accept
   `grad_cam` results. Refusals `attribution_eval_map_misaligned`,
   `attribution_eval_setting_invalid`, `attribution_randomization_layer_invalid`,
   `attribution_randomization_map_changed`; warning `attribution_randomization_maps_large`. Doc
   of record: `docs/reference/attribution.md`.
 - Causal audit (DOCUMENTED-UNSTABLE): `tl.attribution.causal_audit(model, inputs,
-  input_kwargs=None, *, claim, target=None, corrupted=None, metric=None, edges=None, k=5,
-  ablation="zero", controls=("bottom", "random"), random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
+  input_kwargs=None, *, claim, target=None, corrupted_input=None, metric=None, edges=None, k=5,
+  edit="zero", controls=("bottom", "random"), num_random_draws=10, per_unit=True, seed=0)` grades a layer attribution (also one computed for a
   `tl.attribution.SiteTarget`) at its hidden site, a `torchlens.mechinterp.direct_logit_contributions`
   table (each component's whole site ablated, the logit read from the unembedding head after a
   native-logit check; leave `target=` out; the constant row is reported apart in
   `extra["constant_row"]`), or a `tl.attribution.read` table of `activation_x_grad` `ACT` rows
   (each site or element ablated, `target=` the same `tl.attribution.seed(...)`), or a
   `torchlens.mechinterp.edge_scores` table of `EDGE` rows (each edge patched alone with
-  `torchlens.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
+  `torchlens.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted_input=` and `metric=` it was
   scored with, `edges=` audits a subset; every set is patched in one call, into one receiver or
   several, and replays from its per-receiver pairs): each unit ablated (or patched) alone (one
   `torchlens.experiment.sweep_sites` member per unit where one edit serves every unit), then the
   top-k claimed units together beside bottom-k and seeded random-k controls, one
-  `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
+  `trace.fork().do(...)` each; returns `tl.attribution.CausalAudit` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`
   rows carry `site`, `component`, `claimed_effect`, `measured_effect` and a replayable
   `intervention`, as do the `tl.attribution.CausalAuditSet` rows (without `site` and `component`). Refusals `attribution_audit_claim_unsupported`,
@@ -1663,3 +1663,60 @@ Debugging tools live in `tl.debug`, trace-describing reports in `tl.report`.
 | `tl.report.measure_clean_step` | Measure an UNINSTRUMENTED forward wall time (the MFU denominator). |
 | `tl.report.overhead` | Measure requested capture tiers on the user's own model/host. |
 | `tl.report.profile` | Build a unified op, module, or invocation resource profile. |
+## Visuals and kits namespace names
+Namespace homes and exports introduced by the visuals-and-kits rename:
+- `tl.attribution.Attribution`: Container for provisional input-attribution results.
+- `tl.attribution.AttributionMetric`: Frozen container for one attribution quality metric.
+- `tl.attribution.TokenAttribution`: Frozen result of the token-attribution two-liner.
+- `tl.bridge.huggingface_hub`: Hugging Face Hub publishing and loading helpers.
+- `tl.bridge.huggingface_hub.from_hub`: Download a TorchLens artifact from the Hub and load it safely.
+- `tl.bridge.huggingface_hub.push_to_hub`: Upload a TorchLens ``Trace`` or ``Bundle`` to the Hugging Face Hub.
+- `tl.bridge.pytorch_grad_cam`: pytorch-grad-cam bridge helpers.
+- `tl.bridge.pytorch_grad_cam.cam`: Run a pytorch-grad-cam method for a TorchLens site.
+- `tl.bridge.transformers.AttentionCall`: One recorded attention call.
+- `tl.bridge.transformers.AttentionRecording`: Per-head attention probabilities recorded by the TorchLens backend.
+- `tl.bridge.transformers.trace_image`: Trace an image model with PIL input and resolved preprocessing.
+- `tl.bridge.transformers.trace_multimodal`: Trace a Hugging Face multimodal model with dict-keyed input.
+- `tl.bridge.transformers.trace_text`: Trace a Hugging Face language model with raw text input.
+- `tl.errors.AttributionError`: Error raised for unsupported or invalid attribution requests.
+- `tl.errors.LogitLensError`: Raised when a logit lens cannot be built, validated, or applied.
+- `tl.errors.MissingFacetError`: Raised when a declared facet needs a different capture to be available.
+- `tl.facets.FacetFunction`: Registered facet recipe metadata.
+- `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
+- `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
+- `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
+- `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
+- `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
+- `tl.mechinterp.LogitLensPredictions`: Result of a streaming :func:`logit_lens_predictions` sweep.
+- `tl.mechinterp.PatchedRun`: The receipted product of one lowered counterfactual.
+- `tl.mechinterp.SavePlan`: A priced, composable retention plan (mikit D15).
+- `tl.mechinterp.patch_grid`: Run a labelled activation-patching grid (mikit section 7).
+- `tl.mechinterp.patching`: Prebuilt activation and attribution patching helpers for facets.
+- `tl.neuro.ExtractionPlan`: Immutable measured plan for one whole-model extraction sweep.
+- `tl.neuro.PlanSite`: One requested site's measured plan row.
+- `tl._observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat; D8).
+- `tl._observability.RunningStatsResult`: Finalized spine statistics for one population.
+- `tl.stats.NarrationObserver`: Live stats-line echo mounted on the shipped observer surface.
+- `tl.stats.RunningStatsResult`: Finalized spine statistics for one population.
+- `tl.stats.narrate`: Create an echo observer (the live line density) for one site.
+- `tl.trackers.SeriesPoint`: One (step-span, block-truth, observation) sample of a series.
+- `tl.viz.NodeSpec`: Graphviz node attributes produced by TorchLens before user customization.
+- `tl.viz.ablation_grid`: Render the measured-intervention receipt grid (THE differentiator).
+- `tl.viz.attention`: Render an attention view to paper-ready PNG/SVG/PDF pages.
+- `tl.viz.attention_atlas`: Render the whole-model attention atlas (BertViz model view, matched).
+- `tl.viz.contact_sheet`: Render one page of the ranked overview contact sheet.
+- `tl.viz.histogram_waterfall`: Render the histogram waterfall (step x signed-log2-bin density).
+- `tl.viz.image_scatter`: Render a bounded 2D scatter with optional PIL thumbnails.
+- `tl.viz.intervention_diff`: Diff ``subject`` against ``reference``, site-key-first.
+- `tl.viz.lineplot`: Render one or more series as a compact PIL line plot.
+- `tl.viz.metric_strip`: Render a loss/entropy strip to paper output.
+- `tl.viz.nodes.channel_grid`: Create a grid visualizer for the first ``n`` activation channels.
+- `tl.viz.nodes.heatmap`: Create a channel-averaged 2D activation heatmap visualizer.
+- `tl.viz.nodes.histogram`: Create a compact value-distribution histogram visualizer.
+- `tl.viz.nodes.text_table`: Render a text batch as a Graphviz HTML-like table label.
+- `tl.viz.quantile_fan`: Render the quantile-fan strip for one series (the default view).
+- `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
+- `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
+- `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.

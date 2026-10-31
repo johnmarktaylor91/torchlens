@@ -18,7 +18,7 @@ from torchlens.quickstart._primitive import state_dict_hash
 
 import torchlens as tl
 from torchlens._quickstart import (
-    RenderResult,
+    Drawing,
     provenance_to_record,
     resolve_inputs,
     trace_input_provenance,
@@ -143,7 +143,7 @@ class TestRenderFacade:
                 _cnn().eval(),
                 input_size=SIZE,
                 file=str(tmp_path / "g.svg"),
-                vis_theme="torchlens",
+                path=str(tmp_path / "other"),
             )
         assert excinfo.value.fields["code"] == "render_kwarg_collision"
 
@@ -152,7 +152,7 @@ class TestRenderFacade:
         """RenderResult.save() re-renders from the stored DOT source."""
 
         result = render(_cnn().eval(), input_size=SIZE, file=str(tmp_path / "g.svg"))
-        assert isinstance(result, RenderResult)
+        assert isinstance(result, Drawing)
         assert result.trace is None  # detached by default
         saved = result.save(tmp_path / "again.pdf")
         assert saved.exists() and saved.stat().st_size > 0

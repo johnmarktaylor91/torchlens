@@ -31,7 +31,7 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
   `SaveOptions(activation_transform=<summary-role reducer>,
   save_raw_activations=False)`, so the capture's reduce-only path keeps one
   packed 16-slot `Spine` vector per op in `transformed_out` and no payload.
-  `site_spines(trace)` decodes them. `Op.out` on such a trace refuses
+  `site_stats(trace)` decodes them. `Op.out` on such a trace refuses
   (`activation_reduced_to_stats`) and the replay/validation entry gates in
   `data_classes/_trace_validation.py` refuse (`stats_capture_not_replayable`).
   The reducer is `lean_spine`, not `Spine.update`: same state, bounded

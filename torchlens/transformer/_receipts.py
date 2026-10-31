@@ -163,7 +163,7 @@ def _corrupted_baseline(receipts: dict[str, Any]) -> float:
             code="tv_receipt_invalid",
             message="The patch grid records no corrupted-run baseline metric, so its cells "
             "are patched metric values, not effects; a receipt plots effects only.",
-            remedy="build the grid with mechinterp.grid, patch_heads_grid or "
+            remedy="build the grid with mechinterp.patch_grid, patch_heads_grid or "
             "patch_query_heads_grid (they record receipts['corrupted_metric']), or set "
             "receipts['corrupted_metric'] to the unpatched corrupted run's metric",
             receipts=sorted(receipts),

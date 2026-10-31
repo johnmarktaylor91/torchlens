@@ -38,7 +38,6 @@ _LAZY_ATTRS = {
     "errors": ("torchlens.errors", None),
     "observers": ("torchlens.observers", None),
     "options": ("torchlens.options", None),
-    "brainpipe": ("torchlens.brainpipe", None),
     "to_disk": ("torchlens.options", "to_disk"),
     "Bundle": ("torchlens.bundle", "Bundle"),
     "Layer": ("torchlens._data_classes.layer", "Layer"),
@@ -46,7 +45,6 @@ _LAZY_ATTRS = {
     "Recording": ("torchlens.fastlog.types", "Recording"),
     "Trace": ("torchlens._data_classes.trace", "Trace"),
     "add": ("torchlens.intervention.predicates", "add"),
-    "aggregate": ("torchlens.stats", "aggregate"),
     "attribution": ("torchlens.attribution", None),
     # Entry/facade repair (workstream A10; WT1 A-VI item 27, neuro memo item
     # 2): the integration and appliance namespaces were absent from this map,
@@ -71,7 +69,7 @@ _LAZY_ATTRS = {
     "export": ("torchlens.export", None),
     "facets": ("torchlens.semantic", "facets"),
     "fastlog": ("torchlens.fastlog", None),
-    "facet": ("torchlens.intervention", "facet"),
+    "facet": ("torchlens.intervention.selectors", "facet"),
     "followed_by": ("torchlens.intervention.selectors", "followed_by"),
     "func": ("torchlens.intervention.selectors", "func"),
     "func_transform": ("torchlens.intervention.selectors", "func_transform"),
@@ -207,6 +205,7 @@ def _resolve_top_level(name: str) -> _Any:
 # file for that group through its audited _ALLOWED ledger (GATE-FIX row 1);
 # docs/reference/deprecations.md teaches the same names in prose.
 _REDIRECTS: dict[str, str] = {
+    "aggregate": "use torchlens.stats.aggregate",
     "batched_extract": "use torchlens.extract_dataset",
     "AtenOp": "use torchlens.types.AtenOp",
     "Container": "use torchlens.types.Container",
@@ -219,8 +218,9 @@ _REDIRECTS: dict[str, str] = {
     "Duration": "use torchlens.types.Duration",
     "Flops": "use torchlens.types.Flops",
     "Macs": "use torchlens.types.Macs",
+    "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
+    "build_render_audit": "removed from the public surface; use trace.draw(vis_renderer='dagua')",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
@@ -251,13 +251,13 @@ _REDIRECTS: dict[str, str] = {
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.types.PreHookEffect",
-    "preview_fastlog": "use torchlens.fastlog.preview",
+    "preview_fastlog": "removed from the public surface",
     "record_span": "use torchlens.observers.span",
     "rehydrate_nested": "use torchlens.io.materialize_nested",
     "render_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
-    "render_lines_to_html": "use torchlens.experimental.dagua.render_lines_to_html",
+    "render_lines_to_html": "removed from the public surface; use trace.draw()",
     "render_model_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
-    "render_trace_with_dagua": "use torchlens.experimental.dagua.render_trace_with_dagua",
+    "render_trace_with_dagua": "use trace.draw(vis_renderer='dagua')",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
@@ -280,7 +280,8 @@ _REDIRECTS: dict[str, str] = {
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
-    "transformer": "import torchlens.transformer, then use torchlens.transformer.render_answer_trajectory and its siblings -- a submodule, not a root name",
+    "transformer": "the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention); the kit is the torchlens.transformer submodule, not a root name",
+    "tviz": "the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention); the kit is the torchlens.transformer submodule, not a root name",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
     "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",
@@ -772,7 +773,6 @@ __all__ = [
     # the streaming-statistics namespace and its dataloader aggregation door
     # were shipped, documented-unstable, and root-reachable but undeclared.
     "stats",
-    "aggregate",
 ]
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

@@ -61,8 +61,8 @@ def test_call_kwargs_reach_the_cam_call(cnn: Any, options: dict[str, Any]) -> No
     model, x, log = cnn
     with pytorch_grad_cam.GradCAM(model=model, target_layers=[model.features]) as runner:
         direct = runner(input_tensor=x, targets=_targets(), **options)
-    plain = tl.bridge.gradcam.cam(log, "features", inputs=x, targets=_targets())["cam"]
-    bridged = tl.bridge.gradcam.cam(
+    plain = tl.bridge.pytorch_grad_cam.cam(log, "features", inputs=x, targets=_targets())["cam"]
+    bridged = tl.bridge.pytorch_grad_cam.cam(
         log, "features", inputs=x, targets=_targets(), call_kwargs=options
     )["cam"]
     assert np.max(np.abs(bridged - direct)) == 0.0
@@ -73,7 +73,7 @@ def test_call_kwargs_reach_the_cam_call(cnn: Any, options: dict[str, Any]) -> No
 def test_an_option_given_twice_refuses(cnn: Any) -> None:
     _model, x, log = cnn
     with pytest.raises(KeywordConflictError) as info:
-        tl.bridge.gradcam.cam(
+        tl.bridge.pytorch_grad_cam.cam(
             log,
             "features",
             inputs=x,

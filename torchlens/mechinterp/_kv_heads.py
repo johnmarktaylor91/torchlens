@@ -11,7 +11,7 @@ measures that head alone and leaves the other heads of its group untouched.
 The interceptor finds the expansion op in the captured graph (the first
 query-head-shaped descendant of the facet that is a single-parent reshape
 whose head blocks are exact copies), selects that one call in the rerun, and
-patches through the ordinary rerun route of :func:`torchlens.mechinterp.grid`:
+patches through the ordinary rerun route of :func:`torchlens.mechinterp.patch_grid`:
 the same fire ledger (exactly one fire per cell, or a refusal), the same
 pre-run cost line and ``budget=``, the same transactional model and RNG
 restore. Fused kernels that expand inside the kernel (torch SDPA with
@@ -58,7 +58,7 @@ _RAW_SUFFIX = "_raw"
 
 _UNAVAILABLE_REMEDY = (
     'load the model with attn_implementation="eager", or switch it to the registered '
-    '"torchlens" attention backend (tl.bridge.hf.register_attention(model)); both expand '
+    '"torchlens" attention backend (tl.bridge.transformers.register_attention(model)); both expand '
     "the grouped key/value tensor as a captured op"
 )
 
@@ -97,7 +97,7 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
 
     Each cell patches the CLEAN value of one query head's copy of its KV
     group into a CORRUPTED rerun (the denoising direction of
-    :func:`torchlens.mechinterp.grid`) and scores the run with ``metric``.
+    :func:`torchlens.mechinterp.patch_grid`) and scores the run with ``metric``.
 
     Parameters
     ----------
@@ -284,7 +284,7 @@ def _locate_all(clean_log: Any, corrupted_log: Any, site: str) -> list[_Expansio
         refuse(
             code="mi_payload_missing",
             message=f"No module exposes facet {site!r} on the clean baseline.",
-            remedy="check tl.facets.facet_coverage(trace) for the vocabulary",
+            remedy="check tl.facets.coverage(trace) for the vocabulary",
             analysis="patching.query_heads_grid",
             missing_sites=[],
         )
@@ -300,7 +300,7 @@ def _locate_all(clean_log: Any, corrupted_log: Any, site: str) -> list[_Expansio
                 f"{_SITE_WORDS[site]} slice.",
                 remedy="use mechinterp.patch_heads_grid, which measures each head directly",
                 module=address,
-                n_q_heads=n_q,
+                num_q_heads=n_q,
                 n_kv_heads=n_kv,
             )
         expansions.append(_locate_expansion(clean_log, corrupted_log, address, site, n_q, n_kv))
@@ -332,7 +332,7 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
             f"grouped {_SITE_WORDS[site]} tensor to the query heads "
             f"({[str(op.label) for op in candidates]}); patching one would leave the "
             "others unpatched.",
-            remedy="patch the whole group with mechinterp.grid(..., sites=site, "
+            remedy="patch the whole group with mechinterp.patch_grid(..., sites=site, "
             "axes=('layer', 'head')), or simplify the module so it expands once",
             module=address,
             candidates=[str(op.label) for op in candidates],
@@ -521,7 +521,7 @@ def _run_cell(  # noqa: PLR0913 -- the shared per-cell rerun of the grid
                 message=f"The expansion op {expansion.op_label!r} of module "
                 f"{expansion.address!r} fired {ledger['fires']} times in one rerun; a "
                 "per-query-head cell needs exactly one fire.",
-                remedy="patch the whole group with mechinterp.grid(..., sites=site, "
+                remedy="patch the whole group with mechinterp.patch_grid(..., sites=site, "
                 "axes=('layer', 'head')) for modules called more than once per forward",
                 module=expansion.address,
                 fires=ledger["fires"],

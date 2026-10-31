@@ -46,9 +46,9 @@ def test_build_profile_validates_level_sort_and_top_k(profiled_trace) -> None:
     with pytest.raises(ValueError, match="sort_by must be"):
         profile(profiled_trace, sort_by="speed")
     with pytest.raises(ValueError, match="top_k"):
-        profile(profiled_trace, top_k=-1)
+        profile(profiled_trace, k=-1)
     with pytest.raises(ValueError, match="top_k"):
-        profile(profiled_trace, top_k=True)
+        profile(profiled_trace, k=True)
 
 
 def test_profile_repr_formats_durations_human_readably(profiled_trace) -> None:
@@ -63,7 +63,7 @@ def test_profile_repr_formats_durations_human_readably(profiled_trace) -> None:
 def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -> None:
     """honesty() returns per-row provenance labels from the closed vocabulary."""
 
-    prof = profile(profiled_trace, level="op", top_k=3)
+    prof = profile(profiled_trace, level="op", k=3)
     honesty = prof.evidence_labels()
     assert list(honesty["name"]) == list(prof.frame["name"])
     # F09 (costreport D2/D9): per-cell evidence with mandatory qualifiers --
@@ -82,7 +82,7 @@ def test_profile_top_k_and_sort_order(profiled_trace) -> None:
     """top_k truncates after a stable descending sort on the requested column."""
 
     full = profile(profiled_trace, level="op", sort_by="param_count")
-    top = profile(profiled_trace, level="op", sort_by="param_count", top_k=2)
+    top = profile(profiled_trace, level="op", sort_by="param_count", k=2)
     assert len(top.frame) == 2
     assert list(top.frame["name"]) == list(full.frame["name"][:2])
     counts = [c for c in full.frame["param_count"] if c == c]

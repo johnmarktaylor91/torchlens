@@ -71,7 +71,7 @@ def test_rms_norm_input_facet_resolves_on_default_backend() -> None:
     )
     norm_module = log.modules["1"]
 
-    assert norm_module.facets.recipe_source == "rms_norm"
+    assert norm_module.facets.function_source == "rms_norm"
     assert norm_module.facets.has("input")
     facet_value = norm_module.facets.input.value
     linear_out = log["linear_1_1"].out

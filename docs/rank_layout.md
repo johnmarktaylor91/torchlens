@@ -29,7 +29,7 @@ ops label each arrow with its argument slot.
 
 ```python
 log = tl.trace(model, x)
-log.draw(layout="auto", vis_outpath="graph", vis_fileformat="svg")
+log.draw(layout="auto", path="graph", file_format="svg")
 ```
 
 Use `layout="dot"` to force Graphviz or `layout="rank"` to force
@@ -42,5 +42,5 @@ high node counts.
 
 | Symptom | Check |
 | --- | --- |
-| Empty large PDF | Render `vis_fileformat="svg"` instead. |
+| Empty large PDF | Render `file_format="svg"` instead. |
 | Slow layout | Reduce nesting/detail with `depth`, rolled mode, or `module=` focus. |

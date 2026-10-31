@@ -114,8 +114,8 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
     )
 
@@ -145,8 +145,8 @@ def _render_svg_output(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     out_path = tmp_path / "graph"
     log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(out_path),
+        file_format="svg",
+        path=str(out_path),
         **kwargs,
     )
     return (tmp_path / "graph.svg").read_text(encoding="utf-8")

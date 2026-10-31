@@ -62,7 +62,7 @@ def counted_patch(monkeypatch, clean, edges, corrupt):
     )
     monkeypatch.setattr(_edges, "component_graph", counting("graph_builds", _edges.component_graph))
     monkeypatch.setattr(type(clean), "fork", counting("forks", type(clean).fork))
-    patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     return patched, counts
 
 
@@ -118,7 +118,7 @@ def test_patch_edges_refuses_with_the_reason_when_a_projection_is_not_recomputed
         "_recompute_with_substitution",
         lambda *args, **kwargs: "the path passes buffer record 'buffer_1'",
     )
-    with pytest.raises(mi.MechInterpError) as excinfo:
-        mi.patch_edges(clean, edges, corrupt=corrupt)
+    with pytest.raises(tl.errors.MechInterpError) as excinfo:
+        mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     assert excinfo.value.fields["code"] == "mi_edge_selection_unresolvable"
     assert "buffer record 'buffer_1'" in str(excinfo.value)

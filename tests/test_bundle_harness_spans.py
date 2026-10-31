@@ -454,9 +454,9 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
     source = tl.visualization.show_bundle_graph(
         bundle,
         nodes="members",
-        vis_outpath=str(tmp_path / "members"),
+        path=str(tmp_path / "members"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     assert source is not None
     for index, name in enumerate(("draft", "critique", "revise")):

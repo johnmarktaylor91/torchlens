@@ -24,17 +24,15 @@ from __future__ import annotations
 from ._bridge import bertviz_tuple, circuitsvis_attention, circuitsvis_payload
 from ._decomp import render_neuron_card, score_decomposition
 from ._extract import attention_view, attention_views
-from ._lens_heatmap import render_logit_lens_heatmap
-from ._metrics import metric_strip, render_metric_strip, token_metrics
+from ._metrics import metric_strip, token_metrics
 from ._predictions import (
     prediction_table,
     prediction_table_html,
     prediction_trajectory,
     render_answer_trajectory,
     render_prediction_ribbon,
-    render_prediction_table,
 )
-from ._receipts import receipt_from_patch_grid, render_receipt_grid
+from ._receipts import receipt_from_patch_grid
 from ._records import (
     ANNOTATION_KINDS,
     Annotation,
@@ -53,8 +51,7 @@ from ._records import (
     TokenScoreRow,
     TokenScores,
 )
-from ._render_attention import render_attention, render_attention_atlas
-from ._strip import render_token_strip, token_strip_html, token_strip_svg
+from ._strip import token_strip_html
 
 __all__ = [
     "ANNOTATION_KINDS",
@@ -84,17 +81,9 @@ __all__ = [
     "prediction_trajectory",
     "receipt_from_patch_grid",
     "render_answer_trajectory",
-    "render_attention",
-    "render_attention_atlas",
-    "render_logit_lens_heatmap",
-    "render_metric_strip",
     "render_neuron_card",
     "render_prediction_ribbon",
-    "render_prediction_table",
-    "render_receipt_grid",
-    "render_token_strip",
     "score_decomposition",
     "token_metrics",
     "token_strip_html",
-    "token_strip_svg",
 ]

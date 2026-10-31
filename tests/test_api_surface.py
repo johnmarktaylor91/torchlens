@@ -97,10 +97,7 @@ TARGET_ALL = [
     "stable_across_passes",
     "pass_variance",
     "subspace",
-    # F39 unhide (conflict-ledger row 8): tl.stats / tl.aggregate promoted
-    # from reachable-but-undeclared lazy names to declared surface.
     "stats",
-    "aggregate",
 ]
 
 CANONICAL_SUBMODULES = [
@@ -193,6 +190,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     and `direction_from_pairs` and adds `Recipe` and `positions` = 112.
     The decided-surface rename moves `AmbiguousOpLookupError` and
     `ReentrantTraceError` to `tl.errors` = 114.
+    The visuals-and-kits rename moves `aggregate` to `tl.stats.aggregate` = 113.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

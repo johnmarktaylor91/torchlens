@@ -66,7 +66,7 @@ chains at draw time with `fold_patterns=`.
 | hiddenlayer's built-in fold set | `trace.draw(fold_patterns="idiomatic")` | Folds `ConvBnRelu`, `ConvBn`, `ConvRelu` and `LinearRelu`. |
 | A fold built from an earlier fold | `{"LinRelu": "linear > relu", "LinRelu2": "LinRelu{2}"}` | An atom naming an earlier pattern inlines it; `{k}` repeats an atom exactly `k` times. |
 | `hl.transforms.Prune(...)` | `trace.draw(skip_fn=...)` | `skip_fn` takes a layer and returns `True` to hide it. |
-| `graph.save(path, format="pdf")` | `trace.draw(vis_outpath=path, vis_fileformat="pdf", vis_save_only=True)` | |
+| `graph.save(path, format="pdf")` | `trace.draw(path=path, file_format="pdf", vis_save_only=True)` | |
 
 `fold_patterns=` cannot be combined with automatic collapse (`collapse=`) and refuses
 with `pattern_collapse_combination_unsupported`. hiddenlayer has had no release since
@@ -87,8 +87,8 @@ trace = tl.trace(model, torch.randn(1, 3, 8, 8))
 outpath = os.path.join(tempfile.mkdtemp(), "folded")
 dot_source = trace.draw(
     fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-    vis_outpath=outpath,
-    vis_fileformat="svg",
+    path=outpath,
+    file_format="svg",
     vis_save_only=True,
 )
 RESULT = ("ConvBnRelu" in dot_source, os.path.exists(outpath + ".svg"))

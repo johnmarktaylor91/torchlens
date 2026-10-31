@@ -234,7 +234,7 @@ def test_mlx_recipes_refuses_typed() -> None:
     """Recipe specs stay refused; only tl.when static predicates dispatch."""
 
     with pytest.raises(BackendUnsupportedError, match="recipe"):
-        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", recipes=object())
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=object())
 
 
 def test_mlx_halt_non_selector_refuses_typed() -> None:

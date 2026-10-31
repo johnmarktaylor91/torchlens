@@ -255,7 +255,7 @@ def _check_upload_graph(graph: dict, size: int) -> str:
         raise _upload_refusal(
             f"The graph JSON is {size:,} bytes; Neuronpedia takes {_MIN_GRAPH_BYTES:,} to "
             f"{_MAX_GRAPH_BYTES:,}. Remedy: export with stricter pruning for a smaller file, "
-            "graph.to_neuronpedia(..., node_threshold=0.6, edge_threshold=0.9).",
+            "graph.to_neuronpedia(..., node_influence_coverage=0.6, edge_influence_coverage=0.9).",
             code="neuronpedia_upload_argument_invalid",
         )
     return str(meta["slug"])
@@ -376,7 +376,7 @@ def _check_vector_settings(  # noqa: PLR0913 -- the endpoint's fields, checked t
             raise _upload_refusal(
                 f"{name}={value!r} is not a non-empty string. Remedy: "
                 'direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], '
-                'scan="gemma-2-2b", vector_label="honesty").',
+                'model_id="gemma-2-2b", name="honesty").',
                 code="neuronpedia_upload_argument_invalid",
             )
     if isinstance(layer, bool) or not isinstance(layer, int) or layer < 0:

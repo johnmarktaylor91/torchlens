@@ -22,7 +22,7 @@ from typing import Any
 
 CONVENTIONS: Mapping[str, Any] = MappingProxyType(
     {
-        "vis_fileformat": "svg",
+        "file_format": "svg",
         "vis_save_only": True,
         "direction": "leftright",
         "font_size": 16,
@@ -464,7 +464,7 @@ SLIDES: tuple[Slide, ...] = (
         id="buffers",
         title="Buffers: cylinders",
         rule='"meaningful" hides {noise_buffers}; the op that reads them gets a double outline.',
-        panels=(Panel("a", "Stateful", kwargs=FULL, label='show_buffer_layers="meaningful"'),),
+        panels=(Panel("a", "Stateful", kwargs=FULL, label='show_buffers="meaningful"'),),
         keys=(
             Key("@scale: a buffer drawn as a cylinder", "node(shape=cylinder, text~@scale)"),
             Key("Double outline: hidden buffers feed this op", "node(peripheries=2)"),
@@ -1103,7 +1103,7 @@ SLIDES: tuple[Slide, ...] = (
         rule='Meaning stays, ink changes; for_paper=True forces "paper".',
         layout="grid",
         panels=tuple(
-            Panel(name, "Tiny", kwargs={"vis_theme": skin}, label=skin)
+            Panel(name, "Tiny", kwargs={"theme": skin}, label=skin)
             for name, skin in zip(
                 "abcde", ("torchlens", "paper", "dark", "colorblind", "high_contrast"), strict=True
             )
@@ -1348,8 +1348,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Loops", "view, stack_by", ("view", "vis_mode", "stack_by")),
     (
         "Buffers, containers, orphans",
-        "show_buffer_layers, show_containers, show_orphans",
-        ("show_buffer_layers", "show_containers", "container_max_inline", "show_orphans"),
+        "show_buffers, show_containers, show_orphans",
+        ("show_buffers", "show_containers", "container_max_inline", "show_orphans"),
     ),
     ("Edits", "vis_intervention_mode", ("vis_intervention_mode", "vis_show_cone")),
     (
@@ -1370,9 +1370,9 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "The look",
-        "vis_theme, direction, layout",
+        "theme, direction, layout",
         (
-            "vis_theme",
+            "theme",
             "for_paper",
             "direction",
             "layout",
@@ -1397,8 +1397,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Files",
-        "vis_fileformat, vis_outpath",
-        ("vis_fileformat", "vis_outpath", "vis_save_only", "dpi", "return_graph"),
+        "file_format, path",
+        ("file_format", "path", "vis_save_only", "dpi", "return_graph"),
     ),
 )
 

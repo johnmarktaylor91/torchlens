@@ -242,9 +242,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        rendered_summary = tl.visualization.summary(
-            torch.compile(_Tiny(), backend="eager"), input_tensor
-        )
+        rendered_summary = tl.summary(torch.compile(_Tiny(), backend="eager"), input_tensor)
     assert "_orig_mod" not in rendered_summary
     assert_single_note(caught)
 

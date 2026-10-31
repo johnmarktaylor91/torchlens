@@ -167,7 +167,7 @@ def test_profile_percent_denominator_invariant_under_top_k(nested_trace) -> None
     the partition total and per-row percents are unchanged by the view."""
 
     full = profile(nested_trace, level="op")
-    view = profile(nested_trace, level="op", top_k=2)
+    view = profile(nested_trace, level="op", k=2)
     assert view.partition_total == full.partition_total
     by_name_full = dict(zip(full.frame["name"], full.frame["flops_pct"], strict=True))
     for name, pct in zip(view.frame["name"], view.frame["flops_pct"], strict=True):
@@ -270,7 +270,7 @@ def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     display receipt; the denominator never shrinks."""
 
     full = cost_tree(nested_trace)
-    view = cost_tree(nested_trace, top_k=1)
+    view = cost_tree(nested_trace, k=1)
     assert view.partition_total == full.partition_total
     remainder_rows = [row for row in view.rows if row.role == "REMAINDER"]
     assert remainder_rows
@@ -484,7 +484,7 @@ def test_view_argument_codes_are_provoked(nested_trace) -> None:
     from torchlens._errors import InvalidArgumentError
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        cost_tree(nested_trace, top_k=0)
+        cost_tree(nested_trace, k=0)
     assert excinfo.value.fields["code"] == "cost_tree_top_k_invalid"
 
     with pytest.raises(InvalidArgumentError) as excinfo:

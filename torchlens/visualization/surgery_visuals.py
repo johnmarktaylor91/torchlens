@@ -633,7 +633,7 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
     if not user_kwargs.get("return_graph", False):
-        outpath = user_kwargs.get("vis_outpath")
+        outpath = user_kwargs.get("path")
         if outpath is None:
             # A bare draw chose a collision-safe name: the census
             # rides beside the file that was actually written.

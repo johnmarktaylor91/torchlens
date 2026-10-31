@@ -54,8 +54,8 @@ def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> tuple
         warnings.simplefilter("always")
         source = trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / name),
+            file_format="dot",
+            path=str(tmp_path / name),
             **kwargs,
         )
     messages = [

@@ -98,12 +98,12 @@ image_trace.model_profile
 image_trace.output_table(k=5)
 tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_trace, save=mds_layers)
-tl.viz.feature_map_evolution(image_trace, save=mds_layers)
+tl.viz.feature_maps(image_trace, save=mds_layers)
 tl.repgeom.scree_evolution(image_trace, save=mds_layers)
-image_trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
-image_trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
-image_trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
-image_trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+image_trace.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.feature_map())
+image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`

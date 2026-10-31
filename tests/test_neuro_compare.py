@@ -182,7 +182,7 @@ def test_invalid_settings_refuse() -> None:
     with pytest.raises(ValueError, match="ridge_alphas"):
         tl.neuro.compare(source, target, ridge_alphas=(0.0,))
     with pytest.raises(ValueError, match="n_folds"):
-        tl.neuro.compare(source, target, n_folds=1)
+        tl.neuro.compare(source, target, num_folds=1)
     with pytest.raises(ValueError, match="same stimuli"):
         tl.neuro.compare({"s": rng.normal(size=(11, 3))}, target)
     with pytest.raises(ValueError, match="not keys"):

@@ -514,17 +514,17 @@ def test_push_to_hub_refuses_objects_without_a_tlspec_path() -> None:
     """A plain object is refused typed; push_to_hub never falls back to pickle."""
 
     from torchlens._errors import ArgumentTypeError
-    from torchlens.bridge import huggingface
+    from torchlens.bridge import huggingface_hub
 
     with pytest.raises(ArgumentTypeError) as info:
-        huggingface.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
+        huggingface_hub.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
     assert info.value.fields["code"] == "hub_push_artifact_unsupported"
 
 
 def test_push_to_hub_tarball_format_and_name(monkeypatch: pytest.MonkeyPatch) -> None:
     """A bundle upload reports tar.gz under the default ``.tar.gz`` name."""
 
-    from torchlens.bridge import huggingface
+    from torchlens.bridge import huggingface_hub
 
     class Unpicklable:
         def __reduce__(self) -> Any:
@@ -537,7 +537,7 @@ def test_push_to_hub_tarball_format_and_name(monkeypatch: pytest.MonkeyPatch) ->
 
         return _save
 
-    monkeypatch.setattr(huggingface, "_resolve_bundle_saver", fake_saver)
-    result = huggingface.push_to_hub(Unpicklable(), "example/repo", dry_run=True)
+    monkeypatch.setattr(huggingface_hub, "_resolve_bundle_saver", fake_saver)
+    result = huggingface_hub.push_to_hub(Unpicklable(), "example/repo", dry_run=True)
     assert result["format"] == "tar.gz"
     assert result["path_in_repo"] == "torchlens_artifact.tar.gz"

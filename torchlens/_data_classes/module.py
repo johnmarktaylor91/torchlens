@@ -973,7 +973,7 @@ class ModuleCall:
 
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from ..semantic import FacetView
+            from ..semantic.facets import FacetView
 
             cache = FacetView(self)
             self.__dict__["_facets_cache"] = cache
@@ -1899,7 +1899,7 @@ class Module:
         self._single_call_or_error()
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from ..semantic import FacetView
+            from ..semantic.facets import FacetView
 
             cache = FacetView(self)
             self.__dict__["_facets_cache"] = cache

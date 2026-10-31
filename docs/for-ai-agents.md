@@ -208,9 +208,9 @@ x = torch.randn(1, 2)
 trace = tl.trace(model, x, save=tl.func("tanh"))
 graph = trace.draw(
     view="unrolled",
-    vis_outpath=str(Path(DOCS_TMPDIR) / "agent-graph"),
+    path=str(Path(DOCS_TMPDIR) / "agent-graph"),
     vis_save_only=True,
-    vis_fileformat="dot",
+    file_format="dot",
     return_graph=True,
 )
 

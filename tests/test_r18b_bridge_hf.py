@@ -1,6 +1,6 @@
 """Regression tests for r18b bridge/hf.py hardening.
 
-Covers four A3 findings on ``torchlens/bridge/hf.py``:
+Covers four A3 findings on ``torchlens/bridge/transformers.py``:
 
 * A3-06 -- autoroute predicates must decline implausible modality/chat values.
 * A3-07 -- list image preprocessing must not run per-item transforms N+1 times.
@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.bridge.hf as hf
+import torchlens.bridge.transformers as hf
 
 # ---------------------------------------------------------------------------
 # A3-06 -- predicate misclassification

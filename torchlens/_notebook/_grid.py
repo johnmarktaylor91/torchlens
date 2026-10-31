@@ -281,7 +281,7 @@ def _resolve_bounds(values: Any, mask: Any, stats: Any | None) -> SignedBounds:
             getattr(stats, "finite_min", None),
             getattr(stats, "finite_max", None),
             getattr(stats, "mean", None),
-            getattr(stats, "sd", None),
+            getattr(stats, "std", None),
         )
     import numpy as np
 

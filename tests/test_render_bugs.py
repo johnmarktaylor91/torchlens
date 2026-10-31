@@ -183,9 +183,9 @@ def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
 
     dot = trace.draw(
         skip_fn=lambda layer: layer.func_name == "relu",
-        vis_outpath=str(tmp_path / "skip_relu"),
+        path=str(tmp_path / "skip_relu"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
         order_siblings=False,
     )
 
@@ -282,7 +282,7 @@ def test_missing_graphviz_binary_refuses_typed(
 
     with pytest.raises(GraphvizUnavailableError) as exc_info:
         trace.draw(
-            vis_outpath=str(tmp_path / "graph"),
+            path=str(tmp_path / "graph"),
             vis_save_only=True,
             order_siblings=False,
         )
@@ -333,9 +333,9 @@ def test_hidden_buffer_update_node_is_not_rendered(tmp_path: Path) -> None:
     trace = tl.trace(model, torch.randn(4, 8))
 
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "batchnorm_hidden_buffers"),
+        path=str(tmp_path / "batchnorm_hidden_buffers"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
         order_siblings=False,
     )
 
@@ -350,9 +350,9 @@ def test_lstmcell_rolled_count_uses_calls_not_outputs(tmp_path: Path) -> None:
 
     dot = trace.draw(
         vis_mode="rolled",
-        vis_outpath=str(tmp_path / "lstmcell_rolled"),
+        path=str(tmp_path / "lstmcell_rolled"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
         order_siblings=False,
     )
 
@@ -366,10 +366,10 @@ def test_dark_theme_themes_caption_and_parameter_nodes(tmp_path: Path) -> None:
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
 
     dot = trace.draw(
-        vis_theme="dark",
-        vis_outpath=str(tmp_path / "dark"),
+        theme="dark",
+        path=str(tmp_path / "dark"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
         order_siblings=False,
     )
 
@@ -392,9 +392,9 @@ def test_rank_layout_embeds_code_panel(tmp_path: Path) -> None:
     dot = trace.draw(
         vis_node_placement="rank",
         code_panel=lambda _model: "def forward(self, x):\n    return self[1](self[0](x))",
-        vis_outpath=str(tmp_path / "rank_code_panel"),
+        path=str(tmp_path / "rank_code_panel"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         order_siblings=False,
     )
 
@@ -440,9 +440,9 @@ def test_rank_layout_failure_preserves_dot_source(
         with pytest.raises(RuntimeError, match="forced neato failure"):
             trace.draw(
                 vis_node_placement="rank",
-                vis_outpath=str(outpath),
+                path=str(outpath),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 order_siblings=False,
             )
     finally:
@@ -488,7 +488,7 @@ def test_draw_bool_flag_kwarg_refuses_non_bool_typed(
 
     with pytest.raises(InvalidArgumentError, match="order_siblings") as excinfo:
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "bool_flag"),
+            path=str(tmp_path / "bool_flag"),
             vis_save_only=True,
             order_siblings="no",  # type: ignore[arg-type]
         )
@@ -505,7 +505,7 @@ def test_draw_show_containers_vocabulary_refuses_typed(
 
     with pytest.raises(InvalidArgumentError, match="show_containers") as excinfo:
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "containers_vocab"),
+            path=str(tmp_path / "containers_vocab"),
             vis_save_only=True,
             show_containers="everything",  # type: ignore[arg-type]
         )
@@ -523,9 +523,9 @@ def test_forward_render_timeout_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward"),
+            path=str(tmp_path / "forward"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -541,9 +541,9 @@ def test_backward_render_timeout_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
         backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward"),
+            path=str(tmp_path / "backward"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -558,9 +558,9 @@ def test_combined_render_timeout_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
         backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined"),
+            path=str(tmp_path / "combined"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -575,9 +575,9 @@ def test_forward_zero_byte_render_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward_empty"),
+            path=str(tmp_path / "forward_empty"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -593,9 +593,9 @@ def test_backward_zero_byte_render_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
         backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward_empty"),
+            path=str(tmp_path / "backward_empty"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -610,9 +610,9 @@ def test_combined_zero_byte_render_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
         backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_empty"),
+            path=str(tmp_path / "combined_empty"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -627,9 +627,9 @@ def test_forward_called_process_error_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward_failed"),
+            path=str(tmp_path / "forward_failed"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -645,9 +645,9 @@ def test_backward_called_process_error_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
         backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward_failed"),
+            path=str(tmp_path / "backward_failed"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -662,9 +662,9 @@ def test_combined_called_process_error_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
         backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_failed"),
+            path=str(tmp_path / "combined_failed"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
 
@@ -680,9 +680,9 @@ def test_combined_render_keeps_dot_source_on_graphviz_failure(
 
     with pytest.raises(GraphvizRenderError, match="DOT source was saved"):
         backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_failed"),
+            path=str(tmp_path / "combined_failed"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
         )
 
     assert dot_path.exists()
@@ -743,9 +743,9 @@ def test_grad_edges_use_preserved_edge_cluster_key(
     try:
         trace.log_backward(trace[trace.output_layers[0]].out)
         trace.draw(
-            vis_outpath=str(tmp_path / "nested_grad"),
+            path=str(tmp_path / "nested_grad"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -780,9 +780,9 @@ def test_module_cluster_title_escapes_html_special_moduledict_key(tmp_path: Path
         # ModuleDict key previously broke the HTML-like label parser
         # mid-render of the "heads.score & rank" module cluster.
         dot = trace.draw(
-            vis_outpath=str(outpath),
+            path=str(outpath),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -828,9 +828,9 @@ def test_rank_engine_cluster_subgraph_id_quotes_moduledict_special_key(
             # Must not raise: neither a GraphvizRenderError (dot engine) nor a
             # RuntimeError from a failed `neato` subprocess (rank engine).
             dot = trace.draw(
-                vis_outpath=str(outpath),
+                path=str(outpath),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 order_siblings=False,
                 **engine_kwargs,
             )
@@ -874,9 +874,9 @@ def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> N
         # previously broke the HTML-like label parser mid-render.
         dot = trace.draw(
             show_containers="nodes",
-            vis_outpath=str(outpath),
+            path=str(outpath),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -898,9 +898,9 @@ def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> Non
     pdf_path = tmp_path / "large_composed.pdf"
     try:
         trace.draw(
-            vis_outpath=str(pdf_path.with_suffix("")),
+            path=str(pdf_path.with_suffix("")),
             vis_save_only=True,
-            vis_fileformat="pdf",
+            file_format="pdf",
             code_panel=lambda _model: "def forward(self, x):\n    return x",
             order_siblings=False,
         )
@@ -985,9 +985,9 @@ def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
 
         dot = trace.draw(
             vis_node_placement="rank",
-            vis_outpath=str(tmp_path / "rank_html_escape"),
+            path=str(tmp_path / "rank_html_escape"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -1015,9 +1015,9 @@ def test_rank_layout_model_class_name_html_specials_render_cleanly(
     try:
         dot = trace.draw(
             vis_node_placement="rank",
-            vis_outpath=str(tmp_path / "rank_class_name_escape"),
+            path=str(tmp_path / "rank_class_name_escape"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -1063,9 +1063,9 @@ def test_saved_dot_source_free_of_per_run_temp_imagepath(tmp_path: Path) -> None
         outpath = tmp_path / "temp_free"
         trace.draw(
             node_spec_fn=spec_fn,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_save_only=True,
-            vis_outpath=str(outpath),
+            path=str(outpath),
         )
         source = (tmp_path / "temp_free.dot").read_text()
     finally:
@@ -1099,9 +1099,9 @@ def test_node_image_renders_without_in_source_imagepath(tmp_path: Path) -> None:
         outpath = tmp_path / "image_inlined"
         trace.draw(
             node_spec_fn=spec_fn,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_save_only=True,
-            vis_outpath=str(outpath),
+            path=str(outpath),
         )
         svg = (tmp_path / "image_inlined.svg").read_text()
     finally:
@@ -1233,8 +1233,8 @@ def test_collapsed_module_boundary_edge_discloses_multiplicity(tmp_path: Path) -
     trace.draw(
         vis_call_depth=1,
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(outpath),
+        file_format="dot",
+        path=str(outpath),
     )
     source = (tmp_path / "twoout.dot").read_text()
     boundary_edge_lines = [

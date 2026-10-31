@@ -136,7 +136,7 @@ Cluster C: instance-state inspection is fail-closed (`inspect_instance_state`; a
 property/descriptor-shadowed `__dict__` or a custom `__getattribute__`/`__getattr__` on a
 declared-schema container refuses `instance_state_uninspectable` without running the hook).
 Cluster B: slice/composite-literal components are classifier-first (a semantic scalar can never
-launder through a `slice` component). Cluster D: reserved input-path sentinels (the whole `\x00`
+launder through a `plane` component). Cluster D: reserved input-path sentinels (the whole `\x00`
 namespace) are escaped by the key codec so a real dict key equal to a marker round-trips.
 
 The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)

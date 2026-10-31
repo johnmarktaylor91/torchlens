@@ -857,7 +857,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
     outpath = tmp_path / "tinygrad_graph"
-    dot = trace.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="dot")
+    dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
     assert isinstance(dot, str)
 
     audit_path = tmp_path / "tinygrad_audit.tlspec"

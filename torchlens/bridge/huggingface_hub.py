@@ -221,7 +221,7 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
         raise ArtifactError(
             f"from_hub refused {archive.name}: {problem}. Only the gzipped `.tlspec` "
             "tar written by push_to_hub is loaded. Remedy: point path_in_repo at an "
-            "artifact uploaded with torchlens.bridge.huggingface.push_to_hub, or "
+            "artifact uploaded with torchlens.bridge.huggingface_hub.push_to_hub, or "
             "download the file yourself and inspect it before loading it with "
             "torchlens.load.",
             code="hub_artifact_unsafe",

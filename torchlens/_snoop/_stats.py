@@ -139,12 +139,12 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narrati
         policy="exact",
         population=record.numel,
         mean=record.mean,
-        sd=record.sd,
+        sd=record.std,
         minimum=record.finite_min,
         maximum=record.finite_max,
-        nan_count=record.nan_count,
-        posinf_count=record.posinf_count,
-        neginf_count=record.neginf_count,
+        nan_count=record.num_nan,
+        posinf_count=record.num_posinf,
+        neginf_count=record.num_neginf,
     )
 
 

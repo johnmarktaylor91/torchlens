@@ -173,9 +173,9 @@ def _snapshot_case(trace: tl.Trace, tmp_path: Path, case_name: str) -> dict[str,
                 continue
             source = str(
                 trace.draw(
-                    vis_outpath=str(tmp_path / f"{case_name}_{key}"),
+                    path=str(tmp_path / f"{case_name}_{key}"),
                     vis_save_only=True,
-                    vis_fileformat="svg",
+                    file_format="svg",
                     vis_node_placement="dot",
                     collapse=collapse,
                     fold_repeats=fold_repeats,

@@ -186,7 +186,7 @@ def test_show_3d_requires_explicit_slice() -> None:
     descriptor = _descriptor(3)
     with pytest.raises(
         ReceptiveFieldError,
-        match=r"3-D receptive-field visualization requires slice=\(axis, index\)\.",
+        match=r"3-D receptive-field visualization requires plane=\(axis, index\)\.",
     ):
         show(_View(descriptor), (0, 0, 3, 3, 3), image=Image.new("RGB", (80, 60)))
 
@@ -219,9 +219,9 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
         output_path = tmp_path / "rf_cone.svg"
         trace.draw(
             node_spec_fn=node_spec(target),
-            vis_fileformat="svg",
+            file_format="svg",
             vis_save_only=True,
-            vis_outpath=str(output_path),
+            path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")
         assert "RF " in svg

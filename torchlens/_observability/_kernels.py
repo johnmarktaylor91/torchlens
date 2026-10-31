@@ -19,7 +19,7 @@ built from:
   format change.
 
 Both kernels implement the ``torchlens.stats`` ``StreamingStat`` protocol
-(``update`` / ``result``), so ``tl.aggregate`` gets dataset-mode histograms
+(``update`` / ``result``), so ``tl.stats.aggregate`` gets dataset-mode histograms
 free (D18). Neither kernel consumes RNG (model or global), and half/bf16
 inputs reduce in float32-or-wider with the reduction dtype recorded.
 
@@ -172,7 +172,7 @@ DEFAULT_DESCRIPTOR = HistogramDescriptor()
 
 
 @dataclass(frozen=True)
-class SpineResult:
+class RunningStatsResult:
     """Finalized spine statistics for one population.
 
     Integer counts are exact. Floating fields carry the recorded reduction
@@ -211,7 +211,7 @@ class SpineResult:
         }
 
 
-class Spine:
+class RunningStats:
     """Always-on scalar spine accumulator (StreamingStat; D8).
 
     ``num, min, max, sum, sum_squares`` map verbatim onto five of
@@ -243,7 +243,7 @@ class Spine:
         Empty inputs are a specified no-op outcome (D14: reducers are total).
         """
 
-        tensor, dtype_tag = _as_reduction_tensor("Spine", value)
+        tensor, dtype_tag = _as_reduction_tensor("RunningStats", value)
         if self._reduction_dtype is None:
             self._reduction_dtype = dtype_tag
         elif self._reduction_dtype != dtype_tag and "float64" in (
@@ -304,7 +304,7 @@ class Spine:
             self._mean += delta * (n_finite / total)
             self._m2 += batch_m2 + delta * delta * (prior_finite * n_finite / total)
 
-    def merge(self, other: Spine) -> None:
+    def merge(self, other: RunningStats) -> None:
         """Fold another spine into this one.
 
         Integer counts merge exactly; floating fields merge with the stable
@@ -312,7 +312,7 @@ class Spine:
         sums) and are documented approximate, never exact (D8).
         """
 
-        if not isinstance(other, Spine):
+        if not isinstance(other, RunningStats):
             raise StatKernelError(
                 f"Spine.merge expects a Spine, got {type(other).__name__}.",
                 code="stat_merge_incompatible",
@@ -358,11 +358,11 @@ class Spine:
             self._mean += delta * (n_b / total)
             self._m2 += other._m2 + delta * delta * (n_a * n_b / total)
 
-    def result(self) -> SpineResult:
+    def result(self) -> RunningStatsResult:
         """Return the finalized spine statistics."""
 
         has_finite = self._count_finite > 0
-        return SpineResult(
+        return RunningStatsResult(
             count_total=self._count_total,
             count_finite=self._count_finite,
             count_zero=self._count_zero,
@@ -536,7 +536,7 @@ def spine_vector(value: torch.Tensor) -> torch.Tensor:
     never the cancellation-prone ``E[x^2] - E[x]^2``.
     """
 
-    tensor, _ = _as_reduction_tensor("Spine", value)
+    tensor, _ = _as_reduction_tensor("RunningStats", value)
     device = tensor.device
     out = torch.zeros(SPINE_SLOTS, dtype=torch.float64, device=device)
     n = tensor.numel()
@@ -590,7 +590,7 @@ def spine_vector_fused(value: torch.Tensor) -> torch.Tensor:
     noise band (tests pin parity either way). No host sync happens here.
     """
 
-    tensor, _ = _as_reduction_tensor("Spine", value)
+    tensor, _ = _as_reduction_tensor("RunningStats", value)
     device = tensor.device
     out = torch.zeros(SPINE_SLOTS, dtype=torch.float64, device=device)
     n = tensor.numel()
@@ -673,13 +673,13 @@ def merge_spine_vectors(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def spine_result_from_vector(vector: torch.Tensor, reduction_dtype: str) -> SpineResult:
+def spine_result_from_vector(vector: torch.Tensor, reduction_dtype: str) -> RunningStatsResult:
     """Build a :class:`SpineResult` from one (CPU) spine vector."""
 
     cells = vector.tolist()
     n_finite = int(cells[_SLOT_FINITE])
     has_finite = n_finite > 0
-    return SpineResult(
+    return RunningStatsResult(
         count_total=int(cells[_SLOT_TOTAL]),
         count_finite=n_finite,
         count_zero=int(cells[_SLOT_ZERO]),
@@ -772,8 +772,8 @@ __all__ = [
     "Histogram",
     "HistogramDescriptor",
     "HistogramResult",
-    "Spine",
-    "SpineResult",
+    "RunningStats",
+    "RunningStatsResult",
     "histogram_result_from_vector",
     "merge_spine_vectors",
     "sketch_vector",

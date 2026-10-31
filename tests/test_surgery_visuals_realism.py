@@ -53,8 +53,8 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     outpath = str(tmp_path / stem)
     render_surgery(
         trace,
-        vis_outpath=outpath,
-        vis_fileformat="svg",
+        path=outpath,
+        file_format="svg",
         vis_save_only=True,
     )
     svg = (tmp_path / f"{stem}.svg").read_text()

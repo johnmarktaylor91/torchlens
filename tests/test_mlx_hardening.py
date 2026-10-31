@@ -580,8 +580,8 @@ def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     rendered = trace.draw(
-        vis_outpath=str(tmp_path / "mlx_trace"),
-        vis_fileformat="pdf",
+        path=str(tmp_path / "mlx_trace"),
+        file_format="pdf",
         vis_save_only=True,
     )
 

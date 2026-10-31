@@ -85,7 +85,7 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
             "pass them as tl.trace(model, (), input_kwargs={"
             + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
             + "}); for HuggingFace text models, "
-            "torchlens.bridge.hf.trace_text(model, 'prompt') builds the "
+            "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
             "inputs for you"
         ),
         unrouted_keywords=sorted(forward_kwargs),

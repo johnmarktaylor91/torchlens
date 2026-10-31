@@ -184,7 +184,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
     """Run the panel's draw call; return the DOT source."""
 
     kwargs = draw_kwargs(panel)
-    kwargs["vis_outpath"] = str(outpath)
+    kwargs["path"] = str(outpath)
     if panel.call == "draw":
         return str(trace.draw(**kwargs))
     if panel.call == "draw_backward":
@@ -201,12 +201,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         graph = render_surgery(fork, **kwargs)
         return str(getattr(graph, "source", graph))
     if panel.call == "surgery_diff":
-        from torchlens.visualization import surgery_diff
-
         fork = _fork_edit(trace)
         from torchlens.visualization._surgery_diff import _build_diff_dot
+        from torchlens.viz import intervention_diff
 
-        diff = surgery_diff(fork, trace)
+        diff = intervention_diff(fork, trace)
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
@@ -237,7 +236,7 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
             dot_source = _facade(panel, outpath)
         elif panel.kwargs.get("return_graph"):
             trace, _inputs = capture(panel)
-            graph = trace.draw(**{**draw_kwargs(panel), "vis_outpath": str(outpath)})
+            graph = trace.draw(**{**draw_kwargs(panel), "path": str(outpath)})
             record["returned"] = type(graph).__name__
             dot_source = graph.source
             graph.render(str(outpath), format="svg", cleanup=True)
@@ -246,7 +245,7 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
             dot_source = draw(panel, trace, outpath)
     record["warnings"] = sorted({f"{w.category.__name__}: {w.message}"[:300] for w in seen})
     (out / f"{stem}.dot").write_text(dot_source)
-    fmt = str(draw_kwargs(panel).get("vis_fileformat", "svg"))
+    fmt = str(draw_kwargs(panel).get("file_format", "svg"))
     if fmt == "png":
         png = outpath.with_suffix(".png") if outpath.with_suffix(".png").exists() else None
         png = png or Path(f"{outpath}.png")
@@ -301,29 +300,29 @@ def probe_export(raw: Path) -> dict[str, str]:
     base = {"direction": "leftright", "vis_save_only": True}
     for dpi in (96, 192):
         path = raw / f"export-png-{dpi}"
-        trace.draw(vis_outpath=str(path), vis_fileformat="png", dpi=dpi, **base)
+        trace.draw(path=str(path), file_format="png", dpi=dpi, **base)
         png = path.with_suffix(".png") if path.with_suffix(".png").exists() else Path(f"{path}.png")
         width, height = _png_size(png)
-        facts[f'vis_fileformat="png", dpi={dpi}'] = f"{width} x {height} pixels"
+        facts[f'file_format="png", dpi={dpi}'] = f"{width} x {height} pixels"
     svg_path = raw / "export-svg"
-    trace.draw(vis_outpath=str(svg_path), vis_fileformat="svg", **base)
+    trace.draw(path=str(svg_path), file_format="svg", **base)
     svg_file = svg_path.with_suffix(".svg") if svg_path.with_suffix(".svg").exists() else None
     svg_file = svg_file or Path(f"{svg_path}.svg")
     view = re.search(r'viewBox="([^"]+)"', svg_file.read_text())
-    facts['vis_fileformat="svg"'] = (
+    facts['file_format="svg"'] = (
         f"vector, viewBox {view.group(1) if view else '?'} (pt); dpi has no effect"
     )
-    facts["vis_fileformat"] = f"default {defaults['vis_fileformat'].default!r}"
-    graph = trace.draw(return_graph=True, vis_outpath=str(raw / "export-graph"), **base)
+    facts["file_format"] = f"default {defaults['file_format'].default!r}"
+    graph = trace.draw(return_graph=True, path=str(raw / "export-graph"), **base)
     facts["return_graph=True"] = f"returns a {type(graph).__module__}.{type(graph).__name__} object"
     facts["vis_save_only"] = (
         f"default {defaults['vis_save_only'].default!r}; True saves without opening a viewer"
     )
-    facts["vis_outpath"] = f"default {defaults['vis_outpath'].default!r} (the file stem)"
+    facts["path"] = f"default {defaults['path'].default!r} (the file stem)"
     facts['view="none"'] = f"draws nothing and returns {trace.draw(view='none')!r}"
     refused = 'view="sideways"'
     try:
-        trace.draw(view="sideways", vis_outpath=str(raw / "export-refused"), **base)
+        trace.draw(view="sideways", path=str(raw / "export-refused"), **base)
         facts[refused] = "accepted (unexpected)"
     except InvalidArgumentError as exc:  # the refusal is the measurement
         # The message without its remedy sentence, which repeats the allowed values.

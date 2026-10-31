@@ -393,7 +393,7 @@ class TestTableRefusals:
         path = table.save(tmp_path / "scalar.json")
         loaded = ob.load_read_table(path)
         assert len(loaded) == len(table)
-        assert loaded.rescorable is False
+        assert loaded.is_rescorable is False
         assert loaded.provenance.rescorable is False
         for key, row in table.items():
             assert loaded[key].score == row.score
@@ -418,7 +418,7 @@ class TestTableRefusals:
         table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
-        _read_error(lambda: table.for_target("t99"), "read_table_target_unknown")
+        _read_error(lambda: table.target("t99"), "read_table_target_unknown")
         _read_error(lambda: table.column("nonexistent"), "read_table_column_unknown")
         _read_error(lambda: table.to_pandas(values="all"), "read_table_values_mode_invalid")
 
@@ -528,7 +528,7 @@ class TestTypedDoorProvocations:
     def test_read_table_target_unknown(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
-            table.for_target("t99")
+            table.target("t99")
         assert excinfo.value.fields["code"] == "read_table_target_unknown"
 
     @_requires_gradient_edge

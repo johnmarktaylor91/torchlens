@@ -97,14 +97,14 @@ def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:
     trace = _trace(DictOutputModel())
     default_source = trace.draw(
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "default"),
+        file_format="dot",
+        path=str(tmp_path / "default"),
     )
     explicit_source = trace.draw(
         show_containers=False,
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "explicit"),
+        file_format="dot",
+        path=str(tmp_path / "explicit"),
     )
 
     assert default_source == explicit_source
@@ -120,8 +120,8 @@ def test_show_containers_labels_adds_key_labeled_midpoint_edges(tmp_path: Path) 
     source = trace.draw(
         show_containers="labels",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "labels"),
+        file_format="dot",
+        path=str(tmp_path / "labels"),
     )
 
     assert 'label=<<TABLE BORDER="0"' in source
@@ -138,8 +138,8 @@ def test_show_containers_cluster_falls_back_without_single_owner(tmp_path: Path)
     source = trace.draw(
         show_containers="cluster",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "cluster"),
+        file_format="dot",
+        path=str(tmp_path / "cluster"),
     )
 
     assert '<FONT POINT-SIZE="8">a</FONT>' in source
@@ -154,8 +154,8 @@ def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> 
         show_containers="collapsed",
         container_max_inline=2,
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "collapsed"),
+        file_format="dot",
+        path=str(tmp_path / "collapsed"),
     )
     assert "container_final_output_0_tuple" in collapsed_source
     assert "output_1pass1" not in collapsed_source
@@ -165,8 +165,8 @@ def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> 
         show_containers="collapsed",
         container_max_inline=1,
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "inline"),
+        file_format="dot",
+        path=str(tmp_path / "inline"),
     )
     assert "container_final_output_0_tuple" not in inline_source
     assert "output_1pass1" in inline_source
@@ -183,8 +183,8 @@ def test_show_containers_nodes_adds_source_and_sink_nodes(tmp_path: Path) -> Non
     source = trace.draw(
         show_containers="nodes",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "nodes_input"),
+        file_format="dot",
+        path=str(tmp_path / "nodes_input"),
     )
 
     assert "dict[2] (model input)" in source
@@ -205,8 +205,8 @@ def test_show_containers_nodes_adds_midgraph_member_ties(tmp_path: Path) -> None
     source = trace.draw(
         show_containers="nodes",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "nodes_midgraph"),
+        file_format="dot",
+        path=str(tmp_path / "nodes_midgraph"),
     )
 
     assert "dict[2] (call output)" in source
@@ -235,8 +235,8 @@ def test_show_containers_nodes_homogeneous_collapse_is_coherent(tmp_path: Path) 
     source = trace.draw(
         show_containers="nodes",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "nodes_wide"),
+        file_format="dot",
+        path=str(tmp_path / "nodes_wide"),
     )
 
     declared = set(re.findall(r'^\s*"?([\w.:\-+@]+)"? \[', source, re.MULTILINE))
@@ -271,8 +271,8 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
     trace.draw(
         show_containers="nodes",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "nodes_before_save"),
+        file_format="dot",
+        path=str(tmp_path / "nodes_before_save"),
     )
     save_path = tmp_path / "draw_then_save.tlspec"
     trace.save(save_path)
@@ -332,8 +332,8 @@ def test_show_containers_survives_multipass_layers(
         vis_mode=vis_mode,
         show_containers=show_containers,
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / f"{vis_mode}_{show_containers}"),
+        file_format="dot",
+        path=str(tmp_path / f"{vis_mode}_{show_containers}"),
     )
 
 

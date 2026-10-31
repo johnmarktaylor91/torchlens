@@ -1308,9 +1308,9 @@ def _draw_source(
 
     return str(
         trace.draw(
-            vis_outpath=str(tmp_path / name),
+            path=str(tmp_path / name),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_node_placement="dot",
             collapse=collapse,
             fold_repeats=fold_repeats,
@@ -1349,9 +1349,9 @@ def _draw_source_mode(
     return str(
         trace.draw(
             vis_mode=vis_mode,  # type: ignore[arg-type]
-            vis_outpath=str(tmp_path / name),
+            path=str(tmp_path / name),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_node_placement="dot",
             collapse=collapse,  # type: ignore[arg-type]
         )
@@ -1477,9 +1477,9 @@ def _draw_svg_layer_labels(
 
     out = tmp_path / name
     trace.draw(
-        vis_outpath=str(out),
+        path=str(out),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_node_placement="dot",
         collapse=collapse,
     )
@@ -1521,9 +1521,9 @@ def _assert_plan_svg_parity(
     out = tmp_path / name
     trace.draw(
         vis_mode=vis_mode,  # type: ignore[arg-type]
-        vis_outpath=str(out),
+        path=str(out),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_node_placement="dot",
         collapse=mode,  # type: ignore[arg-type]
         show_containers=False,
@@ -1558,9 +1558,9 @@ def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) ->
             out = tmp_path / f"batchnorm_float_{index}"
             trace.draw(
                 collapse=threshold,
-                vis_outpath=str(out),
+                path=str(out),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 show_containers=False,
                 order_siblings=False,
@@ -2166,9 +2166,9 @@ def test_auto_collapse_places_collapsed_children_inside_parent_cluster(tmp_path:
     try:
         auto_source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "nested_stage_cluster_auto"),
+                path=str(tmp_path / "nested_stage_cluster_auto"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 collapse_fn=_select_backbone_stage,
@@ -2249,9 +2249,9 @@ def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) 
     try:
         auto_source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "parallel_run_fold_auto"),
+                path=str(tmp_path / "parallel_run_fold_auto"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 collapse_fn=_select_branches_child,
@@ -2280,9 +2280,9 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         representative = trace.modules[fold.representative]
         source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "parallel_run_fold_auto_rep_stats"),
+                path=str(tmp_path / "parallel_run_fold_auto_rep_stats"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 collapse_fn=_select_branches_child,
@@ -2459,9 +2459,9 @@ def test_auto_collapse_run_fold_parallel_fan_keeps_junction_visible(tmp_path: Pa
     try:
         auto_source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "parallel_fan_contract_auto"),
+                path=str(tmp_path / "parallel_fan_contract_auto"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 collapse_fn=_select_branches_child,
@@ -2570,9 +2570,9 @@ def test_auto_collapse_fold_repeats_true_standalone_keeps_parallel_junction(
     try:
         source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "standalone_run_fold_parallel"),
+                path=str(tmp_path / "standalone_run_fold_parallel"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="none",
                 fold_repeats=True,
@@ -2595,9 +2595,9 @@ def test_auto_collapse_fold_repeats_rejects_invalid_value(tmp_path: Path) -> Non
     try:
         with pytest.raises(ValueError, match="fold_repeats must be None, True, or False"):
             trace.draw(
-                vis_outpath=str(tmp_path / "invalid_fold_repeats"),
+                path=str(tmp_path / "invalid_fold_repeats"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 fold_repeats="yes",  # type: ignore[arg-type]
@@ -2614,9 +2614,9 @@ def test_draw_rejects_removed_fold_repeats_predecessor_kwarg(tmp_path: Path) -> 
     try:
         with pytest.raises(TypeError, match=removed_kwarg):
             trace.draw(
-                vis_outpath=str(tmp_path / "old_fold_repeats_predecessor"),
+                path=str(tmp_path / "old_fold_repeats_predecessor"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="auto",
                 **{removed_kwarg: True},
@@ -2688,9 +2688,9 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         setattr(collapse_block, "_torchlens_v2_mode", "max")
         source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / f"{op_prefix}own_output_remainder"),
+                path=str(tmp_path / f"{op_prefix}own_output_remainder"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse_fn=collapse_block,
             )

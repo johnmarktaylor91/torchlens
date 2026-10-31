@@ -600,7 +600,7 @@ class ReceptiveFieldView:
         image: object | None = None,
         gradient: bool = False,
         retain_graph: bool = False,
-        slice: object | None = None,
+        plane: object | None = None,
         box_color: str = "#FF3B30",
         alpha: float = 0.6,
         cmap: str = "magma",
@@ -627,7 +627,7 @@ class ReceptiveFieldView:
             Whether the empirical gradient probe retains autograd buffers, so
             repeated ``show(gradient=True)`` or later ``gradient()`` calls over
             the same captured graph stay possible.
-        slice:
+        plane:
             Required plane selector for three-dimensional inputs.
         box_color:
             Geometric-box overlay color.
@@ -655,7 +655,7 @@ class ReceptiveFieldView:
                 image=cast("Image.Image | None", image),
                 gradient=gradient,
                 retain_graph=retain_graph,
-                slice=cast("tuple[int, int] | None", slice),
+                plane=cast("tuple[int, int] | None", plane),
                 box_color=box_color,
                 alpha=alpha,
                 cmap=cmap,

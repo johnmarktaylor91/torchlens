@@ -500,7 +500,7 @@ instead of just saying "measured":
 
 ```python
 prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
-print(prof_log.profile(level='module', sort_by='flops', top_k=8))
+print(prof_log.profile(level='module', sort_by='flops', k=8))
 print(prof_log.profile().evidence_labels())
 
 # Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;
@@ -514,7 +514,7 @@ Dataset-level statistics stream in constant memory -- including *exact*
 full-data linear CKA, not a minibatch approximation:
 
 ```python
-stats = tl.aggregate(
+stats = tl.stats.aggregate(
     model,
     [torch.rand(1, 3, 64, 64) for _ in range(2)],   # any iterable of inputs
     metrics={'relu_1_2': tl.stats.Aggregator(tl.stats.Mean(), tl.stats.Norm()),
@@ -681,7 +681,7 @@ saved activations are unaffected either way.
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |
-| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.aggregate` |
+| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.stats.aggregate` |
 | [docs/native-torch.md](docs/native-torch.md) | What native torch tooling is authoritative for, with recipes |
 | [docs/migration/from_hooks.md](docs/migration/from_hooks.md) | Honest two-way comparison with forward hooks |
 | [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |

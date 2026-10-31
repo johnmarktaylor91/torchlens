@@ -1851,9 +1851,9 @@ class TestConditionalBranchDetection:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.draw(
                 vis_mode="unrolled",
-                vis_outpath=outpath,
+                path=outpath,
                 vis_save_only=True,
-                vis_fileformat="dot",
+                file_format="dot",
             )
             dot_file = outpath + ".dot"
             if os.path.exists(dot_file):

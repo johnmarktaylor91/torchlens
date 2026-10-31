@@ -1,4 +1,4 @@
-"""``tl.aggregate(..., cache=True)``: skip the dataset loop on a rerun (DOCUMENTED-UNSTABLE).
+"""``tl.stats.aggregate(..., cache=True)``: skip the dataset loop on a rerun (DOCUMENTED-UNSTABLE).
 
 A cached call keys the run, looks the key up in the cache directory, and on
 a hit restores every accumulator's saved final state in place and returns
@@ -72,7 +72,7 @@ def _refuse_unkeyable(reason: _Unkeyable) -> NoReturn:
     """Raise the user-facing refusal for an unkeyable run."""
 
     raise InvalidArgumentError(
-        f"tl.aggregate(cache=True) cannot key {reason.part}: {reason.why}. A cache key "
+        f"tl.stats.aggregate(cache=True) cannot key {reason.part}: {reason.why}. A cache key "
         "that does not cover everything the result depends on could return a stale "
         f"result, so the call refuses instead. See {_DOCS}.",
         code="stats_aggregate_cache_unkeyable",
@@ -146,7 +146,7 @@ def _ndarray_key(value: Any, where: str) -> object:
 
 _REMEDY_DATA = (
     "yield tensors, numbers, strings and lists, tuples or dicts of them from a re-iterable "
-    "loader, for example tl.aggregate(model, [x[:4], x[4:]], metrics, cache=True); "
+    "loader, for example tl.stats.aggregate(model, [x[:4], x[4:]], metrics, cache=True); "
     "or drop cache="
 )
 _REMEDY_CALLABLE = (
@@ -439,7 +439,7 @@ def _warn_unstable_data() -> None:
     _WARNED_CODES.add(code)
     warnings.warn(
         TorchLensWarning(
-            "tl.aggregate(cache=True) read different batches from the dataloader when keying "
+            "tl.stats.aggregate(cache=True) read different batches from the dataloader when keying "
             "the run and when folding it (a shuffling sampler with its own generator, or a "
             "loader that changes between passes), so the result was returned but not cached; "
             f"this warning fires once per session. See {_DOCS}. Remedy: pass a loader that "
@@ -472,7 +472,7 @@ def run_cached(  # noqa: PLR0913 -- aggregate's subject arguments plus its keywo
         _refuse_unkeyable(reason)
     entry = _cache_root(cache_dir) / f"{key}.safetensors"
     if _restore_hit(entry, metrics):
-        return {name: stat.result() for name, stat in metrics.items()}
+        return {name: stat.compute() for name, stat in metrics.items()}
     hashing = _HashingLoader(dataloader)
     results = loop(hashing)
     if hashing.hasher.hexdigest() != data_digest:

@@ -1145,7 +1145,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "extraction_engine_unsupported",
    "confidence": "medium",
-   "note": "brainpipe extraction_plan refuses a non-trace engine because fastlog records a strict subset of sites."
+   "note": "brainpipe plan_extraction refuses a non-trace engine because fastlog records a strict subset of sites."
   },
   {
    "a": "extract",

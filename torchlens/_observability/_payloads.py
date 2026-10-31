@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._kernels import HistogramResult, SpineResult
+from ._kernels import HistogramResult, RunningStatsResult
 from ._quantiles import WatchRenderError
 from ._schema import ObservationRecord
 
@@ -27,7 +27,7 @@ __tl_layer__ = "L5"
 
 def _require_observed_sketch(
     observation: ObservationRecord,
-) -> tuple[SpineResult, HistogramResult]:
+) -> tuple[RunningStatsResult, HistogramResult]:
     """Refuse payload conversion without an observed spine + sketch.
 
     Returns the narrowed ``(spine, sketch)`` pair it just proved present.

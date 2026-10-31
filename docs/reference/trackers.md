@@ -280,7 +280,7 @@ trainer = pl.Trainer(
 
 The sink protocol is documented and closed over capability words
 (`scalar`, `raw_histogram`, `text_manifest`, `image`, `graph`,
-`run_metadata`, `structured_event`, `embedding`): implement
+`run_metadata`, `structured_event`, `embedding_module`): implement
 `capabilities()`, the `emit_*` methods for what you advertise, `flush`,
 and `close`. A requested capability you do not advertise refuses by name
 before any partial emission; a raise in your sink latches it failed in the

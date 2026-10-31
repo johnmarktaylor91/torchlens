@@ -28,7 +28,7 @@ from typing import Any
 
 from torch.nn import Module
 
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 # Registry of the kit's OWN methods: name -> (kind, known_stochastic,
 # names of the settings whose presence freezes the randomness). This is a
@@ -83,7 +83,7 @@ class _BoundMethod:
         model, memo D3).
     """
 
-    call: Callable[[Any, dict[str, Any] | None], AttributionResult]
+    call: Callable[[Any, dict[str, Any] | None], Attribution]
     kind: str
     method_name: str
     settings: dict[str, Any]
@@ -112,8 +112,8 @@ def _method_display_name(method: Callable[..., Any]) -> str:
 
 def _bind_method(
     *,
-    attribute: Callable[..., AttributionResult] | None = None,
-    method: Callable[..., AttributionResult] | None = None,
+    attribute: Callable[..., Attribution] | None = None,
+    method: Callable[..., Attribution] | None = None,
     method_kwargs: dict[str, Any] | None = None,
     model: Module | None = None,
     target: Any = None,
@@ -173,11 +173,11 @@ def _bind_method(
                 code="attribution_method_binding_invalid",
             )
 
-        def _call_closed(inputs: Any, input_kwargs: dict[str, Any] | None) -> AttributionResult:
+        def _call_closed(inputs: Any, input_kwargs: dict[str, Any] | None) -> Attribution:
             """Invoke the user's closed callable and validate its result type."""
 
             result = attribute(inputs, input_kwargs)
-            if not isinstance(result, AttributionResult):
+            if not isinstance(result, Attribution):
                 raise AttributionError(
                     "the closed attribute= callable must return an "
                     f"AttributionResult; got {type(result).__name__}. "
@@ -226,11 +226,11 @@ def _bind_method(
     kind, known_stochastic, freeze_markers = _KNOWN_METHODS.get(name, ("input", False, ()))
     frozen = any(settings.get(marker) is not None for marker in freeze_markers)
 
-    def _call_sugar(inputs: Any, input_kwargs: dict[str, Any] | None) -> AttributionResult:
+    def _call_sugar(inputs: Any, input_kwargs: dict[str, Any] | None) -> Attribution:
         """Invoke the kit-contract callable with the bound model/target/settings."""
 
         result = method(model, inputs, input_kwargs, target=target, **settings)
-        if not isinstance(result, AttributionResult):
+        if not isinstance(result, Attribution):
             raise AttributionError(
                 f"method= callable {name!r} must return an AttributionResult; "
                 f"got {type(result).__name__}. Remedy: satisfy the kit "

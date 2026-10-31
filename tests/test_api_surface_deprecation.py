@@ -49,7 +49,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("TorchLensPostfuncError", "torchlens.errors", "UserTransformError"),
     ("TrainingModeConfigError", "torchlens.errors", "TrainingModeConfigError"),
     ("VisualizationOptions", "torchlens.options", "VisualizationOptions"),
-    ("build_render_audit", "torchlens.experimental.dagua", "build_render_audit"),
     ("check_metadata_invariants", "torchlens.validation", "check_metadata_invariants"),
     ("check_spec_compat", "torchlens.intervention", "check_spec_compat"),
     ("cleanup_tmp", "torchlens.io", "cleanup_tmp"),
@@ -57,10 +56,7 @@ REMOVED_TOP_LEVEL_CASES = [
     ("list_logs", "torchlens.io", "list_traces"),
     ("log_model_metadata", "torchlens", "trace"),
     ("trace_to_dagua_graph", "torchlens.experimental.dagua", "trace_to_dagua_graph"),
-    ("preview_fastlog", "torchlens.fastlog", "preview"),
     ("rehydrate_nested", "torchlens.io", "materialize_nested"),
-    ("render_lines_to_html", "torchlens.experimental.dagua", "render_lines_to_html"),
-    ("render_trace_with_dagua", "torchlens.experimental.dagua", "render_trace_with_dagua"),
     ("reset_naming_counter", "torchlens.io", "reset_naming_counter"),
     ("resolve_sites", "torchlens.validation", "resolve_sites"),
     ("save_intervention", "torchlens.io", "save_intervention"),
@@ -73,6 +69,15 @@ REMOVED_TOP_LEVEL_CASES = [
     ),
     ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
+]
+
+#: Old top-level spellings whose later submodule home also left the public
+#: surface: the redirect refuses with no canonical spelling to resolve.
+REMOVED_SURFACE_NAMES = [
+    "build_render_audit",
+    "preview_fastlog",
+    "render_lines_to_html",
+    "render_trace_with_dagua",
 ]
 
 #: Removed top-level wrapper functions whose canonical spelling lives in a
@@ -105,7 +110,6 @@ REMOVED_PAPER_ERA_NAMES = [
 
 @pytest.mark.smoke_cells(
     "test_moved_name_is_gone_and_canonical_resolves[NodeSpec-torchlens.experimental.dagua-NodeSpec]",
-    "test_moved_name_is_gone_and_canonical_resolves[preview_fastlog-torchlens.fastlog-preview]",
 )
 @pytest.mark.parametrize(("old_name", "module_name", "new_name"), REMOVED_TOP_LEVEL_CASES)
 def test_moved_name_is_gone_and_canonical_resolves(
@@ -121,7 +125,10 @@ def test_moved_name_is_gone_and_canonical_resolves(
     assert getattr(module, new_name) is not None
 
 
-@pytest.mark.parametrize("name", REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES)
+@pytest.mark.smoke_cells("test_removed_top_level_wrapper_is_gone[preview_fastlog]")
+@pytest.mark.parametrize(
+    "name", REMOVED_SURFACE_NAMES + REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES
+)
 def test_removed_top_level_wrapper_is_gone(name: str) -> None:
     """Removed wrapper and paper-era spellings raise the typed redirect error."""
 
@@ -136,6 +143,7 @@ def test_dir_lists_no_removed_names() -> None:
     visible = set(dir(torchlens))
     removed = (
         {case[0] for case in REMOVED_TOP_LEVEL_CASES}
+        | set(REMOVED_SURFACE_NAMES)
         | set(REMOVED_WRAPPER_NAMES)
         | set(REMOVED_PAPER_ERA_NAMES)
     )

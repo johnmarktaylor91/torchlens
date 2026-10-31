@@ -18,7 +18,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._vocab.node_spec import NodeSpec
-from torchlens.visualization import surgery_diff
 from torchlens.visualization.surgery_visuals import (
     CREDIT_ROWS,
     MARK_BASES,
@@ -30,6 +29,7 @@ from torchlens.visualization.surgery_visuals import (
     surgery_facts,
     surgery_stage,
 )
+from torchlens.viz import intervention_diff
 
 _CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
 
@@ -191,8 +191,8 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     source = render_surgery(
         fork,
         vis_mode="unrolled",
-        vis_outpath=str(tmp_path / "surgery_passes"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "surgery_passes"),
+        file_format="svg",
         vis_save_only=True,
     )
     edited = _dot_node_statement(source, "linear_1_1pass1")
@@ -364,7 +364,7 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, vis_outpath=outpath, vis_fileformat="svg", vis_save_only=True)
+    render_surgery(fork, path=outpath, file_format="svg", vis_save_only=True)
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -390,7 +390,7 @@ def test_diff_joins_site_key_first_and_marks_travel(chain_capture) -> None:
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
-    diff = surgery_diff(fork, log)
+    diff = intervention_diff(fork, log)
     matched = [row for row in diff.rows if row.kind == "matched"]
     assert matched and all(row.join == "site_key" and row.basis == "fact" for row in matched)
     edited = [row for row in matched if row.subject_label == "relu_1_2:1"]
@@ -408,7 +408,7 @@ def test_diff_positional_cohort_join_is_heuristic() -> None:
     reference = tl.trace(model, x, capture=_CAPTURE)
     fork = subject.fork()
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
-    diff = surgery_diff(fork, reference)
+    diff = intervention_diff(fork, reference)
     joins = {row.subject_label: row for row in diff.rows if row.kind == "matched"}
     assert joins["linear_1_1:1"].join == "site_key_positional"
     assert joins["linear_1_1:1"].basis == "heuristic"
@@ -424,7 +424,7 @@ def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     torch.manual_seed(0)
     other = _ChainExtra().eval()
     subject = tl.trace(other, x)
-    diff = surgery_diff(subject, log)
+    diff = intervention_diff(subject, log)
     only_rows = [row for row in diff.rows if row.kind == "only_in_subject"]
     assert len(only_rows) == 1
     assert only_rows[0].subject_label == "sigmoid_1_5:1"
@@ -439,7 +439,7 @@ def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
 
     _model, _x, log = chain_capture
     with pytest.raises(InvalidArgumentError) as excinfo:
-        surgery_diff(log, log)
+        intervention_diff(log, log)
     assert excinfo.value.fields["code"] == "surgery_diff_incomparable"
 
     class _Husk:
@@ -451,7 +451,7 @@ def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
         intervention_audit: list = []
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        surgery_diff(log, _Husk())  # type: ignore[arg-type]
+        intervention_diff(log, _Husk())  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "surgery_diff_incomparable"
 
 
@@ -466,7 +466,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     reference = tl.trace(model, x, capture=_CAPTURE)
     fork = subject.fork()
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
-    diff = surgery_diff(fork, reference)
+    diff = intervention_diff(fork, reference)
     rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
     figure_text = (tmp_path / "diff_fig.svg").read_text()
     assert rendered.endswith("diff_fig.svg")

@@ -84,7 +84,7 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
             remedy="this facet layout is unexpected -- report the architecture",
             address=address,
         )
-    recipe = getattr(spec, "recipe_id", None) if spec is not None else None
+    recipe = getattr(spec, "function_id", None) if spec is not None else None
     provenance = "reconstructed" if recipe == "attention_reconstruction" else "captured"
     return value[batch_index].detach().to(torch.float32), provenance
 

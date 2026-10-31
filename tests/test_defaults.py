@@ -295,7 +295,7 @@ def test_summary_uses_metadata_only_defaults(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.visualization.summary(_TinyModel(), _tiny_input(), depth=2)
+    result = tl.summary(_TinyModel(), _tiny_input(), depth=2)
 
     assert result == "summary output"
     assert captured_calls[-1]["layers_to_save"] is None

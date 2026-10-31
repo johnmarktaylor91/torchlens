@@ -61,13 +61,13 @@ def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
 class TraceVisualizationMixin(_TraceMixinBase):
     """``Trace`` visualization surface: ``draw``, ``show``, and collapse diagnostics."""
 
-    def show(self: "Trace", method: str = "graph", **kwargs: Any) -> str | None:
+    def show(self: "Trace", kind: str | None = None, **kwargs: Any) -> str | None:
         """Render this trace using a lightweight notebook-friendly dispatcher.
 
         Parameters
         ----------
-        method:
-            Display method. ``"graph"`` delegates to :meth:`draw`, ``"repr"``
+        kind:
+            Picture kind. ``None`` or ``"graph"`` delegates to :meth:`draw`, ``"repr"``
             returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
         **kwargs:
             Visualization keyword arguments forwarded to :meth:`draw`.
@@ -81,9 +81,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         if kwargs.get("vis_mode") == "none":
             return None
-        if method == "repr":
+        if kind == "repr":
             return repr(self)
-        if method == "html":
+        if kind == "html":
             return self._repr_html_()
         return cast("str | None", self.draw(**kwargs))
 
@@ -96,7 +96,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         node_style: VisNodeModeLiteral | MissingType = MISSING,
         vis_mode: VisModeLiteral = "unrolled",
         vis_call_depth: int = 1000,
-        vis_outpath: str | None = None,
+        path: str | None = None,
         vis_graph_overrides: dict[str, Any] | None = None,
         module: "Module | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
@@ -111,12 +111,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_grad_edge_overrides: dict[str, Any] | None = None,
         vis_module_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
-        show_buffer_layers: BufferVisibilityLiteral = "meaningful",
+        file_format: str = "pdf",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
         direction: VisDirectionLiteral = "bottomup",
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
-        vis_theme: str = "torchlens",
+        theme: str = "torchlens",
         vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
         vis_show_cone: bool = False,
         code_panel: "CodePanelOption" = False,
@@ -303,7 +303,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=vis_outpath,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             module=module,
             node_mode=node_mode,
@@ -318,12 +318,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_grad_edge_overrides=vis_grad_edge_overrides,
             vis_module_overrides=vis_module_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
-            show_buffer_layers=show_buffer_layers,
+            vis_fileformat=file_format,
+            show_buffer_layers=show_buffers,
             direction=direction,
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
-            vis_theme=vis_theme,
+            vis_theme=theme,
             vis_intervention_mode=vis_intervention_mode,
             vis_show_cone=vis_show_cone,
             code_panel=code_panel,
@@ -551,14 +551,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
     def draw_backward(
         self: "Trace",
-        vis_outpath: str = "backward_modelgraph",
+        path: str = "backward_modelgraph",
         vis_graph_overrides: dict[str, Any] | None = None,
         node_spec_fn: Callable[..., Any] | None = None,
         collapsed_node_spec_fn: Callable[..., Any] | None = None,
         vis_node_mode: VisNodeModeLiteral = "default",
         vis_edge_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
+        file_format: str = "pdf",
         vis_direction: VisDirectionLiteral = "topdown",
         code_panel: "CodePanelOption" = False,
         vis_mode: VisModeLiteral = "rolled",
@@ -604,14 +604,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            vis_outpath=vis_outpath,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             vis_node_mode=vis_node_mode,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
+            vis_fileformat=file_format,
             direction=vis_direction,
             code_panel=code_panel,
             vis_mode=vis_mode,
@@ -624,17 +624,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
     def draw_combined(
         self: "Trace",
-        vis_outpath: str = "combined_modelgraph",
+        path: str = "combined_modelgraph",
         vis_graph_overrides: dict[str, Any] | None = None,
         node_spec_fn: Callable[..., Any] | None = None,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         vis_edge_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
+        file_format: str = "pdf",
         vis_direction: VisDirectionLiteral = "leftright",
         vis_mode: VisModeLiteral = "unrolled",
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        show_buffer_layers: BufferVisibilityLiteral = "meaningful",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
         bwd: int | Iterable[int] | None = None,
         show_legend: bool | None = None,
     ) -> str:
@@ -657,17 +657,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            vis_outpath=vis_outpath,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             backward_node_spec_fn=backward_node_spec_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
+            vis_fileformat=file_format,
             direction=vis_direction,
             vis_mode=vis_mode,
             intervening_cluster=intervening_cluster,
-            show_buffer_layers=show_buffer_layers,
+            show_buffer_layers=show_buffers,
             bwd=bwd,
             show_legend=show_legend,
         )
@@ -930,12 +930,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
         self: "Trace",
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
-        vis_outpath: str = "graph.gv",
+        path: str = "graph.gv",
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
-        vis_buffers: bool = False,
+        file_format: str = "pdf",
+        show_buffers: bool = False,
         vis_direction: str = "bottomup",
-        vis_theme: str = "torchlens",
+        theme: str = "torchlens",
     ) -> str:
         """Render this model log with the experimental Dagua backend.
 
@@ -944,14 +944,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_mode, vis_call_depth, vis_outpath, vis_save_only, vis_fileformat, \
         vis_buffers, vis_direction, vis_theme:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.render_trace_with_dagua`.
+            ``torchlens.experimental.dagua._bridge.render_trace_with_dagua``.
 
         Returns
         -------
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..experimental.dagua import render_trace_with_dagua as _impl
+        from ..experimental.dagua._bridge import render_trace_with_dagua as _impl
 
         return cast(
             str,
@@ -959,12 +959,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
                 self,
                 vis_mode=vis_mode,
                 vis_call_depth=vis_call_depth,
-                vis_outpath=vis_outpath,
+                path=path,
                 vis_save_only=vis_save_only,
-                vis_fileformat=vis_fileformat,
-                vis_buffers=vis_buffers,
+                file_format=file_format,
+                show_buffers=show_buffers,
                 vis_direction=vis_direction,
-                vis_theme=vis_theme,
+                theme=theme,
             ),
         )
 
@@ -972,7 +972,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         self: "Trace",
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
-        show_buffer_layers: bool = False,
+        show_buffers: bool = False,
         direction: str = "bottomup",
         include_grad_edges: bool | None = None,
     ) -> Any:
@@ -995,7 +995,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            show_buffer_layers=show_buffer_layers,
+            show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,
         )
@@ -1008,6 +1008,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         TorchLensRenderAudit
             Audit of used and unused fields in the visualization bridge.
         """
-        from ..experimental.dagua import build_render_audit as _impl
+        from ..experimental.dagua._bridge import build_render_audit as _impl
 
         return _impl(self)

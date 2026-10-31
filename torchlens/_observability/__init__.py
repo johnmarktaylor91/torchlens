@@ -37,8 +37,8 @@ from ._kernels import (
     Histogram,
     HistogramDescriptor,
     HistogramResult,
-    Spine,
-    SpineResult,
+    RunningStats,
+    RunningStatsResult,
     spine_vector_fused,
 )
 from ._kineto import NormalizedEvent
@@ -52,7 +52,7 @@ from ._memory_totals import (
     total_transformed_activation_memory,
     total_transformed_gradient_memory,
 )
-from ._op_tier import FacetSplitter, OpTierCollector, split_heads
+from ._op_tier import OpTierCollector, split_heads
 from ._overhead import ArmSpec, OverheadMeasurement, measure_overhead
 from ._payloads import histogram_payload, observation_row
 from ._perf_harness import (
@@ -70,16 +70,9 @@ from ._quantiles import (
 )
 from ._region import RegionRecord, region
 from ._render import (
-    RANKING_SCORE,
-    HistoryView,
-    SeriesPoint,
     color_by_watch,
     contact_sheet_pages,
     rank_sites,
-    render_contact_sheet,
-    render_detail,
-    render_fan,
-    render_waterfall,
 )
 from ._schema import (
     HISTORY_SCHEMA_VERSION,
@@ -111,7 +104,6 @@ __all__ = [
     "OPTIMIZER_STATUS",
     "PHASES",
     "PRESENCE",
-    "RANKING_SCORE",
     "STEP_PROVENANCE",
     "STREAMS",
     "ABMeasurement",
@@ -122,8 +114,6 @@ __all__ = [
     "HistogramDescriptor",
     "HistogramResult",
     "HistoryCollector",
-    "HistoryView",
-    "FacetSplitter",
     "JoinCoverage",
     "KinetoJoinResult",
     "LaunchRow",
@@ -136,13 +126,12 @@ __all__ = [
     "ProfilerSession",
     "RegionRecord",
     "RunRecord",
-    "SeriesPoint",
     "SessionResult",
     "SiteRecord",
     "SpanRecord",
     "SpanRegistry",
-    "Spine",
-    "SpineResult",
+    "RunningStats",
+    "RunningStatsResult",
     "StepBlockRecord",
     "StepTruth",
     "WatchPlan",
@@ -166,10 +155,6 @@ __all__ = [
     "pinned_parity_scenario",
     "rank_sites",
     "region",
-    "render_contact_sheet",
-    "render_detail",
-    "render_fan",
-    "render_waterfall",
     "session",
     "spine_vector_fused",
     "split_heads",

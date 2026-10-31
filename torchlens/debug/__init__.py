@@ -47,7 +47,6 @@ from ._grad_fn_walk import (
 from ._graph import (
     LineageReport,
     dead_neurons,
-    dead_neurons_rows,
     first_divergence,
     lineage,
 )
@@ -89,7 +88,6 @@ __all__ = [
     "clone_input_tree",
     "count_compiles",
     "dead_neurons",
-    "dead_neurons_rows",
     "first_divergence",
     "preserved_rng_state",
     "walk_grad_fn",

@@ -27,7 +27,6 @@ torchlens.add	torchlens.intervention.predicates	L4	core	1	0
 torchlens.add_grad_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.add_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
-torchlens.aggregate	torchlens.stats	L5	core	1	0
 torchlens.appliances	torchlens.appliances	L1	core	0	0
 torchlens.fingerprint.assert_unchanged	torchlens.fingerprint	L1	core	1	0
 torchlens.at_step	torchlens.intervention.selectors	L4	core	1	0
@@ -35,7 +34,6 @@ torchlens.attribution	torchlens.attribution	L5	core	0	0
 torchlens._autoroute	torchlens._autoroute	L4	core	0	0
 torchlens.backends	torchlens.backends	L2	core	0	0
 torchlens.between	torchlens._selection_graph	FACADE	facade	1	0
-torchlens.brainpipe	torchlens.brainpipe	FACADE	facade	0	0
 torchlens.bridge	torchlens.bridge	L8	bridge	0	1
 torchlens.callbacks	torchlens.callbacks	L8	bridge	0	1
 torchlens.captured_run	torchlens.captured_run	L3	core	0	0
@@ -57,7 +55,7 @@ torchlens.experimental	torchlens.experimental	FACADE	facade	0	0
 torchlens.export	torchlens.export	L7	present	1	1
 torchlens.extract	torchlens	FACADE	facade	1	0
 torchlens.extract_dataset	torchlens.dataset_extraction	L5	core	1	0
-torchlens.facet	torchlens.intervention	L4	core	1	0
+torchlens.facet	torchlens.intervention.selectors	L4	core	1	0
 torchlens.facets	torchlens.semantic	L6	appliance	1	1
 torchlens.fastlog	torchlens.fastlog	L2	core	1	0
 torchlens.followed_by	torchlens.intervention.selectors	L4	core	1	0

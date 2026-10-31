@@ -32,8 +32,8 @@ import torchlens as tl  # noqa: E402
 import torchlens.errors
 import torchlens.mechinterp as mi  # noqa: E402
 import torchlens.transformer as tviz  # noqa: E402
+from torchlens.errors import MechInterpError  # noqa: E402
 from torchlens.errors._base import TorchLensWarning  # noqa: E402
-from torchlens.mechinterp import MechInterpError  # noqa: E402
 from torchlens.mechinterp._kv_heads import _patch_query_heads_once  # noqa: E402
 from torchlens.semantic.patching import _trace_kwargs  # noqa: E402
 
@@ -149,14 +149,14 @@ def value_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
 def group_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     """The ordinary value-site grid, whose head axis counts KV groups."""
 
-    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
+    return mi.patch_grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
 
 
 @pytest.fixture(scope="module")
 def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     """Whole-layer value patches: every query head of a layer at once."""
 
-    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
+    return mi.patch_grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
 
 
 @pytest.mark.heavy
@@ -305,7 +305,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert receipt.effect_source == (
         "expanded value copy read by one query head (op-level interceptor)"
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "query_heads.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "query_heads.png")
     assert (
         "pattern source: captured; effect source: expanded value copy read by one query "
         "head (op-level interceptor)"
@@ -355,5 +355,5 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
         "kv group 1 of 2, shared by query heads 0-1",
         "kv group 2 of 2, shared by query heads 2-3",
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "kv_groups.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "kv_groups.png")
     assert any("no cell is a per-query-head effect" in line for line in artifact.disclosure_lines)

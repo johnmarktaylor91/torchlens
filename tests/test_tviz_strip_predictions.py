@@ -15,6 +15,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+import torchlens
 import torchlens.errors
 import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import (
@@ -23,6 +24,7 @@ from torchlens.semantic.logit_lens import (
     LogitLensPrediction,
     LogitLensPredictions,
 )
+from torchlens.transformer._strip import token_strip_svg as _token_strip_svg
 
 
 def _scores() -> tviz.TokenScores:
@@ -61,7 +63,7 @@ class TestZeroDependencyEmitters:
     def test_svg_has_no_image_and_no_network(self) -> None:
         """The SVG emitter is self-contained vector output."""
 
-        svg = tviz.token_strip_svg(_scores())
+        svg = _token_strip_svg(_scores())
         assert "<image" not in svg
         assert "http" not in svg.replace("http://www.w3.org/2000/svg", "")
         assert "factor 0" in svg
@@ -69,7 +71,7 @@ class TestZeroDependencyEmitters:
     def test_multi_row_shares_one_token_axis(self) -> None:
         """The NMF multi-row form: every row over the same tokens."""
 
-        svg = tviz.token_strip_svg(_scores())
+        svg = _token_strip_svg(_scores())
         assert svg.count("cat") == 2  # one per row
 
 
@@ -78,7 +80,7 @@ def test_paper_strip_renders_all_formats(tmp_path: Path) -> None:
 
     record = _scores()
     for fmt in ("svg", "pdf", "png"):
-        artifact = tviz.render_token_strip(record, tmp_path / f"strip.{fmt}")
+        artifact = torchlens.viz.token_strip(record, tmp_path / f"strip.{fmt}")
         assert artifact.paths[0].exists()
     assert "<image" not in (tmp_path / "strip.svg").read_text()
 
@@ -116,7 +118,7 @@ def _predictions() -> LogitLensPredictions:
         k=3,
         facet="resid_post",
         lens_source="model_head",
-        validated=True,
+        is_validated=True,
     )
 
 
@@ -175,7 +177,7 @@ class TestPredictionPictures:
             k=3,
             facet="resid_post",
             lens_source="model_head",
-            validated=True,
+            is_validated=True,
         )
         with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.prediction_table(projected_only)
@@ -186,7 +188,7 @@ class TestPredictionPictures:
         """Table pages keep whole positions and list every page."""
 
         table = tviz.prediction_table(_predictions())
-        artifact = tviz.render_prediction_table(table, tmp_path / "table.pdf")
+        artifact = torchlens.viz.prediction_table(table, tmp_path / "table.pdf")
         assert artifact.num_pages == 1
         assert artifact.paths[0].exists()
 
@@ -264,5 +266,5 @@ class TestMetricOracles:
         logits = torch.randn(4, 30, generator=generator)
         ids = torch.randint(0, 30, (4,), generator=generator)
         loss, _ = tviz.token_metrics(logits, ids, ("a", "b", "c", "d"))
-        artifact = tviz.render_metric_strip(loss, tmp_path / "loss.svg")
+        artifact = torchlens.viz.metric_strip(loss, tmp_path / "loss.svg")
         assert any("first token N/A" in line for line in artifact.disclosure_lines)

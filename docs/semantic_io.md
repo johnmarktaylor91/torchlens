@@ -214,7 +214,7 @@ Render MDS thumbnails with the draw-time node hook:
 
 ```python
 trace.draw(
-    node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8),
+    node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
 )
 ```
 
@@ -232,15 +232,15 @@ review-day signoff.
 The low-level primitives live under `tl.viz`:
 
 ```python
-heatmap_image = tl.viz.render_heatmap(array)
-lineplot_image = tl.viz.render_lineplot(series)
-scatter_image = tl.viz.render_image_scatter(coords, images=image_list)
+heatmap_image = tl.viz.heatmap(array)
+lineplot_image = tl.viz.lineplot(series)
+scatter_image = tl.viz.image_scatter(coords, images=image_list)
 ```
 
 They return bounded `PIL.Image.Image` objects directly. Matplotlib is
 intentionally not used, so graph drawing can compose compact deterministic
 images without adding a plotting dependency. These are separate from the older
-`tl.viz.heatmap(max_size=...)` visualizer factory, which returns a callable for
+`tl.viz.nodes.heatmap(max_size=...)` visualizer factory, which returns a callable for
 tensor payload display.
 
 RDM annotations use the representation-geometry helpers:
@@ -248,7 +248,7 @@ RDM annotations use the representation-geometry helpers:
 ```python
 rdm_matrix = tl.repgeom.rdm(activations)
 rdms_by_layer = tl.repgeom.rdm_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
+trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
 ```
 
 `rdm_evolution(...)` stores an `N x N` representational dissimilarity matrix
@@ -260,11 +260,11 @@ Feature and activation map annotations live under `tl.viz` because they are
 activation displays, not representation-geometry numerics:
 
 ```python
-feature_maps = tl.viz.feature_map_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
+feature_maps = tl.viz.feature_maps(trace, save=mds_layers)
+trace.draw(node_spec_fn=tl.viz.nodes.feature_map())
 ```
 
-`feature_map_evolution(...)` requires saved spatial activations with shape
+`feature_maps(...)` requires saved spatial activations with shape
 `[N, C, H, W]`; capture the convolutional layers you want to inspect before
 calling it. Non-spatial sites are skipped, and the call raises only when no
 selected site has spatial activations. By default, `feature_map_node_spec()`
@@ -279,7 +279,7 @@ Scree annotations expose the layerwise eigenspectrum:
 eigenvalues = tl.repgeom.scree(activations)
 dim_info = tl.repgeom.effective_dimensionality(activations)
 scree_by_layer = tl.repgeom.scree_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+trace.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 `effective_dimensionality(...)` returns variance-explained and dimensionality
@@ -313,7 +313,7 @@ trace = tl.trace(
 trace.model_profile
 trace.output_table(k=5)
 tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
-trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
+trace.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
 trace.draw(show_input_transform_summary=True)
 ```
 
@@ -359,6 +359,6 @@ core flow runs without downloading external model weights.
 - `tl.repgeom.procrustes_align(...)`
 - `tl.repgeom.activation_distance_matrix(...)`
 - `tl.repgeom.mds_evolution(...)`
-- `tl.repgeom.mds_scatter_node_spec(...)`
+- `tl.viz.nodes.mds_scatter(...)`
 - `Trace.draw(node_spec_fn=...)`
 - `Trace._annotation_blobs`

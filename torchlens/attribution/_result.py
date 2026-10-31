@@ -64,7 +64,7 @@ def _summarize_attribution_tree(value: Any) -> str:
 
 
 @dataclass(frozen=True)
-class AttributionResult:
+class Attribution:
     """Container for provisional input-attribution results.
 
     Parameters
@@ -102,6 +102,6 @@ class AttributionResult:
 __all__ = [
     "AttributionError",
     "AttributionWarning",
-    "AttributionResult",
+    "Attribution",
     "AttributionValueTree",
 ]

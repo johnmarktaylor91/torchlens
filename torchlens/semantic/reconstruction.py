@@ -91,8 +91,8 @@ def sdpa_reconstruction_spec(
         )
     spec = FacetSpec.computed(
         lambda: _reconstruct_checked(module, sdpa_op, facet),
-        recipe_id=recipe_id,
-        recipe_version="p3",
+        function_id=recipe_id,
+        function_version="p3",
     )
     return _as_reconstructed_spec(spec)
 
@@ -161,8 +161,8 @@ def _as_reconstructed_spec(spec: FacetSpec) -> FacetSpec:
         ),
         value_version=spec.value_version,
         conflict_alias_group=spec.conflict_alias_group,
-        recipe_id=spec.recipe_id,
-        recipe_version=spec.recipe_version,
+        function_id=spec.function_id,
+        function_version=spec.function_version,
         home=spec.home,
     )
 

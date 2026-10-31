@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import Tensor, nn
 
+import torchlens
 import torchlens.attribution as attribution
 
 
@@ -254,7 +255,7 @@ def test_grad_cam_rejects_non_conv_style_layer() -> None:
     model = TinyCnn()
     inputs = torch.randn(1, 1, 5, 5)
 
-    with pytest.raises(attribution.AttributionError, match="4D N,C,H,W feature map"):
+    with pytest.raises(torchlens.errors.AttributionError, match="4D N,C,H,W feature map"):
         attribution.grad_cam(model, inputs, target=0, layer="classifier")
 
 
@@ -305,7 +306,7 @@ def test_bad_layer_name_lists_available_options() -> None:
     inputs = torch.randn(1, 1, 5, 5)
 
     with pytest.raises(
-        attribution.AttributionError,
+        torchlens.errors.AttributionError,
         match="layer 'missing' was not found; available conv-like layers include: features.0",
     ):
         attribution.grad_cam(model, inputs, target=0, layer="missing")
@@ -359,7 +360,7 @@ def test_layer_integrated_gradients_completeness_and_shape() -> None:
         target=1,
         layer="hidden",
         baseline=baseline,
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():
@@ -398,7 +399,7 @@ def test_layer_conductance_completeness_and_shape() -> None:
         target=lambda output: output[..., 0].sum(),
         layer="hidden",
         baseline=baseline,
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():
@@ -425,7 +426,7 @@ def test_layer_path_methods_reject_bad_layer_name() -> None:
     inputs = torch.randn(1, 3, dtype=torch.float64)
 
     with pytest.raises(
-        attribution.AttributionError,
+        torchlens.errors.AttributionError,
         match="layer 'missing' was not found; available conv-like layers include: hidden",
     ):
         attribution.layer_integrated_gradients(
@@ -451,7 +452,7 @@ def test_layer_path_methods_support_multi_input_model_call() -> None:
         target=lambda output: output.sum(),
         layer="hidden",
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
     conductance_result = attribution.layer_conductance(
         model,
@@ -459,7 +460,7 @@ def test_layer_path_methods_support_multi_input_model_call() -> None:
         target=lambda output: output.sum(),
         layer="hidden",
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():

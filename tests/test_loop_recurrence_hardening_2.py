@@ -80,9 +80,7 @@ def _op_record(op) -> tuple:
 
 def _rolled_node_label_line(traced, node_name: str, outpath: str) -> str:
     """Render the rolled graph and return the named node's label line."""
-    graph = traced.draw(
-        vis_mode="rolled", vis_save_only=True, return_graph=True, vis_outpath=outpath
-    )
+    graph = traced.draw(vis_mode="rolled", vis_save_only=True, return_graph=True, path=outpath)
     for line in graph.source.splitlines():
         if line.strip().startswith(f"{node_name} [label"):
             return line.strip()
@@ -270,7 +268,7 @@ def test_tied_distinct_modules_rolled_render_shows_both_sites(tmp_path) -> None:
         vis_mode="rolled",
         vis_save_only=True,
         return_graph=True,
-        vis_outpath=str(tmp_path / "tied_rolled"),
+        path=str(tmp_path / "tied_rolled"),
     )
     label_lines = [
         line.strip()

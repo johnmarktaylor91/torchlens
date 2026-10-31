@@ -327,6 +327,7 @@ _LAZY_EXCEPTION_PATHS = {
     "CheckConfigError": ("torchlens.checks._errors", "CheckConfigError"),
     "CheckLifecycleError": ("torchlens.checks._errors", "CheckLifecycleError"),
     "CheckViolationError": ("torchlens.checks._errors", "CheckViolationError"),
+    "AttributionError": ("torchlens.attribution._result", "AttributionError"),
     "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
     "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),
     "GradFnWalkError": ("torchlens.debug._grad_fn_walk", "GradFnWalkError"),
@@ -339,6 +340,8 @@ _LAZY_EXCEPTION_PATHS = {
     "MechInterpError": ("torchlens.mechinterp._errors", "MechInterpError"),
     "NeuroHandoffError": ("torchlens.neuro._handoff", "NeuroHandoffError"),
     "PreprocessingAuditError": ("torchlens.preprocessing._audit", "PreprocessingAuditError"),
+    "LogitLensError": ("torchlens.semantic.logit_lens", "LogitLensError"),
+    "MissingFacetError": ("torchlens.semantic.facets", "MissingFacetError"),
     "NormReconstructionError": (
         "torchlens.semantic._norm_reconstruction",
         "NormReconstructionError",

@@ -34,7 +34,7 @@ Key entry points:
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
   read warns once (`nongold_raw_value_read`). `torchlens.user_funcs.render`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
-  verified restore, `collapse="auto"` there only, detached `RenderResult`,
+  verified restore, `collapse="auto"` there only, detached `Drawing`,
   never auto-opens). Lazy: gold/declared rungs materialize during the one
   captured forward with truthful totals; zero-arg refuses before probing.
   Doc: `docs/quickstart.md`.
@@ -123,7 +123,7 @@ Key entry points:
   kind, and effects never recolor attention cells. `score_decomposition`
   enforces the hard sum-to-score invariant (`tv_decomposition_unclosed`).
   Bridges: payload-bounded `circuitsvis_attention` + the `bertviz_tuple`
-  parity oracle. FIX-H shipped in `tl.viz.render_heatmap` (nearest-neighbor
+  parity oracle. FIX-H shipped in `tl.viz.heatmap` (nearest-neighbor
   cells, separate `row_labels=`/`col_labels=`, post-selection omission
   marker). Doc: `docs/reference/tviz.md`.
 - Structure-only capture (DOCUMENTED-UNSTABLE; D8 GRANTED — weights-free
@@ -382,7 +382,7 @@ runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
 verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
-overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
+overview_svg = torch_trace.draw(collapse="auto", file_format="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
 
 # Influence geometry follows the real captured DAG in both directions.

@@ -10,9 +10,9 @@ from torchlens._observability import (
     PRESENCE,
     STREAMS,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
     merge_observations,
     validate_step_order,
@@ -21,7 +21,7 @@ from torchlens.errors import HistorySchemaError
 
 
 def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> ObservationRecord:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([1.0, -2.0, 0.0]))
     defaults: dict = {
         "global_step": step,

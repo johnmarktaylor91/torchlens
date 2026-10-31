@@ -38,7 +38,6 @@ __all__ = [
     "cleanup_partial",
     "dry_run",
     "stop",
-    "preview",
     "recover",
 ]
 
@@ -97,10 +96,6 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not part of the fastlog public surface.
     """
 
-    if name == "preview":
-        from ..visualization.fastlog_preview import preview_fastlog
-
-        return preview_fastlog
     if name in _LAZY_ATTRS:
         module_path, attr_name = _LAZY_ATTRS[name]
         value = getattr(_importlib.import_module(module_path), attr_name)

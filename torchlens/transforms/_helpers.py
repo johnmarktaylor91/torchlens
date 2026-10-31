@@ -94,7 +94,7 @@ class SrpSizing:
         }
 
 
-def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
+def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
     """Size an SRP width with the dense-JL L2 heuristic (honestly labeled).
 
     ``k = ceil(4 ln(n) / (eps^2/2 - eps^3/3))`` — the classical dense-JL
@@ -117,13 +117,13 @@ def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
         The sized width with formula/version/assumptions recorded.
     """
 
-    if isinstance(n_samples, bool) or not isinstance(n_samples, int) or n_samples < 2:
+    if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 2:
         raise TransformContractError(
-            f"srp_dims_for(n_samples={n_samples!r}) needs an int >= 2 (the bound "
+            f"srp_dims_for(n_samples={num_samples!r}) needs an int >= 2 (the bound "
             "is about preserving pairwise distances).",
             code="transform_params_invalid",
             remedy="pass the row count of the dataset being projected",
-            n_samples=n_samples,
+            num_samples=num_samples,
         )
     if isinstance(eps, bool) or not isinstance(eps, (int, float)) or not (0.0 < eps < 1.0):
         raise TransformContractError(
@@ -134,12 +134,12 @@ def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
         )
     eps = float(eps)
     denominator = eps**2 / 2.0 - eps**3 / 3.0
-    k = math.ceil(4.0 * math.log(n_samples) / denominator)
+    k = math.ceil(4.0 * math.log(num_samples) / denominator)
     return SrpSizing(
         n_components=k,
         formula="dense_jl_l2_heuristic",
         version=1,
-        n_samples=n_samples,
+        n_samples=num_samples,
         eps=eps,
         note=(
             "dense-JL Euclidean heuristic (sklearn johnson_lindenstrauss_min_dim "

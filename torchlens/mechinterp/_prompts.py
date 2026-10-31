@@ -56,7 +56,7 @@ class PromptInspection:
     pieces: tuple[str, ...] | None
     bos_disclosure: str
     answers: tuple[AnswerRow, ...]
-    top_k: tuple[tuple[int, str | None, float], ...]
+    k: tuple[tuple[int, str | None, float], ...]
     logit_diff: float | None
     contributions: tuple[tuple[str, float], ...] | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
@@ -106,7 +106,7 @@ class PromptInspection:
             )
         if self.logit_diff is not None:
             lines.append(f"  logit diff (answer - vs): {self.logit_diff:.4f}")
-        for token_id, piece, logit in self.top_k:
+        for token_id, piece, logit in self.k:
             lines.append(
                 f"  top: {token_id}" + (f" ({piece!r})" if piece else "") + f" {logit:.4f}"
             )
@@ -150,7 +150,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     answer: Any = None,
     vs: Any = None,
     position: int = -1,
-    top_k: int = 5,
+    k: int = 5,
     tokenizer: Any = None,
     contributions: bool = False,
 ) -> PromptInspection:
@@ -221,7 +221,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     if vs is not None and answer_ids:
         logit_diff = float(row_logits[answer_ids[0]] - row_logits[int(vs)])
 
-    top_values, top_indices = row_logits.topk(max(1, top_k))
+    top_values, top_indices = row_logits.topk(max(1, k))
     top_rows = tuple(
         (int(index), _decode(tokenizer, int(index)), float(value))
         for index, value in zip(top_indices, top_values, strict=True)
@@ -234,7 +234,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         dla = direct_logit_contributions(
             trace, answer=answer_ids[0], vs=int(vs) if vs is not None else None, positions=pos
         )
-        contribution_rows = dla.top(5)
+        contribution_rows = dla.topk(5)
 
     pieces = None
     if tokenizer is not None and input_ids:
@@ -244,7 +244,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         pieces=pieces,
         bos_disclosure=_bos_disclosure(input_ids, tokenizer),
         answers=tuple(rows),
-        top_k=top_rows,
+        k=top_rows,
         logit_diff=logit_diff,
         contributions=contribution_rows,
         provenance={"position": pos, "tie_convention": TIE_CONVENTION},
@@ -258,7 +258,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     answer: Any,
     vs: Any = None,
     tokenizer: Any = None,
-    top_k: int = 5,
+    k: int = 5,
     contributions: bool = False,
 ) -> PromptInspection:
     """Trace one forward and inspect it -- with checked multi-token
@@ -295,7 +295,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         answer=answer_ids[0],
         vs=vs,
         position=len(prompt_ids) - 1,
-        top_k=top_k,
+        k=k,
         tokenizer=tokenizer,
         contributions=contributions,
     )
@@ -336,7 +336,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         pieces=base.pieces,
         bos_disclosure=base.bos_disclosure,
         answers=tuple(rows),
-        top_k=base.top_k,
+        k=base.k,
         logit_diff=base.logit_diff,
         contributions=base.contributions,
         provenance={**base.provenance, "teacher_forced_tokens": len(answer_ids)},

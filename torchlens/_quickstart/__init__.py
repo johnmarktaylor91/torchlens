@@ -34,7 +34,7 @@ from ._provenance import (
     provenance_to_record,
     trace_input_provenance,
 )
-from ._render import RenderResult, render
+from ._render import Drawing, render
 from ._resolve import ResolvedInputs, attach_provenance, resolve_inputs
 
 __tl_layer__ = "FACADE"
@@ -45,7 +45,7 @@ __tl_layer__ = "FACADE"
 #: are ``(home_module, attribute)`` rows in ``_LAZY_ATTRS`` form.
 ROOT_SURFACE_REGISTRATION: dict[str, tuple[str, str]] = {
     "render": ("torchlens.user_funcs", "render"),
-    "RenderResult": ("torchlens._quickstart", "RenderResult"),
+    "Drawing": ("torchlens._quickstart", "Drawing"),
 }
 
 __all__ = [
@@ -53,7 +53,7 @@ __all__ = [
     "InputPlan",
     "InputProvenance",
     "InputSpec",
-    "RenderResult",
+    "Drawing",
     "ResolvedInputs",
     "TensorFacts",
     "attach_provenance",

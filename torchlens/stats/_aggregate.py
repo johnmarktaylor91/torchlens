@@ -53,7 +53,7 @@ class Aggregator:
         for stat in self.stats:
             stat.update(value)
 
-    def result(self) -> dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         """Return each child statistic result.
 
         Returns
@@ -67,7 +67,7 @@ class Aggregator:
             key = stat.name or type(stat).__name__
             if key in results:
                 key = f"{key}_{index}"
-            results[key] = stat.result()
+            results[key] = stat.compute()
         return results
 
 
@@ -550,10 +550,10 @@ def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_f
         cache_dir is None or isinstance(cache_dir, (str, os.PathLike))
     ):
         raise ArgumentTypeError(
-            f"tl.aggregate(cache={cache!r}, cache_dir={cache_dir!r}) needs cache= to be "
+            f"tl.stats.aggregate(cache={cache!r}, cache_dir={cache_dir!r}) needs cache= to be "
             "True or False and cache_dir= a path or None",
             code="stats_aggregate_cache_type",
-            remedy="spell it tl.aggregate(model, data, metrics, cache=True, cache_dir='stats-cache')",
+            remedy="spell it tl.stats.aggregate(model, data, metrics, cache=True, cache_dir='stats-cache')",
             argument="cache",
         )
     if not cache:
@@ -611,7 +611,7 @@ def _aggregate_loop(
                     stat.update(_metric_grad_from_log(log, metric_name))
             finally:
                 log.cleanup()
-        return {name: stat.result() for name, stat in metrics.items()}
+        return {name: stat.compute() for name, stat in metrics.items()}
 
     # target == "out": trace the structure once, then execute a compiled sparse
     # measurement per batch. Any surprise -- unstable structure, non-eval
@@ -674,4 +674,4 @@ def _aggregate_loop(
         if saved_gc_thresholds is not None:
             gc.collect(1)
             gc.set_threshold(*saved_gc_thresholds)
-    return {name: stat.result() for name, stat in metrics.items()}
+    return {name: stat.compute() for name, stat in metrics.items()}

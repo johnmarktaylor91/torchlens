@@ -201,12 +201,12 @@ assert torch.equal(oracle.find_sites(site).first().out, steered_mlp)
 
 ### Per-head attention from a Hugging Face model without a trace
 
-`tl.bridge.hf.register_attention(model)` makes TorchLens the model's attention backend
+`tl.bridge.transformers.register_attention(model)` makes TorchLens the model's attention backend
 (the `"torchlens"` attention function plus its matching mask function, so causal and padding
-masks always arrive); `tl.bridge.hf.record_attention(model)` then records every call's per-head
+masks always arrive); `tl.bridge.transformers.record_attention(model)` then records every call's per-head
 probabilities by module name. It materializes the full `(batch, heads, q, kv)` matrix per call
 (32 GiB per 4096-token sequence for a Llama-2-7B shape in bfloat16). Glossary:
-"tl.bridge.hf.register_attention".
+"tl.bridge.transformers.register_attention".
 
 ```python
 import torch
@@ -220,8 +220,8 @@ lm = transformers.LlamaForCausalLM(
 ).eval()
 batch = {"input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
          "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]])}
-tl.bridge.hf.register_attention(lm)
-with torch.no_grad(), tl.bridge.hf.record_attention(lm, check_sdpa=True) as attn:
+tl.bridge.transformers.register_attention(lm)
+with torch.no_grad(), tl.bridge.transformers.record_attention(lm, check_sdpa=True) as attn:
     lm(**batch)
 probs = attn["model.layers.0.self_attn"]  # (batch, heads, q, kv), the tensor the model used
 assert probs.shape == (2, 4, 4, 4)
@@ -273,13 +273,13 @@ else:
 # Also exported: tl.debug.Report (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
-# experiment the user owns) and torchlens.transformer.render_logit_lens_heatmap(result, path)
+# experiment the user owns) and torchlens.viz.logit_lens(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
 
 ### Attribution graphs
 
-`tl.attribution.build_graph(trace, transcoders, embedding=..., frozen=...)` builds an
+`tl.attribution.build_graph(trace, transcoders, embedding_module=..., frozen=...)` builds an
 attribution graph from one prompt's capture: `transcoders=` maps each MLP module name to a
 transcoder (`encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`; mappings for `W_dec` and `b_dec`
 give a cross-layer transcoder), and `frozen=` names the attention-pattern and norm-scale
@@ -297,9 +297,9 @@ the key must run before them. `frozen=` also takes facet selectors:
 attention pattern and every `Gemma2RMSNorm` scale, where `inv_rms` is the norm's
 `rsqrt` output, the factor that multiplies its input. DOCUMENTED-UNSTABLE.
 
-`graph.to_neuronpedia(slug="my-graph", scan="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
-returns the graph, pruned by circuit-tracer's rule (`node_threshold=0.8`,
-`edge_threshold=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
+`graph.to_neuronpedia(slug="my-graph", model_id="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
+returns the graph, pruned by circuit-tracer's rule (`node_influence_coverage=0.8`,
+`edge_influence_coverage=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
 to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 
 `tl.attribution.overlay(trace, graph)` paints the graph onto its trace for
@@ -307,6 +307,6 @@ to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 of its nodes (`graph_value="activation"` paints feature activations instead).
 `tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
-`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], scan="gemma-2-2b", vector_label="honesty")`
+`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and
 never write the key into a message. DOCUMENTED-UNSTABLE.

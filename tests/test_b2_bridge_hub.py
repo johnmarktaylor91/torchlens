@@ -22,7 +22,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import ArgumentTypeError
 from torchlens._io import ArtifactError
-from torchlens.bridge import huggingface
+from torchlens.bridge import huggingface_hub
 
 
 class _LocalHub:
@@ -80,11 +80,11 @@ def trace() -> Any:
 
 def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_path: Path) -> None:
     hub = _LocalHub(tmp_path / "cache")
-    pushed = huggingface.push_to_hub(trace, "me/demo", api=hub)
+    pushed = huggingface_hub.push_to_hub(trace, "me/demo", api=hub)
     assert pushed["format"] == "tar.gz"
     assert pushed["path_in_repo"] == "torchlens_artifact.tar.gz"
 
-    loaded = huggingface.from_hub("me/demo", api=hub, revision="main")
+    loaded = huggingface_hub.from_hub("me/demo", api=hub, revision="main")
 
     assert hub.downloads == [
         {"repo_id": "me/demo", "filename": "torchlens_artifact.tar.gz", "revision": "main"}
@@ -99,7 +99,7 @@ def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_pa
 
 def test_push_writes_no_pickle(trace: Any, tmp_path: Path) -> None:
     hub = _LocalHub(tmp_path / "cache")
-    huggingface.push_to_hub(trace, "me/demo", api=hub)
+    huggingface_hub.push_to_hub(trace, "me/demo", api=hub)
     payload = hub.files[("me/demo", "torchlens_artifact.tar.gz")]
 
     # The upload is a gzipped tar of the .tlspec bundle, never a pickle stream.
@@ -109,7 +109,7 @@ def test_push_writes_no_pickle(trace: Any, tmp_path: Path) -> None:
     assert {name.split("/")[0] for name in names} == {"bundle"}
     assert "bundle/manifest.json" in names
     # The module has no pickle path left at all.
-    tree = ast.parse(inspect.getsource(huggingface))
+    tree = ast.parse(inspect.getsource(huggingface_hub))
     imported = {
         alias.name
         for node in ast.walk(tree)
@@ -119,7 +119,7 @@ def test_push_writes_no_pickle(trace: Any, tmp_path: Path) -> None:
     assert "pickle" not in imported
     # A plain object is refused before anything is uploaded.
     with pytest.raises(ArgumentTypeError) as info:
-        huggingface.push_to_hub({"weights": [1, 2]}, "me/other", api=hub)
+        huggingface_hub.push_to_hub({"weights": [1, 2]}, "me/other", api=hub)
     assert info.value.fields["code"] == "hub_push_artifact_unsupported"
     assert ("me/other", "torchlens_artifact.tar.gz") not in hub.files
 
@@ -164,6 +164,6 @@ def test_from_hub_refuses_an_unsafe_download(payload: bytes, problem: str, tmp_p
     hub = _LocalHub(tmp_path / "cache")
     hub.files[("me/bad", "torchlens_artifact.tar.gz")] = payload
     with pytest.raises(ArtifactError, match=problem) as info:
-        huggingface.from_hub("me/bad", api=hub)
+        huggingface_hub.from_hub("me/bad", api=hub)
     assert info.value.fields["code"] == "hub_artifact_unsafe"
     assert not (tmp_path / "escape.json").exists()

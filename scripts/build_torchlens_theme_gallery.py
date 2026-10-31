@@ -240,13 +240,13 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
     try:
         log.draw(
             vis_renderer="dagua",
-            vis_theme="torchlens",
+            theme="torchlens",
             vis_mode=spec.vis_mode,
             direction=spec.vis_direction,
             vis_call_depth=spec.vis_nesting_depth,
             vis_save_only=True,
-            vis_fileformat="png",
-            vis_outpath=str(outpath),
+            file_format="png",
+            path=str(outpath),
         )
         audit = log.visualization_field_audit().to_dict()
         result = {

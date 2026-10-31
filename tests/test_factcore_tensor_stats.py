@@ -14,12 +14,7 @@ import torch
 
 from torchlens._utils._torch_compat import get_cpu_half_kernels_support
 from torchlens.stats import (
-    GLYPH_RAMP_ASCII,
-    GLYPH_RAMP_UNICODE,
     TensorStats,
-    degrade,
-    format_sig,
-    render_core_line,
     tensor_stats,
 )
 from torchlens.stats._stats_kernel import (
@@ -27,6 +22,13 @@ from torchlens.stats._stats_kernel import (
     SAMPLE_CAP,
     identity_seed,
     seeded_sample,
+)
+from torchlens.stats._stats_render import (
+    GLYPH_RAMP_ASCII,
+    GLYPH_RAMP_UNICODE,
+    degrade,
+    format_sig,
+    render_core_line,
 )
 
 
@@ -54,7 +56,7 @@ def test_offset_cancellation_golden_n1e6_sd1() -> None:
     stats = tensor_stats(tensor)
     oracle_mean, oracle_sd = _oracle_moments(tensor)
     assert stats.mean == pytest.approx(oracle_mean, rel=1e-6)
-    assert stats.sd == pytest.approx(oracle_sd, rel=1e-3)
+    assert stats.std == pytest.approx(oracle_sd, rel=1e-3)
     naive = _naive_variance(tensor)
     # The anti-regression: the banned form is catastrophically wrong here
     # (often NEGATIVE); any reintroduction flips the kernel assertion above.
@@ -69,7 +71,7 @@ def test_offset_cancellation_golden_sd_1e_3_f64() -> None:
     stats = tensor_stats(tensor)
     oracle_mean, oracle_sd = _oracle_moments(tensor)
     assert stats.mean == pytest.approx(oracle_mean, rel=1e-9)
-    assert stats.sd == pytest.approx(oracle_sd, rel=1e-3)
+    assert stats.std == pytest.approx(oracle_sd, rel=1e-3)
     naive = _naive_variance(tensor)
     assert naive < 0 or abs(naive**0.5 - oracle_sd) / oracle_sd > 0.01
 
@@ -89,13 +91,13 @@ def test_fp16_underflow_pin() -> None:
     exact_value = float(tensor[0])
     assert exact_value > 0
     assert stats.mean == pytest.approx(exact_value, rel=1e-6)
-    assert stats.sd == pytest.approx(0.0, abs=1e-12)
+    assert stats.std == pytest.approx(0.0, abs=1e-12)
     torch.manual_seed(2)
     noisy = (1e-6 * (1 + 0.1 * torch.randn(50_000))).to(torch.float16)
     noisy_stats = tensor_stats(noisy)
     oracle_mean, oracle_sd = _oracle_moments(noisy)
     assert noisy_stats.mean == pytest.approx(oracle_mean, rel=1e-3)
-    assert noisy_stats.sd == pytest.approx(oracle_sd, rel=1e-2)
+    assert noisy_stats.std == pytest.approx(oracle_sd, rel=1e-2)
 
 
 def test_nonfinite_census_exact_and_finite_story_kept() -> None:
@@ -103,11 +105,11 @@ def test_nonfinite_census_exact_and_finite_story_kept() -> None:
 
     tensor = torch.tensor([1.0, -2.0, float("nan"), float("inf"), float("-inf"), 3.0, 0.0])
     stats = tensor_stats(tensor)
-    assert (stats.nan_count, stats.posinf_count, stats.neginf_count) == (1, 1, 1)
+    assert (stats.num_nan, stats.num_posinf, stats.num_neginf) == (1, 1, 1)
     assert stats.finite_min == -2.0 and stats.finite_max == 3.0
     finite = torch.tensor([1.0, -2.0, 3.0, 0.0], dtype=torch.float64)
     assert stats.mean == pytest.approx(float(finite.mean()))
-    assert stats.zero_count == 1
+    assert stats.num_zero == 1
 
 
 def test_sampler_aliasing_regression_with_strided_negative_control() -> None:
@@ -143,13 +145,13 @@ def test_sampled_sd_above_gate_is_marked_and_bounded(monkeypatch) -> None:
     from torchlens.stats._tensor_stats import _record_from_kernel
 
     stats = _record_from_kernel(tensor, kernel.run_kernel(tensor, identity="gate-test"), None)
-    assert stats.sd_evidence.sampled
-    assert stats.sd_evidence.sample_size == min(SAMPLE_CAP, tensor.numel())
+    assert stats.std_evidence.is_sampled
+    assert stats.std_evidence.sample_size == min(SAMPLE_CAP, tensor.numel())
     assert stats.mean_evidence.policy == "exact"
     oracle_mean, oracle_sd = _oracle_moments(tensor)
     assert stats.mean == pytest.approx(oracle_mean, rel=1e-6)
-    assert stats.sd_se is not None
-    assert abs(stats.sd - oracle_sd) <= 6 * stats.sd_se
+    assert stats.std_se is not None
+    assert abs(stats.std - oracle_sd) <= 6 * stats.std_se
 
 
 def test_end_bin_invariant_with_failing_control() -> None:
@@ -183,9 +185,9 @@ def test_integer_route_exact_moments() -> None:
     tensor = torch.arange(8)
     stats = tensor_stats(tensor)
     assert stats.mean == pytest.approx(3.5)
-    assert stats.sd == pytest.approx(math.sqrt(5.25), rel=1e-12)
-    assert format_sig(stats.sd) == "2.291"
-    assert stats.zero_count == 1
+    assert stats.std == pytest.approx(math.sqrt(5.25), rel=1e-12)
+    assert format_sig(stats.std) == "2.291"
+    assert stats.num_zero == 1
     assert stats.mean_evidence.policy == "exact"
 
 
@@ -205,10 +207,10 @@ def test_bool_family_truth_rate_never_moments() -> None:
 
     tensor = torch.tensor([True, True, False, True])
     stats = tensor_stats(tensor)
-    assert stats.true_count == 3
-    assert stats.mean is None and stats.sd is None
-    assert tensor_stats(torch.ones(4, dtype=torch.bool)).all_true
-    assert tensor_stats(torch.zeros(4, dtype=torch.bool)).all_false
+    assert stats.num_true == 3
+    assert stats.mean is None and stats.std is None
+    assert tensor_stats(torch.ones(4, dtype=torch.bool)).is_all_true
+    assert tensor_stats(torch.zeros(4, dtype=torch.bool)).is_all_false
 
 
 @pytest.mark.smoke
@@ -218,7 +220,7 @@ def test_complex_magnitude_labeled() -> None:
     torch.manual_seed(5)
     tensor = torch.complex(torch.randn(1_000), torch.randn(1_000))
     stats = tensor_stats(tensor)
-    assert stats.magnitude_basis
+    assert stats.is_magnitude_based
     magnitude = tensor.abs().to(torch.float64)
     assert stats.mean == pytest.approx(float(magnitude.mean()), rel=1e-9)
     line = render_core_line(stats)

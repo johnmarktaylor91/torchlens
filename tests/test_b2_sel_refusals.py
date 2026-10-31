@@ -246,7 +246,7 @@ class _AttnHost(nn.Module):
 def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
     """U36.1: both facet doors refuse with MissingFacetError, never a bare KeyError."""
 
-    from torchlens.semantic import MissingFacetError
+    from torchlens.errors import MissingFacetError
 
     trace = tl.trace(_AttnHost().eval(), torch.randn(1, 4, 8))
     for view in (trace.modules["attn"].facets, trace.module_calls["attn:1"].facets):
@@ -254,6 +254,6 @@ def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
             view["q"]
         assert type(exc_info.value) is not KeyError
         assert "_UnregisteredAttention" in str(exc_info.value)
-        assert "torchlens.semantic.register" in str(exc_info.value)
+        assert "torchlens.facets.register" in str(exc_info.value)
         assert view.get("q") is None
         assert not hasattr(view, "q")

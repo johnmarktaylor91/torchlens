@@ -65,9 +65,7 @@ def _boxes(address: str) -> Callable[[object], bool]:
 
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     return str(
-        trace.draw(
-            vis_outpath=str(tmp_path / name), vis_save_only=True, vis_fileformat="dot", **kwargs
-        )
+        trace.draw(path=str(tmp_path / name), vis_save_only=True, file_format="dot", **kwargs)
     )
 
 

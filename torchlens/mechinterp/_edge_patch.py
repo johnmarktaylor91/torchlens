@@ -190,7 +190,7 @@ def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]])
         owner.do(pairs)
 
 
-def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
+def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> Any:
     """Return a fork of ``trace`` with the given edges patched to their corrupted senders.
 
     Parameters
@@ -234,7 +234,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
                     edge.sender.name: live.nodes[edge.sender.name].value for edge in receiver_edges
                 }
             for edge in receiver_edges:
-                corrupt_value = corrupt.nodes[edge.sender.name].value
+                corrupt_value = corrupted_graph.nodes[edge.sender.name].value
                 patched = patched - senders[edge.sender.name] + corrupt_value.to(patched.dtype)
             writes.append((receiver, patched.detach()))
         owner = trace.fork() if result is None else result

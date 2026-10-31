@@ -1,6 +1,6 @@
 """Behavioral tests for the lightweight viz display surfaces.
 
-Covers the PIL visualizer factories (``tl.viz.heatmap`` / ``channel_grid`` /
+Covers the PIL visualizer factories (``tl.viz.nodes.heatmap`` / ``channel_grid`` /
 ``histogram``), the batch summary renderers, ``causal_trace_heatmap``, and the
 ``Layer.show()`` / ``Op.show()`` tensor display path.
 """
@@ -31,7 +31,7 @@ def _close_figures():
 def test_heatmap_visualizer_renders_supported_shapes_and_rejects_others() -> None:
     """heatmap() renders 2-d/3-d/4-d tensors within max_size and skips 1-d."""
 
-    visualizer = tl.viz.heatmap(max_size=32)
+    visualizer = tl.viz.nodes.heatmap(max_size=32)
 
     for shape in [(8, 8), (3, 8, 8), (2, 3, 8, 8)]:
         image = visualizer(torch.randn(*shape))
@@ -49,7 +49,7 @@ def test_heatmap_visualizer_renders_supported_shapes_and_rejects_others() -> Non
 def test_heatmap_constant_tensor_renders_flat_image() -> None:
     """A zero-range tensor normalizes to a flat single-color heatmap."""
 
-    visualizer = tl.viz.heatmap(max_size=16)
+    visualizer = tl.viz.nodes.heatmap(max_size=16)
     image = visualizer(torch.ones(4, 4))
     assert image is not None
     colors = image.convert("RGB").getcolors()
@@ -62,9 +62,9 @@ def test_channel_grid_renders_first_batch_element_and_validates_n() -> None:
     """channel_grid() tiles channels, uses tensor[0] for batches, refuses n<1."""
 
     with pytest.raises(ValueError, match="at least 1"):
-        tl.viz.channel_grid(n=0)
+        tl.viz.nodes.channel_grid(n=0)
 
-    visualizer = tl.viz.channel_grid(n=4, max_size=64)
+    visualizer = tl.viz.nodes.channel_grid(n=4, max_size=64)
     image = visualizer(torch.randn(9, 5, 5))
     assert isinstance(image, Image.Image)
     # 4 channels tile as a 2x2 grid of equal square cells.
@@ -81,9 +81,9 @@ def test_histogram_visualizer_draws_bars_and_skips_empty_input() -> None:
     """histogram() renders finite values and returns None with nothing to draw."""
 
     with pytest.raises(ValueError, match="at least 1"):
-        tl.viz.histogram(bins=0)
+        tl.viz.nodes.histogram(bins=0)
 
-    visualizer = tl.viz.histogram(bins=8, width=64, height=48)
+    visualizer = tl.viz.nodes.histogram(bins=8, width=64, height=48)
     image = visualizer(torch.randn(100))
     assert isinstance(image, Image.Image)
     assert image.size == (64, 48)
@@ -99,12 +99,12 @@ def test_montage_tiles_images_and_validates_inputs() -> None:
     """montage() centers thumbnails on a square grid and refuses bad inputs."""
 
     with pytest.raises(ValueError, match="at least 1"):
-        tl.viz.montage([Image.new("RGB", (4, 4))], max_n=0)
+        tl.viz.montage([Image.new("RGB", (4, 4))], max_items=0)
     with pytest.raises(ValueError, match="at least one image"):
-        tl.viz.montage([], max_n=3)
+        tl.viz.montage([], max_items=3)
 
     images = [Image.new("RGB", (10, 10), color) for color in ("red", "green", "blue")]
-    grid = tl.viz.montage(images, max_n=2, max_size=20)
+    grid = tl.viz.montage(images, max_items=2, max_size=20)
     assert isinstance(grid, Image.Image)
     # Two images tile as 2 columns x 1 row of 10px cells.
     assert grid.size == (20, 10)
@@ -114,14 +114,14 @@ def test_montage_tiles_images_and_validates_inputs() -> None:
 def test_text_table_escapes_truncates_and_counts_overflow() -> None:
     """text_table() escapes markup, truncates long items, and adds a +N row."""
 
-    label = tl.viz.text_table(["a<b>", "x" * 100, "third", "fourth"], max_n=2)
+    label = tl.viz.nodes.text_table(["a<b>", "x" * 100, "third", "fourth"], max_items=2)
     assert label.startswith("<<TABLE")
     assert "a&lt;b&gt;" in label
     assert ("x" * 57 + "...") in label
     assert "x" * 58 not in label
     assert "+2 more" in label
 
-    exact = tl.viz.text_table(["one"], max_n=1)
+    exact = tl.viz.nodes.text_table(["one"], max_items=1)
     assert "more" not in exact
 
 
@@ -170,10 +170,10 @@ def test_layer_show_auto_routes_by_dimensionality() -> None:
     fig = conv_layer.show()  # 4-d, channel dim 4 -> hist fallback
     assert fig is not None and hasattr(fig, "axes")
 
-    fig_heatmap = conv_layer.show(method="heatmap")
+    fig_heatmap = conv_layer.show(kind="heatmap")
     assert fig_heatmap.axes[0].images
 
-    fig_channels = conv_layer.show(method="channels")
+    fig_channels = conv_layer.show(kind="channels")
     assert len(fig_channels.axes) >= 2
 
     rgb_input = log["input_1"]
@@ -181,7 +181,7 @@ def test_layer_show_auto_routes_by_dimensionality() -> None:
     assert fig_rgb.axes[0].images
 
     with pytest.raises(ValueError, match="method must be"):
-        conv_layer.show(method="sideways")
+        conv_layer.show(kind="sideways")
 
 
 @pytest.mark.smoke
@@ -220,7 +220,7 @@ def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
         aggregate.show()
 
     single_pass = log["linear_1_1:1"]
-    fig = single_pass.show(method="heatmap")
+    fig = single_pass.show(kind="heatmap")
     assert fig.axes[0].images
 
 
@@ -231,7 +231,7 @@ def test_channel_grid_discloses_hidden_channels() -> None:
 
     base = torch.arange(2 * 3 * 3, dtype=torch.float32).reshape(2, 3, 3)
     capped_source = torch.cat([base, base + 1.0, base + 2.0], dim=0)  # 6 channels
-    visualizer = tl.viz.channel_grid(n=2, max_size=64)
+    visualizer = tl.viz.nodes.channel_grid(n=2, max_size=64)
 
     capped = visualizer(capped_source)
     complete = visualizer(base)

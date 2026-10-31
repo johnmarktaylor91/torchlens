@@ -1544,7 +1544,7 @@ def _facet_scatter_hook(
 
         from .runtime import validate_hook_output
 
-        facet_slice = spec.apply(out)
+        facet_slice = spec.apply_transforms(out)
         edited_slice = user_hook(facet_slice, hook=hook)
         checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=hook)
         return spec.scatter_update(out, checked_slice, mode="replace")

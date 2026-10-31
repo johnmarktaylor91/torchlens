@@ -13,9 +13,9 @@ from torchlens.observability._artifact import CommittedBlock, HistoryWriter, Ram
 from torchlens._observability import (
     Histogram,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
 )
 from torchlens.errors import HistoryArtifactError
@@ -31,7 +31,7 @@ def _site(site_id: str = "module:enc.0") -> SiteRecord:
 
 
 def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> CommittedBlock:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([value, -value, 0.0]))
     sketch = None
     if with_sketch:

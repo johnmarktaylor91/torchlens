@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import feature_map_evolution
+from torchlens.viz.feature_maps import feature_maps
 
 
 class _TinyConv(nn.Module):
@@ -60,7 +60,7 @@ def _annotated_trace(model: nn.Module) -> tl.Trace:
     """Capture the conv fixture and store feature-map annotation blobs."""
 
     trace = tl.trace(model, _input_batch(), save=tl.func("conv2d"))
-    feature_map_evolution(trace, save=tl.func("conv2d"))
+    feature_maps(trace, save=tl.func("conv2d"))
     assert isinstance(trace._annotation_blobs, dict) and trace._annotation_blobs
     return trace
 

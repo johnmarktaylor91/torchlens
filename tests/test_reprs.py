@@ -64,7 +64,7 @@ def test_layer_log_show_custom_methods_return_output(method: str) -> None:
 
     x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)
     log = _log_for_input(x)
-    output = log.layers[0].show(method=method)
+    output = log.layers[0].show(kind=method)
     assert output is not None
 
 
@@ -72,7 +72,7 @@ def test_op_log_show_returns_output() -> None:
     """Op.show delegates to the tensor display helper."""
 
     log = _log_for_input(torch.randn(8))
-    output = log.layer_list[0].show(method="hist")
+    output = log.layer_list[0].show(kind="hist")
     assert output is not None
 
 

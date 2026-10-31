@@ -9,7 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ..viz.node_plots import render_heatmap
+from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
@@ -42,7 +42,7 @@ def show(
     image: Image.Image | None = None,
     gradient: bool = False,
     retain_graph: bool = False,
-    slice: tuple[int, int] | None = None,
+    plane: tuple[int, int] | None = None,
     box_color: str = "#FF3B30",
     alpha: float = 0.6,
     cmap: str = "magma",
@@ -64,14 +64,14 @@ def show(
     retain_graph:
         Whether the empirical gradient probe retains autograd buffers, so a
         later backward over the same captured graph stays possible.
-    slice:
+    plane:
         Required ``(input_axis, index)`` plane selection for three spatial axes.
     box_color:
         RGB/CSS color for the geometric-box outline.
     alpha:
         Gradient heatmap opacity in ``[0, 1]``.
     cmap:
-        Colormap passed to :func:`torchlens.viz.render_heatmap`.
+        Colormap passed to :func:`torchlens.viz.heatmap`.
 
     Returns
     -------
@@ -99,10 +99,10 @@ def show(
         else None
     )
     spatial_axes = _spatial_axes(descriptor, gradient_result)
-    rendered_axes = _rendered_axes(spatial_axes, slice)
+    rendered_axes = _rendered_axes(spatial_axes, plane)
     base = _base_image(view, descriptor, image, rendered_axes)
     if gradient_result is not None:
-        heatmap = _gradient_image(gradient_result, rendered_axes, slice, base.size, cmap)
+        heatmap = _gradient_image(gradient_result, rendered_axes, plane, base.size, cmap)
         base = _blend_heatmap(base, heatmap, alpha=alpha)
     if box is not None and box.status in {
         ReceptiveFieldStatus.EXACT,
@@ -325,7 +325,7 @@ def _rendered_axes(
     if rank == 3:
         if slice_spec is None:
             raise ReceptiveFieldError(
-                "3-D receptive-field visualization requires slice=(axis, index)."
+                "3-D receptive-field visualization requires plane=(axis, index)."
             )
         axis, _ = slice_spec
         if axis not in spatial_axes:
@@ -381,7 +381,7 @@ def _tensor_image(
         data = data.mean(dim=axis)
     if data.ndim == 1:
         data = data.unsqueeze(0)
-    return render_heatmap(
+    return node_plots.heatmap(
         data.numpy(),
         width=max(1, int(descriptor.input_shape[axes[-1]])),
         height=32 if len(axes) == 1 else max(1, int(descriptor.input_shape[axes[0]])),
@@ -412,7 +412,7 @@ def _gradient_image(
         data = data.mean(dim=axis)
     if data.ndim == 1:
         data = data.unsqueeze(0)
-    return render_heatmap(data.numpy(), width=size[0], height=size[1], cmap=cmap)
+    return node_plots.heatmap(data.numpy(), width=size[0], height=size[1], cmap=cmap)
 
 
 def _draw_box(

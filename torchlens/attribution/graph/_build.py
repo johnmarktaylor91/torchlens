@@ -161,11 +161,11 @@ def _resolve_sites(
             raise _graph_refusal(
                 f"logits_at={logits_at!r} selects a unit or a call; the graph reads the "
                 "whole logit vector of a module that runs once. Remedy: pass "
-                f"logits_at=tl.attribution.SiteTarget({logits_at.layer!r}).",
+                f"logits_at=tl.attribution.SiteTarget({logits_at.module_address!r}).",
                 code="attribution_graph_target_invalid",
             )
-        module = _module(trace, logits_at.layer, "logits")
-        op = _one_op(module, logits_at.layer, "output_ops", "logits")
+        module = _module(trace, logits_at.module_address, "logits")
+        op = _one_op(module, logits_at.module_address, "output_ops", "logits")
         logits_label = _edge_label(index, op, "target")
     return _Sites(
         index,
@@ -176,7 +176,7 @@ def _resolve_sites(
         tokens,
         logits_label,
         embedding,
-        "output" if logits_at is None else logits_at.layer,
+        "output" if logits_at is None else logits_at.module_address,
     )
 
 
@@ -225,7 +225,7 @@ def _active_features(readers: tuple[Reader, ...], sites: _Sites) -> _Features:
                 code="attribution_graph_transcoder_invalid",
             )
         for position, feature in torch.nonzero(acts.detach(), as_tuple=False).tolist():
-            found.nodes.append(GraphNode("feature", reader.site, position, feature=feature))
+            found.nodes.append(GraphNode("feature", reader.site, position, feature_index=feature))
             found.reader_index.append(number)
             found.positions.append(position)
             found.features.append(feature)
@@ -256,9 +256,9 @@ def _logit_targets(
     if target is None:
         if max_n_logits < 1 or not 0.0 < desired_logit_prob <= 1.0:
             raise _graph_refusal(
-                f"max_n_logits={max_n_logits!r} and desired_logit_prob="
-                f"{desired_logit_prob!r} select no logits. Remedy: pass max_n_logits=10, "
-                "desired_logit_prob=0.95 (the defaults).",
+                f"max_num_logits={max_n_logits!r} and logit_probability_coverage="
+                f"{desired_logit_prob!r} select no logits. Remedy: pass max_num_logits=10, "
+                "logit_probability_coverage=0.95 (the defaults).",
                 code="attribution_graph_target_invalid",
             )
         ids = _salient(probabilities, max_n_logits, desired_logit_prob)
@@ -512,10 +512,10 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     trace: Any,
     transcoders: Any,
     *,
-    embedding: str,
+    embedding_module: str,
     target: Sequence[int] | None = None,
-    max_n_logits: int = 10,
-    desired_logit_prob: float = 0.95,
+    max_num_logits: int = 10,
+    logit_probability_coverage: float = 0.95,
     demeaned_logits: bool = True,
     logits_at: SiteTarget | None = None,
     frozen: Sequence[str | FacetSelector] | FacetSelector | _Unset = _UNSET,
@@ -592,10 +592,10 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     return _build(
         trace,
         transcoders,
-        embedding=embedding,
+        embedding=embedding_module,
         target=target,
-        max_n_logits=max_n_logits,
-        desired_logit_prob=desired_logit_prob,
+        max_n_logits=max_num_logits,
+        desired_logit_prob=logit_probability_coverage,
         demeaned_logits=demeaned_logits,
         logits_at=logits_at,
         frozen=frozen,
@@ -668,12 +668,14 @@ def _node_layout(
     token_start = len(nodes)
     token_ids = sites.tokens.tolist() if sites.tokens is not None else [None] * n_pos
     nodes += [
-        GraphNode("token", _site_name(sites, "embedding"), p, token=token_ids[p])
+        GraphNode("token", _site_name(sites, "embedding"), p, token_id=token_ids[p])
         for p in range(n_pos)
     ]
     logit_start = len(nodes)
     logit_site = _site_name(sites, "logits")
-    nodes += [GraphNode("logit", logit_site, n_pos - 1, token=int(t)) for t in logit_ids.tolist()]
+    nodes += [
+        GraphNode("logit", logit_site, n_pos - 1, token_id=int(t)) for t in logit_ids.tolist()
+    ]
     return nodes, _Starts(error_start, token_start, logit_start)
 
 
@@ -790,24 +792,24 @@ def _pack(  # noqa: PLR0913 -- one packer for the build's computed parts
         adjacency_matrix=adjacency,
         node_values=values,
         constants={"encoder_bias": encoder_bias, "decoder_bias": decoder_bias, "other": other},
-        active_features=torch.tensor(
+        active_feature_indices=torch.tensor(
             list(zip(found.reader_index, found.positions, found.features, strict=True)),
             dtype=torch.long,
         ).reshape(-1, 3),
-        activation_values=(
+        feature_activations=(
             torch.stack(found.activations) if found.activations else torch.zeros(0, dtype=dtype)
         ),
         transcoder_sites=tuple(reader.site for reader in readers),
         error_sites=tuple(sites.writes),
         error_vectors=torch.stack([source.error for source in writes]),
-        input_tokens=(
+        input_token_ids=(
             sites.tokens if sites.tokens is not None else torch.zeros(0, dtype=torch.long)
         ),
-        logit_tokens=logit_ids,
+        logit_token_ids=logit_ids,
         logit_probabilities=probabilities.detach(),
-        demeaned_logits=demeaned_logits,
-        frozen=tuple(frozen),
-        capture_outcome=capture_outcome,
+        has_demeaned_logits=demeaned_logits,
+        frozen_sites=tuple(frozen),
+        capture_status=capture_outcome,
         disclosures=_disclosures(capture_outcome, sites),
     )
 

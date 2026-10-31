@@ -269,7 +269,7 @@ def _build_report(
     status = backward_status(trace)
     breakdown: tuple[str, ...] = ()
     if breakdown_top_k:
-        tree = build_cost_tree(trace, top_k=breakdown_top_k, max_depth=1, aggregation=agg)
+        tree = build_cost_tree(trace, k=breakdown_top_k, max_depth=1, aggregation=agg)
         # Depth-1 rows carry their INCLUSIVE mass: a call row's subtree
         # (its own ops plus everything nested below the depth cutoff), the
         # root-direct remainder, and the top-k remainder. Together they

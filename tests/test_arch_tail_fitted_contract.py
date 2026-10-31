@@ -118,7 +118,7 @@ def test_fitted_seam_spec_carries_the_provenance_field_set() -> None:
 
     # The record itself: algorithm identity + data identity + geometry.
     assert fitted.digest.startswith("sha256:"), "fitting-data identity must be a content digest"
-    assert fitted.n_samples == 20 and fitted.n_features == 5
+    assert fitted.num_samples == 20 and fitted.num_features == 5
 
     spec = tl.transforms.pca_apply(fitted)
     params = dict(spec.params)

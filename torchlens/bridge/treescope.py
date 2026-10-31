@@ -591,7 +591,7 @@ def display(obj: Any) -> None:
     renders through treescope's automatic array visualizer with OUR
     truncation budgets.
 
-    Spelling is [UI-SPRINT]; ``layer.show(method="treescope")`` is the
+    Spelling is [UI-SPRINT]; ``layer.show(kind="treescope")`` is the
     candidate method form.
     """
 

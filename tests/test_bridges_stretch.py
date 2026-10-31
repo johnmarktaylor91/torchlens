@@ -136,7 +136,7 @@ def test_gradcam_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
         sys.modules, "pytorch_grad_cam", _module("pytorch_grad_cam", GradCAM=FakeGradCAM)
     )
 
-    payload = tl.bridge.gradcam.cam(log, "conv", inputs=x, targets=["class-0"])
+    payload = tl.bridge.pytorch_grad_cam.cam(log, "conv", inputs=x, targets=["class-0"])
 
     assert payload["schema"] == "torchlens.gradcam.v1"
     assert payload["model"] is model

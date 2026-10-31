@@ -1285,7 +1285,6 @@ __all__ = [
     "resolve_target",
     "safetensors",
     "speedscope",
-    "svg",
     "tensorboard",
     "to_model_explorer_dict",
     "unregister_target",

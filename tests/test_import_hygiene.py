@@ -368,10 +368,9 @@ assert collisions == {
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],
-    # T47/T48 (2026-08-28): attribution deliberately exports its onebackward
-    # child module (tl.attribution.onebackward is the documented door to the
-    # one-backward read surface), the fastlog/intervention pattern.
-    "attribution": ["onebackward"], "autoroute": ["input", "output"],
+    # The visuals rename removed the tl.attribution.onebackward export; the
+    # child module stays importable by its full path.
+    "attribution": [], "autoroute": ["input", "output"],
     "backends": [],
     # Entry/facade repair (workstream A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
@@ -380,14 +379,13 @@ assert collisions == {
     # notebook deliberately exports its three real child modules (the
     # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
-        "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
-        "huggingface", "inseq", "lit", "mcp", "profiler", "pyreft",
-        "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
-        "steering_vectors", "treescope",
+        "brain_score", "captum", "depyf", "dialz", "huggingface_hub", "inseq",
+        "lit", "mcp", "profiler", "pyreft", "pytorch_grad_cam", "repeng",
+        "rsatoolbox", "sae", "sae_lens", "shap", "steering_vectors",
+        "transformers", "treescope",
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.
         "xarray",
     ],
-    "brainpipe": [],
     "callbacks": ["lightning"],
     "neuro": [],
     "notebook": ["cards", "cardtree", "frontier"],
@@ -410,7 +408,11 @@ assert collisions == {
     "types": [], "user_funcs": [],
     # F29: tl._utils gained a root row (the docs teach tl._utils.doctor()).
     "utils": [],
-    "validation": [], "visualization": [], "viz": [],
+    "validation": [], "visualization": [],
+    # Visuals rename: tl.viz exports its nodes child module (the node-visual
+    # factories namespace), and the feature_maps function shares its module's
+    # name; the package imports the function eagerly, so the root keeps it.
+    "viz": ["feature_maps", "nodes"],
 }
 
 """

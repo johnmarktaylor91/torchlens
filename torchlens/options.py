@@ -1211,7 +1211,7 @@ class VisualizationOptions:
     show_legend: bool | None = None
     color_by: str | Callable[[Any], Any] | None = None
     size_by: str | Callable[[Any], Any] | None = None
-    scale: str | None = None
+    size_scale: str | None = None
     stack_by: str | bool | Callable[[Any], Any] | None = None
     show_redundant_args: bool = False
     font_size: int | None = None
@@ -1368,7 +1368,7 @@ class VisualizationOptions:
             )
             return object.__getattribute__(self, name)
 
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
 
         return {field_name: getattr(self, field_name) for field_name in _VISUALIZATION_FIELDS}
@@ -1798,11 +1798,11 @@ def merge_visualization_options(
     """Merge the canonical flat visualization kwargs into a grouped options object."""
 
     if visualization is None:
-        values = VisualizationOptions().as_dict()
+        values = VisualizationOptions().to_dict()
         values["view"] = function_default_mode
         specified_fields: frozenset[str] = frozenset()
     else:
-        values = visualization.as_dict()
+        values = visualization.to_dict()
         specified_fields = _explicit_fields(visualization)
         if "view" not in specified_fields:
             # The grouped object's non-explicit view default ("none") must not
@@ -1918,7 +1918,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     kwargs: dict[str, Any] = {
         "vis_mode": visualization.view,
         "vis_call_depth": visualization.depth,
-        "vis_outpath": visualization.container_path,
+        "path": visualization.container_path,
         "vis_graph_overrides": visualization.graph_overrides,
         "node_mode": visualization.node_style,
         "node_spec_fn": visualization.node_spec_fn,
@@ -1930,12 +1930,12 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_grad_edge_overrides": visualization.grad_edge_overrides,
         "vis_module_overrides": visualization.module_overrides,
         "vis_save_only": visualization.save_only,
-        "vis_fileformat": visualization.file_format,
-        "show_buffer_layers": visualization.show_buffers,
+        "file_format": visualization.file_format,
+        "show_buffers": visualization.show_buffers,
         "direction": visualization.direction,
         "vis_node_placement": visualization.layout,
         "vis_renderer": visualization.renderer,
-        "vis_theme": visualization.theme,
+        "theme": visualization.theme,
         "vis_intervention_mode": visualization.intervention_mode,
         "vis_show_cone": visualization.show_cone,
     }
@@ -1947,7 +1947,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "show_legend": visualization.show_legend,
         "color_by": visualization.color_by,
         "size_by": visualization.size_by,
-        "scale": visualization.scale,
+        "scale": visualization.size_scale,
         "stack_by": visualization.stack_by,
         "show_redundant_args": visualization.show_redundant_args,
         "font_size": visualization.font_size,

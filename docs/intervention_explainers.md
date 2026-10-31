@@ -415,7 +415,7 @@ attribution-patching row and formula helpers are not shipped; keep those formula
 and record the exact selectors and metric definitions next to saved specs.
 
 Two sign conventions are in use. The TransformerLens presentation is the first-order estimate
-`grad * (clean - corrupt)`, with `grad` taken on the corrupted run. The
+`grad * (clean - corrupted_graph)`, with `grad` taken on the corrupted run. The
 [intervention API reference](intervention_api.md#attribution-patching) examples use
-`(corrupt - clean) * patched`. Both are valid; name the convention next to the metric so higher
+`(corrupted_graph - clean) * patched`. Both are valid; name the convention next to the metric so higher
 and lower scores stay clear.

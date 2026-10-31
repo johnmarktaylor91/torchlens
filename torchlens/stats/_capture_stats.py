@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from .._observability._kernels import Spine, _as_reduction_tensor
+from .._observability._kernels import RunningStats, _as_reduction_tensor
 
 __all__ = [
     "STATS_REDUCER_REPR",
@@ -30,7 +30,7 @@ __all__ = [
     "is_stats_capture",
     "lean_spine",
     "refuse_reduced_payload_read",
-    "site_spines",
+    "site_stats",
     "stats_save_options",
 ]
 
@@ -100,7 +100,7 @@ class _StatsReducer:
 _CHUNK = 1 << 16
 
 
-def lean_spine(value: Any) -> Spine:
+def lean_spine(value: Any) -> RunningStats:
     """Fold one tensor into a fresh ``Spine`` with bounded working memory.
 
     Produces the state ``Spine().update(value)`` produces. ``Spine.update``
@@ -117,7 +117,7 @@ def lean_spine(value: Any) -> Spine:
     """
 
     tensor, dtype_tag = _as_reduction_tensor("Spine", value)
-    spine = Spine()
+    spine = RunningStats()
     spine._reduction_dtype = dtype_tag
     n = int(tensor.numel())
     if n == 0:
@@ -138,7 +138,7 @@ def lean_spine(value: Any) -> Spine:
     return spine
 
 
-def _fold_finite(spine: Spine, finite: torch.Tensor) -> None:
+def _fold_finite(spine: RunningStats, finite: torch.Tensor) -> None:
     """Fill a fresh spine's finite-value fields from a flat all-finite tensor."""
 
     n_finite = int(finite.numel())
@@ -191,13 +191,13 @@ def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:
         f"op {label} was captured with save='stats': its out was folded into a Spine "
         "and no payload was kept",
         code="activation_reduced_to_stats",
-        remedy="read the statistics with tl.stats.site_spines(trace)[label], or capture "
+        remedy="read the statistics with tl.stats.site_stats(trace)[label], or capture "
         "again keeping payloads with tl.trace(model, x, save='all')",
         label=str(label),
     )
 
 
-def pack_spine(spine: Spine) -> torch.Tensor:
+def pack_spine(spine: RunningStats) -> torch.Tensor:
     """Pack a ``Spine``'s state into one float64 vector (counts exact to 2^53)."""
 
     cells = [math.nan if getattr(spine, f) is None else float(getattr(spine, f)) for f in _FIELDS]
@@ -205,11 +205,11 @@ def pack_spine(spine: Spine) -> torch.Tensor:
     return torch.tensor(cells, dtype=torch.float64)
 
 
-def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> Spine:
+def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> RunningStats:
     """Rebuild a live ``Spine`` from a packed vector (exact round trip)."""
 
     cells = vector.detach().to("cpu", torch.float64).tolist()
-    spine = Spine(name=name)
+    spine = RunningStats(name=name)
     for field, cell in zip(_FIELDS, cells, strict=False):
         if field in _INT_FIELDS:
             setattr(spine, field, int(cell))
@@ -232,7 +232,7 @@ def is_stats_capture(trace: Any) -> bool:
     return trace._activation_transform_repr == STATS_REDUCER_REPR  # noqa: SLF001 -- declared Trace field
 
 
-def site_spines(trace: Any) -> dict[str, Spine]:
+def site_stats(trace: Any) -> dict[str, RunningStats]:
     """Return ``{op label: Spine}`` for a ``save="stats"`` trace, in capture order.
 
     Parameters
@@ -251,14 +251,14 @@ def site_spines(trace: Any) -> dict[str, Spine]:
 
     if not is_stats_capture(trace):
         raise InvalidArgumentError(
-            "tl.stats.site_spines(trace) reads the per-site statistics of a reduce-and-discard "
+            "tl.stats.site_stats(trace) reads the per-site statistics of a reduce-and-discard "
             "capture, but this trace was not captured with save='stats'",
             code="stats_capture_not_reduced",
             remedy="capture with tl.trace(model, x, save='stats'), then call "
-            "tl.stats.site_spines(trace)",
+            "tl.stats.site_stats(trace)",
             argument="trace",
         )
-    spines: dict[str, Spine] = {}
+    spines: dict[str, RunningStats] = {}
     for op in trace.ops:
         vector = op.transformed_out
         if not isinstance(vector, torch.Tensor) or vector.numel() != PACKED_SLOTS:

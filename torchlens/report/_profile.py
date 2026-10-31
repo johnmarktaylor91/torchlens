@@ -878,7 +878,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     level: ProfileLevel = "op",
     sort_by: ProfileSort = "time",
     ascending: bool = False,
-    top_k: int | None = None,
+    k: int | None = None,
     group_by: ProfileGroupBy | None = None,
 ) -> ProfileReport:
     """Build a unified op, module, or invocation resource profile.
@@ -921,7 +921,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     column additivity stamped on every export (D5).
     """
 
-    _validate_profile_args(level, sort_by, top_k, group_by)
+    _validate_profile_args(level, sort_by, k, group_by)
 
     from ._compute_truth import compute_aggregation
 
@@ -971,8 +971,8 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         row["_profile_row_index"] = index
     frame["_profile_row_index"] = list(range(len(frame)))
     frame = frame.sort_values(sort_by, ascending=ascending, na_position="last", kind="stable")
-    if top_k is not None:
-        frame = frame.head(top_k)
+    if k is not None:
+        frame = frame.head(k)
     sorted_row_indices = frame["_profile_row_index"].tolist()
     frame = frame.drop(columns=["_profile_row_index"])
     frame = frame.reset_index(drop=True)
@@ -989,8 +989,8 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         honesty_rows,
         columns=["name", "time", "flops", "activation_memory", "param_count"],
     )
-    if top_k is not None:
-        frame.attrs["top_k"] = top_k
+    if k is not None:
+        frame.attrs["top_k"] = k
     outcome = getattr(trace, "outcome", None)
     status_value = getattr(getattr(outcome, "status", None), "value", None)
     capture_status = str(status_value) if status_value is not None else "unknown"

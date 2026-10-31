@@ -260,7 +260,7 @@ def test_tf_halt_and_recipes_keep_typed_refusals() -> None:
     with pytest.raises(BackendUnsupportedError, match="halt"):
         tl.trace(_relu_plus_ten, x, backend="tf", halt=tl.func("relu"))
     with pytest.raises(BackendUnsupportedError, match="recipes"):
-        tl.trace(_relu_plus_ten, x, backend="tf", recipes=object())
+        tl.trace(_relu_plus_ten, x, backend="tf", facets=object())
 
 
 def test_tf_graph_only_capture_refuses_intervene() -> None:

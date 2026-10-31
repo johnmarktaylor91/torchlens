@@ -74,12 +74,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     explicit facet DIFF, not both-run)."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
-        coverage = sem.facet_coverage(trace)
+        coverage = tl.facets.coverage(trace)
         assert not coverage.unresolved, f"unresolved facet rows: {coverage.unresolved}"
         by_class: dict[str, list[Any]] = {}
         for row in coverage.rows:
@@ -128,7 +127,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         capture=tl.options.CaptureOptions(save_args=True),
     )
     try:
-        eager_coverage = sem.facet_coverage(eager_trace)
+        eager_coverage = tl.facets.coverage(eager_trace)
         eager_attention = [row for row in eager_coverage.rows if row.class_name == "GPT2Attention"]
         assert eager_attention and all("pattern" in row.available for row in eager_attention), (
             "eager arm: the attention pattern facet is still unavailable --"
@@ -151,7 +150,7 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
         lens = sem.logit_lens(trace)
-        assert lens.validated, "logit_lens self-validation did not run/pass"
+        assert lens.is_validated, "logit_lens self-validation did not run/pass"
         final = lens.final_logits
         assert torch.allclose(final, native, atol=1e-4), (
             "lens-at-final-layer != the model's own logits (the flagship"

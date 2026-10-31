@@ -54,7 +54,7 @@ def test_streaming_cka_refuses_nonfinite_batches() -> None:
     assert info.value.fields["code"] == "cka_input_nonfinite"
 
     meter.update(torch.nan_to_num(bad, posinf=0.0), torch.randn(6, 2))
-    assert math.isfinite(meter.result())
+    assert math.isfinite(meter.compute())
 
 
 def test_zero_variance_cka_warns_and_returns_nan() -> None:
@@ -68,7 +68,7 @@ def test_zero_variance_cka_warns_and_returns_nan() -> None:
     meter = tl.stats.CKA()
     meter.update(constant, other)
     with pytest.warns(TorchLensWarning) as caught_stream:
-        assert math.isnan(meter.result())
+        assert math.isnan(meter.compute())
     assert caught_stream[0].message.fields["code"] == "cka_zero_variance"
 
 
