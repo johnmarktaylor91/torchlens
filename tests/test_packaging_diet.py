@@ -432,6 +432,35 @@ def test_release_job_python_stack_is_hash_locked() -> None:
     )
 
 
+#: Security floors for the token-bearing release lock: package -> (first fixed
+#: release, advisory). A regeneration that drops one fails here, not only in the
+#: pip-audit job, which runs on pull requests.
+_RELEASE_LOCK_SECURITY_FLOORS = {
+    "certifi": ("2026.10.18", "GHSA-6q48-6c7w-9gw2"),
+    "gitpython": ("3.2.1", "GHSA-83vg-56qc-22m7"),
+    "setuptools": ("84.1.0", "GHSA-xmj3-9gf7-h52w"),
+}
+
+
+def test_release_lock_meets_security_floors() -> None:
+    """The release lock pins no package below its advisory's first fixed release."""
+    from packaging.version import Version
+
+    repo_root = Path(__file__).resolve().parents[1]
+    lock_text = (repo_root / ".github" / "workflows" / "release-requirements.txt").read_text()
+    pins = {
+        name.lower(): Version(version)
+        for name, version in re.findall(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)", lock_text, re.M)
+    }
+    below = [
+        f"{name}=={pins[name]} < {floor} ({advisory})"
+        for name, (floor, advisory) in _RELEASE_LOCK_SECURITY_FLOORS.items()
+        if name in pins and pins[name] < Version(floor)
+    ]
+    assert not below, f"release lock pins vulnerable versions: {below}"
+    assert set(_RELEASE_LOCK_SECURITY_FLOORS) <= set(pins), "a floored package left the lock"
+
+
 @pytest.mark.slow
 def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
     """Assert the built wheel's manifest: schemas in, py.typed in, nothing else top-level.
