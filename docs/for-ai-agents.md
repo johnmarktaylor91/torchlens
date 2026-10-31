@@ -144,7 +144,7 @@ bound = tl.when(tl.module("1"), tl.steer(direction, magnitude=2.0, feature_axis=
 outputs = [bound(torch.randn(2, 4)) for _ in range(3)]
 
 assert outputs[0].shape == (2, 2)
-assert bound.last_report.fire_count == 1
+assert bound.last_report.num_fires == 1
 ```
 
 Run a capture-time intervention:

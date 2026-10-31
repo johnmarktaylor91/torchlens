@@ -286,7 +286,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     assert profile.capture_verification_reason == "mode_rescue_rerun"
     assert profile.rescue_rerun is True
     assert profile.frame.attrs["capture_verified"] is False
-    assert profile.honesty().attrs["capture_verified"] is False
+    assert profile.evidence_labels().attrs["capture_verified"] is False
     rendered = repr(profile)
     assert "UNVERIFIED" in rendered
     assert "mode_rescue_rerun" in rendered

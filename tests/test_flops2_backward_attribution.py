@@ -351,7 +351,7 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
         assert "HAS_CURRENT_AUTOGRAD_NODE is False" in status.reason
         assert "UNKNOWN" in status.status_line
         tree = tl.report.cost_tree(trace)
-        assert tree.backward_total is None
+        assert tree.total_backward_flops is None
         assert "executed backward: unknown" in str(tree)
     finally:
         trace.cleanup()

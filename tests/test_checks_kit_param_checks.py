@@ -85,7 +85,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
     warn_codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "param_received_no_gradient" in warn_codes
 
-    change_facts = [f for f in report.findings if f.check == "params_changed_fact"]
+    change_facts = [f for f in report.findings if f.check_name == "params_changed_fact"]
     assert change_facts, "the corroborating change fact must be recorded"
     if mechanism == "graph_preserving":
         # THE VACUITY LOCK (memo D2, measured): a zero GRADIENT still gets
@@ -105,7 +105,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
         assert "learning" not in finding.message
         assert '"dead"' not in finding.message
     # The cone finding points at the frontier follow-up (D3, load-bearing).
-    sample = next(f for f in report.findings if f.check == "param_received_no_gradient")
+    sample = next(f for f in report.findings if f.check_name == "param_received_no_gradient")
     assert "gradient_flow_audit" in sample.follow_up
 
 
@@ -197,7 +197,7 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
             model(torch.randn(2, 4)).sum().backward()
             optimizer.step()
         report = session.report()
-        assert not [f for f in report.findings if f.check == "frozen_param_changed"]
+        assert not [f for f in report.findings if f.check_name == "frozen_param_changed"]
 
         # Now violate out-of-band; the digest difference PROVES change.
         with torch.no_grad():

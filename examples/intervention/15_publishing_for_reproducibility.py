@@ -57,7 +57,7 @@ def main() -> None:
 
     assert spec.metadata["save_level"] == "portable"
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 if __name__ == "__main__":

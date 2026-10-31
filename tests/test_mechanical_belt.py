@@ -243,7 +243,7 @@ def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(belt, "_report", _forged_failure_report())
     monkeypatch.setattr(belt, "_member_map", {})
-    row = compat_report(torch.nn.Linear(2, 2), torch.randn(1, 2)).row("mechanical_belt")
+    row = compat_report(torch.nn.Linear(2, 2), torch.randn(1, 2)).check("mechanical_belt")
     assert row.status == "scope"
     assert row.severity == "warning"
     assert row.detected is True
@@ -273,7 +273,7 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
     assert doctor_row.status == "PASS"
     assert "unprobed_candidates=" in doctor_row.detail
 
-    compat_row = compat_report(torch.nn.Linear(2, 2), torch.randn(1, 2)).row("mechanical_belt")
+    compat_row = compat_report(torch.nn.Linear(2, 2), torch.randn(1, 2)).check("mechanical_belt")
     assert compat_row.status == "pass"
     assert compat_row.severity == "ok"
     assert "unprobed_candidates=" in compat_row.details

@@ -187,7 +187,7 @@ spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
 steered = spec.bind(lm)
 logits = steered(ids).logits
 tokens = steered.generate(ids, max_new_tokens=5, do_sample=False, use_cache=True)
-assert steered.last_report.fire_count == 5  # one firing per generated token
+assert steered.last_report.num_fires == 5  # one firing per generated token
 
 # Steering plus evidence: one tl.record per forward returns the output and the recording.
 out, rec = tl.record(lm, ids, save=site, intervene=spec, return_output=True)

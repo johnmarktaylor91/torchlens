@@ -495,13 +495,13 @@ documented in [`docs/`](docs/).
 
 Every trace already carries per-op timings, FLOPs, and memory; `profile()`
 presents them per op, module, or call, sorted and truncated how you like, and
-`honesty()` names the clock and instrumentation state behind every number
+`evidence_labels()` names the clock and instrumentation state behind every number
 instead of just saying "measured":
 
 ```python
 prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
 print(prof_log.profile(level='module', sort_by='flops', top_k=8))
-print(prof_log.profile().honesty())
+print(prof_log.profile().evidence_labels())
 
 # Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;
 # without CUDA, emit_nvtx=True is refused with a typed error)

@@ -196,7 +196,7 @@ to the GradFn call it ran under and to the forward op that node differentiates
 `op_label`, `flops`, `recompute_flops`). Calls that ran under no recorded node (the engine's seed
 gradient, nodes no capture walked) go to the `unattributed` bucket, which names every call
 (`unattributed_ops`); the rows plus `unattributed_flops` equal the pass's `executed_flops`
-exactly. `backward_status(trace).attributions` holds one attribution per counted pass. When one
+exactly. `backward_status(trace).flops_attributions` holds one attribution per counted pass. When one
 backward reaches the nodes of two captures, each capture's view keeps the nodes whose forward op
 it recorded and leaves the others to their capture (`other_trace_ops`); a pass that raised before
 finishing has no count.
@@ -214,7 +214,7 @@ reads unknown with that reason.
 
 `tl.report.cost_tree(trace)` carries the same counts per module call: `self_forward_mac_flops`
 (the forward's multiply-accumulate work, 2 x true MACs), `self_backward_flops` and
-`self_total_flops`, with `subtree_*` twins. The total adds the backward to the forward's MAC
+`self_forward_backward_flops`, with `subtree_*` twins. The total adds the backward to the forward's MAC
 work, one convention, never to the elementwise-inclusive `self_flops`. Backward work on a node
 with no forward op and the unattributed calls get their own rows, so the backward column sums to
 the executed count. Without a counted backward the columns are `None` and the tree's
@@ -231,7 +231,7 @@ trace = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(bac
 trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
 status = backward_status(trace)
-(attribution,) = status.attributions
+(attribution,) = status.flops_attributions
 attributed = sum(row.flops for row in attribution.rows)
 assert attributed + attribution.unattributed_flops == status.executed_flops
 by_op = attribution.flops_by_op()  # forward op label -> backward FLOPs

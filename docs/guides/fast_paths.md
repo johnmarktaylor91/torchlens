@@ -62,7 +62,7 @@ finally:
     handle.remove()
 
 assert all(torch.equal(a, b) for a, b in zip(steered, reference))
-assert bound.last_report.fire_count == 1  # the ledger of the most recent call
+assert bound.last_report.num_fires == 1  # the ledger of the most recent call
 ```
 
 What to know about a binding:

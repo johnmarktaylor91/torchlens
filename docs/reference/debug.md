@@ -365,7 +365,7 @@ import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
 audit = tl.debug.dtype_range_audit(trace)
-print(len(audit.findings), audit.n_ops_audited <= audit.n_ops_total)
+print(len(audit.findings), audit.num_audited_ops <= audit.num_ops)
 ```
 
 Output:

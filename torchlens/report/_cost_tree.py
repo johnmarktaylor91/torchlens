@@ -64,10 +64,10 @@ COST_COLUMN_ADDITIVITY: dict[str, bool] = {
     "subtree_pct": False,
     "self_forward_mac_flops": True,
     "self_backward_flops": True,
-    "self_total_flops": True,
+    "self_forward_backward_flops": True,
     "subtree_forward_mac_flops": False,
     "subtree_backward_flops": False,
-    "subtree_total_flops": False,
+    "subtree_forward_backward_flops": False,
 }
 
 #: The counting convention of each FLOPs column family. The forward
@@ -130,7 +130,7 @@ class CostTreeRow:
         GradFn calls (matmul and convolution families, fma2), recompute
         included; ``None`` when no backward was counted (the tree's
         ``backward_state`` says whether it was not run or is unknown).
-    self_total_flops / subtree_total_flops:
+    self_forward_backward_flops / subtree_forward_backward_flops:
         Forward MAC work plus executed backward; ``None`` with the backward.
     """
 
@@ -167,7 +167,7 @@ class CostTree:
     those rows, disclosed so a truncated view never reads as complete).
 
     ``backward_state`` is the three-state backward answer
-    (``tl.report.backward_status``); ``backward_total`` is the executed
+    (``tl.report.backward_status``); ``total_backward_flops`` is the executed
     backward count when one was counted (the self backward column sums to
     it exactly, unattributed calls included as their own row), else
     ``None``; ``column_conventions`` names each FLOPs column's convention.

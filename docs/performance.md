@@ -388,7 +388,7 @@ status = tl.report.backward_status(trace)
 # it needs a gradient, so no input-gradient matmul is dispatched.
 assert status.executed_flops == 2 * 2 * 32 * 4
 print(status.status_line)
-print(status.uncounted_ops)  # the bias-gradient sums and other calls, named, not zeroed
+print(status.uncounted_op_counts)  # the bias-gradient sums and other calls, named, not zeroed
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
 

@@ -121,8 +121,8 @@ uninstrumented and says so.
 
 ```python
 balance = tl.report.machine_balance(
-    compute_peak_flops_per_s=1.0e12,
-    memory_peak_bytes_per_s=1.0e11,
+    peak_flops_per_s=1.0e12,
+    peak_bytes_per_s=1.0e11,
     basis="advertised",
 )
 result = tl.report.roofline(log, ridge_intensity=balance.ridge_intensity)

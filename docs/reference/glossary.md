@@ -2481,16 +2481,16 @@ shim owed*
   builds a graph; checkpoint replays run with it on, which is how a replayed
   forward kernel is labeled recompute.
 
-**CostTreeRow forward/backward/total columns; CostTree.backward_state / backward_total / forward_mac_total / column_conventions** — *unstable — no deprecation shim owed*
+**CostTreeRow forward/backward/total columns; CostTree.backward_state / total_backward_flops / total_forward_mac_flops / column_conventions** — *unstable — no deprecation shim owed*
 : `tl.report.cost_tree(trace)` rows carry `self_forward_mac_flops` (2 x true
   MACs), `self_backward_flops` (executed backward, matmul and convolution
-  families, fma2) and `self_total_flops` (their sum, one convention), with
+  families, fma2) and `self_forward_backward_flops` (their sum, one convention), with
   non-additive subtree twins `CostTreeRow.subtree_forward_mac_flops`,
   `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_forward_backward_flops`
   (constructor keywords `subtree_forward_mac_flops=`,
-  `subtree_backward_flops=`, `subtree_total_flops=`). Backward work on nodes with no
+  `subtree_backward_flops=`, `subtree_forward_backward_flops=`). Backward work on nodes with no
   forward op and unattributed calls get their own remainder rows, so the self
-  backward column sums to `backward_total`. Without a counted backward the
+  backward column sums to `total_backward_flops`. Without a counted backward the
   cells are `None` and `backward_state` names the state; never 0.
   `column_conventions` names each FLOPs column's convention. Siblings fold
   only when their MAC and backward cells agree too.

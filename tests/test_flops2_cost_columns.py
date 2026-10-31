@@ -34,7 +34,7 @@ def _observed(case: str) -> tuple[Any, Any]:
 
 def _assert_columns_conserve(tree: Any, executed: int) -> None:
     rows = tree.rows
-    assert tree.backward_total == executed
+    assert tree.total_backward_flops == executed
     assert sum(row.self_backward_flops for row in rows) == executed
     assert sum(row.self_forward_mac_flops for row in rows) == tree.total_forward_mac_flops
     for row in rows:
@@ -99,7 +99,7 @@ def test_states_without_a_counted_backward_are_never_zero() -> None:
             (unobserved, "grad_enabled_unobserved", "unknown"),
         ):
             tree = cost_tree(trace)
-            assert tree.backward_state == state and tree.backward_total is None
+            assert tree.backward_state == state and tree.total_backward_flops is None
             assert all(row.self_backward_flops is None for row in tree.rows)
             assert all(row.self_forward_backward_flops is None for row in tree.rows)
             assert f"executed backward: {words}" in str(tree)

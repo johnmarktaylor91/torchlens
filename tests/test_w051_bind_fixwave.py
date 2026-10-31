@@ -374,7 +374,7 @@ def test_bind_in_module_pass_qualifier_still_resolves_after_root_skip() -> None:
     bound = tl.when(tl.in_module("blk:2") & tl.func("relu"), tl.scale(0.0)).bind(model)
     bound(x)
     assert [fire["site_key"] for fire in bound.last_report.fires] == ["s1|blk/blk.1|relu||1"]
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
 
 
 # ---------------------------------------------------------------------------

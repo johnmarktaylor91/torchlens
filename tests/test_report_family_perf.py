@@ -182,8 +182,8 @@ def test_roofline_rows_are_hypotheses_and_aggregate_is_sum_over_sum(small_trace)
     sum(FLOPs)/sum(bytes), never a mean of per-op ratios."""
 
     balance = machine_balance(
-        compute_peak_flops_per_s=1e12,
-        memory_peak_bytes_per_s=1e11,
+        peak_flops_per_s=1e12,
+        peak_bytes_per_s=1e11,
         basis="advertised",
     )
     result = roofline(small_trace, ridge_intensity=balance.ridge_intensity)
@@ -222,13 +222,11 @@ def test_machine_balance_requires_named_basis() -> None:
     is never called MFU."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        machine_balance(
-            compute_peak_flops_per_s=1e12, memory_peak_bytes_per_s=1e11, basis="vendor_max"
-        )
+        machine_balance(peak_flops_per_s=1e12, peak_bytes_per_s=1e11, basis="vendor_max")
     assert excinfo.value.fields["code"] == "machine_balance_basis_invalid"
     balance = machine_balance(
-        compute_peak_flops_per_s=1e12,
-        memory_peak_bytes_per_s=1e11,
+        peak_flops_per_s=1e12,
+        peak_bytes_per_s=1e11,
         basis="measured_achievable",
         method="STREAM triad + DGEMM roof",
     )
