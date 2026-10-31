@@ -2115,9 +2115,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch 2.14): its absence is a healthy older install with no method to
         # drop a row for (same rationale as the three generator flags above).
         "HAS_GENERATOR_PHILOX_STATE",
-        # GradientEdge / Node.register_prehook postdate the torch>=2.1 floor:
-        # their absence is a healthy old install with nothing to shim -- the
-        # one-backward read refuses typed instead of degrading.
+        # A working GradientEdge postdates the torch>=2.1 floor (absent or broken
+        # through 2.3; Node.register_prehook is present from 2.1): absence is a
+        # healthy old install with nothing to shim -- the one-backward read
+        # refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
         # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the
@@ -2163,12 +2164,11 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch.distributed._functional_collectives._resolve_group /
         # torch.distributed.distributed_c10d._resolve_process_group (funcol
         # group resolution, merge-ranks C2 recording) are torch-private
-        # surfaces absent on torch 2.7.1 specifically (measured on the
-        # nightly fast-tier leg, 2026-10-02) though present on both the
-        # declared torch>=2.1 floor's neighbors and the canonical/newest
-        # pins: a healthy install with nothing to shim -- captured funcol
-        # calls refuse typed instead of recording correlated boundary nodes,
-        # the same honest degradation every other optional probe here takes.
+        # surfaces that read absent on every measured release before 2.13
+        # (``_torch_compat_table``): a healthy install with nothing to shim --
+        # captured funcol calls refuse typed instead of recording correlated
+        # boundary nodes, the same honest degradation every other optional
+        # probe here takes.
         "HAS_FUNCOL_GROUP_RESOLUTION",
         # torch._C._autograd._top_saved_tensors_default_hooks (peeks the
         # innermost installed default saved-tensors pack/unpack hook pair) is
@@ -2176,8 +2176,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # never merely "unprobed" -- on a torch build without it,
         # saved_tensors_default_hooks_active() honestly answers None instead
         # of degrading capture-time side-effect analysis; nothing shims it.
-        # Absent on torch 2.7.1 specifically (measured on the nightly
-        # fast-tier leg, 2026-10-02).
+        # Absent through torch 2.7 (measured; ``_torch_compat_table``).
         "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     }
 )
