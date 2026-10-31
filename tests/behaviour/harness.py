@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import inspect
+import shutil
 import warnings
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -515,6 +516,27 @@ def run_cell(case: Case, features: Sequence[Feature], tmp: Path) -> CellResult:
     with warnings.catch_warnings():
         warnings.simplefilter("default")
         return _run_cell(case, features, tmp)
+
+
+def run_cell_and_clean(
+    case: Case, features: Sequence[Feature], tmp: Path, *, keep_failed: bool = False
+) -> CellResult:
+    """Run one cell in ``tmp``, then remove ``tmp``, pass or fail.
+
+    Every oracle has its outcome when :func:`run_cell` returns (the result
+    holds outcomes only, never a path), so nothing reads ``tmp`` afterwards.
+    With ``keep_failed`` the directory stays when an oracle failed or the cell
+    raised, for inspection; a passing cell's directory is removed either way.
+    """
+
+    failed = True
+    try:
+        result = run_cell(case, features, tmp)
+        failed = any(outcome.status == "fail" for outcome in result.outcomes.values())
+    finally:
+        if not (failed and keep_failed):
+            shutil.rmtree(tmp)
+    return result
 
 
 def _run_cell(case: Case, features: tuple[Feature, ...], tmp: Path) -> CellResult:
