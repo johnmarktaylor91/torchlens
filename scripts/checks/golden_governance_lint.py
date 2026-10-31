@@ -29,12 +29,18 @@ import ast
 import fnmatch
 import functools
 import re
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
-from _oracle_env import GOLDEN_FLAG_PREFIXES, golden_flag_names_for_role
+from _harness import TESTS_DIR, run_checks, use_test_helpers
 
-_TESTS_DIR = Path(__file__).resolve().parent
+use_test_helpers()
+
+from _oracle_env import GOLDEN_FLAG_PREFIXES, golden_flag_names_for_role  # noqa: E402
+
+_TESTS_DIR = TESTS_DIR
 
 #: Env-var name shapes that arm golden mutation. DERIVED from the single
 #: registry in tests/_oracle_env.py (b10 R78 round-4): this set and the root
@@ -484,7 +490,7 @@ def _ledger_entry(rel: str) -> tuple[str, tuple[str, str]] | None:
     return None
 
 
-def test_every_golden_file_is_governed_or_ledgered() -> None:
+def check_every_golden_file_is_governed_or_ledgered() -> None:
     """No golden family remains silently outside governance (b10 R78 round-3)."""
 
     unledgered = [rel for rel in _discover_golden_files() if _ledger_entry(rel) is None]
@@ -495,7 +501,7 @@ def test_every_golden_file_is_governed_or_ledgered() -> None:
     )
 
 
-def test_ledger_has_no_dead_entries() -> None:
+def check_ledger_has_no_dead_entries() -> None:
     """Every ledger pattern matches at least one committed file."""
 
     discovered = _discover_golden_files()
@@ -527,7 +533,7 @@ _ENV_GOVERNED_REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
 }
 
 
-def test_env_governed_ledger_dirs_carry_env_markers() -> None:
+def check_env_governed_ledger_dirs_carry_env_markers() -> None:
     """Every env-governed dir carries ALL of its declared marker files."""
 
     governed_dirs = {
@@ -581,7 +587,7 @@ def _declared_emitter_packages(source: str) -> tuple[str, ...]:
     return tuple(part.strip().strip("'\"") for part in match.group(1).split(",") if part.strip())
 
 
-def test_emitter_packages_match_declared_env_markers() -> None:
+def check_emitter_packages_match_declared_env_markers() -> None:
     """Family emitter tuples and the marker table agree, both directions."""
 
     sources = dict(_test_texts())
@@ -617,7 +623,7 @@ def test_emitter_packages_match_declared_env_markers() -> None:
 #: every sibling carried it — this census makes the omission structural.
 _GENERATION_WRAP_GUARD_CENSUS: dict[str, tuple[str, str]] = {
     "TORCHLENS_REGEN_EXPORT_GOLDENS": ("test_exports.py", "in-process"),
-    "TORCHLENS_REGEN_LAYER_BASELINE": ("test_arch_spine_layer_lint.py", "in-process"),
+    "TORCHLENS_REGEN_LAYER_BASELINE": ("../scripts/checks/arch_spine_layer_lint.py", "in-process"),
     "TORCHLENS_UPDATE_BACKEND_PARITY": (
         "backend_parity/test_torch_parity_gates.py",
         "in-process",
@@ -690,10 +696,14 @@ def _wrap_guard_census_violations(
     return violations
 
 
-def test_golden_generators_carry_wrap_state_guard() -> None:
+def check_golden_generators_carry_wrap_state_guard() -> None:
     """Every golden generator family is censused; in-process ones call the guard."""
 
     sources = dict(_test_texts())
+    # Golden generators that moved out of tests/ into scripts/checks/ stay censused.
+    for relpath, _mode in _GENERATION_WRAP_GUARD_CENSUS.values():
+        if relpath.startswith("../scripts/checks/"):
+            sources[relpath] = (_TESTS_DIR / relpath).resolve().read_text(encoding="utf-8")
     discovered: set[str] = set()
     for _relpath, source in sources.items():
         discovered.update(_FLAG_LITERAL_RE.findall(source))
@@ -707,7 +717,7 @@ def test_golden_generators_carry_wrap_state_guard() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_wrap_guard_census_is_red_capable() -> None:
+def check_wrap_guard_census_is_red_capable() -> None:
     """The census check fails on an in-process generator lacking the guard."""
 
     census = {"TORCHLENS_UPDATE_X": ("planted.py", "in-process")}
@@ -755,7 +765,7 @@ other = os.environ.get("TORCHLENS_CACHE_DIR")
 """
 
 
-def test_flag_scanner_catches_pre_fix_selector_matrix_pattern() -> None:
+def check_flag_scanner_catches_pre_fix_selector_matrix_pattern() -> None:
     """The exact pre-fix truthy-armed pattern is a violation (red-capable)."""
 
     violations = find_unguarded_flag_reads(_PLANTED_TRUTHY_FLAG)
@@ -763,7 +773,7 @@ def test_flag_scanner_catches_pre_fix_selector_matrix_pattern() -> None:
     assert "TORCHLENS_UPDATE_SELECTOR_MATRIX" in violations[0]
 
 
-def test_flag_scanner_catches_presence_and_bare_if_reads() -> None:
+def check_flag_scanner_catches_presence_and_bare_if_reads() -> None:
     """Presence tests and bare truthy `if` reads are violations."""
 
     presence = find_unguarded_flag_reads(_PLANTED_PRESENCE_FLAG)
@@ -772,7 +782,7 @@ def test_flag_scanner_catches_presence_and_bare_if_reads() -> None:
     assert len(bare) == 1 and "TORCHLENS_REGEN_EXPORT_GOLDENS" in bare[0]
 
 
-def test_flag_scanner_accepts_guarded_reads() -> None:
+def check_flag_scanner_accepts_guarded_reads() -> None:
     """== "1" comparisons, flag_armed, and non-flag reads are clean."""
 
     assert find_unguarded_flag_reads(_GUARDED_FLAG) == []
@@ -805,7 +815,7 @@ def _assert_golden(path, projection):
 """
 
 
-def test_autogreen_scanner_catches_pre_fix_backend_parity_pattern() -> None:
+def check_autogreen_scanner_catches_pre_fix_backend_parity_pattern() -> None:
     """The historical write-then-compare-to-self regen path is caught."""
 
     violations = find_autogreen_update_branches(_PLANTED_AUTOGREEN)
@@ -813,7 +823,7 @@ def test_autogreen_scanner_catches_pre_fix_backend_parity_pattern() -> None:
     assert "TORCHLENS_UPDATE_BACKEND_PARITY" in violations[0]
 
 
-def test_autogreen_scanner_accepts_write_then_skip_and_return_true() -> None:
+def check_autogreen_scanner_accepts_write_then_skip_and_return_true() -> None:
     """pytest.skip and the caller-skips `return True` patterns are clean."""
 
     assert find_autogreen_update_branches(_FIXED_WRITE_THEN_SKIP) == []
@@ -830,7 +840,7 @@ def assert_artifact_current(path, payload):
 """
 
 
-def test_scanners_catch_pre_fix_producer_ledger_refresh_pattern() -> None:
+def check_scanners_catch_pre_fix_producer_ledger_refresh_pattern() -> None:
     """The b10 R78 round-4 producer-ledger shape now trips BOTH scanners.
 
     The pre-fix ``tests/producer_parity/test_ledger.py`` refresh branch
@@ -849,7 +859,7 @@ def test_scanners_catch_pre_fix_producer_ledger_refresh_pattern() -> None:
     assert any(token in _PLANTED_PRODUCER_LEDGER_REFRESH for token in _FLAG_TOKENS)
 
 
-def test_flag_registry_roles_cover_both_governance_layers() -> None:
+def check_flag_registry_roles_cover_both_governance_layers() -> None:
     """The single registry feeds both layers with the intended memberships.
 
     The arming lint must see the refresh/record/enforce flags; the CI guard
@@ -894,7 +904,7 @@ def test_a():
 """
 
 
-def test_xfail_scanner_catches_reasonless_markers() -> None:
+def check_xfail_scanner_catches_reasonless_markers() -> None:
     """Reasonless and bare xfail markers are violations (red-capable)."""
 
     violations = find_bare_xfails(_PLANTED_BARE_XFAIL)
@@ -1008,28 +1018,28 @@ def _scan_repo(scanner, tokens: tuple[str, ...]) -> list[str]:
     return violations
 
 
-def test_no_unguarded_golden_flag_reads_in_tests() -> None:
+def check_no_unguarded_golden_flag_reads_in_tests() -> None:
     """Every golden mutation flag in tests/ arms on the exact value "1"."""
 
     violations = _scan_repo(find_unguarded_flag_reads, _FLAG_TOKENS)
     assert not violations, "\n".join(violations)
 
 
-def test_no_autogreen_update_branches_in_tests() -> None:
+def check_no_autogreen_update_branches_in_tests() -> None:
     """Every golden update branch in tests/ is write-then-skip, never green."""
 
     violations = _scan_repo(find_autogreen_update_branches, _FLAG_TOKENS)
     assert not violations, "\n".join(violations)
 
 
-def test_no_reasonless_xfails_in_tests() -> None:
+def check_no_reasonless_xfails_in_tests() -> None:
     """Every xfail marker in tests/ names the gap it pins via reason=."""
 
     violations = _scan_repo(find_bare_xfails, ("xfail",))
     assert not violations, "\n".join(violations)
 
 
-def test_no_unflagged_baseline_writes_in_tests() -> None:
+def check_no_unflagged_baseline_writes_in_tests() -> None:
     """No missing-golden branch may silently self-baseline (flag-independent).
 
     Prefiltered on the write tokens themselves, NOT the flag tokens — the
@@ -1070,7 +1080,7 @@ def test_snapshot(path, actual):
 """
 
 
-def test_unflagged_baseline_scanner_is_red_capable() -> None:
+def check_unflagged_baseline_scanner_is_red_capable() -> None:
     """The exact pre-fix tests/snapshots shape is caught; the governed shape passes."""
 
     violations = find_unflagged_baseline_writes(_PLANTED_UNFLAGGED_BASELINE)
@@ -1078,7 +1088,7 @@ def test_unflagged_baseline_scanner_is_red_capable() -> None:
     assert find_unflagged_baseline_writes(_GOVERNED_BASELINE) == []
 
 
-def test_repo_scan_prefilter_is_sound() -> None:
+def check_repo_scan_prefilter_is_sound() -> None:
     """The substring prefilter can never hide a violation.
 
     Every scanner's violations require its trigger token to appear literally
@@ -1105,7 +1115,7 @@ def test_repo_scan_prefilter_is_sound() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_backend_parity_update_run_never_reports_green(
+def _check_backend_parity_update_run_never_reports_green(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The fixed fourth auto-green path: an update run writes, then SKIPS.
@@ -1134,7 +1144,14 @@ def test_backend_parity_update_run_never_reports_green(
     assert parity._assert_projection_matches_golden("probe", {"a": 1}) is False
 
 
-def test_backend_parity_update_flag_arms_on_exact_one_only(
+def check_backend_parity_update_run_never_reports_green() -> None:
+    """Run the check body in a scratch directory with a scoped monkeypatch."""
+
+    with tempfile.TemporaryDirectory() as tmp, pytest.MonkeyPatch.context() as monkeypatch:
+        _check_backend_parity_update_run_never_reports_green(Path(tmp), monkeypatch)
+
+
+def _check_backend_parity_update_flag_arms_on_exact_one_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """TORCHLENS_UPDATE_BACKEND_PARITY=0 must NOT regenerate goldens."""
@@ -1152,7 +1169,14 @@ def test_backend_parity_update_flag_arms_on_exact_one_only(
     assert '"a": 1' in (tmp_path / "probe.json").read_text(), "disarmed flag must not rewrite"
 
 
-def test_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
+def check_backend_parity_update_flag_arms_on_exact_one_only() -> None:
+    """Run the check body in a scratch directory with a scoped monkeypatch."""
+
+    with tempfile.TemporaryDirectory() as tmp, pytest.MonkeyPatch.context() as monkeypatch:
+        _check_backend_parity_update_flag_arms_on_exact_one_only(Path(tmp), monkeypatch)
+
+
+def check_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
     """r7 R77 (fable b2 MED): the warmup skip must honor ALL golden prefixes.
 
     The session warmup capture wraps torch before any test runs; SF-53
@@ -1164,7 +1188,7 @@ def test_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
     hand-copied prefix literal.
     """
 
-    conftest_text = (Path(__file__).resolve().parent / "conftest.py").read_text(encoding="utf-8")
+    conftest_text = (TESTS_DIR / "conftest.py").read_text(encoding="utf-8")
     assert "key.startswith(GOLDEN_FLAG_PREFIXES)" in conftest_text, (
         "the session-warmup golden carve-out no longer derives from "
         "_oracle_env.GOLDEN_FLAG_PREFIXES"
@@ -1174,7 +1198,7 @@ def test_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
     )
 
 
-def test_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
+def check_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
     """r7 R78-1 (opus b10 MED): the dirty disclosure must be about the SOURCE.
 
     Golden bytes are rewritten BEFORE the provenance stamp, so counting the
@@ -1204,7 +1228,7 @@ def test_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
     assert _foreign_porcelain_lines(sibling, own) == [" M tests/golden/family_b/case.dot"]
 
 
-def test_emitter_census_discovers_every_emitter_declaration() -> None:
+def check_emitter_census_discovers_every_emitter_declaration() -> None:
     """r7 R78-2 (opus b10 MED): the emitter census is DERIVED-complete, both ways.
 
     The six census rows were hand-written with no discovery sweep, so a NEW
@@ -1240,3 +1264,42 @@ def test_emitter_census_discovers_every_emitter_declaration() -> None:
     )
     stale_exempt = exempt_dirs - set(_ENV_GOVERNED_REQUIRED_MARKERS)
     assert not stale_exempt, f"stale emitter-census exemption(s): {sorted(stale_exempt)}"
+
+
+CHECKS = (
+    check_every_golden_file_is_governed_or_ledgered,
+    check_ledger_has_no_dead_entries,
+    check_env_governed_ledger_dirs_carry_env_markers,
+    check_emitter_packages_match_declared_env_markers,
+    check_golden_generators_carry_wrap_state_guard,
+    check_wrap_guard_census_is_red_capable,
+    check_flag_scanner_catches_pre_fix_selector_matrix_pattern,
+    check_flag_scanner_catches_presence_and_bare_if_reads,
+    check_flag_scanner_accepts_guarded_reads,
+    check_autogreen_scanner_catches_pre_fix_backend_parity_pattern,
+    check_autogreen_scanner_accepts_write_then_skip_and_return_true,
+    check_scanners_catch_pre_fix_producer_ledger_refresh_pattern,
+    check_flag_registry_roles_cover_both_governance_layers,
+    check_xfail_scanner_catches_reasonless_markers,
+    check_no_unguarded_golden_flag_reads_in_tests,
+    check_no_autogreen_update_branches_in_tests,
+    check_no_reasonless_xfails_in_tests,
+    check_no_unflagged_baseline_writes_in_tests,
+    check_unflagged_baseline_scanner_is_red_capable,
+    check_repo_scan_prefilter_is_sound,
+    check_backend_parity_update_run_never_reports_green,
+    check_backend_parity_update_flag_arms_on_exact_one_only,
+    check_session_warmup_carveout_matches_every_golden_flag_prefix,
+    check_provenance_source_disclosure_ignores_the_familys_own_output,
+    check_emitter_census_discovers_every_emitter_declaration,
+)
+
+
+def main() -> int:
+    """Run every golden_governance_lint check and return the exit status."""
+
+    return run_checks("golden_governance_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

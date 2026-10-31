@@ -5112,11 +5112,8 @@ test-docstrings	tests/test_api_surface.py	93.
 test-docstrings	tests/test_api_surface.py	94.
 test-docstrings	tests/test_api_surface.py	96.
 test-docstrings	tests/test_api_surface.py	97.
-test-docstrings	tests/test_arch_spine_layer_lint.py	12
-test-docstrings	tests/test_arch_spine_layer_lint.py	650
 test-docstrings	tests/test_arch_spine_relocations.py	35
 test-docstrings	tests/test_arch_tail_fitted_contract.py	20
-test-docstrings	tests/test_arch_tail_vocab_lint.py	3.3
 test-docstrings	tests/test_arg_spec_coverage.py	774
 test-docstrings	tests/test_argpos_hardening.py	22
 test-docstrings	tests/test_argpos_hardening.py	31
@@ -5427,11 +5424,6 @@ test-docstrings	tests/test_distributed_honesty.py	2026
 test-docstrings	tests/test_distributed_honesty.py	26
 test-docstrings	tests/test_distributed_shard_local_marker.py	3.2
 test-docstrings	tests/test_distributed_shard_local_marker.py	3.3
-test-docstrings	tests/test_docs_lockstep_names.py	12,430
-test-docstrings	tests/test_docs_lockstep_names.py	12,651
-test-docstrings	tests/test_docs_lockstep_names.py	41
-test-docstrings	tests/test_docs_lockstep_names.py	53
-test-docstrings	tests/test_docs_lockstep_names.py	97
 test-docstrings	tests/test_docs_snippets.py	10
 test-docstrings	tests/test_docs_snippets.py	10,
 test-docstrings	tests/test_docs_snippets.py	15
@@ -5531,8 +5523,6 @@ test-docstrings	tests/test_extract_v2_text.py	41.6
 test-docstrings	tests/test_extract_v2_workflows.py	10
 test-docstrings	tests/test_extract_v2_workflows.py	14
 test-docstrings	tests/test_extract_v2_workflows.py	16
-test-docstrings	tests/test_factcore_import_lint.py	42
-test-docstrings	tests/test_factcore_import_lint.py	7.4
 test-docstrings	tests/test_factcore_report_layer.py	3.8,
 test-docstrings	tests/test_factcore_repr_harness.py	10
 test-docstrings	tests/test_factcore_repr_harness.py	12
@@ -5585,7 +5575,6 @@ test-docstrings	tests/test_fastlog_bundle_perms.py	700
 test-docstrings	tests/test_fastlog_recover_bounded.py	256
 test-docstrings	tests/test_fastlog_recover_bounded.py	256_
 test-docstrings	tests/test_fastlog_recover_bounded.py	60
-test-docstrings	tests/test_file_size_ratchet.py	43
 test-docstrings	tests/test_fixa_escrow_spill.py	13
 test-docstrings	tests/test_fixa_escrow_spill.py	16
 test-docstrings	tests/test_fixa_escrow_spill.py	18
@@ -5619,10 +5608,6 @@ test-docstrings	tests/test_global_state_child_process_guard.py	40
 test-docstrings	tests/test_global_state_child_process_guard.py	56
 test-docstrings	tests/test_global_state_inventory.py	54
 test-docstrings	tests/test_global_state_inventory.py	55
-test-docstrings	tests/test_golden_governance_lint.py	10
-test-docstrings	tests/test_golden_governance_lint.py	53
-test-docstrings	tests/test_golden_governance_lint.py	77
-test-docstrings	tests/test_golden_governance_lint.py	78
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	10
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	100
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	13
@@ -6436,7 +6421,6 @@ test-docstrings	tests/test_robustness_pr2.py	65
 test-docstrings	tests/test_robustness_pr2.py	67
 test-docstrings	tests/test_robustness_pr4.py	6896
 test-docstrings	tests/test_roofline.py	16
-test-docstrings	tests/test_ruff_ratchet_governance.py	70
 test-docstrings	tests/test_run_stateful_warning.py	24
 test-docstrings	tests/test_run_stateful_warning.py	5.2
 test-docstrings	tests/test_run_until.py	18
@@ -6483,13 +6467,10 @@ test-docstrings	tests/test_save_union_lookup.py	24
 test-docstrings	tests/test_saved_tensors_hooks_capture.py	35
 test-docstrings	tests/test_scaling_ladder.py	52
 test-docstrings	tests/test_scaling_ladder.py	60
-test-docstrings	tests/test_schema_lockstep.py	10
-test-docstrings	tests/test_schema_lockstep.py	14
 test-docstrings	tests/test_schema_lockstep.py	17
 test-docstrings	tests/test_schema_lockstep.py	3.0
 test-docstrings	tests/test_schema_lockstep.py	3.10
 test-docstrings	tests/test_schema_lockstep.py	3.11
-test-docstrings	tests/test_schema_lockstep.py	53
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	2.34.1
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
@@ -6527,8 +6508,6 @@ test-docstrings	tests/test_site_join.py	3,1
 test-docstrings	tests/test_site_key.py	033
 test-docstrings	tests/test_site_key.py	777
 test-docstrings	tests/test_site_key.py	93
-test-docstrings	tests/test_skip_audit.py	10
-test-docstrings	tests/test_skip_audit.py	79
 test-docstrings	tests/test_snoop_core.py	277
 test-docstrings	tests/test_snoop_core.py	554
 test-docstrings	tests/test_snoop_failure.py	2,8

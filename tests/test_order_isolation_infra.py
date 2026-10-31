@@ -28,7 +28,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_skip_audit import FULL_TEST_EXTRA_SENTINEL
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
+from skip_audit import FULL_TEST_EXTRA_SENTINEL  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
