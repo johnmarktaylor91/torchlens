@@ -1237,9 +1237,9 @@ def open_extraction(
             remedy="pass verify='structural' or verify='first_access'",
             value=repr(verify),
         )
+    from .._data_substrate.artifact import MANIFEST_SCHEMA_V2
     from ..dataset_extraction import (
         MANIFEST_FILENAME,
-        MANIFEST_SCHEMA_V2,
         DatasetExtractionResumeError,
         _load_manifest,
     )

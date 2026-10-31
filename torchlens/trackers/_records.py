@@ -34,12 +34,12 @@ from dataclasses import dataclass, field
 
 from ..observability import (
     HISTORY_SCHEMA_VERSION,
-    CommittedBlock,
     HistogramResult,
     RunRecord,
     SiteRecord,
     SpineResult,
 )
+from ..observability._artifact import CommittedBlock
 from ._errors import TagGrammarError
 
 __tl_layer__ = "L8"
