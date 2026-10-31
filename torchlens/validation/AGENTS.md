@@ -74,8 +74,8 @@ keys. Invariants are part of the postprocess regression net.
 artifact.
 Only the two legacy 2.16 INTERVENTION formats (`v2.16_intervention`,
 `v2.16_intervention_with_kind`) are accepted without schema validation. Legacy 2.16
-MODEL-LOG bundles are NOT loadable: they sit below the tlspec v6 / torchlens 2.33
-rehydration floor and refuse with `ArtifactTooOldError`.
+MODEL-LOG bundles are NOT loadable: like every file saved by torchlens 2.x they sit below
+the tlspec 11 rehydration floor and refuse with `ArtifactTooOldError`.
 
 ## How It Connects
 

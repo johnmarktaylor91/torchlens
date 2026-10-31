@@ -25,11 +25,11 @@
 8. `_tracing_finished` is set once at finalization and mirrored onto every retained op
    (`backends/_finalize.py`); nothing resets it per pass.
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
-9a. Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-    `tl.errors.ArtifactTooOldError`; legacy field-alias resurrection ladders are
-    deleted. The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 / 2.32.4
-    artifacts load (the floor is the stamp, never a release name). Legacy 2.16 intervention
-    specs remain loadable (floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
+9a. Rehydration floor: this release reads only its own format. An artifact stamped
+    `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
+    `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
+    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
+    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
     through the loader's default-deny unpickler and refuses unportable values typed
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
@@ -62,7 +62,8 @@
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
     lands, so no further bump follows; the writer contract states the floor release as
-    `2.31.0` (v9 froze the false "2.33"); `reserved_vocabularies.step_scores` reserves the
+    `3.0.0`, the first tlspec-11 writer (v9 and v10 keep their frozen texts);
+    `reserved_vocabularies.step_scores` reserves the
     generation step-score names, credited to inseq. Contract of record
     `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
 9e. tlspec v11 (persisted-field rename write; current): stored keys follow the decided public

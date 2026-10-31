@@ -632,12 +632,11 @@
   `docs/migration/scoped_detached_patching.md`.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
-  Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-  `tl.errors.ArtifactTooOldError` (drop-not-resurrect; the legacy field-alias
-  ladders are deleted). The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 /
-  2.32.4 artifacts LOAD (the compat ledger's governed producer windows are the authority;
-  the floor is the STAMP, never a release name). Legacy 2.16 intervention specs remain
-  loadable — the floor covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
+  Rehydration floor: this release reads only its own format. An artifact stamped
+  `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
+  `tl.errors.ArtifactTooOldError` (no alias list or legacy spelling adapter remains on any
+  record class). Legacy 2.16 intervention specs remain loadable; the floor covers Trace
+  rehydration only. WRITE/READ SYMMETRY (W051-IO): the
   save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
   unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
   naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
@@ -650,8 +649,8 @@
 - TLSPEC V10 (the batch-2 coordinated schema write, 2026-10-12; current version): one bump
   for every new saved field of the window, each admitted by the v10 field registry
   (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
-  lands; the writer contract and the below-floor refusal name the floor release `2.31.0`
-  (the first tlspec-6 writer; v9 froze the false "2.33"); `reserved_vocabularies.step_scores`
+  lands; the writer contract names the floor release `3.0.0`, the first tlspec-11 writer
+  (v9 and v10 keep their frozen texts); `reserved_vocabularies.step_scores`
   reserves the generation step-score names, credited to inseq. Contract of record:
   `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
 - TLSPEC V9 (the C07 coordinated schema write, 2026-08-27): the

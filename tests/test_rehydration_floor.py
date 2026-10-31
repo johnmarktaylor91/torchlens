@@ -1,6 +1,6 @@
-"""The tlspec_version 6 rehydration floor (drop-not-resurrect; first writer 2.31.0).
+"""The tlspec_version 11 rehydration floor: this release reads only its own format.
 
-Artifacts written by torchlens >= 2.31.0 (``tlspec_version >= 6``) load; anything
+Artifacts stamped ``tlspec_version 11`` load; anything
 older refuses with the typed ``ArtifactTooOldError`` naming the
 floor, instead of being resurrected through legacy field-alias ladders.
 """
