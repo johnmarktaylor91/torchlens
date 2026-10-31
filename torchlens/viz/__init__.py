@@ -25,19 +25,25 @@ __all__ = [
     "lineplot",
     "montage",
     "nodes",
-    # Transformer renderers, resolved by __getattr__ below.
+    # Transformer and watch-history renderers, resolved by __getattr__ below.
     "ablation_grid",  # noqa: F822 -- resolved by __getattr__
     "attention",  # noqa: F822 -- resolved by __getattr__
     "attention_atlas",  # noqa: F822 -- resolved by __getattr__
+    "contact_sheet",  # noqa: F822 -- resolved by __getattr__
+    "histogram_waterfall",  # noqa: F822 -- resolved by __getattr__
     "logit_lens",  # noqa: F822 -- resolved by __getattr__
     "metric_strip",  # noqa: F822 -- resolved by __getattr__
     "prediction_table",  # noqa: F822 -- resolved by __getattr__
+    "quantile_fan",  # noqa: F822 -- resolved by __getattr__
+    "site_detail",  # noqa: F822 -- resolved by __getattr__
+    "timeline",  # noqa: F822 -- resolved by __getattr__
     "token_strip",  # noqa: F822 -- resolved by __getattr__
 ]
 
-#: Transformer renderers (attention, logit lens, predictions, receipts), resolved on
-#: first access so importing this namespace does not import the transformer kit.
-_TRANSFORMER_RENDERERS: dict[str, tuple[str, str]] = {
+#: Transformer renderers (attention, logit lens, predictions, receipts) and the
+#: watch-history and timeline renderers, resolved on first access so importing
+#: this namespace does not import those kits.
+_LAZY_RENDERERS: dict[str, tuple[str, str]] = {
     "ablation_grid": ("torchlens.tviz._receipts", "render_receipt_grid"),
     "attention": ("torchlens.tviz._render_attention", "render_attention"),
     "attention_atlas": ("torchlens.tviz._render_attention", "render_attention_atlas"),
@@ -45,11 +51,16 @@ _TRANSFORMER_RENDERERS: dict[str, tuple[str, str]] = {
     "metric_strip": ("torchlens.tviz._metrics", "render_metric_strip"),
     "prediction_table": ("torchlens.tviz._predictions", "render_prediction_table"),
     "token_strip": ("torchlens.tviz._strip", "render_token_strip"),
+    "contact_sheet": ("torchlens.observability._render", "render_contact_sheet"),
+    "histogram_waterfall": ("torchlens.observability._render", "render_waterfall"),
+    "quantile_fan": ("torchlens.observability._render", "render_fan"),
+    "site_detail": ("torchlens.observability._render", "render_detail"),
+    "timeline": ("torchlens.observe._svg", "render_timeline_svg"),
 }
 
 
 def __getattr__(name: str) -> Any:
-    """Resolve the transformer renderers lazily.
+    """Resolve the transformer and watch-history renderers lazily.
 
     Parameters
     ----------
@@ -67,10 +78,10 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not a ``torchlens.viz`` name.
     """
 
-    if name in _TRANSFORMER_RENDERERS:
+    if name in _LAZY_RENDERERS:
         import importlib
 
-        module_path, attr = _TRANSFORMER_RENDERERS[name]
+        module_path, attr = _LAZY_RENDERERS[name]
         value = getattr(importlib.import_module(module_path), attr)
         globals()[name] = value
         return value

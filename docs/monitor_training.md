@@ -43,10 +43,11 @@ element budget of the whole rest of the model). Cadence is per-stream.
 ## 2. Read the contact sheet
 
 ```python
-from torchlens.observability import HistoryView, render_contact_sheet
+from torchlens.viz import contact_sheet
+from torchlens.trackers import HistoryView
 
 view = HistoryView.from_collector(collector)
-svg = render_contact_sheet(view)          # page 0
+svg = contact_sheet(view)          # page 0
 ```
 
 Tiles are ranked by the named score `nonfinite_first_drift_v1`: sites with
@@ -58,11 +59,11 @@ hidden top-N truncation. The first real gpt2 sheet this repo produced is
 ## 3. Drill into a site
 
 ```python
-from torchlens.observability import render_fan, render_waterfall, render_detail
+from torchlens.viz import histogram_waterfall, quantile_fan, site_detail
 
-fan = render_fan(view, site_id)        # the default per-site view
-wf = render_waterfall(view, site_id)   # step x signed-log2-bin density
-sheet = render_detail(view, site_id)   # every stream on one step axis
+fan = quantile_fan(view, site_id)        # the default per-site view
+wf = histogram_waterfall(view, site_id)   # step x signed-log2-bin density
+sheet = site_detail(view, site_id)   # every stream on one step axis
 ```
 
 The fan's median and p25-75/p5-95 bands are DERIVED from the sketch

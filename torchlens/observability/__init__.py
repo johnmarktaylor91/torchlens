@@ -98,15 +98,9 @@ from ._quantiles import (
 )
 from ._region import RegionRecord, region
 from ._render import (
-    HistoryView,
-    SeriesPoint,
     color_by_watch,
     contact_sheet_pages,
     rank_sites,
-    render_contact_sheet,
-    render_detail,
-    render_fan,
-    render_waterfall,
 )
 from ._schema import (
     GRAD_SCALE_PROVENANCE,
@@ -157,7 +151,6 @@ __all__ = [
     "HistoryCollector",
     "HistoryReader",
     "HistorySchemaError",
-    "HistoryView",
     "HistoryWriter",
     "JoinCoverage",
     "KinetoJoinResult",
@@ -177,7 +170,6 @@ __all__ = [
     "RefusalPredicate",
     "RegionRecord",
     "RunRecord",
-    "SeriesPoint",
     "SessionResult",
     "SiteRecord",
     "SpanError",
@@ -220,10 +212,6 @@ __all__ = [
     "rank_sites",
     "region",
     "register_join_result",
-    "render_contact_sheet",
-    "render_detail",
-    "render_fan",
-    "render_waterfall",
     "session",
     "spine_vector_fused",
     "split_heads",

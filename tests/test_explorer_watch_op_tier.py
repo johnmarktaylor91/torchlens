@@ -14,15 +14,14 @@ import torch
 
 import torchlens as tl
 from torchlens.observability import (
-    HistoryView,
     StepTruth,
     WatchLifecycleError,
     WatchPlanError,
-    render_contact_sheet,
-    render_fan,
 )
 from torchlens.observability._op_tier import OpTierCollector, split_heads
 from torchlens.observability._quantiles import WatchRenderError
+from torchlens.trackers import HistoryView
+from torchlens.viz import contact_sheet, quantile_fan
 
 
 def _model() -> torch.nn.Module:
@@ -94,8 +93,8 @@ class TestOpTierObservations:
             assert spine is not None and spine.count_total > 0
             assert point.observation.sketch is not None
         # The renderers accept op-tier views unchanged (grain-agnostic).
-        assert render_fan(view, linear_sites[0]).startswith("<svg")
-        assert "of" in render_contact_sheet(view)
+        assert quantile_fan(view, linear_sites[0]).startswith("<svg")
+        assert "of" in contact_sheet(view)
 
     def test_training_graph_survives_wrapped_step(self) -> None:
         model = _model()

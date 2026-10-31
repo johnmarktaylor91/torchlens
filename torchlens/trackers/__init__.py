@@ -32,6 +32,7 @@ own receivers -- TorchLens owns the engine, they own the sink.
 
 from __future__ import annotations
 
+from ..observability._render import HistoryView, SeriesPoint
 from ._amp import (
     SCALE_EVIDENCE,
     correct_histogram,
@@ -96,6 +97,8 @@ from ._watch import (
 __tl_layer__ = "L8"
 
 __all__ = [
+    "HistoryView",
+    "SeriesPoint",
     "CAPABILITIES",
     "DEFAULT_EVERY",
     "DELIVERY_STATES",

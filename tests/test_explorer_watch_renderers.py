@@ -18,7 +18,6 @@ from torchlens.observability import (
     CommittedBlock,
     Histogram,
     HistoryCollector,
-    HistoryView,
     ObservationRecord,
     RunningStats,
     RunRecord,
@@ -32,11 +31,9 @@ from torchlens.observability import (
     histogram_payload,
     observation_row,
     rank_sites,
-    render_contact_sheet,
-    render_detail,
-    render_fan,
-    render_waterfall,
 )
+from torchlens.trackers import HistoryView
+from torchlens.viz import contact_sheet, histogram_waterfall, quantile_fan, site_detail
 
 
 def _observed(
@@ -316,8 +313,8 @@ def _parse_svg(document: str) -> ET.Element:
 class TestRenderers:
     def test_fan_deterministic_and_honest(self) -> None:
         view = _synthetic_view()
-        svg_1 = render_fan(view, "m:b")
-        svg_2 = render_fan(view, "m:b")
+        svg_1 = quantile_fan(view, "m:b")
+        svg_2 = quantile_fan(view, "m:b")
         assert svg_1 == svg_2, "fan must be byte-deterministic"
         assert 'xmlns:xlink="http://www.w3.org/1999/xlink"' in svg_1
         assert "min/max exact" in svg_1
@@ -328,8 +325,8 @@ class TestRenderers:
     @pytest.mark.smoke
     def test_waterfall_deterministic_with_raster_and_caption(self) -> None:
         view = _synthetic_view()
-        svg_1 = render_waterfall(view, "m:a")
-        assert svg_1 == render_waterfall(view, "m:a")
+        svg_1 = histogram_waterfall(view, "m:a")
+        assert svg_1 == histogram_waterfall(view, "m:a")
         assert "data:image/png;base64," in svg_1
         assert "never rebinned" in svg_1
         assert "nonfinite" in svg_1
@@ -338,26 +335,26 @@ class TestRenderers:
     @pytest.mark.smoke
     def test_contact_sheet_footer_ranking_pagination(self) -> None:
         view = _synthetic_view()
-        sheet = render_contact_sheet(view)
-        assert sheet == render_contact_sheet(view)
+        sheet = contact_sheet(view)
+        assert sheet == contact_sheet(view)
         assert "of 2 -- page 1 of 1" in sheet
         assert "nonfinite_first_drift_v1" in sheet
         ranked = rank_sites(view)
         assert ranked[0][0] == "m:b", "nonfinite site ranks first"
         assert "nonfinite" in ranked[0][2]
         assert contact_sheet_pages(view, tiles_per_page=1) == 2
-        page_2 = render_contact_sheet(view, page=1, tiles_per_page=1)
+        page_2 = contact_sheet(view, page=1, tiles_per_page=1)
         assert "sites 2-2 of 2" in page_2
         with pytest.raises(WatchRenderError) as excinfo:
-            render_contact_sheet(view, page=7)
+            contact_sheet(view, page=7)
         assert excinfo.value.fields["code"] == "watch_page_out_of_range"
         _parse_svg(sheet)
 
     @pytest.mark.smoke
     def test_detail_sheet_discloses(self) -> None:
         view = _synthetic_view()
-        detail = render_detail(view, "m:b")
-        assert detail == render_detail(view, "m:b")
+        detail = site_detail(view, "m:b")
+        assert detail == site_detail(view, "m:b")
         assert "site detail" in detail
         assert "activation" in detail
         _parse_svg(detail)
@@ -368,10 +365,10 @@ class TestRenderers:
         assert ranked, "collector produced rankable sites"
         site_id = ranked[0][0]
         for document in (
-            render_fan(collector_view, site_id),
-            render_waterfall(collector_view, site_id),
-            render_contact_sheet(collector_view),
-            render_detail(collector_view, site_id),
+            quantile_fan(collector_view, site_id),
+            histogram_waterfall(collector_view, site_id),
+            contact_sheet(collector_view),
+            site_detail(collector_view, site_id),
         ):
             _parse_svg(document)
         # D11: the skipped optimizer step records skipped and NO fake update:
@@ -390,10 +387,10 @@ class TestCairosvgRoundTrip:
         cairosvg = pytest.importorskip("cairosvg")
         view = _synthetic_view()
         for document in (
-            render_fan(view, "m:a"),
-            render_waterfall(view, "m:a"),
-            render_contact_sheet(view),
-            render_detail(view, "m:a"),
+            quantile_fan(view, "m:a"),
+            histogram_waterfall(view, "m:a"),
+            contact_sheet(view),
+            site_detail(view, "m:a"),
         ):
             png = cairosvg.svg2png(bytestring=document.encode("utf-8"))
             assert png[:8] == b"\x89PNG\r\n\x1a\n"

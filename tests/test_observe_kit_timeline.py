@@ -22,8 +22,8 @@ from torchlens.observe import (
     estimated_liveness,
     memory_timeline_v2,
     module_rollup,
-    render_timeline_svg,
 )
+from torchlens.viz import timeline
 
 
 class _DeterministicBlock(nn.Module):
@@ -154,8 +154,8 @@ def test_svg_renders_byte_exact_and_deterministic() -> None:
     artifact = _artifact(
         _DeterministicBlock(), torch.ones(2, 8, requires_grad=True), backward_ready=True
     )
-    first = render_timeline_svg(artifact)
-    second = render_timeline_svg(artifact)
+    first = timeline(artifact)
+    second = timeline(artifact)
     assert first == second
     assert first.startswith("<svg ")
     assert "not allocator residency" in first
@@ -175,9 +175,9 @@ def test_svg_binning_is_disclosed_never_truncating() -> None:
     """Over-budget traces bin contiguous ordinals and disclose the bin size."""
 
     artifact = _artifact(_DeterministicBlock(), torch.ones(2, 8))
-    binned = render_timeline_svg(artifact, column_budget=2)
+    binned = timeline(artifact, column_budget=2)
     assert "binned x" in binned
-    unbinned = render_timeline_svg(artifact, column_budget=4096)
+    unbinned = timeline(artifact, column_budget=4096)
     assert "binned x" not in unbinned
 
 
@@ -240,7 +240,7 @@ def _regen() -> None:
     artifact = _artifact(
         _DeterministicBlock(), torch.ones(2, 8, requires_grad=True), backward_ready=True
     )
-    print(hashlib.sha256(render_timeline_svg(artifact).encode()).hexdigest())
+    print(hashlib.sha256(timeline(artifact).encode()).hexdigest())
 
 
 #: Byte-exact SVG golden digest (a content hash, not a credential).
