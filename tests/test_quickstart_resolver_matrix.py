@@ -131,7 +131,7 @@ class TestRenderFacade:
         """An explicit collapse= value lands in the result policy."""
 
         result = render(
-            _cnn().eval(), input_size=SIZE, collapse="none", file=str(tmp_path / "g.svg")
+            _cnn().eval(), input_shape=SIZE, collapse="none", file=str(tmp_path / "g.svg")
         )
         assert result.policy["collapse"] == "none"
 
@@ -141,7 +141,7 @@ class TestRenderFacade:
         with pytest.raises(Exception) as excinfo:
             render(
                 _cnn().eval(),
-                input_size=SIZE,
+                input_shape=SIZE,
                 file=str(tmp_path / "g.svg"),
                 path=str(tmp_path / "other"),
             )
@@ -161,7 +161,7 @@ class TestRenderFacade:
         """return_trace=True keeps the trace; close() releases it."""
 
         result = render(
-            _cnn().eval(), input_size=SIZE, return_trace=True, file=str(tmp_path / "g.svg")
+            _cnn().eval(), input_shape=SIZE, return_trace=True, file=str(tmp_path / "g.svg")
         )
         assert result.trace is not None
         with result:
@@ -186,7 +186,7 @@ class TestRenderFacade:
         with pytest.raises(Exception) as excinfo:
             render(
                 _cnn().eval(),
-                input_size=SIZE,
+                input_shape=SIZE,
                 file=str(tmp_path / "g.svg"),
                 color_by="magnitude",
             )

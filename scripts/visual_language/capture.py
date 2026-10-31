@@ -100,7 +100,7 @@ def _resolve(value: Any) -> Any:
 
 def _fork_edit(trace: Any) -> Any:
     fork = trace.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     return fork
 
 

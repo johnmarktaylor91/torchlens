@@ -261,7 +261,7 @@ _REDIRECTS: dict[str, str] = {
     "rerun": "use torchlens.Trace.do with engine='rerun'",
     "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
     "reset_naming_counter": "use torchlens.io.reset_naming_counter",
-    "resolve_sites": "use trace[selector] -- it returns every matching site as a torchlens.Selection",
+    "resolve_sites": "use torchlens.Trace indexing (trace[selector]) -- it returns every matching site as a torchlens.Selection",
     "load_extraction": "use torchlens.load(path) -- it detects a saved extraction directory",
     "save": "use torchlens.Trace.save (trace.save(path)) -- objects save themselves; torchlens.load(path) reads a saved artifact back",
     "save_intervention": "use torchlens.io.save_intervention",
