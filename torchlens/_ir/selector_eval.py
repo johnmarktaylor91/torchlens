@@ -813,7 +813,9 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
 
     module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
     if lifecycle == "capture" and not module_outputs:
-        source_trace = getattr(subject, "trace", None)
+        # Capture subjects include backend ``OpEvent`` records, which carry the
+        # owning session as ``source_trace`` (they have no ``trace`` member).
+        source_trace = getattr(subject, "source_trace", None)
         if getattr(source_trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:
