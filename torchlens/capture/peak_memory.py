@@ -367,7 +367,7 @@ def record_forward_peak(
 
 
 def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
-    """Fold one backward pass's peak into ``trace._cost_backward_peak_memory``.
+    """Fold one backward pass's peak into ``trace.cost.backward_peak_memory``.
 
     CPU passes aggregate by max (the largest peak above a pass's starting
     baseline) and only under ``measure_host_peak_memory=True``; without the

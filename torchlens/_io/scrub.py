@@ -209,7 +209,7 @@ def scrub_for_save(
         so ``False`` drops the whole channel; values are never rewritten.
     backend_name:
         Backend identifier for payload audit records. Defaults to
-        ``trace._provenance_backend`` when present.
+        ``trace.provenance.backend`` when present.
     payload_materialization:
         Whether this backend can serialize materialized tensor payloads.
     sparse_runnable:

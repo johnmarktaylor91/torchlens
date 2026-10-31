@@ -179,7 +179,7 @@ def attach_tf_derived_grads(
     Returns
     -------
     None
-        ``trace._autograd_derived_grads`` and optionally
+        ``trace.autograd.derived_grads`` and optionally
         ``trace.autograd.intermediate_derived_grads`` are populated.
     """
 

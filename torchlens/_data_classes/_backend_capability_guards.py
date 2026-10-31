@@ -9,7 +9,7 @@ accessors: ``Op.grads`` / ``Module.grads``, ``Trace.autograd.backward_passes``,
 ``Trace.saved_grad_modules`` all route through this guard, so on
 ``backward_capture=False`` backends they raise where they previously returned
 ``None``/``0``/empty. The registered table, not a hardcoded backend-name set,
-is the authority; the error text redirects to ``trace._autograd_derived_grads`` only
+is the authority; the error text redirects to ``trace.autograd.derived_grads`` only
 when the backend actually declares a derived-gradient surface, and an
 UNREGISTERED backend name refuses typed too — fail-closed, never silently
 empty.

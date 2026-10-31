@@ -1263,7 +1263,7 @@ class TinygradBackend:
         Returns
         -------
         None
-            ``trace._autograd_derived_grads`` is populated with input leaf gradient records.
+            ``trace.autograd.derived_grads`` is populated with input leaf gradient records.
         """
 
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":

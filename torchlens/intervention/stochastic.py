@@ -244,7 +244,7 @@ def _base_seed(
     """Resolve the base seed for one firing (D5, DIS-4 spelling).
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
-    recorded ``trace._options_seed`` (threaded through ``run_ctx`` by the
+    recorded ``trace.options.seed`` (threaded through ``run_ctx`` by the
     live/replay doors), the helper's persisted identity, and the population
     identity -- never the ambient RNG, never a transient construction ordinal.
     """

@@ -1413,7 +1413,7 @@ class MLXBackend:
         Returns
         -------
         None
-            ``trace._autograd_derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace.autograd.derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         params = grad_options.params

@@ -384,7 +384,7 @@ class JAXBackend:
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
-            ``trace._autograd_derived_grads``.
+            ``trace.autograd.derived_grads``.
         capture
             Grouped ``CaptureOptions``. The sole post-sprint spelling for the
             flat capture kwargs above; an explicit field here is merged in
@@ -1615,7 +1615,7 @@ class JAXBackend:
         Returns
         -------
         None
-            ``trace._autograd_derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace.autograd.derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         import jax

@@ -1648,7 +1648,7 @@ def _run_model_and_save_specified_outs(
             every exit path, so code after the capture continues its own streams. When
             None the seed is drawn from a private entropy-seeded stream, so an outer
             ``torch.manual_seed`` does not make an unseeded capture reproducible. The
-            seed used is recorded on ``trace._options_seed``.
+            seed used is recorded on ``trace.options.seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -2670,8 +2670,8 @@ def trace(
         grouping), ``"strict_shapes"`` (reserved; refuses typed until its
         own reviewed design lands), ``"fold_sites"`` (the D1 folding axis;
         refuses typed on plain captures until an affirmative D1 ruling).
-        The requested value is recorded on ``trace._options_grouping`` and the
-        policy that actually ran on ``trace._options_grouping_policy``. Distinct
+        The requested value is recorded on ``trace.options.grouping`` and the
+        policy that actually ran on ``trace.options.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
     narrate:

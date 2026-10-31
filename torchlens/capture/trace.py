@@ -93,7 +93,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace._options_seed``.
+always disclosed on ``trace.options.seed``.
 """
 
 
@@ -157,8 +157,8 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 
-    Stores the peak on ``trace._cost_forward_peak_memory`` and the backend label on
-    ``trace._provenance_forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
+    Stores the peak on ``trace.cost.forward_peak_memory`` and the backend label on
+    ``trace.provenance.forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
     around the forward WITHOUT ``reset_peak_memory_stats`` (R36-2): resetting
     clobbered the caller's process-wide high-water counter on every capture
     (the CPU branch below explicitly refuses the analogous clobber). When the

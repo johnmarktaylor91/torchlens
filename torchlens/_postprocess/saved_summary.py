@@ -109,7 +109,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
 
     Notes
     -----
-    Sets ``trace._cost_pinned_autograd_memory``: ``Bytes(0)`` when every
+    Sets ``trace.cost.pinned_autograd_memory``: ``Bytes(0)`` when every
     payload is detached, ``None`` on a non-torch backend, where the walk does
     not apply.
     """

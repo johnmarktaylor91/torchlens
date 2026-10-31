@@ -68,7 +68,7 @@ def status_of(record: ResolvedPreprocessing) -> str:
 
 
 def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[..., Any]) -> None:
-    """Populate ``trace._provenance_input_preprocessor`` for a user-supplied transform (B1).
+    """Populate ``trace.provenance.input_preprocessor`` for a user-supplied transform (B1).
 
     A capture that APPLIED an input transform carries provenance on every
     path, not only the HF bridges (which stamp a richer record over this one

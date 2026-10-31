@@ -61,7 +61,7 @@ def finalize_single_pass_trace(
     trace:
         Trace whose ``_raw_layer_dict`` contains backend-created op logs.
     backend_name:
-        Canonical backend name written to ``trace._provenance_backend``.
+        Canonical backend name written to ``trace.provenance.backend``.
     module_tree:
         Optional object-module discovery tree for object-module traces.
     attach_function_root_module:
@@ -85,8 +85,8 @@ def finalize_single_pass_trace(
     compute_input_output_distances:
         Whether to run the neutral input/output distance flood (torch Step 4)
         over the finalized single-pass graph. ``None`` reads the request the
-        backend stored on ``trace._options_mark_layer_depths``; the effective value is
-        written back to ``trace._options_mark_layer_depths`` either way.
+        backend stored on ``trace.options.mark_layer_depths``; the effective value is
+        written back to ``trace.options.mark_layer_depths`` either way.
     recurrence_detection:
         Whether to run the neutral recurrence grouper over the raw graph and
         apply its assignments (multi-pass layers, pass-qualified op labels,
@@ -194,7 +194,7 @@ def finalize_single_pass_trace(
 
 
 def stamp_preview_graph_shape_hash(trace: Trace) -> None:
-    """Compute ``trace._provenance_fingerprint`` for a finalized preview trace.
+    """Compute ``trace.provenance.fingerprint`` for a finalized preview trace.
 
     Torch traces get the hash in postprocess Step 16.5; preview backends
     finalize through this module and used to leave it ``None``. The hash
