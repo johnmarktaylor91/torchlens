@@ -61,8 +61,8 @@ one alias shape -- an underscore-prefixed private field backing a same-named
 public property (e.g. ``_is_in_conditional_body`` / ``is_in_conditional_body``).
 That is narrower than the docstring here previously claimed: it does not
 recognize a KEEP field that is a real, populated value but whose FIELD_ORDER
-counterpart lives at a *different* name (e.g. ``Param._grad_memory`` backs the
-differently-named public ``gradient_memory`` property) or is deliberately
+counterpart lives at a *different* name (a private backing field whose public
+property is spelled differently) or is deliberately
 excluded from FIELD_ORDER by design (e.g. ``Param._derived_grad_payload``
 backs the live-handle ``.grad`` property, which the metadata-only
 ``to_pandas()`` contract excludes everywhere). Both shapes are real,
