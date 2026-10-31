@@ -68,7 +68,7 @@ def resolution() -> pp.Resolution:
         }
     )
     return pp.Resolution(
-        record=base.record,
+        preprocessing=base.preprocessing,
         declared=base.declared,
         transform=lambda batch: (batch - 0.5) / 0.5,
     )

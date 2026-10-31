@@ -125,7 +125,7 @@ class TestSiteMatrixRoutes:
         file_side = features.site_matrix(out_dir, "conv")
         memory_side = features.site_matrix(trace, "conv")
         assert torch.allclose(file_side.matrix, memory_side.matrix)
-        assert file_side.record.op == memory_side.record.op
+        assert file_side.shaping.op == memory_side.shaping.op
 
     def test_file_route_carries_ids_and_provenance(self, artifact) -> None:
         """Row ids and the input-preprocessing block ride the file route."""

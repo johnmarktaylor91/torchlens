@@ -59,7 +59,7 @@ class TestResolver:
         """A real shipped family declares NO fields; resolution stays honest."""
 
         assert detection_resolution.declared is None
-        assert detection_resolution.record.config.get("declares") == "nothing"
+        assert detection_resolution.preprocessing.config.get("declares") == "nothing"
         assert detection_resolution.transform is not None
 
     def test_explicit_mapping_resolves_with_aliases(self) -> None:
