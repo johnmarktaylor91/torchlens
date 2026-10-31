@@ -42,20 +42,23 @@ class StrayStatementPow(nn.Module):
         return x.pow(2)
 
 
-def _reused_tensor_address(first: torch.Tensor) -> torch.Tensor | None:
-    """Free ``first`` and allocate until a tensor takes its address (CPython reuses freed slots)."""
+def _tensor_preferring_address(wanted: int) -> torch.Tensor:
+    """Allocate tensors until one takes the address ``wanted`` (CPython reuses freed slots), else the last."""
 
-    wanted = id(first)
-    del first
+    candidate = torch.ones(3)
     for _ in range(64):
-        candidate = torch.ones(3)
         if id(candidate) == wanted:
-            return candidate
-    return None
+            break
+        candidate = torch.ones(3)
+    return candidate
 
 
 def test_consecutive_same_name_events_are_told_apart_by_object_identity() -> None:
-    """A fresh output at a freed tensor's address is a new event, not a nested repeat."""
+    """A fresh output after the last one is freed is a new event, not a nested repeat.
+
+    Before the fix the collector compared ``id()`` values, so the fresh tensor
+    that took the freed output's address was dropped as a repeat.
+    """
 
     model = StrayStatementPow()
     trace = tl.trace(model, torch.ones(3))
@@ -63,12 +66,11 @@ def test_consecutive_same_name_events_are_told_apart_by_object_identity() -> Non
     try:
         with session.activated():
             first = torch.ones(3)
+            wanted = id(first)
             session.capture_function("pow", first)
             assert session.function_index == 1
-            second = _reused_tensor_address(first)
             del first
-            if second is None:
-                pytest.skip("the allocator did not reuse the freed tensor's address")
+            second = _tensor_preferring_address(wanted)
             session.capture_function("pow", second)
             assert session.failure is None
             assert session.function_index == 2
@@ -212,7 +214,7 @@ def test_fast_run_names_a_direct_forward_call_as_a_capability_refusal() -> None:
     trace = tl.trace(model, torch.arange(6.0).view(2, 3))
     with pytest.raises(RunCapabilityUnavailableError) as info:
         trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
-    assert info.value.code == "run_capability_unavailable"
+    assert info.value.fields["code"] == "run_capability_unavailable"
     assert "forward()" in str(info.value)
     assert "parent.inner" in str(info.value)
 
@@ -238,5 +240,5 @@ def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> 
     trace = tl.trace(model, torch.arange(6.0).view(2, 3))
     with pytest.raises(RunCapabilityUnavailableError) as info:
         trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
-    assert info.value.code == "run_capability_unavailable"
+    assert info.value.fields["code"] == "run_capability_unavailable"
     assert "Normal" in str(info.value)
