@@ -38,7 +38,6 @@ keeps the modern signature but changes its version string.
 from __future__ import annotations
 
 import contextlib
-import functools
 import importlib
 import inspect
 import sys
@@ -639,23 +638,18 @@ def _import_module_attr_or_none(module_name: str, attr_name: str) -> Any | None:
     return getattr(module, attr_name, None)
 
 
-@functools.cache
 def _split_attribute_path(spec: str) -> tuple[str, tuple[str, ...]]:
-    """Split a ``"module:dotted.attr"`` path once per process (pure; getters run per op).
-
-    Parameters
-    ----------
-    spec:
-        Capability-table attribute path.
-
-    Returns
-    -------
-    tuple[str, tuple[str, ...]]
-        Module name and the attribute segments to traverse from it.
-    """
-
+    """Split a ``"module:dotted.attr"`` table path into the module and its attribute segments."""
     module_name, _, attr_path = spec.partition(":")
     return module_name, tuple(attr_path.split("."))
+
+
+_SPLIT_TABLE_PATHS: dict[str, tuple[str, tuple[str, ...]]] = {
+    path: _split_attribute_path(path)
+    for row in CAPABILITY_ROWS.values()
+    for path in row.attribute_paths
+}
+"""Every table path split once at import: two table getters run on every wrapped op."""
 
 
 def _resolve_attribute_path(spec: str) -> Any | None:
@@ -673,7 +667,7 @@ def _resolve_attribute_path(spec: str) -> Any | None:
         Resolved object, or ``None`` when the module or any segment is absent.
     """
 
-    module_name, attrs = _split_attribute_path(spec)
+    module_name, attrs = _SPLIT_TABLE_PATHS.get(spec) or _split_attribute_path(spec)
     if module_name == "torch":
         return _nested_getattr_or_none(torch, attrs)
     resolved = _import_module_attr_or_none(module_name, attrs[0])
