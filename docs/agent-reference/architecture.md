@@ -110,7 +110,7 @@ Key entry points:
 - Transformer pictures (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE
   pending the naming session): typed session-only display records
   (`AttentionView`/`TokenScores`/`PredictionTrajectory`/`PredictionTable`/
-  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`Artifact`)
+  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`SavedFigure`)
   under matplotlib renderers resolved at CALL time (`tv_matplotlib_missing`
   prints the `torchlens[viz]` install command; zero-dependency SVG/HTML token
   emitters keep bare installs alive). Attention views read the semantic
@@ -165,7 +165,7 @@ Key entry points:
   `trace.between(sources, sinks)` presents the same region as a
   `TraceSlice` (frozen presenter, never a Trace: member ops, internal
   edges, EXPLICIT `boundary_in_edges`/`boundary_out_edges`, no
-  save/replay/validate — `tl.save` refuses `slice_save_unsupported`;
+  save/replay/validate — `Trace.save` refuses `slice_save_unsupported`;
   `__selection__` lifts it back into the algebra);
   `trace.subgraph(selection)` is the general slice door for any ACT region.
   statistic; the single-capture form is `sign(site,'zero')`); comparative
@@ -379,7 +379,7 @@ trace_from_recording = recording.to_trace()
 # (RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE, provisional/documented-unstable).
 run_result = torch_trace.run(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
-tl.save(torch_trace, runnable_path, level="runnable", include_weights=True)
+torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
 verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
 overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)

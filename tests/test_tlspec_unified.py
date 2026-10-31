@@ -985,7 +985,7 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
     trace = tl.trace(MlxTinyModel(), mx.ones((1, 3)))
     path = tmp_path / "mlx_public_materialized.tlspec"
 
-    tl.save(trace, path, level="portable")
+    trace.save(path, level="portable")
     validate_tlspec(path)
     manifest = _read_manifest(path)
 
@@ -1145,7 +1145,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     )
     path = tmp_path / f"{helper_name}.tlspec"
 
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
 

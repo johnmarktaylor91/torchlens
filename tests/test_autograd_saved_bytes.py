@@ -191,7 +191,7 @@ def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path
     trace = _log_sequential(requires_grad=True)
     bundle_path = tmp_path / "autograd_memory.tl"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert loaded.total_autograd_memory == trace.total_autograd_memory

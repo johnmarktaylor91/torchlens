@@ -191,6 +191,6 @@ class TestPersistedAtV9:
         trace = tl.trace(model, torch.randn(2, 4))
         attach_sidecar(trace, FAMILY.family_id, {"scores": [0.5, 1.5]})
         path = tmp_path / "plain.tlspec"
-        tl.save(trace, path)
+        trace.save(path)
         loaded = tl.load(path)
         assert read_sidecar(loaded, FAMILY.family_id) == {"scores": [0.5, 1.5]}

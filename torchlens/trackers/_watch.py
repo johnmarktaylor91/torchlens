@@ -42,13 +42,13 @@ import torch
 
 from .. import _state
 from ..observability import (
-    CommittedBlock,
     EventStream,
     HistogramDescriptor,
     HistoryCollector,
     ObserverEvent,
     WatchSettings,
 )
+from ..observability._artifact import CommittedBlock
 from ..observability._collector import StepTruth
 from ..observability._kernels import spine_result_from_vector, spine_vector
 from ..observability._schema import validate_step_order

@@ -111,7 +111,7 @@ def test_list_logs_returns_tuple_snapshot() -> None:
     """The process registry exposes an immutable tuple snapshot."""
 
     log = _capture()
-    logs = tl.io.list_logs()
+    logs = tl.io.list_traces()
 
     assert isinstance(logs, tuple)
     assert log in logs
@@ -179,7 +179,7 @@ def test_loaded_log_preserves_name_without_incrementing_counter(tmp_path: Path) 
     tl.io.reset_naming_counter()
     log = _capture(name="saved_name")
     path = tmp_path / "saved.tl"
-    tl.save(log, path, overwrite=True)
+    log.save(path, overwrite=True)
 
     loaded = tl.load(path)
     fresh = _capture()

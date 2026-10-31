@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from ._mpl import figure, save_figure
-from ._records import Artifact, TokenScoreRow, TokenScores
+from ._records import SavedFigure, TokenScoreRow, TokenScores
 
 __all__ = ["render_token_strip", "token_strip_html", "token_strip_svg"]
 
@@ -176,7 +176,7 @@ def render_token_strip(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the paper-format token strip via matplotlib (memo D3).
 
     Proportional-width tokens with real font metrics, wrapped at token
@@ -227,15 +227,15 @@ def render_token_strip(
     disclosures = list(record.footer_lines) + [f"provenance: {record.provenance}"]
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=6, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title=record.rows[0].label,
         disclosure_lines=tuple(disclosures),
         provenance=record.provenance,
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )
 
 

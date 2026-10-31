@@ -50,12 +50,12 @@ from torch import nn
 
 if TYPE_CHECKING:
     from .._io.streaming import BundleStreamWriter
-    from ..debug._audit import TraceAudit
-    from ..runnable import (
+    from .._runnable import (
         ArchivedActivation,
         ReadinessReport,
         SparseRunDescriptor,
     )
+    from ..debug._audit import TraceAudit
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
@@ -544,7 +544,7 @@ class ConditionalEvent:
     # (B8-18). The scrubber applies the source-privacy policy to ``source_file`` via
     # ``_apply_conditional_source_policy``; every other field is portable structural
     # metadata. Declared ``ClassVar`` so ``@dataclass`` does not treat it as a field.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "kind": FieldPolicy.KEEP,
         "source_file": FieldPolicy.KEEP,
@@ -694,7 +694,7 @@ class Conditional:
     # Declared so the scrubber walks this record and applies the source-privacy
     # policy to ``source_file`` (the absolute forward-module path) instead of
     # persisting it verbatim (B8-18). ``ClassVar`` so ``@dataclass`` ignores it.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "arms": FieldPolicy.KEEP,
         "fired_arm_index": FieldPolicy.KEEP,
@@ -760,7 +760,7 @@ class ConditionalAccessor:
     # ``Conditional`` (whose ``source_file`` must be privacy-scrubbed) rather than
     # persisting the whole accessor subtree verbatim (B8-18). ``_list`` and ``_dict``
     # share the same ``Conditional`` objects, so the scrub memo keeps them identical.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_list": FieldPolicy.KEEP,
         "_dict": FieldPolicy.KEEP,
     }
@@ -947,12 +947,12 @@ class Trace(
             runnable_trace_state(self).archived_activations or {},
         )
 
-    def load_state_dict(self, sd: Mapping[str, Any]) -> None:
+    def load_state_dict(self, state_dict: Mapping[str, Any]) -> None:
         """Strictly validate and atomically stage sparse-run state.
 
         Parameters
         ----------
-        sd:
+        state_dict:
             Canonically named parameter and persistent-buffer tensor mapping.
 
         Raises
@@ -969,7 +969,7 @@ class Trace(
 
         from .._runnable_state import load_trace_state_dict
 
-        load_trace_state_dict(self, sd)
+        load_trace_state_dict(self, state_dict)
 
     def find_nan(self) -> Any:
         """Return the first NaN or Inf among saved outputs in execution order.
@@ -1172,9 +1172,9 @@ class Trace(
     #: the writer contract as the record's alias rules (alias-or-fail,
     #: ecosystem MEMO 3.3). The reasoned ledger lives in
     #: ``_trace_legacy_state.py``.
-    PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
+    _PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,
         "model_class_name": FieldPolicy.KEEP,
         "model_label": FieldPolicy.KEEP,
@@ -1635,7 +1635,7 @@ class Trace(
         # (`reset_validation_failure` writes None on every run), so a plain
         # validate-then-save sequence hit
         # `TorchLensIOError: Trace._last_validation_failure is missing from
-        # PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
+        # _PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
         # workflow. Both attrs are session-time diagnostics carried on the
         # trace as a side channel, exactly the `_fast_run_session` class, and
         # `ValidationFailure`/`ValidationDiagnostic` are not portable records.
@@ -1658,12 +1658,12 @@ class Trace(
     }
     FIELD_POLICY = build_record_field_policy_table(
         MODEL_LOG_FIELD_ORDER,
-        PORTABLE_STATE_SPEC,
+        _PORTABLE_STATE_SPEC,
         fork_policy=MODEL_LOG_FIELD_FORK_POLICY,
         default_fill_state=_MODEL_LOG_DEFAULT_FILL,
         schema_key="trace",
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -2860,26 +2860,60 @@ class Trace(
         else:
             return iter(list(self._raw_graph_ws.raw_layer_dict.values()))
 
-    def save(self, path: str | Path, **kwargs: Any) -> None:
-        """Call :func:`torchlens.save` for this model log.
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+        include_outs: bool | None = None,
+        include_weights: bool = False,
+        include_grads: bool | None = None,
+        include_saved_args: bool | None = None,
+        include_rng_states: bool | None = None,
+        include_activations: bool = False,
+        include_source: bool = True,
+        include_custom_attributes: bool = True,
+        include_buffer_values: bool | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Save this trace as a ``.tlspec`` directory; ``tl.load(path)`` reads it back.
 
         Parameters
         ----------
         path:
-            Destination bundle directory.
-        **kwargs:
-            Portable save options. For runnable saves, ``include_weights=True``
-            bundles the full capture-time ``state_dict``: all named parameters
-            and persistent buffers, as state rather than a reconstructed model.
-            Independently, ``include_activations=True`` archives exactly the
-            capture-time ``save=``-selected payloads for inspection and eligible
-            byte-exact attestation; those payloads never seed execution.
-            ``include_source`` (default ``True``) controls whether the captured
-            model source code is embedded; set it ``False`` to strip verbatim
-            source, docstrings, and source-file references from a shared
-            ``.tlspec``. Absolute source paths are always relativized to a bare
-            basename, so no ``$HOME`` / username is ever embedded. See
-            :func:`torchlens.save` for the full option list.
+            Destination ``.tlspec`` directory.
+        level:
+            ``"audit"``, ``"executable_with_callables"``, ``"portable"`` or
+            ``"runnable"``.
+        overwrite:
+            Replace an existing directory at ``path``.
+        include_outs:
+            Persist activation payloads (``None`` follows the level default).
+        include_weights:
+            For runnable saves, bundle the full capture-time ``state_dict``: all
+            named parameters and persistent buffers, as state rather than a
+            reconstructed model.
+        include_grads:
+            Persist gradient payloads (``None`` follows the level default).
+        include_saved_args:
+            Persist saved call arguments (``None`` follows the level default).
+        include_rng_states:
+            Persist RNG states (``None`` follows the level default).
+        include_activations:
+            Archive exactly the capture-time ``save=``-selected payloads for
+            inspection and eligible byte-exact attestation; those payloads never
+            seed execution.
+        include_source:
+            Embed the captured model source code (default ``True``); ``False``
+            strips verbatim source, docstrings, and source-file references.
+            Absolute source paths are always relativized to a bare basename.
+        include_custom_attributes:
+            Persist user-set custom attributes.
+        include_buffer_values:
+            Persist buffer values (``None`` follows the level default).
+        strict:
+            Refuse typed on any field the level cannot persist.
 
         Warning
         -------
@@ -2893,7 +2927,22 @@ class Trace(
 
         from .._io.bundle import save as save_bundle
 
-        save_bundle(self, path, **kwargs)
+        save_bundle(
+            self,
+            path,
+            level=level,
+            overwrite=overwrite,
+            include_outs=include_outs,
+            include_weights=include_weights,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
+            include_rng_states=include_rng_states,
+            include_activations=include_activations,
+            include_source=include_source,
+            include_custom_attributes=include_custom_attributes,
+            include_buffer_values=include_buffer_values,
+            strict=strict,
+        )
 
     def reconstruct_output(self, values: Literal["out", "transformed"] = "out") -> Any:
         """Reconstruct the traced model's final Python output object.
@@ -2972,14 +3021,14 @@ class Trace(
         # Lazy influence-geometry caches (FieldPolicy.DROP) hold
         # mappingproxy-bearing solution objects after any receptive-field
         # access, so carrying them made pickle.dumps/copy.deepcopy crash with
-        # "cannot pickle 'mappingproxy' object" while tl.save succeeded on
+        # "cannot pickle 'mappingproxy' object" while Trace.save succeeded on
         # the same trace. They rebuild on first access after restore.
         state.pop("_receptive_field_solution", None)
         state.pop("_rf_directional_solutions", None)
         # Render diagnostic from the last draw(): its EncodingChannelSpec can
         # hold the RAW user callable a `color_by=lambda ...` passed in, so
         # carrying it made pickle.dumps crash after an ordinary draw while
-        # tl.save succeeded on the same trace (the R10-7 raw-callable class).
+        # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
         # Runtime-only either way; it rebuilds on the next draw.
         state.pop("_last_encoding_state", None)
         # The recorded save request can hold a raw user save callable.
@@ -3004,7 +3053,7 @@ class Trace(
         # Capture-session predicate carriers (FieldPolicy.DROP) hold LIVE USER
         # CLOSURES when predicate capture/intervention/halt was used (a
         # ``tl.when(...)`` conditional is a local function), so pickling a
-        # trace that ``tl.save`` accepted failed on exactly these fields.
+        # trace that ``Trace.save`` accepted failed on exactly these fields.
         # Serialize to the loaded-artifact form instead (absent / None), which
         # every post-capture consumer already tolerates -- same belt as the
         # semantic-output scratch above.
@@ -3022,7 +3071,7 @@ class Trace(
         state.pop("_distributed_plane_p", None)
         # R10-7: the REPR is scrubbed below, but the RAW user callables stayed
         # in state, so a lambda transform= made pickle.dumps crash while
-        # tl.save succeeded on the same trace. Serialize to the loaded-artifact
+        # Trace.save succeeded on the same trace. Serialize to the loaded-artifact
         # form (None), which every post-load consumer already tolerates.
         state["activation_transform"] = None
         state["grad_transform"] = None

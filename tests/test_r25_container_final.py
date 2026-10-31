@@ -35,6 +35,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.ir.container import (
     ContainerSpec,
@@ -46,7 +47,6 @@ from torchlens.ir.container import (
     reconstruction_is_lossy_by_type,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -296,7 +296,7 @@ def test_derived_attr_dataclass_run_is_unverifiable(tmp_path: Path) -> None:
     tl.trace(_DerivedAttrDataclassModel(), x.clone(), capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    result = tl.load(bundle).run(inputs=x.clone(), seed=0, on_divergence="return")
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert type(result.output) is _DerivedAttrDataclassOut
@@ -312,7 +312,7 @@ def test_derived_attr_model_output_run_is_unverifiable(tmp_path: Path) -> None:
     tl.trace(_DerivedAttrModelOutputModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x, seed=0, on_divergence="return_diverged")
+    result = tl.load(bundle).run(inputs=x, seed=0, on_divergence="return")
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert type(result.output) is _DerivedAttrModelOutput
@@ -378,7 +378,7 @@ def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path:
     tl.trace(_PureModelOutputModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x, on_divergence="return_diverged")
+    result = tl.load(bundle).run(inputs=x, on_divergence="return")
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert type(result.output) is _PureModelOutput

@@ -22,13 +22,13 @@
   `method.__self__`, registered as the `owner` submodule of a TL-authored wrapper root, method
   called exactly once; identity reads `type(owner).__name__`;
   `root_entry_point="bound_method:..."` + `tl_authored_root=True` on the root op record persist.
-  `EpisodeSpec.stepped_module` defaults to the owner on bound-method episode captures. The
+  `EpisodeOptions.stepped_module` defaults to the owner on bound-method episode captures. The
   rerun/append identity gate is FAIL-CLOSED on the fact: absent fact refuses
   `root_entry_point_unavailable`, non-`module_call` roots refuse `rerun_entry_point_unsupported`
   (interim posture; replay engines unaffected). Other callables refuse `model_type_unsupported`
   teaching the ruled spelling.
 - EPISODE CAPTURE (torch-only, spellings DOCUMENTED-UNSTABLE): `tl.trace(episode_root, x,
-  episode=tl.options.EpisodeSpec(stepped_module=model, n_steps=N))` captures one wrapped
+  episode=tl.options.EpisodeOptions(stepped_module=model, n_steps=N))` captures one wrapped
   multi-step generation run as ONE product with a per-step status ledger at
   `trace.annotations["episode"]` (disclosure, never a settlement authority; persists
   plainly as of the tlspec v8 coordinated bump, load-validated fail-closed). Cross-step
@@ -36,7 +36,7 @@
   transformed/declared/exogenous/unchecked) in the `episode_step_join_v1` header envelope; a
   measured break refuses episode-dependent claims (series reads, whole-episode replay,
   the blessing fold, escalation) while ops/values/graph/per-segment reads stay usable;
-  `EpisodeSpec(feed="closed")` is the strict halt-at-next-entry arm,
+  `EpisodeOptions(feed="closed")` is the strict halt-at-next-entry arm,
   `on_feed_break="refuse"` the built FORK-4 typed-refusal arm, `crossings=(k,...)` the
   declared tool-call crossings; envelope-less artifacts read unmeasured, never
   measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —

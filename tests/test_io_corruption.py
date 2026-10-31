@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import load, save
+from torchlens import load
 from torchlens._io import TorchLensIOError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.manifest import sha256_of_file
@@ -72,7 +72,7 @@ def _save_bundle(tmp_path: Path, path_name: str = "bundle.tl") -> Path:
         model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0)
     )
     bundle_path = tmp_path / path_name
-    save(trace, bundle_path)
+    trace.save(bundle_path)
     return bundle_path
 
 
@@ -353,7 +353,7 @@ def test_io_artifact_door_codes_are_provoked(tmp_path: Path) -> None:
     assert level.value.fields["code"] == "artifact_save_level_unsupported"
 
     with pytest.raises(ValueError) as payload:
-        tl.save(source, tmp_path / "weights.tl", level="portable", include_weights=True)
+        source.save(tmp_path / "weights.tl", level="portable", include_weights=True)
     assert payload.value.fields["code"] == "save_payload_level_conflict"
 
 

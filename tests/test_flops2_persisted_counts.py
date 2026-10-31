@@ -24,7 +24,7 @@ from torchlens.report._backward_attribution import executed_flops_record_problem
 
 def _save_load(trace: Any, tmp_path: Path, name: str) -> Any:
     path = tmp_path / f"{name}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     return tl.load(path)
 
 

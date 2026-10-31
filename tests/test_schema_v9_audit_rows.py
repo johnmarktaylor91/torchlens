@@ -72,7 +72,7 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
         "fixture must exercise the shipped per-site source disclosure"
     )
     path = tmp_path / "selection_intervened.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
@@ -86,7 +86,7 @@ def test_param_intervened_artifact_loads_its_own_save(log, tmp_path):
     fork.do(tl.params("c1.weight"), tl.scale(0.5))
     assert any(row.get("kind") == "PARAM" for row in fork.intervention_audit)
     path = tmp_path / "param_intervened.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "PARAM"]
     assert loaded_rows, "PARAM audit row must survive the round trip"

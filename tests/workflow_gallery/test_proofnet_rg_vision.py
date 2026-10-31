@@ -93,7 +93,7 @@ def test_rg10_extraction_memory_and_disk_agree_and_reload(
         torch.stack(stimuli),
         [EXTRACT_SITE],
         batch_size=2,
-        output_dir=str(output_dir),
+        path=str(output_dir),
         progress=False,
         stimulus_ids=stimulus_ids,
     )
@@ -175,7 +175,7 @@ def test_rg12_runnable_save_load_rerun_verified(
     trace = tl.trace(resnet, batch, capture=tl.options.CaptureOptions(intervention_ready=True))
     try:
         path = tmp_path / "resnet-runnable.tlspec"
-        tl.save(trace, str(path), level="runnable", include_weights=True)
+        trace.save(str(path), level="runnable", include_weights=True)
         loaded = tl.load(str(path))
         result = loaded.run(inputs=batch)
         assert result.report.path_faithfulness.name == "VERIFIED"

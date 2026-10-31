@@ -408,7 +408,7 @@ def test_paddle_intervened_trace_round_trips_metadata(tmp_path: Any) -> None:
 
     trace = _ablated_trace()
     path = tmp_path / "paddle_intervened.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     relu = _relu_op(loaded)
     assert relu.intervention_replaced is True

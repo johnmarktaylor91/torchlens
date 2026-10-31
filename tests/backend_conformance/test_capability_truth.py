@@ -334,7 +334,7 @@ def test_runnable_producer_gate_reads_save_levels() -> None:
     """The runnable producer refusal keys on 'runnable' in save_levels."""
 
     from torchlens._io.runnable import build_sparse_run_descriptor
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     assert "runnable" in get_backend_spec("torch").capabilities.save_levels
     for name in _PREVIEW_NAMES:

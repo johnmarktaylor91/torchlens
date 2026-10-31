@@ -256,7 +256,7 @@ def test_field_order_names_are_unique_and_backed() -> None:
         duplicates = _duplicates(case.field_order)
         assert not duplicates, f"{case.name} FIELD_ORDER duplicates: {duplicates}"
 
-        portable_fields = set(case.cls.PORTABLE_STATE_SPEC)
+        portable_fields = set(case.cls._PORTABLE_STATE_SPEC)
         class_fields = set(dir(case.cls))
         missing_backing = [
             field
@@ -272,7 +272,7 @@ def test_portable_state_display_fields_are_in_field_order_or_documented() -> Non
     for case in FIELD_ORDER_CASES:
         portable_display_fields = {
             field
-            for field, policy in case.cls.PORTABLE_STATE_SPEC.items()
+            for field, policy in case.cls._PORTABLE_STATE_SPEC.items()
             if policy not in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         missing_from_order = portable_display_fields - set(case.field_order)
@@ -288,7 +288,7 @@ def test_field_order_drop_policy_fields_are_documented() -> None:
         dropped_in_order = {
             field
             for field in case.field_order
-            if case.cls.PORTABLE_STATE_SPEC.get(field)
+            if case.cls._PORTABLE_STATE_SPEC.get(field)
             in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         assert dropped_in_order == case.dropped_display_fields, (
@@ -313,7 +313,7 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER
-    assert "has_op" in GradFn.PORTABLE_STATE_SPEC
+    assert "has_op" in GradFn._PORTABLE_STATE_SPEC
 
 
 def _duplicates(values: Collection[str]) -> list[str]:

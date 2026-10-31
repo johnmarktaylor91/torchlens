@@ -30,7 +30,7 @@ tl.extract_dataset(
     stimuli[torch.as_tensor(chosen)],
     ["1"],  # the ReLU output
     batch_size=4,
-    output_dir="subsample",
+    path="subsample",
     stimulus_ids=[image_ids[i] for i in chosen],  # original ids, not 0..11
     progress=False,
 )
@@ -43,9 +43,8 @@ rows line up with the original dataset by name:
 
 ```python
 # recipe-test: tool=torchlens expected=True
-from torchlens.dataset_extraction import load_extraction
 
-loaded = load_extraction("subsample")
+loaded = tl.load("subsample")
 (key,) = loaded.activations
 prefix = model[:2]  # conv + ReLU, the extracted site
 with torch.no_grad():

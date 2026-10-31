@@ -69,7 +69,7 @@ def _refuse_poisoned_rf_verification(trace: Trace) -> None:
         a receptive-field validation verdict.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace, "receptive field verification")
 

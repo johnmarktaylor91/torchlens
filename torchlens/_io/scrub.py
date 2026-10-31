@@ -2,7 +2,7 @@
 
 This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
-rehydration: every class-specific ``PORTABLE_STATE_SPEC`` is applied here so
+rehydration: every class-specific ``_PORTABLE_STATE_SPEC`` is applied here so
 tensor payloads become ``BlobRef`` placeholders and non-portable live objects
 are dropped or stringified before writing ``metadata.pkl``.
 """
@@ -444,9 +444,9 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
         # multi-pass accessor raises InvalidArgumentError (a ValueError, which
         # getattr does not swallow), so probing before the gate broke every
-        # save of a multi-pass trace. Layer's PORTABLE_STATE_SPEC has no
+        # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
         # `parent_param_ops` row; only Op-side records reach the getattr.
-        record_spec = getattr(type(record), "PORTABLE_STATE_SPEC", {})
+        record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
         parent_param_ops = (
             getattr(record, "parent_param_ops", None) if "parent_param_ops" in record_spec else None
         )
@@ -868,7 +868,7 @@ def _scrub_value(
     ----------
     stringify_unknown:
         When ``True``, a value with neither a container type handled here
-        nor a ``PORTABLE_STATE_SPEC`` falls back to
+        nor a ``_PORTABLE_STATE_SPEC`` falls back to
         :func:`_stringify_value` instead of being returned unchanged. Used
         by the ``save_raw_input``/``save_raw_output`` ``True`` policy
         (:func:`_scrub_raw_value_for_save`) so live, un-picklable objects
@@ -1069,7 +1069,7 @@ def _scrub_value(
             )
         return rebuilt_mapping
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         if stringify_unknown and not _is_safely_picklable(value):
             return _stringify_value(value)
@@ -1092,7 +1092,7 @@ def _scrub_value(
             # public ``Trace.intervention_spec`` accessor). Those cells are
             # DERIVED state that rebuilds on access, never portable fields,
             # and they appear only after a read -- refusing them here made a
-            # read-only public property poison every later ``tl.save``
+            # read-only public property poison every later ``Trace.save``
             # (B3R4-R10-1). Skip the whole class structurally; the check runs
             # only on the refusal path, so the hot field loop pays nothing.
             if isinstance(
@@ -1117,7 +1117,7 @@ def _scrub_value(
                         f" This cell was populated by reading the public "
                         f"`.{accessor_name}` accessor; a lazy derived cache "
                         f"must be declared FieldPolicy.DROP in "
-                        f"{type(value).__name__}.PORTABLE_STATE_SPEC so a "
+                        f"{type(value).__name__}._PORTABLE_STATE_SPEC so a "
                         f"read-only access cannot poison a later save."
                     )
             # Same lesson for LEDGERED-but-undeclared Trace transients (the
@@ -1142,7 +1142,7 @@ def _scrub_value(
                     )
             raise TorchLensIOError(
                 f"{type(value).__name__}.{field_name} is missing from "
-                f"PORTABLE_STATE_SPEC. Every live state field needs an "
+                f"_PORTABLE_STATE_SPEC. Every live state field needs an "
                 f"explicit portability policy before it can be saved."
                 f"{accessor_hint}"
             )
@@ -1298,7 +1298,7 @@ def _trace_state_items_for_scrub(
     tuple[str, Any]
         Live Trace field/value pairs: first fields present in
         ``MODEL_LOG_FIELD_ORDER`` order, then remaining present fields in
-        ``PORTABLE_STATE_SPEC`` order, then any still-unseen fields so the
+        ``_PORTABLE_STATE_SPEC`` order, then any still-unseen fields so the
         existing unknown-field guard can raise.
     """
 
@@ -1344,7 +1344,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_unrecorded_operator_mutations",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
-        # above); left unenrolled, ONE draw() poisoned every later tl.save.
+        # above); left unenrolled, ONE draw() poisoned every later Trace.save.
         "_last_encoding_state",
         # Layout-execution geometry record (vizmech D24), same write site class.
         "_last_render_geometry",
@@ -1366,7 +1366,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
         # `_source_bundle_{path,manifest_sha256}` and the output-parent
         # retention flag (now inside `_rerun_save_request`) moved out of this allowance
-        # into declared `Trace.PORTABLE_STATE_SPEC` DROP rows. This allowance is
+        # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
         "jax_closed_jaxpr",
@@ -1380,7 +1380,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
-        # allowance and into `Trace.PORTABLE_STATE_SPEC` as declared
+        # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
         # `FieldPolicy.DROP` rows. This allowance is consulted BEFORE the spec,
         # so an entry here makes the declared policy dead code -- a policy
         # flipped to KEEP would still be silently dropped. Declared rows keep
@@ -1951,7 +1951,7 @@ def _blobify_recursive_value(
         memo[obj_id] = rebuilt_frozenset
         return rebuilt_frozenset
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is not None:
         return _scrub_value(
             value,
@@ -1978,7 +1978,7 @@ def _is_safely_picklable(value: Any) -> bool:
 
     Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
     whether an unspecced leaf value (one with no
-    ``PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
+    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
     ``save_raw_output``'s ``True`` policy should be kept as-is (full
     retention, per those options' docs) or degraded to a bounded
     :func:`_stringify_value` placeholder. Probing picklability once, here,

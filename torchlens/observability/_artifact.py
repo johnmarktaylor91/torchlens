@@ -486,7 +486,7 @@ class HistoryReader:
         self._index = read_bounded(self.path / "index.json")["chunks"]
 
     @property
-    def n_chunks(self) -> int:
+    def num_chunks(self) -> int:
         """Number of committed chunks."""
 
         return len(self._index)

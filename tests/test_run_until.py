@@ -17,14 +17,14 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
     TensorSlotRole,
 )
+from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.options import CaptureOptions
 
 
 class _Chain(nn.Module):
@@ -76,7 +76,7 @@ def _loaded_runnable(tmp_path, model=None):
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     return tl.load(str(path)), x
 
 
@@ -161,9 +161,9 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     from torchlens import io as tlio
     from torchlens.capture.outcome import CaptureStatus
 
-    prior = tlio.list_logs()
+    prior = tlio.list_traces()
     _model, _log, result = _live_until_relu()
-    fresh = [entry for entry in tlio.list_logs() if not any(entry is p for p in prior)]
+    fresh = [entry for entry in tlio.list_traces() if not any(entry is p for p in prior)]
     halted_fresh = [
         entry
         for entry in fresh
@@ -172,7 +172,7 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     ]
     assert not halted_fresh, (
         "the truncated live run left a HALTED trace enumerable through "
-        "tl.io.list_logs(); the internal halt settle must stay invisible"
+        "tl.io.list_traces(); the internal halt settle must stay invisible"
     )
     assert any(entry is result.trace for entry in fresh)
 
@@ -312,14 +312,14 @@ def test_truncated_result_refuses_all_saves(tmp_path):
     _model, _log, result = _live_until_relu()
     for level in ("analysis", "runnable"):
         with pytest.raises(Exception) as exc_info:  # noqa: PT011 - poison-gate class
-            tl.save(result.trace, str(tmp_path / f"t_{level}.tlspec"), level=level)
+            result.trace.save(str(tmp_path / f"t_{level}.tlspec"), level=level)
         assert "poison" in str(exc_info.value).lower() or "truncat" in str(exc_info.value).lower()
 
 
 def test_truncated_result_refuses_rerun():
     """3.3.2: re-running a truncated result refuses typed at the run door."""
 
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     _model, _log, result = _live_until_relu()
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:
@@ -348,7 +348,7 @@ def test_until_requires_full_inputs(tmp_path):
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     # until= the relu: y's consumer (the add) is skipped, but the full recorded
     # input tree remains REQUIRED -- a partial-inputs surface would let omission

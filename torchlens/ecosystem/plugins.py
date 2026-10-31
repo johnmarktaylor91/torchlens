@@ -273,7 +273,7 @@ def _commit_export_targets(result: Any, provider: ProviderCandidate) -> None:
     """Commit one export-target row through the export door."""
 
     from .._registry import ProviderInfo
-    from ..export._registry import register_export_target
+    from ..export._registry import register_target
 
     if not isinstance(result, dict) or not {"name", "fn", "tier"} <= set(result):
         raise ConfigurationError(
@@ -283,7 +283,7 @@ def _commit_export_targets(result: Any, provider: ProviderCandidate) -> None:
             code="plugin_activation_invalid",
             remedy="return the frozen export-target row from a zero-arg factory",
         )
-    register_export_target(
+    register_target(
         result["name"],
         result["fn"],
         tier=result["tier"],

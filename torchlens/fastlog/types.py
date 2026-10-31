@@ -52,7 +52,7 @@ def _backfill_cooked_ancestry(events: Any) -> None:
       (matching the live source-minting convention), else parent union;
     * ``root_ancestors``            = ``input_ancestors | internal_source_ancestors``.
 
-    Mutates ``events`` in place: this runs only on the ``copy_for_replay``
+    Mutates ``events`` in place: this runs only on the ``_copy_for_replay``
     projection a cook owns (the sanctioned mutation surface -- postprocess
     graph traversal replaces events on the same projection), never on the
     sealed Recording stream. The fold cache keys on lane lengths, so it is
@@ -1177,7 +1177,7 @@ class Recording(CapturedRun):
         # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
         # `self._capture_events` (the original, intact) below -- only the
         # materialized `trace.capture_events` is the copy.
-        events_for_replay = cast(Any, projection.capture_events).copy_for_replay()
+        events_for_replay = cast(Any, projection.capture_events)._copy_for_replay()
         # The sparse recorder never tracks ancestry at capture time; derive the
         # closures on the cook's own projection before postprocess materializes
         # Op rows from it (the ancestry_closure invariant checks exactly this).

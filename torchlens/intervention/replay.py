@@ -139,7 +139,7 @@ def _walk_call_cone(
 
 
 def push(
-    log: Trace,
+    trace: Trace,
     *,
     replay: ReplayOptions | None = None,
 ) -> Trace:
@@ -159,23 +159,23 @@ def push(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
-    origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
+    _preflight_log(trace)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
+    origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("push requires at least one hook target")
     with changed_param_scope(replay_options.allow_changed_params):
         if replay_options.differentiable:
             return _run_differentiable_replay(
-                log,
+                trace,
                 origins,
                 hook_entries=hook_entries,
                 strict=replay_options.strict,
                 preserve_origins=False,
             )
         return _run_replay(
-            log,
+            trace,
             origins,
             hook_entries=hook_entries,
             strict=replay_options.strict,
@@ -184,7 +184,7 @@ def push(
 
 
 def push_from(
-    log: Trace,
+    trace: Trace,
     site: SelectorLike | str | Op,
     *,
     replay: ReplayOptions | None = None,
@@ -208,14 +208,14 @@ def push_from(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    origin = _resolve_single_origin(log, site, strict=replay_options.strict)
+    _preflight_log(trace)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    origin = _resolve_single_origin(trace, site, strict=replay_options.strict)
     if not isinstance(origin.out, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor out")
     with changed_param_scope(replay_options.allow_changed_params):
         return _run_replay(
-            log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+            trace, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
         )
 
 
@@ -1379,7 +1379,7 @@ def _preflight_log(log: Trace) -> None:
         Model log to validate.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     if not getattr(log, "_tracing_finished", False):

@@ -41,7 +41,7 @@ def lazy_artifact(tmp_path: Path) -> tuple[Path, tl.Trace]:
     model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4), nn.Sigmoid())
     source = tl.trace(model, torch.randn(4, 8), save=tl.func("relu"))
     destination = tmp_path / "lazy.tlspec"
-    tl.save(source, destination)
+    source.save(destination)
     return destination, source
 
 

@@ -188,7 +188,7 @@ def test_all_four_fields_are_declared_drop_on_trace() -> None:
 def test_declared_rows_are_the_single_scrub_authority() -> None:
     """The names left the pre-spec runtime-only allowance in `_io/scrub.py`.
 
-    That allowance is consulted BEFORE ``PORTABLE_STATE_SPEC``, so an entry
+    That allowance is consulted BEFORE ``_PORTABLE_STATE_SPEC``, so an entry
     there would make the declared policy dead code.
     """
 
@@ -263,6 +263,6 @@ def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     path = tmp_path / "halted_semantic.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert _leaked(loaded) == []

@@ -586,7 +586,7 @@ def _rehydrate_object(
 
     seen[obj_id] = value
 
-    spec = getattr(value_type, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(value_type, "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 
@@ -796,7 +796,7 @@ def _materialize_recursive_blob_refs(
         return {recurse(item) for item in value}
     if isinstance(value, frozenset):
         return frozenset(recurse(item) for item in value)
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is not None and type(value).__name__ == "GradientRecord":
         for field_name, field_value in list(state_items(value)):
             if field_name not in spec:
@@ -1247,7 +1247,7 @@ def rehydrate_nested(
 
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.rehydrate_nested(log)
+    >>> tl.io.materialize_nested(log)
 
     Parameters
     ----------
@@ -1479,7 +1479,7 @@ def _rehydrate_nested_object(
 
     seen[obj_id] = value
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 

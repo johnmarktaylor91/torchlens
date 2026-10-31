@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._runnable import (
+    ControlWitness,
+    ControlWitnessKind,
+    RunnableCallDescriptor,
+    SparseRunDescriptor,
+)
 from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
 from .ir.container import (
     ContainerSpec,
-)
-from .runnable import (
-    ControlWitness,
-    ControlWitnessKind,
-    RunnableCallDescriptor,
-    SparseRunDescriptor,
 )
 
 if TYPE_CHECKING:

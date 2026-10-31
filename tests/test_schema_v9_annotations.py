@@ -34,7 +34,7 @@ def _reload_with_annotation(tmp_path, key, value, name):
     trace = _traced()
     trace.annotations[key] = value
     path = tmp_path / f"{name}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     return tl.load(path)
 
 
@@ -133,7 +133,7 @@ def test_health_facts_round_trip_serves_persisted_basis(tmp_path):
     record = health_facts(trace)
     assert "health_facts" in trace.annotations, "derivation persists on the channel (D9)"
     path = tmp_path / "health_ok.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     served = health_facts(loaded)
     assert served.nonfinite_labels == record.nonfinite_labels
@@ -155,7 +155,7 @@ def test_tampered_health_facts_are_never_the_authority(tmp_path):
     health_facts(trace)
     trace.annotations["health_facts"] = {"schema_version": "corrupt"}
     path = tmp_path / "health_bad.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     served = health_facts(loaded)
     assert served.basis != "persisted", (

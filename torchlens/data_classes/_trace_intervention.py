@@ -115,8 +115,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether an existing destination may be replaced.
         """
 
+        from .._runnable import refuse_poisoned_trace
         from ..intervention.save import save_intervention
-        from ..runnable import refuse_poisoned_trace
 
         refuse_poisoned_trace(self, "intervention export")
         save_intervention(

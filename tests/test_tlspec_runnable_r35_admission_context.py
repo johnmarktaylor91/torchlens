@@ -13,13 +13,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError, RunPreconditionError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError, RunPreconditionError
+from torchlens.options import CaptureOptions
 from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 
@@ -45,7 +45,7 @@ def _save(model: nn.Module, args: Any, path: Path, **save_kwargs: Any) -> Path:
             intervention_ready=True, capture_container_structure=True, cache=False
         ),
     )
-    tl.save(trace, str(path), level="runnable", **save_kwargs)
+    trace.save(str(path), level="runnable", **save_kwargs)
     return path
 
 
@@ -68,7 +68,7 @@ def _exotic_inputs() -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.parametrize("kind", sorted(_exotic_inputs()))
-@pytest.mark.parametrize("policy", [DivergencePolicy.RAISE, DivergencePolicy.RETURN_DIVERGED])
+@pytest.mark.parametrize("policy", ["raise", "return"])
 def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     tmp_path: Path, kind: str, policy: DivergencePolicy
 ) -> None:
@@ -77,7 +77,7 @@ def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     corr2_6: previously meta/sparse/named inputs reached
     ``.cpu().contiguous().view(uint8)`` and surfaced raw
     NotImplementedError/RuntimeError before their recorded contract could fire.
-    ``return_diverged`` never bypasses a hard executability precondition.
+    ``on_divergence="return"`` never bypasses a hard executability precondition.
     """
 
     x = torch.randn(2, 3)
@@ -237,7 +237,7 @@ def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
             ),
         )
     path = tmp_path / "autocast.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.output.dtype is torch.bfloat16

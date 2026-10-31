@@ -307,7 +307,7 @@ def test_decoded_output_roundtrips_tlspec_and_decode_output_is_bounded(tmp_path:
     trace = tl.trace(_Classifier(torch.tensor([[1.0, 2.0, 0.0]]), labels).eval(), torch.ones(1, 2))
     bundle_path = tmp_path / "decoded.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
 
     assert restored.decoded_output == trace.decoded_output

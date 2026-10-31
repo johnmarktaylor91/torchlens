@@ -37,8 +37,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 

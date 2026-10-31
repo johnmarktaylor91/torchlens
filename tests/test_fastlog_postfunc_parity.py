@@ -173,7 +173,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
     assert transformed_entries, "manifest is missing transformed_out kind"
     assert manifest["n_auxiliary_blobs"] == len(transformed_entries)
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     loaded_disk = _disk_out_records(loaded)
     assert len(loaded_disk) == len(records)
     for original, restored in zip(records, loaded_disk):
@@ -419,7 +419,7 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
     assert metadata.get("_activation_transform_repr") is not None
     assert "named_transform" in metadata["_activation_transform_repr"]
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     assert loaded._activation_transform_repr == persisted._activation_transform_repr
 
 
@@ -435,7 +435,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
         streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
     original_records = _disk_out_records(original)

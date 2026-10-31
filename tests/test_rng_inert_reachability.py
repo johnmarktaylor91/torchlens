@@ -60,8 +60,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.utils import rng as rng_mod
 from torchlens.utils.rng import (
     _AMBIENT_BRIDGE_LEAF_TYPES,
@@ -677,7 +677,7 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
         path = tmp_path / "hidden_generator.tlspec"
         shutil.rmtree(path, ignore_errors=True)
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        report = tl.load(path).run(inputs=x.clone(), on_divergence="return_diverged").report
+        report = tl.load(path).run(inputs=x.clone(), on_divergence="return").report
         assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
         assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
         assert "host_rng" in report.nondeterministic_sources
@@ -861,7 +861,7 @@ def test_ambient_graph_subclass_generator_draw_still_unverifiable(tmp_path: Path
         path = tmp_path / "ambient_subclass.tlspec"
         shutil.rmtree(path, ignore_errors=True)
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        report = tl.load(path).run(inputs=x.clone(), on_divergence="return_diverged").report
+        report = tl.load(path).run(inputs=x.clone(), on_divergence="return").report
         assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
         assert "host_rng" in report.nondeterministic_sources
     finally:

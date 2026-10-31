@@ -1,7 +1,7 @@
 """Trace validation and replay mixin."""
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
 import torch
 from torch import nn
@@ -15,8 +15,8 @@ else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
+from .._runnable import DivergencePolicy, RunProvider, RunResult
 from ..options import ReplayOptions, merge_replay_options
-from ..runnable import DivergencePolicy, RunProvider, RunResult
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -47,8 +47,8 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
         loaded_from_bundle = False
     if not loaded_from_bundle:
         return
+    from .._runnable import RunnableErrorCode
     from ..errors import RunCapabilityUnavailableError
-    from ..runnable import RunnableErrorCode
 
     raise RunCapabilityUnavailableError(
         f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
@@ -383,9 +383,9 @@ class TraceValidationMixin(_TraceMixinBase):
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
         """
+        from .._runnable import refuse_poisoned_trace
         from ..backends import get_backend_spec
         from ..capture.outcome import require_capture_capability
-        from ..runnable import refuse_poisoned_trace
 
         if isinstance(ground_truth_output_tensors, torch.Tensor):
             ground_truth_output_tensors = [ground_truth_output_tensors]
@@ -454,7 +454,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         Derived at read time from records that persist with the trace (the
         intervention audit, the operation history, mutation states, direct
-        writes and op intervention marks), so it survives ``tl.save`` /
+        writes and op intervention marks), so it survives ``Trace.save`` /
         ``tl.load`` and no reset makes a touched trace read pristine again.
         It is a reading, never a verdict: it does not change validation or
         any run report. Distinct from ``Trace.state`` (``TraceState.PRISTINE``
@@ -550,7 +550,7 @@ class TraceValidationMixin(_TraceMixinBase):
         carry_state: bool = False,
         until: Any = None,
         save: Any = None,
-        on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
+        on_divergence: Literal["raise", "return"] = "raise",
         chunk_paths: Any | None = None,
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
@@ -710,8 +710,8 @@ class TraceValidationMixin(_TraceMixinBase):
             # poison bit alone does NOT refuse a re-run -- the transaction's
             # inherited-status leg would silently settle UNVERIFIABLE instead,
             # which is exactly the silence the capability table forbids.
+            from .._runnable import RunnableErrorCode
             from ..errors import RunCapabilityUnavailableError
-            from ..runnable import RunnableErrorCode
 
             raise RunCapabilityUnavailableError(
                 "This Trace is a TRUNCATED run product (until=): it covers only "
@@ -833,8 +833,8 @@ class TraceValidationMixin(_TraceMixinBase):
                     argument="until",
                 )
             if fast and save is not None:
+                from .._runnable import RunnableErrorCode
                 from ..errors import RunCapabilityUnavailableError
-                from ..runnable import RunnableErrorCode
 
                 raise RunCapabilityUnavailableError(
                     "run-time save= does not compose with fast=True yet: the fast "
@@ -910,7 +910,7 @@ class TraceValidationMixin(_TraceMixinBase):
                         self,
                         run_inputs,
                         seed=seed,
-                        on_divergence=on_divergence,
+                        on_divergence=DivergencePolicy(on_divergence),
                         until=until,
                     ),
                     run_save_labels,

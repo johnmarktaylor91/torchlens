@@ -687,7 +687,7 @@ def test_pickle_tlspec_lazy_and_v5_compatibility(tmp_path: Path) -> None:
     assert torch.equal(pickled_call.inputs_before_pre_hooks.args[0], torch.ones(1))
 
     path = tmp_path / "prehook.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     eager = tl.load(path, lazy=False)
     lazy = tl.load(path, lazy=True, materialize_nested=False)
     assert torch.equal(_call(eager).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))

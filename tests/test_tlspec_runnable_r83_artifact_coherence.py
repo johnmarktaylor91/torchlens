@@ -17,11 +17,11 @@ whose run is ``not_applicable``.
 
 S4 -- ``Trace._pending_live_fire_records`` is reinstated by ``Trace.__setstate__``
 and listed in ``_io/rehydrate.py``, but was never registered in
-``PORTABLE_STATE_SPEC``. Any trace that went through ``__setstate__`` -- which
+``_PORTABLE_STATE_SPEC``. Any trace that went through ``__setstate__`` -- which
 ``cache=True`` makes routine -- tripped the field-catalog tripwire, so
 ``save(level="runnable")`` failed outright on the SECOND capture with
 ``TorchLensIOError: Trace._pending_live_fire_records is missing from
-PORTABLE_STATE_SPEC``. A user-facing save failure on a normal flow, not merely a
+_PORTABLE_STATE_SPEC``. A user-facing save failure on a normal flow, not merely a
 test red. The broader cross-effort field-catalog drift stays deferred.
 """
 
@@ -38,8 +38,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -188,7 +188,7 @@ def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
     detected at the resolver's registry-coherence stage.
     """
 
-    from torchlens.runnable import ReadinessStatus, RunnableErrorCode
+    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
 
     clean = _save(tmp_path / "clean.tlspec")
     tampered = _retarget_registry(clean, tmp_path / "tampered.tlspec", "__add__", "__sub__")
@@ -214,8 +214,8 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     the distinction the r83 S3 relocation exists to preserve (r83 regression 2).
     """
 
+    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
     from torchlens.errors import ReattachError
-    from torchlens.runnable import ReadinessStatus, RunnableErrorCode
 
     clean = _save(tmp_path / "clean.tlspec")
     tampered = _retarget_registry(
@@ -303,7 +303,7 @@ def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
     ``TorchLensIOError: Trace._pending_live_fire_records is missing from
-    PORTABLE_STATE_SPEC`` -- a user-facing save failure on a normal flow.
+    _PORTABLE_STATE_SPEC`` -- a user-facing save failure on a normal flow.
     """
 
     for index in range(3):
@@ -325,5 +325,5 @@ def test_pending_live_fire_records_is_registered() -> None:
 
     from torchlens.data_classes.trace import FieldPolicy, Trace
 
-    spec: dict[str, Any] = Trace.PORTABLE_STATE_SPEC
+    spec: dict[str, Any] = Trace._PORTABLE_STATE_SPEC
     assert spec["_pending_live_fire_records"] is FieldPolicy.DROP

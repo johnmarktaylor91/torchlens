@@ -303,8 +303,8 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
         model.generate,
         (ids,),
         {"max_new_tokens": 4, "do_sample": False},
-        episode=tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        episode=tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         ),
     )
     try:
@@ -341,8 +341,8 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
         baseline = model.generate(ids, max_new_tokens=4, do_sample=False)
 
     def episode_spec() -> Any:
-        return tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        return tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         )
 
     steered = tl.trace(

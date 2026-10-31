@@ -67,7 +67,7 @@ def _same(left: Any, right: Any) -> bool:
     return bool(left == right)
 
 
-#: Trace fields ``tl.save``'s source-privacy policy rewrites (compared separately).
+#: Trace fields ``Trace.save``'s source-privacy policy rewrites (compared separately).
 _SOURCE_FILE_FIELDS = {
     "class_source_file",
     "init_source_file",
@@ -132,7 +132,7 @@ def test_trace_round_trips_through_safetensors(tmp_path: Path) -> None:
 
 
 def test_export_embeds_no_host_path(tmp_path: Path) -> None:
-    """tl.save's source-privacy policy applies: no absolute path reaches the file."""
+    """Trace.save's source-privacy policy applies: no absolute path reaches the file."""
 
     path = tl.export.safetensors(_trace(), tmp_path / "trace.safetensors")
     data = path.read_bytes()
@@ -162,7 +162,7 @@ def test_export_file_is_pure_safetensors_with_no_pickle(tmp_path: Path) -> None:
 def test_export_registry_row_and_refusals(tmp_path: Path) -> None:
     """The door is a present-tier export target; misuse refuses typed."""
 
-    assert tl.export.export_target_info("safetensors").capabilities["tier"] == "present"
+    assert tl.export.describe_target("safetensors").capabilities["tier"] == "present"
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.export.safetensors(object(), tmp_path / "x.safetensors")
     assert excinfo.value.fields["code"] == "trace_safetensors_trace_required"

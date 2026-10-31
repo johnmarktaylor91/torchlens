@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
-from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, rehydrate_nested
-from .._io.bundle import cleanup_tmp, load, save
+from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, materialize_nested
+from .._io.bundle import cleanup_tmp, load as _load
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarError,
@@ -20,14 +20,13 @@ from .._io.sidecar import (
     register_sidecar_family,
     unregister_sidecar_family,
 )
-from .._io.state_contract import inspect_state_contract
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
 from ..options import suppress_mutate_warnings
 
 
-def list_logs() -> tuple[Any, ...]:
+def list_traces() -> tuple[Any, ...]:
     """Return a snapshot of currently live TorchLens traces."""
 
     from .. import user_funcs
@@ -41,14 +40,6 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     from .. import user_funcs
 
     user_funcs.reset_naming_counter(class_name)
-
-
-def log_model_metadata(*args: Any, **kwargs: Any) -> Any:
-    """Run metadata-only model capture through the public user_funcs surface."""
-
-    from .. import user_funcs
-
-    return user_funcs.log_model_metadata(*args, **kwargs)
 
 
 def detect_tlspec_format(path: str | Path) -> str:
@@ -276,7 +267,7 @@ def load_intervention_spec(
         If ``path`` does not load as an intervention spec.
     """
 
-    loaded = load(
+    loaded = _load(
         path,
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
@@ -285,7 +276,7 @@ def load_intervention_spec(
         raise ArgumentTypeError(
             f"load_intervention_spec loaded {type(loaded).__name__}, not InterventionSpec",
             code="artifact_kind_mismatch",
-            remedy="pass the path of an intervention .tlspec artifact or use torchlens.io.load",
+            remedy="pass the path of an intervention .tlspec artifact or use torchlens.load",
             argument="path",
             loaded_type=type(loaded).__name__,
         )
@@ -295,7 +286,8 @@ def load_intervention_spec(
 #: Removed public names: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {
-    "get_model_metadata": ("use torchlens.io.log_model_metadata -- get_model_metadata was renamed"),
+    "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
+    "log_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
 }
 
 
@@ -323,19 +315,15 @@ __all__ = [
     "attach_sidecar",
     "cleanup_tmp",
     "detect_tlspec_format",
-    "inspect_state_contract",
     "inspect_tlspec",
-    "list_logs",
-    "load",
+    "list_traces",
     "list_sidecar_families",
     "load_intervention_spec",
-    "log_model_metadata",
     "read_safetensors",
     "read_sidecar",
     "register_sidecar_family",
-    "rehydrate_nested",
+    "materialize_nested",
     "reset_naming_counter",
-    "save",
     "save_intervention",
     "suppress_mutate_warnings",
     "unregister_sidecar_family",

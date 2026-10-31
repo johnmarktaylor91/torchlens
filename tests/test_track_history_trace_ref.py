@@ -16,17 +16,16 @@ import torch
 
 from torchlens.observability import (
     HISTORY_SCHEMA_VERSION,
-    CommittedBlock,
-    HistoryReader,
-    HistoryWriter,
     ObservationRecord,
     RunRecord,
     SiteRecord,
     Spine,
     StepBlockRecord,
 )
+from torchlens.observability._artifact import CommittedBlock, HistoryWriter
 from torchlens.observability._errors import HistorySchemaError
 from torchlens.observability._op_tier import OpTierCollector
+from torchlens.trackers import HistoryReader
 
 
 def _committed(step: int, trace_ref: str | None) -> CommittedBlock:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import glob
+import importlib
 import io
 import json
 import os
@@ -80,14 +81,14 @@ from .tensor_policy import FailReason, Ok
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
-    from ..bundle import Bundle
-    from ..intervention.types import InterventionSpec
-    from ..runnable import (
+    from .._runnable import (
         ActivationPayloadMember,
         SlotByteDigest,
         SparseRunDescriptor,
         StateByteDigest,
     )
+    from ..bundle import Bundle
+    from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
@@ -387,7 +388,7 @@ def save(
     >>> model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     >>> x = torch.randn(2, 4)
     >>> trace = tl.trace(model, x)
-    >>> tl.save(trace, "demo_bundle", overwrite=True)
+    >>> trace.save("demo_bundle", overwrite=True)
     >>> loaded = tl.load("demo_bundle")
     >>> loaded["linear_1_1"].out.shape
     torch.Size([2, 3])
@@ -404,7 +405,7 @@ def save(
     grant it to artifacts whose provenance you trust.
     """
 
-    # A MergedTrace is a presenter, never a Trace: tl.save() refuses it typed
+    # A MergedTrace is a presenter, never a Trace: trace.save() refuses it typed
     # (contract 2.5 "merged runnable export ... refused typed") instead of the
     # historical bare AttributeError from the poison gate. The sys.modules
     # gate keeps ordinary saves free of any merged import: a MergedTrace can
@@ -414,9 +415,9 @@ def save(
         from ..merged import MergedErrorCode, MergedSurfaceUnsupportedError
 
         raise MergedSurfaceUnsupportedError(
-            "tl.save() does not support MergedTrace. Write the merged-directory "
+            "trace.save() does not support MergedTrace. Write the merged-directory "
             "artifact with merged.save(path), or save a single rank core with "
-            "tl.save(merged.ranks[r], path).",
+            "merged.ranks[r].save(path).",
             code=MergedErrorCode.MERGED_SURFACE_UNSUPPORTED,
         )
     # A TraceSlice is likewise a presenter, never a Trace: a slice has
@@ -429,9 +430,9 @@ def save(
         from ..selection import SelectionError
 
         raise SelectionError(
-            "tl.save() does not support TraceSlice: a slice is a VIEW with "
+            "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "
-            "Save the underlying trace (tl.save(slice.source_trace, path)) "
+            "Save the underlying trace (slice.source_trace.save(path)) "
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
@@ -440,7 +441,7 @@ def save(
     # UNKNOWN and false-refused EVERY bundle tl.bundle() built (with the
     # hand-built-object warning) while bundle.save() worked -- the third
     # instance of the two-answers outcome-authority disease (foldB D9).
-    # tl.save delegates to the ONE container door before any per-trace gate;
+    # Trace.save delegates to the ONE container door before any per-trace gate;
     # each member's own save applies the N1 gate PER MEMBER inside the
     # container write (D8: a container-level status is a fold reported
     # beside results, never a gate on a member it does not describe). Same
@@ -533,7 +534,7 @@ def save(
 
         settled = outcome_for(trace)
         raise CaptureOutcomeError(
-            "tl.save() does not support PartialTrace wrappers: a partial "
+            "trace.save() does not support PartialTrace wrappers: a partial "
             "capture is an inspection product with no persistable schema. "
             "Inspect it live (draw, audit, first_nonfinite), or re-capture "
             "successfully and save the resulting Trace.",
@@ -541,7 +542,7 @@ def save(
             capability="save_analysis",
             status="unknown" if settled is None else settled.status.value,
         )
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     # The poison gate only applies to products that carry sparse-run state; a
     # PartialTrace / Recording has none, so there is nothing to refuse.
@@ -557,8 +558,8 @@ def save(
             require_capture_capability(trace, "save_runnable")
         except CaptureOutcomeError as outcome_exc:
             if outcome_exc.fields.get("code") == "N4":
+                from .._runnable import RunnableErrorCode
                 from ..errors import RunnablePreflightError
-                from ..runnable import RunnableErrorCode
 
                 raise RunnablePreflightError(
                     "Runnable save refuses a HALTED capture: the recorded graph "
@@ -944,8 +945,8 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
         Typed save refusal for any label the load door would refuse.
     """
 
+    from .._runnable import RunnableErrorCode
     from ..errors import RunnablePreflightError
-    from ..runnable import RunnableErrorCode
 
     for name in names:
         if not isinstance(name, str) or name == "":
@@ -1092,9 +1093,9 @@ def _capture_activation_blob_specs(
         If a selected payload is unavailable or is not a dense torch tensor.
     """
 
+    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
     from .._runnable_execution import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
-    from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
@@ -1432,6 +1433,19 @@ def load(
                 from ..merged._artifact import load_merged
 
                 return load_merged(bundle_path)  # type: ignore[return-value]
+            if (
+                isinstance(candidate, dict)
+                and candidate.get("bundle_format") == "fastlog-directory"
+            ):
+                from ..fastlog.recover import load as load_fastlog
+
+                return load_fastlog(bundle_path)  # type: ignore[return-value]
+            if isinstance(candidate, dict) and _is_extraction_manifest(candidate):
+                # Resolved by name: a static import would pull the extraction
+                # engine (which imports the root facade) into this module's
+                # import cycle for the type checker.
+                extraction = importlib.import_module("torchlens.dataset_extraction")
+                return extraction.load_extraction(bundle_path)
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
@@ -1508,6 +1522,25 @@ def load(
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
+
+
+def _is_extraction_manifest(candidate: dict[str, Any]) -> bool:
+    """Return whether a directory manifest is a dataset-extraction artifact's.
+
+    Parameters
+    ----------
+    candidate:
+        The parsed ``manifest.json`` mapping.
+
+    Returns
+    -------
+    bool
+        True for the extraction manifest schemas (v1 and v2).
+    """
+
+    from .._data_substrate.artifact import MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2
+
+    return candidate.get("schema") in {MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2}
 
 
 def _load_trace_payload(
@@ -1594,7 +1627,7 @@ def _load_trace_payload(
             raise TorchLensIOError(
                 f"Bundle metadata at {metadata_path} is not a metadata mapping "
                 f"(got {type(scrubbed_state).__name__}); the artifact is corrupt or "
-                "hand-edited. Remedy: re-save the trace with tl.save().",
+                "hand-edited. Remedy: re-save the trace with trace.save().",
                 code="metadata_payload_not_a_mapping",
             )
         # AUD-CODE 3.0b: snapshot the stamp/row-count facts from the bytes as
@@ -1773,7 +1806,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
       descriptor) carrying STRAY runnable payload blobs is a real inconsistency; hard-fail.
     """
 
-    from ..runnable import RunProvider
+    from .._runnable import RunProvider
 
     if trace.runnable_descriptor is not None:
         return "bind"
@@ -1986,8 +2019,8 @@ def _bind_archived_activation_payload(
         If descriptor membership, blob entries, or file checksums disagree.
     """
 
+    from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
     from .._runnable_state import runnable_tensor_byte_digest
-    from ..runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
@@ -2017,7 +2050,7 @@ def _bind_archived_activation_payload(
         return
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
-    from ..runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+    from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
 
     if declared.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
         raise TorchLensIOError(
@@ -3812,7 +3845,7 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
             value[key] = _replace_skipped_blob_refs(item, skipped_blob_ids)
         return value
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 
@@ -3855,7 +3888,7 @@ def _raise_for_unmaterialized_nested_blob_refs(
     if _contains_nested_blob_refs(value, set(), allowed_blob_ids):
         raise TorchLensIOError(
             "Trace contains unmaterialized nested blob references. "
-            "Call torchlens.io.rehydrate_nested(trace) before saving."
+            "Call torchlens.io.materialize_nested(trace) before saving."
         )
 
 
@@ -3935,7 +3968,7 @@ def _contains_nested_blob_refs(
     if kind == _NESTED_BLOB_SEQUENCE:
         return any(_contains_nested_blob_refs(item, seen, allowed_blob_ids) for item in value)
 
-    spec = getattr(value_type, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(value_type, "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return False
 

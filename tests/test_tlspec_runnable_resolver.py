@@ -21,15 +21,15 @@ from torchlens._io.runnable import (
     build_sparse_run_descriptor,
     preflight_sparse_run_descriptor,
 )
-from torchlens.errors import ReattachError
-from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     ReadinessStatus,
     ResolverStatus,
     RunnableErrorCode,
     SparseRunDescriptor,
 )
+from torchlens.errors import ReattachError
+from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.options import CaptureOptions
 from torchlens.utils._torch_compat import (
     _RUNNABLE_TORCH_ALIASES,
     _torch_minor_version,

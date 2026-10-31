@@ -101,7 +101,7 @@ def _diff(a: Any, b: Any, path: str, seen: set[tuple[int, int]]) -> list[str]:
     if is_dataclass(a) and not isinstance(a, type):
         names = [field.name for field in fields(a)]
         return _diff_attrs(a, b, names, path, seen)
-    if getattr(type(a), "PORTABLE_STATE_SPEC", None) is not None:
+    if getattr(type(a), "_PORTABLE_STATE_SPEC", None) is not None:
         left_state = dict(state_items(a))
         right_state = dict(state_items(b))
         left_keys = set(left_state) - _ignored_fields(a)

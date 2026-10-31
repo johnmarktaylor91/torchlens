@@ -35,8 +35,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -287,7 +287,7 @@ def test_r10_input_escape_changed_is_unverifiable(
     tmp_path: Path,
 ) -> None:
     path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
-    result = tl.load(path).run(inputs=changed_x.clone(), on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=changed_x.clone(), on_divergence="return")
     _assert_not_blessed(result.report)
     # The recorded taken path / baked literal is stale for the changed input.
     assert not torch.allclose(result.output, model_cls()(changed_x.clone()))
@@ -350,7 +350,7 @@ def test_r10_data_alias_escape_changed_is_unverifiable(tmp_path: Path) -> None:
         tmp_path / "c.tlspec",
         include_activations=True,
     )
-    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return_diverged")
+    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return")
     _assert_not_blessed(changed.report)
     assert not torch.allclose(changed.output, DataAliasScalarEscape()(torch.tensor([10.0, 10.0])))
 
@@ -394,7 +394,7 @@ def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -
     path = _save(PrunedParamEscape(), x, tmp_path / "p.tlspec", include_weights=True)
     loaded = tl.load(path)
     loaded.load_state_dict({"w": torch.tensor([7.0])})
-    result = loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+    result = loaded.run(inputs=x.clone(), on_divergence="return")
     _assert_not_blessed(result.report)
     # Captured s=3.0 replays 4*7 + 3 = 31; a true live forward with w=7 is 4*7 + 8 = 36.
     assert abs(result.output.item() - 31.0) < 1e-5
@@ -431,7 +431,7 @@ def test_r10_inplace_mutated_source_original_still_verified(tmp_path: Path) -> N
 def test_r10_inplace_mutated_source_changed_is_still_unverifiable(tmp_path: Path) -> None:
     x = torch.tensor(3.0)
     path = _save(InPlaceMutatedEscapeSource(), x, tmp_path / "m3.tlspec")
-    result = tl.load(path).run(inputs=torch.tensor(5.0), on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=torch.tensor(5.0), on_divergence="return")
     # Snapshot-based staleness still fires: capture s=6.0, changed production is 10.0.
     _assert_not_blessed(result.report)
     live = InPlaceMutatedEscapeSource()(torch.tensor(5.0))

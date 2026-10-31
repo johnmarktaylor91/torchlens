@@ -276,7 +276,7 @@ def test_include_source_false_strips_source_text_and_host_paths(tmp_path: Path) 
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "no_source.tlspec"
-    tl.save(log, bundle_path, include_source=False, overwrite=True)
+    log.save(bundle_path, include_source=False, overwrite=True)
 
     raw = _bundle_metadata_bytes(bundle_path)
     for marker in _SOURCE_BODY_MARKERS:
@@ -299,7 +299,7 @@ def test_default_save_keeps_source_but_relativizes_host_paths(tmp_path: Path) ->
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "with_source.tlspec"
-    tl.save(log, bundle_path, overwrite=True)
+    log.save(bundle_path, overwrite=True)
 
     raw = _bundle_metadata_bytes(bundle_path)
     # Source is embedded by default...
@@ -320,7 +320,7 @@ def test_source_stripped_artifact_visualizes_without_crashing(tmp_path: Path) ->
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "stripped.tlspec"
-    tl.save(log, bundle_path, include_source=False, overwrite=True)
+    log.save(bundle_path, include_source=False, overwrite=True)
     loaded = tl.load(bundle_path)
 
     # Requesting a source panel on the reloaded, source-stripped trace must not

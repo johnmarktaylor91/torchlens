@@ -271,7 +271,7 @@ tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` cov
 "dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`output_dir=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis
 semantics, dtypes); an interrupted long extraction continues from its last completed shard with
-`resume=True`, and `torchlens.dataset_extraction.load_extraction(...)` reads the artifact back
+`resume=True`, and `torchlens.load(path)` reads the artifact back
 with its metadata (both spellings DOCUMENTED-UNSTABLE).
 
 ## Windowed and disk-backed capture

@@ -737,21 +737,20 @@ class TestHaltedMemberArtifactRoundTrip:
         art = tmp_path / "halted_member.tlspec"
         merged.save(art)
         loaded = load_merged(art)
-        assert loaded.load_degradations == ()
+        assert loaded.degradations == ()
         assert loaded.member_outcomes == {0: "halted", 1: "complete"}
         assert "halted" in loaded.summary()
         assert loaded.value_status is merged.value_status
 
 
 class TestModuleLevelSaveRefusesTyped:
-    """tl.save(merged, ...) is a contract-promised typed refusal, not an AttributeError."""
+    """The bundle save door refuses a MergedTrace typed, not with an AttributeError."""
 
     @pytest.mark.smoke
     def test_tl_save_merged_trace_refuses_typed(self, tmp_path):
         # The module-level bundle save used to reach the runnable poison gate
         # and die as a bare AttributeError ('MergedTrace' has no '_runnable');
         # the contract (2.5) promises every merged export surface refuses typed.
-        import torchlens as tl
         from torchlens.merged._errors import MergedSurfaceUnsupportedError
         from torchlens.merged._presenter import MergedTrace, _RankHandle
 
@@ -761,7 +760,9 @@ class TestModuleLevelSaveRefusesTyped:
         merged = MergedTrace(
             derivation, {0: _RankHandle(0, trace=None), 1: _RankHandle(1, trace=None)}
         )
+        from torchlens._io.bundle import save as _save_bundle
+
         with pytest.raises(MergedSurfaceUnsupportedError) as excinfo:
-            tl.save(merged, tmp_path / "merged_refused.tlspec")
+            _save_bundle(merged, tmp_path / "merged_refused.tlspec")
         assert excinfo.value.fields["code"] == "merged_surface_unsupported"
         assert not (tmp_path / "merged_refused.tlspec").exists()

@@ -140,7 +140,7 @@ def test_portable_round_trip_runtime_handles_are_none(tmp_path: Path) -> None:
     _model, trace = _make_trace()
     path = tmp_path / "runtime_handles.tlspec"
 
-    tl.save(trace, path, level="portable")
+    trace.save(path, level="portable")
     loaded = tl.load(path)
 
     assert loaded.params["linear.weight"].handle is None

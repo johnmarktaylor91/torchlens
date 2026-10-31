@@ -64,6 +64,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch._tl import (
     get_buffer_address,
     get_tensor_meta,
@@ -72,7 +73,6 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 

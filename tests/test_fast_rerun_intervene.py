@@ -25,9 +25,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._fast_run import close_fast_run_session
+from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, EngineDispatchError
-from torchlens.runnable import RunResult
 
 _VOCAB = 64
 _DIM = 16

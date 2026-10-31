@@ -88,13 +88,13 @@ def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> No
     trace = _halted_trace()
     stamp_backend_finalized(trace)
     path = tmp_path / "preview_halted.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.halted is True
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.HALTED
     # N1: a non-degraded halted artifact re-saves.
-    tl.save(loaded, str(tmp_path / "preview_halted_again.tlspec"))
+    loaded.save(str(tmp_path / "preview_halted_again.tlspec"))
 
 
 # ---------------------------------------------------------------------------

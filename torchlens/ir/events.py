@@ -54,7 +54,7 @@ class _AtenTensorFact:
     layout: str
     requires_grad: bool
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "container_path": FieldPolicy.KEEP,
         "tensor_impl_capability": FieldPolicy.KEEP,
         "logical_version": FieldPolicy.KEEP,
@@ -87,7 +87,7 @@ class _AtenExecutionContext:
     owner_thread_coverage: tuple[int, ...]
     completeness_witness_mode: str
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "pytorch_version": FieldPolicy.KEEP,
         "backend": FieldPolicy.KEEP,
         "device_model": FieldPolicy.KEEP,

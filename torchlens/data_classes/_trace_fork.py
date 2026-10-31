@@ -538,7 +538,7 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
         # shell has no pool/registry to decode them later, and
         # ``DetachedOpStore.items`` streams cells verbatim — a leaked
         # ``PooledCell`` would poison the record's pickle state and make every
-        # fork serialization (pickle AND tl.save/tl.load) fail downstream.
+        # fork serialization (pickle AND Trace.save/tl.load) fail downstream.
         if value.__class__ is PooledCell:
             value = value.hydrate()
         elif value.__class__ is str and store.compacted_singleton(row, fid, value):

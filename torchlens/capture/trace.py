@@ -1515,7 +1515,7 @@ def _finalize_halted_trace(
     )
     # Mirror the completed paths: the transient attribution inputs are consumed
     # by output extraction and must never survive onto the finished product
-    # (an unpopped copy blocked halted analysis saves via PORTABLE_STATE_SPEC).
+    # (an unpopped copy blocked halted analysis saves via _PORTABLE_STATE_SPEC).
     self.__dict__.pop("_output_attribution_input_tensors", None)
     _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
     set_capture_phase(self, CapturePhase.POSTPROCESS)
@@ -2029,7 +2029,7 @@ def run_and_log_inputs_through_model(
 
         # Fence every cpu_async D2H copy recorded this forward BEFORE any
         # host-side consumer (finalize, postprocess digests, ``op.out``,
-        # ``tl.save`` serialization) can observe partial bytes (R36-1).
+        # ``Trace.save`` serialization) can observe partial bytes (R36-1).
         synchronize_pending_cpu_async_copies()
         # Settle deferred track_nonfinite device flags here, after the forward
         # is complete, so the record costs one batch of scalar reads instead of

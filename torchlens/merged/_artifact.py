@@ -788,7 +788,7 @@ def load_merged(path: str | Path) -> MergedTrace:
     Returns
     -------
     MergedTrace
-        The merged presenter, with ``load_degradations`` recording any rank
+        The merged presenter, with ``degradations`` recording any rank
         core that no longer parses on this runtime (capping the effective
         alignment at ``partial``).
 

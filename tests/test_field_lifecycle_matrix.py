@@ -78,7 +78,7 @@ def test_field_lifecycle_matrix_modellog() -> None:
     """Assert every Trace ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Trace.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Trace._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
 
@@ -87,7 +87,7 @@ def test_field_lifecycle_matrix_op_log() -> None:
     """Assert every Op ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Op.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Op._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(Op.DEFAULT_FILL_STATE)
 

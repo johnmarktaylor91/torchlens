@@ -78,7 +78,7 @@ def _tiny_trace() -> Trace:
 @pytest.mark.smoke
 def test_registration_requires_declared_drop_policy() -> None:
     keep_field = next(
-        name for name, policy in Trace.PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
+        name for name, policy in Trace._PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
     )
     with pytest.raises(ValueError, match="not 'drop'"):
         register_prerelease_field(Trace, keep_field)
@@ -171,7 +171,7 @@ def test_marked_artifact_refuses_to_load_as_real_current_version(
     setattr(trace, planted_field, 7)
     marked_path = tmp_path / "marked.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(marked_path))
+        trace.save(str(marked_path))
     # Without the switch the marked artifact refuses typed.
     with pytest.raises(PreReleaseArtifactError, match="pre-release field marker"):
         tl.load(str(marked_path))
@@ -185,7 +185,7 @@ def test_unmarked_artifact_loads_clean_with_no_marker(planted_field: str, tmp_pa
     trace = _tiny_trace()
     setattr(trace, planted_field, 7)
     plain_path = tmp_path / "plain.tlspec"
-    tl.save(trace, str(plain_path))
+    trace.save(str(plain_path))
     loaded = tl.load(str(plain_path))
     # Default write: field dropped, no marker, loads with or without switch.
     assert getattr(loaded, planted_field, None) in (None, 0)

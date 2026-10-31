@@ -125,7 +125,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `type(owner).__name__`, `Trace.root_entry_point` records
   `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
   carries `tl_authored_root=True` — both persisted with fail-closed load validation. On
-  bound-method episode captures `EpisodeSpec.stepped_module` defaults to the owner. Bound-method
+  bound-method episode captures `EpisodeOptions.stepped_module` defaults to the owner. Bound-method
   captures refuse rerun/append at the identity gate (`rerun_entry_point_unsupported`; an absent
   fact on a legacy artifact refuses `root_entry_point_unavailable`); replay engines are
   unaffected. Other callables (closures, bare functions) refuse `model_type_unsupported`. All
@@ -133,7 +133,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Episode capture**
 : One wrapped multi-step generation run captured as a single product
-  (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeSpec(stepped_module=...))`
+  (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeOptions(stepped_module=...))`
   stamps the declaration and lands a per-step status ledger (grammar v2,
   `episode_ledger_version=2`: header with the declared `step_output_kind`
   (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the
@@ -852,7 +852,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
   `False`, or `None`. It is derived at read time from records that persist with the trace (the
   intervention audit, the operation history, mutation states, direct writes and op intervention
-  marks), never stored as a flag, so it survives `tl.save`/`tl.load`, pickle and `fork()`, and no
+  marks), never stored as a flag, so it survives `Trace.save`/`tl.load`, pickle and `fork()`, and no
   reset makes a touched trace read `True` again. `False` means some touch was recorded: a
   capture-time `intervene=` (including one that fired nowhere), a staged hook or value
   replacement (even after `clear_hooks()`), `do()`, `set()`, a region edit, a hooked rerun or run,
@@ -1129,7 +1129,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (``stimulus_ids=`` optional), axis semantics, dtypes, devices, and the TorchLens
   version. ``resume=True`` (DOCUMENTED-UNSTABLE, like ``stimulus_ids=`` and the loader)
   continues an interrupted disk run from its last completed shard after a signature
-  check; `torchlens.dataset_extraction.load_extraction` reads the artifact back with
+  check; `torchlens.load(path)` reads the artifact back with
   its metadata as a `LoadedExtraction`.
 
 **Module and stage names** *(rule documented-unstable)*
@@ -1197,15 +1197,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
   itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
   session-scoped); `tl.clear_capture_cache`
-  empties the capture cache; `tl.io.list_logs` / `tl.io.reset_naming_counter` manage log
+  empties the capture cache; `tl.io.list_traces` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 
 ## Persistence, containers, and namespaces
 
 **Save / load**
-: `tl.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
+: `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  The staged intervention spec is session-only: `tl.save` keeps the intervened
+  The staged intervention spec is session-only: `Trace.save` keeps the intervened
   values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
   staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
@@ -1830,7 +1830,7 @@ deprecation shim owed*
   silently dropped, plus the region's entry/exit ops
   (`source_ops`/`sink_ops`). A slice deliberately offers NO
   save/replay/validate (a region with dangling external inputs cannot
-  honour them); `tl.save` refuses it typed (`slice_save_unsupported`).
+  honour them); `Trace.save` refuses it typed (`slice_save_unsupported`).
   `__selection__` lifts the member family back into the algebra, so a
   slice composes under `| & - ~` and feeds `do()`.
   `trace.subgraph(selection)` is the general door: any ACT region — an
@@ -1958,7 +1958,7 @@ shim owed; S2-gated*
   mask_shape_mismatch | facet_write_mask_unavailable | population_too_small |
   multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`),
   `selection_apply_invalid` (stage 2), and `slice_save_unsupported`
-  (`tl.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
+  (`Trace.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
   is the `tl.units` face of the multi-pass bare-label ambiguity refusal: a
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`); the
@@ -1981,7 +1981,7 @@ default-keep); mask-application semantics documented-unstable*
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
-  otherwise). The hook `factory` is session-side. `Edit.PORTABLE_STATE_SPEC`
+  otherwise). The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC`
   is the class-level table of how a saved spec keeps each field: `factory`
   is dropped, `selection_recipe` is saved as a recursive blob, every other
   field is kept. `trace.do(selection, edit)`
@@ -2574,7 +2574,7 @@ deprecation shim owed*
   row reproduces the model's own output scores. `title=` prefixes the
   figure title with a subject such as the model's name. Lenses
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
-  names the columns; nothing is cropped silently. Returns an `Artifact`.
+  names the columns; nothing is cropped silently. Returns a `SavedFigure`.
 
 **kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
 : `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`

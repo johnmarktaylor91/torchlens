@@ -24,12 +24,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
@@ -85,7 +85,7 @@ def _save_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> Path:
     """Capture and persist a runnable bundle with embedded weights."""
 
     log = tl.trace(model.eval(), inputs, capture=_CAP)
-    tl.save(log, path, level="runnable", include_weights=True)
+    log.save(path, level="runnable", include_weights=True)
     return path
 
 

@@ -126,7 +126,7 @@ _REDIRECT_TARGETS: dict[str, str] = {
     "effective_dimensionality": "repgeom.effective_dimensionality",
     "procrustes_align": "repgeom.procrustes_align",
     "extract_dataset": "extract_dataset",
-    "load_extraction": "load_extraction",
+    "load_extraction": "load",
     "brain_score": "bridge.brain_score",
 }
 

@@ -39,7 +39,6 @@ from ._receipts import receipt_from_patch_grid, render_receipt_grid
 from ._records import (
     ANNOTATION_KINDS,
     Annotation,
-    Artifact,
     AttentionView,
     CausalReceipt,
     CropInfo,
@@ -48,6 +47,7 @@ from ._records import (
     MaskInfo,
     PredictionTable,
     PredictionTrajectory,
+    SavedFigure,
     ScoreDecomposition,
     TokenAxis,
     TokenMetrics,
@@ -60,7 +60,7 @@ from ._strip import render_token_strip, token_strip_html, token_strip_svg
 __all__ = [
     "ANNOTATION_KINDS",
     "Annotation",
-    "Artifact",
+    "SavedFigure",
     "AttentionView",
     "CausalReceipt",
     "CropInfo",

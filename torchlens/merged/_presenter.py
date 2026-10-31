@@ -191,7 +191,7 @@ class MergeReport:
     value_status: MergeValueStatus
     n_joins: int
     findings: tuple[MergedFinding, ...]
-    load_degradations: tuple[str, ...] = ()
+    degradations: tuple[str, ...] = ()
 
     @property
     def gaps(self) -> tuple[MergedFinding, ...]:
@@ -227,7 +227,7 @@ class MergeReport:
             f"- alignment: {self.alignment.value}"
             + (
                 f" (stored: {self.stored_alignment.value}; "
-                f"{len(self.load_degradations)} load degradation(s))"
+                f"{len(self.degradations)} load degradation(s))"
                 if self.alignment is not self.stored_alignment
                 else ""
             ),
@@ -239,21 +239,19 @@ class MergeReport:
         return "\n".join(lines)
 
 
-def _report_from(
-    derivation: MergeDerivation, load_degradations: tuple[str, ...] = ()
-) -> MergeReport:
+def _report_from(derivation: MergeDerivation, degradations: tuple[str, ...] = ()) -> MergeReport:
     """Build the report projection of a derivation."""
 
     findings = derivation.findings
-    if load_degradations:
+    if degradations:
         findings = findings + tuple(
-            MergedFinding(kind="load_degradation", detail=detail) for detail in load_degradations
+            MergedFinding(kind="load_degradation", detail=detail) for detail in degradations
         )
     effective = derivation.stored_alignment
-    if load_degradations and effective is MergeAlignment.ALIGNED:
+    if degradations and effective is MergeAlignment.ALIGNED:
         effective = MergeAlignment.PARTIAL
     effective_value_status = derivation.stored_value_status
-    if load_degradations and effective_value_status is MergeValueStatus.ATTESTED_COMPLETE:
+    if degradations and effective_value_status is MergeValueStatus.ATTESTED_COMPLETE:
         # An unparseable member can never support a COMPLETE attestation claim
         # (R18-5 presenter half; same demote-only cap as the alignment above).
         effective_value_status = MergeValueStatus.ATTESTED_PARTIAL
@@ -265,7 +263,7 @@ def _report_from(
         value_status=effective_value_status,
         n_joins=len(derivation.joins),
         findings=findings,
-        load_degradations=load_degradations,
+        degradations=degradations,
     )
 
 
@@ -273,7 +271,7 @@ class MergedTrace:
     """N rank-local captures stitched at their collective boundaries.
 
     Never construct directly: use :func:`merge_ranks` (live/loaded inputs)
-    or :func:`torchlens.merged.load` (a saved ``merged-directory`` artifact).
+    or :func:`torchlens.load` (a saved ``merged-directory`` artifact).
 
     Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins
@@ -286,11 +284,11 @@ class MergedTrace:
         self,
         derivation: MergeDerivation,
         handles: Mapping[int, _RankHandle],
-        load_degradations: tuple[str, ...] = (),
+        degradations: tuple[str, ...] = (),
     ) -> None:
         self._derivation = derivation
         self._handles = dict(handles)
-        self._load_degradations = tuple(load_degradations)
+        self._load_degradations = tuple(degradations)
         self._source_path: str | None = None
         self._released = False
         self._member_outcomes = self._settle_member_outcomes(self._handles)
@@ -321,7 +319,7 @@ class MergedTrace:
 
         The counterpart of ``Trace.cleanup()`` for the presenter (R37 /
         b2:B20, contract section 8): the derivation record, verdict
-        properties, findings, and ``load_degradations`` stay readable, but
+        properties, findings, and ``degradations`` stay readable, but
         every surface that resolves a member trace (``ranks``,
         ``__getitem__``, ``super_op()``, ``join_ops()``, ``save()``) refuses
         typed with ``fields["code"] = "merged_member_released"`` afterwards
@@ -385,7 +383,7 @@ class MergedTrace:
         return stored
 
     @property
-    def load_degradations(self) -> tuple[str, ...]:
+    def degradations(self) -> tuple[str, ...]:
         """Environment degradations recorded at load (empty on a live merge)."""
 
         return self._load_degradations

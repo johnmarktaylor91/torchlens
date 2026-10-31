@@ -39,7 +39,7 @@ _SAFE_DEFAULT_FACTORIES: dict[str, Any] = {
 class TupleIndex:
     """Index component for tuple/list output paths."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"index": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"index": FieldPolicy.KEEP}
 
     index: int
 
@@ -48,7 +48,7 @@ class TupleIndex:
 class DictKey:
     """Key component for dict output paths."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
 
     key: Any
 
@@ -57,7 +57,7 @@ class DictKey:
 class NamedField:
     """Field-name component for namedtuple output paths."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
 
     name: str
 
@@ -66,7 +66,7 @@ class NamedField:
 class DataclassField:
     """Field-name component for dataclass output paths."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
 
     name: str
 
@@ -75,7 +75,7 @@ class DataclassField:
 class HFKey:
     """Key component for HuggingFace ``ModelOutput`` output paths."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
 
     key: Any
 
@@ -89,7 +89,7 @@ OutputPathComponent: TypeAlias = (
 class ContainerSpec:
     """Portable description of an output container seen during capture."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "kind": FieldPolicy.KEEP,
         "length": FieldPolicy.KEEP,
         "keys": FieldPolicy.BLOB_RECURSIVE,

@@ -292,7 +292,7 @@ def test_loaded_trace_restores_default_and_serves_saved_basis(tmp_path) -> None:
     )
     assert log.nonfinite_coverage.basis == "capture"
     path = tmp_path / "nonfinite.tlspec"
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
     assert loaded.track_nonfinite is False
     assert loaded.nonfinite_coverage.basis == "saved_payloads"

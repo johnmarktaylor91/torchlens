@@ -16,9 +16,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import EngineDispatchError
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _DIM = 8
 

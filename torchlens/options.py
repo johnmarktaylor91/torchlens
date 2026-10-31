@@ -13,7 +13,7 @@ from ._deprecations import (
     MISSING,
     MissingType,
 )
-from ._episode_spec import EpisodeSpec
+from ._episode_spec import EpisodeOptions
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
@@ -1562,14 +1562,14 @@ class StreamingOptions:
     include_custom_attributes:
         Whether harvested module attributes (``Module.custom_attributes``)
         are persisted verbatim in the streamed bundle. The streamed-bundle
-        counterpart of ``tl.save(..., include_custom_attributes=)`` (R62:
+        counterpart of ``trace.save(..., include_custom_attributes=)`` (R62:
         the streaming path had no opt-out and reopened the token-leak class
         the save-path fix closed).
     include_buffer_values:
         Whether captured pre-forward buffer values
         (``Trace._buffer_initial_values``) are persisted in the streamed
         bundle. The streamed-bundle counterpart of
-        ``tl.save(..., include_buffer_values=)`` (R62 buffer extension).
+        ``trace.save(..., include_buffer_values=)`` (R62 buffer extension).
     async_writes:
         Whether ``trace(..., storage=...)`` blob writes overlap forward
         capture through a bounded single-worker pipeline instead of pausing
@@ -1686,10 +1686,10 @@ def to_disk(
         Whether streamed payloads should also remain as RAM copies.
     include_custom_attributes:
         Whether harvested module attributes are persisted verbatim in the
-        streamed bundle (the ``tl.save`` opt-out, mirrored for streaming).
+        streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     include_buffer_values:
         Whether captured pre-forward buffer values are persisted in the
-        streamed bundle (the ``tl.save`` opt-out, mirrored for streaming).
+        streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     async_writes:
         Whether ``trace(..., storage=...)`` blob writes overlap capture on a
         bounded single-worker pipeline instead of pausing the forward for
@@ -1953,14 +1953,13 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 __all__ = [
     "CaptureOptions",
     "EchoOptions",
-    "EpisodeSpec",
+    "EpisodeOptions",
     "InterventionOptions",
     "OptionReceiptEntry",
     "ReplayOptions",
     "SaveOptions",
     "StreamingOptions",
     "option_receipt",
-    "to_disk",
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]

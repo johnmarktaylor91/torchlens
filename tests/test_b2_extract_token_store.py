@@ -85,7 +85,7 @@ def _extract(path: Path, *, collate=_collate, **kwargs) -> None:
         list(_TEXTS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=path,
+        path=path,
         collate=collate,
         ragged="trim",
         store_input_ids=True,
@@ -207,7 +207,7 @@ def test_default_shuffle_is_unchanged(tmp_path: Path) -> None:
         torch.randn(11, 4, generator=torch.Generator().manual_seed(5)),
         {"y": "fc"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     reader = open_extraction(tmp_path)
@@ -228,7 +228,7 @@ def test_dense_padded_and_pooled_keys_refuse_token_rows(tmp_path: Path) -> None:
         texts,
         {"h": "proj", "pooled": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         collate=lambda items: {
             key: torch.nn.functional.pad(value, (0, 3 - value.shape[1]))
             for key, value in _collate(items).items()
@@ -311,7 +311,7 @@ def test_resume_compares_the_stored_ids_flag(tmp_path: Path) -> None:
             list(_TEXTS),
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=_collate,
             ragged="trim",
             progress=False,

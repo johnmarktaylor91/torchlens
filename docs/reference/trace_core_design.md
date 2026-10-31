@@ -178,7 +178,7 @@ exposure; partial cores carry `topology_complete=False` and never pretend full
 postprocess ran.
 
 Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_log`
-and `return_diverged` traces are facade-backed automatically), but the escape-path
+and `on_divergence="return"` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
 (observers, `tap()`, `span()`, validation internals, bridge adapters) is
 inventoried at M0 and covered by oracle scenarios.
@@ -574,9 +574,9 @@ loaded analysis and runnable traces. Three deterministic byte streams per case:
   kind per name, invalid-access exception class/args/message. Floats via `float.hex()`;
   sets sorted by canonical bytes; dicts as ordered pairs; only documented volatile
   fields masked, each into a named bucket proven against a baseline-vs-baseline run.
-  The documented volatile surface is `torchlens.constants.ARTIFACT_VOLATILE_METADATA_FIELDS`
+  The documented volatile surface is `_ARTIFACT_VOLATILE_METADATA_FIELDS` in `torchlens/constants.py`
   (metadata.pkl: `random_seed`, capture start/end times, `_phase_timings`, the four
-  duration fields, `forward_peak_memory`) plus `ARTIFACT_VOLATILE_MANIFEST_FIELDS`
+  duration fields, `forward_peak_memory`) plus `_ARTIFACT_VOLATILE_MANIFEST_FIELDS`
   (manifest.json: `created_at`, `rng_state_digests`) — empirically derived from a
   same-seed two-process control; masking anything else is a contract widening that
   needs review.

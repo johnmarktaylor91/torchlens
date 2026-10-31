@@ -246,7 +246,7 @@ def test_region_do_round_trips(chain_fork, tmp_path) -> None:
     _model, _x, fork = chain_fork
     fork.do(fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region(), tl.zero_ablate())
     path = str(tmp_path / "region.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     (fact,) = _region_fact_rows(loaded)
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"

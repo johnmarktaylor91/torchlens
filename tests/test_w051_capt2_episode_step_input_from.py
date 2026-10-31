@@ -1,4 +1,4 @@
-"""``EpisodeSpec.step_input_from`` (W051-EPISODE out-of-fence item 3).
+"""``EpisodeOptions.step_input_from`` (W051-EPISODE out-of-fence item 3).
 
 The options owner gains the declared carried-input argument selector. The
 consumer (``resolve_episode_declaration`` -> ``EpisodeJoinSession``, the
@@ -18,17 +18,17 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._episode_spec import EpisodeSpec
+from torchlens._episode_spec import EpisodeOptions
 
 
 def test_step_input_from_field_defaults_to_none_and_accepts_str_or_int() -> None:
-    names = [f.name for f in dataclasses.fields(EpisodeSpec)]
+    names = [f.name for f in dataclasses.fields(EpisodeOptions)]
     assert "step_input_from" in names
     assert names.index("step_input_from") == names.index("crossings") + 1
-    assert EpisodeSpec().step_input_from is None
-    assert EpisodeSpec(step_input_from="input_ids").step_input_from == "input_ids"
-    assert EpisodeSpec(step_input_from=0).step_input_from == 0
-    assert tl.options.EpisodeSpec is EpisodeSpec
+    assert EpisodeOptions().step_input_from is None
+    assert EpisodeOptions(step_input_from="input_ids").step_input_from == "input_ids"
+    assert EpisodeOptions(step_input_from=0).step_input_from == 0
+    assert tl.options.EpisodeOptions is EpisodeOptions
 
 
 def _join_consumer_wired() -> bool:
@@ -71,9 +71,9 @@ def test_unknown_step_input_name_records_step_input_not_found() -> None:
     trace = tl.trace(
         model,
         x,
-        episode=EpisodeSpec(
+        episode=EpisodeOptions(
             stepped_module=model.cell,
-            n_steps=3,
+            num_steps=3,
             step_output_kind="none",
             step_input_from="no_such_kwarg",
         ),

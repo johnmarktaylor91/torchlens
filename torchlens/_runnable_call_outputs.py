@@ -7,6 +7,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._runnable import (
+    ContractCheck,
+    RunnableCallDescriptor,
+    RunnableErrorCode,
+    SparseRunDescriptor,
+    TensorSlotDescriptor,
+    TensorSlotRole,
+)
 from ._runnable_retention import _check_unretained_extent
 from ._runnable_state import (
     RunResourceCeiling,
@@ -23,14 +31,6 @@ from .ir.container import (
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,
     resolve_container_type,
-)
-from .runnable import (
-    ContractCheck,
-    RunnableCallDescriptor,
-    RunnableErrorCode,
-    SparseRunDescriptor,
-    TensorSlotDescriptor,
-    TensorSlotRole,
 )
 from .utils._torch_compat import tensor_version_or_none
 

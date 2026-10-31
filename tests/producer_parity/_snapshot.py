@@ -465,10 +465,8 @@ _ARTIFACT_TIMING_KEYS = frozenset(
 def artifact_snapshot(snapshot: Snapshot, trace: Any, tmp_path: Path) -> None:
     """Save a .tlspec and canonicalize manifest + blob digests."""
 
-    import torchlens as tl
-
     target = tmp_path / "parity_artifact.tlspec"
-    tl.save(trace, str(target))
+    trace.save(str(target))
     canonizer = _Canonicalizer(snapshot, "artifact")
     canonizer.anchor = "<artifact>"
     result: dict[str, Any] = {}

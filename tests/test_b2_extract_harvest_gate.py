@@ -73,10 +73,8 @@ def test_resnet18_64_image_harvest_gate(
     model, images = resnet18_and_images
     clean_dir, edited_dir = tmp_path / "clean", tmp_path / "edited"
     kwargs = {"batch_size": 16, "progress": False}
-    extract_dataset(model, images, _LAYERS, output_dir=clean_dir, **kwargs)
-    extract_dataset(
-        model, images, _LAYERS, output_dir=edited_dir, intervene=spec_factory(), **kwargs
-    )
+    extract_dataset(model, images, _LAYERS, path=clean_dir, **kwargs)
+    extract_dataset(model, images, _LAYERS, path=edited_dir, intervene=spec_factory(), **kwargs)
 
     manifest = json.loads((edited_dir / MANIFEST_FILENAME).read_text(encoding="utf-8"))
     harvest = validate_harvest_block(manifest[HARVEST_BLOCK_KEY])
@@ -101,7 +99,7 @@ def test_resnet18_64_image_harvest_gate(
         model,
         images,
         _LAYERS,
-        output_dir=edited_dir,
+        path=edited_dir,
         intervene=spec_factory(),
         resume=True,
         **kwargs,

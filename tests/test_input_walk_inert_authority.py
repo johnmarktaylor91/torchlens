@@ -448,8 +448,8 @@ def test_same_class_instance_state_is_witnessed_on_protocol_subclasses():
 def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
     """The r66-R1/ModeBox end-to-end repro: same class, changed field, typed refusal."""
 
+    from torchlens._runnable import PathFaithfulness
     from torchlens.errors import PathDivergenceError
-    from torchlens.runnable import PathFaithfulness
 
     class ModeRoutedModel(nn.Module):
         """Add a mode-selected constant to the boxed tensor."""
@@ -473,7 +473,7 @@ def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
         ),
     )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     changed = _ModeBox({"x": tensor})
     changed.mode = "b"

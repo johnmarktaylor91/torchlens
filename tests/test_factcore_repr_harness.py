@@ -24,9 +24,9 @@ _NO_AUTO_REPR_CLASSES = (
     "torchlens.fastlog.types:Recording",
     "torchlens.fastlog.types:ActivationRecord",
     "torchlens.ir.predicate:RecordContext",
-    "torchlens.runnable:RunResult",
-    "torchlens.runnable:RunReport",
-    "torchlens.runnable:ReadinessReport",
+    "torchlens._runnable:RunResult",
+    "torchlens._runnable:RunReport",
+    "torchlens._runnable:ReadinessReport",
 )
 
 

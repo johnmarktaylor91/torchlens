@@ -177,7 +177,7 @@ class DivergencePolicy(str, Enum):
     """Allowed responses to a detected path divergence."""
 
     RAISE = "raise"
-    RETURN_DIVERGED = "return_diverged"
+    RETURN_DIVERGED = "return"
 
 
 class ReadinessStatus(str, Enum):
@@ -1621,12 +1621,12 @@ class RunnableTraceProtocol(Protocol):
         """
         ...
 
-    def load_state_dict(self, sd: Mapping[str, Any]) -> None:
+    def load_state_dict(self, state_dict: Mapping[str, Any]) -> None:
         """Atomically validate and stage a strict state mapping.
 
         Parameters
         ----------
-        sd:
+        state_dict:
             Canonically named parameter and buffer mapping.
         """
         ...

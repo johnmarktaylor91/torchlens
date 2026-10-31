@@ -202,7 +202,7 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     )
     layer = _first_transformed_layer(trace)
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
     restored_layer = restored[layer.layer_label]
 

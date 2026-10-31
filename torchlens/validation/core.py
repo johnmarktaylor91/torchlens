@@ -838,7 +838,7 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
-    from ..runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
+    from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
     # A collective boundary cannot be replayed single-device: re-issuing it

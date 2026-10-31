@@ -21,12 +21,7 @@ import torch
 from .. import _state
 from .._errors import _ActionableErrorMixin
 from .._input_walk import INPUT_CONTAINER_KINDS
-from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
-from ..backends import TORCH_BACKEND_NAME
-from ..constants import get_orig_torch_funcs
-from ..errors._base import TorchLensError
-from ..intervention.types import FunctionRegistryKey
-from ..runnable import (
+from .._runnable import (
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
@@ -94,6 +89,11 @@ from ..runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
+from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
+from ..backends import TORCH_BACKEND_NAME
+from ..constants import get_orig_torch_funcs
+from ..errors._base import TorchLensError
+from ..intervention.types import FunctionRegistryKey
 from ..utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,

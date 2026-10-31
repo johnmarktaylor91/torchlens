@@ -63,7 +63,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "GraphBreak",
         "GraphBreakReport",
     ),
-    "torchlens.runnable": (
+    "torchlens._runnable": (
         "GapSpec",
         "ActivationPayloadMember",
         "RUNNABLE_CALLABLE_REF_SCHEMA_VERSION",

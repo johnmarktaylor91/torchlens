@@ -253,7 +253,7 @@ def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
     torch.manual_seed(0)
     trace = tl.trace(_TanhLoop(), _x())
     spec = tmp_path / "loop.tlspec"
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     loaded = tl.load(str(spec))
     assert loaded.grouping_policy["detector"] == "callsite_v1"
     assert contract.call_site_classes_for(loaded) is None

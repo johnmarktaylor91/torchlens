@@ -63,7 +63,7 @@ def _buffer_log_to_row(buffer_log: Buffer) -> dict[str, Any]:
 class Buffer:
     """Persistent metadata entity for one registered buffer address."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "address": FieldPolicy.KEEP,
         "module_address": FieldPolicy.KEEP,
         "versions": FieldPolicy.KEEP,
@@ -71,9 +71,9 @@ class Buffer:
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        BUFFER_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="buffer"
+        BUFFER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="buffer"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -405,7 +405,7 @@ _install_buffer_facade()
 class BufferAccessor(Accessor["Buffer"]):
     """Dict-like accessor for persistent Buffer entities."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,

@@ -8,10 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .errors import (
-    RunPreconditionError,
-)
-from .runnable import (
+from ._runnable import (
     ContractCheck,
     ControlWitness,
     ControlWitnessKind,
@@ -20,6 +17,9 @@ from .runnable import (
     SparseRunDescriptor,
     TensorSlotRole,
     WitnessGapKind,
+)
+from .errors import (
+    RunPreconditionError,
 )
 
 if TYPE_CHECKING:
@@ -499,7 +499,7 @@ def _post_execution_contract_checks(
     # r71 A2 belt: every owner-record arm-entry dependency edge must own its witness
     # (parse enforces the equality; a descriptor that somehow reaches execution with
     # an unwitnessed edge fails closed as a check, never a silently skipped arm).
-    from .runnable import control_dependency_site_label
+    from ._runnable import control_dependency_site_label
 
     arm_witness_labels = {
         witness.site_label

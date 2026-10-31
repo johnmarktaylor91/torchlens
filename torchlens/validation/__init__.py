@@ -348,7 +348,7 @@ def _validate_sparse_run_descriptor(
         contradict the Stage-0 runnable schema.
     """
 
-    from ..runnable import (
+    from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
         RUNNABLE_CALL_RECIPE_VERSION,

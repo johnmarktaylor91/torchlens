@@ -81,14 +81,14 @@ def test_halted_trace_analysis_save_round_trips(tmp_path) -> None:
 
     Flips the P0 characterization (the halted finalizer used to leave
     ``_output_attribution_input_tensors`` on the product, refusing every
-    halted ``tl.save``); the capability table requires HALTED analysis
+    halted ``Trace.save``); the capability table requires HALTED analysis
     export to be allowed.
     """
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert "_output_attribution_input_tensors" not in trace.__dict__
     bundle = tmp_path / "halted_analysis.tlspec"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)
     assert loaded.halted is True
     assert loaded.halt_reason == trace.halt_reason

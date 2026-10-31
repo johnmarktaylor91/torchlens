@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:

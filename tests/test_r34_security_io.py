@@ -59,10 +59,10 @@ from torchlens._io.scrub import (
     _RAW_INPUT_IMAGE_BYTES_LIMIT,
     _RAW_INPUT_IMAGE_MAX_EDGE,
 )
+from torchlens._runnable import LiteralAtom, LiteralAtomKind
 from torchlens.fastlog.storage_disk import _dtype_from_name
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.runnable import LiteralAtom, LiteralAtomKind
 from torchlens.utils._callable_safety import is_pure_forward_callable
 
 # --------------------------------------------------------------------------- #

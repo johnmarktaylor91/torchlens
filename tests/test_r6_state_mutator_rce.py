@@ -40,11 +40,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io._safe_unpickle import _safe_getattr
+from torchlens._runnable import PathFaithfulness
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
@@ -314,7 +314,7 @@ def test_inplace_model_runnable_still_verified(tmp_path: Path) -> None:
     model = _InplaceNet().eval()  # retain a live ref: include_weights needs the source model
     log = tl.trace(model, inputs, capture=_CAP)
     path = tmp_path / "inplace.tlspec"
-    tl.save(log, path, level="runnable", include_weights=True)
+    log.save(path, level="runnable", include_weights=True)
     assert model is not None  # keep alive across save (defeats weakref GC)
     result = tl.load(path).run(inputs=inputs)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

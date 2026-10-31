@@ -32,9 +32,9 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
 from torchlens._io.runnable_load import _safe_tensor_property_getter
+from torchlens._runnable import PathFaithfulness, ReadinessStatus
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, ReadinessStatus
 from torchlens.utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     _iter_tensor_getset_descriptor_names,
@@ -311,7 +311,7 @@ def test_r45_H_mH_round_trip_verified(
     path = tmp_path / f"{prop}.tlspec"
     trace.save(path, level="runnable")
     loaded = tl.load(path)
-    result = loaded.run(x.clone(), seed=0, on_divergence="return_diverged")
+    result = loaded.run(x.clone(), seed=0, on_divergence="return")
 
     assert loaded.readiness.status is ReadinessStatus.READY
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

@@ -219,8 +219,8 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
     assert derived.selection_recipe is not None
     assert derived.selection_recipe["resolve_digest"]
     # the mask lives only in the runtime factory closure, which never persists
-    assert Edit.PORTABLE_STATE_SPEC["factory"].name == "DROP"
-    assert Edit.PORTABLE_STATE_SPEC["selection_recipe"].name == "BLOB_RECURSIVE"
+    assert Edit._PORTABLE_STATE_SPEC["factory"].name == "DROP"
+    assert Edit._PORTABLE_STATE_SPEC["selection_recipe"].name == "BLOB_RECURSIVE"
 
     def _no_tensor_leaves(value):
         if isinstance(value, torch.Tensor):

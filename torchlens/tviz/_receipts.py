@@ -29,7 +29,7 @@ import numpy as np
 
 from ._errors import refuse
 from ._mpl import DIVERGING_CMAP, colorbar, figure, require_matplotlib, save_figure
-from ._records import Artifact, CausalReceipt, GqaInfo
+from ._records import CausalReceipt, GqaInfo, SavedFigure
 from ._wording import (
     JOINT_EFFECT_WORDING,
     KV_GROUP_RECEIPT_WORDING,
@@ -403,7 +403,7 @@ def render_receipt_grid(
     *,
     joint_effect: float | None = None,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the measured-intervention receipt grid (THE differentiator).
 
     Layers on the y axis (one row per receipt), heads on the x axis; each
@@ -485,13 +485,13 @@ def render_receipt_grid(
     footer = fig.text(0.01, 0.0, "", fontsize=_TEXT_PT, va="bottom")
     _reserve_footer(fig, ax, bar, title, footer, lines=disclosures, n_rows=len(rows))
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="receipt grid",
         disclosure_lines=tuple(disclosures),
         provenance=f"engine: {rows[0].engine} ({rows[0].disclosure})",
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )

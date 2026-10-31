@@ -33,7 +33,7 @@ _DELTA_PROVIDER = "bundle_delta (L2 norm of out difference per op)"
 
 def model_explorer_diff(
     members: Any,
-    out_dir: str | Path,
+    path: str | Path,
     *,
     label: str | None = None,
     privacy_profile: str = "local",
@@ -60,7 +60,7 @@ def model_explorer_diff(
     """
 
     left, right, names = _resolve_pair(members)
-    destination = Path(out_dir)
+    destination = Path(path)
     destination.mkdir(parents=True, exist_ok=True)
     base = str(label or getattr(left, "model_class_name", None) or "model")
     payloads = {}

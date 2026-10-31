@@ -68,7 +68,7 @@ def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
     bundle_path = tmp_path / "final.tlfast"
     original = _write_bundle(bundle_path)
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
     assert loaded.recovered is False
@@ -99,7 +99,7 @@ def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> Non
     }
     assert original_values, "sanity: at least one record should have captured a raw payload"
 
-    for reload_fn in (tl.fastlog.load, tl.fastlog.recover):
+    for reload_fn in (tl.load, tl.fastlog.recover):
         reloaded = reload_fn(bundle_path)
         rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
         assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"
@@ -226,7 +226,7 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
     _first_blob(bundle_path).write_bytes(b"corrupt")
 
     with pytest.raises(TorchLensIOError, match="failed integrity validation"):
-        tl.fastlog.load(bundle_path)
+        tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
 
@@ -251,7 +251,7 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     with pytest.raises(TorchLensIOError, match="failed integrity validation"):
-        tl.fastlog.load(bundle_path)
+        tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
 
@@ -384,7 +384,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
 
     assert label_index[label] == [{"blob_id": "0000000001", "pass_index": 1, "record_index": 0}]
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
     assert loaded.by_label[label] == [(1, 0)]
     assert len(loaded[label]) == 1

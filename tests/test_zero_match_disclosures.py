@@ -137,7 +137,7 @@ def test_zero_match_selectors_leave_a_persisted_trace_record(tmp_path) -> None:
 
     # The fact survives save/load: a re-analysis of the artifact can see it.
     path = tmp_path / "zero_match.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
     loaded_records = loaded.annotations.get("unmatched_capture_selectors")
     assert loaded_records
@@ -197,7 +197,7 @@ def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:
     log = tl.trace(_Leaky(), torch.ones(1, 3))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.save(log, tmp_path / "leaky.tlspec")
+        log.save(tmp_path / "leaky.tlspec")
     matching = [
         w
         for w in caught
@@ -209,12 +209,12 @@ def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:
     clean = tl.trace(nn.Sequential(nn.Linear(3, 2)), torch.ones(1, 3))
     with warnings.catch_warnings(record=True) as caught_clean:
         warnings.simplefilter("always")
-        tl.save(clean, tmp_path / "clean.tlspec")
+        clean.save(tmp_path / "clean.tlspec")
     assert not [w for w in caught_clean if "custom module attribute" in str(w.message)]
 
     with warnings.catch_warnings(record=True) as caught_optout:
         warnings.simplefilter("always")
-        tl.save(log, tmp_path / "optout.tlspec", include_custom_attributes=False)
+        log.save(tmp_path / "optout.tlspec", include_custom_attributes=False)
     assert not [w for w in caught_optout if "custom module attribute" in str(w.message)]
 
 
@@ -271,7 +271,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
     # The artifact carries the record too.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, tmp_path / "zm.tlspec")
+        log.save(tmp_path / "zm.tlspec")
         loaded = tl.load(tmp_path / "zm.tlspec")
     loaded_entries = loaded.annotations.get("unmatched_capture_selectors", [])
     assert any(entry["slot"] == "layers_to_save" for entry in loaded_entries)

@@ -432,7 +432,7 @@ class TestZeroInterferenceSuiteAndPerf:
         summaries["capture_core"] = _trace_shape_summary(log)
 
         save_path = tmp_path / f"zi2-{tag}.tlspec"
-        tl.save(log, save_path)
+        log.save(save_path)
         loaded = tl.load(save_path)
         summaries["save_load_roundtrip"] = _trace_shape_summary(loaded)
 

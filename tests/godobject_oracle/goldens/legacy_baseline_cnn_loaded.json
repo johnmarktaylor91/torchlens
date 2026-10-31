@@ -6280,7 +6280,7 @@
   "random_seed": 1196337876,
   "raw_input": null,
   "raw_output": null,
-  "readiness": "<torchlens.runnable.ReadinessReport>",
+  "readiness": "<torchlens._runnable.ReadinessReport>",
   "recording_kept": true,
   "recurrence_detection": true,
   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",

@@ -234,7 +234,7 @@ def test_public_runnable_schema_has_no_runtime_imports() -> None:
 
     forbidden = {"_io", "capture", "_runnable_execution", "_runnable_state"}
     imported: set[str] = set()
-    for node in ast.walk(_module_ast("runnable.py")):
+    for node in ast.walk(_module_ast("_runnable.py")):
         if isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.lstrip(".").split(".")[0])
         elif isinstance(node, ast.Import):

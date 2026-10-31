@@ -4,12 +4,12 @@
 user-held Trace, and validation ENTRY unconditionally writes the failure side
 channel: ``reset_validation_failure`` sets ``_last_validation_failure = None``
 on every run (``validation/core.py``), and non-failing diagnostics accumulate
-in ``_validation_diagnostics``. Neither name had a ``PORTABLE_STATE_SPEC`` /
+in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
 ``FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
 
     TorchLensIOError: Trace._last_validation_failure is missing from
-    PORTABLE_STATE_SPEC
+    _PORTABLE_STATE_SPEC
 
 Both are session-time diagnostics carried on the trace as a side channel --
 the ``_fast_run_session`` class -- so they are declared ``FieldPolicy.DROP``.
@@ -73,7 +73,7 @@ def test_validate_then_save_round_trips(tmp_path) -> None:
     # Validation entry writes the side channel unconditionally, even on a pass.
     assert TRACE_FAILURE_ATTR in trace.__dict__
     path = tmp_path / "validated.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # DROP scrubs the VALUE to None (the key stays, like every other DROP
     # row); no session-time diagnostic reaches the portable artifact.
@@ -101,7 +101,7 @@ def test_save_after_a_recorded_failure_payload_round_trips(tmp_path) -> None:
     assert isinstance(trace.__dict__[TRACE_FAILURE_ATTR], ValidationFailure)
     assert trace.__dict__[TRACE_DIAGNOSTICS_ATTR]
     path = tmp_path / "failed_validation.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # The whole record is gone -- not a partially-portable ValidationFailure.
     for name in _SIDE_CHANNEL_ATTRS:
@@ -118,7 +118,7 @@ def test_repeated_validate_save_cycles_stay_saveable(tmp_path) -> None:
     trace, ground_truth = _traced()
     for index in range(3):
         trace.validate_forward_pass([ground_truth])
-        tl.save(trace, str(tmp_path / f"cycle_{index}.tlspec"))
+        trace.save(str(tmp_path / f"cycle_{index}.tlspec"))
 
 
 def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:

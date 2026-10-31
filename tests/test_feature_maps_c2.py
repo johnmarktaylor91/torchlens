@@ -309,7 +309,7 @@ def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) 
     original = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"].clone()
     bundle_path = tmp_path / "feature_maps.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
 
     assert restored._annotation_blobs is not None

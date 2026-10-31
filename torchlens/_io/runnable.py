@@ -17,22 +17,7 @@ import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
-from .._runnable_state import runnable_tensor_byte_digest
-from ..backends.registry import BackendRegistryError, get_backend_spec
-from ..data_classes._state_adapter import state_items
-from ..errors import RunnablePreflightError
-from ..errors.runnable import SparseCorePayloadError
-from ..intervention.types import (
-    CapturedArgTemplate,
-    FunctionRegistryKey,
-    LiteralTensor,
-    LiteralValue,
-    ParentRef,
-    Unsupported,
-)
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
-from ..ir.container_registry import ModelSite, Role
-from ..runnable import (
+from .._runnable import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
@@ -92,6 +77,21 @@ from ..runnable import (
     derived_witness_completeness,
     encode_input_site_position,
 )
+from .._runnable_state import runnable_tensor_byte_digest
+from ..backends.registry import BackendRegistryError, get_backend_spec
+from ..data_classes._state_adapter import state_items
+from ..errors import RunnablePreflightError
+from ..errors.runnable import SparseCorePayloadError
+from ..intervention.types import (
+    CapturedArgTemplate,
+    FunctionRegistryKey,
+    LiteralTensor,
+    LiteralValue,
+    ParentRef,
+    Unsupported,
+)
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from ..ir.container_registry import ModelSite, Role
 from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from . import TorchLensIOError
 
@@ -342,7 +342,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
         )
 
-    from ..runnable import collective_boundaries_of
+    from .._runnable import collective_boundaries_of
 
     collective_boundaries = collective_boundaries_of(trace)
     if collective_boundaries:
@@ -1090,11 +1090,11 @@ def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
     A conditional arm records a private ``_trace`` back-reference to its owning
     ``Trace`` (bound in postprocess finalization to serve the ``evaluation_ops`` /
     ``execution_ops`` convenience accessors). ``ConditionalAccessor`` has no
-    ``PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
+    ``_PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
     ``_trace`` still points at the LIVE trace -- dragging that trace's
     ``_runnable_capture_state`` (and every other live tensor field) into the value-free
     sparse core through ``conditionals._list.<i>.arms.<j>._trace``. The top-level
-    capture-state is dropped by ``Trace.PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
+    capture-state is dropped by ``Trace._PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
     routed to the separate ``state_dict_v1`` blob; the arm back-reference must get the
     SAME treatment. Arm replay is driven entirely by the descriptor's recorded
     ``conditional_arm_entry_edges`` control witnesses and top-level state, never by this

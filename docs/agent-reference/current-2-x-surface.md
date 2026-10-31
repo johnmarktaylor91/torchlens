@@ -124,7 +124,7 @@
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
   FAILED, never COMPLETE. Refresh re-arms `raise_on_nan`. Halted analysis
-  `tl.save` works (the transient-leak refusal is fixed); halted `log_backward`
+  `Trace.save` works (the transient-leak refusal is fixed); halted `log_backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
   returns the pass-qualified labels of ops whose output held NaN/Inf and
@@ -172,7 +172,7 @@
   `type(owner).__name__` (never "method") for `model_class_name`/`model_class_qualname`, writes
   `root_entry_point="bound_method:<owner_qualname>.<method>"`, and marks the root op record
   (output-boundary ops) `tl_authored_root=True` (both persisted, fail-closed load validation).
-  On bound-method episode captures `EpisodeSpec.stepped_module` DEFAULTS to the owner (`None` on
+  On bound-method episode captures `EpisodeOptions.stepped_module` DEFAULTS to the owner (`None` on
   a module root refuses typed). The entry-point fact is joined to the ONE rerun/append identity
   gate FAIL-CLOSED: an absent fact refuses `root_entry_point_unavailable` (legacy artifacts) and
   a non-`module_call` root refuses `rerun_entry_point_unsupported` — interim posture per foldA
@@ -182,7 +182,7 @@
   spelling.
 - EPISODE CAPTURE (torch-only; every spelling DOCUMENTED-UNSTABLE): one wrapped multi-step
   generation run is ONE product — `tl.trace(episode_root, x,
-  episode=tl.options.EpisodeSpec(stepped_module=model, n_steps=N))` stamps
+  episode=tl.options.EpisodeOptions(stepped_module=model, n_steps=N))` stamps
   `capture_kind=episode` and lands the per-step status ledger (GRAMMAR v2 as of the
   C07X amendment, `episode_ledger_version=2` family-local: header carries the declared
   `step_output_kind` tokens|digest|none + the `step_output_from` source disclosure /
@@ -208,12 +208,12 @@
   refuses episode-dependent claims across a measured break (step-series reads via
   `EpisodeLedger.step_output_series()`, whole-episode `run()`, the blessing fold,
   escalation — `episode_feed_break_exogenous`/`episode_join_declared_crossing`; ops/
-  values/graph/per-segment reads unaffected); `EpisodeSpec(on_feed_break="refuse")` is
+  values/graph/per-segment reads unaffected); `EpisodeOptions(on_feed_break="refuse")` is
   the built FORK-4 arm (b) (settlement raises typed with the product on
-  `exc.partial_log`); `EpisodeSpec(feed="closed")` is the strict arm (undeclared
+  `exc.partial_log`); `EpisodeOptions(feed="closed")` is the strict arm (undeclared
   crossing halts at the NEXT step entry — one-step detection latency —
   `episode_feed_closed_violation`; declared crossing stops before entry,
-  `episode_declared_crossing_stop`); `EpisodeSpec(crossings=(k,...))` declares
+  `episode_declared_crossing_stop`); `EpisodeOptions(crossings=(k,...))` declares
   tool-call-shaped exogenous entries (grade `declared`, disclosed, still
   chain-shaped). The claim is PER-ARTIFACT: an envelope-less ledger reads
   step_join=unmeasured everywhere and series claims refuse `episode_join_unmeasured`
@@ -549,7 +549,7 @@
   `docs/reference/merged_trace_contract.md`. `merged.save(path)` writes the `merged-directory`
   artifact (canonical-JSON descriptor CACHE + per-member tree hashes + byte-identical rank
   cores); every load reruns the derivation and requires EXACT cache equality (tamper refuses
-  typed, never degrades to a gap); an unparseable member enters `load_degradations` and caps the
+  typed, never degrades to a gap); an unparseable member enters `degradations` and caps the
   effective alignment at `partial`. Refused typed in C1: p2p/pipeline boundaries (C3), DTensor
   dual geometry (C2), merged-level selectors, merged replay/runnable export/validate.
   `distributed_witness="payload"` remains a typed construction refusal (digest witnesses only).
@@ -892,7 +892,7 @@
   the MergedTrace precedent): member ops in execution order, internal
   dataflow edges, and an EXPLICIT boundary (`boundary_in_edges` /
   `boundary_out_edges` name every crossing edge; `source_ops`/`sink_ops`
-  the entry/exit ops). A slice offers NO save/replay/validate; `tl.save`
+  the entry/exit ops). A slice offers NO save/replay/validate; `Trace.save`
   refuses `slice_save_unsupported`; `__selection__` lifts the member family
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region
@@ -1319,7 +1319,7 @@
   devices, transform disclosure, TorchLens version), ledgered per batch. `resume=True`
   continues an interrupted run from its last completed shard after a signature check
   (typed refusals `extraction_resume_*` / `extraction_manifest_invalid`);
-  `torchlens.dataset_extraction.load_extraction` reads the artifact back with metadata.
+  `torchlens.load(path)` reads the artifact back with metadata.
   Crash-safety is pinned by a hard-process-death test.
 - R2-08 EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
   `tl.extract_dataset(model, x, layers, intervene=tl.when(tl.module("fc2"), tl.zero_ablate()))`

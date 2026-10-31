@@ -42,8 +42,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.utils import rng as rng_utils
 
 pytestmark = pytest.mark.skipif(

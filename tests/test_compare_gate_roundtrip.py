@@ -87,7 +87,7 @@ def _round_trip(trace: tl.Trace, path: Path) -> tl.Trace:
         Loaded trace.
     """
 
-    tl.save(trace, str(path))
+    trace.save(str(path))
     return tl.load(str(path))
 
 
@@ -149,8 +149,8 @@ def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
     left = _capture(model, x)
     right = _capture(model, x)
 
-    tl.save(left, str(tmp_path / "a.tlspec"), level="runnable")
-    tl.save(right, str(tmp_path / "b.tlspec"), level="runnable")
+    left.save(str(tmp_path / "a.tlspec"), level="runnable")
+    right.save(str(tmp_path / "b.tlspec"), level="runnable")
     loaded = tl.bundle(
         {
             "a": tl.load(str(tmp_path / "a.tlspec")),

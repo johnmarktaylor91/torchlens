@@ -108,7 +108,7 @@ def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), halt=tl.func("relu"))
     assert log.outcome.status.value == "halted"
     path = tmp_path / "halted.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     envelope = call_tool("torchlens_overview", {"path": str(path)})
     assert envelope["data"]["capture"]["capture_status"] == "halted"
     assert cli.main(["overview", str(path), "--json", "--fail-on", "incomplete"]) == cli.EXIT_GATE

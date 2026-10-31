@@ -1236,7 +1236,7 @@ class _PauseLogging:
     general form of the r43 fix that ``materialize_deferred_for_call`` applied at
     one call site; every one of the ~40 ``pause_logging()`` sites is covered here,
     including the ones reachable with NO concurrent capture at all -- a thread
-    merely analyzing an older Trace (``tl.save``, validation, an ``.out``
+    merely analyzing an older Trace (``Trace.save``, validation, an ``.out``
     transform) while another thread captures.
     """
 

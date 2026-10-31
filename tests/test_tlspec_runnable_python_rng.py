@@ -27,8 +27,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 class _PythonRandomBranch(nn.Module):

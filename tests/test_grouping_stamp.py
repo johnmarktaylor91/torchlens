@@ -176,7 +176,7 @@ def test_g1_stamp_roundtrip_under_switch(tmp_path) -> None:
     trace = _tiny_trace()
     path = tmp_path / "stamp.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             loaded = tl.load(str(path))
@@ -193,11 +193,11 @@ def _tampered_reload(tmp_path, mutate, name: str) -> tl.Trace:
     trace = _tiny_trace()
     path = tmp_path / f"{name}.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         mutate(loaded)
         repath = tmp_path / f"{name}_tampered.tlspec"
-        tl.save(loaded, str(repath))
+        loaded.save(str(repath))
         with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
             return tl.load(str(repath))
 
@@ -237,7 +237,7 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
     # warning and stays degraded (verdicts only worsen, never heal).
     path = tmp_path / "settled_again.tlspec"
     with activate_prerelease_fields():
-        tl.save(settled, str(path))
+        settled.save(str(path))
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             resettled = tl.load(str(path))
@@ -271,7 +271,7 @@ def test_g5_legacy_v7_artifact_settles_silently() -> None:
 def test_healthy_stamp_persists_on_plain_v8_round_trip(tmp_path) -> None:
     trace = _tiny_trace()
     path = tmp_path / "fresh.tlspec"
-    tl.save(trace, str(path))  # tlspec v8: the stamp persists plainly
+    trace.save(str(path))  # tlspec v8: the stamp persists plainly
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         loaded = tl.load(str(path))

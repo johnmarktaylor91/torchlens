@@ -16,7 +16,7 @@ tl.export.netron(log, "model.json")                    # module view (default)
 tl.export.netron(log, "model.json", granularity="op")  # every leaf op
 tl.export.netron(log, "model.json", attachment=False)  # no metrics companion
 tl.export.netron(log, "model.json", baseline=ref_log)  # + per-node diff facts
-tl.export.netron(log, open=True)                       # serve + browser tab
+tl.export.netron(log, serve=True)                       # serve + browser tab
 ```
 
 The artifact is valid ONNX protobuf JSON (`irVersion` 10): it strict-parses

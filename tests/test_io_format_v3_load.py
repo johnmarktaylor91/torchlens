@@ -41,7 +41,7 @@ def test_save_load_roundtrip_v4(tmp_path: Path) -> None:
     trace = tl.trace(model, torch.randn(2, 4))
     path = tmp_path / "roundtrip.tlspec"
 
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
 
     for field_name in _DROPPED_CAPTURE_FIELDS:

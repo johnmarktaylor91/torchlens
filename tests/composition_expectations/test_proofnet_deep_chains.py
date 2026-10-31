@@ -39,7 +39,7 @@ def test_chain_halted_settle_save_load_report_doors(tmp_path: Any) -> None:
     halted = tl.trace(_model(), _x(), halt=tl.func("relu"))
     assert halted.outcome.status.name == "HALTED"
     path = tmp_path / "halted.tlspec"
-    tl.save(halted, str(path))
+    halted.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.outcome.status.name == "HALTED", "the halt fact fell off at the save/load hop"
     for door, text in (
@@ -62,7 +62,7 @@ def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:
     trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(structure_only=True))
     assert trace.structure_only
     path = tmp_path / "structure.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.structure_only, "structure_only flag fell off at the load hop"
     assert "hypothes" in tl.report.explain(loaded).lower(), (
@@ -94,7 +94,7 @@ def test_chain_episode_ledger_survives_save_load_with_ragged_reads(tmp_path: Any
     episode = products["episode"]
     ledger_before = episode.annotations["episode"]
     path = tmp_path / "episode.tlspec"
-    tl.save(episode, str(path))
+    episode.save(str(path))
     loaded = tl.load(str(path))
     ledger_after = loaded.annotations["episode"]
     assert ledger_after["header"]["episode_ledger_version"] == 2

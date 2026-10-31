@@ -90,7 +90,7 @@ paths = tl.extract_dataset(
     images,                       # any iterable: PIL images, tensors, a Dataset
     ["avgpool", "layer3"],
     batch_size=32,
-    output_dir="features_run",
+    path="features_run",
     input_transform=pre,          # the authority's OWN transform, applied + recorded
     stimulus_ids=image_ids,       # row-order authority, digested into the manifest
     resume=True,                  # continue an interrupted run from its ledger
@@ -107,7 +107,7 @@ before the block existed.
 ## 5. Take the features anywhere
 
 ```python
-loaded = tl.load_extraction("features_run")
+loaded = tl.load("features_run")
 print(loaded.input_preprocessing["verdict"])
 
 from torchlens.bridge import rsatoolbox as tl_rsa

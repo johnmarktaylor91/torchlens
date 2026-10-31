@@ -362,7 +362,7 @@ def test_witness_rides_ordinary_save_at_v8(tmp_path) -> None:
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
     assert trace.checkpoint_invocation_witness["token_count"] == 1
     path = tmp_path / "ckpt_plain.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.checkpoint_invocation_witness is not None
     assert loaded.checkpoint_invocation_witness["token_count"] == 1

@@ -14,14 +14,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
-from torchlens.errors import NumericAttestationError
-from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens.errors import NumericAttestationError
+from torchlens.options import CaptureOptions, SaveOptions
 
 
 class ActivationPayloadModel(nn.Module):
@@ -398,7 +397,7 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
 
     result = tl.load(path).run(
         inputs=inputs.clone(),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

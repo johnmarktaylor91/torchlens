@@ -204,8 +204,8 @@ def test_halted_trace_has_no_transient_attribution_leak() -> None:
     """FLIPPED (P2): the halted finalizer pops the transient attribution list.
 
     The P0 characterization pinned the leak (an unpopped
-    ``_output_attribution_input_tensors`` refused every halted ``tl.save``
-    via PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
+    ``_output_attribution_input_tensors`` refused every halted ``Trace.save``
+    via _PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
     finalizer mirrors the completed paths. The positive save round-trip
     lives in test_capture_settlement.py.
     """
@@ -260,14 +260,14 @@ def test_halted_trace_runnable_save_refuses_typed() -> None:
     conversion, surfacing through the runnable error vocabulary.
     """
 
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.errors import RunnablePreflightError
-    from torchlens.runnable import RunnableErrorCode
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
     trace = tl.trace(model, x, halt=halt_on_relu)
     with pytest.raises(RunnablePreflightError) as exc_info:
-        tl.save(trace, "/tmp/tl_p0_halted_runnable.tlspec", level="runnable", overwrite=True)
+        trace.save("/tmp/tl_p0_halted_runnable.tlspec", level="runnable", overwrite=True)
     assert exc_info.value.fields.get("code") == RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value
 
 

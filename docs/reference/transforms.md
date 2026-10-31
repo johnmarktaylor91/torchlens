@@ -19,7 +19,7 @@ from torchlens import transforms as T
 paths = tl.extract_dataset(
     model, stimuli,
     layers=["layer3", "layer4", "avgpool"],
-    output_dir="run/",
+    path="run/",
     transform={
         "layer3": T.chain(T.flatten(), T.srp(1024, seed=0)),
         "layer4": T.srp(4096, seed=0),

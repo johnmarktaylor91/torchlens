@@ -38,12 +38,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io._safe_unpickle import SafeBundleUnpickler, _safe_getattr
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
@@ -249,7 +249,7 @@ def test_runnable_load_blocks_from_file_creation(tmp_path: Path) -> None:
     )  # retain: include_weights needs the live source model (survive full-suite GC)
     log = tl.trace(model, torch.ones(1, 4), capture=_CAP)
     clean = tmp_path / "clean.tlspec"
-    tl.save(log, clean, level="runnable", include_weights=True)
+    log.save(clean, level="runnable", include_weights=True)
     assert model is not None
 
     evil = tmp_path / "evil.tlspec"
@@ -383,7 +383,7 @@ def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     model = _TinyCNN().eval()  # retain a strong ref: include_weights needs the live source model
     log = tl.trace(model, inputs, capture=_CAP)
     path = tmp_path / "cnn.tlspec"
-    tl.save(log, path, level="runnable", include_weights=True)
+    log.save(path, level="runnable", include_weights=True)
     assert (
         model is not None
     )  # keep the model alive across save (defeats weakref GC under full-suite pressure)

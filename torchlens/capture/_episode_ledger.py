@@ -53,7 +53,7 @@ from ._episode_ledger_anchors import _anchor_loaded_ledger, quarantine_loaded_le
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-    from ..options import EpisodeSpec
+    from ..options import EpisodeOptions
 
 __all__ = [
     "CAPTURE_KIND_EPISODE",
@@ -112,7 +112,7 @@ def episode_step_join_claim() -> str:
 #: gpt2-124M (CPU): N=20 = 79 s / 1.9 GB peak RSS; N=100 = 657 s (323x
 #: native) / 5.4 GB. A declaration beyond this ceiling refuses typed
 #: (``episode_step_ceiling_exceeded``) at declaration time unless the
-#: EpisodeSpec carries the explicit ``acknowledge_step_cost=True`` override,
+#: EpisodeOptions carries the explicit ``acknowledge_step_cost=True`` override,
 #: so hundreds-of-steps wrapped captures are a decision, never an accident.
 EPISODE_DECLARED_STEP_CEILING = 100
 
@@ -365,7 +365,7 @@ class EpisodeLedgerHeader:
     step_output_from:
         The step-output SOURCE disclosure: which root-output slot the
         per-step evidence derives from. The declared
-        ``EpisodeSpec.step_output_from`` path when one was declared,
+        ``EpisodeOptions.step_output_from`` path when one was declared,
         ``"output"`` for the undeclared single-output default, and ``None``
         exactly when ``step_output_kind="none"`` (no source is consumed).
     step_axis:
@@ -1129,7 +1129,7 @@ class ResolvedEpisode:
     join_session: Any = None
     # W051 (audit 3.3): the declared entry argument the join measures
     # (positional index or keyword name); None selects by the disclosed
-    # preference rule. Read from ``EpisodeSpec.step_input_from`` when the
+    # preference rule. Read from ``EpisodeOptions.step_input_from`` when the
     # spec carries it (the spec field itself is the options owner's).
     step_input_from: str | int | None = None
     # Attested coupling (lane F42): the live fire-attribution session, set
@@ -1161,21 +1161,21 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
             stepped = model.tl_owner
         else:
             raise _declaration_error(
-                "EpisodeSpec.stepped_module is required on a module-root "
+                "EpisodeOptions.stepped_module is required on a module-root "
                 "capture (it defaults to the bound method's owner only on a "
                 "bound-method root, e.g. tl.trace(model.generate, ids, "
-                "episode=tl.options.EpisodeSpec(n_steps=N))). Remedy: pass "
-                "EpisodeSpec(stepped_module=<the stepped nn.Module>).",
+                "episode=tl.options.EpisodeOptions(num_steps=N))). Remedy: pass "
+                "EpisodeOptions(stepped_module=<the stepped nn.Module>).",
                 code="episode_declaration_invalid",
             )
     if not isinstance(stepped, nn.Module):
         raise _declaration_error(
-            "EpisodeSpec.stepped_module must be an nn.Module (the stepped model "
+            "EpisodeOptions.stepped_module must be an nn.Module (the stepped model "
             f"whose calls define step boundaries), got {type(stepped).__name__}."
         )
     if stepped is model:
         raise _declaration_error(
-            "EpisodeSpec.stepped_module is the episode root itself. The "
+            "EpisodeOptions.stepped_module is the episode root itself. The "
             "stepped model must be a PROPER submodule of the traced root. "
             "Remedy: trace the bound generation method "
             "(tl.trace(model.generate, ids, episode=...) -- stepped_module "
@@ -1186,13 +1186,13 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
         if candidate is stepped and name:
             return name
     raise _declaration_error(
-        "EpisodeSpec.stepped_module is not a submodule of the traced episode "
+        "EpisodeOptions.stepped_module is not a submodule of the traced episode "
         "root; the ledger's step boundaries are the stepped module's calls "
         "inside the root's forward."
     )
 
 
-def _validate_step_output_declaration(spec: EpisodeSpec) -> None:
+def _validate_step_output_declaration(spec: EpisodeOptions) -> None:
     """Validate the declared step-output evidence triple (foldA D8, F40b).
 
     Raises
@@ -1205,11 +1205,11 @@ def _validate_step_output_declaration(spec: EpisodeSpec) -> None:
 
     if not isinstance(spec.step_axis, int) or isinstance(spec.step_axis, bool):
         raise _declaration_error(
-            f"EpisodeSpec.step_axis={spec.step_axis!r} must be an int axis index."
+            f"EpisodeOptions.step_axis={spec.step_axis!r} must be an int axis index."
         )
     if spec.step_output_kind not in _STEP_OUTPUT_KINDS:
         raise _declaration_error(
-            f"EpisodeSpec.step_output_kind={spec.step_output_kind!r} is outside "
+            f"EpisodeOptions.step_output_kind={spec.step_output_kind!r} is outside "
             f"the closed vocabulary {sorted(_STEP_OUTPUT_KINDS)}: 'tokens' reads "
             "per-step emitted token ids, 'digest' reads per-step content "
             "digests (any dtype), 'none' derives no evidence (status-only "
@@ -1220,7 +1220,7 @@ def _validate_step_output_declaration(spec: EpisodeSpec) -> None:
         not isinstance(spec.step_output_from, str) or not spec.step_output_from
     ):
         raise _declaration_error(
-            f"EpisodeSpec.step_output_from={spec.step_output_from!r} must be a "
+            f"EpisodeOptions.step_output_from={spec.step_output_from!r} must be a "
             "non-empty root-output slot path (dot-separated dict keys, "
             "namedtuple/ModelOutput field names, or tuple indices, e.g. "
             "'sequences' or '0') or None.",
@@ -1228,7 +1228,7 @@ def _validate_step_output_declaration(spec: EpisodeSpec) -> None:
         )
     if spec.step_output_kind == "none" and spec.step_output_from is not None:
         raise _declaration_error(
-            "EpisodeSpec.step_output_from declares an evidence source but "
+            "EpisodeOptions.step_output_from declares an evidence source but "
             "step_output_kind='none' declares that no per-step evidence is "
             "derived; the declaration contradicts itself. Remedy: drop "
             "step_output_from, or declare kind 'tokens'/'digest'.",
@@ -1236,7 +1236,7 @@ def _validate_step_output_declaration(spec: EpisodeSpec) -> None:
         )
 
 
-def _validated_forced_tokens(spec: EpisodeSpec) -> tuple[int, ...] | None:
+def _validated_forced_tokens(spec: EpisodeOptions) -> tuple[int, ...] | None:
     """Validate the teacher-forced feed against the declaration."""
 
     if spec.forced_tokens is None:
@@ -1245,21 +1245,21 @@ def _validated_forced_tokens(spec: EpisodeSpec) -> tuple[int, ...] | None:
         forced = tuple(int(token) for token in spec.forced_tokens)
     except (TypeError, ValueError):
         raise _declaration_error(
-            "EpisodeSpec.forced_tokens must be an iterable of ints (the "
+            "EpisodeOptions.forced_tokens must be an iterable of ints (the "
             "teacher-forced feed), got "
             f"{type(spec.forced_tokens).__name__}."
         ) from None
     if not forced:
-        raise _declaration_error("EpisodeSpec.forced_tokens must be non-empty when given.")
-    if spec.n_steps is not None and len(forced) != spec.n_steps:
+        raise _declaration_error("EpisodeOptions.forced_tokens must be non-empty when given.")
+    if spec.num_steps is not None and len(forced) != spec.num_steps:
         raise _declaration_error(
-            f"EpisodeSpec.forced_tokens has {len(forced)} tokens but n_steps="
-            f"{spec.n_steps}; the forced feed must cover exactly the declared steps."
+            f"EpisodeOptions.forced_tokens has {len(forced)} tokens but num_steps="
+            f"{spec.num_steps}; the forced feed must cover exactly the declared steps."
         )
     return forced
 
 
-def _preflight_declared_state(spec: EpisodeSpec) -> None:
+def _preflight_declared_state(spec: EpisodeOptions) -> None:
     """E-A4: declared-state preflight, unconditional, at declaration time."""
 
     import torch
@@ -1271,7 +1271,7 @@ def _preflight_declared_state(spec: EpisodeSpec) -> None:
             copy.deepcopy(item)
         except Exception as exc:
             raise _declaration_error(
-                f"EpisodeSpec.state[{index}] ({type(item).__name__}) is not "
+                f"EpisodeOptions.state[{index}] ({type(item).__name__}) is not "
                 "snapshot/restorable within the declared checkpoint scope: "
                 f"deepcopy failed with {type(exc).__name__}: {exc}. Remedy: "
                 "declare only snapshotable state, or make the item deep-copyable.",
@@ -1279,7 +1279,7 @@ def _preflight_declared_state(spec: EpisodeSpec) -> None:
             ) from exc
 
 
-def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisode:
+def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpisode:
     """Validate an episode declaration at entry, BEFORE execution.
 
     Performs the structural entry checks and the E-A4 preflight: every
@@ -1291,7 +1291,7 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
     Parameters
     ----------
     spec:
-        The user's :class:`torchlens.options.EpisodeSpec`.
+        The user's :class:`torchlens.options.EpisodeOptions`.
     model:
         The episode root about to be traced.
 
@@ -1307,28 +1307,30 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
         ``episode_state_unsnapshotable`` for the E-A4 refusal.
     """
 
-    from ..options import EpisodeSpec as _EpisodeSpec
+    from ..options import EpisodeOptions as _EpisodeSpec
 
     if not isinstance(spec, _EpisodeSpec):
         raise _declaration_error(
-            f"episode= expects an EpisodeSpec, got {type(spec).__name__}. "
-            "Remedy: pass tl.options.EpisodeSpec(stepped_module=...)"
+            f"episode= expects an EpisodeOptions, got {type(spec).__name__}. "
+            "Remedy: pass tl.options.EpisodeOptions(stepped_module=...)"
         )
     address = _resolved_stepped_address(spec.stepped_module, model)
     if spec.rng != "managed":
         raise _declaration_error(
-            f"EpisodeSpec.rng={spec.rng!r} is unsupported; only the 'managed' "
+            f"EpisodeOptions.rng={spec.rng!r} is unsupported; only the 'managed' "
             "seeding discipline ships (the capture's effective random_seed is "
             "recorded as the ledger entry_seed)."
         )
-    if spec.n_steps is not None and (not isinstance(spec.n_steps, int) or spec.n_steps <= 0):
+    if spec.num_steps is not None and (not isinstance(spec.num_steps, int) or spec.num_steps <= 0):
         raise _declaration_error(
-            f"EpisodeSpec.n_steps={spec.n_steps!r} must be a positive int or None."
+            f"EpisodeOptions.num_steps={spec.num_steps!r} must be a positive int or None."
         )
     _validate_step_output_declaration(spec)
     forced = _validated_forced_tokens(spec)
     declared_steps = (
-        spec.n_steps if spec.n_steps is not None else (len(forced) if forced is not None else None)
+        spec.num_steps
+        if spec.num_steps is not None
+        else (len(forced) if forced is not None else None)
     )
     if (
         declared_steps is not None
@@ -1343,7 +1345,7 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
             "guarded-fast tier (trace.run(inputs=..., fast=True), which needs "
             "a functional save= such as save=tl.func(...) on the capture) is "
             "the engine for episode-scale re-runs. Remedy: declare fewer steps, "
-            "or pass EpisodeSpec(acknowledge_step_cost=True) to accept the "
+            "or pass EpisodeOptions(acknowledge_step_cost=True) to accept the "
             "diagnostic-tier cost explicitly.",
             code="episode_step_ceiling_exceeded",
         )
@@ -1356,7 +1358,7 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
         or (isinstance(step_input_from, str) and step_input_from)
     ):
         raise _declaration_error(
-            f"EpisodeSpec.step_input_from={step_input_from!r} must be a positional "
+            f"EpisodeOptions.step_input_from={step_input_from!r} must be a positional "
             "argument index (int) or a keyword argument name (non-empty str) "
             "naming the stepped call's carried input, or None.",
             code="episode_declaration_invalid",
@@ -1369,7 +1371,7 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
         )
     if reason is not None and reason not in _ESCALATION_REASONS:
         raise _declaration_error(
-            f"EpisodeSpec.reason={reason!r} is outside the closed vocabulary "
+            f"EpisodeOptions.reason={reason!r} is outside the closed vocabulary "
             f"{sorted(_ESCALATION_REASONS)}."
         )
     _preflight_declared_state(spec)
@@ -1378,7 +1380,7 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
     return ResolvedEpisode(
         episode_id=f"ep-{uuid.uuid4().hex[:16]}",
         address=address,
-        n_steps=spec.n_steps,
+        n_steps=spec.num_steps,
         step_axis=spec.step_axis,
         step_output_kind=cast("StepOutputKind", spec.step_output_kind),
         step_output_from=spec.step_output_from,
@@ -1677,7 +1679,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
 
     if status == "COMPLETE" and resolved.n_steps is not None and started != resolved.n_steps:
         raise _ledger_error(
-            f"episode declared n_steps={resolved.n_steps} but the COMPLETE "
+            f"episode declared num_steps={resolved.n_steps} but the COMPLETE "
             f"capture ran {started} stepped-module calls; the declaration does "
             "not match the executed episode.",
             code="episode_ledger_incoherent",
@@ -1767,7 +1769,7 @@ def escalation_spec(
     reason: EscalationReason,
     n_steps: int | None = None,
     step_axis: int | None = None,
-) -> EpisodeSpec:
+) -> EpisodeOptions:
     """Build the E-A escalation declaration FROM a cheap-tier episode product.
 
     E-A1: the escalation product of an episode is a NEW whole-episode wrapped
@@ -1789,7 +1791,7 @@ def escalation_spec(
         finalized episode ledger.
     """
 
-    from ..options import EpisodeSpec as _EpisodeSpec
+    from ..options import EpisodeOptions as _EpisodeSpec
 
     ledger = episode_ledger_for(producer)
     if ledger is None:
@@ -1811,7 +1813,7 @@ def escalation_spec(
     header = ledger.header
     return _EpisodeSpec(
         stepped_module=stepped_module,
-        n_steps=n_steps if n_steps is not None else header.n_steps_declared,
+        num_steps=n_steps if n_steps is not None else header.n_steps_declared,
         step_axis=(
             step_axis
             if step_axis is not None

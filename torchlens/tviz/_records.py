@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ANNOTATION_KINDS",
     "Annotation",
-    "Artifact",
+    "SavedFigure",
     "AttentionView",
     "CausalReceipt",
     "CropInfo",
@@ -1142,7 +1142,7 @@ class Annotation:
 
 
 @dataclass(frozen=True)
-class Artifact:
+class SavedFigure:
     """The result of saving a picture: paths + everything the figure said.
 
     Parameters
@@ -1150,7 +1150,7 @@ class Artifact:
     paths:
         Written files in page order (pagination never silently drops;
         every page is listed).
-    format:
+    file_format:
         ``"png"`` / ``"svg"`` / ``"pdf"`` / ``"html"``.
     title:
         Figure title as rendered.
@@ -1163,15 +1163,15 @@ class Artifact:
     svg_fonttype:
         The matplotlib ``svg.fonttype`` used (``"path"`` default; ``"none"``
         is the editing opt-in), recorded per the memo's manifest rule.
-    pages_total:
+    num_pages:
         Total page count (equals ``len(paths)`` for file output).
     """
 
     paths: tuple[Path, ...]
-    format: str
+    file_format: str
     title: str
     disclosure_lines: tuple[str, ...]
     provenance: str
     fingerprint: str
     svg_fonttype: str | None = None
-    pages_total: int = 1
+    num_pages: int = 1

@@ -22,7 +22,7 @@ import torch
 
 from ._errors import refuse
 from ._mpl import ATTENTION_CMAP, colorbar, figure, require_matplotlib, save_figure
-from ._records import Artifact
+from ._records import SavedFigure
 
 __all__ = ["render_logit_lens_heatmap"]
 
@@ -272,7 +272,7 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     batch_index: int = 0,
     title: str | None = None,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the layers-by-positions logit-lens heatmap.
 
     Parameters
@@ -359,13 +359,13 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     ax.set_title(f"{title}: {heading}" if title else heading, fontsize=10)
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=_FONT - 0.5, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="logit lens heatmap",
         disclosure_lines=tuple(disclosures),
         provenance=f"lens: {result.lens_source}",
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )

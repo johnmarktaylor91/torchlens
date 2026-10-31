@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import load, save
+from torchlens import load
 from torchlens._io import TorchLensIOError
 
 
@@ -68,7 +68,7 @@ def _build_bundle(tmp_path: Path, *, name: str = "bundle.tl") -> Path:
         model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0)
     )
     bundle_path = tmp_path / name
-    save(trace, bundle_path)
+    trace.save(bundle_path)
     return bundle_path
 
 

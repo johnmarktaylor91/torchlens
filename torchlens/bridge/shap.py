@@ -9,7 +9,7 @@ from ._utils import first_input_tensor, source_model
 
 
 def explain(
-    log: Any,
+    trace: Any,
     *,
     background: Any,
     inputs: Any | None = None,
@@ -65,8 +65,8 @@ def explain(
             "SHAP bridge requires the `shap` extra: install torchlens[shap]."
         ) from exc
 
-    model = source_model(log)
-    input_data = first_input_tensor(log) if inputs is None else inputs
+    model = source_model(trace)
+    input_data = first_input_tensor(trace) if inputs is None else inputs
     factory = getattr(shap_module, "DeepExplainer") if explainer_class is None else explainer_class
     explainer = factory(model, background, **kwargs)
     values = explainer.shap_values(input_data)

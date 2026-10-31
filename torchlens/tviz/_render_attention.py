@@ -36,8 +36,8 @@ from ._mpl import (
 )
 from ._records import (
     Annotation,
-    Artifact,
     AttentionView,
+    SavedFigure,
     tensor_fingerprint,
 )
 from ._wording import (
@@ -185,7 +185,7 @@ def _render_pages(
     annotation: Annotation | None,
     path: Path | str,
     svg_fonttype: str,
-) -> Artifact:
+) -> SavedFigure:
     """Render every head of a view across numbered pages."""
 
     heads = list(view.heads)
@@ -223,15 +223,15 @@ def _render_pages(
                 svg_fonttype=svg_fonttype,
             )
         )
-    return Artifact(
+    return SavedFigure(
         paths=tuple(written),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title=view.layer,
         disclosure_lines=tuple(disclosures),
         provenance=view.provenance_wording,
         fingerprint=view.fingerprint,
         svg_fonttype=svg_fonttype,
-        pages_total=n_pages,
+        num_pages=n_pages,
     )
 
 
@@ -288,7 +288,7 @@ def render_attention(
     heads: tuple[int, ...] | None = None,
     annotation: Annotation | None = None,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render an attention view to paper-ready PNG/SVG/PDF pages.
 
     One head renders a single square panel; several heads render the
@@ -348,7 +348,7 @@ def render_attention_atlas(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the whole-model attention atlas (BertViz model view, matched).
 
     Page 1 is the all-member overview (every layer x head tile admitted by
@@ -384,15 +384,15 @@ def render_attention_atlas(
     for view, target in zip(views, targets[1:], strict=True):
         artifact = _render_pages(view, None, target, svg_fonttype)
         written.extend(artifact.paths)
-    return Artifact(
+    return SavedFigure(
         paths=tuple(written),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="attention atlas",
         disclosure_lines=tuple(disclosures),
         provenance=views[0].provenance_wording,
         fingerprint=tensor_fingerprint(views[0].pattern),
         svg_fonttype=svg_fonttype,
-        pages_total=n_pages,
+        num_pages=n_pages,
     )
 
 

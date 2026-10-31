@@ -402,6 +402,30 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_runnable.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_runnable.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/_runnable.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_runnable_attestation.py",
   "has_default": false,
   "sites": 2,
@@ -8205,30 +8229,6 @@
   "file": "torchlens/report/_summary_result.py",
   "has_default": false,
   "sites": 9,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/runnable.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/runnable.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "output",
-  "file": "torchlens/runnable.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

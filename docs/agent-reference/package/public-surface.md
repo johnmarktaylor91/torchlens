@@ -38,7 +38,7 @@ resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only 
 Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED explicit
 `CallExecutionContext` and the descriptor one `AmbientExecutionContext`, both restored at replay or
 refused typed; legacy v1 artifacts load analysis-only with a typed readiness refusal.
-Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
+Use `trace.save(path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
 family, not part of the tensor-value-free sparse core or a reconstructed model. Used non-persistent
 buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family (declared state, not
@@ -52,7 +52,7 @@ random/non-equivalent-state, and nondeterministic-capture-context runs are `not_
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
-Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
+Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save

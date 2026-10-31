@@ -96,7 +96,7 @@ class PartialTrace:
 
     # R11: declared so the runtime field-declaration gates can sweep failed
     # partial products instead of being structurally blind to them. Failed
-    # partials never persist (`to_trace`/`tl.save` refuse), so both fields
+    # partials never persist (`to_trace`/`Trace.save` refuse), so both fields
     # are session-time DROP.
     FIELD_POLICY: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {

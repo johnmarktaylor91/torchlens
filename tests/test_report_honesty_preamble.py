@@ -268,7 +268,7 @@ def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
 def test_poisoned_trace_export_preamble_discloses(tmp_path: Path) -> None:
     """A poisoned capture's exports carry the poison, never a clean preamble."""
 
-    from torchlens.runnable import PathFaithfulness
+    from torchlens._runnable import PathFaithfulness
 
     trace = tl.trace(nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3))
     trace._runnable.poisoned = True

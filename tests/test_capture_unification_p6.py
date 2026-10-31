@@ -116,7 +116,7 @@ def test_trace_disk_streamed_save_load_round_trip(tmp_path: Path) -> None:
     expected = _saved_linear(log).out
     bundle_path = tmp_path / "round_trip.tlspec"
 
-    tl.save(log, bundle_path)
+    log.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert isinstance(loaded, tl.Trace)

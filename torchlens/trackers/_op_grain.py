@@ -40,13 +40,13 @@ import torch
 
 from ..observability import (
     ArmSpec,
-    CommittedBlock,
     OpTierCollector,
     OverheadMeasurement,
     RefusalPredicate,
     WatchSettings,
     measure_overhead,
 )
+from ..observability._artifact import CommittedBlock
 from ..observability._collector import StepTruth
 from ._errors import WatchConfigError
 

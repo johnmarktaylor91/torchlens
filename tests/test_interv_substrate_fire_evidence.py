@@ -250,7 +250,7 @@ def test_envelope_rows_survive_save_load() -> None:
     fork = _ready_trace(model).fork()
     fork.do(tl.when(tl.func("relu"), tl.scale(0.0)))
     path = os.path.join(tempfile.mkdtemp(), "c03_evidence.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     events = _event_rows(loaded)
     assert events and events[-1]["status"] == "fired"

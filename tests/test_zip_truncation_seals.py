@@ -87,7 +87,7 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
     x = torch.randn(2, 3)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tmp_path / "runnable.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))
 
     loaded.run(inputs=x, fast=True)  # first fast run = ordinary verified run

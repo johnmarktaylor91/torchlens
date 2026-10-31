@@ -298,7 +298,7 @@ def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable")
     -------
     bytes
         The gzipped tar. The bundle is the same privacy-scrubbed portable
-        save :func:`torchlens.save` / ``Bundle.save`` write (raw pickling of a
+        save :meth:`Trace.save` / ``Bundle.save`` write (raw pickling of a
         ``Trace`` would embed ``$HOME``, the username and absolute source
         paths into a public upload).
 

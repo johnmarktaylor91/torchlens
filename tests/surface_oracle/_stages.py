@@ -116,7 +116,7 @@ def build_stage_snapshots(
     def _tlspec_round_trip() -> Any:
         with tempfile.TemporaryDirectory() as tmp_dir:
             bundle_path = Path(tmp_dir) / "surface_oracle.tlspec"
-            tl.save(trace, str(bundle_path))
+            trace.save(str(bundle_path))
             return tl.load(str(bundle_path))
 
     _stage("tlspec", _tlspec_round_trip)

@@ -27,7 +27,7 @@ from ._gate import (
 )
 from ._grammar import InputSpec, parse_input_size, synthesize
 from ._plan import InputPlan, normalize_gold_args, resolve_rung
-from ._primitive import ExecutionReceipt, capture_concrete, state_dict_hash
+from ._primitive import ExecutionReceipt, capture_concrete
 from ._provenance import (
     InputProvenance,
     TensorFacts,
@@ -70,7 +70,6 @@ __all__ = [
     "require_gold",
     "resolve_inputs",
     "resolve_rung",
-    "state_dict_hash",
     "synthesize",
     "trace_input_provenance",
     "warn_on_raw_read",

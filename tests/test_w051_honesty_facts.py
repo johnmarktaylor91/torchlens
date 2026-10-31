@@ -81,7 +81,7 @@ def test_capture_time_intervene_is_disclosed_on_every_surface(model_and_x) -> No
 def test_intervention_block_survives_save_load(model_and_x, tmp_path) -> None:
     model, x = model_and_x
     trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
-    tl.save(trace, tmp_path / "iv.tlspec")
+    trace.save(tmp_path / "iv.tlspec")
     loaded = tl.load(tmp_path / "iv.tlspec")
     block = capture_honesty_facts(loaded)["interventions"]
     assert block["replaced_ops"] == ["relu_1_2"]

@@ -81,7 +81,7 @@ def test_round_trip_preserves_identity_payloads_and_query_split(chain, tmp_path)
     logged = _logged_trace(chain)
     live = logged.injected_ops
     path = str(tmp_path / "logged.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(live) == 5
@@ -123,7 +123,7 @@ def test_load_degrades_to_unattested_and_replay_attests(chain, tmp_path) -> None
     assert live_report.passed
     assert {row.status for row in live_report.rows} == {"attested"}
     path = str(tmp_path / "logged.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     assert {record.attestation for record in loaded.injected_ops} == {"unattested"}
     assert {record.attestation_reason for record in loaded.injected_ops} == {None}
@@ -139,9 +139,9 @@ def test_resave_of_loaded_logged_trace_round_trips(chain, tmp_path) -> None:
     logged = _logged_trace(chain)
     first = str(tmp_path / "one.tlspec")
     second = str(tmp_path / "two.tlspec")
-    tl.save(logged, first)
+    logged.save(first)
     loaded = tl.load(first)
-    tl.save(loaded, second)
+    loaded.save(second)
     reloaded = tl.load(second)
     assert [r.provenance for r in reloaded.injected_ops] == [
         r.provenance for r in logged.injected_ops
@@ -155,12 +155,12 @@ def test_runnable_save_refuses_typed(chain, tmp_path) -> None:
 
     logged = _logged_trace(chain)
     with pytest.raises(Exception) as excinfo:
-        tl.save(logged, str(tmp_path / "run.tlspec"), level="runnable")
+        logged.save(str(tmp_path / "run.tlspec"), level="runnable")
     assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
     # an unlogged capture keeps its historical runnable behavior
     model, x = chain
     plain = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    tl.save(plain, str(tmp_path / "plain_run.tlspec"), level="runnable")
+    plain.save(str(tmp_path / "plain_run.tlspec"), level="runnable")
 
 
 def test_untrusted_and_missing_callable_arms_degrade_never_refuse(chain, tmp_path) -> None:
@@ -198,7 +198,7 @@ def test_untrusted_and_missing_callable_arms_degrade_never_refuse(chain, tmp_pat
         records[2] = dataclasses.replace(records[2], callable_ref=missing)
         state["records"] = records
         path = str(tmp_path / "arms.tlspec")
-        tl.save(logged, path)
+        logged.save(path)
         loaded = tl.load(path)
         reasons = {r.label: r.attestation_reason for r in loaded.injected_ops}
         assert reasons[records[3].label] == "callable_untrusted"
@@ -233,7 +233,7 @@ def test_replay_divergence_is_the_tripwire_verdict(chain, tmp_path) -> None:
     assert [row.reason for row in report.diverged] == ["replay_value_mismatch"]
     # the tampered claim also fails after a save/load cycle
     path = str(tmp_path / "tampered.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded_report = attest_injected_ops(tl.load(path))
     assert not loaded_report.passed
 
@@ -243,7 +243,7 @@ def test_include_outs_false_persists_identity_only(chain, tmp_path) -> None:
 
     logged = _logged_trace(chain)
     path = str(tmp_path / "noouts.tlspec")
-    tl.save(logged, path, include_outs=False)
+    logged.save(path, include_outs=False)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == 5
@@ -282,7 +282,7 @@ def test_multi_output_slots_round_trip_and_attest(chain, tmp_path) -> None:
     slots = sorted(r.provenance.output_slot for r in logged.injected_ops if "chunk" in r.func_name)
     assert slots == [0, 1]
     path = str(tmp_path / "chunk.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     report = attest_injected_ops(loaded)
     assert report.passed
@@ -299,8 +299,8 @@ def test_ordinary_validation_unchanged_after_round_trip(chain, tmp_path) -> None
     spec = tl.when(tl.func("relu"), _sae_like)
     base = tl.trace(model, x, intervene=spec)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    tl.save(logged, str(tmp_path / "l.tlspec"))
-    tl.save(base, str(tmp_path / "b.tlspec"))
+    logged.save(str(tmp_path / "l.tlspec"))
+    base.save(str(tmp_path / "b.tlspec"))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         logged_verdict = logged.validate_forward_pass(model(x))
@@ -319,7 +319,7 @@ def test_unanchored_record_refuses_at_save(chain, tmp_path) -> None:
     )
     state["records"] = records
     with pytest.raises(Exception) as excinfo:
-        tl.save(logged, str(tmp_path / "unanchored.tlspec"))
+        logged.save(str(tmp_path / "unanchored.tlspec"))
     assert excinfo.value.fields["code"] == "injection_persist_unanchored"
 
 
@@ -328,7 +328,7 @@ def test_loaded_record_types_are_the_live_types(chain, tmp_path) -> None:
 
     logged = _logged_trace(chain)
     path = str(tmp_path / "types.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     for record in loaded.injected_ops:
         assert isinstance(record, InjectedOp)

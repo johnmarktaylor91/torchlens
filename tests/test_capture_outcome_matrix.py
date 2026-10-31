@@ -146,7 +146,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
     from torchlens.errors import RunnablePreflightError
 
     with pytest.raises(RunnablePreflightError):
-        tl.save(cooked, tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
+        cooked.save(tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
     with pytest.raises(CaptureOutcomeError) as exc_info:
         cooked.push()
     assert exc_info.value.fields["code"] == "N5"

@@ -3,7 +3,7 @@
 Bundle is the THIRD instance of the "two answers for one product"
 outcome-authority disease (PartialTrace: ``_OUTCOME_DELEGATE_FIELD``;
 Recording: ``_OUTCOME_SELF_AUTHORITY``): ``outcome_for(bundle)`` returned
-``None`` while every member was COMPLETE, so ``tl.save(bundle)`` false-refused
+``None`` while every member was COMPLETE, so ``bundle.save(path)`` false-refused
 EVERY bundle (N1 status 'unknown' + a RuntimeWarning blaming the user for
 hand-building an object ``tl.bundle()`` built) while ``bundle.save()`` worked.
 
@@ -191,13 +191,13 @@ def test_capability_gate_on_bundle_no_false_hand_built_warning(complete_pair: Bu
 
 
 def test_both_doors_save_a_complete_bundle(tmp_path, complete_pair: Bundle) -> None:
-    """tl.save(bundle) stops false-refusing; both doors round-trip identically."""
+    """bundle.save(path) stops false-refusing; both doors round-trip identically."""
 
     door_tl = tmp_path / "door_tl.tlspec"
     door_method = tmp_path / "door_method.tlspec"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.save(complete_pair, door_tl)
+        complete_pair.save(door_tl)
     hand_built = [w for w in caught if "no settled capture outcome" in str(w.message)]
     assert not hand_built, "the false hand-built-object warning must be gone"
     complete_pair.save(door_method)
@@ -220,7 +220,7 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
     mixed = tl.bundle({"complete": complete, "halted": halted})
     assert mixed.outcome.status is CaptureStatus.HALTED
 
-    tl.save(mixed, tmp_path / "tl_door.tlspec")
+    mixed.save(tmp_path / "tl_door.tlspec")
     mixed.save(tmp_path / "method_door.tlspec")
     loaded = tl.load(tmp_path / "tl_door.tlspec")
     settled = outcome_for(loaded)
@@ -242,7 +242,7 @@ def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> No
     assert mixed.outcome.status is CaptureStatus.FAILED
 
     with pytest.raises(CaptureOutcomeError) as tl_door:
-        tl.save(mixed, tmp_path / "tl_door.tlspec")
+        mixed.save(tmp_path / "tl_door.tlspec")
     assert tl_door.value.fields["code"] == "N1"
     with pytest.raises(CaptureOutcomeError) as method_door:
         mixed.save(tmp_path / "method_door.tlspec")
@@ -265,7 +265,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
     assert require_capture_capability(good_member, "validation_entry").status is (
         CaptureStatus.COMPLETE
     )
-    tl.save(good_member, tmp_path / "good_member.tlspec")
+    good_member.save(tmp_path / "good_member.tlspec")
     # The FAILED member's own gate keeps refusing (per-member, not container).
     with pytest.raises(CaptureOutcomeError):
         require_capture_capability(mixed["bad"], "validation_entry")
@@ -279,7 +279,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
 @pytest.mark.smoke
 def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pair: Bundle) -> None:
     with pytest.raises(InvalidArgumentError) as tl_door:
-        tl.save(complete_pair, tmp_path / "r1.tlspec", level="runnable")
+        complete_pair.save(tmp_path / "r1.tlspec", level="runnable")
     assert tl_door.value.fields["code"] == "artifact_save_level_unsupported"
     with pytest.raises(InvalidArgumentError) as method_door:
         complete_pair.save(tmp_path / "r2.tlspec", level="runnable")
@@ -287,13 +287,19 @@ def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pai
 
 
 def test_trace_only_save_options_refuse_typed(tmp_path, complete_pair: Bundle) -> None:
-    """tl.save(bundle) honors exactly the container door's surface; per-trace
+    """bundle.save(path) honors exactly the container door's surface; per-trace
     payload options refuse typed instead of being silently dropped."""
 
+    from torchlens._io.bundle import save as _save_bundle
+
     for kwargs in ({"include_weights": True}, {"include_outs": False}, {"strict": False}):
+        # Bundle.save takes no per-trace options at all; the private save door
+        # still refuses them typed rather than dropping them.
+        with pytest.raises(TypeError):
+            complete_pair.save(tmp_path / "opt.tlspec", **kwargs)
         with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.save(complete_pair, tmp_path / "opt.tlspec", **kwargs)
+            _save_bundle(complete_pair, tmp_path / "opt.tlspec", **kwargs)
         assert excinfo.value.fields["code"] == "bundle_save_option_unsupported"
     # Explicitly passing a value equal to the trace-door default is honored.
-    tl.save(complete_pair, tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
+    _save_bundle(complete_pair, tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
     assert tl.load(tmp_path / "default_ok.tlspec").names == ["a", "b"]

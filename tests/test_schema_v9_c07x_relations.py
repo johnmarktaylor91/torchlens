@@ -351,7 +351,7 @@ def test_default_from_payload_policy_is_refuse() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Item 2 legs (a) + (c) end to end through tl.save / tl.load.
+# Item 2 legs (a) + (c) end to end through Trace.save / tl.load.
 # ---------------------------------------------------------------------------
 
 

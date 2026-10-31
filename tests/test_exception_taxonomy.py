@@ -404,7 +404,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     # ValueError lineage is load-bearing: the runnable run wrapper reports the
     # container-spec tripwire as a typed RunPreconditionError denial (R64-3).
     "ContainerReconstructionError": ("ValueError",),
-    # ValueError lineage is load-bearing (R64-4): the other three tl.save
+    # ValueError lineage is load-bearing (R64-4): the other three Trace.save
     # door refusals are ValueError-lineage; except ValueError must catch all.
     "CaptureOutcomeError": ("ValueError",),
     "CompileCountsUnavailableError": ("RuntimeError",),
@@ -918,7 +918,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
         DescriptorStructuralBoundError,
     )
     from torchlens._io.state_keys import PortableStateKeyError
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.validation.invariants import MetadataInvariantError
 
     return (

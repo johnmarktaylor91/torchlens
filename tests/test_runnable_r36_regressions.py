@@ -44,6 +44,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    WitnessCompleteness,
+)
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     PathDivergenceError,
@@ -52,11 +57,6 @@ from torchlens.errors import (
     RunnableTLSPECError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    NumericAttestationStatus,
-    PathFaithfulness,
-    WitnessCompleteness,
-)
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -86,9 +86,9 @@ def _save_load(
 
 
 def _verdict(loaded: tl.Trace, inputs: Any, **kwargs: Any) -> tuple[str, str]:
-    """Run with ``return_diverged`` and return (path_faithfulness, attestation) values."""
+    """Run with ``on_divergence="return"`` and return (path_faithfulness, attestation) values."""
 
-    result = loaded.run(inputs=inputs, on_divergence="return_diverged", **kwargs)
+    result = loaded.run(inputs=inputs, on_divergence="return", **kwargs)
     return (
         result.report.path_faithfulness.value,
         result.report.numeric_attestation.value,
@@ -715,7 +715,7 @@ class TestCorr25LivePoisonSpine:
         # next GC pass, making the test GC-timing-dependent).
         model = _LossyLiveModel()
         trace = tl.trace(model, x, capture=_CAPTURE)
-        result = trace.run(inputs=x, on_divergence="return_diverged")
+        result = trace.run(inputs=x, on_divergence="return")
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
         assert result.report.poisoned is True
         with pytest.raises(PoisonedRunError):
@@ -845,7 +845,7 @@ class _PropertyTrapTensor(torch.Tensor):
 class TestCorr26SubclassAdmission:
     """Unsupported subclasses fail typed at phase 0 under both policies."""
 
-    @pytest.mark.parametrize("policy", ("raise", "return_diverged"))
+    @pytest.mark.parametrize("policy", ("raise", "return"))
     def test_property_trap_subclass_fails_typed(self, policy: str, tmp_path: Path) -> None:
         x = torch.randn(2, 3)
         loaded = _save_load(_AddPair(), (x, x.clone()), tmp_path, acts=True)
@@ -884,7 +884,7 @@ class TestCorr27CloneGradFidelity:
 
         x = torch.randn(3, requires_grad=True)
         loaded = _save_load(_Double(), x, tmp_path, acts=True)
-        result = loaded.run(inputs=x.detach(), on_divergence="return_diverged")
+        result = loaded.run(inputs=x.detach(), on_divergence="return")
         assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
         assert result.output.requires_grad is False
 
@@ -897,7 +897,7 @@ class TestCorr27CloneGradFidelity:
 _CPU_ONLY_READINESS = """
 import sys, torch, torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import ReadinessStatus
+from torchlens._runnable import ReadinessStatus
 
 assert not torch.cuda.is_available()
 loaded = tl.load(sys.argv[1])
@@ -960,7 +960,7 @@ class TestCudaStagingAndReadiness:
             descriptor = loaded.runnable_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
-            result = loaded.run(inputs=x, on_divergence="return_diverged")
+            result = loaded.run(inputs=x, on_divergence="return")
         finally:
             torch.use_deterministic_algorithms(deterministic_before)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -1422,7 +1422,7 @@ class TestContractLockstep:
     def test_contract_error_table_matches_enum_exactly(self) -> None:
         import re
 
-        from torchlens.runnable import RunnableErrorCode
+        from torchlens._runnable import RunnableErrorCode
 
         doc = (
             Path(__file__).resolve().parents[1]

@@ -4,7 +4,7 @@ This package is the untrusted-artifact save/load surface: a loaded `.tlspec` bun
 hostile input, and every load path here is fail-closed.
 
 ## bundle.py
-- `save()` and `load()` (typed overloads) are the main entry points behind `tl.save()`/`tl.load()`.
+- `save()` and `load()` (typed overloads) are the main entry points behind `trace.save()`/`tl.load()`.
 - `_RenameAwareUnpickler` reads `metadata.pkl` through the default-deny `SafeBundleUnpickler`
   allowlist while preserving the locked `_RENAMED_PICKLE_GLOBALS` class/module remap; each
   remapped target is still gated through the allowlist.

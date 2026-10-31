@@ -176,10 +176,10 @@ def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -
     The prep-time flag the finalization pipeline uses to track an
     UninitializedParameter (``Param._lazy_at_prep``, reset False once step
     15 re-reads the materialized geometry) is plain instance state with no
-    declared portable policy; before it got one, ``tl.save`` on ANY trace of
+    declared portable policy; before it got one, ``Trace.save`` on ANY trace of
     a model holding a lazy module (``nn.LazyLinear`` et al.) raised
     ``TorchLensIOError: Param._lazy_at_prep is missing from
-    PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
+    _PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
     platform-canary step traces with a predicate ``save=``.
     """
 
@@ -187,6 +187,6 @@ def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -
     trace = tl.trace(model, torch.randn(2, 3, 8, 8), save=tl.func("relu"))
 
     path = tmp_path / "lazy_canary.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.layer_labels == trace.layer_labels

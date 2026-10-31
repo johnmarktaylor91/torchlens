@@ -400,7 +400,7 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
             streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
     )
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
     assert recording.halted is True

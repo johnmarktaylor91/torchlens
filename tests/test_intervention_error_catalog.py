@@ -15,7 +15,7 @@ from example_models import TinyReluAdd as _ReluAdd
 
 import torchlens as tl
 from torchlens.intervention import errors as terrors
-from torchlens.io import TraceState, list_logs, load_intervention_spec
+from torchlens.io import TraceState, list_traces, load_intervention_spec
 from torchlens.validation import check_spec_compat
 
 SeverityClass = type[BaseException]
@@ -417,7 +417,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
 
 
 def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
-    """``tl.io.list_logs()`` returns valid snapshots while logs are created concurrently."""
+    """``tl.io.list_traces()`` returns valid snapshots while logs are created concurrently."""
 
     errors: list[BaseException] = []
     snapshots: list[tuple[tl.Trace, ...]] = []
@@ -434,10 +434,10 @@ def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
 
         try:
             torch.manual_seed(seed)
-            snapshots.append(list_logs())
+            snapshots.append(list_traces())
             with capture_lock:
                 _capture(_ReluAdd(), torch.randn(1, 3))
-            snapshots.append(list_logs())
+            snapshots.append(list_traces())
         except BaseException as exc:  # pragma: no cover - failure path is asserted below.
             errors.append(exc)
 
@@ -474,7 +474,7 @@ def test_axis_i_log_registry_uses_weakref_cleanup() -> None:
     gc.collect()
 
     assert log_ref() is None
-    assert all(id(log) != log_id for log in list_logs())
+    assert all(id(log) != log_id for log in list_traces())
 
 
 def test_helper_axis_ambiguity_uses_catalog_error() -> None:

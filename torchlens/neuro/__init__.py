@@ -8,7 +8,7 @@ sections:
 
 1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
    save=...)`` or write a disk artifact with ``tl.extract_dataset(...,
-   output_dir=...)`` and read it back with ``tl.load_extraction``. The
+   path=...)`` and read it back with ``tl.load``. The
    manifest records stimulus ids, ordering, dtypes, and preprocessing
    provenance -- everything downstream descriptors are built from.
 2. GEOMETRY (needs no extra): RDMs and friends live in their canonical
@@ -137,7 +137,7 @@ _REDIRECTS: dict[str, str] = {
     "effective_dimensionality": ("use tl.repgeom.effective_dimensionality (needs no extra)"),
     "procrustes_align": "use tl.repgeom.procrustes_align (needs no extra)",
     "extract_dataset": "use tl.extract_dataset (needs no extra)",
-    "load_extraction": "use tl.load_extraction (needs no extra)",
+    "load_extraction": "use tl.load (needs no extra)",
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "

@@ -7,7 +7,7 @@ each data class (Trace, Op, Layer, etc.).  They serve two purposes:
    to present fields in a consistent, human-readable order.
 2. **User-facing completeness contract** — every public/exported attribute a data
    class exposes must appear in its FIELD_ORDER.  Runtime-only and portable
-   internal state belongs in the class FIELD_POLICY / PORTABLE_STATE_SPEC even
+   internal state belongs in the class FIELD_POLICY / _PORTABLE_STATE_SPEC even
    when it is intentionally not exported as a user-facing column.
 
 **Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
@@ -32,7 +32,7 @@ from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_n
 # Field-order definitions
 # ---------------------------------------------------------------------------
 # Each list defines the ordered user-facing/export fields for its data class.
-# Runtime-only state belongs in per-class FIELD_POLICY / PORTABLE_STATE_SPEC.
+# Runtime-only state belongs in per-class FIELD_POLICY / _PORTABLE_STATE_SPEC.
 
 RAW_LABEL_SUFFIX = "_raw"
 
@@ -61,7 +61,7 @@ ARG_EXPRESSIONS_FIELD = "arg_expressions"
 # artifact A/B gates) must mask exactly this set and nothing else; widening
 # it is a reviewed contract diff, because every additional row weakens the
 # reproducibility tripwire.
-ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
+_ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     "random_seed",
     "capture_start_time",
     "capture_end_time",
@@ -74,7 +74,7 @@ ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     # varies exactly with forward_peak_memory (set iff a CPU delta read 0).
     "forward_peak_memory_reason",
 )
-ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
+_ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
     "created_at",
     "rng_state_digests",
 )

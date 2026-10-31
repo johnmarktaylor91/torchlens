@@ -17,7 +17,7 @@ BOTH fork arms are built):
 - FORK-4 arm (b) (``on_feed_break="refuse"``): the settlement write raises
   typed ``episode_feed_break_exogenous`` carrying the settled product on
   ``exc.partial_log`` -- recoverable partial evidence, nothing discarded.
-- STRICT (``EpisodeSpec(feed="closed")``): for an undeclared crossing the
+- STRICT (``EpisodeOptions(feed="closed")``): for an undeclared crossing the
   capture HALTS at the next step entry -- the first point where the break is
   observable (one-step detection latency; a live check cannot see a break
   before the broken input arrives). A DECLARED crossing under strict mode
@@ -53,7 +53,7 @@ from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 if TYPE_CHECKING:
     import torch.nn as nn
 
-    from ..options import EpisodeSpec
+    from ..options import EpisodeOptions
     from ._episode_ledger import EpisodeLedgerHeader, ResolvedEpisode
 
 __all__ = [
@@ -169,7 +169,7 @@ def _declared_crossing_teaching(step: int) -> str:
 
     return (
         f"Step {step}'s input crosses a DECLARED exogenous boundary "
-        f"(EpisodeSpec.crossings includes step {step}). The trace is intact "
+        f"(EpisodeOptions.crossings includes step {step}). The trace is intact "
         "and the crossing is disclosed, but a declared crossing is still not "
         "one closed feed: token-series reads, whole-episode replay, and the "
         "blessing fold are refused across it; ops, values, graph, and "
@@ -543,7 +543,7 @@ class EpisodeJoinSession:
         self.feed = feed
         self.on_feed_break = on_feed_break
         self.crossings = frozenset(crossings)
-        #: Declared entry argument (``EpisodeSpec.step_input_from``); ``None``
+        #: Declared entry argument (``EpisodeOptions.step_input_from``); ``None``
         #: selects by the disclosed preference rule (:func:`_select_entry`).
         self.step_input_from = step_input_from
         self.boundaries: list[_StepBoundary] = []
@@ -1125,7 +1125,9 @@ def refuse_broken_join_claim(subject: Any) -> None:
     _raise_break_refusal(envelope, break_step, grade)
 
 
-def _validated_join_declaration(spec: EpisodeSpec, declared_steps: int | None) -> tuple[int, ...]:
+def _validated_join_declaration(
+    spec: EpisodeOptions, declared_steps: int | None
+) -> tuple[int, ...]:
     """Validate the join-arm declaration triple (lane F40c).
 
     Raises
@@ -1139,7 +1141,7 @@ def _validated_join_declaration(spec: EpisodeSpec, declared_steps: int | None) -
 
     if spec.feed not in ("open", "closed"):
         raise _declaration_error(
-            f"EpisodeSpec.feed={spec.feed!r} is outside the closed vocabulary "
+            f"EpisodeOptions.feed={spec.feed!r} is outside the closed vocabulary "
             "['closed', 'open']: 'open' (default) captures across feed breaks "
             "and marks them in the measured step_join envelope; 'closed' is "
             "the opt-in strict arm that halts at the break.",
@@ -1147,7 +1149,7 @@ def _validated_join_declaration(spec: EpisodeSpec, declared_steps: int | None) -
         )
     if spec.on_feed_break not in ("disclose", "refuse"):
         raise _declaration_error(
-            f"EpisodeSpec.on_feed_break={spec.on_feed_break!r} is outside the "
+            f"EpisodeOptions.on_feed_break={spec.on_feed_break!r} is outside the "
             "closed vocabulary ['disclose', 'refuse']: 'disclose' (default) "
             "returns the one Trace with the break marked and episode-"
             "dependent claims refused across it; 'refuse' raises typed at "
@@ -1158,7 +1160,7 @@ def _validated_join_declaration(spec: EpisodeSpec, declared_steps: int | None) -
         crossings = tuple(int(step) for step in spec.crossings)
     except (TypeError, ValueError):
         raise _declaration_error(
-            "EpisodeSpec.crossings must be an iterable of step indices (the "
+            "EpisodeOptions.crossings must be an iterable of step indices (the "
             "declared exogenous entries), got "
             f"{type(spec.crossings).__name__}.",
             code="episode_declaration_invalid",
@@ -1166,14 +1168,14 @@ def _validated_join_declaration(spec: EpisodeSpec, declared_steps: int | None) -
     for step in crossings:
         if step < 1:
             raise _declaration_error(
-                f"EpisodeSpec.crossings declares step {step}; crossings are "
+                f"EpisodeOptions.crossings declares step {step}; crossings are "
                 "JOINS into steps 1+ (step 0 is the prefill, whose entry is "
                 "the capture input, not a cross-step join).",
                 code="episode_declaration_invalid",
             )
         if declared_steps is not None and step >= declared_steps:
             raise _declaration_error(
-                f"EpisodeSpec.crossings declares step {step} but only "
+                f"EpisodeOptions.crossings declares step {step} but only "
                 f"{declared_steps} steps are declared (steps 0-"
                 f"{declared_steps - 1}).",
                 code="episode_declaration_invalid",

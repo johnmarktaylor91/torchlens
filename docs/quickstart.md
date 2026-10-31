@@ -71,7 +71,7 @@ same-shaped inputs with different values may take different control-flow
 paths (measured: detection models differ by several ops between two random
 inputs). Every synthesized-input trace therefore carries a persistent
 provenance record -- origin, shapes, dtypes, recipe, seed, strategy, probe
-diary -- that survives `tl.save`/`tl.load`, so a synthesized trace can never
+diary -- that survives `Trace.save`/`tl.load`, so a synthesized trace can never
 masquerade as a real one after a handoff.
 
 Two guardrails follow from the record:

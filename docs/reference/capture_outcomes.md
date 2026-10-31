@@ -52,7 +52,7 @@ absent phase; no gate consults it.
   driving member. The fold is a DISCLOSURE reported beside results, never a
   settlement and never a per-member gate: capability gating applies at the
   member whose facts a read cites (foldB D8). Both public save doors agree
-  by construction — `tl.save(bundle, ...)` delegates to the container door
+  by construction — `bundle.save(path, ...)` delegates to the container door
   (`Bundle.save`), whose member writes run the N1 gate per member; per-trace
   payload options refuse typed (`bundle_save_option_unsupported`).
 - `Trace.fork().outcome` — a DERIVED record settled by `stamp_forked`, never
@@ -102,8 +102,8 @@ Enforced through the ONE chokepoint
 | capability | COMPLETE | HALTED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
 |---|---|---|---|---|---|
 | validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
-| `tl.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
-| `tl.save(level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `halted_capture_not_runnable`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
+| `Trace.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
+| `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `halted_capture_not_runnable`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
 | live replay: refresh / `save_new_outs` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
 | `log_backward` / `backward` / `recording_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
@@ -118,7 +118,7 @@ Row rationales, stated once:
   OPEN because validation is the tripwire that catches a freeze-corrupted
   legacy representation.
 - **UNKNOWN** refusals replace what was previously an ungated pass-through of
-  provably-unfinished artifacts (`tl.save` of failed partials) or an
+  provably-unfinished artifacts (`Trace.save` of failed partials) or an
   undefined crash on unbuilt structures. The nearest legitimate workflows
   (partial inspection, `draw`, `tl.partial.from_failed_capture`) all remain
   open.
@@ -240,7 +240,7 @@ sits inside a region whose only success exit reaches an authority stamp.
 
 ## Disclosed conversions and residuals
 
-- Halted analysis `tl.save` was BROKEN before this design (the halted
+- Halted analysis `Trace.save` was BROKEN before this design (the halted
   finalizer leaked `_output_attribution_input_tensors`, refusing every
   export); it now works, per the capability table.
 - Postprocess-tail failures (steps 18–20, the core freeze) used to be MASKED

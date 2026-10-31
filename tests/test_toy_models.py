@@ -16,7 +16,7 @@ import torch
 import torchlens as tl
 from torchlens import trace
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.io import log_model_metadata
+from torchlens.user_funcs import log_model_metadata
 from torchlens.validation import validate_forward_pass
 from torchlens.visualization import show_model_graph
 

@@ -38,7 +38,7 @@ class TensorInputObservation:
         Description of how the retained payload was obtained.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.KEEP,
         "source_op": FieldPolicy.KEEP,
         "object_id": FieldPolicy.DROP,
@@ -93,7 +93,7 @@ class ModuleInputSnapshot:
         Bounded summary that does not materialize lazy payloads.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_args": FieldPolicy.BLOB_RECURSIVE,
         "_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "structure": FieldPolicy.KEEP,
@@ -156,7 +156,7 @@ class PreHookEffect:
         String-only failure metadata for interrupted captures.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "ordinal": FieldPolicy.KEEP,
         "scope": FieldPolicy.KEEP,
         "registration_id": FieldPolicy.KEEP,

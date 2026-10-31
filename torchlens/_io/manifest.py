@@ -62,7 +62,7 @@ def _is_plain_nonnegative_int(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-_SCHEMA_REMEDY = "re-save the artifact with tl.save(); do not hand-edit manifest.json"
+_SCHEMA_REMEDY = "re-save the artifact with trace.save(); do not hand-edit manifest.json"
 
 
 def _schema_refuse(detail: str, **fields: Any) -> TorchLensIOError:
@@ -457,7 +457,7 @@ class Manifest:
         UTC timestamp string for bundle creation.
     bundle_format:
         Bundle container format: ``"directory"`` for standard portable
-        bundles written by ``Trace.save()``/``tl.save()``, or
+        bundles written by ``trace.save()``, or
         ``"fastlog-directory"`` for fastlog ring-buffer disk storage
         (see ``torchlens/fastlog/storage_disk.py``).
     n_layers:
@@ -716,7 +716,7 @@ class Manifest:
             # operator log reader) must be able to tell apart.
             raise TorchLensIOError(
                 f"Manifest not found at {manifest_path}. Remedy: pass the bundle "
-                "directory produced by tl.save() (it must contain manifest.json).",
+                "directory produced by trace.save() (it must contain manifest.json).",
                 code="manifest_missing",
             ) from exc
         except OSError as exc:
@@ -729,13 +729,13 @@ class Manifest:
             raise TorchLensIOError(
                 f"Manifest at {manifest_path} does not parse as JSON within the "
                 f"supported bounds: {exc}. Remedy: the artifact is corrupt or "
-                "hand-edited; re-save it with tl.save().",
+                "hand-edited; re-save it with trace.save().",
                 code="manifest_unreadable",
             ) from exc
         if not isinstance(raw_data, dict):
             raise TorchLensIOError(
                 f"Manifest root at {manifest_path} must be a JSON object. Remedy: "
-                "the artifact is corrupt or hand-edited; re-save it with tl.save().",
+                "the artifact is corrupt or hand-edited; re-save it with trace.save().",
                 code="manifest_not_json_object",
             )
         try:

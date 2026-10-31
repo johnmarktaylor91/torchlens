@@ -54,12 +54,12 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_capture_events",
         "_tl_backward_hooked_tensor_keys",
         # One-gradient-owner-per-label bookkeeping (FieldPolicy.DROP,
-        # trace.py PORTABLE_STATE_SPEC): session-only, stripped from pickle
+        # trace.py _PORTABLE_STATE_SPEC): session-only, stripped from pickle
         # state, reset by refresh rebind and replay resets.
         "_tl_grad_hook_owner_by_label",
         "_backward_gradfn_refs",
         # Backward projection guard trio: session-only fold watermark, all
-        # declared FieldPolicy.DROP in Trace.PORTABLE_STATE_SPEC and stripped
+        # declared FieldPolicy.DROP in Trace._PORTABLE_STATE_SPEC and stripped
         # by __getstate__/__setstate__ (never pickled, never portable).
         "_backward_projection_event_count",
         "_backward_projection_revision",
@@ -191,12 +191,12 @@ def test_trace_field_set_subset_of_user_facing() -> None:
 
 
 def test_public_cached_property_read_does_not_poison_save(tmp_path) -> None:
-    """Assert reading ``Trace.intervention_spec`` never breaks ``tl.save``.
+    """Assert reading ``Trace.intervention_spec`` never breaks ``Trace.save``.
 
     ``intervention_spec`` is a ``functools.cached_property``, so a read caches
     its value under its own name in ``Trace.__dict__``. The tlspec scrub walks
     the live ``__dict__`` fail-closed, and before B3R4-R10-1 the undeclared
-    cache key made every later ``tl.save`` raise ``TorchLensIOError`` -- a
+    cache key made every later ``Trace.save`` raise ``TorchLensIOError`` -- a
     read-only public accessor permanently poisoning the artifact path.
 
     Parameters
@@ -218,7 +218,7 @@ def test_public_cached_property_read_does_not_poison_save(tmp_path) -> None:
     assert "intervention_spec" in trace.__dict__
 
     save_path = tmp_path / "after_read.tlspec"
-    tl.save(trace, str(save_path))
+    trace.save(str(save_path))
 
     loaded = tl.load(str(save_path))
     # The cache is derived state: it must rebuild on the loaded trace, not

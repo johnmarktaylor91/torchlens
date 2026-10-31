@@ -34,6 +34,7 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch import completeness_witness as cw
 from torchlens.backends.torch.completeness_witness import (
     _private_c_forward_op_modules,
@@ -42,7 +43,6 @@ from torchlens.backends.torch.completeness_witness import (
     host_escape_observer_install_failed,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import (
     _ALLOWED_FORWARD_OP_MODULES,
     is_pure_forward_callable,

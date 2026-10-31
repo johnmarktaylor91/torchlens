@@ -627,7 +627,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     }
     bundle_path = tmp_path / "mlx-materialized.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
@@ -662,7 +662,7 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     }
     bundle_path = tmp_path / "mlx-lazy-materialized.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path, lazy=True)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
@@ -689,7 +689,7 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     bundle_path = tmp_path / "mlx-missing-runtime.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
 
     def _missing_mlx_runtime() -> Any:
         """Pretend ``mlx.core`` is unavailable during payload decode."""
@@ -725,7 +725,7 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
     _assert_static_save_summary(trace, {"relu"})
 
     bundle_path = tmp_path / "mlx-selective-materialized.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
     loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]

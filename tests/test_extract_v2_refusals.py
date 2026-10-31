@@ -70,7 +70,7 @@ def test_checksums_vocabulary_refuses() -> None:
             _model(),
             torch.randn(4, 3),
             ["relu"],
-            output_dir="/tmp/never-created-f18",
+            path="/tmp/never-created-f18",
             checksums="paranoid",
             progress=False,
         )
@@ -85,7 +85,7 @@ def test_shard_format_vocabulary_refuses(tmp_path) -> None:
             _model(),
             torch.randn(4, 3),
             ["relu"],
-            output_dir=tmp_path,
+            path=tmp_path,
             shard_format="npz",
             progress=False,
         )
@@ -401,7 +401,7 @@ def test_relabel_refuses_incomplete_and_mislengthed(tmp_path) -> None:
         torch.randn(4, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=["a", "b", "c", "d"],
     )
@@ -431,7 +431,7 @@ def test_relabel_rewrites_sidecar_with_audit(tmp_path) -> None:
         torch.randn(4, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=["a", "b", "c", "d"],
     )
@@ -455,7 +455,7 @@ def test_stimulus_ids_reject_empty_and_non_strings() -> None:
             _model(),
             torch.randn(2, 3),
             ["relu"],
-            output_dir="/tmp/never-created-f18-ids",
+            path="/tmp/never-created-f18-ids",
             stimulus_ids=["a", ""],
             progress=False,
         )

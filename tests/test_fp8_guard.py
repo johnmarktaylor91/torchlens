@@ -468,7 +468,7 @@ def test_saving_an_fp8_activation_refuses_typed(tmp_path) -> None:
 
     trace = tl.trace(_Fp8CastModel(torch.float8_e4m3fn), torch.randn(2, 4))
     with pytest.raises(TorchLensIOError) as excinfo:
-        tl.save(trace, str(tmp_path / "fp8.tlspec"))
+        trace.save(str(tmp_path / "fp8.tlspec"))
     assert "float8_e4m3fn" in str(excinfo.value)
 
 

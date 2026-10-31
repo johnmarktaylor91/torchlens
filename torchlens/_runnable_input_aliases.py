@@ -8,18 +8,18 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from . import _state
-from ._runnable_state import (
-    RunResourceCeiling,
-    _guarded_defensive_materialize,
-    runnable_tensor_byte_digest,
-)
-from .runnable import (
+from ._runnable import (
     ContractCheck,
     InputAttestationFingerprint,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
+)
+from ._runnable_state import (
+    RunResourceCeiling,
+    _guarded_defensive_materialize,
+    runnable_tensor_byte_digest,
 )
 from .utils.alias_footprint import touched_bytes_relation
 

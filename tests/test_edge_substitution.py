@@ -365,12 +365,12 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
     )
     for index, level in enumerate(("audit", "executable_with_callables", "portable", "runnable")):
         with pytest.raises(Exception) as excinfo:
-            tl.save(fork, tmp_path / f"edge_{index}.tlspec", level=level)
+            fork.save(tmp_path / f"edge_{index}.tlspec", level=level)
         assert getattr(excinfo.value, "fields", {}).get("code") == (
             "edge_intervention_save_unsupported"
         ), level
     # non-edge saves are untouched even under the regressed schema
-    tl.save(trace, tmp_path / "clean.tlspec", level="audit")
+    trace.save(tmp_path / "clean.tlspec", level="audit")
 
 
 def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
@@ -383,7 +383,7 @@ def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
     path = tmp_path / "edge_plain.tlspec"
-    tl.save(fork, path, level="portable")
+    fork.save(path, level="portable")
     loaded = tl.load(path)
     child = loaded["conv2d_2_3"].ops[0]
     assert child.edge_substitutions and child.edge_replacement_stamps
@@ -423,12 +423,12 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
             field_name,
             replace(Op.FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
         )
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
     path = tmp_path / "forced_edge.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(fork, path, level="executable_with_callables")
+        fork.save(path, level="executable_with_callables")
     loaded = tl.load(path)
     loaded_child = loaded["conv2d_2_3"].ops[0]
     assert not loaded_child.edge_substitutions

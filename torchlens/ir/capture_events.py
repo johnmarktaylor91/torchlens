@@ -118,7 +118,7 @@ class SealedJournalAmendmentError(SealedJournalWriteError):
     After ``CaptureSession.seal()`` folds a journal into its
     ``CapturedRunCore``, the sealed source refuses further amendment appends
     fail-closed (DoR 4.5.5): post-seal knowledge must route through a working
-    projection (``copy_for_replay``), whose carried amendment lane the
+    projection (``_copy_for_replay``), whose carried amendment lane the
     watermark filter keeps double-application-free.
     """
 
@@ -133,7 +133,7 @@ class SealedJournalAppendError(SealedJournalWriteError):
     live stream from its sealed ``CapturedRunCore`` snapshot with no signal at
     all. The op lane and the forward sibling lanes are now the same fence the
     amendment lane always had; post-seal work belongs on a working projection
-    (``copy_for_replay``).
+    (``_copy_for_replay``).
 
     The backward lane is deliberately NOT fenced: backward capture runs after
     the forward seal by design (``Trace.log_backward`` /
@@ -189,7 +189,7 @@ def _clone_op_event_for_replay(event: Any) -> Any:
     """Return a projection copy of ``event`` with independent mutable state.
 
     ``OpEvent`` is a frozen dataclass, but two of its fields are live dicts:
-    ``transform_config`` and ``parent_arg_positions``. A ``copy_for_replay``
+    ``transform_config`` and ``parent_arg_positions``. A ``_copy_for_replay``
     projection must not be able to mutate those dicts on the sealed source
     stream, so they are duplicated here. Every other field is immutable (or an
     intentionally shared tensor payload / opaque handle), so the clone stays
@@ -283,7 +283,7 @@ class CaptureEvents:
     amendment_seq: int = 0
     # Highest amendment seq folded into this journal's sealed core, stamped by
     # ``CaptureSession.seal()`` (and mirrored onto the pre-seal projection
-    # clone — reviewer note S-N2). ``copy_for_replay`` preserves it and, when
+    # clone — reviewer note S-N2). ``_copy_for_replay`` preserves it and, when
     # already-folded events seed the copy, filters the carried lane to
     # ``seq > core_seal_watermark`` so double-application is impossible.
     core_seal_watermark: int | None = None
@@ -314,7 +314,7 @@ class CaptureEvents:
     # Run identity token for causal binding of intervention-edit records: the
     # observing site stamps it onto each edit, and validation accepts an edit
     # only when its token matches the validated stream's nonce. Working
-    # projections of the SAME run (``copy_for_replay``) preserve the nonce;
+    # projections of the SAME run (``_copy_for_replay``) preserve the nonce;
     # detached streams and fresh captures get their own.
     run_nonce: int = field(default_factory=lambda: next(_RUN_NONCE_COUNTER))
     # Detached-stream baseline: event streams never serialize and forks never
@@ -393,7 +393,7 @@ class CaptureEvents:
         self.live_index.labels = list(events_by_label)
         self.live_index.rebuild_edges()
 
-    def copy_for_replay(
+    def _copy_for_replay(
         self,
         *,
         projected_op_events: Iterable[OpEvent] | None = None,
@@ -740,7 +740,7 @@ class CaptureEvents:
                 f"journal sealed at watermark {self.core_seal_watermark}: "
                 f"amendment {amendment.family!r} targeting "
                 f"{amendment.target_label_raw!r} must route through a working "
-                "projection (copy_for_replay), never the sealed source"
+                "projection (_copy_for_replay), never the sealed source"
             )
         validate_amendment(amendment)
         live_target = self.live_index.by_raw_label.get(amendment.target_label_raw)
@@ -816,7 +816,7 @@ class CaptureEvents:
                 f"journal sealed at watermark {self.core_seal_watermark}: "
                 f"appending to {lane_name!r} would diverge the live stream from "
                 "its sealed CapturedRunCore snapshot; route post-seal work "
-                "through a working projection (copy_for_replay), never the "
+                "through a working projection (_copy_for_replay), never the "
                 "sealed source"
             )
 

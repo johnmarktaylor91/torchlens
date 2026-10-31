@@ -55,12 +55,12 @@
    "options": []
   },
   "episode": {
-   "summary": "Multi-step episode capture (episode=EpisodeSpec)",
+   "summary": "Multi-step episode capture (episode=EpisodeOptions)",
    "trace_kwargs": [
     "episode"
    ],
    "options": [
-    "EpisodeSpec"
+    "EpisodeOptions"
    ]
   },
   "backend": {
@@ -733,7 +733,7 @@
    "status": "asymmetry",
    "asymmetry": "A13",
    "confidence": "high",
-   "note": "tl.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
+   "note": "bundle.save(path) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
   },
   {
    "a": "bundle",
@@ -1175,7 +1175,7 @@
    "status": "composes",
    "evidence": "tests/test_b2_extract_intervened.py::test_intervened_disk_artifact_records_the_counterfactual",
    "confidence": "high",
-   "note": "Disk mode is extract_dataset(output_dir=); disk-only options without output_dir refuse extraction_disk_only_option."
+   "note": "Disk mode is extract_dataset(path=); disk-only options without path refuse extraction_disk_only_option."
   },
   {
    "a": "extract",
@@ -1908,7 +1908,7 @@
     "bundle",
     "storage"
    ],
-   "summary": "tl.save on a Trace accepts per-trace payload options and streaming storage; tl.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
+   "summary": "Trace.save on a Trace accepts per-trace payload options and streaming storage; Trace.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"

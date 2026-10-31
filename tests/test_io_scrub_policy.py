@@ -164,7 +164,7 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
         save=tl.options.SaveOptions(activation_transform=transform),
     )
     spec = tmp_path / "partial.tlspec"
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     for artifact in spec.rglob("*"):
         if artifact.is_file():
             assert secret.encode() not in artifact.read_bytes(), (
@@ -228,7 +228,7 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     missing_by_class = {}
     for cls, instance in instances.items():
         missing = sorted(
-            {field_name for field_name, _ in state_items(instance)} - set(cls.PORTABLE_STATE_SPEC)
+            {field_name for field_name, _ in state_items(instance)} - set(cls._PORTABLE_STATE_SPEC)
         )
         if missing:
             missing_by_class[cls.__name__] = missing
@@ -275,8 +275,8 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
     Fail-before: ``ModuleCall.facets`` / ``Module.facets`` cached a FacetView
-    in ``__dict__["_facets_cache"]`` with no PORTABLE_STATE_SPEC row, so one
-    documented read made every later ``tl.save`` refuse with an error naming
+    in ``__dict__["_facets_cache"]`` with no _PORTABLE_STATE_SPEC row, so one
+    documented read made every later ``Trace.save`` refuse with an error naming
     an internal cache the user never touched. The sibling completeness test
     above checks live state straight after capture, which is exactly why the
     lazily-populated caches slipped past it: they appear only after a read.
@@ -289,7 +289,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in records:
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -308,7 +308,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
         f"declare each field (usually FieldPolicy.DROP): {undeclared_by_class}"
     )
 
-    tl.save(live_log, str(tmp_path / "after_sweep.tlspec"))
+    live_log.save(str(tmp_path / "after_sweep.tlspec"))
 
 
 def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
@@ -322,7 +322,7 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
     _ = log.edges
     for record in _all_record_instances(log):
         _sweep_public_accessors(record)
-    tl.save(log, str(tmp_path / "after_armed_sweep.tlspec"))
+    log.save(str(tmp_path / "after_armed_sweep.tlspec"))
 
 
 # --- Public METHOD sweep (v2 of the accessor tripwire) ----------------------
@@ -683,7 +683,7 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in _all_record_instances(live_log):
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -703,24 +703,24 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
         f"declare each field (usually FieldPolicy.DROP): {undeclared_by_class}"
     )
 
-    tl.save(live_log, str(tmp_path / "after_method_sweep.tlspec"))
+    live_log.save(str(tmp_path / "after_method_sweep.tlspec"))
     pickle.dumps(live_log)
 
 
 def test_draw_then_save_and_pickle_regression(tmp_path: Path) -> None:
-    """Focused fail-before pin: draw() must not poison tl.save or pickle.
+    """Focused fail-before pin: draw() must not poison Trace.save or pickle.
 
     ``draw()`` stored the encoding diagnostic on ``_last_encoding_state``
     (ledgered as "scrub-declared runtime-only" but enrolled nowhere the scrub
-    consults), so one draw made every later ``tl.save`` refuse. The callable
+    consults), so one draw made every later ``Trace.save`` refuse. The callable
     variant pins the pickle side: a ``color_by=`` lambda rode the diagnostic
     into ``__dict__``, so ``pickle.dumps`` crashed on the raw user callable
-    while ``tl.save`` succeeded on the same trace (the R10-7 class).
+    while ``Trace.save`` succeeded on the same trace (the R10-7 class).
     """
 
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
     log.draw(vis_outpath=str(tmp_path / "graph"), color_by=lambda node: 1.0)
-    tl.save(log, str(tmp_path / "after_draw.tlspec"))
+    log.save(str(tmp_path / "after_draw.tlspec"))
     pickle.dumps(log)
 
 
@@ -742,12 +742,12 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     field_name = next(
         name
         for name in TRACE_EXTERNAL_WRITE_EXEMPTIONS
-        if name not in Trace.PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
+        if name not in Trace._PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
     )
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
     setattr(log, field_name, "still-live-at-save-time")
     with pytest.raises(TorchLensIOError) as excinfo:
-        tl.save(log, str(tmp_path / "refused.tlspec"))
+        log.save(str(tmp_path / "refused.tlspec"))
     message = str(excinfo.value)
     assert field_name in message
     assert "TRACE_EXTERNAL_WRITE_EXEMPTIONS" in message

@@ -259,7 +259,7 @@ def test_tlspec_round_trip_drops_and_recomputes_view(tmp_path: Path) -> None:
     assert isinstance(recomputed, ReceptiveFieldView)
     assert recomputed is loaded_target.receptive_field
     assert recomputed is not original
-    assert type(loaded_target).PORTABLE_STATE_SPEC["_receptive_field_cache"] is FieldPolicy.DROP
+    assert type(loaded_target)._PORTABLE_STATE_SPEC["_receptive_field_cache"] is FieldPolicy.DROP
 
 
 def test_registry_epoch_invalidation_refreshes_all_cached_views() -> None:

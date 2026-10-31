@@ -45,8 +45,8 @@ from tests.classics_corpus._loader import (
     load_manifest,
 )
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
+from torchlens._runnable import ResolverStatus, RunnableErrorCode
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ResolverStatus, RunnableErrorCode
 from torchlens.utils.arg_handling import normalize_input_args
 from torchlens.validation import last_validation_failure
 
@@ -144,7 +144,7 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     labels = [op.label for op in trace.ops]
     assert labels, f"{entry.id}: empty trace"
     spec = tmp_path / "entry.tlspec"
-    tl.save(trace, spec, level="portable")
+    trace.save(spec, level="portable")
     loaded = tl.load(spec)
     assert [op.label for op in loaded.ops] == labels, f"{entry.id}: save/load changed the ops"
     del trace, loaded

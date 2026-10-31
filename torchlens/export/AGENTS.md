@@ -57,7 +57,7 @@ netron outright.
   resolve lazily at call time; add new exporters with the same deferred
   pattern, never module-top imports.
 - These renderers are NOT behind the capture-outcome N-gates (those cover
-  `tl.save`/replay/validation entries); they read whatever the log exposes.
+  `Trace.save`/replay/validation entries); they read whatever the log exposes.
   Report-side honesty (unverified/halted disclosure) lives in `report/`.
 
 ## Tests

@@ -229,7 +229,7 @@ model over many forwards or through `generate()`, skip capture entirely with
 Save and load traces portably:
 
 ```python
-tl.save(log, 'my_trace')
+log.save('my_trace')
 loaded = tl.load('my_trace')
 ```
 

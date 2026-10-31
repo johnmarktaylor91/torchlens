@@ -290,14 +290,14 @@ def _maybe_widget(netron_package: Any, address: tuple[str, int]) -> None:
 
 
 def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-20)
-    log: Any,
+    trace: Any,
     path: str | Path | None = None,
     *,
     granularity: str = "module",
     depth: int = 1,
     show_buffers: BufferVisibilityLiteral = "meaningful",
     attachment: bool | None = None,
-    open: bool = False,  # noqa: A002 - the memo-ruled one-liner spelling
+    serve: bool = False,  # noqa: A002 - the memo-ruled one-liner spelling
     baseline: Any = None,
 ) -> Path | None:
     """Export a lossy ONNX ``ModelProto`` JSON graph that netron opens.
@@ -357,9 +357,9 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         The written JSON path, or ``None`` for the memory-only serve mode.
     """
 
-    _require_trace(log, exporter="tl.export.netron")
+    _require_trace(trace, exporter="tl.export.netron")
     _validate_options(granularity, depth, show_buffers)
-    if path is None and not open:
+    if path is None and not serve:
         raise ConfigurationError(
             "Netron export got path=None without open=True, leaving it "
             "nothing to do. Remedy: pass a destination path, or open=True "
@@ -373,15 +373,15 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
             "path= together with attachment=True.",
             code="netron_attachment_invalid",
         )
-    projection = _build_projection(log, granularity, depth, show_buffers)
+    projection = _build_projection(trace, granularity, depth, show_buffers)
     _warn_extent(projection)
-    baseline_text, diff = _baseline_slot(log, baseline, projection)
-    graph_name = str(getattr(log, "model_class_name", "TorchLens graph"))
+    baseline_text, diff = _baseline_slot(trace, baseline, projection)
+    graph_name = str(getattr(trace, "model_class_name", "TorchLens graph"))
     text = emit_model_json(
         projection,
         graph_name=graph_name,
         disclaimer=NETRON_DISCLAIMER,
-        metadata_props=_metadata_props(log, projection, show_buffers, baseline_text),
+        metadata_props=_metadata_props(trace, projection, show_buffers, baseline_text),
     )
     if path is None:
         _serve(f"{graph_name or 'torchlens'}.json", text.encode(), browse=True)
@@ -395,6 +395,6 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
             destination,
             extra_metadata=sidecar_rows(diff) if diff is not None else None,
         )
-    if open:
+    if serve:
         _serve(destination.name, text.encode(), browse=True)
     return destination

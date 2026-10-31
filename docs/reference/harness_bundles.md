@@ -164,7 +164,7 @@ re-run over the members' retained token ids, must return the same spans. Spans t
 not what the matcher finds are stored as `verified` (checked, but not found by TorchLens); spans
 that contradict the ids refuse `bundle_relation_span_unverified`; missing evidence leaves the row
 `declared`. Saved bundles keep each member's token-id input and its binding, so a matched row
-re-attests after `tl.save` and `tl.load`, lazy or not.
+re-attests after `Trace.save` and `tl.load`, lazy or not.
 
 ## Reading aligned activations
 

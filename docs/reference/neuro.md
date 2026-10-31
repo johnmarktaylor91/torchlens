@@ -20,7 +20,7 @@ accessing an unadvertised name teaches the exact install command.
 
 1. **Extract** (needs no extra): `tl.trace(model, x, save=...)`,
    `tl.extract_dataset(..., output_dir=..., stimulus_ids=...)`,
-   `tl.load_extraction(path)`.
+   `tl.load(path)`.
 2. **Geometry** (needs no extra): `tl.repgeom.rdm` / `classical_mds` /
    `scree` / `effective_dimensionality` / `procrustes_align`,
    `tl.stats.cka`. Nothing is re-exported into neuro.

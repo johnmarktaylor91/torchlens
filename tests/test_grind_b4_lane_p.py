@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import warnings
 import weakref
 from pathlib import Path
 from typing import Any
@@ -265,15 +264,6 @@ def test_visualizer_scratch_is_removed_by_trace_cleanup() -> None:
 
     assert not output_dir.exists()
     assert getattr(trace, "_visualizer_dir", None) is None
-
-
-def test_log_model_metadata_does_not_self_deprecate() -> None:
-    """Canonical metadata helper uses grouped options internally."""
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        tl.io.log_model_metadata(nn.Identity(), torch.ones(1))
-    assert not [warning for warning in caught if warning.category is DeprecationWarning]
 
 
 def test_visualizer_cleanup_helper_is_idempotent() -> None:
@@ -576,7 +566,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
     }
     assert raw_barcodes, "expected live param barcodes on a param-bearing capture"
 
-    tl.save(trace, str(tmp_path / "t.tlspec"))
+    trace.save(str(tmp_path / "t.tlspec"))
     loaded = tl.load(str(tmp_path / "t.tlspec"))
 
     leaked: list[str] = []

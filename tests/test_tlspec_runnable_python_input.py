@@ -4,7 +4,7 @@ These tests lock the honesty rule that a sparse runnable ``run`` may never repor
 ``VERIFIED``/``ATTESTED`` after silently replaying the recorded taken path for a
 *changed* non-tensor Python input (bool/int/float). A changed control input can
 make the recorded path numerically wrong, so it must diverge (or, under
-``return_diverged``, be reported diverged/poisoned and never attested) while an
+``on_divergence="return"``, be reported diverged/poisoned and never attested) while an
 unchanged input still verifies and attests exactly as before.
 """
 
@@ -17,13 +17,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 class BoolBranch(nn.Module):
@@ -99,7 +98,7 @@ def test_changed_bool_input_diverges_and_is_not_attested(tmp_path: Path) -> None
 
     diverged = tl.load(path).run(
         inputs=[left, right, False],
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
@@ -140,7 +139,7 @@ def test_changed_int_input_diverges_unchanged_verifies(tmp_path: Path) -> None:
 
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=[value, 1])
-    diverged = tl.load(path).run(inputs=[value, 1], on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    diverged = tl.load(path).run(inputs=[value, 1], on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -159,9 +158,7 @@ def test_changed_float_input_diverges_unchanged_verifies(tmp_path: Path) -> None
 
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=[value, 0.5])
-    diverged = tl.load(path).run(
-        inputs=[value, 0.5], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=[value, 0.5], on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -185,9 +182,7 @@ def test_mixed_tensor_and_python_arg_binds_without_crashing(tmp_path: Path) -> N
 
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=[value, False])
-    diverged = tl.load(path).run(
-        inputs=[value, False], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=[value, False], on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -261,9 +256,7 @@ def test_h1_extra_dict_key_diverges_identical_verifies(tmp_path: Path) -> None:
     # An extra non-tensor leaf steers an unwitnessed branch -> fail closed.
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs={"x": x, "flag": True})
-    diverged = tl.load(path).run(
-        inputs={"x": x, "flag": True}, on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs={"x": x, "flag": True}, on_divergence="return")
     assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
@@ -280,9 +273,7 @@ def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
     same = tl.load(path).run(inputs={"x": x, "tags": []})
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
 
-    diverged = tl.load(path).run(
-        inputs={"x": x, "tags": ["extra"]}, on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs={"x": x, "tags": ["extra"]}, on_divergence="return")
     assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
@@ -293,7 +284,7 @@ def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
 
 import dataclasses  # noqa: E402
 
-from torchlens.runnable import RunnableErrorCode  # noqa: E402
+from torchlens._runnable import RunnableErrorCode  # noqa: E402
 
 
 class _TwoArgModel(nn.Module):
@@ -323,9 +314,7 @@ def test_extra_positional_arg_diverges_never_verified(tmp_path: Path) -> None:
     with pytest.raises(PathDivergenceError) as exc:
         tl.load(path).run(inputs=[x, y, torch.tensor([3.0])])
     assert exc.value.fields.get("code") == RunnableErrorCode.INPUT_ARITY_EXTRA.value
-    diverged = tl.load(path).run(
-        inputs=[x, y, torch.tensor([3.0])], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=[x, y, torch.tensor([3.0])], on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.first_mismatch is not None
     assert diverged.report.first_mismatch.code is RunnableErrorCode.INPUT_ARITY_EXTRA
@@ -436,7 +425,7 @@ def test_dataclass_opaque_field_never_verified(tmp_path: Path) -> None:
 
     pair = _OpaqueFieldPair(torch.randn(2), object())
     path = _save_runnable(_DataclassOpaqueModel(), [pair], tmp_path / "dc_opaque.tlspec")
-    result = tl.load(path).run(inputs=pair, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    result = tl.load(path).run(inputs=pair, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
     assert result.report.poisoned

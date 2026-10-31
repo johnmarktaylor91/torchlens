@@ -165,7 +165,7 @@ from .ir.op_record import amend_graph_edge_insertion
 from .ir.selector_eval import selector_contains_kind
 from .options import (
     CaptureOptions,
-    EpisodeSpec,
+    EpisodeOptions,
     ReplayOptions,
     SaveOptions,
     StreamingOptions,
@@ -1683,10 +1683,10 @@ def _run_model_and_save_specified_outs(
         save_outs_to: Optional portable bundle directory for streaming out save.
         stream_custom_attributes: Whether harvested module attributes are
             persisted in the streamed bundle (streaming counterpart of
-            tl.save's include_custom_attributes).
+            Trace.save's include_custom_attributes).
         stream_buffer_values: Whether captured pre-forward buffer values are
             persisted in the streamed bundle (streaming counterpart of
-            tl.save's include_buffer_values).
+            Trace.save's include_buffer_values).
         stream_async_writes: Tri-state async-write routing for the streaming
             writer (StreamingOptions.async_writes): None/True arm the bounded
             async pipeline, False keeps synchronous per-blob writes.
@@ -2569,7 +2569,7 @@ def trace(
     echo: Any | None = None,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
-    episode: EpisodeSpec | None = None,
+    episode: EpisodeOptions | None = None,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
@@ -2715,7 +2715,7 @@ def trace(
         leaf-level preview. Supported by explicit ``backend="jax"`` and
         ``backend="tinygrad"`` only.
     episode:
-        Torch-only episode capture declaration (``EpisodeSpec``).
+        Torch-only episode capture declaration (``EpisodeOptions``).
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
     on_zero_fire:
@@ -2967,7 +2967,7 @@ def _trace_torch_model(
         | None
         | MissingType
     ) = MISSING,
-    episode: EpisodeSpec | None = None,
+    episode: EpisodeOptions | None = None,
     capture_output_structure: bool | MissingType = MISSING,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,

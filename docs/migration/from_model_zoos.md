@@ -38,11 +38,11 @@ tl.extract_dataset(
     stimuli,
     ["layer4"],
     batch_size=3,
-    output_dir=output_dir,
+    path=output_dir,
     transform={"layer4": T.chain(T.flatten(), T.srp(16, seed=0))},
     progress=False,
 )
-loaded = tl.load_extraction(output_dir)
+loaded = tl.load(output_dir)
 projected = torch.as_tensor(loaded.activations["layer4"])
 RESULT = (tuple(projected.shape), bool(torch.isfinite(projected).all()))
 ```

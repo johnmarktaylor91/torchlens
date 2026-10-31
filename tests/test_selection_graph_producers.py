@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._io.bundle import save as _save_bundle
 from torchlens.selection import SelectionError
 
 
@@ -430,11 +431,11 @@ def test_slice_offers_no_capture_capabilities(log) -> None:
 
 
 def test_slice_save_refuses_typed(log, tmp_path) -> None:
-    """tl.save on a slice refuses slice_save_unsupported with the remedy."""
+    """Trace.save on a slice refuses slice_save_unsupported with the remedy."""
 
     view = log.between("linear_1_1", "add_1_5")
     with pytest.raises(SelectionError) as excinfo:
-        tl.save(view, str(tmp_path / "slice_bundle"))
+        _save_bundle(view, str(tmp_path / "slice_bundle"))
     assert excinfo.value.fields["code"] == "slice_save_unsupported"
     assert "source_trace" in str(excinfo.value)
 

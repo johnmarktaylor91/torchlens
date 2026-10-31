@@ -9,7 +9,7 @@ Covers DoR 4.3-4.6 plus the binding reviewer notes:
 * runtime validation at append AND fold; fail-closed target resolution,
 * sealed-source refusal vs working-projection acceptance (DoR 4.5.5),
 * seal watermark dual-stamp incl. the pre-seal projection clone (S-N2) and
-  the ``copy_for_replay`` seq-filter (no double-application),
+  the ``_copy_for_replay`` seq-filter (no double-application),
 * multi-domain by-label resolution with the target_seq cross-check gated to
   single-domain journals (O-N6),
 * concat: lane-local domain validation, target_seq rebind via the merge seq
@@ -256,7 +256,7 @@ def test_sealed_source_refuses_working_projection_accepts(
         journal.append_amendment(
             amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
         )
-    working = journal.copy_for_replay()
+    working = journal._copy_for_replay()
     assert working.amendments_sealed is False
     assert working.core_seal_watermark == journal.core_seal_watermark
     working_target = working.op_event_by_label_raw[target.label_raw]
@@ -284,12 +284,12 @@ def test_watermark_filters_seeded_copies_only(
     )
 
     # Plain structural copy: the whole lane rides along.
-    plain = journal.copy_for_replay()
+    plain = journal._copy_for_replay()
     assert [a.seq for a in plain.op_amendments] == [1, 2]
 
     # Folded-seed copy: seal-consumed amendments are filtered out; genuinely
     # post-seal knowledge survives.
-    seeded = journal.copy_for_replay(projected_op_events=folded_at_seal)
+    seeded = journal._copy_for_replay(projected_op_events=folded_at_seal)
     assert [a.seq for a in seeded.op_amendments] == [2]
     # And the surviving amendment still folds on the copy.
     assert seeded.amended_op_record(second.label_raw).intervention_replaced
@@ -303,7 +303,7 @@ def test_multi_domain_resolves_by_label_last_occurrence(
     folded = list(journal.amended_op_records())
     # Simulate a multi-pass concatenated projection: the same sealed fold
     # twice — colliding seqs, duplicate labels, no single seq domain.
-    seeded = journal.copy_for_replay(projected_op_events=folded + folded)
+    seeded = journal._copy_for_replay(projected_op_events=folded + folded)
     assert seeded.single_seq_domain is False
     target = folded[1]
     # target_seq disagreement is NOT cross-checked in a multi-domain journal
@@ -587,7 +587,7 @@ def test_working_projection_of_a_sealed_journal_accepts_forward_appends(
     journal = _fresh_journal(leg_templates["decomposed"])
     journal.core_seal_watermark = journal.amendment_seq
     journal.amendments_sealed = True
-    working = journal.copy_for_replay()
+    working = journal._copy_for_replay()
     assert working.amendments_sealed is False
     template = journal.op_events[0]
     working.append(_clone_op_event_for_replay(template))

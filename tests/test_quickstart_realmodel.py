@@ -16,11 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    SynthesizedValueReadWarning,
-    state_dict_hash,
-    trace_input_provenance,
-)
+from torchlens.quickstart import SynthesizedValueReadWarning, trace_input_provenance
+from torchlens.quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 pytestmark = pytest.mark.heavy
@@ -126,7 +123,7 @@ class TestGpt2Rungs:
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
 
         path = tmp_path / "gpt2_declared.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         loaded_provenance = trace_input_provenance(loaded)
         assert loaded_provenance is not None

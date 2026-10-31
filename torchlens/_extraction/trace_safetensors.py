@@ -7,7 +7,7 @@ document in the safetensors header. ``tl.io.read_safetensors(path)`` reads it
 back. The file holds no pickle: safetensors stores raw tensor bytes plus a
 string header, so reading it never executes code.
 
-Source metadata passes through ``tl.save``'s own source-privacy policy (at
+Source metadata passes through ``Trace.save``'s own source-privacy policy (at
 its default: paths reduced to basenames), so no host path reaches the file.
 Metadata follows the writer contract of record (``writer_contract()``): for
 the ``trace`` record and every ``op`` record, each KEEP-policy field whose
@@ -366,7 +366,7 @@ def _storable(tensor: Any) -> bool:
 
 
 def _portable_trace_state(trace: Any) -> dict[str, Any]:
-    """Return the Trace's state under ``tl.save``'s source-privacy policy.
+    """Return the Trace's state under ``Trace.save``'s source-privacy policy.
 
     The same policy bodies a portable save applies (at its default,
     ``include_source=True``): source-file paths reduce to bare basenames,
@@ -473,7 +473,7 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
         "writer_contract_digest": writer_contract_digest(contract),
         "torchlens_version": __version__,
         "records": ["trace", "op"],
-        "source_policy": "tl.save default: source text kept, source paths reduced to basenames",
+        "source_policy": "Trace.save default: source text kept, source paths reduced to basenames",
         "capture_honesty": capture_honesty_facts(trace),
         "op_labels": list(trace.op_labels),
         "trace": trace_fields,

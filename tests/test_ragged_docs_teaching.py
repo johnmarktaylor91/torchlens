@@ -27,7 +27,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -94,7 +94,7 @@ def episode_log():
     trace = tl.trace(
         runner,
         torch.tensor([[1, 2]]),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     try:
         yield trace

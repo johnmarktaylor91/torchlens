@@ -36,7 +36,7 @@ def _traced():
 
 def _roundtrip(trace, tmp_path, name):
     path = tmp_path / f"{name}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     return tl.load(path)
 
 

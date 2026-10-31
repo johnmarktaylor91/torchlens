@@ -366,8 +366,8 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
         build_sparse_run_descriptor,
         preflight_sparse_run_descriptor,
     )
+    from torchlens._runnable import ResolverStatus
     from torchlens.errors import ReattachError
-    from torchlens.runnable import ResolverStatus
 
     x = torch.randn(2, 4)
     trace = tl.trace(
@@ -387,7 +387,7 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
     assert statuses["FloatTensor"] == (ResolverStatus.UNAVAILABLE, "nonforward_callable_denied")
     assert statuses["Variable"][0] is ResolverStatus.UNAVAILABLE
     path = tmp_path / "legacy.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
     with pytest.raises(ReattachError):
         tl.load(path).run(inputs=x, seed=0)
 

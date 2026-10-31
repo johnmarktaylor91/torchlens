@@ -259,7 +259,7 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     }
 
     default_path = tmp_path / "default.tlspec"
-    tl.save(trace, default_path)
+    trace.save(default_path)
     loaded = tl.load(default_path)
     # tlspec v8: the telemetry annotation section persists on a plain save.
     assert "_kernel_telemetry" in loaded.annotations
@@ -275,8 +275,8 @@ def test_kernel_rows_persist_and_registrations_are_retired() -> None:
     assert "_TelemetryPayload" not in inventory
     # v8 telemetry keys retired; the standing row is C01's gated sidecar key.
     assert inventory.get("Trace.annotations", ()) in ((), ("sidecar",))
-    assert set(KernelLaunch.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
-    assert set(telemetry._TelemetryPayload.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
+    assert set(KernelLaunch._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
+    assert set(telemetry._TelemetryPayload._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
 
 
 def _imported_modules(path: Path) -> set[str]:

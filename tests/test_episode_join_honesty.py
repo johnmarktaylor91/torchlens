@@ -15,7 +15,7 @@ import torchlens as tl
 from torchlens import _capture_honesty
 from torchlens.capture import _episode_ledger as episode_ledger_module
 from torchlens.capture._episode_ledger import episode_step_join_claim
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -69,7 +69,7 @@ def _capture(runner_cls, **spec_kwargs):
     return tl.trace(
         runner_cls(model, 4),
         torch.tensor([[1, 2, 3]]),
-        episode=EpisodeSpec(stepped_module=model, n_steps=4, **spec_kwargs),
+        episode=EpisodeOptions(stepped_module=model, num_steps=4, **spec_kwargs),
     )
 
 

@@ -23,8 +23,8 @@ import torchlens as tl
 from torchlens._io import MIN_TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
 from torchlens._io.payload_codec import get_payload_codec
+from torchlens._runnable import NumericAttestationStatus
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus
 from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
 
 _CAP = CaptureOptions(

@@ -969,7 +969,7 @@ def test_tlspec_load_adopts_every_record_kind() -> None:
         return found
 
     with tempfile.TemporaryDirectory() as tmp:
-        tl.save(trace, tmp + "/t.tlspec")
+        trace.save(tmp + "/t.tlspec")
         loaded = tl.load(tmp + "/t.tlspec")
 
     core = loaded.__dict__.get("_trace_core")

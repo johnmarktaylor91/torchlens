@@ -216,16 +216,16 @@ def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
 
     model, x = chain
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    tl.save(logged, str(tmp_path / "logged.tlspec"))
+    logged.save(str(tmp_path / "logged.tlspec"))
     loaded = tl.load(str(tmp_path / "logged.tlspec"))
     assert len(loaded.injected_ops) == len(logged.injected_ops)
     with pytest.raises(Exception) as excinfo:
-        tl.save(logged, str(tmp_path / "run.tlspec"), level="runnable")
+        logged.save(str(tmp_path / "run.tlspec"), level="runnable")
     assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
     # an armed-but-unfired capture (no injected ops) saves normally
     clean = tl.trace(model, x, capture=_LOGGED)
     assert len(clean.injected_ops) == 0
-    tl.save(clean, str(tmp_path / "clean.tlspec"))
+    clean.save(str(tmp_path / "clean.tlspec"))
 
 
 def test_injection_validation_tripwire_unchanged(chain) -> None:
@@ -285,7 +285,7 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     """FIX-2 enrollment pin: the intervene fire counter has a real scrub policy.
 
     ``_tl_intervene_selector_fire_count`` sat in the external-write ledger
-    with NO ``PORTABLE_STATE_SPEC`` row, so any save reached while the
+    with NO ``_PORTABLE_STATE_SPEC`` row, so any save reached while the
     counter was live (streamed ``to_disk`` finalize runs before the settle
     epilogue pops it; deferred backward selectors keep it past ``trace()``)
     refused with ``TorchLensIOError`` and downgraded runnable honesty
@@ -303,7 +303,7 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     from torchlens.data_classes.trace import Trace
 
     name = "_tl_intervene_selector_fire_count"
-    assert Trace.PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
+    assert Trace._PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
     assert TRACE_FIELD_OWNERSHIP[name] == "session"
     assert name not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
 

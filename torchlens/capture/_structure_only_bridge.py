@@ -130,8 +130,8 @@ def compute_bound_state_digests(values: Mapping[str, Any]) -> dict[str, str]:
     """
 
     from .. import hash as tl_hash
+    from .._runnable import RunnableErrorCode
     from ..errors.runnable import StateBindingError
-    from ..runnable import RunnableErrorCode
 
     digests: dict[str, str] = {}
     for name, value in values.items():

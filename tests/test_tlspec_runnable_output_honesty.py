@@ -31,8 +31,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _capture(model: nn.Module, x: Any) -> Any:
@@ -598,13 +598,13 @@ def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: 
     x = torch.arange(4.0) + 1.0
     trace = _capture(model, x)
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, str(tmp_path / f"{kind}.tlspec"), level="runnable")
+        trace.save(str(tmp_path / f"{kind}.tlspec"), level="runnable")
     codes = {diag.code.value for diag in excinfo.value.fields["diagnostics"]}
     assert "missing_output_container_contract" in codes
     # No runnable artifact was written.
     assert not (tmp_path / f"{kind}.tlspec").exists()
     # Ordinary analysis save remains available for the same capture.
-    tl.save(trace, str(tmp_path / f"{kind}_analysis.tlspec"), level="portable")
+    trace.save(str(tmp_path / f"{kind}_analysis.tlspec"), level="portable")
 
 
 _R35_LOSSLESS_OUTPUT_BUILDERS = {
@@ -626,7 +626,7 @@ def test_r35_lossless_outputs_still_save_and_run_verified(tmp_path: Path, kind: 
     expected = model(x)
     trace = _capture(model, x)
     path = tmp_path / f"{kind}.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert type(result.output) is type(expected)

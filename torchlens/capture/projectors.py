@@ -468,9 +468,9 @@ class RefreshProjector:
         "computational graph changed" term, so historical callers survive.
         """
 
+        from .._runnable import RunnableErrorCode
         from ..errors.runnable import BufferSinkRoutingError
         from ..partial import PartialTrace
-        from ..runnable import RunnableErrorCode
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "
@@ -519,7 +519,7 @@ class RefreshProjector:
         evidence key still governs).
         """
 
-        from ..runnable import is_mode_sensitive_qualname
+        from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
         qualname = getattr(sink_layer, "buffer_source_func_name", None)
@@ -992,7 +992,7 @@ class RecordingProjector:
                 and source_core.amendment_watermark is not None
             ):
                 capture_events.core_seal_watermark = source_core.amendment_watermark
-            capture_events = capture_events.copy_for_replay(projected_op_events=all_events)
+            capture_events = capture_events._copy_for_replay(projected_op_events=all_events)
             capture_events.raw_layer_counter = max(
                 (event.raw_index for event in all_events), default=0
             )

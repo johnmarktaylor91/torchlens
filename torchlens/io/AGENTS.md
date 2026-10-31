@@ -8,7 +8,7 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
 ## Public surface
 
 - `load` / `save` — re-exported from `_io.bundle` (also top-level `tl.load` /
-  `tl.save`).
+  `Trace.save`).
 - `detect_tlspec_format(path)` / `inspect_tlspec(path)` — artifact inspection without
   full rehydration; metadata paths reject symlinks
   (`_reject_symlinked_metadata_path`).
@@ -16,14 +16,14 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
   keys are tolerated for structural analysis but execution resolution denies foreign
   imports unless explicitly trusted (`trust_custom_callables=True`, or better the
   narrow `allowed_custom_callable_modules={...}`).
-- `list_logs()` / `reset_naming_counter()` / `log_model_metadata()` — admin
-  helpers (`get_model_metadata` was removed; it was an alias of
-  `log_model_metadata`).
+- `list_traces()` / `reset_naming_counter()` — admin
+  helpers (`log_model_metadata` and `get_model_metadata` were removed; a metadata-only
+  capture is `tl.trace(model, x, save="none")`).
 - `save_intervention(...)` — write an intervention recipe (`Trace.save_intervention`
   routes here).
 - `TraceState` — the runtime state enum (`torchlens._trace_state`).
 - `suppress_mutate_warnings()` — context manager silencing mutation warnings.
-- `PayloadLoadHints` / `JaxPayloadLoadHint`, `TorchLensIOError`, `rehydrate_nested`,
+- `PayloadLoadHints` / `JaxPayloadLoadHint`, `TorchLensIOError`, `materialize_nested`,
   `cleanup_tmp` — re-exports from `_io`.
 
 ## Gotchas

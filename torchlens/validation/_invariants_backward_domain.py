@@ -395,7 +395,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     obligation, not this one).
 
     The amendment lane rides its OWN counter and is checked in the same spirit,
-    but only for shape: ``copy_for_replay`` legitimately filters it to
+    but only for shape: ``_copy_for_replay`` legitimately filters it to
     ``seq > core_seal_watermark``, so a non-empty lane must be strictly
     increasing, counter-bounded, and CONTIGUOUS, starting at either 1 (the
     unfiltered source) or ``core_seal_watermark + 1`` (a filtered projection).
@@ -490,7 +490,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # legitimate (released, never amended, or fully folded at the seal).
     amendments = list(getattr(capture_events, "op_amendments", ()) or ())
     if not amendments:
-        # A released or never-amended lane; ``copy_for_replay`` may also filter
+        # A released or never-amended lane; ``_copy_for_replay`` may also filter
         # every carried amendment away when the seal folded all of them.
         return
     amendment_counter = int(getattr(capture_events, "amendment_seq", 0) or 0)

@@ -27,12 +27,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     WitnessCompleteness,
 )
+from torchlens.options import CaptureOptions
 
 
 class DDScale(nn.Module):

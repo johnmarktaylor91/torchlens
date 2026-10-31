@@ -39,6 +39,23 @@ from ._fast_live_until import (
     truncate_after,
 )
 from ._fast_sparse_state import _state_mutating_call_ids
+from ._runnable import (
+    ContractCheck,
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    ReadinessReport,
+    ReadinessStatus,
+    RunnableCallDescriptor,
+    RunnableErrorCode,
+    RunProvider,
+    RunResult,
+    SparseRunDescriptor,
+    StateSource,
+    TensorSlotDescriptor,
+    TensorSlotRole,
+    mark_trace_path_status,
+)
 from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
@@ -91,23 +108,6 @@ from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_
 from .data_classes._trace_accessors import boundary_label_rows
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 from .ir.container import ContainerSpec, rebuild_container_from_spec
-from .runnable import (
-    ContractCheck,
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-    ReadinessReport,
-    ReadinessStatus,
-    RunnableCallDescriptor,
-    RunnableErrorCode,
-    RunProvider,
-    RunResult,
-    SparseRunDescriptor,
-    StateSource,
-    TensorSlotDescriptor,
-    TensorSlotRole,
-    mark_trace_path_status,
-)
 from .utils._torch_compat import tensor_has_named_dims
 from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 

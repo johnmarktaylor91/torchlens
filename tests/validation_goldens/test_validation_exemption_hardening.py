@@ -1200,7 +1200,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
         check_func_call_id_invariant(trace)
 
     path = str(tmp_path / "forged.tlspec")
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert getattr(loaded, "_loaded_from_bundle", False) is True
     with pytest.raises(MetadataInvariantError, match="func_call_id"):
@@ -1230,7 +1230,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
     check_func_call_id_invariant(trace)
 
     path = str(tmp_path / "genuine.tlspec")
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert getattr(loaded, "_loaded_from_bundle", False) is True
     check_func_call_id_invariant(loaded)

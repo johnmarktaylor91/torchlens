@@ -21,10 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import PathDivergenceError
 from torchlens.ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, declared_leaf_slots
 from torchlens.options import CaptureOptions
-from torchlens.runnable import DivergencePolicy, PathFaithfulness, RunnableErrorCode
 
 
 class _TupleOut(nn.Module):
@@ -137,7 +137,7 @@ def test_opaque_root_output_names_its_reason() -> None:
     model = _SetOut()
     with pytest.warns(UserWarning):
         trace = tl.trace(model, x)
-    result = trace.run(inputs=x, on_divergence="return_diverged")
+    result = trace.run(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     check = _failed_check(result.report, "live_output_reconstruction")
     assert dict(check.diagnostic.details)["reason"] == "opaque_root"
@@ -221,7 +221,7 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     x = torch.randn(3, 8)
     trace = tl.trace(model, x)
     flipped = torch.full((3, 8), -5.0)
-    result = trace.run(inputs=flipped, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    result = trace.run(inputs=flipped, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.poisoned is True
     assert result.output is None
@@ -233,7 +233,7 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     from torchlens.errors import PoisonedRunError
 
     with pytest.raises(PoisonedRunError):
-        tl.save(result.trace, "/nonexistent/never_written.tlspec")
+        result.trace.save("/nonexistent/never_written.tlspec")
     # The SOURCE trace is untouched: a matching-input run still verifies.
     again = trace.run(inputs=x)
     assert again.report.path_faithfulness is PathFaithfulness.VERIFIED

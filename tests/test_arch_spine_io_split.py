@@ -43,7 +43,7 @@ _FACADE_SPELLINGS = (
     "read_tlspec_version",
     "default_fill_state",
     "coerce_container_typed_state",
-    "rehydrate_nested",
+    "materialize_nested",
     "validate_prerelease_state",
     "_LEGACY_THREAD_WARNING_EMITTED",
 )

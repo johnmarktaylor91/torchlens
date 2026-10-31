@@ -116,7 +116,7 @@ def _external_writes(tree: ast.AST) -> list[tuple[str, int, str]]:
         # ``trace.__dict__["_x"] = v`` and ``trace.__dict__.setdefault("_x",
         # ...)`` attach the same undeclared field while dodging both the
         # attribute-assign scan and setattr (grind-r6 b5 R45:
-        # _backward_grad_fn_type_counter broke tl.save through exactly this
+        # _backward_grad_fn_type_counter broke Trace.save through exactly this
         # spelling).
         for target in targets:
             if (
@@ -275,7 +275,7 @@ def test_gate_scanner_detects_dict_spellings_and_loaded_trace() -> None:
     ``trace.__dict__["_x"] = v`` and ``trace.__dict__.setdefault("_x", ...)``
     attach the same undeclared field as an attribute assignment while dodging
     the assign/setattr scans (this is exactly how
-    ``_backward_grad_fn_type_counter`` broke ``tl.save``), and
+    ``_backward_grad_fn_type_counter`` broke ``Trace.save``), and
     ``loaded_trace``-based writes rooted outside the original 8-identifier
     allowlist were invisible entirely.
     """

@@ -18,7 +18,7 @@ from typing import Any
 
 from ._errors import refuse
 from ._mpl import ATTENTION_CMAP, colorbar, figure, require_matplotlib, save_figure
-from ._records import Artifact, PredictionTable, PredictionTrajectory
+from ._records import PredictionTable, PredictionTrajectory, SavedFigure
 
 __all__ = [
     "prediction_table",
@@ -165,7 +165,7 @@ def render_prediction_ribbon(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the layer-prediction ribbon (Ecco layer predictions, matched).
 
     Layers on the y axis in execution order, top-k token slots on the x
@@ -225,15 +225,15 @@ def render_prediction_ribbon(
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=6, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
     del matplotlib
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="layer prediction ribbon",
         disclosure_lines=tuple(disclosures),
         provenance=f"lens: {trajectory.lens_source}",
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )
 
 
@@ -242,7 +242,7 @@ def render_answer_trajectory(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the tracked answer token's probability + rank panels.
 
     Parameters
@@ -288,15 +288,15 @@ def render_answer_trajectory(
     )
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=6, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="answer trajectory",
         disclosure_lines=tuple(disclosures),
         provenance=f"lens: {trajectory.lens_source}",
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )
 
 
@@ -382,7 +382,7 @@ def render_prediction_table(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the top-k table to paginated paper pages (whole positions).
 
     Parameters
@@ -435,13 +435,13 @@ def render_prediction_table(
             footer = f"page {page + 1} of {n_pages}\n" + footer
         fig.text(0.01, 0.01, footer, fontsize=6, va="bottom")
         written.append(save_figure(fig, target, svg_fonttype=svg_fonttype))
-    return Artifact(
+    return SavedFigure(
         paths=tuple(written),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="top-k tokens per position",
         disclosure_lines=tuple(disclosures),
         provenance=table.provenance,
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=n_pages,
+        num_pages=n_pages,
     )

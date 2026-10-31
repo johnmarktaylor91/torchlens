@@ -253,7 +253,7 @@ class TestTraceGC:
 
         assert trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] is accessor
         assert trace.module_calls is accessor
-        assert Trace.PORTABLE_STATE_SPEC[_TRACE_MODULE_CALL_ACCESSOR_ATTR] is FieldPolicy.DROP
+        assert Trace._PORTABLE_STATE_SPEC[_TRACE_MODULE_CALL_ACCESSOR_ATTR] is FieldPolicy.DROP
 
     @pytest.mark.heavy
     def test_populated_module_call_accessor_does_not_pin_trace(self):

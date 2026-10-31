@@ -172,7 +172,7 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "helper_name": FieldPolicy.KEEP,
         "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
@@ -258,7 +258,7 @@ class Edit:
         Builtin factories are local closures derived entirely from the
         stable ``(helper_name, args, kwargs)`` identity; ``__setstate__``
         rebuilds them through the same builtin registry ``tl.load`` uses,
-        so plain ``pickle`` and ``tl.save`` agree on helper-carrying specs.
+        so plain ``pickle`` and ``Trace.save`` agree on helper-carrying specs.
         ``opaque_audit`` factories (load-time raising placeholders) drop to
         the canonical factory-less audit-only form.
         """
@@ -437,7 +437,7 @@ REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
 class FireRecord:
     """Runtime record for one intervention firing."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "target_label": FieldPolicy.KEEP,
         "call_label": FieldPolicy.KEEP,
         "func_call_id": FieldPolicy.KEEP,

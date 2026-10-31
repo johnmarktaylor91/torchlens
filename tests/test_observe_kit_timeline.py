@@ -229,7 +229,7 @@ def test_export_door_writes_v2_and_v1_stays_compatible(tmp_path) -> None:
         assert "deprecation" in v1_payload
         assert v1_payload["events"], "the v1 compatibility exporter still serves rows"
         assert v2_payload["schema"] == "torchlens.memory_timeline.v2"
-        assert "memory_timeline_v2" in export.export_targets()
+        assert "memory_timeline_v2" in export.list_targets()
     finally:
         captured.cleanup()
 

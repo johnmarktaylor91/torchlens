@@ -76,7 +76,7 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
 
     trace = _build_trace()
     path = tmp_path / "current.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", ArtifactSchemaAgeWarning)
@@ -138,7 +138,7 @@ def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
 
     trace = _build_trace()
     path = tmp_path / "no_kind.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["kind"] == "trace"
@@ -157,7 +157,7 @@ def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Pat
 
     trace = _build_trace()
     path = tmp_path / "no_kind_below_floor.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     del manifest["kind"]
@@ -178,7 +178,7 @@ def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
 
     trace = _build_trace()
     path = tmp_path / "forged.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
@@ -197,7 +197,7 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
 
     trace = _build_trace()
     path = tmp_path / "forged.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
@@ -231,7 +231,7 @@ def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> Non
 
     trace = _build_trace()
     path = tmp_path / "between_floor.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
     _stamp_between_floor(path, MIN_TLSPEC_VERSION)
 
@@ -262,7 +262,7 @@ def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
 
     trace = _build_trace()
     path = tmp_path / "forged_release.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["tlspec_version"] == TLSPEC_VERSION

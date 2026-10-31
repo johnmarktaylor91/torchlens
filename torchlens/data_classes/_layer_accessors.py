@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class OpAccessor(Accessor["Op"]):
     """Scoped dict-like accessor for the Op entries owned by one Layer."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
@@ -171,7 +171,7 @@ class LayerAccessor(Accessor["Layer"]):
     Available as ``trace.layers``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,

@@ -45,8 +45,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
+from torchlens._runnable import RunnableErrorCode
 from torchlens.merged import MergedErrorCode
-from torchlens.runnable import RunnableErrorCode
 
 # Per-test smoke marks (the former module-level pytestmark was additive
 # with the census's heavy re-tier and tripped the marker-combination
@@ -536,7 +536,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:
