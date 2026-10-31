@@ -54,7 +54,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     assert spec.capabilities.payload_materialization == (
         tf_capabilities.supports_payload_materialization
     )
-    assert spec.capabilities.streaming == tf_capabilities.supports_streaming
+    assert spec.capabilities.has_streaming == tf_capabilities.supports_streaming
     assert spec.capabilities.input_container_structure == (
         tf_capabilities.input_container_structure
     )

@@ -174,7 +174,7 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
     from torchlens.backends import BackendCapabilityConformanceError
 
     spec = tl.backends.spec("mlx")
-    object.__setattr__(spec.capabilities, "streaming", True)
+    object.__setattr__(spec.capabilities, "has_streaming", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
             tl.trace(
@@ -184,7 +184,7 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
                 storage=object(),
             )
     finally:
-        object.__setattr__(spec.capabilities, "streaming", False)
+        object.__setattr__(spec.capabilities, "has_streaming", False)
 
 
 def test_mlx_validation_loaded_payload_stripped_trace_is_unavailable() -> None:
