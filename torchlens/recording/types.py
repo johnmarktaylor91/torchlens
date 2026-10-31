@@ -32,6 +32,7 @@ __all__ = [
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
     from .._data_classes.trace import Trace
+    from ..viz._drawing import Drawing
 
 
 def _backfill_cooked_ancestry(events: Any) -> None:
@@ -370,12 +371,20 @@ class DryRun:
 
         return to_pandas(self)
 
-    def draw(self, **kwargs: Any) -> str:
-        """Render a flat Graphviz graph of trace operation events."""
+    def draw(self, **kwargs: Any) -> Drawing:
+        """Render a flat Graphviz graph of trace operation events.
+
+        Returns
+        -------
+        Drawing
+            The picture; ``str()`` of it is the DOT source.
+        """
 
         from .._visualization.fastlog_live import draw
+        from ..viz._drawing import Drawing
 
-        return draw(self, **kwargs)
+        source = draw(self, **kwargs)
+        return Drawing(dot=source, file_format=str(kwargs.get("vis_fileformat", "pdf")))
 
     def summary(self) -> str:
         """Return a concise human-readable dry-run summary."""
