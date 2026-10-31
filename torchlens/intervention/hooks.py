@@ -13,6 +13,7 @@ import torch
 from ..ir.selector_eval import (
     _UPFRONT_UNSUPPORTED_KINDS,
     _capability_error,
+    _grad_fn_forward_op,
     evaluate,
     live_label_error_message,
     looks_like_finalized_label,
@@ -489,6 +490,30 @@ def _needs_tensor_backward_adapter(
     return not bool(tuple_callback_params & set(signature.parameters))
 
 
+def _backward_context_op(grad_fn_handle: Any) -> Any:
+    """Return the forward record a live backward hook context describes.
+
+    ``GradFn.op`` names the paired layer, which on a multi-pass layer is the
+    aggregate ``Layer`` whose per-pass fields refuse; the context snapshots
+    per-pass fields, so it describes the one pass this GradFn differentiates.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn receiving the backward callback.
+
+    Returns
+    -------
+    Any
+        The paired pass-level op, the GradFn's op, or ``grad_fn_handle`` itself
+        when it carries no ``op``.
+    """
+
+    if not hasattr(grad_fn_handle, "op"):
+        return grad_fn_handle
+    return _grad_fn_forward_op(grad_fn_handle)
+
+
 def _adapt_tensor_backward_hook(
     hook_callable: HookCallable,
     helper_spec: HelperSpec | None,
@@ -529,7 +554,7 @@ def _adapt_tensor_backward_hook(
             context = make_hook_context(
                 name=helper_name,
                 direction="backward",
-                layer_log=getattr(grad_fn_handle, "op", grad_fn_handle),
+                layer_log=_backward_context_op(grad_fn_handle),
                 run_ctx=run_ctx,
                 args=(grad,),
                 kwargs={

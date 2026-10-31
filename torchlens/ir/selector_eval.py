@@ -1230,7 +1230,8 @@ def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
     if kind == "not" and isinstance(selector, NotSelector):
         return not evaluate(selector.selector, site, lifecycle="site")
     if kind in DIRECTION_AGNOSTIC_KINDS:
-        if site.op is not None and _evaluate_subject(selector, site.op, "site"):
+        forward_op = _grad_fn_forward_op(site)
+        if forward_op is not None and _evaluate_subject(selector, forward_op, "site"):
             return True
         return any(
             _evaluate_subject(selector, alias, "site") for alias in _grad_fn_boundary_aliases(site)
@@ -1263,6 +1264,35 @@ def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
             for call in _grad_fn_call_values(site)
         )
     return False
+
+
+def _grad_fn_forward_op(site: Any) -> Any:
+    """Return the forward op one GradFn site pairs with, at its own pass.
+
+    ``GradFn.op`` resolves the paired layer label, which on a multi-pass layer
+    is the multi-pass ``Layer`` itself; its per-pass fields (``label``) refuse
+    by design. A GradFn belongs to exactly one pass, so the pass whose
+    ``grad_fn_object_id`` is this GradFn's autograd identity is the subject
+    every forward selector kind evaluates against.
+
+    Parameters
+    ----------
+    site:
+        GradFn site.
+
+    Returns
+    -------
+    Any
+        The paired pass-level op, or ``None`` when the GradFn has no op.
+    """
+
+    from torchlens.data_classes.grad_fn import _pass_op_for_grad_fn
+
+    op = site.op
+    pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
+    # No pass carries this autograd identity: keep the multi-pass Layer so its
+    # typed per-pass refusal fires rather than silently matching nothing.
+    return op if pass_op is None else pass_op
 
 
 def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
