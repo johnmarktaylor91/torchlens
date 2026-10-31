@@ -126,7 +126,7 @@ def test_trace_backed_population_records_address_identity() -> None:
     """D11: trace-backed populations default to the ADDRESS digest kind."""
 
     class _TraceLike:
-        trace_label = "toy"
+        name = "toy"
         model_class_qualname = "Toy"
         random_seed = 7
         num_operations = 3

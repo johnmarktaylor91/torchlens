@@ -424,7 +424,7 @@
       "outcome": {
         "failed": false,
         "halt_frontier": "relu_1_2",
-        "halt_reason": "relu_1_2",
+        "stop_reason": "relu_1_2",
         "halted": true,
         "output_layers": [
           "output_1"

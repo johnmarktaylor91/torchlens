@@ -44,9 +44,9 @@ TRACE_COMPONENT_VOCABULARY = frozenset(
 )
 
 TRACE_FIELD_OWNERSHIP: dict[str, str] = {
-    "trace_label": "header",
+    "name": "header",
     "model_class_name": "header",
-    "model_label": "header",
+    "model_name": "header",
     "tlspec_version": "header",
     "_tracing_finished": "header",
     "backend": "header",
@@ -112,7 +112,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "capture_thread_activity_detected": "witness",
     "capture_guard_passes": "witness",
     "halted": "witness",
-    "halt_reason": "witness",
+    "stop_reason": "witness",
     "halt_frontier": "witness",
     "_capture_outcome": "witness",
     "_capture_phase": "session",

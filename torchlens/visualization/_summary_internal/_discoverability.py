@@ -43,7 +43,7 @@ def format_discoverability_summary(
     lines = [
         "TorchLens Discoverability Summary",
         "Capture:",
-        f"  name: {getattr(trace, 'trace_label', None)!r}",
+        f"  name: {getattr(trace, 'name', None)!r}",
         f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
         *_input_preprocessing_lines(
@@ -472,7 +472,7 @@ def _parent_run_summary(trace: Trace) -> str:
     parent = parent_ref()
     if parent is None:
         return "collected"
-    return f"{getattr(parent, 'trace_label', None)!r} ({getattr(parent, 'model_class_name', None)})"
+    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, 'model_class_name', None)})"
 
 
 def _fork_chain_summary(trace: Trace) -> str:
@@ -489,7 +489,7 @@ def _fork_chain_summary(trace: Trace) -> str:
         Fork chain from root to current log.
     """
 
-    names = [str(getattr(trace, "trace_label", None))]
+    names = [str(getattr(trace, "name", None))]
     seen = {id(trace)}
     current = trace
     while True:
@@ -499,7 +499,7 @@ def _fork_chain_summary(trace: Trace) -> str:
         parent = parent_ref()
         if parent is None or id(parent) in seen:
             break
-        names.append(str(getattr(parent, "trace_label", None)))
+        names.append(str(getattr(parent, "name", None)))
         seen.add(id(parent))
         current = parent
     return " <- ".join(reversed(names))

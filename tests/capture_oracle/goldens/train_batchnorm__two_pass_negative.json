@@ -17,7 +17,7 @@
         "current": {
           "failed": false,
           "halt_frontier": null,
-          "halt_reason": null,
+          "stop_reason": null,
           "halted": false,
           "output_layers": [
             "output_1"

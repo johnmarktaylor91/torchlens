@@ -31939,7 +31939,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -33909,7 +33909,7 @@
    "mark_layer_depths": true,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_label": "TinyTransformer",
+   "model_name": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -34414,7 +34414,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "tinytransformer_N_fork_N",
+   "name": "tinytransformer_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [
@@ -66353,7 +66353,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -68323,7 +68323,7 @@
    "mark_layer_depths": true,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_label": "TinyTransformer",
+   "model_name": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -68889,7 +68889,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "tinytransformer_N",
+   "name": "tinytransformer_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [
@@ -100843,7 +100843,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -102813,7 +102813,7 @@
    "mark_layer_depths": true,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_label": "TinyTransformer",
+   "model_name": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -103326,7 +103326,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "tinytransformer_N_fork_N",
+   "name": "tinytransformer_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [
@@ -134065,7 +134065,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -136035,7 +136035,7 @@
    "mark_layer_depths": true,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_label": "TinyTransformer",
+   "model_name": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -136534,7 +136534,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "tinytransformer_N",
+   "name": "tinytransformer_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],

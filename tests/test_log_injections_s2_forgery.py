@@ -171,8 +171,8 @@ def test_graph_entangled_injected_row_refuses(tmp_path) -> None:
     def tamper(state) -> None:
         """Forge a dataflow edge onto the injected row."""
 
-        model_label = _model_rows(state)[0].layer_label
-        _injected_rows(state)[0].parents = [model_label]
+        model_name = _model_rows(state)[0].layer_label
+        _injected_rows(state)[0].parents = [model_name]
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_graph_entangled")
 

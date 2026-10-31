@@ -99,7 +99,7 @@ __all__ = [
 def _reference_display(reference: Any) -> str:
     """Return a compact reference identity for reprs/sources (never the trace)."""
 
-    label = getattr(reference, "trace_label", None)
+    label = getattr(reference, "name", None)
     return str(label) if label else "<reference trace>"
 
 

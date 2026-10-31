@@ -683,7 +683,7 @@
         "error_message": "capture-oracle intentional forward failure",
         "error_type": "RuntimeError",
         "failed": true,
-        "halt_reason": null,
+        "stop_reason": null,
         "halted": false,
         "last_event_func": null,
         "last_event_label": "relu_1_5_raw",

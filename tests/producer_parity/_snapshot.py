@@ -497,7 +497,7 @@ def _canon_manifest(canonizer: _Canonicalizer, value: Any, path: str) -> Any:
             rendered = _stable_key(key)
             if rendered in ARTIFACT_VOLATILE_KEYS or rendered in _ARTIFACT_TIMING_KEYS:
                 out[rendered] = _presence_marker(value[key])
-            elif rendered == "trace_label" and isinstance(value[key], str):
+            elif rendered == "name" and isinstance(value[key], str):
                 # per-process model-instance counter suffix; the semantic stem
                 # still compares strictly
                 out[rendered] = re.sub(r"_\d+$", "_<n>", value[key])

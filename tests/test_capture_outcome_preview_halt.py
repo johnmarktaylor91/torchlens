@@ -54,7 +54,7 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
     # An attested stamp, not a structural derivation.
     assert outcome.is_derived is False
     assert outcome.is_partial is True
-    assert outcome.reason == trace.halt_reason
+    assert outcome.reason == trace.stop_reason
     assert outcome.boundary_label == trace.halt_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
     assert outcome.num_committed_ops is not None
@@ -240,7 +240,7 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     trace = _halted_trace()
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
-        reason=trace.halt_reason,
+        reason=trace.stop_reason,
         boundary_label=trace.halt_frontier,
     )
     outcome = stamp_backend_finalized(trace)

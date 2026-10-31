@@ -415,7 +415,7 @@ def test_changed_composes_with_the_algebra(log, log_b):
 def test_repr_stability_pins(log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 
-    label = log_b.trace_label
+    label = log_b.name
     assert repr(tl.changed(log_b)) == (
         f"Selection[ACT](changed(vs={label!r}, above=0.0, below=None, by='abs', "
         "within=saved_sites))"

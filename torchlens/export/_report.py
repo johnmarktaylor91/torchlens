@@ -493,7 +493,7 @@ def _banner(log: Any, plan: _ArrayPlan) -> str:
     """Sticky identity + outcome banner; embed disclosure is mandatory."""
 
     kind = "PartialTrace (FAILED CAPTURE)" if _is_partial(log) else "Trace"
-    title = str(getattr(log, "trace_label", None) or getattr(log, "model_label", None) or kind)
+    title = str(getattr(log, "name", None) or getattr(log, "model_name", None) or kind)
     status = getattr(getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN")
     if plan.stripped:
         embed_note = "share_safe: every embedded value stripped"
@@ -638,7 +638,7 @@ def write_report(
         f"<pre>{escape(_scrub(_safe_json(manifest)))}</pre></details></section>"
     )
 
-    title = escape(_scrub(str(getattr(log, "model_label", None) or "TorchLens report")))
+    title = escape(_scrub(str(getattr(log, "model_name", None) or "TorchLens report")))
     document = (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         + _CSP_META
@@ -691,7 +691,7 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
         # getattr spelling: the layer lint's torch-privates text scan would
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),
-        "model": _scrub(str(getattr(log, "model_label", "unknown"))),
+        "model": _scrub(str(getattr(log, "model_name", "unknown"))),
         "backend": str(getattr(log, "backend", "unknown")),
         "outcome": getattr(
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"

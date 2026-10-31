@@ -31,7 +31,7 @@ def format_model_repr(trace: Trace) -> str:
     tracing_finished = getattr(trace, "_tracing_finished", True)
     if not tracing_finished:
         return (
-            f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+            f"Trace(name={getattr(trace, 'name', None)!r}, "
             f"model_class_qualname={model_class_name!r}, layers={_live_op_count(trace)}, "
             f"state={state})"
         )
@@ -47,7 +47,7 @@ def format_model_repr(trace: Trace) -> str:
 
         structure_note = f", structure_only={claim_status_for(trace).value.upper()}"
     return (
-        f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+        f"Trace(name={getattr(trace, 'name', None)!r}, "
         f"model_class_qualname={model_class_name!r}, layers={len(layer_logs)}, "
         f"state={state}{structure_note})"
     )

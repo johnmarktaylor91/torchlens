@@ -540,7 +540,7 @@ def _recording_from_records(
         predicate_failures=[],
         num_predicate_failure_overflows=int(metadata.get("predicate_failure_overflow_count", 0)),
         is_stopped=halted,
-        stop_reason=metadata.get("halt_reason"),
+        stop_reason=metadata.get("stop_reason"),
         stops_by_pass={
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()

@@ -944,7 +944,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "status": product.status,
             "failed": product.is_failed,
             "halted": product.is_stopped,
-            "halt_reason": product.stop_reason,
+            "stop_reason": product.stop_reason,
             "n_ops_completed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
@@ -977,7 +977,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
         "status": "halted" if halted else "complete",
         "failed": False,
         "halted": halted,
-        "halt_reason": getattr(product, "halt_reason", None),
+        "stop_reason": getattr(product, "stop_reason", None),
         "halt_frontier": getattr(product, "halt_frontier", None),
         "output_layers": list(getattr(product, "output_layers", ())),
     }

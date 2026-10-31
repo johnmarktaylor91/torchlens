@@ -751,7 +751,7 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
     halted = bool(state.get("halted"))
     inference_only = bool(state.get("inference_only"))
     if halted and finished:
-        reason = state.get("halt_reason")
+        reason = state.get("stop_reason")
         frontier = state.get("halt_frontier")
         return CaptureOutcome(
             status=CaptureStatus.STOPPED,
@@ -1104,7 +1104,7 @@ def settle_halted(
         # during the halted postprocess; the settled record mirrors them so
         # the boundary resolves through ``trace[...]`` on the finished
         # product. Raw-label boundaries stay only where postprocess never ran.
-        remapped_reason = getattr(trace, "halt_reason", None)
+        remapped_reason = getattr(trace, "stop_reason", None)
         if isinstance(remapped_reason, str):
             reason = remapped_reason
         remapped_frontier = getattr(trace, "halt_frontier", None)
@@ -1362,7 +1362,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         settle_failed(trace, None, swallowed)
         raise swallowed
     if bool(getattr(trace, "halted", False)):
-        reason = getattr(trace, "halt_reason", None)
+        reason = getattr(trace, "stop_reason", None)
         frontier_label = getattr(trace, "halt_frontier", None)
         # The preview tail ran to completion (module attachment, relation
         # freeze), so ``output_layers`` holds this backend's final labels for

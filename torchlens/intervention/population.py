@@ -124,7 +124,7 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
 
 
 #: Persisted capture facts entering the trace ADDRESS identity, in order.
-#: ``trace_label`` is deliberately ABSENT: it is a process-global registry
+#: ``name`` is deliberately ABSENT: it is a process-global registry
 #: ordinal (``twoblock_1``, ``twoblock_2``, ...), a transient of the session,
 #: not a fact of the capture.
 _TRACE_ADDRESS_FACTS = (

@@ -73,7 +73,7 @@ def parent_trace() -> Iterator[tl.Trace]:
 def _assert_fork_equivalent(restored: tl.Trace, fork: tl.Trace) -> None:
     """Assert the restored trace mirrors the fork's structure and payloads."""
 
-    assert restored.trace_label == fork.trace_label
+    assert restored.name == fork.name
     assert len(restored.layer_list) == len(fork.layer_list)
     assert list(restored.layer_logs.keys()) == list(fork.layer_logs.keys())
     for source_op, restored_op in zip(fork.layer_list, restored.layer_list):

@@ -61,8 +61,8 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
 
     log_a = _log()
     log_b = _log()
-    log_a.trace_label = "auto_a"
-    log_b.trace_label = "auto_b"
+    log_a.name = "auto_a"
+    log_b.name = "auto_b"
 
     from_dict = tl.Bundle({"a": log_a, "b": log_b})
     assert len(from_dict) == 2
@@ -147,9 +147,9 @@ def test_relationship_matrix_gates_node_operations() -> None:
     with pytest.raises(BundleComparisonError, match="node"):
         bundle.node(tl.func("relu"))
 
-    assert bundle.map(lambda member: member.trace_label) == {
-        "good": good.trace_label,
-        "different": different.trace_label,
+    assert bundle.map(lambda member: member.name) == {
+        "good": good.name,
+        "different": different.name,
     }
 
 

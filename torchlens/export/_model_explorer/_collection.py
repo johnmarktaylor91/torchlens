@@ -89,7 +89,7 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
         )
     collection_label = str(
         opts.label
-        or getattr(trace, "trace_label", None)
+        or getattr(trace, "name", None)
         or getattr(trace, "model_class_name", None)
         or "model"
     )

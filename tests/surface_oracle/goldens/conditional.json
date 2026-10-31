@@ -4990,7 +4990,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -5355,7 +5355,7 @@
    "mark_layer_depths": true,
    "model_class_name": "ConditionalModel",
    "model_class_qualname": "capture_oracle._models.ConditionalModel",
-   "model_label": "ConditionalModel",
+   "model_name": "ConditionalModel",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -5552,7 +5552,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "conditional_N_fork_N",
+   "name": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -10543,7 +10543,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -10908,7 +10908,7 @@
    "mark_layer_depths": true,
    "model_class_name": "ConditionalModel",
    "model_class_qualname": "capture_oracle._models.ConditionalModel",
-   "model_label": "ConditionalModel",
+   "model_name": "ConditionalModel",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -11108,7 +11108,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "conditional_N",
+   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -16110,7 +16110,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -16475,7 +16475,7 @@
    "mark_layer_depths": true,
    "model_class_name": "ConditionalModel",
    "model_class_qualname": "capture_oracle._models.ConditionalModel",
-   "model_label": "ConditionalModel",
+   "model_name": "ConditionalModel",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -16666,7 +16666,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "conditional_N",
+   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -21668,7 +21668,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -22033,7 +22033,7 @@
    "mark_layer_depths": true,
    "model_class_name": "ConditionalModel",
    "model_class_qualname": "capture_oracle._models.ConditionalModel",
-   "model_label": "ConditionalModel",
+   "model_name": "ConditionalModel",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -22238,7 +22238,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "conditional_N_fork_N",
+   "name": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -27105,7 +27105,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -27470,7 +27470,7 @@
    "mark_layer_depths": true,
    "model_class_name": "ConditionalModel",
    "model_class_qualname": "capture_oracle._models.ConditionalModel",
-   "model_label": "ConditionalModel",
+   "model_name": "ConditionalModel",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -27661,7 +27661,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "conditional_N",
+   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],

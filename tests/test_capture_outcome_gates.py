@@ -67,7 +67,7 @@ def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     loaded = tl.load(bundle)
     assert loaded.outcome.status is CaptureStatus.STOPPED
     assert loaded.outcome.is_derived is False
-    assert loaded.outcome.reason == trace.halt_reason
+    assert loaded.outcome.reason == trace.stop_reason
 
 
 def test_pickle_round_trip_adopts_attestation() -> None:

@@ -426,7 +426,7 @@ def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
     first = loaded.run(inputs=torch.ones(2, 3))
     second = loaded.run(inputs=torch.ones(2, 3))
 
-    assert first.trace.trace_label != second.trace.trace_label
+    assert first.trace.name != second.trace.name
 
 
 @pytest.mark.smoke

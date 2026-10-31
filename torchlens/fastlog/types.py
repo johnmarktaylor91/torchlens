@@ -1112,7 +1112,7 @@ class Recording(TraceLike):
           captured, a training-mode buffer-writing model yields FEWER graph
           nodes than exhaustive capture, which shifts the global-index component
           of every final label downstream of the first buffer write. For such
-          models ``halt_reason`` / ``halt_frontier`` (and other final labels)
+          models ``stop_reason`` / ``halt_frontier`` (and other final labels)
           can differ from ``tl.trace(model, x, halt=...)`` even though both
           describe the same semantic halt point. Eval-mode and
           buffer-write-free models are unaffected: halt provenance matches
@@ -1189,7 +1189,7 @@ class Recording(TraceLike):
         # (the output-marking step that stamps it only runs on a completed
         # pass). The exhaustive path handles this in _finalize_halted_trace
         # (capture/trace.py): it recovers a frontier-output tensor, sets
-        # halted/halt_reason/halt_frontier, and marks that frontier as the
+        # halted/stop_reason/halt_frontier, and marks that frontier as the
         # output parent so postprocess Step 1 synthesizes a dedicated output_N
         # node. Mirror that here so a halted Recording.to_trace() yields a
         # VALID halted Trace whose .halted is True (not silently False) and
@@ -1204,7 +1204,7 @@ class Recording(TraceLike):
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
             trace.halted = True
-            trace.halt_reason = self.stop_reason
+            trace.stop_reason = self.stop_reason
             trace.halt_frontier = self.stop_reason
             trace.raw_output = None
             trace.output_layers = [frontier_label]
@@ -1233,9 +1233,9 @@ class Recording(TraceLike):
             # FINAL labels; the settled record mirrors them (settle_halted
             # parity) instead of stamping the Recording-space raw label into an
             # outcome whose frontier is final. boundary_kind rides the
-            # Recording's own settled outcome; the raw halt_reason stays the
+            # Recording's own settled outcome; the raw stop_reason stays the
             # fallback when the remap did not run.
-            remapped_reason = getattr(trace, "halt_reason", None)
+            remapped_reason = getattr(trace, "stop_reason", None)
             cooked_reason = (
                 remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
             )

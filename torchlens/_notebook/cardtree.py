@@ -391,7 +391,7 @@ def trace_overview_card(trace: Any) -> Card:
     # Text links only: card leaves are DATA and escape at the leaf
     # boundary, so an HTML-formatted link would render as raw markup.
     nonfinite = trace.first_nonfinite(link_format="text")
-    title = str(getattr(trace, "trace_label", None) or trace.model_label)
+    title = str(getattr(trace, "name", None) or trace.model_name)
     state = str(getattr(getattr(trace, "state", None), "name", "UNKNOWN"))
     key_index = CardCollection(
         children=tuple(CardKey(f"log[{label!r}]") for label in list(trace.layer_logs or {})[:64]),

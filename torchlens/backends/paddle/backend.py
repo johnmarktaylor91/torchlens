@@ -483,7 +483,7 @@ class PaddleBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.trace_label = name
+        trace.name = name
         trace.backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.
@@ -563,7 +563,7 @@ class PaddleBackend:
             )
             if halt_signal is not None:
                 trace.halted = True
-                trace.halt_reason = halt_signal.reason
+                trace.stop_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
                 trace.raw_output = None
             elif intervention_runtime is not None:

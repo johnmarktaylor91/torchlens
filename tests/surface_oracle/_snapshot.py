@@ -52,7 +52,7 @@ _MEASURED_NAME_TOKENS = frozenset(
 #: Attributes whose values embed process-global counters (the per-process
 #: trace counter and fork counter). Digit runs are normalized so the golden
 #: does not depend on how many traces ran earlier in the process.
-_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"trace_label", "state_history"})
+_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"name", "state_history"})
 
 #: Nested mapping keys treated as measured wherever they appear (runtime
 #: object identities inside structured values such as ``state_history``).

@@ -309,10 +309,10 @@ def _refuse_release_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
+    model_name = getattr(trace, "model_name", None) or getattr(trace, "model_class_name", None)
     raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
-        + (f" for model {model_label!r}" if model_label else ""),
+        + (f" for model {model_name!r}" if model_name else ""),
         code="release_during_active_capture",
         remedy=(
             "let the capture finish before releasing the model — releasing "

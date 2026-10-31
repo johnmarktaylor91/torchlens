@@ -1501,7 +1501,7 @@ def _finalize_halted_trace(
         ) from halt_exc
 
     self.halted = True
-    self.halt_reason = halt_exc.reason
+    self.stop_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
     self.raw_output = None
     if not postprocess:

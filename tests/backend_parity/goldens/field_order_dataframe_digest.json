@@ -163,9 +163,9 @@
       "num_saved_grads"
     ],
     "model_field_order": [
-      "trace_label",
+      "name",
       "model_class_name",
-      "model_label",
+      "model_name",
       "tlspec_version",
       "_tracing_finished",
       "backend",
@@ -207,7 +207,7 @@
       "capture_thread_activity_detected",
       "capture_guard_passes",
       "halted",
-      "halt_reason",
+      "stop_reason",
       "halt_frontier",
       "_capture_outcome",
       "_layers_logged",
@@ -965,7 +965,7 @@
       "grouping",
       "grouping_policy",
       "halt_frontier",
-      "halt_reason",
+      "stop_reason",
       "halted",
       "has_backward_pass",
       "has_gradients",
@@ -998,7 +998,7 @@
       "mark_layer_depths",
       "model_class_name",
       "model_class_qualname",
-      "model_label",
+      "model_name",
       "model_object_id",
       "module_identity_mode",
       "num_backward_passes",
@@ -1062,7 +1062,7 @@
       "total_gradient_memory",
       "total_param_gradient_memory",
       "total_param_memory",
-      "trace_label",
+      "name",
       "transform_repr",
       "verbose"
     ]

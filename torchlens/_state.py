@@ -811,7 +811,7 @@ def _reentrant_refusal() -> ReentrantTraceError:
         Refusal naming the active model when one is identifiable.
     """
 
-    active_model = getattr(_active_trace, "model_label", None)
+    active_model = getattr(_active_trace, "model_name", None)
     if active_model is None:
         active_model = getattr(_active_trace, "model_class_name", None)
     active_model_text = f" for active model {active_model!r}" if active_model else ""

@@ -13,9 +13,9 @@ from .field_policy import StorageBinding, StorageKind
 
 STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
     "trace": {
-        "trace_label": StorageBinding(StorageKind.SCALAR),
+        "name": StorageBinding(StorageKind.SCALAR),
         "model_class_name": StorageBinding(StorageKind.SCALAR),
-        "model_label": StorageBinding(StorageKind.SCALAR),
+        "model_name": StorageBinding(StorageKind.SCALAR),
         "tlspec_version": StorageBinding(StorageKind.SCALAR, annotation="<class 'int'>"),
         "_tracing_finished": StorageBinding(StorageKind.SCALAR),
         "backend": StorageBinding(StorageKind.SCALAR, annotation="typing.Literal['torch', 'mlx', 'jax', 'tinygrad', 'paddle', 'tf', 'fake'] | str"),
@@ -57,7 +57,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "capture_thread_activity_detected": StorageBinding(StorageKind.RUNTIME),
         "capture_guard_passes": StorageBinding(StorageKind.RUNTIME),
         "halted": StorageBinding(StorageKind.SCALAR),
-        "halt_reason": StorageBinding(StorageKind.SCALAR),
+        "stop_reason": StorageBinding(StorageKind.SCALAR),
         "halt_frontier": StorageBinding(StorageKind.SCALAR),
         "_capture_outcome": StorageBinding(StorageKind.SCALAR),
         "_layers_logged": StorageBinding(StorageKind.SCALAR),

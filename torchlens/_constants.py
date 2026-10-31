@@ -81,9 +81,9 @@ _ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
 
 MODEL_LOG_FIELD_ORDER = [
     # General info
-    "trace_label",
+    "name",
     "model_class_name",
-    "model_label",
+    "model_name",
     "tlspec_version",
     "_tracing_finished",
     "backend",
@@ -129,7 +129,7 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_thread_activity_detected",
     "capture_guard_passes",
     "halted",
-    "halt_reason",
+    "stop_reason",
     "halt_frontier",
     "_capture_outcome",
     "_layers_logged",

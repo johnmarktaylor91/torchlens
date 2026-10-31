@@ -474,7 +474,7 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     # .halted must be TRUE (not silently False) and match exhaustive exactly.
     assert cooked.halted is True
     assert cooked.halted == exhaustive.halted
-    assert cooked.halt_reason == exhaustive.halt_reason
+    assert cooked.stop_reason == exhaustive.stop_reason
     assert cooked.halt_frontier == exhaustive.halt_frontier
     assert list(cooked.output_layers) == list(exhaustive.output_layers)
 
@@ -636,7 +636,7 @@ def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() ->
 def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None:
     """cert8 MAJOR-1: halt provenance matches exhaustive when a buffer op precedes halt.
 
-    ``halt_reason`` / ``halt_frontier`` used to store raw capture-time labels,
+    ``stop_reason`` / ``halt_frontier`` used to store raw capture-time labels,
     which diverge between capture modes because exhaustive counts buffer ops that
     predicate mode skips. Both paths now remap them to FINAL labels in postprocess
     Step 10. For an eval-mode BatchNorm model (buffer READS only, matched node
@@ -656,9 +656,9 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
 
     assert cooked.halted is True
     # Final labels (not raw) -- and they match exhaustive exactly.
-    assert cooked.halt_reason == exhaustive.halt_reason
+    assert cooked.stop_reason == exhaustive.stop_reason
     assert cooked.halt_frontier == exhaustive.halt_frontier
-    assert not cooked.halt_reason.endswith("_raw")
+    assert not cooked.stop_reason.endswith("_raw")
     check_metadata_invariants(cooked)
     check_metadata_invariants(exhaustive)
 

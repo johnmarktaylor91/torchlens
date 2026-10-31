@@ -3808,7 +3808,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -4045,7 +4045,7 @@
    "mark_layer_depths": true,
    "model_class_name": "PlainCNN",
    "model_class_qualname": "capture_oracle._models.PlainCNN",
-   "model_label": "PlainCNN",
+   "model_name": "PlainCNN",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -4216,7 +4216,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "plaincnn_N_fork_N",
+   "name": "plaincnn_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -8022,7 +8022,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -8259,7 +8259,7 @@
    "mark_layer_depths": true,
    "model_class_name": "PlainCNN",
    "model_class_qualname": "capture_oracle._models.PlainCNN",
-   "model_label": "PlainCNN",
+   "model_name": "PlainCNN",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -8433,7 +8433,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "plaincnn_N",
+   "name": "plaincnn_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -12191,7 +12191,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -12428,7 +12428,7 @@
    "mark_layer_depths": true,
    "model_class_name": "PlainCNN",
    "model_class_qualname": "capture_oracle._models.PlainCNN",
-   "model_label": "PlainCNN",
+   "model_name": "PlainCNN",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -12593,7 +12593,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "plaincnn_N",
+   "name": "plaincnn_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -16411,7 +16411,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -16648,7 +16648,7 @@
    "mark_layer_depths": true,
    "model_class_name": "PlainCNN",
    "model_class_qualname": "capture_oracle._models.PlainCNN",
-   "model_label": "PlainCNN",
+   "model_name": "PlainCNN",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -16827,7 +16827,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "plaincnn_N_fork_N",
+   "name": "plaincnn_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -20480,7 +20480,7 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "halt_reason": null,
+   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -20717,7 +20717,7 @@
    "mark_layer_depths": true,
    "model_class_name": "PlainCNN",
    "model_class_qualname": "capture_oracle._models.PlainCNN",
-   "model_label": "PlainCNN",
+   "model_name": "PlainCNN",
    "model_object_id": "<measured>",
    "model_ops": [
     {
@@ -20882,7 +20882,7 @@
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "trace_label": "plaincnn_N",
+   "name": "plaincnn_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],

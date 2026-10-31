@@ -25,7 +25,7 @@ class _TraceGroup:
     def __repr__(self) -> str:
         """Name the group and its Trace."""
 
-        label = getattr(self._trace, "trace_label", None)
+        label = getattr(self._trace, "name", None)
         return f"<{type(self).__name__} of Trace {label!r}>"
 
     def __dir__(self) -> list[str]:

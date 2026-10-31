@@ -122,9 +122,9 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
     trace.module_identity_mode = "function_root"
     trace.param_source = "none"
     trace.model_class_name = "_FakeModel"
-    trace.model_label = "_FakeModel"
+    trace.model_name = "_FakeModel"
     trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
-    trace.trace_label = "fake-backend-trace"
+    trace.name = "fake-backend-trace"
     for layer in trace.layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"

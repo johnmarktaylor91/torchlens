@@ -125,7 +125,7 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     trace = tl.trace(model, _input(), backend="mlx", halt=tl.func("relu"))
 
     assert trace.halted is True
-    assert str(trace.halt_reason).startswith("relu")
+    assert str(trace.stop_reason).startswith("relu")
     labels = [op._label_raw for op in trace.layer_list]
     # Save-then-halt: the relu frontier is captured; the second linear is not.
     assert any(label.startswith("relu") for label in labels)

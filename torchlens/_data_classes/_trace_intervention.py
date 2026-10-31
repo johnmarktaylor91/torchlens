@@ -939,7 +939,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         fork = self._fork_trace(name=name)
-        self._record_operation("fork", source_id=id(self), name=fork.trace_label)
+        self._record_operation("fork", source_id=id(self), name=fork.name)
         return fork
 
     def _record_operation(self: "Trace", op: str, **payload: Any) -> None:
@@ -1776,7 +1776,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     def _next_fork_name(self: "Trace") -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.trace_label or "trace"
+        base_name = self.name or "trace"
         fork_count = sum(
             1
             for record in self.state_history

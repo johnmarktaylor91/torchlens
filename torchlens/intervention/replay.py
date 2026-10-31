@@ -254,7 +254,7 @@ def _run_differentiable_replay(
     log._record_operation(
         "fork",
         source_id=id(log),
-        name=replay_log.trace_label,
+        name=replay_log.name,
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)
@@ -270,14 +270,14 @@ def _run_differentiable_replay(
         **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
         "engine": "replay",
         "differentiable": True,
-        "source_trace_label": getattr(log, "trace_label", None),
+        "source_trace_label": getattr(log, "name", None),
         "frontier": tuple(replay_log._replay_frontier),
     }
     if replay_log.state_history and isinstance(replay_log.state_history[-1], dict):
         replay_log.state_history[-1].update(
             {
                 "differentiable": True,
-                "source_trace_label": getattr(log, "trace_label", None),
+                "source_trace_label": getattr(log, "name", None),
                 "frontier": tuple(replay_log._replay_frontier),
             }
         )
@@ -298,7 +298,7 @@ def _differentiable_replay_name(log: Trace) -> str:
         Trace label for the replay fork.
     """
 
-    base_name = getattr(log, "trace_label", None) or "trace"
+    base_name = getattr(log, "name", None) or "trace"
     return f"{base_name}_replay"
 
 

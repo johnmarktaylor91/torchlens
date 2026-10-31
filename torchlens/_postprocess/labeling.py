@@ -1011,7 +1011,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         setattr(self, field, final_labels)
 
     # Remap halt provenance from raw to final labels, exactly as the special
-    # layer lists above. `halt_reason`/`halt_frontier` are set to a raw op label
+    # layer lists above. `stop_reason`/`halt_frontier` are set to a raw op label
     # by BOTH the exhaustive `tl.trace(halt=...)` finalizer
     # (capture/trace.py `_finalize_halted_trace`) and the cooked
     # `Recording.to_trace()` path (fastlog/types.py); leaving them raw meant the
@@ -1024,7 +1024,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     # (present in `_raw_layer_dict`); synthetic halt reasons that are NOT op
     # labels ("linear:exit:1" module-exit reasons, "" empty, custom fastlog
     # strings) are left untouched.
-    for halt_field in ("halt_reason", "halt_frontier"):
+    for halt_field in ("stop_reason", "halt_frontier"):
         raw_halt_label = getattr(self, halt_field, None)
         if raw_halt_label is not None and raw_halt_label in self._raw_graph_ws.raw_layer_dict:
             setattr(self, halt_field, self._raw_graph_ws.raw_layer_dict[raw_halt_label].layer_label)

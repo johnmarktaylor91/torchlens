@@ -183,8 +183,8 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "grouping": "structural",
     "grouping_policy": None,
     "distributed_scope": None,
-    "trace_label": None,
-    "model_label": None,
+    "name": None,
+    "model_name": None,
     "backend": "torch",
     "module_identity_mode": "torch_module",
     "param_source": "native-module",
@@ -1089,9 +1089,9 @@ class Trace(
     _PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "trace_label": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
         "model_class_name": FieldPolicy.KEEP,
-        "model_label": FieldPolicy.KEEP,
+        "model_name": FieldPolicy.KEEP,
         "backend": FieldPolicy.KEEP,
         "backend_runtime_config": FieldPolicy.KEEP,
         "backend_runtime_device_summary": FieldPolicy.KEEP,
@@ -1180,7 +1180,7 @@ class Trace(
         "capture_thread_activity_detected": FieldPolicy.DROP,
         "capture_guard_passes": FieldPolicy.DROP,
         "halted": FieldPolicy.KEEP,
-        "halt_reason": FieldPolicy.KEEP,
+        "stop_reason": FieldPolicy.KEEP,
         "halt_frontier": FieldPolicy.KEEP,
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
@@ -1686,9 +1686,9 @@ class Trace(
         # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
-        self.trace_label: str | None = None
+        self.name: str | None = None
         self.model_class_name = model_class_name
-        self.model_label = model_class_name
+        self.model_name = model_class_name
         self.backend: BackendName = "torch"
         self.backend_runtime_config: dict[str, Any] | None = None
         self.backend_runtime_device_summary: dict[str, Any] | None = None
@@ -1735,7 +1735,7 @@ class Trace(
         # under its private name; never survives save/load. DOCUMENTED-UNSTABLE.
         self._distributed_plane_p: Any | None = None
         self.halted = False
-        self.halt_reason: str | None = None
+        self.stop_reason: str | None = None
         self.halt_frontier: str | None = None
         self._layers_logged = False
         self._layers_saved = False
@@ -3453,7 +3453,7 @@ class Trace(
         """
 
         preserved_fields = (
-            "trace_label",
+            "name",
             "parent_run",
             "_intervention_spec",
             "_transform",

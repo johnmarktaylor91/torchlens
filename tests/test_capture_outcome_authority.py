@@ -175,7 +175,7 @@ def test_derivation_carries_halt_detail() -> None:
         {
             "_tracing_finished": True,
             "halted": True,
-            "halt_reason": "relu_1_2_raw",
+            "stop_reason": "relu_1_2_raw",
             "halt_frontier": "relu_1_2_raw",
         }
     )

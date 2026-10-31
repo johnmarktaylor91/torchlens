@@ -171,7 +171,7 @@ class Session:
                 name=f"session_{index}",
             ),
         )
-        metadata = {"index": index, "name": log.trace_label}
+        metadata = {"index": index, "name": log.name}
         setattr(log, "session_invocation", metadata)
         self.traces.append(log)
         self.invocations.append(metadata)

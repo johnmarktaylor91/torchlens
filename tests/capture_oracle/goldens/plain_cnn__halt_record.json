@@ -417,7 +417,7 @@
         "error_message": null,
         "error_type": null,
         "failed": false,
-        "halt_reason": "relu_1_3_raw",
+        "stop_reason": "relu_1_3_raw",
         "halted": true,
         "last_event_func": null,
         "last_event_label": null,
