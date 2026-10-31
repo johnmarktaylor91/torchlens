@@ -1773,7 +1773,7 @@ def run_and_log_inputs_through_model(
             capture_mode=str(self.capture_mode),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            seed=seed,
+            random_seed=seed,
             postprocess=postprocess,
             stop=self._stop_directive,
         )

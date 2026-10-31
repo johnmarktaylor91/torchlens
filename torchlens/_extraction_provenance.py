@@ -200,7 +200,7 @@ def coerce_input_preprocessing(
             verdict = input_provenance.verdict
             unknown_reasons = list(input_provenance.unknown_reasons)
         elif isinstance(input_provenance, Resolution):
-            record = input_provenance.record
+            record = input_provenance.preprocessing
             authority_json = {
                 "source": record.source,
                 "identifier": record.identifier,
