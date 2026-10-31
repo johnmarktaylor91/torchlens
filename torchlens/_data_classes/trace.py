@@ -99,7 +99,6 @@ from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
-from ._trace_legacy_state import TRACE_PORTABLE_STATE_ALIASES, pop_retired_legacy_keys
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
 from ._transform_repr import _scrubbed_transform_repr
@@ -774,30 +773,6 @@ def _normalize_conditional_arm_entry_edges(
     return normalized
 
 
-def _append_conditional_arm_edge(
-    conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]],
-    key: tuple[int, str],
-    edge: tuple[str, str],
-) -> None:
-    """Append one conditional arm edge, replacing malformed legacy values.
-
-    Parameters
-    ----------
-    conditional_arm_entry_edges:
-        Canonical edge mapping to mutate.
-    key:
-        ``(conditional_id, arm_kind)`` edge bucket.
-    edge:
-        ``(parent_label, child_label)`` edge tuple.
-    """
-
-    edges = conditional_arm_entry_edges.setdefault(key, [])
-    if not isinstance(edges, list):
-        edges = []
-        conditional_arm_entry_edges[key] = edges
-    edges.append(edge)
-
-
 @dataclass(init=False, repr=False, eq=False)
 class Trace(
     TraceStatsMixin,
@@ -1081,12 +1056,6 @@ class Trace(
     _receptive_field_solution: Any
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
-
-    #: Legacy persisted spellings ``__setstate__`` still adapts, published by
-    #: the writer contract as the record's alias rules (alias-or-fail,
-    #: ecosystem MEMO 3.3). The reasoned ledger lives in
-    #: ``_trace_legacy_state.py``.
-    _PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "name": FieldPolicy.KEEP,
@@ -3215,15 +3184,8 @@ class Trace(
                 "_grad_op_nums_to_save",
             },
         )
-        if "_grad_layer_nums_to_save" in state and "_grad_op_nums_to_save" not in state:
-            state["_grad_op_nums_to_save"] = state.pop("_grad_layer_nums_to_save")
-        if "_saved_grads_set" in state and "_saved_grad_labels" not in state:
-            state["_saved_grad_labels"] = state.pop("_saved_grads_set")
-        state.pop("_keep_grads_in_memory", None)
-        state.pop("_grad_stream_retain_in_memory", None)
         state["pinned_autograd_memory"] = None  # a restored trace pins nothing
         state.pop("_uncalled_module_addresses", None)
-        pop_retired_legacy_keys(state)
         if state.get("_intervention_spec") is None:
             state["_intervention_spec"] = InterventionSpec()
         if not state.get("relationship_evidence"):
@@ -3267,22 +3229,6 @@ class Trace(
         conditional_arm_entry_edges = _normalize_conditional_arm_entry_edges(
             state.get("conditional_arm_entry_edges") or {}
         )
-        for parent, child in state.pop("conditional_then_entry_edges", []) or []:
-            _append_conditional_arm_edge(conditional_arm_entry_edges, (0, "then"), (parent, child))
-        for conditional_id, elif_index, parent, child in (
-            state.pop("conditional_elif_entry_edges", []) or []
-        ):
-            _append_conditional_arm_edge(
-                conditional_arm_entry_edges,
-                (conditional_id, f"elif_{elif_index}"),
-                (parent, child),
-            )
-        for conditional_id, parent, child in state.pop("conditional_else_entry_edges", []) or []:
-            _append_conditional_arm_edge(
-                conditional_arm_entry_edges,
-                (conditional_id, "else"),
-                (parent, child),
-            )
         state["conditional_arm_entry_edges"] = conditional_arm_entry_edges
         for field_name in (
             "total_activation_memory",

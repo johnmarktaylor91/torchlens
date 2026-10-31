@@ -30,39 +30,6 @@ RUNNABLE_TRACE_PUBLIC_MEMBERS = frozenset(
 )
 """Complete public ``Trace`` surface owned by the runnable subsystem."""
 
-LEGACY_RUNNABLE_TRACE_FIELD_MAP = {
-    "_runnable_descriptor": "descriptor",
-    "_runnable_readiness": "readiness",
-    "_runnable_staged_user_state": "staged_user_state",
-    "_runnable_embedded_state": "embedded_state",
-    "_runnable_capture_state": "capture_state",
-    "_runnable_embedded_nonpersistent_buffers": "embedded_nonpersistent_buffers",
-    "_runnable_archived_activations": "archived_activations",
-    "_runnable_path_faithfulness": "path_faithfulness",
-    "_runnable_first_mismatch": "first_mismatch",
-    "_runnable_poisoned": "poisoned",
-    "_runnable_callables_by_call_id": "callables_by_call_id",
-    "_runnable_host_rng_consumed": "host_rng_consumed",
-    "_runnable_capture_ambient": "capture_ambient",
-    "_runnable_state_alias_topology": "state_alias_topology",
-    "_runnable_capture_state_signatures": "capture_state_signatures",
-    "_runnable_persistent_buffer_universe": "persistent_buffer_universe",
-    "_runnable_host_rng_unreplayable": "host_rng_unreplayable",
-    "_runnable_host_rng_channels": "host_rng_channels",
-    "_runnable_host_rng_replayable_reads": "host_rng_replayable_reads",
-    "_runnable_rng_monitor_uncertain": "rng_monitor_uncertain",
-    "_runnable_rng_monitor_uncertain_detail": "rng_monitor_uncertain_detail",
-    "_runnable_output_losslessness": "output_losslessness",
-    "_runnable_input_nontensor_leaves": "input_nontensor_leaves",
-    "_runnable_input_structure": "input_structure",
-    "_runnable_input_tensor_sites": "input_tensor_sites",
-    "_runnable_input_metadata_reads": "input_metadata_reads",
-    "_runnable_input_label_layouts": "input_label_layouts",
-    "_runnable_module_training_modes": "module_training_modes",
-    "_runnable_state_compromised": "state_compromised",
-}
-"""Legacy dict keys accepted only while restoring older plain pickles."""
-
 
 @dataclass(slots=True)
 class RunnableTraceState:
@@ -166,7 +133,7 @@ def runnable_trace_state(trace: Any) -> RunnableTraceState:
 
 
 def normalize_runnable_trace_state(mapping: MutableMapping[str, Any]) -> RunnableTraceState:
-    """Normalize current or legacy pickle state onto the one runnable field.
+    """Normalize pickle state onto the one runnable field.
 
     Parameters
     ----------
@@ -181,9 +148,6 @@ def normalize_runnable_trace_state(mapping: MutableMapping[str, Any]) -> Runnabl
 
     current = mapping.get("_runnable")
     state = current if isinstance(current, RunnableTraceState) else RunnableTraceState()
-    for legacy_name, field_name in LEGACY_RUNNABLE_TRACE_FIELD_MAP.items():
-        if legacy_name in mapping:
-            setattr(state, field_name, mapping.pop(legacy_name))
     mapping["_runnable"] = state
     return state
 
@@ -225,7 +189,6 @@ class RunnableCoordinator(Protocol):
 
 
 __all__ = [
-    "LEGACY_RUNNABLE_TRACE_FIELD_MAP",
     "RUNNABLE_TRACE_PUBLIC_MEMBERS",
     "RunnableCoordinator",
     "RunnableTraceState",
