@@ -29,15 +29,21 @@ Deliberately NOT covered (they are not API deprecation shims):
 from __future__ import annotations
 
 import ast
+import sys
+import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import pytest
-from _source_corpus import module_ast as _corpus_ast, module_source as _corpus_source
+from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks, use_test_helpers
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_PACKAGE_ROOT = _REPO_ROOT / "torchlens"
+use_test_helpers()
+
+from _source_corpus import module_ast as _corpus_ast, module_source as _corpus_source  # noqa: E402
+
+_REPO_ROOT = REPO_ROOT
+_PACKAGE_ROOT = PACKAGE_ROOT
 
 #: Warning categories whose emission makes a ``warnings.warn`` call a
 #: DEPRECATION emission. ``TorchLensDeprecationWarning`` is deleted, but the
@@ -247,7 +253,7 @@ def documented_deprecated_sites(package_root: Path, base: Path | None = None) ->
 # ---------------------------------------------------------------------------
 
 
-def test_package_emits_no_deprecation_warnings() -> None:
+def check_package_emits_no_deprecation_warnings() -> None:
     """No shipped site emits a DeprecationWarning of any spelling."""
 
     sites = deprecation_emission_sites(_PACKAGE_ROOT)
@@ -257,14 +263,14 @@ def test_package_emits_no_deprecation_warnings() -> None:
     )
 
 
-def test_no_warn_helper_calls_remain() -> None:
+def check_no_warn_helper_calls_remain() -> None:
     """No shipped site calls a historical deprecation warn-helper."""
 
     sites = warn_helper_call_sites(_PACKAGE_ROOT)
     assert sites == set(), f"warn-helper calls reappeared: {sorted(sites)}"
 
 
-def test_no_surface_documents_itself_as_deprecated() -> None:
+def check_no_surface_documents_itself_as_deprecated() -> None:
     """No shipped surface declares itself a deprecated/legacy alias."""
 
     documented = documented_deprecated_sites(_PACKAGE_ROOT)
@@ -274,7 +280,7 @@ def test_no_surface_documents_itself_as_deprecated() -> None:
     )
 
 
-def test_deprecation_warning_class_is_gone() -> None:
+def check_deprecation_warning_class_is_gone() -> None:
     """The dedicated warning category did not quietly come back."""
 
     import torchlens._deprecations as deprecations_module
@@ -292,12 +298,11 @@ def test_deprecation_warning_class_is_gone() -> None:
 # ---------------------------------------------------------------------------
 
 
-class TestTripwireMechanismIsRedCapable:
-    """Plant a shim and prove each scanner reports it."""
+def check_site_scanner_finds_a_planted_emission() -> None:
+    """A new DeprecationWarning site is discovered by the scan."""
 
-    def test_site_scanner_finds_a_planted_emission(self, tmp_path: Path) -> None:
-        """A new DeprecationWarning site is discovered by the scan."""
-
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
@@ -307,9 +312,12 @@ class TestTripwireMechanismIsRedCapable:
         found = deprecation_emission_sites(package, base=tmp_path)
         assert found == {"torchlens/mod.py::f"}, found
 
-    def test_site_scanner_ignores_other_warning_categories(self, tmp_path: Path) -> None:
-        """A UserWarning is not a deprecation and is not reported."""
 
+def check_site_scanner_ignores_other_warning_categories() -> None:
+    """A UserWarning is not a deprecation and is not reported."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
@@ -318,9 +326,12 @@ class TestTripwireMechanismIsRedCapable:
         )
         assert deprecation_emission_sites(package, base=tmp_path) == set()
 
-    def test_helper_scanner_finds_a_planted_call(self, tmp_path: Path) -> None:
-        """A resurrected warn-helper call is discovered by the scan."""
 
+def check_helper_scanner_finds_a_planted_call() -> None:
+    """A resurrected warn-helper call is discovered by the scan."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
@@ -329,9 +340,12 @@ class TestTripwireMechanismIsRedCapable:
         )
         assert warn_helper_call_sites(package, base=tmp_path) == {"torchlens/mod.py::f"}
 
-    def test_docstring_scanner_finds_a_planted_alias_surface(self, tmp_path: Path) -> None:
-        """A deprecated-documented surface is reported."""
 
+def check_docstring_scanner_finds_a_planted_alias_surface() -> None:
+    """A deprecated-documented surface is reported."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
@@ -340,11 +354,12 @@ class TestTripwireMechanismIsRedCapable:
         )
         assert documented_deprecated_sites(package, base=tmp_path) == {"torchlens/mod.py::f"}
 
-    def test_docstring_scanner_ignores_helpers_that_merely_mention_deprecation(
-        self, tmp_path: Path
-    ) -> None:
-        """A summary ABOUT deprecation is not a deprecated surface."""
 
+def check_docstring_scanner_ignores_helpers_that_merely_mention_deprecation() -> None:
+    """A summary ABOUT deprecation is not a deprecated surface."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
@@ -353,3 +368,26 @@ class TestTripwireMechanismIsRedCapable:
             encoding="utf-8",
         )
         assert documented_deprecated_sites(package, base=tmp_path) == set()
+
+
+CHECKS = (
+    check_package_emits_no_deprecation_warnings,
+    check_no_warn_helper_calls_remain,
+    check_no_surface_documents_itself_as_deprecated,
+    check_deprecation_warning_class_is_gone,
+    check_site_scanner_finds_a_planted_emission,
+    check_site_scanner_ignores_other_warning_categories,
+    check_helper_scanner_finds_a_planted_call,
+    check_docstring_scanner_finds_a_planted_alias_surface,
+    check_docstring_scanner_ignores_helpers_that_merely_mention_deprecation,
+)
+
+
+def main() -> int:
+    """Run every deprecation_inventory check and return the exit status."""
+
+    return run_checks("deprecation_inventory", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
