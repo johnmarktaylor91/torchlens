@@ -1356,7 +1356,7 @@ def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
     """
 
     num_calls = getattr(record, "num_calls", None)
-    if num_calls is None or hasattr(record, "call_label") or not hasattr(record, "calls"):
+    if num_calls is None or hasattr(record, "call_index") or not hasattr(record, "calls"):
         return None
     if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
         return None

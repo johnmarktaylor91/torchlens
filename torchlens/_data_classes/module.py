@@ -390,7 +390,7 @@ class ModuleCall:
         self,
         address: str,
         call_index: int,
-        call_label: str,
+        label: str,
         ops: list[str],
         input_layers: list[str],
         output_layers: list[str],
@@ -425,7 +425,7 @@ class ModuleCall:
             Module address in the owning model.
         call_index:
             Zero-based invocation index for this module address.
-        call_label:
+        label:
             Pass-qualified module call label.
         ops:
             Operation labels executed inside this module call.
@@ -485,7 +485,7 @@ class ModuleCall:
         self.class_name = class_name
         self.class_qualname = class_qualname
         self.call_index = call_index
-        self.label = call_label  # e.g. "features.0:1"
+        self.label = label  # e.g. "features.0:1"
         self.ordinal_index = ordinal_index
         self.ops = ops  # pass-qualified Op labels
         self.input_layers = input_layers
