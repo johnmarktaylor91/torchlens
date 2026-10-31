@@ -31,6 +31,7 @@ BND-Q-018	OBL-Q-NUM-PARAMS	torchlens._data_classes.param.Param.num_params	CR1	su
 BND-Q-019	OBL-Q-NUM-PARAMS	torchlens.report._summary_report.SummaryReport.total_params	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door
 BND-Q-020	OBL-Q-NUM-PARAMS	torchlens.report._summary_report.SummaryTotals.params_total	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door
 BND-Q-021	OBL-Q-NUM-PARAMS	torchlens.Trace.num_params	CR1	declared	untouched	no		n/a	tests/test_numbers_truth_params.py::test_tied_params_counted_once_by_object_identity
+BND-Q-023	OBL-Q-NUM-PARAM-TENSORS	torchlens._data_classes.module.Module.num_param_tensors	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door
 BND-Q-024	OBL-Q-NUM-PARAM-TENSORS	torchlens._data_classes.module.ModuleCall.num_param_tensors	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door
 BND-Q-026	OBL-Q-NUM-PARAM-TENSORS	torchlens.Trace.num_param_tensors	CR1	declared	untouched	no		n/a	tests/test_numbers_truth_params.py::test_shared_storage_views_stay_distinct_parameters
 BND-Q-027	OBL-Q-NUM-PARAMS-FROZEN	torchlens.Layer.num_params_frozen	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door
@@ -65,6 +66,7 @@ BND-Q-055	OBL-Q-FLOPS-FORWARD	torchlens.Op.flops_forward	CR1	declared	untouched	
 BND-Q-056	OBL-Q-FLOPS-FORWARD	torchlens.report._summary_report.SummaryReport.total_flops_forward	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
 BND-Q-057	OBL-Q-FLOPS-FORWARD	torchlens.report._summary_report.SummaryTotals.flops_forward_fma2	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
 BND-Q-058	OBL-Q-FLOPS-FORWARD	torchlens._data_classes._trace_groups.TraceCost.total_flops_forward	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door
+BND-Q-060	OBL-Q-NUM-OPS	torchlens._data_classes.module.ModuleCall.num_ops	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call
 BND-Q-061	OBL-Q-NUM-OPS	torchlens.Trace.num_ops	CR1	declared	untouched	no		n/a	tests/test_numbers_truth_vocabulary.py::test_summary_rows_never_spell_passes_as_ops
 BND-Q-062	OBL-Q-NUM-PASSES	torchlens.Layer.num_passes	CR1	declared	untouched	no		n/a	tests/test_loop_module_rolling.py::test_reused_single_op_module_stays_a_loop
 BND-Q-063	OBL-Q-NUM-PASSES	torchlens.Op.num_passes	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door
@@ -115,6 +117,8 @@ BND-Q-B1-012	OBL-Q-MAX-DISTANCE-FROM-INPUT	torchlens.Op.max_distance_from_input	
 BND-Q-B1-013	OBL-Q-MIN-DISTANCE-TO-OUTPUT	torchlens.Op.min_distance_to_output	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances
 BND-Q-B1-014	OBL-Q-MAX-DISTANCE-TO-OUTPUT	torchlens.Op.max_distance_to_output	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances
 BND-Q-B1-015	OBL-Q-MAX-LAYER-OP-COUNT	torchlens._data_classes._trace_groups.TraceGraph.max_ops_per_layer	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
+BND-Q-B1-016	OBL-Q-NUM-USES-BY-OPS	torchlens._data_classes.param.Param.num_uses_by_ops	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
+BND-Q-B1-017	OBL-Q-NUM-USES-BY-LAYERS	torchlens._data_classes.param.Param.num_uses_by_layers	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
 BND-Q-B1-018	OBL-Q-NUM-POS-ARGS	torchlens.Layer.num_pos_args	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-019	OBL-Q-NUM-KWARGS	torchlens.Layer.num_kwargs	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-020	OBL-Q-NUM-ARGS-TOTAL	torchlens.Layer.num_args_total	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
@@ -122,10 +126,10 @@ BND-Q-B1-021	OBL-Q-NUM-POS-ARGS	torchlens.Op.num_pos_args	CR1	declared	untouched
 BND-Q-B1-022	OBL-Q-NUM-KWARGS	torchlens.Op.num_kwargs	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-023	OBL-Q-NUM-ARGS-TOTAL	torchlens.Op.num_args_total	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-024	OBL-Q-GRADIENT-MEMORY	torchlens.Op.gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
-BND-Q-B1-025	OBL-Q-GRADIENT-MEMORY	torchlens._data_classes.param.Param.grad_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
+BND-Q-B1-025	OBL-Q-GRADIENT-MEMORY	torchlens._data_classes.param.Param.gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
 BND-Q-B1-026	OBL-Q-GRADIENT-MEMORY	torchlens.Trace.total_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes
 BND-Q-B1-027	OBL-Q-GRADIENT-MEMORY	torchlens.Layer.total_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
-BND-Q-B1-028	OBL-Q-GRADIENT-MEMORY	torchlens._data_classes.buffer.Buffer.grad_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
+BND-Q-B1-028	OBL-Q-GRADIENT-MEMORY	torchlens._data_classes.buffer.Buffer.gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
 BND-Q-B1-029	OBL-Q-PARAM-GRADIENT-MEMORY	torchlens.Trace.total_param_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
 BND-Q-B1-030	OBL-Q-SAVED-GRADIENT-MEMORY	torchlens.Trace.saved_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes
 BND-Q-B1-031	OBL-Q-OUTPUT-GRADIENT-MEMORY	torchlens._data_classes.module.ModuleCall.output_gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
@@ -164,6 +168,7 @@ BND-Q-2B2-009	OBL-Q-FUNC-CALLS-DURATION	torchlens._data_classes.module.Module.fu
 BND-Q-2B2-010	OBL-Q-MAX-DESCENDANT-DEPTH	torchlens._data_classes.module.Module.max_descendant_depth	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts
 BND-Q-2B2-011	OBL-Q-NUM-CALLS	torchlens._data_classes.module.Module.num_calls	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts
 BND-Q-2B2-012	OBL-Q-NUM-DESCENDANT-CALLS	torchlens._data_classes.module.Module.num_descendant_calls	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts
+BND-Q-2B2-013	OBL-Q-NUM-LAYERS	torchlens._data_classes.module.Module.num_layers	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call
 BND-Q-2B2-014	OBL-Q-NUM-RECURSIVE-PARAM-TENSORS	torchlens._data_classes.module.Module.num_recursive_param_tensors	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts
 BND-Q-2B2-015	OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-FROZEN	torchlens._data_classes.module.Module.num_recursive_param_tensors_frozen	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts
 BND-Q-2B2-016	OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-TRAINABLE	torchlens._data_classes.module.Module.num_recursive_param_tensors_trainable	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_module_counts.py::test_recursive_param_counts
