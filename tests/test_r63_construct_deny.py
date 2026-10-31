@@ -22,8 +22,8 @@ predicate (storage OR ``torch.Tensor`` subclass OR legacy ``tensortype`` class O
 code). The type OBJECTS stay RESOLVABLE at ``find_class`` -- legit ``.tlspec`` metadata
 references ``torch.Tensor`` / ``torch.FloatTensor`` / ``numpy.ndarray`` as inert dtype /
 module_type values -- and the legit payload reconstructors (``_rebuild_tensor_v2`` /
-numpy ``_frombuffer`` / ``_reconstruct``, all FUNCTIONS not alloc TYPES, plus the wrapped
-``_safe_load_from_bytes``) are untouched. Zero-regression is PROVEN: a real
+numpy ``_frombuffer`` / ``_reconstruct``, all FUNCTIONS not alloc TYPES, plus the TorchLens
+inline tensor reconstructor) are untouched. Zero-regression is PROVEN: a real
 embedded-weights ``.tlspec`` performs many REDUCE/NEWOBJ ops and ZERO tensor/ndarray
 constructions, so it round-trips (save -> load -> run) unchanged.
 """

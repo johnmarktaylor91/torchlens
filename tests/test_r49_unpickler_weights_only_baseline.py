@@ -48,7 +48,6 @@ from torchlens._io._safe_unpickle import (
     _is_torch_storage_type,
 )
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -172,16 +171,20 @@ def test_build_belt_denies_tensor_rebind_white_box() -> None:
 
 
 def test_build_rebind_denied_end_to_end_no_setstate() -> None:
-    """A crafted ``_load_from_bytes -> Tensor -> BUILD`` load RAISES; ``__setstate__`` never runs."""
+    """A crafted ``inline tensor -> Tensor -> BUILD`` load RAISES; ``__setstate__`` never runs.
 
-    saved = io.BytesIO()
-    torch.save(torch.zeros(3), saved)
-    tensor_bytes = saved.getvalue()
+    The tensor on the stack comes from the TorchLens inline reduction (the only admitted
+    tensor source now that ``torch.storage._load_from_bytes`` is refused by name).
+    """
+
+    tensor_bytes = bytes(12)  # three float32 zeros
 
     buf = pickle.PROTO + bytes([2])
-    buf += pickle.GLOBAL + b"torch.storage\n_load_from_bytes\n"
+    buf += pickle.GLOBAL + b"torchlens._io._inline_tensor\nrebuild_inline_tensor\n"
     buf += pickle.MARK
     buf += pickle.BINBYTES + struct.pack("<I", len(tensor_bytes)) + tensor_bytes
+    buf += pickle.SHORT_BINUNICODE + bytes([13]) + b"torch.float32"
+    buf += pickle.BININT1 + bytes([3]) + pickle.TUPLE1
     buf += pickle.TUPLE + pickle.REDUCE  # -> a real Tensor on the stack
     buf += pickle.EMPTY_DICT + pickle.BUILD + pickle.STOP  # attacker rebind BUILD
 
@@ -195,10 +198,7 @@ def test_build_rebind_denied_end_to_end_no_setstate() -> None:
 
     torch.Tensor.__setstate__ = _spy  # type: ignore[method-assign, assignment]
     try:
-        expected_refusal = (
-            "BUILD applied to a torch" if HAS_SAFE_WEIGHTS_ONLY_LOAD else "CVE-2025-32434"
-        )
-        with pytest.raises(pickle.UnpicklingError, match=expected_refusal):
+        with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
             SafeBundleUnpickler(io.BytesIO(buf)).load()
     finally:
         torch.Tensor.__setstate__ = original_setstate  # type: ignore[method-assign]

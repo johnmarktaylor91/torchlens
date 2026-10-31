@@ -34,17 +34,15 @@ these are the mediators found, each pinned below:
      direct zero-fill allocator the type-keyed belt never covered.
 
   5. ``torch._utils._rebuild_tensor_v2`` -- the mediator the FIRST pass got wrong. It must
-     stay REDUCE-invocable (it is the legitimate tensor path), and the first pass justified
-     that with: "a storage-resizing oversize view is refused by torch itself, because the
-     only reachable storage source, ``_safe_load_from_bytes``, yields a NON-resizable
-     storage". The second half of that claim is FALSE for the LEGACY (non-zipfile)
-     ``torch.save`` format, which reconstructs a RESIZABLE storage;
-     ``_rebuild_tensor_v2(storage, 0, (N,), (1,), False, None)`` then calls ``set_``, which
-     GROWS it. Measured: a 354-byte pickle produced a 100 MB tensor (~282,000x), unbounded
-     in N. Bounded at the SOURCE rather than per-signature -- ``_freeze_embedded_storage``
-     makes the embedded result non-resizable, so torch's own ``set_`` refuses to grow it
-     for every present and future consumer while an exact-fit view still succeeds. The
-     modern zipfile format was already non-resizable and is returned untouched.
+     stay REDUCE-invocable (it is the legitimate tensor path), so its bound is enforced at
+     the SOURCE of any storage it could be handed. The legacy source, an embedded
+     ``torch.storage._load_from_bytes`` blob (a nested ``torch.load`` whose legacy format
+     yielded a RESIZABLE storage; measured: a 354-byte pickle produced a 100 MB tensor,
+     ~282,000x), is now REFUSED BY NAME before anything resolves. The only tensor source
+     left is the TorchLens inline reduction (``_inline_tensor.rebuild_inline_tensor``),
+     which returns a finished tensor over a buffer-backed, non-resizable storage, so
+     torch's own ``set_`` refuses to grow it for every present and future consumer while
+     an exact-fit view still succeeds.
 
 Assessed and NOT mediators (recorded so a future reader does not re-derive them):
 ``numpy.dtype`` (describes an itemsize, allocates no buffer), ``_frombuffer`` (bounded by
@@ -77,6 +75,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._io._canonical_pickle import dump_canonical_metadata
+from torchlens._io._inline_tensor import rebuild_inline_tensor
 from torchlens._io._safe_unpickle import (
     _NUMPY_RECONSTRUCT_FUNCS,
     _SAFE_EXPLICIT_GLOBALS,
@@ -86,22 +86,11 @@ from torchlens._io._safe_unpickle import (
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 # torch renamed ``torch._C._TensorBase`` -> ``torch._C.TensorBase`` (the new name on
 # torch>=2.4; the old spelling remains on the 2.1 floor). Feature-detect so the tensor-base
 # descriptor probe below works across the whole supported range without parsing versions.
 _TENSOR_BASE = getattr(torch._C, "TensorBase", None) or torch._C._TensorBase
-
-# Embedded-tensor bundles are only loadable on torch>=2.6 (CVE-2025-32434: torch.load
-# weights_only RCE, fixed in 2.6). On older torch the load path CORRECTLY refuses, so the
-# embedded-blob round-trip tests below exercise a torch>=2.6 feature and are gated on the
-# same feature flag the production loader uses.
-_requires_safe_weights_only_load = pytest.mark.skipif(
-    not HAS_SAFE_WEIGHTS_ONLY_LOAD,
-    reason="embedded-tensor bundles are refused on torch<2.6 (CVE-2025-32434); "
-    "the round-trip is a torch>=2.6 feature",
-)
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -146,6 +135,33 @@ def _glob(module: str, name: str) -> bytes:
     """Emit a ``GLOBAL module name`` opcode."""
 
     return pickle.GLOBAL + (module + "\n" + name + "\n").encode()
+
+
+def _inline_tensor_reduce(tensor: torch.Tensor) -> bytes:
+    """``rebuild_inline_tensor(bytes, dtype, shape, False, "cpu")`` as REDUCE opcodes."""
+
+    data = tensor.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+    dtype_name = str(tensor.dtype).encode()
+    shape = b"".join(_binint(dim) for dim in tensor.shape)
+    return (
+        _glob("torchlens._io._inline_tensor", "rebuild_inline_tensor")
+        + pickle.MARK
+        + pickle.BINBYTES
+        + struct.pack("<I", len(data))
+        + data
+        + pickle.SHORT_BINUNICODE
+        + bytes([len(dtype_name)])
+        + dtype_name
+        + pickle.MARK
+        + shape
+        + pickle.TUPLE
+        + pickle.NEWFALSE
+        + pickle.SHORT_BINUNICODE
+        + bytes([3])
+        + b"cpu"
+        + pickle.TUPLE
+        + pickle.REDUCE
+    )
 
 
 def _binint(value: int) -> bytes:
@@ -321,16 +337,13 @@ def test_tensor_constructor_method_descriptor_reduce_refused() -> None:
     The second half of mediator (2), and the one that survived the first fix: descriptors
     fetched off ``torch._C.TensorBase`` carry ``__module__ is None``, so a
     ``__module__``-only ownership test misses them. The full chain is REACHABLE --
-    ``_safe_load_from_bytes`` yields a genuine (proportional, tiny) tensor from an embedded
-    blob, and ``getattr(TensorBase, "new_empty")(that_tensor, (N,))`` then returns an
+    the inline tensor reduction yields a genuine (proportional, tiny) tensor from stream
+    bytes, and ``getattr(TensorBase, "new_empty")(that_tensor, (N,))`` then returns an
     arbitrarily large UNINITIALIZED tensor. Measured before the fix: a 1,681-byte pickle
     produced a 16,000,000-byte tensor. Ownership is now read from ``__objclass__`` /
     ``__self__`` as well as ``__module__``.
     """
 
-    blob = io.BytesIO()
-    torch.save(torch.arange(2, dtype=torch.float32), blob)
-    embedded = blob.getvalue()
     descriptor = (
         _glob("builtins", "getattr")
         + _glob("torch._C", _TENSOR_BASE.__name__)
@@ -340,14 +353,7 @@ def test_tensor_constructor_method_descriptor_reduce_refused() -> None:
         + pickle.TUPLE2
         + pickle.REDUCE
     )
-    small_tensor = (
-        _glob("torch.storage", "_load_from_bytes")
-        + pickle.BINBYTES
-        + struct.pack("<I", len(embedded))
-        + embedded
-        + pickle.TUPLE1
-        + pickle.REDUCE
-    )
+    small_tensor = _inline_tensor_reduce(torch.arange(2, dtype=torch.float32))
     payload = (
         pickle.PROTO
         + bytes([2])
@@ -362,13 +368,7 @@ def test_tensor_constructor_method_descriptor_reduce_refused() -> None:
         + pickle.STOP
     )
 
-    # The malicious pickle embeds a tensor storage, so on torch < 2.6 the
-    # CVE-2025-32434 embedded-tensor refusal fires FIRST -- before the
-    # mediated-allocation guard this test targets is reached. Both are correct
-    # refusals of the hostile construction; assert the reason reachable on the
-    # running torch.
-    expected_refusal = "mediated allocation" if HAS_SAFE_WEIGHTS_ONLY_LOAD else "CVE-2025-32434"
-    with pytest.raises(pickle.UnpicklingError, match=expected_refusal):
+    with pytest.raises(pickle.UnpicklingError, match="mediated allocation"):
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
@@ -416,10 +416,11 @@ def test_vetted_rebuild_reconstructors_are_still_invocable() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 2b. The vetted ``_rebuild*`` family may not amplify an EMBEDDED storage.
+# 2b. The vetted ``_rebuild*`` family may not amplify any storage it can be handed.
 #
-# ``_rebuild_tensor_v2`` must stay invocable, so its bound is enforced at the SOURCE:
-# ``_safe_load_from_bytes`` freezes the embedded result, and torch's own ``set_`` then
+# ``_rebuild_tensor_v2`` must stay invocable, so its bound is enforced at the SOURCE: the
+# legacy embedded-storage source (``torch.storage._load_from_bytes``) is refused by name,
+# and the inline tensor reduction yields a non-resizable storage, so torch's own ``set_``
 # refuses to grow it.
 # --------------------------------------------------------------------------- #
 
@@ -431,6 +432,14 @@ def _uint8_typed_storage() -> Any:
         wrap_storage=torch.arange(4, dtype=torch.uint8).untyped_storage(),
         dtype=torch.uint8,
         _internal=True,
+    )
+
+
+def _typed_view(tensor: torch.Tensor) -> Any:
+    """Wrap a tensor's (frozen) untyped storage as the typed storage ``_rebuild_tensor_v2`` takes."""
+
+    return torch.storage.TypedStorage(
+        wrap_storage=tensor.untyped_storage(), dtype=tensor.dtype, _internal=True
     )
 
 
@@ -472,44 +481,42 @@ def _rebuild_amplification_pickle(blob: bytes, count: int) -> bytes:
     )
 
 
-@_requires_safe_weights_only_load
-@pytest.mark.parametrize("legacy", [False, True])
-def test_embedded_storage_is_never_resizable(legacy: bool) -> None:
-    """Both ``torch.save`` formats yield a NON-resizable storage through the wrapper.
+def test_inline_tensor_storage_is_never_resizable() -> None:
+    """The inline reduction yields a buffer-backed storage torch cannot grow."""
 
-    The LEGACY (non-zipfile) format used to yield a RESIZABLE one -- the growable handle
-    the amplification below needs.
+    for dtype in (torch.uint8, torch.float32):
+        itemsize = torch.empty((), dtype=dtype).element_size()
+        loaded = rebuild_inline_tensor(bytes(4 * itemsize), str(dtype), (4,))
+        assert not loaded.untyped_storage().resizable(), f"{dtype} stayed growable"
+
+
+def test_rebuild_tensor_v2_cannot_amplify_an_inline_tensor() -> None:
+    """A vetted ``_rebuild_tensor_v2`` may not GROW the storage behind an inline tensor.
+
+    ``_N`` here is small enough that a REGRESSION does not wedge the suite.
     """
 
-    from torchlens._io._safe_unpickle import _safe_load_from_bytes
-
-    for value in (torch.arange(4, dtype=torch.uint8), _uint8_typed_storage()):
-        loaded = _safe_load_from_bytes(_embedded_blob(value, legacy=legacy))
-        storage = (
-            loaded.untyped_storage()
-            if isinstance(loaded, torch.Tensor)
-            # ``_untyped_storage`` rather than ``untyped()``: the public accessor emits
-            # torch's TypedStorage-removal warning, which pytest escalates to an error.
-            else getattr(loaded, "_untyped_storage", loaded)
-        )
-        assert not storage.resizable(), f"{type(loaded).__name__} stayed growable"
+    storage = _typed_view(rebuild_inline_tensor(bytes(range(4)), "torch.uint8", (4,)))
+    with pytest.raises(RuntimeError, match="(?i)resiz"):
+        torch._utils._rebuild_tensor_v2(storage, 0, (_N,), (1,), False, None)
+    exact_fit = torch._utils._rebuild_tensor_v2(storage, 0, (4,), (1,), False, None)
+    assert exact_fit.tolist() == [0, 1, 2, 3]
 
 
-@pytest.mark.smoke_cells("test_rebuild_tensor_v2_cannot_amplify_an_embedded_storage[True]")
-@_requires_safe_weights_only_load
 @pytest.mark.parametrize("legacy", [False, True])
-def test_rebuild_tensor_v2_cannot_amplify_an_embedded_storage(legacy: bool) -> None:
-    """A vetted ``_rebuild_tensor_v2`` may not GROW the storage it was handed.
+def test_legacy_embedded_storage_refused_by_name(
+    legacy: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The former amplification carrier is refused at ``_load_from_bytes`` before torch.load."""
 
-    Measured before the fix on the legacy format: a 354-byte pickle produced a 100 MB
-    tensor (~282,000x, unbounded in the requested size). ``_N`` here is small enough that a
-    REGRESSION does not wedge the suite.
-    """
+    def _trip(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("torch.load was entered with file bytes")
 
+    monkeypatch.setattr(torch, "load", _trip)
     payload = _rebuild_amplification_pickle(
         _embedded_blob(_uint8_typed_storage(), legacy=legacy), _N
     )
-    with pytest.raises((pickle.UnpicklingError, RuntimeError), match="(?i)resiz"):
+    with pytest.raises(pickle.UnpicklingError, match=r"torch\.storage\._load_from_bytes"):
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
@@ -521,37 +528,33 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
     (path / "metadata.pkl").write_bytes(
         _rebuild_amplification_pickle(_embedded_blob(_uint8_typed_storage(), legacy=True), _N)
     )
-
     with pytest.raises(Exception) as caught:
         tl.load(path)
-    assert "resiz" in (str(caught.value) + str(caught.value.__cause__)).lower()
+    assert "_load_from_bytes" in str(caught.value) + str(caught.value.__cause__)
 
 
-@pytest.mark.smoke_cells("test_embedded_blob_round_trips_exactly_after_freezing[True]")
-@_requires_safe_weights_only_load
-@pytest.mark.parametrize("legacy", [False, True])
-def test_embedded_blob_round_trips_exactly_after_freezing(legacy: bool) -> None:
-    """Freezing preserves value, shape, stride, dtype and ``requires_grad`` exactly.
+@pytest.mark.smoke
+def test_inline_tensor_round_trips_exactly() -> None:
+    """The writer's inline reduction preserves value, shape, dtype and ``requires_grad``.
 
-    An EXACT-FIT ``_rebuild_tensor_v2`` view -- the only thing an honest stream asks for --
-    still succeeds against the frozen storage.
+    The loaded tensor is a contiguous copy (strides are not preserved); an EXACT-FIT
+    ``_rebuild_tensor_v2`` view over its storage still succeeds.
     """
-
-    from torchlens._io._safe_unpickle import _safe_load_from_bytes
 
     for original in (
         torch.arange(6, dtype=torch.float32).reshape(2, 3),
         torch.arange(12, dtype=torch.float32).reshape(3, 4)[:, 1:3],
         torch.ones(3, requires_grad=True),
     ):
-        loaded = _safe_load_from_bytes(_embedded_blob(original, legacy=legacy))
+        buffer = io.BytesIO()
+        dump_canonical_metadata({"t": original}, buffer)
+        assert b"_load_from_bytes" not in buffer.getvalue()
+        loaded = SafeBundleUnpickler(io.BytesIO(buffer.getvalue())).load()["t"]
         assert torch.equal(loaded.detach(), original.detach())
         assert loaded.shape == original.shape
-        assert loaded.stride() == original.stride()
         assert loaded.dtype == original.dtype
         assert loaded.requires_grad == original.requires_grad
-
-    storage = _safe_load_from_bytes(_embedded_blob(_uint8_typed_storage(), legacy=legacy))
+    storage = _typed_view(rebuild_inline_tensor(bytes(range(4)), "torch.uint8", (4,)))
     exact_fit = torch._utils._rebuild_tensor_v2(storage, 0, (4,), (1,), False, None)
     assert exact_fit.tolist() == [0, 1, 2, 3]
 
