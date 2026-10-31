@@ -47,10 +47,10 @@ def test_trace_derived_counts_match_accessors() -> None:
     trace = _make_trace()
 
     assert len(trace.layers) == len(trace.layers)
-    assert len(trace.compute_layers) == len(trace.compute_layers)
+    assert len(trace.layers.compute) == len(trace.layers.compute)
     assert len(trace.compute_ops) == len(trace.compute_ops)
     assert len(trace.saved_grad_ops) == len(trace.saved_grad_ops)
-    assert len(trace.saved_grad_layers) == len(trace.saved_grad_layers)
+    assert len(trace.layers.saved_grad) == len(trace.layers.saved_grad)
     assert trace.num_input_layers == len(trace.input_layers)
     assert trace.num_output_layers == len(trace.output_layers)
     assert trace.num_buffer_layers == len(trace.buffer_layers)

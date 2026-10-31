@@ -166,13 +166,13 @@ def test_op_and_layer_counts(graph_trace, mixed_trace) -> None:
     assert int(len(trace)) == G_OPS
     assert int(len(trace.layers)) == G_LAYERS
     assert int(len(trace.compute_ops)) == G_COMPUTE_OPS
-    assert int(len(trace.compute_layers)) == G_COMPUTE_LAYERS
+    assert int(len(trace.layers.compute)) == G_COMPUTE_LAYERS
     assert int(trace.graph.num_layer_edges) == G_LAYER_EDGES
     # Mixed: input, double, wide linear, float, tied linear (2 passes), output.
     assert int(len(mixed_trace)) == 7
     assert int(len(mixed_trace.layers)) == 6
     assert int(len(mixed_trace.compute_ops)) == 5
-    assert int(len(mixed_trace.compute_layers)) == 4
+    assert int(len(mixed_trace.layers.compute)) == 4
 
 
 def test_boundary_counts(graph_trace) -> None:
@@ -216,23 +216,23 @@ def test_internal_source_and_sink_counts(
 ) -> None:
     # Graph: sources are the buffer read and torch.ones; the sink is sigmoid.
     trace = graph_trace
-    assert int(len(trace.internal_source_ops)) == int(len(trace.internal_source_layers)) == 2
-    assert int(len(trace.internal_sink_ops)) == int(len(trace.internal_sink_layers)) == 1
+    assert int(len(trace.internal_source_ops)) == int(len(trace.layers.internal_source)) == 2
+    assert int(len(trace.internal_sink_ops)) == int(len(trace.layers.internal_sink)) == 1
     # Counter: the two buffer reads are sources; the written count, which has
     # the add_ as its parent, is a sink and not a source.
     trace = counter_trace
-    assert int(len(trace.internal_source_ops)) == int(len(trace.internal_source_layers)) == 2
-    assert int(len(trace.internal_sink_ops)) == int(len(trace.internal_sink_layers)) == 1
+    assert int(len(trace.internal_source_ops)) == int(len(trace.layers.internal_source)) == 2
+    assert int(len(trace.internal_sink_ops)) == int(len(trace.layers.internal_sink)) == 1
     # BatchNorm: the three reads are sources, the three writes are sinks.
     trace = batchnorm_trace
-    assert int(len(trace.internal_source_ops)) == int(len(trace.internal_source_layers)) == 3
-    assert int(len(trace.internal_sink_ops)) == int(len(trace.internal_sink_layers)) == 3
+    assert int(len(trace.internal_source_ops)) == int(len(trace.layers.internal_source)) == 3
+    assert int(len(trace.internal_sink_ops)) == int(len(trace.layers.internal_sink)) == 3
     # Looped: the four initial reads are sources; only each buffer's last
     # write is unread, so four sinks. Each buffer is one Layer whose passes
     # are its versions, so the source and sink Layers are the same four.
     trace = looped_trace
-    assert int(len(trace.internal_source_ops)) == int(len(trace.internal_source_layers)) == 4
-    assert int(len(trace.internal_sink_ops)) == int(len(trace.internal_sink_layers)) == 4
+    assert int(len(trace.internal_source_ops)) == int(len(trace.layers.internal_source)) == 4
+    assert int(len(trace.internal_sink_ops)) == int(len(trace.layers.internal_sink)) == 4
 
 
 def test_parent_child_and_input_counts(graph_trace) -> None:
@@ -328,7 +328,7 @@ def test_saved_gradient_counts(grad_trace) -> None:
     # The input does not require grad; linear a, relu, linear b and the output
     # receive a gradient: four Ops, four Layers.
     assert int(len(trace.saved_grad_ops)) == 4
-    assert int(len(trace.saved_grad_layers)) == 4
+    assert int(len(trace.layers.saved_grad)) == 4
     # Every call's output Op received a gradient: self:1 (the output), a:1, b:1.
     assert int(len(trace.saved_grad_module_calls)) == 3
     assert int(len(trace.saved_grad_modules)) == 3

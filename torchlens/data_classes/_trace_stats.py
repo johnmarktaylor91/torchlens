@@ -177,7 +177,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return read_peak_pair(self)
 
     @property
-    def recurrent_layers(self: "Trace") -> "LayerAccessor":
+    def _layers_recurrent(self: "Trace") -> "LayerAccessor":
         """Access Layers with more than one captured pass.
 
         Returns
@@ -1522,7 +1522,7 @@ class TraceStatsMixin(_TraceMixinBase):
         )
 
     @property
-    def saved_grad_layers(self: "Trace") -> Accessor[Layer]:
+    def _layers_saved_grad(self: "Trace") -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved gradient."""
 
         from .layer import LayerAccessor
@@ -1640,7 +1640,7 @@ class TraceStatsMixin(_TraceMixinBase):
         )
 
     @property
-    def compute_layers(self: "Trace") -> Accessor[Layer]:
+    def _layers_compute(self: "Trace") -> Accessor[Layer]:
         """Access Layers whose representative Op is not a boundary sentinel."""
 
         from .layer import LayerAccessor
@@ -1715,7 +1715,7 @@ class TraceStatsMixin(_TraceMixinBase):
         ]
 
     @property
-    def internal_source_layers(self: "Trace") -> Accessor[Layer]:
+    def _layers_internal_source(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
         from .layer import LayerAccessor
@@ -1729,7 +1729,7 @@ class TraceStatsMixin(_TraceMixinBase):
         )
 
     @property
-    def internal_sink_layers(self: "Trace") -> Accessor[Layer]:
+    def _layers_internal_sink(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
         from .layer import LayerAccessor

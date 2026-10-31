@@ -10,6 +10,7 @@ qualname resolution working.
 """
 
 import weakref
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Optional
 
 from .._errors import AmbiguousOpLookupError
@@ -236,6 +237,50 @@ class LayerAccessor(Accessor["Layer"]):
         if source is not None and hasattr(source, "find_layers"):
             return source.find_layers(str(key))
         return []
+
+    def _trace_filtered(self, impl: str) -> "LayerAccessor":
+        """Return the Trace-level layer filter ``impl`` restricted to this collection."""
+
+        records = list(self._dict.values())
+        if not records:
+            return LayerAccessor(OrderedDict())
+        trace = records[0].source_trace
+        full = getattr(trace, impl)
+        members = {id(layer) for layer in records}
+        return LayerAccessor(
+            OrderedDict((label, layer) for label, layer in full.items() if id(layer) in members),
+            source_trace=trace,
+        )
+
+    @property
+    def compute(self) -> "LayerAccessor":
+        """Access Layers whose representative Op is not a boundary sentinel."""
+
+        return self._trace_filtered("_layers_compute")
+
+    @property
+    def recurrent(self) -> "LayerAccessor":
+        """Access Layers with more than one captured pass."""
+
+        return self._trace_filtered("_layers_recurrent")
+
+    @property
+    def saved_grad(self) -> "LayerAccessor":
+        """Access Layers containing at least one Op with a saved gradient."""
+
+        return self._trace_filtered("_layers_saved_grad")
+
+    @property
+    def internal_source(self) -> "LayerAccessor":
+        """Access Layers representing internal-source positions."""
+
+        return self._trace_filtered("_layers_internal_source")
+
+    @property
+    def internal_sink(self) -> "LayerAccessor":
+        """Access Layers representing internal-sink positions."""
+
+        return self._trace_filtered("_layers_internal_sink")
 
     def by_operator(self, operator: str | None = None) -> dict[str, int] | list[str]:
         """Group layers by Torch operator name.

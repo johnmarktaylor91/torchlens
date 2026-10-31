@@ -70,7 +70,7 @@ def _only(accessor):
 
 def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     trace, report = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     for value in (trace.num_params, layer.num_params, op.num_params, module.num_params):
         assert int(value) == A_PARAMS
@@ -82,7 +82,7 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
         assert int(value.num_param_tensors) == A_TENSORS
 
     trace, report = fixture_b
-    layers = {layer.layer_label: layer for layer in trace.compute_layers}
+    layers = {layer.layer_label: layer for layer in trace.layers.compute}
     ops = {op.label: op for op in trace.compute_ops}
     modules = {module.address: module for module in trace.modules}
     assert int(trace.num_params_frozen) == B_A
@@ -103,7 +103,7 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
 
 def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     for value in (
         op.param_memory,
@@ -125,7 +125,7 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
 def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
     trace, report = fixture_a
     layer, op, module = (
-        _only(trace.compute_layers),
+        _only(trace.layers.compute),
         _only(trace.compute_ops),
         _only(trace.modules),
     )
@@ -161,7 +161,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
 
 def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     assert int(layer.num_ops) == 1 and int(layer.num_passes) == 1 and int(op.num_passes) == 1
     # A module call counts its boundary ops: input, linear, output.
@@ -177,7 +177,7 @@ def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
 
 def test_activation_bytes_on_every_compute_door(fixture_a) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     for value in (op.activation_memory, layer.activation_memory, layer.total_activation_memory):
         assert int(value) == A_OUT_BYTES
     # The trace total sums every retained activation: the input and the output.

@@ -140,7 +140,7 @@ def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
     yield "SummaryTotals", report.totals
     yield "CaptureFacts", report.capture
     for name, accessor in (
-        ("Layer", trace.compute_layers),
+        ("Layer", trace.layers.compute),
         ("Op", trace.compute_ops),
         ("Module", trace.modules),
         ("ModuleCall", trace.module_calls),

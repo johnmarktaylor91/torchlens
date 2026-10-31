@@ -24,6 +24,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `trace.params.numel_by_path` counts ties once per module path; `.labels` gives the addresses
   (`trace.params.unexecuted.labels`).
 
+**Layer filters**
+: `trace.layers.compute`, `.recurrent`, `.saved_grad`, `.internal_source` and `.internal_sink`
+  are Layer collections; on any Layer collection they keep the members that pass the Trace-level
+  filter, so `len(trace.layers.compute)` counts the compute Layers.
+
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
