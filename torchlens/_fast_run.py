@@ -957,6 +957,16 @@ class _FastSparseSession:
         )
 
 
+def _output_tensor_leaves(output: Any) -> tuple[Any, ...]:
+    """Return the tensor leaves of one live call output (one container level)."""
+
+    if isinstance(output, torch.Tensor):
+        return (output,)
+    if isinstance(output, (tuple, list)):
+        return tuple(item for item in output if isinstance(item, torch.Tensor))
+    return ()
+
+
 class _FastLiveSession:
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
@@ -969,7 +979,10 @@ class _FastLiveSession:
         self.active = False
         self.module_index = 0
         self.function_index = 0
-        self.last_function_output: tuple[str, int] | None = None
+        # The last collected functional event: its name, output object and
+        # tensor leaves, held strongly so a later same-name event is compared by
+        # object identity, never by a reusable ``id()``.
+        self.last_function_output: tuple[str, Any, tuple[Any, ...]] | None = None
         self.failure: ContractCheck | None = None
         self.module_plans = build_module_plans(trace)
         self.function_plans = build_function_plans(
@@ -1194,15 +1207,38 @@ class _FastLiveSession:
         if self.stop_at == ("module", self.module_index - 1) and self.failure is None:
             raise FastUntilReached
 
+    def _repeats_last_function_output(self, func_name: str, output: Any) -> bool:
+        """Return whether a same-name event hands back the last collected output.
+
+        A wrapped torch function that calls another wrapped spelling of itself
+        (``F.relu`` into ``torch.relu``; ``F.adaptive_max_pool1d`` into the
+        ``_with_indices`` tuple it unpacks) fires one event per layer for one
+        captured op, so the outer event is skipped when its output IS the inner
+        output or one of its tensor leaves. Identity is checked on the live
+        objects, which the session keeps alive: comparing ``id()`` values let a
+        later same-name op whose fresh output reused a freed tensor's address
+        be dropped, shifting every later plan by one (a false arm divergence).
+        """
+
+        last = self.last_function_output
+        if last is None or last[0] != func_name or output is None:
+            return False
+        _name, last_output, last_leaves = last
+        if output is last_output:
+            return True
+        if isinstance(output, torch.Tensor):
+            return any(output is leaf for leaf in last_leaves)
+        leaves = _output_tensor_leaves(output)
+        return bool(leaves) and all(any(leaf is kept for kept in last_leaves) for leaf in leaves)
+
     def capture_function(self, func_name: str, output: Any) -> None:
         """Collect and guard one explicitly requested functional-op event."""
 
         if not self.wants_function(func_name) or self.failure:
             return
-        output_identity = (func_name, id(output))
-        if output_identity == self.last_function_output:
+        if self._repeats_last_function_output(func_name, output):
             return
-        self.last_function_output = output_identity
+        self.last_function_output = (func_name, output, _output_tensor_leaves(output))
         if self.function_index >= len(self.function_plans):
             self.failure = _contract_check(
                 "fast_live_function_extra",
@@ -1250,6 +1286,7 @@ class _FastLiveSession:
             _state._active_fast_run_collector = prior
             self.active = False
             self.owner_thread_id = None
+            self.last_function_output = None
 
     def _admit_inputs(self, inputs: Any) -> tuple[Any, Mapping[str, Any], bool]:
         """Split the runtime inputs and admit them against the captured input boundary.
