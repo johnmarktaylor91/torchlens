@@ -95,7 +95,7 @@ def cleanup(self: "Trace") -> None:
     # GC-1: Release parameter references to allow model GC.
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:
-            pl.release_param_ref()
+            pl._release_param_ref()
     # Materialize the M8 Layer mirror fields BEFORE husking the ops that back
     # them: a user-held Layer keeps exactly the readable metadata the dict-era
     # per-layer copies kept after cleanup (the copies existed at this point in

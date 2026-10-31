@@ -1202,7 +1202,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if hasattr(self.param_logs, "_rehydrate_on_iter"):
             self.param_logs._rehydrate_on_iter = False
         for param_log in self.param_logs.values():
-            param_log.release_param_ref()
+            param_log._release_param_ref()
         if hasattr(self.param_logs, "_rehydrate_on_iter"):
             self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
 

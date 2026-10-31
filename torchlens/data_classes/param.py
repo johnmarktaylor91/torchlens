@@ -310,30 +310,6 @@ class Param:
         return len(self.all_addresses) > 1
 
     @property
-    def num_uses_by_ops(self) -> int:
-        """Return the number of distinct Op usages.
-
-        Returns
-        -------
-        int
-            Count of pass-qualified Op labels in ``used_by_ops``.
-        """
-
-        return len(self.used_by_ops)
-
-    @property
-    def num_uses_by_layers(self) -> int:
-        """Return the number of distinct Layer usages.
-
-        Returns
-        -------
-        int
-            Count of Layer labels in ``used_by_layers``.
-        """
-
-        return len(self.used_by_layers)
-
-    @property
     def trace(self) -> Any:
         """Owning Trace, if still alive."""
 
@@ -785,7 +761,7 @@ class Param:
 
         return fail_open(lambda: param_card(self), lambda _error: self.__repr__())
 
-    def release_param_ref(self) -> None:
+    def _release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""
         if self._param_ref is None and self._param_ref_released:
             return

@@ -86,8 +86,6 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
         "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
         "params",  # ParamAccessor -- use trace.params.to_pandas()
         "recursive_params",  # ParamAccessor -- same as params
-        "call_parent_module",  # Module reference -- call_parent already carries the label
-        "call_children_modules",  # list[Module] -- call_children already carries the labels
         "output_structure",  # ContainerSpec -- structural, not a flat scalar
         "forward_args_template",  # arbitrary structural template, not a flat scalar
         "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
@@ -1661,41 +1659,6 @@ class Module:
 
         return module_collapse_score(self)
 
-    @property
-    def call_parent_address(self) -> str | None:
-        """Parent Module address (label string) in the dynamic call tree.
-
-        Glossary stored-form name; ``call_parent_module`` resolves the record.
-        """
-
-        return cast("str | None", self.call_parent)
-
-    @property
-    def call_children_addresses(self) -> list[str]:
-        """Child Module addresses (label strings) in the dynamic call tree.
-
-        Glossary stored-form name; ``call_children_modules`` resolves the records.
-        """
-
-        return list(self.call_children)
-
-    @property
-    def call_parent_module(self) -> "Module | None":
-        """Parent Module in the dynamic call tree, if any."""
-
-        if self.call_parent is None or self._source_trace is None:
-            return None
-        return cast("Module", self._source_trace.modules[self.call_parent])
-
-    @property
-    def call_children_modules(self) -> list["Module"]:
-        """Child Modules in the dynamic call tree."""
-
-        trace = self._source_trace
-        if trace is None:
-            return []
-        return [cast("Module", trace.modules[address]) for address in self.call_children]
-
     def _recursive_modules_depth_first(self) -> list["Module"]:
         """Return this Module and address descendants in stable depth-first order."""
 
@@ -1740,12 +1703,6 @@ class Module:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
-
-    @property
-    def recursive_param_addresses(self) -> list[str]:
-        """Parameter addresses in the same order as ``recursive_params``."""
-
-        return list(self.recursive_params.keys())
 
     @property
     def num_recursive_params(self) -> int:

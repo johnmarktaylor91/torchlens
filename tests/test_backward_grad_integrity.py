@@ -242,7 +242,7 @@ def test_backward_graph_task_id_routes_through_torch_compat(
 
 @pytest.mark.parametrize("save_mode", ["reference", "view"])
 def test_legacy_grad_slot_stores_snapshot_not_alias(save_mode: str) -> None:
-    """``Op.log_tensor_grad`` snapshots the observed gradient under all modes.
+    """``Op._log_tensor_grad`` snapshots the observed gradient under all modes.
 
     The legacy backward-hook write went through ``safe_copy(save_mode=...)``,
     which returns a storage ALIAS under ``reference``/``view``. Output-layer

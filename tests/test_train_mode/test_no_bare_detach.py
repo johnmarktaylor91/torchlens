@@ -17,8 +17,8 @@ SCANNED_PATHS = (
 )
 ALLOWLIST = {
     "Op._tensor_contents_str_helper",
-    "Op.log_tensor_grad",
-    "log_tensor_grad",
+    "Op._log_tensor_grad",
+    "_log_tensor_grad",
 }
 MAX_DETACH_OK_EXEMPTIONS = 5
 

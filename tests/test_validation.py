@@ -5990,7 +5990,7 @@ def test_param_deep_xref_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        used_params = [param for param in log.param_logs if param.num_uses_by_ops > 0]
+        used_params = [param for param in log.param_logs if len(param.used_by_ops) > 0]
         assert used_params
         assert any(param.used_by_layers for param in used_params)
         assert log.layers_with_params
@@ -6004,8 +6004,8 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
 
     log = _make_recurrent_log()
     try:
-        recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
-        assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
+        recurrent_param = next(param for param in log.param_logs if len(param.used_by_ops) > 1)
+        assert len(recurrent_param.used_by_ops) == len(recurrent_param.used_by_ops)
         assert len(recurrent_param.used_by_layers) == 1
         assert check_metadata_invariants(log) is True
     finally:
@@ -7603,7 +7603,7 @@ def test_param_xrefs_accept_used_param_whose_owner_module_is_never_entered() -> 
     ):
         log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(random_seed=42))
         try:
-            used = [param for param in log.param_logs if param.num_uses_by_ops]
+            used = [param for param in log.param_logs if param.used_by_ops]
             assert used, "fixture no longer records used params"
             check_metadata_invariants(log)
         finally:

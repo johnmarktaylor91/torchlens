@@ -730,8 +730,6 @@ PARAM_LOG_FIELD_ORDER = [
     "num_calls",
     "used_by_ops",
     "used_by_layers",
-    "num_uses_by_ops",
-    "num_uses_by_layers",
     "co_parent_params",
     "has_grad",
     "grad_shape",
@@ -853,8 +851,6 @@ MODULE_LOG_FIELD_ORDER = [
     # Hierarchy — call-based
     "call_parent",
     "call_children",
-    "call_parent_module",
-    "call_children_modules",
     "call_depth",
     # Pass info
     "num_calls",
@@ -884,7 +880,6 @@ MODULE_LOG_FIELD_ORDER = [
     "num_recursive_param_tensors",
     "num_recursive_param_tensors_trainable",
     "num_recursive_param_tensors_frozen",
-    "recursive_param_addresses",
     "param_memory",
     "has_trainable_params",
     "has_frozen_params",

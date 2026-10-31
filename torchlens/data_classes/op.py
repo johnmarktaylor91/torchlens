@@ -2345,19 +2345,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return self.source_trace
 
     @property
-    def grad_fn_cls(self) -> type[Any] | None:
-        """Return the live grad_fn_handle class when the autograd object is retained.
-
-        Returns
-        -------
-        type[Any] | None
-            Runtime grad_fn_handle class, or ``None`` when the object is unavailable.
-        """
-
-        grad_fn_handle = self.grad_fn_handle
-        return None if grad_fn_handle is None else type(grad_fn_handle)
-
-    @property
     def grads(self) -> GradientRecordAccessor:
         """Per-pass gradient records saved for this Op."""
 
@@ -3959,7 +3946,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             self._internal_set("saved_args", None)
             self._internal_set("saved_kwargs", None)
 
-    def log_tensor_grad(
+    def _log_tensor_grad(
         self,
         grad: torch.Tensor,
         prebuilt: "tuple[torch.Tensor | None, Any | None] | None" = None,
