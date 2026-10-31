@@ -56,7 +56,7 @@ def _counted_rows_name_their_forward_op(trace: Any, status: Any) -> None:
     """Every row with counted work names a forward op the trace holds, or a node without one."""
 
     labels = {str(op.layer_label) for op in trace.layer_list}
-    for attribution in status.attributions:
+    for attribution in status.flops_attributions:
         for row in attribution.rows:
             if row.flops and row.op_label is not None:
                 assert row.op_label in labels, (row, sorted(labels))
@@ -74,7 +74,7 @@ def test_matmul_family_attribution_conserves_the_count(case: str) -> None:
         assert status.executed_flops == expected
         _counted_rows_name_their_forward_op(trace, status)
         # The engine's seed gradient runs under no recorded node: unattributed, named.
-        names = [name for a in status.attributions for name, _flops in a.unattributed_ops]
+        names = [name for a in status.flops_attributions for name, _flops in a.unattributed_ops]
         assert "aten.ones_like.default" in names
     finally:
         trace.cleanup()
@@ -119,7 +119,7 @@ def test_zoo_second_order_attribution_conserves_each_pass() -> None:
             (1, row["closed_grad_phase"]),
             (2, row["closed_double_backward"]),
         )
-        assert [a.pass_index for a in status.attributions] == [1, 2]
+        assert [a.pass_index for a in status.flops_attributions] == [1, 2]
     finally:
         trace.cleanup()
 
@@ -142,7 +142,7 @@ def test_two_traces_in_one_backward_each_keep_their_own_nodes() -> None:
         assert status1.executed_flops == 2 * 5 * 4 * 3
         assert status2.executed_flops == 2 * 5 * 3 * 2
         for trace, status in ((trace1, status1), (trace2, status2)):
-            (attribution,) = status.attributions
+            (attribution,) = status.flops_attributions
             assert attribution.other_trace_ops > 0
             assert "another trace's nodes" in status.reason
             (counted,) = [row for row in attribution.rows if row.flops]
@@ -199,7 +199,7 @@ def _checkpointed_trace(mode: str) -> Any:
 def _rows_by_label(status: Any) -> dict[str, int]:
     return {
         row.grad_fn_label: row.flops - row.recompute_flops
-        for attribution in status.attributions
+        for attribution in status.flops_attributions
         for row in attribution.rows
     }
 
@@ -216,15 +216,15 @@ def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> No
         assert recompute_observation(twin) == "none_observed"
         assert status.recompute_flops == SEGMENT_FORWARD
         assert twin_status.recompute_flops == 0
-        assert [a.recompute for a in twin_status.attributions] == ["none_observed"]
-        assert [a.recompute for a in status.attributions] == ["labeled"]
+        assert [a.recompute for a in twin_status.flops_attributions] == ["none_observed"]
+        assert [a.recompute for a in status.flops_attributions] == ["labeled"]
         assert status.executed_flops - status.recompute_flops == twin_status.executed_flops
         assert "recomputed forward under checkpointing" in status.status_line
         if mode == "non_reentrant":
             # Same nodes as the twin: removing the recompute share leaves every row unchanged.
             assert _rows_by_label(status) == _rows_by_label(twin_status)
         else:
-            (row,) = [r for a in status.attributions for r in a.rows if r.recompute_flops]
+            (row,) = [r for a in status.flops_attributions for r in a.rows if r.recompute_flops]
             assert row.op_label is None and row.recompute_flops == SEGMENT_FORWARD
         forward = {
             str(op.layer_label): op.flops_forward
@@ -253,7 +253,7 @@ def test_recompute_under_create_graph_is_unknown_not_guessed() -> None:
         torch.autograd.grad(out.sum(), x, create_graph=True)
         status = _assert_conserved(trace)
         assert status.recompute_flops is None
-        assert [a.recompute for a in status.attributions] == ["unknown"]
+        assert [a.recompute for a in status.flops_attributions] == ["unknown"]
         assert "recompute share unknown" in status.status_line
     finally:
         trace.cleanup()

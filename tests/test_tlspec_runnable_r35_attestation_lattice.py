@@ -56,7 +56,7 @@ def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
     path = _save(_AddOneModel().eval(), x, tmp_path / "dev.tlspec")
     result = tl.load(path).run(inputs=x.cuda(), on_divergence=DivergencePolicy.RETURN_DIVERGED)
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 

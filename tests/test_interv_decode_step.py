@@ -87,7 +87,7 @@ def test_module_boundary_rule_fires_at_one_decode_step(model: torch.nn.Module) -
         result = bound.generate(_IDS, **_GENERATE)
     report = bound.last_report
     assert report is not None and report.trace is None
-    assert report.fire_count == 1
+    assert report.num_fires == 1
     want = _oracle_scores(model, ("transformer.h.0",), (2,), torch.zeros_like)
     torch.testing.assert_close(_scores(result), want, rtol=0.0, atol=1e-6)
     with torch.no_grad():
@@ -107,7 +107,7 @@ def test_op_level_rule_fires_at_one_decode_step(model: torch.nn.Module) -> None:
     assert report is not None
     layer_norms = ("transformer.h.0.ln_1", "transformer.h.0.ln_2")
     layer_norms += ("transformer.h.1.ln_1", "transformer.h.1.ln_2", "transformer.ln_f")
-    assert report.fire_count == len(layer_norms)
+    assert report.num_fires == len(layer_norms)
     want = _oracle_scores(model, layer_norms, (1,), lambda out: out * 0.5)
     torch.testing.assert_close(_scores(result), want, rtol=0.0, atol=1e-6)
 

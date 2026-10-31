@@ -295,7 +295,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     """The row cell carries the grouped summary; the accessor the full dump."""
 
     report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
-    row = report.row("torch_capabilities")
+    row = report.check("torch_capabilities")
     assert "capabilities present" in row.details
     snapshot = report.capability_snapshot()
     assert isinstance(snapshot, dict) and len(snapshot) > 10

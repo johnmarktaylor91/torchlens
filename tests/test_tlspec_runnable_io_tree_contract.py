@@ -141,7 +141,7 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
         inputs=[x, {key: 1}], on_divergence=DivergencePolicy.RETURN_DIVERGED
     )
     assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -340,7 +340,7 @@ def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Pat
         inputs=[t, np.float64(9.0)], on_divergence=DivergencePolicy.RETURN_DIVERGED
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert changed.report.poisoned
+    assert changed.report.is_poisoned
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +383,7 @@ def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> 
         on_divergence=DivergencePolicy.RETURN_DIVERGED,
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
 
 
 # ---------------------------------------------------------------------------

@@ -246,7 +246,7 @@ def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> No
     row = compat_report(torch.nn.Linear(2, 2), torch.randn(1, 2)).check("mechanical_belt")
     assert row.status == "scope"
     assert row.severity == "warning"
-    assert row.detected is True
+    assert row.is_detected is True
     assert "torch.frombuffer" in row.details
 
 

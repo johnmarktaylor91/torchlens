@@ -101,7 +101,7 @@ def test_capture_free_bind_edits_the_last_real_token() -> None:
     bound = tl.when(tl.module("1"), edit).bind(model)
     with torch.no_grad():
         got = bound(_IDS)
-    assert bound.last_report is not None and bound.last_report.fire_count == 1
+    assert bound.last_report is not None and bound.last_report.num_fires == 1
     torch.testing.assert_close(got, _by_hand(model, [0, 1], [2, 4], _zero), rtol=0.0, atol=1e-6)
 
 

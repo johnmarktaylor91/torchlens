@@ -166,10 +166,10 @@ def test_default_run_restores_declared_state_bit_identical() -> None:
     before = _declared_state_clone(model)
     first = log.run(inputs=torch.randn(2, 4))
     _assert_declared_state_equal(model, before)
-    assert first.report.state_carried is False
+    assert first.report.has_carried_state is False
     second = log.run(inputs=torch.randn(2, 4))
     _assert_declared_state_equal(model, before)
-    assert second.report.state_carried is False
+    assert second.report.has_carried_state is False
 
 
 def test_carry_state_persists_mutations_and_discloses() -> None:
@@ -182,7 +182,7 @@ def test_carry_state_persists_mutations_and_discloses() -> None:
     log = tl.trace(model, x)
     weight_before = model.lin.weight.detach().clone()
     result = log.run(inputs=torch.randn(2, 4), carry_state=True)
-    assert result.report.state_carried is True
+    assert result.report.has_carried_state is True
     assert not torch.equal(model.lin.weight, weight_before)
 
 
@@ -262,7 +262,7 @@ def test_snapshot_preflight_refuses_overlapping_state_typed() -> None:
     _assert_declared_state_equal(model, before)
     # carry_state=True is the documented escape: the run proceeds without the bracket.
     result = log.run(inputs=torch.randn(2, 4), carry_state=True)
-    assert result.report.state_carried is True
+    assert result.report.has_carried_state is True
 
 
 def test_restore_failure_marks_and_raises() -> None:

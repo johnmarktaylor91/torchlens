@@ -115,7 +115,7 @@ def _assert_not_blessed(report) -> None:
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-    assert report.poisoned
+    assert report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +176,7 @@ def test_original_input_escape_still_verified_attested(
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, model_cls()(capture_x.clone()))
 
 
@@ -204,7 +204,7 @@ def test_buffer_branch_original_state_still_verified(tmp_path: Path) -> None:
     # Embedded capture state (gate=True).
     embedded = tl.load(path).run(inputs=x)
     assert embedded.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not embedded.report.poisoned
+    assert not embedded.report.is_poisoned
     assert torch.allclose(embedded.output, x + 1)
 
     # Re-staging the identical capture-equivalent state stays VERIFIED.
@@ -212,7 +212,7 @@ def test_buffer_branch_original_state_still_verified(tmp_path: Path) -> None:
     loaded.load_state_dict({"gate": torch.tensor(True)})
     restaged = loaded.run(inputs=x)
     assert restaged.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not restaged.report.poisoned
+    assert not restaged.report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -238,7 +238,7 @@ def test_dead_sink_and_escape_free_models_unchanged(tmp_path: Path) -> None:
     path = _save(DeadSinkModel(), torch.tensor([1.0, 2.0]), tmp_path / "d.tlspec")
     result = tl.load(path).run(inputs=torch.tensor([7.0, 8.0]))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, DeadSinkModel()(torch.tensor([7.0, 8.0])))
 
 
@@ -309,7 +309,7 @@ def test_r10_input_escape_original_still_verified(
     path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
     result = tl.load(path).run(inputs=capture_x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, model_cls()(capture_x.clone()))
 
 
@@ -364,7 +364,7 @@ def test_r10_data_alias_escape_original_still_verified(tmp_path: Path) -> None:
     )
     original = tl.load(path).run(inputs=torch.tensor([2.0, 2.0]))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not original.report.poisoned
+    assert not original.report.is_poisoned
     assert torch.allclose(original.output, DataAliasScalarEscape()(torch.tensor([2.0, 2.0])))
 
 
@@ -424,7 +424,7 @@ def test_r10_inplace_mutated_source_original_still_verified(tmp_path: Path) -> N
     # The original input is value-correct (7 * 6 = 42) and must NOT be spuriously
     # downgraded by digesting the post-mutation live slot instead of the snapshot.
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert abs(result.output.item() - 42.0) < 1e-5
 
 

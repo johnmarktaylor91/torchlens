@@ -157,7 +157,7 @@ def test_r77_fresh_parameter_launder_ceils_on_layout_twin(tmp_path: Path) -> Non
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -175,7 +175,7 @@ def test_r77_fresh_parameter_launder_fails_closed_on_same_layout(tmp_path: Path)
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r77_registered_param_wrap_stays_verified(tmp_path: Path) -> None:
@@ -192,11 +192,11 @@ def test_r77_registered_param_wrap_stays_verified(tmp_path: Path) -> None:
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.poisoned
+    assert not twin.report.is_poisoned
 
 
 def test_r77_prepped_param_mixed_chain_keeps_precise_witness(tmp_path: Path) -> None:
@@ -212,11 +212,11 @@ def test_r77_prepped_param_mixed_chain_keeps_precise_witness(tmp_path: Path) -> 
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert twin.report.poisoned
+    assert twin.report.is_poisoned
 
 
 def test_r77_on_path_fresh_parameter_warns_and_refuses_at_save(tmp_path: Path) -> None:
@@ -255,8 +255,8 @@ def test_r77_buffer_control_stays_honest(tmp_path: Path) -> None:
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert twin.report.poisoned
+    assert twin.report.is_poisoned
     assert twin.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     same = tl.load(path).run(inputs=x)
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned

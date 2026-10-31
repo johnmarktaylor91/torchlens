@@ -31,7 +31,7 @@ def _save_load(trace: Any, tmp_path: Path, name: str) -> Any:
 def _row_facts(status: Any) -> list[tuple[Any, ...]]:
     return [
         (row.pass_index, row.grad_fn_label, row.call_index, row.op_label, row.flops)
-        for attribution in status.attributions
+        for attribution in status.flops_attributions
         for row in attribution.rows
     ]
 

@@ -116,7 +116,7 @@ def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Pat
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the twin takes the OTHER arm; the replayed arm is wrong.
     fresh = ContiguityBranch()(_layout_twin(x))
     assert torch.equal(fresh, x - 100)
@@ -168,7 +168,7 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
     diverged = tl.load(path).run(inputs=grad_input, on_divergence=DivergencePolicy.RETURN_DIVERGED)
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the grad input takes the OTHER arm; the replayed arm is wrong.
     fresh = RequiresGradBranch()(x.clone().requires_grad_(True))
     torch.testing.assert_close(fresh.detach(), x * 2)

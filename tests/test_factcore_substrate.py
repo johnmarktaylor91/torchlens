@@ -167,7 +167,7 @@ def test_health_three_states() -> None:
 
     selective = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
     facts = selective.health_facts
-    assert facts.unexamined > 0
+    assert facts.num_unexamined_ops > 0
     assert selective.nonfinite_verdict == "not_checked"  # partial clean never upgrades
 
 

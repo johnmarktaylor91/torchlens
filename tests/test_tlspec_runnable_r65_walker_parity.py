@@ -445,7 +445,7 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the twin takes the OTHER arm; the replayed arm is wrong.
     fresh = _DataclassLayoutBranch()(_LayoutBox(twin))
     assert torch.equal(fresh, twin - 10)

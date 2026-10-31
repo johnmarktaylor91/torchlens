@@ -495,8 +495,8 @@ def test_compat_row_states_the_coexistence_contract_under_stance() -> None:
     """The torch.compile row documents the contract instead of a scope refusal."""
 
     torch.compiler.reset()
-    row = tl.compat.report(_CompiledAttrModel(), torch.randn(2, 4)).row("torch_compile")
-    assert row.detected is True
+    row = tl.compat.report(_CompiledAttrModel(), torch.randn(2, 4)).check("torch_compile")
+    assert row.is_detected is True
     assert row.status == "pass"
     assert "set_stance" in row.details
     assert "a bounded burst of recompilations" in row.details
@@ -504,8 +504,8 @@ def test_compat_row_states_the_coexistence_contract_under_stance() -> None:
     assert "tl.debug.graph_breaks" in row.suggestion
     assert "tl.debug.count_compiles" in row.suggestion
 
-    clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).row("torch_compile")
-    assert clear_row.detected is False
+    clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).check("torch_compile")
+    assert clear_row.is_detected is False
     assert "original eager Python" in clear_row.details
 
 
