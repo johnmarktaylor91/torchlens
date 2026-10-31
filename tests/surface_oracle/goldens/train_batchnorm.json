@@ -358,9 +358,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -444,6 +442,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "site_peers": [],
@@ -643,9 +643,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -770,6 +768,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "site_peers": [],
@@ -932,9 +932,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1009,6 +1007,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "site_peers": [],
@@ -1163,9 +1163,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1250,6 +1248,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "site_peers": [],
@@ -1415,9 +1415,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1496,6 +1494,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "site_peers": [],
@@ -1661,9 +1661,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1742,6 +1740,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "site_peers": [],
@@ -1900,9 +1900,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1991,6 +1989,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -2152,9 +2152,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -2243,6 +2241,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -2397,9 +2397,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -2481,6 +2479,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -2621,9 +2621,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -2728,6 +2726,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -2888,9 +2888,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -2981,6 +2979,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -3031,11 +3031,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "bn:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -3083,6 +3082,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "bn:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -3193,11 +3193,10 @@
      "bn:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "TrainBatchNorm",
     "class_qualname": "capture_oracle._models.TrainBatchNorm",
@@ -3234,6 +3233,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -3362,7 +3362,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies Batch Normalization over a 4D input.\n\n    4D is a mini-batch of 2D inputs\n    with additional channel dimension. Method described in the paper\n    `Batch Normalization: Accelerating Deep Network Training by Reducing\n    Internal Covariate Shift <https://arxiv.org/abs/1502.03167>`__ .\n\n    .. math::\n\n        y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma + \\beta\n\n    The mean and standard-deviation are calculated per-dimension over\n    the mini-batches and :math:`\\gamma` and :math:`\\beta` are learnable parameter vectors\n    of size `C` (where `C` is the input size). By default, the elements of :math:`\\gamma` are set\n    to 1 and the elements of :math:`\\beta` are set to 0. At train time in the forward pass, the\n    standard-deviation is calculated via the biased estimator, equivalent to\n    ``torch.var(input, correction=0)``. However, the value stored in the moving average of the\n    standard-deviation is calculated via the unbiased estimator, equivalent to\n    ``torch.var(input, correction=1)``.\n\n    Also by default, during training this layer keeps running estimates of its\n    computed mean and variance, which are then used for normalization during\n    evaluation. The running estimates are kept with a default :attr:`momentum`\n    of 0.1.\n\n    If :attr:`track_running_stats` is set to ``False``, this layer then does not\n    keep running estimates, and batch statistics are instead used during\n    evaluation time as well.\n\n    .. note::\n        This :attr:`momentum` argument is different from one used in optimizer\n        classes and the conventional notion of momentum. Mathematically, the\n        update rule for running statistics here is\n        :math:`\\hat{x}_\\text{new} = (1 - \\text{momentum}) \\times \\hat{x} + \\text{momentum} \\times x_t`,\n        where :math:`\\hat{x}` is the estimated statistic and :math:`x_t` is the\n        new observed value.\n\n    Because the Batch Normalization is done over the `C` dimension, computing statistics\n    on `(N, H, W)` slices, it's common terminology to call this Spatial Batch Normalization.\n\n    Args:\n        num_features: :math:`C` from an expected input of size\n            :math:`(N, C, H, W)`\n        eps: a value added to the denominator for numerical stability.\n            Default: 1e-5\n        momentum: the value used for the running_mean and running_var\n            computation. Can be set to ``None`` for cumulative moving average\n            (i.e. simple average). Default: 0.1\n        affine: a boolean value that when set to ``True``, this module has\n            learnable affine parameters. Default: ``True``\n        track_running_stats: a boolean value that when set to ``True``, this\n            module tracks the running mean and variance, and when set to ``False``,\n            this module does not track such statistics, and initializes statistics\n            buffers :attr:`running_mean` and :attr:`running_var` as ``None``.\n            When these buffers are ``None``, this module always uses batch statistics.\n            in both training and eval modes. Default: ``True``\n        bias: If set to ``False``, the layer will not learn an additive bias (only relevant if\n            :attr:`affine` is ``True``). Default: ``True``\n\n    Shape:\n        - Input: :math:`(N, C, H, W)`\n        - Output: :math:`(N, C, H, W)` (same shape as input)\n\n    Examples::\n\n        >>> # With Learnable Parameters\n        >>> m = nn.BatchNorm2d(100)\n        >>> # Without Learnable Parameters\n        >>> m = nn.BatchNorm2d(100, affine=False)\n        >>> input = torch.randn(20, 100, 35, 45)\n        >>> output = m(input)\n    ",
@@ -3592,7 +3592,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Train-mode BatchNorm model whose running buffers mutate per forward.",
@@ -4023,13 +4023,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -4114,7 +4112,7 @@
     "parents": [
      "buffer_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -4132,6 +4130,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "source_trace": {
@@ -4461,13 +4461,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -4588,7 +4586,7 @@
      "buffer_3",
      "buffer_4"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 7,
     "raw_label": "batchnorm_1_7",
@@ -4613,6 +4611,8 @@
      4,
      4
     ],
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
@@ -4830,13 +4830,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -4916,7 +4914,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "buffer_1",
@@ -4934,6 +4932,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
@@ -5163,13 +5163,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -5253,7 +5251,7 @@
     "parents": [
      "add_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "buffer_2",
@@ -5271,6 +5269,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
@@ -5491,13 +5491,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -5581,7 +5579,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "buffer_3",
@@ -5601,6 +5599,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
@@ -5821,13 +5821,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -5911,7 +5909,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 6,
     "raw_label": "buffer_4",
@@ -5931,6 +5929,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
@@ -6176,13 +6176,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -6268,7 +6266,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 8,
     "raw_label": "buffer_5",
@@ -6290,6 +6288,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -6542,13 +6542,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -6634,7 +6632,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 9,
     "raw_label": "buffer_6",
@@ -6656,6 +6654,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -6873,13 +6873,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -6965,7 +6963,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -6988,6 +6986,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -7226,13 +7226,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -7318,7 +7316,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 11,
     "raw_label": "output_1",
@@ -7356,6 +7354,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -7612,13 +7612,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -7703,7 +7701,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 10,
     "raw_label": "relu_1_10",
@@ -7728,6 +7726,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -8418,7 +8418,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -9657,9 +9657,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -9743,6 +9741,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "site_peers": [],
@@ -9942,9 +9942,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -10069,6 +10067,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "site_peers": [],
@@ -10231,9 +10231,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10308,6 +10306,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "site_peers": [],
@@ -10462,9 +10462,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10549,6 +10547,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "site_peers": [],
@@ -10714,9 +10714,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10795,6 +10793,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "site_peers": [],
@@ -10960,9 +10960,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11041,6 +11039,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "site_peers": [],
@@ -11199,9 +11199,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11290,6 +11288,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -11451,9 +11451,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11542,6 +11540,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -11696,9 +11696,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -11780,6 +11778,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -11920,9 +11920,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -12027,6 +12025,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -12187,9 +12187,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -12280,6 +12278,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -12330,11 +12330,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "bn:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -12382,6 +12381,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "bn:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -12492,11 +12492,10 @@
      "bn:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "TrainBatchNorm",
     "class_qualname": "capture_oracle._models.TrainBatchNorm",
@@ -12533,6 +12532,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -12661,7 +12661,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies Batch Normalization over a 4D input.\n\n    4D is a mini-batch of 2D inputs\n    with additional channel dimension. Method described in the paper\n    `Batch Normalization: Accelerating Deep Network Training by Reducing\n    Internal Covariate Shift <https://arxiv.org/abs/1502.03167>`__ .\n\n    .. math::\n\n        y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma + \\beta\n\n    The mean and standard-deviation are calculated per-dimension over\n    the mini-batches and :math:`\\gamma` and :math:`\\beta` are learnable parameter vectors\n    of size `C` (where `C` is the input size). By default, the elements of :math:`\\gamma` are set\n    to 1 and the elements of :math:`\\beta` are set to 0. At train time in the forward pass, the\n    standard-deviation is calculated via the biased estimator, equivalent to\n    ``torch.var(input, correction=0)``. However, the value stored in the moving average of the\n    standard-deviation is calculated via the unbiased estimator, equivalent to\n    ``torch.var(input, correction=1)``.\n\n    Also by default, during training this layer keeps running estimates of its\n    computed mean and variance, which are then used for normalization during\n    evaluation. The running estimates are kept with a default :attr:`momentum`\n    of 0.1.\n\n    If :attr:`track_running_stats` is set to ``False``, this layer then does not\n    keep running estimates, and batch statistics are instead used during\n    evaluation time as well.\n\n    .. note::\n        This :attr:`momentum` argument is different from one used in optimizer\n        classes and the conventional notion of momentum. Mathematically, the\n        update rule for running statistics here is\n        :math:`\\hat{x}_\\text{new} = (1 - \\text{momentum}) \\times \\hat{x} + \\text{momentum} \\times x_t`,\n        where :math:`\\hat{x}` is the estimated statistic and :math:`x_t` is the\n        new observed value.\n\n    Because the Batch Normalization is done over the `C` dimension, computing statistics\n    on `(N, H, W)` slices, it's common terminology to call this Spatial Batch Normalization.\n\n    Args:\n        num_features: :math:`C` from an expected input of size\n            :math:`(N, C, H, W)`\n        eps: a value added to the denominator for numerical stability.\n            Default: 1e-5\n        momentum: the value used for the running_mean and running_var\n            computation. Can be set to ``None`` for cumulative moving average\n            (i.e. simple average). Default: 0.1\n        affine: a boolean value that when set to ``True``, this module has\n            learnable affine parameters. Default: ``True``\n        track_running_stats: a boolean value that when set to ``True``, this\n            module tracks the running mean and variance, and when set to ``False``,\n            this module does not track such statistics, and initializes statistics\n            buffers :attr:`running_mean` and :attr:`running_var` as ``None``.\n            When these buffers are ``None``, this module always uses batch statistics.\n            in both training and eval modes. Default: ``True``\n        bias: If set to ``False``, the layer will not learn an additive bias (only relevant if\n            :attr:`affine` is ``True``). Default: ``True``\n\n    Shape:\n        - Input: :math:`(N, C, H, W)`\n        - Output: :math:`(N, C, H, W)` (same shape as input)\n\n    Examples::\n\n        >>> # With Learnable Parameters\n        >>> m = nn.BatchNorm2d(100)\n        >>> # Without Learnable Parameters\n        >>> m = nn.BatchNorm2d(100, affine=False)\n        >>> input = torch.randn(20, 100, 35, 45)\n        >>> output = m(input)\n    ",
@@ -12891,7 +12891,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Train-mode BatchNorm model whose running buffers mutate per forward.",
@@ -13322,13 +13322,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -13413,7 +13411,7 @@
     "parents": [
      "buffer_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -13431,6 +13429,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "source_trace": {
@@ -13760,13 +13760,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -13887,7 +13885,7 @@
      "buffer_3",
      "buffer_4"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 7,
     "raw_label": "batchnorm_1_7",
@@ -13912,6 +13910,8 @@
      4,
      4
     ],
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
@@ -14129,13 +14129,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -14215,7 +14213,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "buffer_1",
@@ -14233,6 +14231,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
@@ -14462,13 +14462,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -14552,7 +14550,7 @@
     "parents": [
      "add_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "buffer_2",
@@ -14570,6 +14568,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
@@ -14790,13 +14790,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -14880,7 +14878,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "buffer_3",
@@ -14900,6 +14898,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
@@ -15120,13 +15120,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -15210,7 +15208,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 6,
     "raw_label": "buffer_4",
@@ -15230,6 +15228,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
@@ -15475,13 +15475,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -15567,7 +15565,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 8,
     "raw_label": "buffer_5",
@@ -15589,6 +15587,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -15841,13 +15841,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -15933,7 +15931,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 9,
     "raw_label": "buffer_6",
@@ -15955,6 +15953,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -16172,13 +16172,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -16264,7 +16262,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -16287,6 +16285,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -16525,13 +16525,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -16617,7 +16615,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 11,
     "raw_label": "output_1",
@@ -16655,6 +16653,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -16911,13 +16911,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -17002,7 +17000,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 10,
     "raw_label": "relu_1_10",
@@ -17027,6 +17025,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -17705,7 +17705,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -18932,9 +18932,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -19018,6 +19016,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "site_peers": [],
@@ -19217,9 +19217,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -19344,6 +19342,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "site_peers": [],
@@ -19506,9 +19506,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -19583,6 +19581,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "site_peers": [],
@@ -19737,9 +19737,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -19824,6 +19822,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "site_peers": [],
@@ -19989,9 +19989,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20070,6 +20068,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "site_peers": [],
@@ -20235,9 +20235,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20316,6 +20314,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "site_peers": [],
@@ -20474,9 +20474,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20565,6 +20563,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -20726,9 +20726,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20817,6 +20815,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -20971,9 +20971,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -21055,6 +21053,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -21195,9 +21195,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -21302,6 +21300,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -21462,9 +21462,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -21555,6 +21553,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -21605,11 +21605,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "bn:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -21657,6 +21656,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "bn:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -21767,11 +21767,10 @@
      "bn:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "TrainBatchNorm",
     "class_qualname": "capture_oracle._models.TrainBatchNorm",
@@ -21808,6 +21807,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -21936,7 +21936,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies Batch Normalization over a 4D input.\n\n    4D is a mini-batch of 2D inputs\n    with additional channel dimension. Method described in the paper\n    `Batch Normalization: Accelerating Deep Network Training by Reducing\n    Internal Covariate Shift <https://arxiv.org/abs/1502.03167>`__ .\n\n    .. math::\n\n        y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma + \\beta\n\n    The mean and standard-deviation are calculated per-dimension over\n    the mini-batches and :math:`\\gamma` and :math:`\\beta` are learnable parameter vectors\n    of size `C` (where `C` is the input size). By default, the elements of :math:`\\gamma` are set\n    to 1 and the elements of :math:`\\beta` are set to 0. At train time in the forward pass, the\n    standard-deviation is calculated via the biased estimator, equivalent to\n    ``torch.var(input, correction=0)``. However, the value stored in the moving average of the\n    standard-deviation is calculated via the unbiased estimator, equivalent to\n    ``torch.var(input, correction=1)``.\n\n    Also by default, during training this layer keeps running estimates of its\n    computed mean and variance, which are then used for normalization during\n    evaluation. The running estimates are kept with a default :attr:`momentum`\n    of 0.1.\n\n    If :attr:`track_running_stats` is set to ``False``, this layer then does not\n    keep running estimates, and batch statistics are instead used during\n    evaluation time as well.\n\n    .. note::\n        This :attr:`momentum` argument is different from one used in optimizer\n        classes and the conventional notion of momentum. Mathematically, the\n        update rule for running statistics here is\n        :math:`\\hat{x}_\\text{new} = (1 - \\text{momentum}) \\times \\hat{x} + \\text{momentum} \\times x_t`,\n        where :math:`\\hat{x}` is the estimated statistic and :math:`x_t` is the\n        new observed value.\n\n    Because the Batch Normalization is done over the `C` dimension, computing statistics\n    on `(N, H, W)` slices, it's common terminology to call this Spatial Batch Normalization.\n\n    Args:\n        num_features: :math:`C` from an expected input of size\n            :math:`(N, C, H, W)`\n        eps: a value added to the denominator for numerical stability.\n            Default: 1e-5\n        momentum: the value used for the running_mean and running_var\n            computation. Can be set to ``None`` for cumulative moving average\n            (i.e. simple average). Default: 0.1\n        affine: a boolean value that when set to ``True``, this module has\n            learnable affine parameters. Default: ``True``\n        track_running_stats: a boolean value that when set to ``True``, this\n            module tracks the running mean and variance, and when set to ``False``,\n            this module does not track such statistics, and initializes statistics\n            buffers :attr:`running_mean` and :attr:`running_var` as ``None``.\n            When these buffers are ``None``, this module always uses batch statistics.\n            in both training and eval modes. Default: ``True``\n        bias: If set to ``False``, the layer will not learn an additive bias (only relevant if\n            :attr:`affine` is ``True``). Default: ``True``\n\n    Shape:\n        - Input: :math:`(N, C, H, W)`\n        - Output: :math:`(N, C, H, W)` (same shape as input)\n\n    Examples::\n\n        >>> # With Learnable Parameters\n        >>> m = nn.BatchNorm2d(100)\n        >>> # Without Learnable Parameters\n        >>> m = nn.BatchNorm2d(100, affine=False)\n        >>> input = torch.randn(20, 100, 35, 45)\n        >>> output = m(input)\n    ",
@@ -22166,7 +22166,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Train-mode BatchNorm model whose running buffers mutate per forward.",
@@ -22597,13 +22597,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -22688,7 +22686,7 @@
     "parents": [
      "buffer_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -22706,6 +22704,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "source_trace": {
@@ -23035,13 +23035,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -23162,7 +23160,7 @@
      "buffer_3",
      "buffer_4"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 7,
     "raw_label": "batchnorm_1_7",
@@ -23187,6 +23185,8 @@
      4,
      4
     ],
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
@@ -23404,13 +23404,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -23490,7 +23488,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "buffer_1",
@@ -23508,6 +23506,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
@@ -23737,13 +23737,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -23827,7 +23825,7 @@
     "parents": [
      "add_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "buffer_2",
@@ -23845,6 +23843,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
@@ -24065,13 +24065,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -24155,7 +24153,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "buffer_3",
@@ -24175,6 +24173,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
@@ -24395,13 +24395,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -24485,7 +24483,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 6,
     "raw_label": "buffer_4",
@@ -24505,6 +24503,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
@@ -24750,13 +24750,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -24842,7 +24840,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 8,
     "raw_label": "buffer_5",
@@ -24864,6 +24862,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -25116,13 +25116,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -25208,7 +25206,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 9,
     "raw_label": "buffer_6",
@@ -25230,6 +25228,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -25447,13 +25447,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -25539,7 +25537,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -25562,6 +25560,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -25800,13 +25800,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -25892,7 +25890,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 11,
     "raw_label": "output_1",
@@ -25930,6 +25928,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -26186,13 +26186,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -26277,7 +26275,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 10,
     "raw_label": "relu_1_10",
@@ -26302,6 +26300,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -26938,7 +26938,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -28171,9 +28171,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -28257,6 +28255,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "site_peers": [],
@@ -28456,9 +28456,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -28583,6 +28581,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "site_peers": [],
@@ -28745,9 +28745,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -28822,6 +28820,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "site_peers": [],
@@ -28976,9 +28976,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29063,6 +29061,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "site_peers": [],
@@ -29228,9 +29228,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29309,6 +29307,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "site_peers": [],
@@ -29474,9 +29474,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29555,6 +29553,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "site_peers": [],
@@ -29713,9 +29713,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29804,6 +29802,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -29965,9 +29965,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -30056,6 +30054,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -30210,9 +30210,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -30294,6 +30292,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -30434,9 +30434,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -30541,6 +30539,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -30701,9 +30701,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -30794,6 +30792,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -30844,11 +30844,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "bn:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -30896,6 +30895,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "bn:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -31006,11 +31006,10 @@
      "bn:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "TrainBatchNorm",
     "class_qualname": "capture_oracle._models.TrainBatchNorm",
@@ -31047,6 +31046,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -31175,7 +31175,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies Batch Normalization over a 4D input.\n\n    4D is a mini-batch of 2D inputs\n    with additional channel dimension. Method described in the paper\n    `Batch Normalization: Accelerating Deep Network Training by Reducing\n    Internal Covariate Shift <https://arxiv.org/abs/1502.03167>`__ .\n\n    .. math::\n\n        y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma + \\beta\n\n    The mean and standard-deviation are calculated per-dimension over\n    the mini-batches and :math:`\\gamma` and :math:`\\beta` are learnable parameter vectors\n    of size `C` (where `C` is the input size). By default, the elements of :math:`\\gamma` are set\n    to 1 and the elements of :math:`\\beta` are set to 0. At train time in the forward pass, the\n    standard-deviation is calculated via the biased estimator, equivalent to\n    ``torch.var(input, correction=0)``. However, the value stored in the moving average of the\n    standard-deviation is calculated via the unbiased estimator, equivalent to\n    ``torch.var(input, correction=1)``.\n\n    Also by default, during training this layer keeps running estimates of its\n    computed mean and variance, which are then used for normalization during\n    evaluation. The running estimates are kept with a default :attr:`momentum`\n    of 0.1.\n\n    If :attr:`track_running_stats` is set to ``False``, this layer then does not\n    keep running estimates, and batch statistics are instead used during\n    evaluation time as well.\n\n    .. note::\n        This :attr:`momentum` argument is different from one used in optimizer\n        classes and the conventional notion of momentum. Mathematically, the\n        update rule for running statistics here is\n        :math:`\\hat{x}_\\text{new} = (1 - \\text{momentum}) \\times \\hat{x} + \\text{momentum} \\times x_t`,\n        where :math:`\\hat{x}` is the estimated statistic and :math:`x_t` is the\n        new observed value.\n\n    Because the Batch Normalization is done over the `C` dimension, computing statistics\n    on `(N, H, W)` slices, it's common terminology to call this Spatial Batch Normalization.\n\n    Args:\n        num_features: :math:`C` from an expected input of size\n            :math:`(N, C, H, W)`\n        eps: a value added to the denominator for numerical stability.\n            Default: 1e-5\n        momentum: the value used for the running_mean and running_var\n            computation. Can be set to ``None`` for cumulative moving average\n            (i.e. simple average). Default: 0.1\n        affine: a boolean value that when set to ``True``, this module has\n            learnable affine parameters. Default: ``True``\n        track_running_stats: a boolean value that when set to ``True``, this\n            module tracks the running mean and variance, and when set to ``False``,\n            this module does not track such statistics, and initializes statistics\n            buffers :attr:`running_mean` and :attr:`running_var` as ``None``.\n            When these buffers are ``None``, this module always uses batch statistics.\n            in both training and eval modes. Default: ``True``\n        bias: If set to ``False``, the layer will not learn an additive bias (only relevant if\n            :attr:`affine` is ``True``). Default: ``True``\n\n    Shape:\n        - Input: :math:`(N, C, H, W)`\n        - Output: :math:`(N, C, H, W)` (same shape as input)\n\n    Examples::\n\n        >>> # With Learnable Parameters\n        >>> m = nn.BatchNorm2d(100)\n        >>> # Without Learnable Parameters\n        >>> m = nn.BatchNorm2d(100, affine=False)\n        >>> input = torch.randn(20, 100, 35, 45)\n        >>> output = m(input)\n    ",
@@ -31405,7 +31405,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Train-mode BatchNorm model whose running buffers mutate per forward.",
@@ -31836,13 +31836,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -31927,7 +31925,7 @@
     "parents": [
      "buffer_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -31945,6 +31943,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "source_trace": {
@@ -32274,13 +32274,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -32401,7 +32399,7 @@
      "buffer_3",
      "buffer_4"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 7,
     "raw_label": "batchnorm_1_7",
@@ -32426,6 +32424,8 @@
      4,
      4
     ],
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
@@ -32643,13 +32643,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -32729,7 +32727,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "buffer_1",
@@ -32747,6 +32745,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
@@ -32976,13 +32976,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -33066,7 +33064,7 @@
     "parents": [
      "add_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "buffer_2",
@@ -33084,6 +33082,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
@@ -33304,13 +33304,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -33394,7 +33392,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "buffer_3",
@@ -33414,6 +33412,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
@@ -33634,13 +33634,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -33724,7 +33722,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 6,
     "raw_label": "buffer_4",
@@ -33744,6 +33742,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
@@ -33989,13 +33989,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -34081,7 +34079,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 8,
     "raw_label": "buffer_5",
@@ -34103,6 +34101,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -34355,13 +34355,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -34447,7 +34445,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 9,
     "raw_label": "buffer_6",
@@ -34469,6 +34467,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -34686,13 +34686,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -34778,7 +34776,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -34801,6 +34799,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -35039,13 +35039,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -35131,7 +35129,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 11,
     "raw_label": "output_1",
@@ -35169,6 +35167,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -35425,13 +35425,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -35516,7 +35514,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 10,
     "raw_label": "relu_1_10",
@@ -35541,6 +35539,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -36231,7 +36231,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -37456,9 +37456,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -37542,6 +37540,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "site_peers": [],
@@ -37741,9 +37741,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -37868,6 +37866,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "site_peers": [],
@@ -38030,9 +38030,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38107,6 +38105,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "site_peers": [],
@@ -38261,9 +38261,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38348,6 +38346,8 @@
     "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "site_peers": [],
@@ -38513,9 +38513,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38594,6 +38592,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "site_peers": [],
@@ -38759,9 +38759,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38840,6 +38838,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "site_peers": [],
@@ -38998,9 +38998,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -39089,6 +39087,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -39250,9 +39250,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -39341,6 +39339,8 @@
      2
     ],
     "shape_summary": null,
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -39495,9 +39495,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -39579,6 +39577,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -39719,9 +39719,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -39813,6 +39811,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -39973,9 +39973,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -40066,6 +40064,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -40116,11 +40116,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "bn:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -40168,6 +40167,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "bn:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -40278,11 +40278,10 @@
      "bn:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "TrainBatchNorm",
     "class_qualname": "capture_oracle._models.TrainBatchNorm",
@@ -40319,6 +40318,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -40447,7 +40447,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "bn"
+     "label": "bn:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies Batch Normalization over a 4D input.\n\n    4D is a mini-batch of 2D inputs\n    with additional channel dimension. Method described in the paper\n    `Batch Normalization: Accelerating Deep Network Training by Reducing\n    Internal Covariate Shift <https://arxiv.org/abs/1502.03167>`__ .\n\n    .. math::\n\n        y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma + \\beta\n\n    The mean and standard-deviation are calculated per-dimension over\n    the mini-batches and :math:`\\gamma` and :math:`\\beta` are learnable parameter vectors\n    of size `C` (where `C` is the input size). By default, the elements of :math:`\\gamma` are set\n    to 1 and the elements of :math:`\\beta` are set to 0. At train time in the forward pass, the\n    standard-deviation is calculated via the biased estimator, equivalent to\n    ``torch.var(input, correction=0)``. However, the value stored in the moving average of the\n    standard-deviation is calculated via the unbiased estimator, equivalent to\n    ``torch.var(input, correction=1)``.\n\n    Also by default, during training this layer keeps running estimates of its\n    computed mean and variance, which are then used for normalization during\n    evaluation. The running estimates are kept with a default :attr:`momentum`\n    of 0.1.\n\n    If :attr:`track_running_stats` is set to ``False``, this layer then does not\n    keep running estimates, and batch statistics are instead used during\n    evaluation time as well.\n\n    .. note::\n        This :attr:`momentum` argument is different from one used in optimizer\n        classes and the conventional notion of momentum. Mathematically, the\n        update rule for running statistics here is\n        :math:`\\hat{x}_\\text{new} = (1 - \\text{momentum}) \\times \\hat{x} + \\text{momentum} \\times x_t`,\n        where :math:`\\hat{x}` is the estimated statistic and :math:`x_t` is the\n        new observed value.\n\n    Because the Batch Normalization is done over the `C` dimension, computing statistics\n    on `(N, H, W)` slices, it's common terminology to call this Spatial Batch Normalization.\n\n    Args:\n        num_features: :math:`C` from an expected input of size\n            :math:`(N, C, H, W)`\n        eps: a value added to the denominator for numerical stability.\n            Default: 1e-5\n        momentum: the value used for the running_mean and running_var\n            computation. Can be set to ``None`` for cumulative moving average\n            (i.e. simple average). Default: 0.1\n        affine: a boolean value that when set to ``True``, this module has\n            learnable affine parameters. Default: ``True``\n        track_running_stats: a boolean value that when set to ``True``, this\n            module tracks the running mean and variance, and when set to ``False``,\n            this module does not track such statistics, and initializes statistics\n            buffers :attr:`running_mean` and :attr:`running_var` as ``None``.\n            When these buffers are ``None``, this module always uses batch statistics.\n            in both training and eval modes. Default: ``True``\n        bias: If set to ``False``, the layer will not learn an additive bias (only relevant if\n            :attr:`affine` is ``True``). Default: ``True``\n\n    Shape:\n        - Input: :math:`(N, C, H, W)`\n        - Output: :math:`(N, C, H, W)` (same shape as input)\n\n    Examples::\n\n        >>> # With Learnable Parameters\n        >>> m = nn.BatchNorm2d(100)\n        >>> # Without Learnable Parameters\n        >>> m = nn.BatchNorm2d(100, affine=False)\n        >>> input = torch.randn(20, 100, 35, 45)\n        >>> output = m(input)\n    ",
@@ -40677,7 +40677,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Train-mode BatchNorm model whose running buffers mutate per forward.",
@@ -41094,10 +41094,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "short_label": "add_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_1",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -41182,7 +41180,7 @@
     "parents": [
      "buffer_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -41200,6 +41198,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1|bn|add||1",
     "source_trace": {
@@ -41480,10 +41480,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "short_label": "batchnorm_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "batchnorm_1_2",
-    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -41604,7 +41602,7 @@
      "buffer_3",
      "buffer_4"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 7,
     "raw_label": "batchnorm_1_7",
@@ -41629,6 +41627,8 @@
      4,
      4
     ],
+    "short_label": "batchnorm_1:1",
+    "short_layer_label": "batchnorm_1",
     "siblings": [],
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
@@ -41846,10 +41846,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "short_label": "buffer_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_1",
-    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -41929,7 +41927,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "buffer_1",
@@ -41947,6 +41945,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_1:1",
+    "short_layer_label": "buffer_1",
     "siblings": [],
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
@@ -42164,10 +42164,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "short_label": "buffer_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_2",
-    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -42251,7 +42249,7 @@
     "parents": [
      "add_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "buffer_2",
@@ -42269,6 +42267,8 @@
     "saved_args": null,
     "saved_kwargs": null,
     "shape": [],
+    "short_label": "buffer_2:1",
+    "short_layer_label": "buffer_2",
     "siblings": [],
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
@@ -42489,10 +42489,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "short_label": "buffer_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_3",
-    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -42576,7 +42574,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "buffer_3",
@@ -42596,6 +42594,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_3:1",
+    "short_layer_label": "buffer_3",
     "siblings": [],
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
@@ -42816,10 +42816,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "short_label": "buffer_4:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_4",
-    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -42903,7 +42901,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 6,
     "raw_label": "buffer_4",
@@ -42923,6 +42921,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_4:1",
+    "short_layer_label": "buffer_4",
     "siblings": [],
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
@@ -43151,10 +43151,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "short_label": "buffer_5:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_5",
-    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -43240,7 +43238,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 8,
     "raw_label": "buffer_5",
@@ -43262,6 +43260,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_5:1",
+    "short_layer_label": "buffer_5",
     "siblings": [
      "relu_1_3",
      "buffer_6"
@@ -43497,10 +43497,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "short_label": "buffer_6:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_6",
-    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -43586,7 +43584,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 9,
     "raw_label": "buffer_6",
@@ -43608,6 +43606,8 @@
     "shape": [
      2
     ],
+    "short_label": "buffer_6:1",
+    "short_layer_label": "buffer_6",
     "siblings": [
      "relu_1_3",
      "buffer_5"
@@ -43825,10 +43825,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -43914,7 +43912,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -43937,6 +43935,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -44158,10 +44158,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -44247,7 +44245,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 11,
     "raw_label": "output_1",
@@ -44272,6 +44270,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -44509,10 +44509,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -44597,7 +44595,7 @@
     "parents": [
      "batchnorm_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 10,
     "raw_label": "relu_1_10",
@@ -44622,6 +44620,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [
      "buffer_5",
      "buffer_6"
@@ -45258,7 +45258,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,

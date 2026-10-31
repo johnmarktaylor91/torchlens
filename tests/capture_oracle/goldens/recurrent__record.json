@@ -230,8 +230,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -391,8 +391,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -540,8 +540,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -701,8 +701,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -850,8 +850,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -1011,8 +1011,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": null,
             "kind": "op",
@@ -1163,13 +1163,13 @@
         "error_message": null,
         "error_type": null,
         "failed": false,
-        "stop_reason": null,
         "halted": false,
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
         "n_ops_completed": 0,
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -1367,20 +1367,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 334062,
+      "python_peak_memory_median_bytes": 425702,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 36.3331699045375
+      "wall_time_median_ms": 45.9986412897706
     }
   },
   "sha256_chunks": [
-    "179ab32b",
-    "a52549ef",
-    "baaa7755",
-    "995906b8",
-    "a470f27e",
-    "848f6b43",
-    "690d1057",
-    "a493a599"
+    "ca632627",
+    "f81e2662",
+    "8a3a37fc",
+    "51f8a663",
+    "654b6775",
+    "4ac7b409",
+    "24a40ada",
+    "85e24a51"
   ]
 }

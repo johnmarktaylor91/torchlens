@@ -100,8 +100,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -263,8 +263,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": null,
             "kind": "op",
@@ -483,13 +483,13 @@
         "error_message": null,
         "error_type": null,
         "failed": false,
-        "stop_reason": null,
         "halted": false,
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
         "n_ops_completed": 0,
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -611,20 +611,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 955146,
+      "python_peak_memory_median_bytes": 917177,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 39.67465599998832
+      "wall_time_median_ms": 55.352681782096624
     }
   },
   "sha256_chunks": [
-    "cfd63bd8",
-    "fa82b329",
-    "94d7b797",
-    "50da33ee",
-    "a874020a",
-    "093de62d",
-    "f8c76dff",
-    "3f6e136b"
+    "ba457c49",
+    "44931b81",
+    "a12a5ddc",
+    "1e8879c0",
+    "b9506191",
+    "50dfafc4",
+    "777b08c3",
+    "5f80c7cc"
   ]
 }

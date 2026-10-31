@@ -29,8 +29,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -102,9 +102,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -191,8 +191,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": true,
-            "is_edited": true,
             "is_bottom_level": true,
+            "is_edited": true,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -236,18 +236,18 @@
             "construction_done": "defaulted_false",
             "dropped_edge_tensor_args": "defaulted_empty",
             "equivalence_class": "populated",
-            "fire_results[0].fire_record.backward_pass_index": "unknown",
+            "fire_results[0].fire_record.backward_pass_number": "unknown",
             "fire_results[0].fire_record.call_index": "unknown",
             "fire_results[0].fire_record.call_label": "populated",
             "fire_results[0].fire_record.container_path": "defaulted_empty",
             "fire_results[0].fire_record.determinism_note": "unknown",
             "fire_results[0].fire_record.direction": "populated",
             "fire_results[0].fire_record.edge_address": "unknown",
+            "fire_results[0].fire_record.edit": "populated",
+            "fire_results[0].fire_record.edit_name": "populated",
             "fire_results[0].fire_record.engine": "populated",
             "fire_results[0].fire_record.func_call_id": "populated",
             "fire_results[0].fire_record.grad_kind": "unknown",
-            "fire_results[0].fire_record.helper": "populated",
-            "fire_results[0].fire_record.helper_name": "populated",
             "fire_results[0].fire_record.replaced": "populated",
             "fire_results[0].fire_record.seed": "unknown",
             "fire_results[0].fire_record.site_label": "populated",
@@ -290,9 +290,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "populated",
-            "is_edited": "populated",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "populated",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -450,12 +450,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": null,
-        "stop_reason": null,
         "halted": false,
         "output_layers": [
           "output_1"
         ],
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -623,20 +623,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 503888,
+      "python_peak_memory_median_bytes": 526879,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 68.8884831033647
+      "wall_time_median_ms": 76.45206898450851
     }
   },
   "sha256_chunks": [
-    "406d42af",
-    "866c441e",
-    "519deba9",
-    "aa197c63",
-    "166874bf",
-    "41ba92fa",
-    "6cd6daa1",
-    "d993fdc5"
+    "5d12d527",
+    "14362a56",
+    "d735d4a9",
+    "b573b859",
+    "e8ce5636",
+    "ab94a2bf",
+    "4bddad33",
+    "dd8498ea"
   ]
 }

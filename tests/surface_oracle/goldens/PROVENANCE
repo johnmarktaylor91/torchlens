@@ -1508,3 +1508,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
 recorded: 2026-10-31T14:50:13.241219+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.561335+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.583760+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.608121+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.632414+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.655678+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:35:42.683690+00:00

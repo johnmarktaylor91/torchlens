@@ -1125,3 +1125,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
 recorded: 2026-10-16T03:09:57.166218+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:07.453067+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:13.276724+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:18.504846+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:24.290071+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:30.193048+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:35.930210+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:41.854294+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:47.022398+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:52.690343+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:36:57.792838+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:03.595235+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:08.770033+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:14.935955+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:21.093319+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:26.376946+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:32.242739+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:38.117653+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:44.203994+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:50.082663+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:37:55.292056+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:01.180871+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:07.001565+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:12.818673+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:18.429061+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:24.218869+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:30.133067+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:36.041651+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:43.049033+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:48.704852+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:54.379866+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 label-family and FireRecord renames (lane mp-v11-labels)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 90bb265e45ee002a71c8afc773115e91ca32606f (dirty)
+recorded: 2026-10-31T16:38:59.449886+00:00

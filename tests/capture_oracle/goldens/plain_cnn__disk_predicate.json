@@ -36,8 +36,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -109,9 +109,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -198,8 +198,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -271,9 +271,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -431,12 +431,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": null,
-        "stop_reason": null,
         "halted": false,
         "output_layers": [
           "output_1"
         ],
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -604,20 +604,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 1538668,
+      "python_peak_memory_median_bytes": 1577543,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 164.27243605721742
+      "wall_time_median_ms": 180.6817469187081
     }
   },
   "sha256_chunks": [
-    "503830b6",
-    "4a6cf0d6",
-    "a556b9b1",
-    "fbd0e871",
-    "af9d0e94",
-    "6a75e46d",
-    "cf3b6a06",
-    "3dafda96"
+    "4008556d",
+    "f8ea670f",
+    "92d28875",
+    "074ca3d0",
+    "edce90bd",
+    "fab08311",
+    "98ca876e",
+    "57ec3cde"
   ]
 }

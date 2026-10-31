@@ -29,8 +29,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -102,9 +102,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -191,8 +191,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -264,9 +264,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -424,12 +424,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": "relu_1_2",
-        "stop_reason": "relu_1_2",
         "halted": true,
         "output_layers": [
           "output_1"
         ],
-        "status": "halted"
+        "status": "halted",
+        "stop_reason": "relu_1_2"
       },
       "selected_payloads": [
         {
@@ -597,20 +597,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 501928,
+      "python_peak_memory_median_bytes": 531292,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 57.61389201506972
+      "wall_time_median_ms": 71.24524703249335
     }
   },
   "sha256_chunks": [
-    "a40854ab",
-    "845053ad",
-    "b41e7c6b",
-    "87129718",
-    "e2c4e814",
-    "1768e181",
-    "9f3404d9",
-    "44023be8"
+    "7e7e3c79",
+    "28879e7f",
+    "2146b0cb",
+    "b8c7b2c6",
+    "d2b5dc3b",
+    "1cd01549",
+    "65fd64b5",
+    "11cf3efc"
   ]
 }

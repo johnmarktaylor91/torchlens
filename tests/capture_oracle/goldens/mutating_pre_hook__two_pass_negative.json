@@ -93,8 +93,8 @@
             "func_name": "add_",
             "has_saved_activation": false,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -164,9 +164,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -237,8 +237,8 @@
             "func_name": "linear",
             "has_saved_activation": false,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -308,9 +308,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -397,8 +397,8 @@
             "func_name": "relu",
             "has_saved_activation": false,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -468,9 +468,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -640,12 +640,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": null,
-        "stop_reason": null,
         "halted": false,
         "output_layers": [
           "output_1"
         ],
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -698,20 +698,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 569725,
+      "python_peak_memory_median_bytes": 563995,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 81.25611860305071
+      "wall_time_median_ms": 81.02990593761206
     }
   },
   "sha256_chunks": [
-    "1a4c0f7f",
-    "d6792b8f",
-    "67fd055e",
-    "77bcd09b",
-    "cada681e",
-    "5977f218",
-    "9f8c5c7f",
-    "f1d70174"
+    "f3d8d146",
+    "50b4d698",
+    "61427554",
+    "a0e8862d",
+    "e5275d2b",
+    "1e4f2ce6",
+    "10e0e60e",
+    "501225b0"
   ]
 }

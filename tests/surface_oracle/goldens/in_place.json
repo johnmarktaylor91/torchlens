@@ -130,9 +130,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -219,6 +217,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "site_peers": [],
@@ -379,9 +379,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "leaf_module_ops": {
      "__set__": []
@@ -468,6 +466,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "site_peers": [],
@@ -616,9 +616,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -696,6 +694,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -836,9 +836,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -937,6 +935,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -1096,9 +1096,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -1185,6 +1183,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "site_peers": [],
@@ -1232,11 +1232,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "InPlaceModel",
     "class_qualname": "capture_oracle._models.InPlaceModel",
@@ -1273,6 +1272,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -1380,7 +1380,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Model with explicit in-place operations on an internal tensor.",
@@ -1770,13 +1770,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -1861,7 +1859,7 @@
     "parents": [
      "clone_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -1882,6 +1880,8 @@
      2,
      4
     ],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "source_trace": {
@@ -2131,13 +2131,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "clone_1_1:1"
     },
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "lookup_keys": [
      -4,
@@ -2220,7 +2218,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "clone_1_2",
@@ -2241,6 +2239,8 @@
      2,
      4
     ],
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "source_trace": {
@@ -2444,13 +2444,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -5,
@@ -2530,7 +2528,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -2551,6 +2549,8 @@
      2,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -2782,13 +2782,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -2872,7 +2870,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "output_1",
@@ -2904,6 +2902,8 @@
      2,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -3150,13 +3150,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -3239,7 +3237,7 @@
     "parents": [
      "add_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "relu_1_4",
@@ -3260,6 +3258,8 @@
      2,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -3558,7 +3558,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -4237,9 +4237,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -4326,6 +4324,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "site_peers": [],
@@ -4486,9 +4486,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "leaf_module_ops": {
      "__set__": []
@@ -4575,6 +4573,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "site_peers": [],
@@ -4723,9 +4723,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -4803,6 +4801,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -4943,9 +4943,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -5044,6 +5042,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -5203,9 +5203,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -5292,6 +5290,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "site_peers": [],
@@ -5339,11 +5339,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "InPlaceModel",
     "class_qualname": "capture_oracle._models.InPlaceModel",
@@ -5380,6 +5379,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -5487,7 +5487,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Model with explicit in-place operations on an internal tensor.",
@@ -5877,13 +5877,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -5968,7 +5966,7 @@
     "parents": [
      "clone_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -5989,6 +5987,8 @@
      2,
      4
     ],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "source_trace": {
@@ -6238,13 +6238,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "clone_1_1:1"
     },
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "lookup_keys": [
      -4,
@@ -6327,7 +6325,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "clone_1_2",
@@ -6348,6 +6346,8 @@
      2,
      4
     ],
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "source_trace": {
@@ -6551,13 +6551,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -5,
@@ -6637,7 +6635,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -6658,6 +6656,8 @@
      2,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -6889,13 +6889,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -6979,7 +6977,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "output_1",
@@ -7011,6 +7009,8 @@
      2,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -7257,13 +7257,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -7346,7 +7344,7 @@
     "parents": [
      "add_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "relu_1_4",
@@ -7367,6 +7365,8 @@
      2,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -7653,7 +7653,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -8333,9 +8333,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -8422,6 +8420,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "site_peers": [],
@@ -8582,9 +8582,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "leaf_module_ops": {
      "__set__": []
@@ -8671,6 +8669,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "site_peers": [],
@@ -8819,9 +8819,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -8899,6 +8897,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -9039,9 +9039,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -9140,6 +9138,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -9299,9 +9299,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -9388,6 +9386,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "site_peers": [],
@@ -9435,11 +9435,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "InPlaceModel",
     "class_qualname": "capture_oracle._models.InPlaceModel",
@@ -9476,6 +9475,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -9583,7 +9583,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Model with explicit in-place operations on an internal tensor.",
@@ -9973,13 +9973,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -10064,7 +10062,7 @@
     "parents": [
      "clone_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -10085,6 +10083,8 @@
      2,
      4
     ],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "source_trace": {
@@ -10334,13 +10334,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "clone_1_1:1"
     },
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "lookup_keys": [
      -4,
@@ -10423,7 +10421,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "clone_1_2",
@@ -10444,6 +10442,8 @@
      2,
      4
     ],
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "source_trace": {
@@ -10647,13 +10647,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -5,
@@ -10733,7 +10731,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -10754,6 +10752,8 @@
      2,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -10985,13 +10985,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -11075,7 +11073,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "output_1",
@@ -11107,6 +11105,8 @@
      2,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -11353,13 +11353,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -11442,7 +11440,7 @@
     "parents": [
      "add_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "relu_1_4",
@@ -11463,6 +11461,8 @@
      2,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -11761,7 +11761,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -12434,9 +12434,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -12523,6 +12521,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "site_peers": [],
@@ -12683,9 +12683,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "leaf_module_ops": {
      "__set__": []
@@ -12772,6 +12770,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "site_peers": [],
@@ -12920,9 +12920,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -13000,6 +12998,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -13140,9 +13140,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -13241,6 +13239,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -13400,9 +13400,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -13489,6 +13487,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "site_peers": [],
@@ -13536,11 +13536,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "InPlaceModel",
     "class_qualname": "capture_oracle._models.InPlaceModel",
@@ -13577,6 +13576,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -13684,7 +13684,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Model with explicit in-place operations on an internal tensor.",
@@ -14074,13 +14074,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -14165,7 +14163,7 @@
     "parents": [
      "clone_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -14186,6 +14184,8 @@
      2,
      4
     ],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "source_trace": {
@@ -14435,13 +14435,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "clone_1_1:1"
     },
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "lookup_keys": [
      -4,
@@ -14524,7 +14522,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "clone_1_2",
@@ -14545,6 +14543,8 @@
      2,
      4
     ],
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "source_trace": {
@@ -14748,13 +14748,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -5,
@@ -14834,7 +14832,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -14855,6 +14853,8 @@
      2,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -15086,13 +15086,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -15176,7 +15174,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "output_1",
@@ -15208,6 +15206,8 @@
      2,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -15454,13 +15454,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -15543,7 +15541,7 @@
     "parents": [
      "add_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "relu_1_4",
@@ -15564,6 +15562,8 @@
      2,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -15862,7 +15862,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
@@ -16549,9 +16549,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -16638,6 +16636,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "site_peers": [],
@@ -16798,9 +16798,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "leaf_module_ops": {
      "__set__": []
@@ -16887,6 +16885,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "site_peers": [],
@@ -17035,9 +17035,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -17115,6 +17113,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "site_peers": [],
@@ -17255,9 +17255,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -17345,6 +17343,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "site_peers": [],
@@ -17504,9 +17504,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -17593,6 +17591,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "site_peers": [],
@@ -17640,11 +17640,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "InPlaceModel",
     "class_qualname": "capture_oracle._models.InPlaceModel",
@@ -17681,6 +17680,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -17788,7 +17788,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Model with explicit in-place operations on an internal tensor.",
@@ -18161,10 +18161,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "short_label": "add_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_2",
-    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -18249,7 +18247,7 @@
     "parents": [
      "clone_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "add_1_3",
@@ -18270,6 +18268,8 @@
      2,
      4
     ],
+    "short_label": "add_1:1",
+    "short_layer_label": "add_1",
     "siblings": [],
     "site_key": "s1||add||1",
     "source_trace": {
@@ -18504,10 +18504,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "clone_1_1:1",
-    "short_label": "clone_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "clone_1_1",
-    "short_layer_label": "clone_1",
     "layer_type": "clone",
     "lookup_keys": [
      -4,
@@ -18590,7 +18588,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "clone_1_2",
@@ -18611,6 +18609,8 @@
      2,
      4
     ],
+    "short_label": "clone_1:1",
+    "short_layer_label": "clone_1",
     "siblings": [],
     "site_key": "s1||clone||1",
     "source_trace": {
@@ -18814,10 +18814,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -5,
@@ -18897,7 +18895,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -18918,6 +18916,8 @@
      2,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -19134,10 +19134,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -19221,7 +19219,7 @@
     "parents": [
      "relu_1_3"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 5,
     "raw_label": "output_1",
@@ -19242,6 +19240,8 @@
      2,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -19473,10 +19473,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "short_label": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_3",
-    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -19559,7 +19557,7 @@
     "parents": [
      "add_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "relu_1_4",
@@ -19580,6 +19578,8 @@
      2,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -19878,7 +19878,7 @@
    },
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
    "capture_cache_hit": false,
    "capture_cache_key": null,
