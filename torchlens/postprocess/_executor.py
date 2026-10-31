@@ -448,7 +448,7 @@ def _step_8_violation(trace: Trace) -> str | None:
 def _step_16_violation(trace: Trace) -> str | None:
     """Return the step-16 module-log postcondition violation, if any."""
 
-    if getattr(trace, "_module_logs", None) is None:
+    if trace._module_logs is None:
         return "Step 16 must build module logs"
     return None
 
