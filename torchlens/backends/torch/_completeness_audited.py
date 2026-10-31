@@ -29,11 +29,6 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         reason="existing metadata/export conversion boundary; TorchLens never records it as an op",
     ),
     AuditedCompletenessBoundary(
-        wrapper_name="torch_func:__array__:not_logged",
-        operator=None,
-        reason="existing NumPy protocol conversion boundary; TorchLens never records it as an op",
-    ),
-    AuditedCompletenessBoundary(
         wrapper_name="torch_func:size:not_logged",
         operator=None,
         reason="existing tensor shape metadata boundary; TorchLens never records it as an op",
