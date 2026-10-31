@@ -28,6 +28,12 @@ from ._live_model_state import (
     reattach_parameter_grads,
     restore_state_dict_if_changed,
 )
+from .diagnostics import (
+    CHECK_BACKWARD,
+    ValidationFailure,
+    record_validation_failure,
+    reset_validation_failure,
+)
 
 if TYPE_CHECKING:
     from ._layer_grad_report import LayerGradReport
@@ -456,6 +462,57 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
         return output_layers
 
 
+def _record_backward_failure(
+    trace: Any,
+    *,
+    reason: str,
+    message: str,
+    op_label: str | None = None,
+    **fields: Any,
+) -> None:
+    """Record why ``validate_backward_pass`` is about to return False.
+
+    One structured ``ValidationFailure`` under ``CHECK_BACKWARD`` with the
+    refusal or mismatch class in ``extra["reason"]``, so a False backward verdict
+    is never bare: ``last_validation_failure()`` names it like a forward one.
+    """
+
+    record_validation_failure(
+        trace,
+        ValidationFailure(
+            check=CHECK_BACKWARD,
+            op_label=op_label,
+            message=message,
+            extra={"reason": reason},
+            **fields,
+        ),
+    )
+
+
+def _parameter_grad_failure_fields(
+    observed: torch.Tensor, expected: torch.Tensor
+) -> dict[str, Any]:
+    """Describe one parameter-gradient mismatch for its failure record."""
+
+    fields: dict[str, Any] = {
+        "saved_shape": tuple(observed.shape),
+        "recomputed_shape": tuple(expected.shape),
+        "saved_dtype": str(observed.dtype).removeprefix("torch."),
+        "recomputed_dtype": str(expected.dtype).removeprefix("torch."),
+    }
+    if observed.shape != expected.shape:
+        return fields
+    fields["nan_mismatch"] = bool((torch.isnan(observed) != torch.isnan(expected)).any())
+    fields["inf_mismatch"] = bool((torch.isinf(observed) != torch.isinf(expected)).any())
+    finite = torch.isfinite(observed) & torch.isfinite(expected)
+    if bool(finite.any()):
+        diff = (observed[finite].double() - expected[finite].double()).abs()
+        fields["max_abs_diff"] = float(diff.max())
+        scale = expected[finite].double().abs().clamp_min(torch.finfo(torch.float64).tiny)
+        fields["max_rel_diff"] = float((diff / scale).max())
+    return fields
+
+
 def _is_appended_trace(value: Any) -> bool:
     """Return whether a value is an appended Trace-like object.
 
@@ -539,6 +596,52 @@ def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
     )
 
 
+def _record_module_output_grad_failure(trace: Any, layer_report: LayerGradReport) -> None:
+    """Record a failed module-output gradient report as the backward failure."""
+
+    gap_buckets = (
+        "mismatched",
+        "skipped_no_grad",
+        "unresolved_output_label",
+        "uncaptured_module_output",
+        "missing_module_call",
+    )
+    first_gap = next(
+        (
+            (label, bucket)
+            for label, bucket in layer_report.coverage.items()
+            if bucket in gap_buckets
+        ),
+        None,
+    )
+    if first_gap is None and not layer_report.covered_count:
+        _record_backward_failure(
+            trace,
+            reason="no_module_output_evidence",
+            message="nothing was compared: no module output carried a gradient on both "
+            f"sides ({layer_report.compared_no_grad_count} output(s) had none in stock or "
+            f"capture; the other {len(layer_report.coverage) - layer_report.compared_no_grad_count}"
+            " module call(s) are proven exclusions)",
+        )
+        return
+    label, bucket = first_gap if first_gap is not None else (None, "unexpected")
+    _record_backward_failure(
+        trace,
+        reason="module_output_grads",
+        op_label=label,
+        message=f"module-output gradient check failed: {bucket}"
+        + (f" at {label}" if label is not None else "")
+        + f" ({layer_report.mismatched_count} mismatched, "
+        f"{layer_report.skipped_no_grad_count} without a captured gradient, "
+        f"{layer_report.uncaptured_module_output_count} uncaptured module outputs, "
+        f"{layer_report.missing_module_call_count} missing module calls, "
+        f"{layer_report.unresolved_output_label_count} unresolved labels, "
+        f"{layer_report.unexpected_count} unexpected)",
+        max_abs_diff=layer_report.max_abs_diffs.get(label) if label is not None else None,
+        max_rel_diff=layer_report.max_rel_diffs.get(label) if label is not None else None,
+    )
+
+
 def validate_backward_pass(
     model: nn.Module,
     input_args: Any,
@@ -610,7 +713,13 @@ def validate_backward_pass(
     from ..user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
     from .invariants import check_metadata_invariants
 
+    reset_validation_failure(None)
     if _is_appended_trace(model):
+        _record_backward_failure(
+            None,
+            reason="appended_trace",
+            message="validate_backward_pass skipped: the model is an appended Trace",
+        )
         return _warn_and_skip_appended_trace_validation(model)
 
     warn_parallel()
@@ -628,6 +737,12 @@ def validate_backward_pass(
     input_args = normalize_input_args(input_args, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
+        _record_backward_failure(
+            None,
+            reason="non_leaf_parameter",
+            message="validate_backward_pass refused: a Parameter is not an autograd leaf "
+            "before validation",
+        )
         return False
     state_dict = _clone_state_dict_with_metadata(model)
     leaf_flags = _leaf_parameter_flags(model)
@@ -638,6 +753,7 @@ def validate_backward_pass(
     trace = None
     stock_module_grads = None
     stock_identity_addresses = None
+    stock_reached_keys = None
 
     try:
         set_random_seed(seed)
@@ -660,7 +776,11 @@ def validate_backward_pass(
                 if validate_layer_grads:
                     from ._stock_layer_grads import _stock_layer_grads
 
-                    stock_module_grads, stock_identity_addresses = _stock_layer_grads(
+                    (
+                        stock_module_grads,
+                        stock_identity_addresses,
+                        stock_reached_keys,
+                    ) = _stock_layer_grads(
                         model,
                         stock_inputs,
                         stock_kwargs,
@@ -671,7 +791,7 @@ def validate_backward_pass(
                 else:
                     stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
                     stock_loss.backward()
-        except CaptureNotActiveError:
+        except CaptureNotActiveError as pristine_error:
             warnings.warn(
                 "validate_backward_pass could not compute pristine-torch stock "
                 "gradients (a capture is active in this process, or the unwrap "
@@ -680,6 +800,11 @@ def validate_backward_pass(
                 "than reporting unverified success.",
                 RuntimeWarning,
                 stacklevel=2,
+            )
+            _record_backward_failure(
+                None,
+                reason="pristine_oracle_unavailable",
+                message=f"pristine-torch stock gradients unavailable: {pristine_error}",
             )
             return False
         expected_param_grads = _param_grads(model)
@@ -734,6 +859,13 @@ def validate_backward_pass(
                 RuntimeWarning,
                 stacklevel=2,
             )
+            _record_backward_failure(
+                trace,
+                reason="backward_coverage_gap",
+                op_label=unexplained_gaps[0].class_qualname,
+                message=f"{len(unexplained_gaps)} backward coverage gap(s); first: "
+                f"{unexplained_gaps[0].reason}",
+            )
             return False
         observed_param_grads = _param_grads(model)
 
@@ -746,6 +878,7 @@ def validate_backward_pass(
                 trace,
                 stock_module_grads,
                 stock_identity_addresses,
+                stock_reached_keys=stock_reached_keys,
                 # None flows through: the comparator derives the tolerance per
                 # gradient dtype (R13: the fp32 constants applied to fp64
                 # masked corruption ~4.5e11 fp64 ULPs above round-off).
@@ -754,6 +887,7 @@ def validate_backward_pass(
             )
             if not bool(layer_report):
                 _warn_if_no_module_output_evidence(layer_report)
+                _record_module_output_grad_failure(trace, layer_report)
                 return False
         # An empty stock parameter-gradient census is UNVERIFIABLE, and that verdict
         # cannot depend on ``validate_layer_grads``. This block used to be duplicated
@@ -772,6 +906,11 @@ def validate_backward_pass(
                 "stock autograd produced zero parameter gradients.",
                 RuntimeWarning,
                 stacklevel=2,
+            )
+            _record_backward_failure(
+                trace,
+                reason="no_parameter_gradients",
+                message="stock autograd produced zero parameter gradients",
             )
             return False
         # Degenerate-evidence guard: an all-nonfinite census makes every
@@ -795,8 +934,22 @@ def validate_backward_pass(
                 RuntimeWarning,
                 stacklevel=2,
             )
+            _record_backward_failure(
+                trace,
+                reason="degenerate_parameter_gradients",
+                message=f"stock parameter-gradient census is degenerate ({degeneracy})",
+            )
             return False
         if expected_param_grads.keys() != observed_param_grads.keys():
+            missing = sorted(expected_param_grads.keys() - observed_param_grads.keys())
+            unexpected = sorted(observed_param_grads.keys() - expected_param_grads.keys())
+            _record_backward_failure(
+                trace,
+                reason="parameter_census_mismatch",
+                op_label=missing[0] if missing else (unexpected[0] if unexpected else None),
+                message=f"captured parameter gradients differ from stock: missing {missing!r}, "
+                f"unexpected {unexpected!r}",
+            )
             return False
         # equal_nan follows tensor_nanequal's doctrine: an identical NaN
         # pattern in candidate and stock grads is agreement, not a mismatch
@@ -817,6 +970,13 @@ def validate_backward_pass(
                 equal_nan=True,
             ):
                 params_passed = False
+                _record_backward_failure(
+                    trace,
+                    reason="parameter_grad_mismatch",
+                    op_label=name,
+                    message=f"captured gradient of parameter {name!r} differs from stock autograd",
+                    **_parameter_grad_failure_fields(observed_param_grads[name], expected_grad),
+                )
                 break
         return params_passed
     finally:
