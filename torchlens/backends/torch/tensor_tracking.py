@@ -385,9 +385,9 @@ def _add_rebound_gradient_hook(
     A refresh projection keeps only the logged copy of each op output, and
     that copy is a graph dead end: its ``CloneBackward`` node was cut from the
     live tensor the model kept using. For an in-place op the live tensor may
-    even have been written again since. The copy's clone node still points at
+    even have been written again since. The copy's clone nodes still lead to
     the autograd node the op produced (``grad_fn_handle``, pinned for the
-    trace's lifetime) and at the live tensor's output slot on it, so the hook
+    trace's lifetime) and to the live tensor's output slot on it, so the hook
     goes on that node's slot, the path the deferred in-place install uses
     (``_add_live_gradient_reference_hook``). A copy without that link keeps
     the plain tensor hook.
@@ -424,8 +424,18 @@ def _add_rebound_gradient_hook(
     )
 
 
+# TorchLens's own payload copies: identity-gradient nodes with one graph edge.
+_PAYLOAD_COPY_NODE_NAMES = frozenset({"CloneBackward0", "_DeferredPayloadCloneFnBackward"})
+# An in-place op's payload is a copy of its safe copy; deeper chains are not minted.
+_MAX_PAYLOAD_COPY_DEPTH = 4
+
+
 def _logged_copy_source_slot(logged: torch.Tensor, grad_fn_handle: Any) -> int | None:
     """Return the output slot of ``grad_fn_handle`` that ``logged`` was copied from.
+
+    The walk follows TorchLens's own copy nodes only: an in-place op's payload
+    is a copy of the safe copy taken right after the op, so two clone nodes
+    can sit between the payload and the op's node.
 
     Parameters
     ----------
@@ -437,9 +447,9 @@ def _logged_copy_source_slot(logged: torch.Tensor, grad_fn_handle: Any) -> int |
     Returns
     -------
     int | None
-        The slot when ``logged`` is a dead-end copy whose only graph edge
-        leads to ``grad_fn_handle``; ``None`` otherwise (no node, a detached
-        copy, or the copy is itself the op's live output).
+        The slot when ``logged`` is a dead-end copy whose clone chain leads to
+        ``grad_fn_handle``; ``None`` otherwise (no node, a detached copy, the
+        copy is itself the op's live output, or the chain leads elsewhere).
     """
 
     from .completeness_witness import internal_scalar_read
@@ -447,13 +457,19 @@ def _logged_copy_source_slot(logged: torch.Tensor, grad_fn_handle: Any) -> int |
     if grad_fn_handle is None:
         return None
     with pause_logging(), internal_scalar_read():
-        copy_grad_fn = logged.grad_fn
-        if copy_grad_fn is None or copy_grad_fn is grad_fn_handle:
-            return None
-        edges = [edge for edge in copy_grad_fn.next_functions if edge[0] is not None]
-    if len(edges) != 1 or edges[0][0] is not grad_fn_handle:
-        return None
-    return int(edges[0][1])
+        node = logged.grad_fn
+        for _ in range(_MAX_PAYLOAD_COPY_DEPTH):
+            if node is None or node is grad_fn_handle:
+                return None
+            if type(node).__name__ not in _PAYLOAD_COPY_NODE_NAMES:
+                return None
+            edges = [edge for edge in node.next_functions if edge[0] is not None]
+            if len(edges) != 1:
+                return None
+            node, output_nr = edges[0]
+            if node is grad_fn_handle:
+                return int(output_nr)
+    return None
 
 
 def _install_tensor_grad_hook(
