@@ -75,23 +75,27 @@ def _base_after(name: str) -> Any:
 
 
 def _retrace(cell: Cell) -> Any:
-    """Capture the cell's model again with the cell's own configuration."""
+    """Capture a freshly built copy of the case with the cell's own configuration.
+
+    A fresh model, not the cell's: by now the harness has run a plain ``model(x)``
+    on the cell's model, which (unlike a capture, a pure observer) leaves any cache
+    the forward builds warm, so its next capture legitimately skips ops.
+    """
 
     kwargs = dict(cell.trace_kwargs)
     if "storage" in kwargs:
         kwargs["storage"] = tl.to_disk(str(cell.tmp / "stream-second.tlspec"))
     if cell.capture_fields:
         kwargs["capture"] = tl.options.CaptureOptions(**cell.capture_fields)
+    model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    return tl.trace(cell.model, cell.fresh_inputs(), **kwargs)
+    return tl.trace(model, cell.fresh_inputs(), **kwargs)
 
 
 def _expect_stable_second_capture(cell: Cell) -> None:
-    """A second capture of the same model gives the same labels, functions and shapes.
+    """Another capture in the same process gives the same labels, functions and shapes.
 
-    Leaves no wrapper or hook state behind that changes the next capture. The
-    cell's own trace is already the model's second capture (the case facts
-    were the first), so a first-call cache cannot explain a difference here.
+    The capture leaves no wrapper or hook state behind that changes the next one.
     """
 
     if cell.case.has("stochastic"):
@@ -117,19 +121,31 @@ def _expect_stable_second_capture(cell: Cell) -> None:
 def _after_halt(cell: Cell) -> None:
     """A halted capture is the plain capture's prefix up to the halt site, live and loaded.
 
-    The halt predicate is ``tl.func(mid_func)``: it fires at the first op running
-    ``mid_func``, so every op the plain capture ran before that op is kept, and
-    nothing after the halting op is recorded.
+    The halt predicate is ``tl.func(mid_func)``: every op the plain capture ran
+    before the op it fires at is kept, in order, and nothing after the halting op
+    is recorded. A halt at the model's last op keeps every op, so the prefix may be
+    the whole capture.
     """
 
-    _base_after("halt")(cell)
     trace = cell.require_trace()
+    cell.expect(trace.outcome.status is CaptureStatus.STOPPED, f"outcome {trace.outcome.status!r}")
     plain = cell.facts.func_names
     got = [op.func_name for op in _order(trace)]
-    site = plain.index(cell.facts.mid_func)
     cell.expect(
-        site <= len(got) <= site + 1,
-        f"halt at the first {cell.facts.mid_func!r} (plain position {site}) kept {len(got)} ops",
+        tuple(got) == plain[: len(got)],
+        f"halted ops are not a prefix of the plain capture ({len(got)}/{len(plain)}): "
+        f"{_first_difference(got, list(plain))}",
+    )
+    # The predicate fires at the first op it matches: no later than the first exact
+    # ``mid_func`` op, and no earlier than the first op of that name up to dunder
+    # spelling (``tl.func("mul")`` also matches ``__mul__``).
+    stem = cell.facts.mid_func.strip("_")
+    earliest = next(i for i, name in enumerate(plain) if name.strip("_") == stem)
+    latest = plain.index(cell.facts.mid_func)
+    cell.expect(
+        bool(got) and earliest <= len(got) <= latest + 1,
+        f"halt at {cell.facts.mid_func!r} (plain positions {earliest}..{latest}) kept "
+        f"{len(got)} ops",
     )
     if cell.loaded is not None:
         cell.expect(
