@@ -50,6 +50,10 @@ ADVISORY_ORPHAN_UNATTRIBUTED_ARGS = "orphan_unattributed_tensor_args"
 #: Advisory kind recorded when a direct ``torch.ops`` call wrote its arguments, returned
 #: nothing, and could not be recorded in place (``backends/torch/_torch_ops_calls.py``).
 ADVISORY_UNRECORDED_OPERATOR_MUTATION = "unrecorded_operator_mutation"
+#: Advisory kind recorded when capture held torch's fused attention fast path off so the
+#: forward, its replay and the validation ground truth all run the unfused program
+#: (``_capture_state_helpers.hold_fused_attention_fastpath_off``). A disclosure, not a gap.
+ADVISORY_FUSED_ATTENTION_FASTPATH_HELD = "fused_attention_fastpath_held_off"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:

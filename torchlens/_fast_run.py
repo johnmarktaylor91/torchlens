@@ -17,6 +17,7 @@ from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._capture_state_helpers import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
     _FastOutputPlan,
@@ -1330,7 +1331,15 @@ class _FastLiveSession:
         if seed is not None:
             set_random_seed(seed)
         truncation = None
-        with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
+        with (
+            self.activated(),
+            self.steer_plan.context(),
+            fingerprinting() as fingerprint,
+            # The native forward must run the attention program the capture
+            # recorded (its call fingerprint is compared against the trace's), so
+            # the fused fast path is held off exactly as at capture entry.
+            hold_fused_attention_fastpath_off(model),
+        ):
             try:
                 # Bind positional inputs exactly as capture and the ordinary live
                 # run do (a tuple or list spreads; a one-parameter forward takes a

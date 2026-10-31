@@ -23,6 +23,7 @@ from ._capture_state_helpers import (
     _move_tensors_to_device,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
+    hold_fused_attention_fastpath_off,
     unwrap_compiled_model,
 )
 from ._data_classes.trace import Trace
@@ -1550,8 +1551,16 @@ def _validate_forward_pass_torch(
         # one forward and reinstalled after; if they cannot be removed (a
         # capture is active), validation REFUSES rather than blessing a
         # wrap-state-dependent ground truth.
+        # The ground truth runs the SAME attention program capture records: the
+        # fused MHA fast path is held off here exactly as the capture scope
+        # holds it (``hold_fused_attention_fastpath_off``), since capture's
+        # forced ``requires_grad`` alone would otherwise steer the two forwards
+        # onto different kernels (wave-3 stress F4).
         try:
-            with pristine_torch_oracle():
+            with (
+                pristine_torch_oracle(),
+                hold_fused_attention_fastpath_off(ground_truth_model),
+            ):
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
         except CaptureNotActiveError:
             return _refuse_validation_precondition(

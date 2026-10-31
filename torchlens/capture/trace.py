@@ -1730,6 +1730,22 @@ def run_and_log_inputs_through_model(
         if not isinstance(compiled_capture_prep, CompiledCapturePrep):
             compiled_capture_prep = CompiledCapturePrep(sites=(), force_eager_stance=False)
         compiled_callable_sites = compiled_capture_prep.sites
+        if compiled_capture_prep.fused_attention_held:
+            from torchlens._capture_honesty import (
+                ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
+                append_capture_advisory,
+            )
+
+            append_capture_advisory(
+                self,
+                ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
+                [
+                    f"{address}: torch's fused attention fast path was held off, so the "
+                    "forward, its replay and the validation ground truth run the unfused "
+                    "attention program"
+                    for address in compiled_capture_prep.fused_attention_held
+                ],
+            )
         global _ACTIVE_CAPTURE_BACKEND
         previous_capture_backend = _ACTIVE_CAPTURE_BACKEND
         _ACTIVE_CAPTURE_BACKEND = backend
