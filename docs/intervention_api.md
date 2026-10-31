@@ -7,8 +7,8 @@ To apply one intervention to many forwards or a `generate()` loop, use `spec.bin
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec,
 return_output=True)` when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
-entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
-[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
+entry "Guarded fast rerun"). Which one to pick for a loop or for generation:
+[Performance: choosing a fast path](guides/fast_paths.md).
 
 ## Selectors
 

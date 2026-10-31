@@ -357,9 +357,8 @@ pages:
   - path: reference/episode_capture.md
     section: reference
   - path: reference/error_refusal_contract.md
-    section: internal
-    move_to: internal/reference/error_refusal_contract.md
-    note: internal engineering contract; the public refusal-code table is generated from it (plan 3.4)
+    section: reference
+    note: the public list of stable refusal codes; refusal messages in the package cite this page
   - path: reference/experiment_ledger.md
     section: reference
   - path: reference/export.md
@@ -411,7 +410,9 @@ pages:
   - path: reference/report_family.md
     section: reference
   - path: reference/runnable_model.md
-    section: reference
+    section: internal
+    move_to: internal/reference/runnable_model.md
+    note: maintainer model of the runnable subsystem; defers to its internal contract
   - path: reference/runnable_tlspec_contract.md
     section: internal
     move_to: internal/reference/runnable_tlspec_contract.md

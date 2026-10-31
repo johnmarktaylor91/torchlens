@@ -465,7 +465,7 @@ activation and gradient substrate.
 Measured on the canonical bench host (Intel i9-9900X) at SHA `712a4e5` on
 `2026-06-16`, from a full non-smoke run (`baseline_status: "canonical"`). The complete 196-row
 table (CPU + CUDA, every model and row) lives in
-[`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in
+`docs/_perf_numbers.md` and the raw baseline in
 `benchmarks/perf_baselines/linux-cpu.json`.
 
 **Headline: with fastlog capture and an early halt at ~25% depth, capture runs _faster than the

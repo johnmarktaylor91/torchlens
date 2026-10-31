@@ -183,7 +183,6 @@ device-specific claims as attested by local testing only.
 ## Related contracts
 
 - [Detached-reference handling](../migration/scoped_detached_patching.md)
-- [Runnable artifact model](runnable_model.md)
-- [Merged-trace contract](merged_trace_contract.md)
+- [Multi-GPU extraction](../migration/multi_gpu_extraction.md)
 - [Capture outcomes](capture_outcomes.md)
 - [Performance and memory controls](../performance.md)
