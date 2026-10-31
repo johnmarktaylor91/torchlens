@@ -103,6 +103,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -281,7 +282,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "add_2_34": {
@@ -382,6 +382,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -560,7 +561,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "contiguous_1_7": {
@@ -688,6 +688,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -862,7 +863,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_1_26": {
@@ -983,6 +983,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -1162,7 +1163,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_2_31": {
@@ -1281,6 +1281,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -1460,7 +1461,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_3_33": {
@@ -1581,6 +1581,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -1760,7 +1761,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_1_8": {
@@ -1878,6 +1878,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -2052,7 +2053,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_2_9": {
@@ -2170,6 +2170,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -2344,7 +2345,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_3_10": {
@@ -2462,6 +2462,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -2636,7 +2637,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "input_1": {
@@ -2730,6 +2730,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -2888,7 +2889,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "layernorm_1_28": {
@@ -3026,6 +3026,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -3218,7 +3219,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "layernorm_2_35": {
@@ -3349,6 +3349,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -3545,7 +3546,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_1_2": {
@@ -3680,6 +3680,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -3865,7 +3866,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_2_23": {
@@ -3996,6 +3996,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -4178,7 +4179,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_3_29": {
@@ -4305,6 +4305,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -4500,7 +4501,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_4_32": {
@@ -4627,6 +4627,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -4820,7 +4821,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": true,
     "visualizer_path": null
    },
    "output_1": {
@@ -4899,6 +4899,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5085,7 +5086,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "permute_1_21": {
@@ -5202,6 +5202,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5376,7 +5377,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_30": {
@@ -5487,6 +5487,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5657,7 +5658,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "reshape_1_22": {
@@ -5772,6 +5772,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5940,7 +5941,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "scaleddotproductattention_1_20": {
@@ -6061,6 +6061,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -6247,7 +6248,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "squeeze_1_6": {
@@ -6367,6 +6367,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -6541,7 +6542,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_1_1": {
@@ -6656,6 +6656,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -6829,7 +6830,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_2_5": {
@@ -6952,6 +6952,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -7129,7 +7130,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_3_12": {
@@ -7250,6 +7250,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -7421,7 +7422,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_4_14": {
@@ -7542,6 +7542,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -7713,7 +7714,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_5_16": {
@@ -7834,6 +7834,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -8005,7 +8006,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_6_25": {
@@ -8120,6 +8120,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -8297,7 +8298,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unflatten_1_3": {
@@ -8417,6 +8417,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -8591,7 +8592,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unsqueeze_1_4": {
@@ -8710,6 +8710,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -8887,7 +8888,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_1_11": {
@@ -9003,6 +9003,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9174,7 +9175,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_2_13": {
@@ -9290,6 +9290,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9461,7 +9462,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_3_15": {
@@ -9577,6 +9577,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9748,7 +9749,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_4_17": {
@@ -9867,6 +9867,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -10041,7 +10042,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_5_18": {
@@ -10160,6 +10160,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -10334,7 +10335,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_6_19": {
@@ -10453,6 +10453,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -10627,7 +10628,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_7_24": {
@@ -10741,6 +10741,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -10912,7 +10913,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 7,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -15183,10 +15183,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -15444,7 +15445,6 @@
     "type": "add",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -15594,10 +15594,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -15855,7 +15856,6 @@
     "type": "add",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -16022,10 +16022,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -16264,7 +16265,6 @@
     "type": "contiguous",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -16442,10 +16442,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -16689,7 +16690,6 @@
     "type": "dropout",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -16865,10 +16865,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -17120,7 +17121,6 @@
     "type": "dropout",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -17298,10 +17298,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -17545,7 +17546,6 @@
     "type": "dropout",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -17712,10 +17712,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -17956,7 +17957,6 @@
     "type": "getitem",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -18123,10 +18123,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -18367,7 +18368,6 @@
     "type": "getitem",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -18534,10 +18534,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -18778,7 +18779,6 @@
     "type": "getitem",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -18896,10 +18896,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -19123,7 +19124,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -19320,10 +19320,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -19594,7 +19595,6 @@
     "type": "layernorm",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -19788,10 +19788,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -20058,7 +20059,6 @@
     "type": "layernorm",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -20244,10 +20244,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -20499,7 +20500,6 @@
     "type": "linear",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -20681,10 +20681,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -20932,7 +20933,6 @@
     "type": "linear",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -21113,10 +21113,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -21376,7 +21377,6 @@
     "type": "linear",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -21557,10 +21557,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -21826,7 +21827,6 @@
     "type": "linear",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -21954,10 +21954,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -22202,7 +22203,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -22376,10 +22376,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -22623,7 +22624,6 @@
     "type": "permute",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -22783,10 +22783,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -23027,7 +23028,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -23195,10 +23195,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -23434,7 +23435,6 @@
     "type": "reshape",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -23617,10 +23617,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -23895,7 +23896,6 @@
     "type": "scaleddotproductattention",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -24066,10 +24066,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -24311,7 +24312,6 @@
     "type": "squeeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -24479,10 +24479,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -24722,7 +24723,6 @@
     "type": "transpose",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -24898,10 +24898,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -25147,7 +25148,6 @@
     "type": "transpose",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -25321,10 +25321,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -25562,7 +25563,6 @@
     "type": "transpose",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -25736,10 +25736,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -25977,7 +25978,6 @@
     "type": "transpose",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -26151,10 +26151,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -26392,7 +26393,6 @@
     "type": "transpose",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -26560,10 +26560,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -26815,7 +26816,6 @@
     "type": "transpose",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -26991,10 +26991,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -27238,7 +27239,6 @@
     "type": "unflatten",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -27408,10 +27408,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -27655,7 +27656,6 @@
     "type": "unsqueeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -27826,10 +27826,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -28068,7 +28069,6 @@
     "type": "view",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -28239,10 +28239,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -28481,7 +28482,6 @@
     "type": "view",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -28652,10 +28652,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -28894,7 +28895,6 @@
     "type": "view",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -29070,10 +29070,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -29316,7 +29317,6 @@
     "type": "view",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -29492,10 +29492,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -29738,7 +29739,6 @@
     "type": "view",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -29914,10 +29914,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -30160,7 +30161,6 @@
     "type": "view",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -30329,10 +30329,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -30570,7 +30571,6 @@
     "type": "view",
     "type_index": 7,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -30595,8 +30595,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30610,6 +30610,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 5,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -30630,16 +30631,11 @@
     "num_params": 8,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 5,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -30680,8 +30676,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30696,6 +30692,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 4,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -30716,17 +30713,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 4,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -30768,8 +30760,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30783,6 +30775,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 7,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -30803,16 +30796,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 7,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -30853,8 +30841,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30869,6 +30857,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 6,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -30889,17 +30878,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 6,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -30941,8 +30925,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30956,6 +30940,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 9,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -30976,16 +30961,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 9,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31026,8 +31006,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31041,6 +31021,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 8,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -31061,16 +31042,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 8,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31111,8 +31087,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31126,6 +31102,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 11,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -31146,16 +31123,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 11,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31196,8 +31168,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31211,6 +31183,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 10,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -31231,16 +31204,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 10,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31281,8 +31249,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31296,6 +31264,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -31316,16 +31285,11 @@
     "num_params": 12,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31366,8 +31330,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31382,6 +31346,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -31402,17 +31367,12 @@
     "num_params": 48,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31454,8 +31414,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31469,6 +31429,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 3,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -31481,16 +31442,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -31531,8 +31487,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -31547,6 +31503,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 2,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -31559,17 +31516,12 @@
     "num_params": 16,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 2,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -35994,6 +35946,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -36172,7 +36125,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "add_2_34": {
@@ -36273,6 +36225,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -36451,7 +36404,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "contiguous_1_7": {
@@ -36579,6 +36531,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -36753,7 +36706,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_1_26": {
@@ -36874,6 +36826,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -37053,7 +37006,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_2_31": {
@@ -37172,6 +37124,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -37351,7 +37304,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_3_33": {
@@ -37472,6 +37424,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -37651,7 +37604,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_1_8": {
@@ -37769,6 +37721,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -37943,7 +37896,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_2_9": {
@@ -38061,6 +38013,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -38235,7 +38188,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_3_10": {
@@ -38353,6 +38305,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -38527,7 +38480,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "input_1": {
@@ -38621,6 +38573,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -38779,7 +38732,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "layernorm_1_28": {
@@ -38917,6 +38869,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -39109,7 +39062,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "layernorm_2_35": {
@@ -39240,6 +39192,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -39436,7 +39389,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_1_2": {
@@ -39571,6 +39523,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -39756,7 +39709,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_2_23": {
@@ -39887,6 +39839,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -40069,7 +40022,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_3_29": {
@@ -40196,6 +40148,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -40391,7 +40344,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_4_32": {
@@ -40518,6 +40470,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -40711,7 +40664,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": true,
     "visualizer_path": null
    },
    "output_1": {
@@ -40790,6 +40742,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -40976,7 +40929,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "permute_1_21": {
@@ -41093,6 +41045,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -41267,7 +41220,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_30": {
@@ -41378,6 +41330,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -41548,7 +41501,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "reshape_1_22": {
@@ -41663,6 +41615,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -41831,7 +41784,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "scaleddotproductattention_1_20": {
@@ -41952,6 +41904,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -42138,7 +42091,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "squeeze_1_6": {
@@ -42258,6 +42210,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -42432,7 +42385,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_1_1": {
@@ -42547,6 +42499,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -42720,7 +42673,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_2_5": {
@@ -42843,6 +42795,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -43020,7 +42973,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_3_12": {
@@ -43141,6 +43093,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -43312,7 +43265,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_4_14": {
@@ -43433,6 +43385,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -43604,7 +43557,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_5_16": {
@@ -43725,6 +43677,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -43896,7 +43849,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_6_25": {
@@ -44011,6 +43963,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -44188,7 +44141,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unflatten_1_3": {
@@ -44308,6 +44260,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -44482,7 +44435,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unsqueeze_1_4": {
@@ -44601,6 +44553,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -44778,7 +44731,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_1_11": {
@@ -44894,6 +44846,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -45065,7 +45018,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_2_13": {
@@ -45181,6 +45133,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -45352,7 +45305,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_3_15": {
@@ -45468,6 +45420,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -45639,7 +45592,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_4_17": {
@@ -45758,6 +45710,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -45932,7 +45885,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_5_18": {
@@ -46051,6 +46003,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -46225,7 +46178,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_6_19": {
@@ -46344,6 +46296,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -46518,7 +46471,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_7_24": {
@@ -46632,6 +46584,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -46803,7 +46756,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 7,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -51074,10 +51026,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -51335,7 +51288,6 @@
     "type": "add",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -51485,10 +51437,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -51746,7 +51699,6 @@
     "type": "add",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -51913,10 +51865,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -52155,7 +52108,6 @@
     "type": "contiguous",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -52333,10 +52285,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -52580,7 +52533,6 @@
     "type": "dropout",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -52756,10 +52708,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -53011,7 +52964,6 @@
     "type": "dropout",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -53189,10 +53141,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -53436,7 +53389,6 @@
     "type": "dropout",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -53603,10 +53555,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -53847,7 +53800,6 @@
     "type": "getitem",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -54014,10 +53966,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -54258,7 +54211,6 @@
     "type": "getitem",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -54425,10 +54377,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -54669,7 +54622,6 @@
     "type": "getitem",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -54787,10 +54739,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -55014,7 +54967,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -55211,10 +55163,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -55485,7 +55438,6 @@
     "type": "layernorm",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -55679,10 +55631,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -55949,7 +55902,6 @@
     "type": "layernorm",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -56135,10 +56087,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -56390,7 +56343,6 @@
     "type": "linear",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -56572,10 +56524,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -56823,7 +56776,6 @@
     "type": "linear",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -57004,10 +56956,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -57267,7 +57220,6 @@
     "type": "linear",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -57448,10 +57400,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -57717,7 +57670,6 @@
     "type": "linear",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -57845,10 +57797,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -58093,7 +58046,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -58267,10 +58219,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -58514,7 +58467,6 @@
     "type": "permute",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -58674,10 +58626,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -58918,7 +58871,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -59086,10 +59038,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -59325,7 +59278,6 @@
     "type": "reshape",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -59508,10 +59460,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -59786,7 +59739,6 @@
     "type": "scaleddotproductattention",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -59957,10 +59909,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -60202,7 +60155,6 @@
     "type": "squeeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -60370,10 +60322,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -60613,7 +60566,6 @@
     "type": "transpose",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -60789,10 +60741,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -61038,7 +60991,6 @@
     "type": "transpose",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -61212,10 +61164,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -61453,7 +61406,6 @@
     "type": "transpose",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -61627,10 +61579,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -61868,7 +61821,6 @@
     "type": "transpose",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -62042,10 +61994,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -62283,7 +62236,6 @@
     "type": "transpose",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -62451,10 +62403,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -62706,7 +62659,6 @@
     "type": "transpose",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -62882,10 +62834,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -63129,7 +63082,6 @@
     "type": "unflatten",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -63299,10 +63251,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -63546,7 +63499,6 @@
     "type": "unsqueeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -63717,10 +63669,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -63959,7 +63912,6 @@
     "type": "view",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -64130,10 +64082,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -64372,7 +64325,6 @@
     "type": "view",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -64543,10 +64495,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -64785,7 +64738,6 @@
     "type": "view",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -64961,10 +64913,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -65207,7 +65160,6 @@
     "type": "view",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -65383,10 +65335,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -65629,7 +65582,6 @@
     "type": "view",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -65805,10 +65757,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -66051,7 +66004,6 @@
     "type": "view",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -66220,10 +66172,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -66461,7 +66414,6 @@
     "type": "view",
     "type_index": 7,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -66486,8 +66438,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66501,6 +66453,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 5,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66521,16 +66474,11 @@
     "num_params": 8,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 5,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -66571,8 +66519,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66587,6 +66535,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 4,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66607,17 +66556,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 4,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -66659,8 +66603,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66674,6 +66618,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 7,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66694,16 +66639,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 7,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -66744,8 +66684,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66760,6 +66700,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 6,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66780,17 +66721,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 6,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -66832,8 +66768,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66847,6 +66783,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 9,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66867,16 +66804,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 9,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -66917,8 +66849,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -66932,6 +66864,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 8,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -66952,16 +66885,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 8,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67002,8 +66930,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67017,6 +66945,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 11,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -67037,16 +66966,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 11,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67087,8 +67011,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67102,6 +67026,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 10,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -67122,16 +67047,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 10,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67172,8 +67092,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67187,6 +67107,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -67207,16 +67128,11 @@
     "num_params": 12,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67257,8 +67173,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67273,6 +67189,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -67293,17 +67210,12 @@
     "num_params": 48,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67345,8 +67257,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67360,6 +67272,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 3,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -67372,16 +67285,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -67422,8 +67330,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -67438,6 +67346,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 2,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -67450,17 +67359,12 @@
     "num_params": 16,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 2,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -71937,6 +71841,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -72115,7 +72020,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "add_2_34": {
@@ -72216,6 +72120,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -72394,7 +72299,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "contiguous_1_7": {
@@ -72522,6 +72426,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -72696,7 +72601,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_1_26": {
@@ -72817,6 +72721,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -72996,7 +72901,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_2_31": {
@@ -73115,6 +73019,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -73294,7 +73199,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_3_33": {
@@ -73415,6 +73319,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -73594,7 +73499,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_1_8": {
@@ -73712,6 +73616,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -73886,7 +73791,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_2_9": {
@@ -74004,6 +73908,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -74178,7 +74083,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_3_10": {
@@ -74296,6 +74200,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -74470,7 +74375,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "input_1": {
@@ -74564,6 +74468,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -74722,7 +74627,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "layernorm_1_28": {
@@ -74860,6 +74764,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -75052,7 +74957,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "layernorm_2_35": {
@@ -75183,6 +75087,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -75379,7 +75284,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_1_2": {
@@ -75514,6 +75418,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -75699,7 +75604,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_2_23": {
@@ -75830,6 +75734,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -76012,7 +75917,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_3_29": {
@@ -76139,6 +76043,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -76334,7 +76239,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_4_32": {
@@ -76461,6 +76365,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -76654,7 +76559,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": true,
     "visualizer_path": null
    },
    "output_1": {
@@ -76733,6 +76637,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -76919,7 +76824,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "permute_1_21": {
@@ -77036,6 +76940,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -77210,7 +77115,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_30": {
@@ -77321,6 +77225,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -77491,7 +77396,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "reshape_1_22": {
@@ -77606,6 +77510,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -77774,7 +77679,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "scaleddotproductattention_1_20": {
@@ -77895,6 +77799,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -78081,7 +77986,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "squeeze_1_6": {
@@ -78201,6 +78105,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -78375,7 +78280,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_1_1": {
@@ -78490,6 +78394,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -78663,7 +78568,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_2_5": {
@@ -78786,6 +78690,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -78963,7 +78868,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_3_12": {
@@ -79084,6 +78988,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -79255,7 +79160,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_4_14": {
@@ -79376,6 +79280,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -79547,7 +79452,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_5_16": {
@@ -79668,6 +79572,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -79839,7 +79744,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_6_25": {
@@ -79954,6 +79858,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -80131,7 +80036,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unflatten_1_3": {
@@ -80251,6 +80155,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -80425,7 +80330,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unsqueeze_1_4": {
@@ -80544,6 +80448,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -80721,7 +80626,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_1_11": {
@@ -80837,6 +80741,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -81008,7 +80913,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_2_13": {
@@ -81124,6 +81028,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -81295,7 +81200,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_3_15": {
@@ -81411,6 +81315,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -81582,7 +81487,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_4_17": {
@@ -81701,6 +81605,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -81875,7 +81780,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_5_18": {
@@ -81994,6 +81898,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -82168,7 +82073,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_6_19": {
@@ -82287,6 +82191,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -82461,7 +82366,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_7_24": {
@@ -82575,6 +82479,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -82746,7 +82651,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 7,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -87017,10 +86921,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -87278,7 +87183,6 @@
     "type": "add",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -87428,10 +87332,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -87689,7 +87594,6 @@
     "type": "add",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -87856,10 +87760,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -88098,7 +88003,6 @@
     "type": "contiguous",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -88276,10 +88180,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -88523,7 +88428,6 @@
     "type": "dropout",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -88699,10 +88603,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -88954,7 +88859,6 @@
     "type": "dropout",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -89132,10 +89036,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -89379,7 +89284,6 @@
     "type": "dropout",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -89546,10 +89450,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -89790,7 +89695,6 @@
     "type": "getitem",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -89957,10 +89861,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -90201,7 +90106,6 @@
     "type": "getitem",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -90368,10 +90272,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -90612,7 +90517,6 @@
     "type": "getitem",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -90730,10 +90634,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -90957,7 +90862,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -91154,10 +91058,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -91428,7 +91333,6 @@
     "type": "layernorm",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -91622,10 +91526,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -91892,7 +91797,6 @@
     "type": "layernorm",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -92078,10 +91982,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -92333,7 +92238,6 @@
     "type": "linear",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -92515,10 +92419,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -92766,7 +92671,6 @@
     "type": "linear",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -92947,10 +92851,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -93210,7 +93115,6 @@
     "type": "linear",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -93391,10 +93295,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -93660,7 +93565,6 @@
     "type": "linear",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -93788,10 +93692,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -94036,7 +93941,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -94210,10 +94114,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -94457,7 +94362,6 @@
     "type": "permute",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -94617,10 +94521,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -94861,7 +94766,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -95029,10 +94933,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -95268,7 +95173,6 @@
     "type": "reshape",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -95451,10 +95355,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -95729,7 +95634,6 @@
     "type": "scaleddotproductattention",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -95900,10 +95804,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -96145,7 +96050,6 @@
     "type": "squeeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -96313,10 +96217,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -96556,7 +96461,6 @@
     "type": "transpose",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -96732,10 +96636,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -96981,7 +96886,6 @@
     "type": "transpose",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -97155,10 +97059,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -97396,7 +97301,6 @@
     "type": "transpose",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -97570,10 +97474,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -97811,7 +97716,6 @@
     "type": "transpose",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -97985,10 +97889,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -98226,7 +98131,6 @@
     "type": "transpose",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -98394,10 +98298,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -98649,7 +98554,6 @@
     "type": "transpose",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -98825,10 +98729,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -99072,7 +98977,6 @@
     "type": "unflatten",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -99242,10 +99146,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -99489,7 +99394,6 @@
     "type": "unsqueeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -99660,10 +99564,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -99902,7 +99807,6 @@
     "type": "view",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -100073,10 +99977,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -100315,7 +100220,6 @@
     "type": "view",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -100486,10 +100390,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -100728,7 +100633,6 @@
     "type": "view",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -100904,10 +100808,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -101150,7 +101055,6 @@
     "type": "view",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -101326,10 +101230,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -101572,7 +101477,6 @@
     "type": "view",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -101748,10 +101652,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -101994,7 +101899,6 @@
     "type": "view",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -102163,10 +102067,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -102404,7 +102309,6 @@
     "type": "view",
     "type_index": 7,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -102429,8 +102333,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102444,6 +102348,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 5,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102464,16 +102369,11 @@
     "num_params": 8,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 5,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102514,8 +102414,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102530,6 +102430,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 4,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102550,17 +102451,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 4,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102602,8 +102498,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102617,6 +102513,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 7,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102637,16 +102534,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 7,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102687,8 +102579,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102703,6 +102595,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 6,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102723,17 +102616,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 6,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      8
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102775,8 +102663,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102790,6 +102678,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 9,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102810,16 +102699,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 9,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102860,8 +102744,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102875,6 +102759,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 8,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102895,16 +102780,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 8,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -102945,8 +102825,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -102960,6 +102840,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 11,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -102980,16 +102861,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 11,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -103030,8 +102906,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -103045,6 +102921,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 10,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -103065,16 +102942,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 10,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -103115,8 +102987,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -103130,6 +103002,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -103150,16 +103023,11 @@
     "num_params": 12,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -103200,8 +103068,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -103216,6 +103084,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -103236,17 +103105,12 @@
     "num_params": 48,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -103288,8 +103152,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -103303,6 +103167,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 3,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -103315,16 +103180,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -103365,8 +103225,8 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -103381,6 +103241,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 2,
     "is_quantized": false,
     "is_trainable": true,
     "module": "<raises KeyError>",
@@ -103393,17 +103254,12 @@
     "num_params": 16,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": 2,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      4
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -107836,6 +107692,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -108014,7 +107871,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "add_2_34": {
@@ -108115,6 +107971,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -108293,7 +108150,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "contiguous_1_7": {
@@ -108421,6 +108277,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -108595,7 +108452,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_1_26": {
@@ -108716,6 +108572,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -108895,7 +108752,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_2_31": {
@@ -109014,6 +108870,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -109193,7 +109050,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "dropout_3_33": {
@@ -109314,6 +109170,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -109493,7 +109350,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_1_8": {
@@ -109611,6 +109467,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -109785,7 +109642,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_2_9": {
@@ -109903,6 +109759,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -110077,7 +109934,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "getitem_3_10": {
@@ -110195,6 +110051,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -110369,7 +110226,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "input_1": {
@@ -110463,6 +110319,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -110621,7 +110478,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "layernorm_1_28": {
@@ -110759,6 +110615,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -110951,7 +110808,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "layernorm_2_35": {
@@ -111082,6 +110938,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -111278,7 +111135,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_1_2": {
@@ -111413,6 +111269,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -111598,7 +111455,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_2_23": {
@@ -111729,6 +111585,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -111911,7 +111768,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_3_29": {
@@ -112038,6 +111894,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -112233,7 +112090,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": true,
     "visualizer_path": null
    },
    "linear_4_32": {
@@ -112360,6 +112216,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -112553,7 +112410,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": true,
     "visualizer_path": null
    },
    "output_1": {
@@ -112632,6 +112488,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -112806,7 +112663,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "permute_1_21": {
@@ -112923,6 +112779,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -113097,7 +112954,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_30": {
@@ -113208,6 +113064,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -113378,7 +113235,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "reshape_1_22": {
@@ -113493,6 +113349,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -113661,7 +113518,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "scaleddotproductattention_1_20": {
@@ -113782,6 +113638,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -113968,7 +113825,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "squeeze_1_6": {
@@ -114088,6 +113944,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -114262,7 +114119,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_1_1": {
@@ -114377,6 +114233,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": true,
@@ -114550,7 +114407,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_2_5": {
@@ -114673,6 +114529,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -114850,7 +114707,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_3_12": {
@@ -114971,6 +114827,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -115142,7 +114999,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_4_14": {
@@ -115263,6 +115119,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -115434,7 +115291,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_5_16": {
@@ -115555,6 +115411,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -115726,7 +115583,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "transpose_6_25": {
@@ -115841,6 +115697,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -116018,7 +115875,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unflatten_1_3": {
@@ -116138,6 +115994,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -116312,7 +116169,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "unsqueeze_1_4": {
@@ -116431,6 +116287,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -116608,7 +116465,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_1_11": {
@@ -116724,6 +116580,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -116895,7 +116752,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_2_13": {
@@ -117011,6 +116867,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -117182,7 +117039,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 2,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_3_15": {
@@ -117298,6 +117154,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -117469,7 +117326,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 3,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_4_17": {
@@ -117588,6 +117444,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -117762,7 +117619,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 4,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_5_18": {
@@ -117881,6 +117737,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -118055,7 +117912,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 5,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_6_19": {
@@ -118174,6 +118030,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -118348,7 +118205,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 6,
-    "uses_params": false,
     "visualizer_path": null
    },
    "view_7_24": {
@@ -118462,6 +118318,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -118633,7 +118490,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 7,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -122904,10 +122760,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -123133,7 +122990,6 @@
     "type": "add",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -123283,10 +123139,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -123512,7 +123369,6 @@
     "type": "add",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -123679,10 +123535,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -123901,7 +123758,6 @@
     "type": "contiguous",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -124075,10 +123931,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -124303,7 +124160,6 @@
     "type": "dropout",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -124475,10 +124331,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -124711,7 +124568,6 @@
     "type": "dropout",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -124885,10 +124741,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -125113,7 +124970,6 @@
     "type": "dropout",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -125280,10 +125136,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -125504,7 +125361,6 @@
     "type": "getitem",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -125671,10 +125527,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -125895,7 +125752,6 @@
     "type": "getitem",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -126062,10 +125918,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -126286,7 +126143,6 @@
     "type": "getitem",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -126404,10 +126260,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -126628,7 +126485,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -126818,10 +126674,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -127073,7 +126930,6 @@
     "type": "layernorm",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -127260,10 +127116,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -127511,7 +127368,6 @@
     "type": "layernorm",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -127693,10 +127549,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -127929,7 +127786,6 @@
     "type": "linear",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -128107,10 +127963,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -128340,7 +128197,6 @@
     "type": "linear",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -128517,10 +128373,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -128761,7 +128618,6 @@
     "type": "linear",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -128938,10 +128794,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -129188,7 +129045,6 @@
     "type": "linear",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -129316,10 +129172,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -129533,7 +129390,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -129702,10 +129558,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -129929,7 +129786,6 @@
     "type": "permute",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -130087,10 +129943,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -130312,7 +130169,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -130477,10 +130333,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -130696,7 +130553,6 @@
     "type": "reshape",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -130872,10 +130728,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -131102,7 +130959,6 @@
     "type": "scaleddotproductattention",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -131271,10 +131127,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -131495,7 +131352,6 @@
     "type": "squeeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -131660,10 +131516,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": true,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -131884,7 +131741,6 @@
     "type": "transpose",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -132057,10 +131913,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -132285,7 +132142,6 @@
     "type": "transpose",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -132456,10 +132312,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -132678,7 +132535,6 @@
     "type": "transpose",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -132849,10 +132705,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -133071,7 +132928,6 @@
     "type": "transpose",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -133242,10 +133098,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -133464,7 +133321,6 @@
     "type": "transpose",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -133629,10 +133485,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -133865,7 +133722,6 @@
     "type": "transpose",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -134038,10 +133894,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -134266,7 +134123,6 @@
     "type": "unflatten",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -134434,10 +134290,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -134661,7 +134518,6 @@
     "type": "unsqueeze",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -134828,10 +134684,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -135051,7 +134908,6 @@
     "type": "view",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -135218,10 +135074,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -135441,7 +135298,6 @@
     "type": "view",
     "type_index": 2,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -135608,10 +135464,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -135831,7 +135688,6 @@
     "type": "view",
     "type_index": 3,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -136002,10 +135858,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -136229,7 +136086,6 @@
     "type": "view",
     "type_index": 4,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -136400,10 +136256,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -136627,7 +136484,6 @@
     "type": "view",
     "type_index": 5,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -136798,10 +136654,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -137025,7 +136882,6 @@
     "type": "view",
     "type_index": 6,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -137190,10 +137046,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -137413,7 +137270,6 @@
     "type": "view",
     "type_index": 7,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -137438,13 +137294,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137457,13 +137314,11 @@
     "num_params": 8,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_3_29"
@@ -137493,13 +137348,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137512,14 +137368,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      8,
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_3_29"
@@ -137549,13 +137403,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137568,13 +137423,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_4_32"
@@ -137604,13 +137457,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137623,14 +137477,12 @@
     "num_params": 32,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      8
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_4_32"
@@ -137660,13 +137512,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137679,13 +137532,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "layernorm_1_28"
@@ -137715,13 +137566,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137734,13 +137586,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "layernorm_1_28"
@@ -137770,13 +137620,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137789,13 +137640,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "layernorm_2_35"
@@ -137825,13 +137674,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137844,13 +137694,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "layernorm_2_35"
@@ -137880,13 +137728,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137899,13 +137748,11 @@
     "num_params": 12,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_1_2"
@@ -137935,13 +137782,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -137954,14 +137802,12 @@
     "num_params": 48,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      12,
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_1_2"
@@ -137991,13 +137837,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -138010,13 +137857,11 @@
     "num_params": 4,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_2_23"
@@ -138046,13 +137891,14 @@
     "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -138065,14 +137911,12 @@
     "num_params": 16,
     "num_uses_by_layers": 1,
     "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      4,
      4
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "linear_2_23"

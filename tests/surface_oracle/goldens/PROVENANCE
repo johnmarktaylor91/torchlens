@@ -1280,3 +1280,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 72b8140ae019ac73c372ec2627bf5b81fc04c6f5 (dirty)
 recorded: 2026-10-30T02:30:24.174664+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.713991+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.735525+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.755046+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.775354+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.793097+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.820376+00:00

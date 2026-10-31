@@ -532,3 +532,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
 recorded: 2026-10-30T02:07:12.409552+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: rename codemod: node member renames and removals
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:38.269162+00:00
