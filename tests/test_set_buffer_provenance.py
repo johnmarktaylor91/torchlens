@@ -215,7 +215,8 @@ def test_shifting_a_view_on_the_same_storage_is_not_a_host_write() -> None:
             capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0),
         )
     try:
-        assert not torch.equal(before, model.b)
+        # The default capture rolls the buffer back after the forward.
+        assert torch.equal(before, model.b)
         (buffer_node,) = [
             layer for layer in trace.layer_list if layer.buffer_write_kind == "data_reassign"
         ]
