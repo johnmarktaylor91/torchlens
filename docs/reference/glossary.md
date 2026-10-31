@@ -2903,8 +2903,7 @@ deprecation shim owed*
   `save_args=` (`CaptureOptions.save_args`), `save_source_context=`
   (`CaptureOptions.save_source_context`), `save_rng=` (`CaptureOptions.save_rng`),
   `save_transformed_output=` (`CaptureOptions.save_transformed_output`) and `input_transform=`
-  (`CaptureOptions.input_transform`). `CaptureOptions.receipt()` returns the per-field option
-  receipt (each public field, its value and why). The saved `Trace` keeps its stored field names
+  (`CaptureOptions.input_transform`). The saved `Trace` keeps its stored field names
   in this release.
 
 **Recording keywords**

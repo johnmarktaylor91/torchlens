@@ -35,7 +35,6 @@ from ._literals import (
 from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
-    OptionReceiptEntry,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
@@ -902,29 +901,6 @@ class CaptureOptions:
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
-
-    def receipt(
-        self,
-        *,
-        adjustments: Mapping[str, tuple[Any, str]] | None = None,
-    ) -> tuple[Any, ...]:
-        """Return the per-field option receipt: each public field, its value and why.
-
-        Parameters
-        ----------
-        adjustments:
-            Field name -> ``(effective_value, reason)`` for options a consumer
-            forced, normalized or refused after construction.
-
-        Returns
-        -------
-        tuple[Any, ...]
-            One receipt entry per public field, in field order.
-        """
-
-        from ._option_receipt import option_receipt
-
-        return option_receipt(self, adjustments=adjustments)
 
 
 @dataclass(frozen=True, init=False)
@@ -1902,7 +1878,6 @@ __all__ = [
     "NarrationOptions",
     "EpisodeOptions",
     "InterventionOptions",
-    "OptionReceiptEntry",
     "ReplayOptions",
     "SaveOptions",
     "StorageOptions",
