@@ -31,7 +31,6 @@ _LAZY_ATTRS = {
     "cleanup_partial": ("torchlens.fastlog.cleanup", "cleanup_partial"),
     "dry_run": ("torchlens.fastlog.dry_run", "dry_run"),
     "halt": ("torchlens.fastlog._halt", "halt"),
-    "load": ("torchlens.fastlog.recover", "load"),
     "recover": ("torchlens.fastlog.recover", "recover"),
     "record": ("torchlens.fastlog._record_one_shot", "record"),
 }
@@ -60,7 +59,6 @@ __all__ = [
     "cleanup_partial",
     "dry_run",
     "halt",
-    "load",
     "preview",
     "recover",
     "record",

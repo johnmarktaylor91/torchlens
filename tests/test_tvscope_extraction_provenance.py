@@ -108,7 +108,7 @@ def test_resolution_backed_run_stamps_verified_block(model, resolution, tmp_path
     signature_value = manifest["signature"]["transform_pipeline"]
     assert set(signature_value) == {"output", "input"}
     assert signature_value["input"]["kind"] == "resolved"
-    loaded = tl.load_extraction(out_dir)
+    loaded = tl.load(out_dir)
     assert loaded.input_preprocessing["verdict"] == "verified"
 
 
@@ -324,6 +324,6 @@ def test_pil_iterable_with_item_level_authority_transform(model, tmp_path) -> No
         stimulus_ids=["a", "b"],
         progress=False,
     )
-    loaded = tl.load_extraction(out_dir)
+    loaded = tl.load(out_dir)
     assert loaded.activations["avgpool"].shape[0] == 2
     assert loaded.input_preprocessing["verdict"] == "verified"

@@ -1432,6 +1432,17 @@ def load(
                 from ..merged._artifact import load_merged
 
                 return load_merged(bundle_path)  # type: ignore[return-value]
+            if (
+                isinstance(candidate, dict)
+                and candidate.get("bundle_format") == "fastlog-directory"
+            ):
+                from ..fastlog.recover import load as load_fastlog
+
+                return load_fastlog(bundle_path)  # type: ignore[return-value]
+            if isinstance(candidate, dict) and _is_extraction_manifest(candidate):
+                from ..dataset_extraction import load_extraction
+
+                return load_extraction(bundle_path)  # type: ignore[return-value]
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
@@ -1508,6 +1519,25 @@ def load(
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
+
+
+def _is_extraction_manifest(candidate: dict[str, Any]) -> bool:
+    """Return whether a directory manifest is a dataset-extraction artifact's.
+
+    Parameters
+    ----------
+    candidate:
+        The parsed ``manifest.json`` mapping.
+
+    Returns
+    -------
+    bool
+        True for the extraction manifest schemas (v1 and v2).
+    """
+
+    from .._data_substrate.artifact import MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2
+
+    return candidate.get("schema") in {MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2}
 
 
 def _load_trace_payload(

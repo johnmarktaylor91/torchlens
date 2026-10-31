@@ -107,7 +107,7 @@ before the block existed.
 ## 5. Take the features anywhere
 
 ```python
-loaded = tl.load_extraction("features_run")
+loaded = tl.load("features_run")
 print(loaded.input_preprocessing["verdict"])
 
 from torchlens.bridge import rsatoolbox as tl_rsa

@@ -947,12 +947,12 @@ class Trace(
             runnable_trace_state(self).archived_activations or {},
         )
 
-    def load_state_dict(self, sd: Mapping[str, Any]) -> None:
+    def load_state_dict(self, state_dict: Mapping[str, Any]) -> None:
         """Strictly validate and atomically stage sparse-run state.
 
         Parameters
         ----------
-        sd:
+        state_dict:
             Canonically named parameter and persistent-buffer tensor mapping.
 
         Raises
@@ -969,7 +969,7 @@ class Trace(
 
         from .._runnable_state import load_trace_state_dict
 
-        load_trace_state_dict(self, sd)
+        load_trace_state_dict(self, state_dict)
 
     def find_nan(self) -> Any:
         """Return the first NaN or Inf among saved outputs in execution order.

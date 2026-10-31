@@ -8,7 +8,7 @@ sections:
 
 1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
    save=...)`` or write a disk artifact with ``tl.extract_dataset(...,
-   path=...)`` and read it back with ``tl.load_extraction``. The
+   path=...)`` and read it back with ``tl.load``. The
    manifest records stimulus ids, ordering, dtypes, and preprocessing
    provenance -- everything downstream descriptors are built from.
 2. GEOMETRY (needs no extra): RDMs and friends live in their canonical

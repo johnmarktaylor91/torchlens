@@ -1129,7 +1129,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (``stimulus_ids=`` optional), axis semantics, dtypes, devices, and the TorchLens
   version. ``resume=True`` (DOCUMENTED-UNSTABLE, like ``stimulus_ids=`` and the loader)
   continues an interrupted disk run from its last completed shard after a signature
-  check; `torchlens.dataset_extraction.load_extraction` reads the artifact back with
+  check; `torchlens.load(path)` reads the artifact back with
   its metadata as a `LoadedExtraction`.
 
 **Module and stage names** *(rule documented-unstable)*

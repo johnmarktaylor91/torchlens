@@ -861,7 +861,6 @@ __all__ = [
     "feature_matrix",
     "hf_collate",
     "input_preprocessing_of",
-    "load_extraction",
     "open_extraction",
     "register_pure_module",
     "relabel_extraction",

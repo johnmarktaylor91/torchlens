@@ -99,10 +99,6 @@ _LAZY_ATTRS = {
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
     "extract_dataset": ("torchlens.dataset_extraction", "extract_dataset"),
-    # WT1 A-VI item 27: the reader half of the extraction workflow was only
-    # reachable as torchlens.dataset_extraction.load_extraction while the
-    # writer (extract_dataset) was top-level.
-    "load_extraction": ("torchlens.dataset_extraction", "load_extraction"),
     "distributed": ("torchlens.distributed", None),
     "do": ("torchlens.intervention", "do"),
     "examples": ("torchlens.examples", None),
@@ -301,6 +297,7 @@ _REDIRECTS: dict[str, str] = {
     "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
     "reset_naming_counter": "use torchlens.io.reset_naming_counter",
     "resolve_sites": "use torchlens.validation.resolve_sites",
+    "load_extraction": "use torchlens.load(path) -- it detects a saved extraction directory",
     "save": "use trace.save(path) -- objects save themselves; torchlens.load(path) reads a saved artifact back",
     "save_intervention": "use torchlens.io.save_intervention",
     "semantic": "import torchlens.semantic, then use torchlens.semantic.logit_lens and its siblings -- a submodule, not a root name",
@@ -789,7 +786,6 @@ __all__ = [
     "pluck",
     "extract",
     "extract_dataset",
-    "load_extraction",
     "validate",
     "decide_recording_of_batch",
     "record_kpi_in_graph",

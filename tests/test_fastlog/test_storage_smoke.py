@@ -83,7 +83,7 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
         default_op=True,
         streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
     assert recording.bundle_path == bundle_path
     assert (bundle_path / "manifest.json").exists()
@@ -114,7 +114,7 @@ def test_disk_only_deep_stack_stays_linear_and_round_trips(
         streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     elapsed = time.perf_counter() - start
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
     assert elapsed < ceiling_seconds
     assert len(loaded.records) == len(recording.records)

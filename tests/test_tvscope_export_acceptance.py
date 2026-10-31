@@ -161,7 +161,7 @@ class TestSiteMatrixRoutes:
         with pytest.raises(InvalidArgumentError) as dir_info:
             features.site_matrix(out_dir, "not_a_key")
         assert dir_info.value.fields["code"] == "extraction_reader_key_unknown"
-        loaded = tl.load_extraction(out_dir)
+        loaded = tl.load(out_dir)
         with pytest.raises(features.FeatureShapingError) as obj_info:
             features.site_matrix(loaded, "not_a_key")
         assert obj_info.value.fields["code"] == "feature_site_payload_unavailable"

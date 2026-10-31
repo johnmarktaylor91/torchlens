@@ -1319,7 +1319,7 @@
   devices, transform disclosure, TorchLens version), ledgered per batch. `resume=True`
   continues an interrupted run from its last completed shard after a signature check
   (typed refusals `extraction_resume_*` / `extraction_manifest_invalid`);
-  `torchlens.dataset_extraction.load_extraction` reads the artifact back with metadata.
+  `torchlens.load(path)` reads the artifact back with metadata.
   Crash-safety is pinned by a hard-process-death test.
 - R2-08 EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
   `tl.extract_dataset(model, x, layers, intervene=tl.when(tl.module("fc2"), tl.zero_ablate()))`
