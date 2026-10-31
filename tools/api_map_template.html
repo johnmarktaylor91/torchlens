@@ -164,8 +164,9 @@ li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
 .doc1 { flex-basis: 100%; color: var(--muted); font-size: 13px; margin-top: 1px; }
 .doc1 code, .details pre code { font-size: 12.5px; background: var(--surface-2); border-radius: 3px; padding: 0 3px; }
 li.node.open > .row .doc1 code, .details pre code { background: var(--surface); }
-.alias-note { font-size: 12px; color: var(--muted); }
-.alias-note code { font-size: 12px; }
+.alias-note { font-size: 12px; color: var(--muted); min-width: 0; max-width: 100%; }
+.alias-note code { font-size: 12px; overflow-wrap: anywhere; word-break: break-all; }
+.main > * { min-width: 0; max-width: 100%; }
 .more { border: 1px solid var(--grid); background: var(--surface-2); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; min-height: 22px; cursor: pointer; margin-left: 2px; }
 .more:hover { border-color: var(--muted); }
 .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
