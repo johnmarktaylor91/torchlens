@@ -1132,7 +1132,7 @@ class Trace(
     backward_ready: bool
     inference_only: bool
     chunked_forward: bool
-    has_timing: bool
+    profile_enabled: bool
     save_arg_templates: bool
     op_equivalence_classes: dict[str, set[str]]
     last_run: Any | None
@@ -1400,7 +1400,7 @@ class Trace(
         "grad_fn_timing_provenance": FieldPolicy.KEEP,
         "checkpoint_invocation_witness": FieldPolicy.KEEP,
         "verbose": FieldPolicy.KEEP,
-        "has_timing": FieldPolicy.KEEP,
+        "profile_enabled": FieldPolicy.KEEP,
         "has_gradients": FieldPolicy.KEEP,
         "mark_layer_depths": FieldPolicy.KEEP,
         "graph_shape_hash": FieldPolicy.KEEP,
@@ -1929,7 +1929,7 @@ class Trace(
         self.grad_fn_timing_provenance: str = "unmeasured"
         self.checkpoint_invocation_witness: dict[str, Any] | None = None
         self.verbose = verbose
-        self.has_timing = False
+        self.profile_enabled = False
         self.has_gradients = False
         self.mark_layer_depths = mark_layer_depths
         self.graph_shape_hash: str | None = None
