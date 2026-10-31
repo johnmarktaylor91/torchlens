@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.behaviour.cases import Case, all_cases, smoke_cases
+from tests.behaviour.cases import Case, _draws_random_numbers, all_cases, smoke_cases
 from tests.behaviour.features import FEATURES, Feature, feature
 from tests.behaviour.harness import BASE_ORACLES, CellResult, cell_id
 
@@ -182,3 +182,21 @@ def test_oracles_are_the_six_the_net_promises() -> None:
     """The base oracle list is the one the README documents."""
 
     assert BASE_ORACLES == ("trace", "validate", "save", "load", "equality", "forward_match")
+
+
+def test_stochastic_tag_names_samplers_not_training_gated_ops() -> None:
+    """The derived tag holds for samplers that always draw and not for eval-deterministic ops."""
+
+    assert _draws_random_numbers("func:rand")  # hand list
+    assert _draws_random_numbers("func:exponential_")  # Gumbel-softmax noise
+    assert _draws_random_numbers("func:uniform_")
+    for gated in (
+        "func:lstm",
+        "func:gru",
+        "func:rnn_tanh",
+        "func:dropout_",
+        "func:feature_dropout",
+    ):
+        assert not _draws_random_numbers(gated), gated
+    assert not _draws_random_numbers("func:relu")
+    assert not _draws_random_numbers("dtype:float32")
