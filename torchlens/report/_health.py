@@ -120,7 +120,7 @@ def _alias_labels(trace: Any) -> set[str]:
     """Pass-qualified labels of alias rows (D19 exclusion set)."""
 
     labels: set[str] = set()
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if (
             getattr(op, "is_input", False)
             or getattr(op, "is_output", False)
@@ -225,7 +225,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
 
             unexamined = sum(
                 1
-                for op in getattr(trace, "layer_list", ()) or ()
+                for op in getattr(trace, "_layer_list", ()) or ()
                 if getattr(op, "has_saved_activation", False)
             )
             return _not_checked("unscanned", capture_fingerprint(trace), unexamined=unexamined)

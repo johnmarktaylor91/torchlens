@@ -125,10 +125,10 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
     trace.model_name = "_FakeModel"
     trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
     trace.name = "fake-backend-trace"
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
     return trace
@@ -200,7 +200,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=False,
                 has_streaming=False,
@@ -297,7 +297,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -327,7 +327,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -353,7 +353,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             backward_capture=False,
             has_validation_replay=False,
             fastlog=False,
-            interventions=False,
+            can_intervene=False,
             rng_replay=False,
             payload_materialization=False,
             has_streaming=False,
@@ -394,7 +394,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
     )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
-    assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert jax_spec.capabilities.can_intervene == jax_capabilities.supports_intervention
     assert (
         jax_spec.capabilities.intermediate_derived_grads
         == jax_capabilities.supports_intermediate_derived_grads
@@ -424,7 +424,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
     )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
-    assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
+    assert mlx_spec.capabilities.can_intervene == mlx_capabilities.supports_intervention
     assert (
         mlx_spec.capabilities.intermediate_derived_grads
         == mlx_capabilities.supports_intermediate_derived_grads
@@ -455,7 +455,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
-    assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert tinygrad_spec.capabilities.can_intervene == tinygrad_capabilities.supports_intervention
     assert (
         tinygrad_spec.capabilities.intermediate_derived_grads
         == tinygrad_capabilities.supports_intermediate_derived_grads
@@ -488,7 +488,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
-    assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
+    assert paddle_spec.capabilities.can_intervene == paddle_capabilities.supports_intervention
     assert (
         paddle_spec.capabilities.intermediate_derived_grads
         == paddle_capabilities.supports_intermediate_derived_grads
@@ -901,7 +901,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         save=tl.label_contains("relu"),
     )
 
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation]
     assert len(saved_ops) == 1
     assert saved_ops[0].func_name == "functional.relu"
 
@@ -1090,7 +1090,7 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
             "is not supported by backend",
         ),
         (lambda trace: setattr(trace, "has_backward_pass", True), "has_backward_pass"),
-        (lambda trace: trace.grad_fn_logs.__setitem__(1, object()), "grad_fn_logs"),
+        (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
         (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
         (lambda trace: trace.output_layers.clear(), "output layer"),
     ],

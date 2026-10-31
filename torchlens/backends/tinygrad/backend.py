@@ -508,7 +508,7 @@ class TinygradBackend:
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, args)
         captures = self._emit_uop_graph(
             trace,
@@ -520,17 +520,15 @@ class TinygradBackend:
         )
         self._mark_output_events(trace, outputs, uop_labels, captures)
         if use_object_module and module_tree is not None:
-            trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace._param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
+            trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
+                param.num_params for param in trace._param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
             trace.param_source = "native-module"
         else:
-            trace.param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
+            trace._param_logs = ParamAccessor({})
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
@@ -1372,7 +1370,7 @@ class TinygradBackend:
                 "scalar unless the traced output is already scalar."
             )
         selected_ops = tuple(
-            op for op in trace.layer_list if op.has_saved_activation and not op.is_input
+            op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
             selected_ops,
@@ -1427,7 +1425,7 @@ class TinygradBackend:
                 "audit-only traces cannot be replay validated."
             )
         ops_by_raw_label = {
-            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
+            getattr(op, "_label_raw", ""): op for op in getattr(trace, "_layer_list", ())
         }
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
         for capture in captures:

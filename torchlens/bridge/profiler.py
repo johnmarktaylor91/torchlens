@@ -55,7 +55,7 @@ def join(trace: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any
     # only via the correlation-ID join.
     kineto = _load_trace(kineto_trace)
     events = [event for event in _trace_events(kineto) if event.get("ph", "X") == "X"]
-    layers = list(getattr(trace, "layer_list", []))
+    layers = list(getattr(trace, "_layer_list", []))
     assigned: dict[int, list[dict[str, Any]]] = {index: [] for index in range(len(layers))}
     used: set[int] = set()
     _assign_label_ranges(layers, events, assigned, used)

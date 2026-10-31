@@ -88,7 +88,7 @@ def _first_failed_live_input_check(
         input_labels = list(getattr(trace, "input_layers", ()) or ())
         if not input_labels:
             return None
-        layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+        layer_dict = getattr(trace, "_layer_dict_all_keys", None) or {}
         recorded: list[tuple[str, tuple[int, ...] | None, str | None]] = []
         for label in input_labels:
             op = layer_dict.get(label)

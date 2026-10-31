@@ -389,5 +389,5 @@ def test_attribute_held_originals_are_rebound_and_validate(
     assert "relu" in func_names
     assert forward_runs(trace, model) == 1
     assert provenance_warnings(caught) == []
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

@@ -235,7 +235,7 @@ class TraceLike:
             return tuple(getattr(self, "records", ()))
         return tuple(
             op
-            for op in getattr(self, "layer_list", ())
+            for op in getattr(self, "_layer_list", ())
             if getattr(op, "has_saved_activation", False)
         )
 

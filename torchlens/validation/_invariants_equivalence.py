@@ -138,7 +138,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
         if isinstance(group, set):
             for member_label in group:
                 group_by_member[member_label] = group
-    for op in ml.layer_list:
+    for op in ml._layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
         expected_group = (
             ml.op_equivalence_classes.get(equivalence_class)
@@ -178,7 +178,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # Same argument for the per-Layer body, whose verdict is a pure function of the
     # layer's canonical object and the ordered canonical objects of its passes.
     verified_layer_keys: set[tuple[int, tuple[int, ...]]] = set()
-    for layer in ml.layer_logs.values():
+    for layer in ml._layer_logs.values():
         layer_canonical = _canonical_equivalent_ops(layer)
         pass_canonicals = [_canonical_equivalent_ops(op) for op in layer.ops.values()]
         layer_key: tuple[int, tuple[int, ...]] | None = None
@@ -256,7 +256,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     # raw_index uniqueness and monotonicity
     seen_rt_nums: dict[int, str] = {}
     prev_rt = -1
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         rt = lpl.raw_index
         if rt in seen_rt_nums:
             raise MetadataInvariantError(
@@ -277,7 +277,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     buffer_set = set(ml.buffer_layers)
     output_set = set(ml.output_layers)
     seen_op_nums: dict[int, str] = {}
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
         if label in input_set or label in buffer_set or label in output_set:
             continue
@@ -291,9 +291,9 @@ def _check_graph_ordering(ml: Trace) -> None:
             seen_op_nums[op] = label
 
     # Topological order: parent.raw_index < child.raw_index
-    rt_map = {lpl.layer_label: lpl.raw_index for lpl in ml.layer_list}
-    rt_map.update({lpl.label: lpl.raw_index for lpl in ml.layer_list})
-    for lpl in ml.layer_list:
+    rt_map = {lpl.layer_label: lpl.raw_index for lpl in ml._layer_list}
+    rt_map.update({lpl.label: lpl.raw_index for lpl in ml._layer_list})
+    for lpl in ml._layer_list:
         for p in lpl.parents:
             if rt_map.get(p, -1) >= lpl.raw_index:
                 raise MetadataInvariantError(
@@ -309,7 +309,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     for label in ml.layer_labels:
         if _RAW_LABEL_PATTERN.search(label):
             raise MetadataInvariantError(name, f"Raw label '{label}' survived postprocessing")
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         for field in _RAW_LABEL_BEARING_LIST_FIELDS:
             for item in getattr(lpl, field, ()) or ():
                 if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
@@ -391,8 +391,8 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # layer_dict_all_keys) and delegate anything else to the full lookup, so
     # every resolution (including ambiguous-key errors) matches ``ml[label]``.
     _MISS = object()
-    layer_logs = ml.layer_logs
-    all_keys = ml.layer_dict_all_keys
+    layer_logs = ml._layer_logs
+    all_keys = ml._layer_dict_all_keys
     ambiguous_keys = getattr(ml, "_ambiguous_lookup_keys", {})
 
     def _resolve(member_label: str) -> Op:
@@ -426,7 +426,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # at its first computational member (matching the original scan order).
     group_func_checked: dict[frozenset[str], bool] = {}
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         slo = lpl.recurrent_ops
 
         group_key = member_group.get(lpl.label)
@@ -561,7 +561,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # Under callsite_v1 call-site contract (ii) replaces it (shared weights are
     # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
-    for lpl in [] if call_site_grouped else ml.layer_list:
+    for lpl in [] if call_site_grouped else ml._layer_list:
         if lpl.has_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
@@ -715,7 +715,7 @@ def _check_call_site_contract_post_hoc(
             func_name=op.func_name,
             group=group_raw.get(member_group.get(op.label, frozenset()), (op._label_raw,)),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:

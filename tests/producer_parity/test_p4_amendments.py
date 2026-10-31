@@ -436,7 +436,7 @@ def test_seal_dual_stamps_live_journal_and_projection_clone() -> None:
     # sealed live journal is trace-side and released with the session); the
     # sealed-source refusal mechanics are covered by the unit test above.
     trace = recording.to_trace()
-    assert trace is not None and trace.layer_list
+    assert trace is not None and trace._layer_list
 
 
 @pytest.mark.parametrize("leg", _LEGS)

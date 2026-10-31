@@ -379,7 +379,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
     try:
-        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         second = trace[f"{linear.layer_label}:2"]
         # GradFn records exist once a backward pass has run.
@@ -424,7 +424,7 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
     )
     try:
         fork = trace.fork("edited")
-        layers = {layer.layer_type: layer.layer_label for layer in fork.layer_logs.values()}
+        layers = {layer.layer_type: layer.layer_label for layer in fork._layer_logs.values()}
         linear, relu = layers["linear"], layers["relu"]
         fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
         dot = fork.draw(

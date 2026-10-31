@@ -26,7 +26,7 @@ class ModelProfile:
     has_output_labels:
         Whether a label space is available from ``output_id2label``.
     num_stimuli:
-        Inferred leading batch/stimulus count from ``raw_input``.
+        Inferred leading batch/stimulus count from ``input``.
     has_raw_images:
         Whether raw input appears to contain image objects.
     keystone_applicable:

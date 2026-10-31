@@ -62,7 +62,7 @@ def _fail_uncorroborated_edge_entries(
     stamps = getattr(target_op, "edge_replacement_stamps", None) or {}
     fire_addresses = {
         tuple(getattr(record, "edge_address", ()) or ())
-        for record in (getattr(target_op, "interventions", None) or ())
+        for record in (getattr(target_op, "edits", None) or ())
         if getattr(record, "edge_address", None) is not None
     }
     from ..intervention.edge_substitution import tensor_content_digest

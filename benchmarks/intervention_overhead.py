@@ -238,7 +238,7 @@ def run_benchmarks() -> str:
     logs = [_capture(model, x + idx * 0.01, replayable=True) for idx in range(4)]
     bundle = tl.Bundle({f"run_{idx}": log for idx, log in enumerate(logs)})
     first_relu_label = next(
-        layer.layer_label for layer in logs[0].layer_list if layer.func_name == "relu"
+        layer.layer_label for layer in logs[0]._layer_list if layer.func_name == "relu"
     )
     assert bundle._supergraph is None
     bundle_label, bundle_s = _time_repeated(

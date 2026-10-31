@@ -108,7 +108,7 @@ def test_save_predicate_step_qualifies_live():
         except Exception:
             return False
 
-    saved_relu = [op.label for op in log.layer_list if "relu" in op.label and has_payload(op)]
+    saved_relu = [op.label for op in log._layer_list if "relu" in op.label and has_payload(op)]
     assert saved_relu == ["relu_1_2:2"]  # 0-based step 1 = pass 2
 
 
@@ -126,7 +126,7 @@ def test_root_loop_ops_between_steps_never_match():
 
     # The final add feeds the model output, whose payload is always retained;
     # the interior root-loop adds are the step-membership probe.
-    add_saved = [op.label for op in log.layer_list if "add" in op.label and has_payload(op)]
+    add_saved = [op.label for op in log._layer_list if "add" in op.label and has_payload(op)]
     assert add_saved == ["add_1_3:3"]
 
 
@@ -149,7 +149,7 @@ def test_episode_step_stamps_land_on_stepped_ops_only():
 
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
-    by_label = {op.label: op.episode_step for op in log.layer_list}
+    by_label = {op.label: op.episode_step for op in log._layer_list}
     assert by_label["linear_1_1:1"] == 0  # nested submodule op stamps
     assert by_label["relu_1_2:2"] == 1
     assert by_label["relu_1_2:3"] == 2
@@ -192,7 +192,7 @@ def test_post_hoc_unstamped_episode_artifact_refuses_typed():
 
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
-    for op in log.layer_list:
+    for op in log._layer_list:
         op.episode_step = None  # simulate the pre-stamping artifact
     with pytest.raises(SiteResolutionError) as excinfo:
         log.find_sites(at_step(0))
@@ -208,8 +208,8 @@ def test_stamps_survive_save_load(tmp_path):
     target = tmp_path / "episode.tlspec"
     log.save(target)
     loaded = tl.load(target)
-    assert {op.label: op.episode_step for op in loaded.layer_list} == {
-        op.label: op.episode_step for op in log.layer_list
+    assert {op.label: op.episode_step for op in loaded._layer_list} == {
+        op.label: op.episode_step for op in log._layer_list
     }
     table = loaded.find_sites(tl.func("relu") & at_step(1))
     assert [site.label for site in table] == ["relu_1_2:2"]

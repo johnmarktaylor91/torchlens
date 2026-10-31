@@ -94,4 +94,4 @@ def test_tensorboard_refuses_a_non_trace_instead_of_writing_zeros() -> None:
     trace = tl.trace(_Tiny().eval(), torch.randn(2, 4))
     tl.export.tensorboard(trace, writer, step=0)
     scalars = dict(writer.rows)
-    assert scalars["torchlens/num_layers"] == len(trace.layer_list) > 0
+    assert scalars["torchlens/num_layers"] == len(trace._layer_list) > 0

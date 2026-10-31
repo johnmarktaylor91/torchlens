@@ -84,7 +84,7 @@ def test_demo_1_zero_ablation_via_do():
     assert torch.equal(trace["relu_1_2"].out, baseline_relu)
 
     # FireRecords + state + last_run honest
-    records = list(fork["relu_1_2"].interventions)
+    records = list(fork["relu_1_2"].edits)
     assert records and records[-1].helper_name == "zero_ablate"
     assert records[-1].replaced is True
     assert records[-1].engine == "replay"
@@ -120,7 +120,7 @@ def test_demo_2_same_run_patch_identity():
     # exact-identity output under the deterministic demo model
     assert torch.equal(patched["output_1"].out, trace["output_1"].out)
     # provenance present: FireRecords at the patched site
-    records = list(patched["relu_1_2"].interventions)
+    records = list(patched["relu_1_2"].edits)
     assert records and records[-1].helper_name == "patch_from"
     assert patched.intervention_audit[-1]["patch_source"]["source_model_class"].endswith(
         "_CanaryNet"

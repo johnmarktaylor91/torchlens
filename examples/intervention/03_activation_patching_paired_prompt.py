@@ -52,9 +52,9 @@ def main() -> None:
     patched.set(tl.func("relu"), clean_relu, confirm_mutation=True)
     patched.push()
 
-    clean_out = clean.layer_list[-1].out
-    corrupted_out = corrupted.layer_list[-1].out
-    patched_out = patched.layer_list[-1].out
+    clean_out = clean.output_ops[-1].out
+    corrupted_out = corrupted.output_ops[-1].out
+    patched_out = patched.output_ops[-1].out
     assert torch.linalg.vector_norm(patched_out - clean_out) < torch.linalg.vector_norm(
         corrupted_out - clean_out
     )

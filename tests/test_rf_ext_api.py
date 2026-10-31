@@ -25,7 +25,7 @@ def _trace() -> tuple[object, object]:
     """Capture a one-call convolution trace and its convolution operation."""
 
     trace = tl.trace(nn.Sequential(nn.Conv2d(1, 1, 3, padding=1)), torch.ones(1, 1, 5, 5))
-    op = next(item for item in trace.layer_list if item.func_name == "conv2d")
+    op = next(item for item in trace._layer_list if item.func_name == "conv2d")
     return trace, op
 
 
@@ -33,7 +33,7 @@ def test_named_projective_siblings_and_direction_keyword() -> None:
     """Keep projective ownership source-anchored across all entity siblings."""
 
     trace, op = _trace()
-    source = next(item for item in trace.layer_list if item.is_input)
+    source = next(item for item in trace._layer_list if item.is_input)
     view = source.projective_field
 
     assert isinstance(view, ReceptiveFieldView)

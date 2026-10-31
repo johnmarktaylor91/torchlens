@@ -55,7 +55,7 @@ def _spellings(log: tl.Trace) -> list[str]:
     """Every label spelling the label evaluator reads, plus a missing one."""
 
     spellings: dict[str, None] = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         spellings.update(dict.fromkeys(selector_eval._string_labels(op, "site")))
         spellings.update(dict.fromkeys(str(key) for key in (op.lookup_keys or ())))
     return [*spellings, "no_such_label_1_1"]
@@ -76,8 +76,8 @@ def _outcome(log: tl.Trace, spelling: str, max_fanout: int) -> tuple[Any, ...]:
 
 def test_label_resolution_inside_the_scope_equals_the_evaluator(trace) -> None:
     spellings = _spellings(trace)
-    assert len(spellings) > len(trace.layer_list)
-    for max_fanout in (1, len(trace.layer_list)):
+    assert len(spellings) > len(trace._layer_list)
+    for max_fanout in (1, len(trace._layer_list)):
         want = [_outcome(trace, spelling, max_fanout) for spelling in spellings]
         with resolver._label_index_scope():
             got = [_outcome(trace, spelling, max_fanout) for spelling in spellings]
@@ -98,16 +98,16 @@ def test_the_index_answers_label_queries_without_evaluating_selectors(
         return real(*args, **kwargs)
 
     monkeypatch.setattr(resolver, "evaluate", counting)
-    labels = [op.label for op in trace.layer_list]
+    labels = [op.label for op in trace._layer_list]
     outside = [resolver.resolve_sites(trace, tl.label(label)).first() for label in labels]
-    assert len(calls) == len(labels) * len(trace.layer_list)
+    assert len(calls) == len(labels) * len(trace._layer_list)
     calls.clear()
     with resolver._label_index_scope():
         inside = [resolver.resolve_sites(trace, tl.label(label)).first() for label in labels]
         assert calls == []
         # Other selector kinds still go through the evaluator, unchanged.
         relus = resolver.resolve_sites(trace, tl.func("relu"), max_fanout=8)
-        assert len(calls) == len(trace.layer_list)
+        assert len(calls) == len(trace._layer_list)
     assert [id(op) for op in inside] == [id(op) for op in outside]
     assert [op.func_name for op in relus] == ["relu"] * 3
 
@@ -120,12 +120,12 @@ def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
         capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
-        label = trace.layer_list[3].label
+        label = trace._layer_list[3].label
         with resolver._label_index_scope():
             mine = resolver.resolve_sites(trace, tl.label(label)).first()
             theirs = resolver.resolve_sites(other, tl.label(label)).first()
-        assert mine is trace.layer_list[3]
-        assert theirs is other.layer_list[3]
+        assert mine is trace._layer_list[3]
+        assert theirs is other._layer_list[3]
     finally:
         other.cleanup()
 
@@ -160,7 +160,7 @@ def test_a_push_with_label_hooks_evaluates_no_selector_per_hook(
         calls.append(1)
         return real(*args, **kwargs)
 
-    hooked = [op.label for op in trace.layer_list if op.func_name in ("relu", "linear")]
+    hooked = [op.label for op in trace._layer_list if op.func_name in ("relu", "linear")]
     assert len(hooked) >= 5
     fork = trace.fork()
     monkeypatch.setattr(resolver, "evaluate", counting)
@@ -169,6 +169,6 @@ def test_a_push_with_label_hooks_evaluates_no_selector_per_hook(
     )
     # Before the index, origins and hook targeting each evaluated every hook's
     # selector on every op: 2 x hooks x ops calls.
-    assert len(calls) < len(trace.layer_list)
-    final = [op for op in pushed.layer_list if op.is_output][-1]
-    assert torch.equal(final.out, [op for op in trace.layer_list if op.is_output][-1].out)
+    assert len(calls) < len(trace._layer_list)
+    final = [op for op in pushed._layer_list if op.is_output][-1]
+    assert torch.equal(final.out, [op for op in trace._layer_list if op.is_output][-1].out)

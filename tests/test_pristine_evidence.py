@@ -278,7 +278,7 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
         ("state", TraceState.DIRECT_WRITE_DIRTY),
         ("state", TraceState.REPLAY_PROPAGATED),
         ("state", TraceState.LIVE_CAPTURED),
-        ("layer_list", [SimpleNamespace(is_edited=True)]),
+        ("_layer_list", [SimpleNamespace(is_edited=True)]),
     ],
 )
 def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:

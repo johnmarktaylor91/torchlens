@@ -82,17 +82,17 @@ def test_nothing_the_rerun_discarded_is_left_for_the_collector_to_evict() -> Non
 
 def test_values_after_the_release_are_unchanged() -> None:
     model, x, trace = _capture()
-    recorded = {op.label: op.out.detach().clone() for op in trace.layer_list}
+    recorded = {op.label: op.out.detach().clone() for op in trace._layer_list}
     fork = _rerun_fork(trace, model, x)
     gc.collect()
     pushed = trace.fork().do(
         tl.func("relu"), tl.scale(2.0), intervention=InterventionOptions(engine="replay")
     )
-    for fork_op, pushed_op in zip(fork.layer_list, pushed.layer_list, strict=True):
+    for fork_op, pushed_op in zip(fork._layer_list, pushed._layer_list, strict=True):
         assert fork_op.out is not None, fork_op.label
         assert torch.equal(fork_op.out, pushed_op.out), fork_op.label
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         assert torch.equal(op.out, recorded[op.label]), "the source keeps its payloads"
     later = fork.fork()
-    for fork_op, later_op in zip(fork.layer_list, later.layer_list, strict=True):
+    for fork_op, later_op in zip(fork._layer_list, later._layer_list, strict=True):
         assert torch.equal(fork_op.out, later_op.out), "a fork of the rerun fork reads the same"

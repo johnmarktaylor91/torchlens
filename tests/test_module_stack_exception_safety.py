@@ -66,7 +66,7 @@ def test_exception_unwinds_module_stack() -> None:
     assert _state._active_trace is None
 
     trace = tl.trace(Outer(NonRaisingChild()), torch.randn(2, 4))
-    linear_ops = [op for op in trace.layer_list if "linear" in op.layer_label]
+    linear_ops = [op for op in trace._layer_list if "linear" in op.layer_label]
     assert linear_ops, "expected at least one linear op"
     module_calls = {str(getattr(op, "module", "")) for op in linear_ops}
     assert any(module_call.endswith(":1") for module_call in module_calls), (

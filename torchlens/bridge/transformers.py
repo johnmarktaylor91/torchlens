@@ -281,7 +281,7 @@ def trace_text(
     Returns
     -------
     Trace
-        TorchLens trace with ``raw_input`` set to the original text.
+        TorchLens trace with ``input`` set to the original text.
     """
 
     import torchlens as tl

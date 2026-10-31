@@ -98,7 +98,7 @@ def test_tied_params_counted_once_by_object_identity() -> None:
     try:
         assert log.num_params == sum(p.numel() for p in model.parameters())
         assert log.num_params == 40
-        assert log.num_param_tensors == 1
+        assert len(log.params) == 1
     finally:
         log.cleanup()
 
@@ -130,7 +130,7 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         assert log.num_params == 24
         assert log.num_params == sum(p.numel() for p in model.parameters())
         # Two distinct parameter identities, no tie group (different objects).
-        assert log.num_param_tensors == 2
+        assert len(log.params) == 2
         assert log.graph.tied_param_groups == ()
     finally:
         log.cleanup()

@@ -38,10 +38,10 @@ def _op_kinds(trace: Any) -> list[str]:
     """Every captured row's kind in capture order, input rows included.
 
     ``trace.ops`` covers only the counted ops (no input or output rows), so
-    this every-row reader walks ``trace.layer_list``.
+    this every-row reader walks ``trace._layer_list``.
     """
 
-    return [str(getattr(op, "func_name", "")) for op in trace.layer_list]
+    return [str(getattr(op, "func_name", "")) for op in trace._layer_list]
 
 
 def _activation_layer_classes() -> list[tuple[str, type[Any]]]:

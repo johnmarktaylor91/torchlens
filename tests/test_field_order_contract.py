@@ -86,7 +86,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # capture_verified / capture_verification_reason left this
                 # ledger in fixwave-5 (2020c7c2): the negative verification
                 # verdict now PERSISTS across save/load (FieldPolicy.KEEP).
-                "rescue_rerun",
+                "_rescue_rerun",
                 "completeness_decompositions",
                 "completeness_diagnostics",
                 "completeness_witness_accounted_count",
@@ -112,7 +112,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "layer_visualizers",
                 "module_filter",
                 "num_modules",
-                "parent_run",
+                "_parent_run",
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
                 "pinned_autograd_memory",
@@ -142,7 +142,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                # "interventions" became a KEEP (portable) ordered field in
+                # "edits" became a KEEP (portable) ordered field in
                 # cert10, so it is no longer a documented DROP display field.
                 # The public computed flag flipped KEEP->DROP in 00bc67d3; the
                 # raw _is_in_conditional_body datum stays KEEP (portable-only

@@ -147,7 +147,7 @@ def find_mutated_parameter_sources(trace: Trace) -> tuple[MutatedParameterSource
         when nothing was mutated.
     """
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list(getattr(trace, "_layer_list", ()) or ())
     first: dict[str, tuple[Any, int]] = {}
     for index, op in enumerate(ops):
         param = _receiver_param(op)

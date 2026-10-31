@@ -144,7 +144,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
         "transformed_out",
         "grad",
         "transformed_grad",
-        "interventions",
+        "edits",
     }
 )
 # ``Op.__getattribute__``/``__setattr__`` run on EVERY attribute touch during
@@ -196,7 +196,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "container_path": (),
     "multi_output_name": None,
     "is_edited": False,
-    "interventions": [],
+    "edits": [],
     "container_spec": None,
     "args_template": None,
     "kwargs_template": None,
@@ -405,7 +405,7 @@ _UNPOOLED_SLOTS = frozenset(
         "out_versions_by_child",
         "func_rng_states",
         "activation_transform",
-        "interventions",
+        "edits",
         # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
         # slot): a mutable mapping distinct per injected op, never a shared
         # internable value. None on every model op until F01 writes it.
@@ -464,7 +464,7 @@ _POOL_MAX_DEPTH = 2
 _POOLED_CONTAINER_FIELDS = frozenset(
     {
         "annotations",
-        "interventions",
+        "edits",
         "var_names",
         "_grad_records",
         "out_versions_by_child",
@@ -539,7 +539,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "input_to_module_calls",
         "internal_source_parents",
         "is_edited",
-        "interventions",
+        "edits",
         "io_role",
         "is_atomic_module",
         "is_buffer",
@@ -1456,7 +1456,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         has_saved_activation: Any
         output_device: Any
         activation_transform: Any
-        interventions: Any
+        edits: Any
         is_edited: Any
         detach_saved_activations: Any
         has_saved_args: Any
@@ -1622,7 +1622,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "output_device": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "interventions": FieldPolicy.KEEP,
+        "edits": FieldPolicy.KEEP,
         "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
@@ -2840,8 +2840,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent_ops[parent_index] = trace.ops[parent_label]
             except KeyError:
-                if parent_label in trace.layer_dict_all_keys:
-                    parent_ops[parent_index] = trace.layer_dict_all_keys[parent_label]
+                if parent_label in trace._layer_dict_all_keys:
+                    parent_ops[parent_index] = trace._layer_dict_all_keys[parent_label]
         return OpAccessor(parent_ops)
 
     @input_ops.deleter
@@ -2860,9 +2860,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = trace.ops[parent_label]
             except KeyError:
-                if parent_label not in trace.layer_dict_all_keys:
+                if parent_label not in trace._layer_dict_all_keys:
                     continue
-                parent = trace.layer_dict_all_keys[parent_label]
+                parent = trace._layer_dict_all_keys[parent_label]
             if parent.is_buffer and parent.buffer_write_kind is None:
                 source_ops[parent_index] = parent
         return OpAccessor(source_ops)
@@ -2883,9 +2883,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 child = trace.ops[child_label]
             except KeyError:
-                if child_label not in trace.layer_dict_all_keys:
+                if child_label not in trace._layer_dict_all_keys:
                     continue
-                child = trace.layer_dict_all_keys[child_label]
+                child = trace._layer_dict_all_keys[child_label]
             if child.is_buffer and child.buffer_write_kind is not None:
                 sink_ops[child_index] = child
         return OpAccessor(sink_ops)
@@ -2920,7 +2920,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = ops[parent_label]
             except KeyError:
-                parent = cast("Op | None", trace.layer_dict_all_keys.get(parent_label))
+                parent = cast("Op | None", trace._layer_dict_all_keys.get(parent_label))
             if parent is None:
                 activations.append(None)
                 continue
@@ -3499,7 +3499,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         solution = _engine.solve(trace)
         cache = self._slot("_receptive_field_cache")
         if cache is not None and cache._solution is not solution:
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op._slot("_receptive_field_cache") is not None:
                     object.__setattr__(
                         op,

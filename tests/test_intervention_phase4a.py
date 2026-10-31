@@ -74,10 +74,10 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
         capture=CaptureOptions(replayable=True),
     )
 
-    ids = [layer.func_call_id for layer in log.layer_list if layer.func_call_id is not None]
+    ids = [layer.func_call_id for layer in log._layer_list if layer.func_call_id is not None]
     assert ids
 
-    max_layers = [layer for layer in log.layer_list if layer.func_name == "max"]
+    max_layers = [layer for layer in log._layer_list if layer.func_name == "max"]
     assert len(max_layers) == 2
     assert len({layer.func_call_id for layer in max_layers}) == 1
 

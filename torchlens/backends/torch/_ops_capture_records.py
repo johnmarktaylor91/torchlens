@@ -153,7 +153,7 @@ def _compact_ancestor_sets(trace: "Trace") -> None:
         Finished trace whose retained Op metadata should be compacted.
     """
 
-    ops = getattr(trace, "layer_list", None)
+    ops = getattr(trace, "_layer_list", None)
     if not ops:
         return
 

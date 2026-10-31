@@ -68,7 +68,7 @@ def test_ellipsis_is_stored_as_a_literal_on_gemma_class_indexing() -> None:
     model, ids = _tiny_gemma2(), torch.randint(0, 64, (1, 6))
     trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     stored_ellipses = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         template = getattr(op, "args_template", None)
         for component in getattr(template, "args", ()):
             for leaf in _template_leaves(component):

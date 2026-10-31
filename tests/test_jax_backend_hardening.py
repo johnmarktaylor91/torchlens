@@ -305,7 +305,7 @@ def _mark_fixture_manifest_materialized(path: Path) -> None:
 def _first_saved_op(trace: Any) -> Any:
     """Return the first op with a saved activation."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.has_saved_activation:
             return op
     raise AssertionError("trace has no saved activation op")
@@ -327,7 +327,7 @@ def _saved_op_by_func_name(trace: Any, func_name: str) -> Any:
         First matching saved op.
     """
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.func_name == func_name and op.has_saved_activation:
             return op
     raise AssertionError(f"trace has no saved {func_name!r} activation op")
@@ -893,10 +893,10 @@ def test_jax_accepts_default_unrolled_cond_and_while() -> None:
     while_trace = tl.trace(cast(Any, uses_while), args, backend="jax")
 
     assert any(
-        op.annotations.get("jax_capture_kind") == "cond_decision" for op in cond_trace.layer_list
+        op.annotations.get("jax_capture_kind") == "cond_decision" for op in cond_trace._layer_list
     )
     assert any(
-        op.annotations.get("jax_capture_kind") == "while_decision" for op in while_trace.layer_list
+        op.annotations.get("jax_capture_kind") == "while_decision" for op in while_trace._layer_list
     )
     assert cond_trace.validate_forward_pass([]) is True
     assert while_trace.validate_forward_pass([]) is True
@@ -936,7 +936,7 @@ def test_jax_accepts_custom_vjp_forward_region() -> None:
     )
     region_ops = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.annotations.get("jax_region_primitive") == "custom_vjp_call"
     ]
 
@@ -1148,7 +1148,7 @@ def test_jax_module_predicate_selects_function_root() -> None:
 
     trace = _trace(save=tl.in_module("self"))
 
-    assert trace.num_saved_ops == len(trace.layer_list)
+    assert len(trace.saved_ops) == len(trace._layer_list)
     assert trace.validate_forward_pass([]) is True
 
 
@@ -1177,13 +1177,13 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.validation_replay_status.state == "passed"
     assert trace.validation_replay_status.source == "live"
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert trace.modules["self"].address == "self"
     assert trace.module_identity_mode == "function_root"
     assert trace.param_source == "pytree-derived"
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.has_backward_pass is False
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
@@ -1195,7 +1195,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     loaded = tl.load(audit_path)
     assert loaded.backend == "jax"
     assert loaded.param_source == "pytree-derived"
-    assert all(op.out is None for op in loaded.layer_list)
+    assert all(op.out is None for op in loaded._layer_list)
 
     portable_path = tmp_path / "jax_portable.tlspec"
     expected = np.asarray(trace[trace.output_layers[0]].out)
@@ -1233,7 +1233,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.interventions is False
+    assert spec.capabilities.can_intervene is False
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.input_container_structure == "paths_only"
     assert spec.capabilities.output_container_structure == "paths_only"
@@ -1319,7 +1319,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
         return jnp.tanh(x @ jnp.ones((4, 3)))
 
     spec = tl.backends.spec("jax")
-    object.__setattr__(spec.capabilities, "interventions", True)
+    object.__setattr__(spec.capabilities, "can_intervene", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
             tl.trace(
@@ -1329,4 +1329,4 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
                 intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
             )
     finally:
-        object.__setattr__(spec.capabilities, "interventions", False)
+        object.__setattr__(spec.capabilities, "can_intervene", False)

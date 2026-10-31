@@ -238,7 +238,7 @@ def fold_trace(log: Any) -> FoldResult:
         Deterministic fold under :data:`FOLD_KEY_VERSION`.
     """
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     groups: dict[tuple[Any, ...], list[Any]] = {}
     order: list[tuple[Any, ...]] = []
     for op in ops:

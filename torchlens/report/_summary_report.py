@@ -380,7 +380,7 @@ def _summary_rows(trace: Trace) -> tuple[SummaryRow, ...]:
     rows: list[SummaryRow] = []
     params_by_label: dict[str, int | None] = {}
     shapes_by_label: dict[str, tuple[int, ...] | None] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         label = str(getattr(op, "layer_label", "?"))
         num_params = getattr(op, "num_params", None)
         params_by_label[label] = None if num_params is None else int(num_params)

@@ -48,7 +48,7 @@ def _check_conditional_arm_edges_match_graph(
     # parent->child topology, so conditional edge metadata can never reference
     # an edge that does not exist in the graph.
     rolled_graph_edges: set[tuple[str, str]] = set()
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         for child_label in layer.children:
             rolled_graph_edges.add((layer.layer_label, _strip_pass_suffix(child_label)))
     for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
@@ -104,12 +104,12 @@ def _check_conditional_branch_membership_records(
             else:
                 branch_kind_by_conditional_arm[(conditional.id, arm_index)] = arm.kind
     stack_entries_by_layer_label: dict[str, set[tuple[int, str]]] = {}
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         stack_entries_by_layer_label.setdefault(layer.layer_label, set()).update(
             layer.conditional_branch_stack
         )
 
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         if layer.conditional_branch_depth != len(layer.conditional_branch_stack):
             _fail_conditional_invariant(
                 name,
@@ -221,7 +221,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: Trace) -> None:
     """
     name = "layer_pass_layer_log_xrefs"
 
-    for ll_label, ll in ml.layer_logs.items():
+    for ll_label, ll in ml._layer_logs.items():
         if ll.layer_label != ll_label:
             raise MetadataInvariantError(
                 name,
@@ -266,8 +266,8 @@ def _check_pass_count_consistency(ml: Trace) -> None:
     """
 
     name = "pass_count_consistency"
-    layer_num_calls = getattr(ml, "layer_num_calls", {}) or {}
-    for layer_label, layer_log in ml.layer_logs.items():
+    layer_num_calls = getattr(ml, "_layer_num_calls", {}) or {}
+    for layer_label, layer_log in ml._layer_logs.items():
         ops = getattr(layer_log, "ops", {}) or {}
         expected_keys = set(range(1, getattr(layer_log, "num_passes", 0) + 1))
         # OpAccessor iteration yields Ops (C02 basis fix); the pass-index key
@@ -324,10 +324,10 @@ def _check_module_layer_containment(ml: Trace) -> None:
 
         # Module.layer_labels exist in layer_logs
         for lbl in mod_log.layer_labels:
-            if lbl not in ml.layer_logs:
+            if lbl not in ml._layer_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"Module '{addr}' layers contains '{lbl}' not in trace.layer_logs",
+                    f"Module '{addr}' layers contains '{lbl}' not in trace._layer_logs",
                 )
 
         if mod_log.num_layers != len(mod_log.layer_labels):
@@ -353,7 +353,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
             # ops resolve to through the trace (an unresolvable op is itself
             # the problem). One raise site for the check.
             resolved = [
-                getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
+                getattr(ml._layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
             ]
             unresolved = [
                 lbl
@@ -388,7 +388,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
                     )
 
     # Reverse check: layer's module exists in modules
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         cmo = lpl.module
         if cmo:
             # module may include pass suffix (e.g. 'fc:1')

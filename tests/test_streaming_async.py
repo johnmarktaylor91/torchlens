@@ -168,7 +168,7 @@ def test_async_and_sync_bundles_are_byte_identical(tmp_path: Path) -> None:
     }
     loaded_async = tl.load(tmp_path / "async.tlspec")
     loaded_sync = tl.load(tmp_path / "sync.tlspec")
-    for index in range(len(loaded_async.layer_list)):
+    for index in range(len(loaded_async._layer_list)):
         assert torch.equal(loaded_async[index].out, loaded_sync[index].out)
 
 
@@ -178,9 +178,9 @@ def test_async_worker_logs_no_spurious_ops(tmp_path: Path) -> None:
     x = torch.randn(4, 8)
     plain = tl.trace(_model(), x)
     streamed = tl.trace(_model(), x, storage=tl.to_disk(tmp_path / "b.tlspec"))
-    assert len(streamed.layer_list) == len(plain.layer_list)
-    assert [op.layer_label for op in streamed.layer_list] == [
-        op.layer_label for op in plain.layer_list
+    assert len(streamed._layer_list) == len(plain._layer_list)
+    assert [op.layer_label for op in streamed._layer_list] == [
+        op.layer_label for op in plain._layer_list
     ]
 
 
@@ -305,7 +305,7 @@ def test_finalize_waits_for_every_slow_pending_write(
         assert sha256_of_file(blob_path) == entry["sha256"]
     loaded = tl.load(bundle)
     reference = tl.trace(_model(), x)
-    for index in range(len(loaded.layer_list)):
+    for index in range(len(loaded._layer_list)):
         assert torch.equal(loaded[index].out, reference[index].out)
 
 

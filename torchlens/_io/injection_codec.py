@@ -99,7 +99,7 @@ def append_injected_op_rows(
     records = injected_ops(trace)
     if not records:
         return
-    rows = scrubbed_state.get("layer_list")
+    rows = scrubbed_state.get("_layer_list")
     if not isinstance(rows, list):
         raise ArtifactError(
             "Scrubbed state has no layer_list to carry injected-op rows.",
@@ -299,7 +299,7 @@ def split_restored_injected_rows(trace: Any) -> None:
     check here is fail-closed: forged provenance refuses, never degrades.
     """
 
-    rows = trace.__dict__.get("layer_list")
+    rows = trace.__dict__.get("_layer_list")
     if not isinstance(rows, list):
         return
     injected = [op for op in rows if getattr(op, "injection_provenance", None) is not None]

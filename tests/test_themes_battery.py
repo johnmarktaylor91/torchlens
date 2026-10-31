@@ -47,7 +47,7 @@ def test_key_is_generated_from_machine_record(keyed: Any) -> None:
     log, resolution, key = keyed
     values = {
         op.layer_label: float(getattr(op, resolution.source.member))
-        for op in log.layer_list
+        for op in log._layer_list
         if getattr(op, resolution.source.member, None) is not None
     }
     by_id = {question.id: question for question in key.questions}

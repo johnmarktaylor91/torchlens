@@ -36,7 +36,7 @@ def _op(trace: object, name: str) -> object:
 
     return next(
         item
-        for item in reversed(trace.layer_list)  # type: ignore[union-attr]
+        for item in reversed(trace._layer_list)  # type: ignore[union-attr]
         if item.func_name == name
     )
 
@@ -44,7 +44,7 @@ def _op(trace: object, name: str) -> object:
 def _input_op(trace: object) -> object:
     """Return the canonical input operation from a one-input trace."""
 
-    return next(item for item in trace.layer_list if item.is_input)  # type: ignore[union-attr]
+    return next(item for item in trace._layer_list if item.is_input)  # type: ignore[union-attr]
 
 
 def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
@@ -89,7 +89,7 @@ def test_pooling_preserves_exact_pointwise_channels(pool: nn.Module) -> None:
     """Keep bare max and average pooling channel-pointwise and gradient-valid."""
 
     trace = _trace(pool, torch.randn(1, 3, 6, 6, requires_grad=True))
-    target = next(item for item in trace.layer_list if "pool2d" in str(item.func_name))
+    target = next(item for item in trace._layer_list if "pool2d" in str(item.func_name))
     descriptor = target.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT
@@ -113,7 +113,7 @@ def test_depthwise_convolution_then_pooling_remains_channel_pointwise() -> None:
     with torch.no_grad():
         model[0].weight.fill_(1.0)
     trace = _trace(model, torch.randn(1, 3, 6, 6, requires_grad=True))
-    target = next(item for item in trace.layer_list if item.func_name == "max_pool2d")
+    target = next(item for item in trace._layer_list if item.func_name == "max_pool2d")
     descriptor = target.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT

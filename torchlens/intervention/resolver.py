@@ -1299,7 +1299,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
             code="episode_step_selector_without_episode",
             remedy="re-capture with episode=, or drop at_step()",
         )
-    if not any(getattr(op, "episode_step", None) is not None for op in log.layer_list):
+    if not any(getattr(op, "episode_step", None) is not None for op in log._layer_list):
         raise SiteResolutionError(
             "at_step(...) needs the per-op episode-step stamps "
             "(Op.episode_step), but no op on this episode product carries "
@@ -1331,7 +1331,7 @@ def _iter_layer_ops(log: Trace) -> Sequence[Op]:
 
     if not getattr(log, "_tracing_finished", False):
         raise SiteResolutionError("Sites can only be resolved after the forward pass is complete.")
-    return log.layer_list
+    return log._layer_list
 
 
 def _iter_sites(log: Trace, direction: Literal["forward", "backward"]) -> Sequence[Site]:
@@ -1354,7 +1354,7 @@ def _iter_sites(log: Trace, direction: Literal["forward", "backward"]) -> Sequen
         return _iter_layer_ops(log)
     if not getattr(log, "has_backward_pass", False):
         raise SiteResolutionError("Backward selectors require log_backward() to run first.")
-    return tuple(log.grad_fn_logs.values())
+    return tuple(log._grad_fn_logs.values())
 
 
 def _resolve_unchecked(

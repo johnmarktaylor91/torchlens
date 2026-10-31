@@ -250,7 +250,7 @@ def layer_outs(trace: tl.Trace) -> dict[str, torch.Tensor]:
     """
 
     outs: dict[str, torch.Tensor] = {}
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         value = getattr(layer, "out", None)
         if isinstance(value, torch.Tensor):
             outs[str(layer.layer_label)] = value.detach()
@@ -599,7 +599,7 @@ def cmd_sweep(args: argparse.Namespace) -> dict[str, Any]:
         "per_candidate_median_s": times[len(times) // 2] if times else None,
         "per_candidate_min_s": times[0] if times else None,
         "per_candidate_max_s": times[-1] if times else None,
-        "baseline_ops": len(baseline.layer_list),
+        "baseline_ops": len(baseline._layer_list),
         "load_start": load_start,
         "load_end": _load(),
         "per_candidate": per_candidate,
@@ -955,8 +955,8 @@ def _count_one(
         "hooks_planned": last_run.get("hooks"),
         "hooks_fired": last_run.get("hooks_fired"),
         "replay_hook_applications": phases.calls["push_hook_apply"],
-        "ops_in_result": len(member.layer_list),
-        "ops_reexecuted": (sum(phases.cone_sizes) if engine == "push" else len(member.layer_list)),
+        "ops_in_result": len(member._layer_list),
+        "ops_reexecuted": (sum(phases.cone_sizes) if engine == "push" else len(member._layer_list)),
         "phases": phases.report(),
     }
     del member
@@ -997,7 +997,7 @@ def cmd_counters(args: argparse.Namespace) -> dict[str, Any]:
         unready = {"error": type(exc).__name__, "message": str(exc).splitlines()[0][:300]}
     return {
         "environment": _environment(),
-        "baseline_ops": len(baseline.layer_list),
+        "baseline_ops": len(baseline._layer_list),
         "plain_forward_aten_ops": sum(plain_counter.ops.values()),
         "baseline_capture": {
             "wall_s_instrumented": round(capture_s, 3),

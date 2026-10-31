@@ -107,12 +107,12 @@ def test_model_structure_conditional() -> None:
 def test_layer_tracking_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.layer_list, list)
-    assert len(mh.layer_list) > 0
+    assert isinstance(mh._layer_list, list)
+    assert len(mh._layer_list) > 0
     assert isinstance(mh.layer_labels, list)
     assert len(mh.layer_labels) > 0
-    assert isinstance(mh.layer_dict_main_keys, dict)
-    assert isinstance(mh.layer_dict_all_keys, dict)
+    assert isinstance(mh._layer_dict_main_keys, dict)
+    assert isinstance(mh._layer_dict_all_keys, dict)
 
 
 def test_input_output_layers(small_input):
@@ -202,7 +202,7 @@ def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
 def test_param_info_fields(small_input):
     model = example_models.BatchNormModel()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.num_param_tensors, int)
+    assert isinstance(len(mh.params), int)
     assert isinstance(mh.num_params, int)
     assert mh.num_params > 0
 
@@ -539,7 +539,7 @@ def test_recurrent_pass_indexbers(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
     found_multi_pass = any(
-        op.pass_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
+        op.pass_index > 1 for layer in mh._layer_logs.values() for op in layer.ops.values()
     )
     assert found_multi_pass, "Recurrent model should have layers with pass_index > 1"
 
@@ -571,8 +571,8 @@ def test_recurrent_same_layer_operations(input_2d):
 def test_layer_logs_fewer_than_layer_list(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
-    assert isinstance(mh.layer_logs, dict)
-    assert len(mh.layer_logs) < len(mh.layer_list)
+    assert isinstance(mh._layer_logs, dict)
+    assert len(mh._layer_logs) < len(mh._layer_list)
 
 
 # =============================================================================
@@ -583,7 +583,7 @@ def test_layer_logs_fewer_than_layer_list(input_2d):
 def test_trace_len(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert len(mh) == len(mh.layer_list)
+    assert len(mh) == len(mh._layer_list)
 
 
 def test_getitem_by_positive_index(small_input):
@@ -612,7 +612,7 @@ def test_trace_iter(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
     items = list(mh)
-    assert len(items) == len(mh.layer_list)
+    assert len(items) == len(mh._layer_list)
 
 
 def test_layer_labels_properties(small_input):
@@ -654,13 +654,13 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
     expected = len(
         {
             op.layer_label
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and not getattr(op, "is_orphan", False)
         }
     )
 
-    assert trace.num_saved_layers == expected
-    assert trace.num_saved_layers == trace.num_saved_ops
+    assert len(trace.saved_layers) == expected
+    assert len(trace.saved_layers) == len(trace.saved_ops)
 
 
 # =============================================================================
@@ -919,7 +919,7 @@ def test_flops_simple_linear_model():
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 5))
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    flops_values = [entry.flops_forward for entry in mh.layer_list]
+    flops_values = [entry.flops_forward for entry in mh._layer_list]
     non_none = [f for f in flops_values if f is not None]
     assert len(non_none) > 0, "No layers have FLOPs computed"
 
@@ -974,7 +974,7 @@ def test_flops_conv_transpose_uses_input_work_basis() -> None:
         bias=False,
     )
     trace = trace_fn(model, torch.randn(1, 6, 8, 8))
-    operation = next(entry for entry in trace.layer_list if entry.func_name == "conv_transpose2d")
+    operation = next(entry for entry in trace._layer_list if entry.func_name == "conv_transpose2d")
 
     assert operation.shape == (1, 4, 15, 15)
     assert operation.flops_forward == 2 * 6 * 8 * 8 * (4 // 2) * 3 * 3
@@ -990,8 +990,8 @@ def test_flops_coverage_on_model():
     )
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    total = len(mh.layer_list)
-    with_flops = sum(1 for e in mh.layer_list if e.flops_forward is not None)
+    total = len(mh._layer_list)
+    with_flops = sum(1 for e in mh._layer_list if e.flops_forward is not None)
     coverage = with_flops / total if total > 0 else 0
     assert coverage >= 0.5, f"FLOPs coverage too low: {coverage:.1%}"
 
@@ -1092,7 +1092,7 @@ def test_flops_einsum_attention_contraction() -> None:
     assert direct == 2 * 2 * 5 * 7 * 4
     assert nested == 2 * 2 * 5 * 7 * 4
     trace = trace_fn(_AttentionEinsum(), (q, k))
-    operation = next(entry for entry in trace.layer_list if entry.func_name == "einsum")
+    operation = next(entry for entry in trace._layer_list if entry.func_name == "einsum")
     assert operation.flops_forward == 2 * 2 * 5 * 7 * 4
 
 
@@ -1108,7 +1108,7 @@ def test_unknown_flops_survive_trace_materialization() -> None:
             return torch.nn.functional.pad(x, (1, 1))
 
     trace = trace_fn(_PadModel(), torch.randn(2, 3))
-    operation = next(entry for entry in trace.layer_list if entry.func_name == "pad")
+    operation = next(entry for entry in trace._layer_list if entry.func_name == "pad")
 
     assert operation.flops_forward is None
     assert operation.flops_backward is None
@@ -1134,18 +1134,18 @@ def test_rerun_refreshes_shape_derived_flops_everywhere() -> None:
 
     model = _LinearModel()
     trace = trace_fn(model, torch.randn(2, 4))
-    captured = next(entry for entry in trace.layer_list if entry.func_name == "linear")
+    captured = next(entry for entry in trace._layer_list if entry.func_name == "linear")
     assert captured.flops_forward == 144
 
     with pytest.warns(UserWarning, match="Tensor shape changed"):
         result = trace.run(inputs=torch.randn(8, 4))
-    refreshed = next(entry for entry in result.trace.layer_list if entry.func_name == "linear")
+    refreshed = next(entry for entry in result.trace._layer_list if entry.func_name == "linear")
 
     assert refreshed.shape == (8, 8)
     assert refreshed.flops_forward == 576
     assert result.trace[refreshed.layer_label].flops_forward == 576
     assert result.trace.cost.total_flops_forward == sum(
-        entry.flops_forward for entry in result.trace.layer_list if entry.flops_forward is not None
+        entry.flops_forward for entry in result.trace._layer_list if entry.flops_forward is not None
     )
 
 
@@ -1340,7 +1340,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
     assert isinstance(stack, list)
     assert len(stack) > 0
     captured_entries = [
-        entry for entry in mh.layer_list if not entry.is_input and entry.func_name != "none"
+        entry for entry in mh._layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert all(len(entry.code_context) > 0 for entry in captured_entries)
     for entry in captured_entries:
@@ -1383,7 +1383,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
 
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
-        entry.code_context for entry in mh_roundtrip.layer_list if not entry.is_input
+        entry.code_context for entry in mh_roundtrip._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1934,6 +1934,6 @@ def test_transpose_positional_args_expose_salient_dims():
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    op = next(o for o in trace.layer_list if "transpose" in o.func_name)
+    op = next(o for o in trace._layer_list if "transpose" in o.func_name)
     assert op.func_config.get("dim0") == 0
     assert op.func_config.get("dim1") == 1

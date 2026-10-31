@@ -53,7 +53,7 @@ def _edges_by_child(trace):
     """Map child label -> its slot-0 positional edge record."""
 
     result = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for record in getattr(op, "edge_uses", ()) or ():
             if record.arg_kind == "positional" and tuple(record.arg_path) == (0,):
                 result.setdefault(record.child_label, record)

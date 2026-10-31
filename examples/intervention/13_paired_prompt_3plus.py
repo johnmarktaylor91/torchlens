@@ -49,7 +49,7 @@ def main() -> None:
     }
     bundle = tl.Bundle(logs, baseline="clean")
 
-    norms = bundle.map(lambda member: float(member.layer_list[-1].out.norm()))
+    norms = bundle.map(lambda member: float(member.output_ops[-1].out.norm()))
     count = len(bundle)
 
     assert count == 3

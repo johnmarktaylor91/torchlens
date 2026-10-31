@@ -130,7 +130,7 @@ def _check_region_replay_provenance(trace: Trace) -> None:
     trace_annotations = getattr(trace, "annotations", None)
     if trace_annotations is not None and not isinstance(trace_annotations, Mapping):
         trace_annotations = None
-    for layer in getattr(trace, "layer_list", ()):
+    for layer in getattr(trace, "_layer_list", ()):
         op_annotations = getattr(layer, "annotations", None)
         if op_annotations is not None and not isinstance(op_annotations, Mapping):
             op_annotations = None
@@ -283,7 +283,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
 
     return [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if not (layer.is_input or layer.is_output or layer.is_buffer)
     ]
 
@@ -387,7 +387,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
     valid_param_sources = {"native-module", "pytree-derived", "none"}
     if param_source not in valid_param_sources:
         raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
-    if param_source == "none" and getattr(trace, "num_param_tensors", 0) != 0:
+    if param_source == "none" and len(getattr(trace, "params", ())) != 0:
         raise MetadataInvariantError(
             name,
             "param_source='none' requires num_param_tensors=0",
@@ -411,18 +411,18 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
     name = "non_torch_backward_inert"
     if getattr(trace, "has_backward_pass", False):
         raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
-    if getattr(trace, "grad_fn_logs", None):
+    if getattr(trace, "_grad_fn_logs", None):
         raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_logs")
     if getattr(trace, "grad_fn_order", None):
         raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_order")
-    if getattr(trace, "backward_pass_logs", None):
+    if getattr(trace, "_backward_pass_logs", None):
         raise MetadataInvariantError(name, "non-torch traces must not populate backward_pass_logs")
     if getattr(trace, "backward_root_grad_fn_object_ids", None):
         raise MetadataInvariantError(
             name,
             "non-torch traces must not populate backward_root_grad_fn_object_ids",
         )
-    if getattr(trace, "num_backward_passes", 0) != 0:
+    if getattr(trace, "_num_backward_passes", 0) != 0:
         raise MetadataInvariantError(name, "non-torch traces must have num_backward_passes=0")
 
 
@@ -454,9 +454,9 @@ def _check_backend_neutral_accessor_refs(trace: Trace) -> None:
     name = "backend_neutral_accessor_refs"
     valid_statuses = {"resolved", "unresolved", "audit_only", "metadata_only"}
     records = [
-        *getattr(trace, "layer_list", ()),
-        *list(getattr(trace, "layer_logs", {}).values()),
-        *list(getattr(trace, "param_logs", {}).values()),
+        *getattr(trace, "_layer_list", ()),
+        *list(getattr(trace, "_layer_logs", {}).values()),
+        *list(getattr(trace, "_param_logs", {}).values()),
     ]
     for record in records:
         if not _record_has_backend_neutral_accessor_metadata(record):
@@ -529,7 +529,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
 
     name = "func_call_id_consistency"
     groups: dict[int, list[Op]] = defaultdict(list)
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if _is_func_call_id_exempt(layer):
             continue
         func_call_id = getattr(layer, "func_call_id", None)

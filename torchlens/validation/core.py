@@ -652,7 +652,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         return
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "layer_list", [])
+        for layer in getattr(self, "_layer_list", [])
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
     ]
@@ -960,7 +960,7 @@ def validate_saved_outs(
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
-    if not getattr(self, "halted", False):
+    if not getattr(self, "is_stopped", False):
         if len(self.output_layers) != len(ground_truth_output_tensors):
             message = (
                 "Trace output boundary count does not match ground truth: "
@@ -1096,7 +1096,7 @@ def validate_saved_outs(
     # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
     # pass of a legitimate multi-pass layer hide behind its reached siblings
     # whenever the metadata invariants were skipped.
-    expected_ops = {op.label for op in self.layer_list}
+    expected_ops = {op.label for op in self._layer_list}
     if len(validated_op_labels) < len(expected_ops):
         unreached = expected_ops - validated_op_labels
         if verbose:
@@ -1223,7 +1223,7 @@ def validate_parents_of_saved_layer(
         self,
         layer_to_validate_parents_for_label,
     )
-    validation_entry = self.layer_logs.get(
+    validation_entry = self._layer_logs.get(
         layer_to_validate_parents_for_label,
         layer_to_validate_parents_for,
     )
@@ -1446,8 +1446,7 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     if not (getattr(layer, "is_edited", False) and not getattr(layer, "is_internal_source", False)):
         return False
     has_own_live_replacement = any(
-        getattr(record, "replaced", False)
-        for record in (getattr(layer, "interventions", None) or ())
+        getattr(record, "replaced", False) for record in (getattr(layer, "edits", None) or ())
     ) or any(
         getattr(result, "replaced", False)
         for result in (getattr(layer, "fire_results", None) or ())
@@ -1614,7 +1613,7 @@ def _resolve_output_entry_for_index(
         Concrete output op for this output occurrence.
     """
 
-    output_entry = self.layer_logs.get(output_layer_label)
+    output_entry = self._layer_logs.get(output_layer_label)
     if output_entry is None:
         return _op_for_validation_label(self, output_layer_label)
     ops = getattr(output_entry, "ops", None)
@@ -1642,9 +1641,9 @@ def _op_for_validation_label(self: "Trace", label: str) -> Op:
         Concrete operation resolved without using ``Trace.__getitem__``.
     """
 
-    if label in self.layer_dict_all_keys:
-        return cast(Op, self.layer_dict_all_keys[label])
-    layer_log = self.layer_logs[label]
+    if label in self._layer_dict_all_keys:
+        return cast(Op, self._layer_dict_all_keys[label])
+    layer_log = self._layer_logs[label]
     op_list = cast(list[Op], cast(Any, layer_log.ops)._list)
     if len(op_list) != 1:
         raise KeyError(f"Validation label {label!r} does not resolve to one concrete op.")
@@ -1757,7 +1756,7 @@ def _check_layer_arguments_logged_correctly(
     ValidationCheckResult
         Structured validation result for argument logging evidence.
     """
-    target_entry = self.layer_logs.get(
+    target_entry = self._layer_logs.get(
         target_layer_label,
         _op_for_validation_label(self, target_layer_label),
     )
@@ -2195,7 +2194,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
     if cached is not None:
         return cast(dict[tuple[Any, Any], list[Op]], cached)
     index: dict[tuple[Any, Any], list[Op]] = {}
-    for candidate in self.layer_list:
+    for candidate in self._layer_list:
         if getattr(candidate, "is_output", False):
             # Output boundary ops duplicate their producer's value; the
             # producer itself is the meaningful candidate.
@@ -2262,7 +2261,7 @@ def _foreach_sibling_attributes_slot(
     if call_id is None:
         return False
     target_label = getattr(target_layer, "label", None) or target_layer.layer_label
-    for sibling in self.layer_list:
+    for sibling in self._layer_list:
         sibling_label = getattr(sibling, "label", None) or sibling.layer_label
         if sibling_label == target_label:
             continue

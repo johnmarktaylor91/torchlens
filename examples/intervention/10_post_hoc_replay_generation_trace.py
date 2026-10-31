@@ -54,11 +54,11 @@ def main() -> None:
     edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
     edited.run(model, x)
 
-    assert edited.layer_list[-1].out.shape == (2, 3, 4)
+    assert edited.output_ops[-1].out.shape == (2, 3, 4)
     assert len(relu_sites) == 3
     assert edited.last_run["hooks"] == 1
     assert edited.last_run["engine"] == "rerun"
-    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
+    assert not torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)
 
 
 if __name__ == "__main__":

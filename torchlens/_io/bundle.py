@@ -787,7 +787,7 @@ def save(
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
 
-        persisted_rows = scrubbed_state.get("layer_list")
+        persisted_rows = scrubbed_state.get("_layer_list")
         manifest = _build_manifest(
             trace=trace,
             tensor_entries=tensor_entries,
@@ -1109,7 +1109,7 @@ def _capture_activation_blob_specs(
     members: list[ActivationPayloadMember] = []
     input_digests: list[SlotByteDigest] = []
     input_fingerprints: list[Any] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         op_label = str(op.label)
         slot_id = f"slot:{op_label}"
         if slot_id not in slot_ids:
@@ -2824,7 +2824,7 @@ def _apply_visualization_save_policy(
         Temporary bundle directory.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         return
     if not bool(getattr(trace, "save_visualizations", False)):
@@ -2834,10 +2834,10 @@ def _apply_visualization_save_policy(
         return
 
     visualizer_dir = tmp_path / "visualizers"
-    # scrubbed_layers is a 1:1 scrub of trace.layer_list; pairing a truncated
+    # scrubbed_layers is a 1:1 scrub of trace._layer_list; pairing a truncated
     # prefix would silently skip visualizer copies for the tail layers.
     for index, (live_layer, scrubbed_layer) in enumerate(
-        zip(trace.layer_list, scrubbed_layers, strict=True)
+        zip(trace._layer_list, scrubbed_layers, strict=True)
     ):
         source_path_value = getattr(live_layer, "visualizer_path", None)
         if not isinstance(source_path_value, str):
@@ -2997,15 +2997,15 @@ def _attach_fast_copy_specs(
         bundles into the new bundle.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         return []
 
     used_blob_ids = {blob_spec.blob_id for blob_spec in blob_specs}
     fast_copy_specs: list[_FastCopySpec] = []
-    # 1:1 scrub of trace.layer_list -- a truncated pairing would silently drop
+    # 1:1 scrub of trace._layer_list -- a truncated pairing would silently drop
     # fast-copy specs for the tail layers, losing their payloads in the copy.
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         if include_outs:
             fast_copy_spec = _maybe_make_fast_copy_spec(
                 live_layer=live_layer,
@@ -3498,7 +3498,7 @@ def _build_manifest(
             "Z",
         ),
         bundle_format="directory",
-        n_layers=len(trace.layer_list) if n_layers is None else n_layers,
+        n_layers=len(trace._layer_list) if n_layers is None else n_layers,
         n_out_blobs=n_out_blobs,
         n_grad_blobs=n_grad_blobs,
         n_auxiliary_blobs=n_auxiliary_blobs,
@@ -3546,7 +3546,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     devices = sorted(
         {
             str(device)
-            for op in getattr(trace, "layer_list", ())
+            for op in getattr(trace, "_layer_list", ())
             if (device := getattr(op, "device_ref", None)) is not None
         }
     )
@@ -3554,7 +3554,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     default_dtype = ambient.get("default_dtype") if isinstance(ambient, Mapping) else None
     autocast_facts: list[dict[str, Any]] = []
     seen_autocast: set[str] = set()
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         state = getattr(op, "func_autocast_state", None)
         if not isinstance(state, Mapping) or not state:
             continue
@@ -3711,7 +3711,7 @@ def _validate_activation_transform_outputs(
 
     if not include_outs or getattr(trace, "activation_transform", None) is None:
         return
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):
             continue
         transformed_out = getattr(layer, "transformed_out", None)
@@ -3742,20 +3742,11 @@ def _apply_skipped_blobs_to_scrubbed_state(
     for field_name, field_value in list(scrubbed_state.items()):
         scrubbed_state[field_name] = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
 
-    layer_list = scrubbed_state.get("layer_list")
+    layer_list = scrubbed_state.get("_layer_list")
     if isinstance(layer_list, list):
-        out_labels = [
-            layer.layer_label
-            for layer in layer_list
-            if bool(getattr(layer, "has_saved_activation", False))
-        ]
         grad_labels = [
             layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
-        scrubbed_state["num_saved_ops"] = len(out_labels)
-        scrubbed_state["num_saved_layers"] = len(
-            {getattr(layer, "layer_label", layer.layer_label) for layer in layer_list}
-        )
         scrubbed_state["saved_activation_memory"] = sum(
             int(getattr(layer, "activation_memory", 0) or 0)
             for layer in layer_list
@@ -4322,7 +4313,7 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
         Root of the loaded bundle.
     """
 
-    layer_list = getattr(trace, "layer_list", None)
+    layer_list = getattr(trace, "_layer_list", None)
     if not layer_list:
         return
     visualizers_dir = bundle_path / "visualizers"

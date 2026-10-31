@@ -195,7 +195,7 @@ def test_halted_trace_basic_shape() -> None:
     """A halted capture finishes postprocess: finished truthy, halted truthy."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace._tracing_finished is True
     assert trace.halt_frontier == trace.stop_reason
 
@@ -293,8 +293,8 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
     trace_halt = tl.trace(model_halt, x, halt=_halt_on_linear)
 
     assert list(trace_full.buffer_layers) == list(trace_halt.buffer_layers)
-    full_labels = [entry.layer_label for entry in trace_full.layer_list]
-    halt_labels = [entry.layer_label for entry in trace_halt.layer_list]
+    full_labels = [entry.layer_label for entry in trace_full._layer_list]
+    halt_labels = [entry.layer_label for entry in trace_halt._layer_list]
     # The halted graph is the complete graph's prefix plus its own output node.
     assert halt_labels[:-1] == [
         label for label in full_labels if label not in ("relu_1_4", "output_1")

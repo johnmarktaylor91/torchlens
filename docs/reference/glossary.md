@@ -908,7 +908,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
-  pre-wrap torch references to their wrappers. The trace records `trace.rescue_rerun` and reason
+  pre-wrap torch references to their wrappers. The capture-honesty facts record `rescue_rerun` and reason
   `mode_rescue_rerun`.
 
 **Collapse**
@@ -1154,7 +1154,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `last_run["shape_varied"]` and resets `shape`, `transformed_out_shape`, `activation_memory`
   and `transformed_activation_memory` to `None` on every op the run did not refresh, so no
   capture-time number is presented as current. The save scope never widens: unsaved ops stay
-  unsaved, `raw_output` follows the capture's output-transform rule, and the stored spec is
+  unsaved, `transformed_output` follows the capture's output-transform rule, and the stored spec is
   unchanged. A real structural divergence still refuses (`PathDivergenceError` from the
   explicit door; the legacy door falls back and records why). A staged helper tensor changed
   since it was staged refuses `helper_tensor_changed_since_capture` on both doors, as the
@@ -2853,7 +2853,7 @@ deprecation shim owed*
   row: `trace.ops["input_1"]` returns the input row and `"input_1" in
   trace.ops` is true although the label is not in `trace.ops.keys()`. The
   every-row sequence (inputs, outputs and buffers included) is
-  `trace.layer_list`; `len(trace)`, `trace[int]` and `trace[plane]` index it.
+  `trace.ops`; `len(trace)`, `trace[int]` and `trace[plane]` index it.
   Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
   `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
   exactly their rows, boundary rows included.
@@ -3376,6 +3376,7 @@ The sections above describe each surface in depth.
 | --- | --- |
 | `Accessor.search` | Return records whose lookup key contains `needle` |
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
+| `BackendCapabilities.can_intervene` | Whether live intervention capture is supported (was `interventions`) |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
 | `BackwardEstimate.is_freeze_pattern_captured` | Whether the parameter freeze pattern was captured |
 | `BackwardEstimate.is_grad_disabled_at_capture` | Whether grad was disabled when the forward was captured |
@@ -3513,6 +3514,7 @@ The sections above describe each surface in depth.
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
+| `Op.edits` | The FireRecords of every edit that fired at this op, in fire order (was `interventions`) |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
@@ -3560,8 +3562,11 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
 | `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
+| `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
+| `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |

@@ -136,7 +136,7 @@ def test_stack_refuses_legacy_op_without_recorded_ordinal() -> None:
     legacy_state.pop("ordinal_index")
     restored_relu = Op.__new__(Op)
     restored_relu.__setstate__(legacy_state)
-    trace.layer_list = [restored_relu if op is relu else op for op in trace.layer_list]
+    trace._layer_list = [restored_relu if op is relu else op for op in trace._layer_list]
 
     with pytest.raises(ValueError, match="requires matched operations with recorded ordinals"):
         trace.stack(tl.func("relu"))

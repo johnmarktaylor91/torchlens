@@ -91,7 +91,7 @@ def collect_summary_facts(
     except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
         buffer_count = None
     passes_max = 1
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         passes_max = max(passes_max, int(getattr(op, "num_passes", 1) or 1))
     return SummaryFacts(
         model_class_name=getattr(trace, "model_class_name", None),

@@ -253,7 +253,7 @@ class TraceOpAccessor(Accessor[Op]):
     ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY
     row: ``trace.ops["input_1"]`` returns the input row and ``"input_1" in
     trace.ops`` is true although the label is not in ``keys()``. The
-    alias-inclusive row sequence is ``trace.layer_list``. A derived accessor
+    alias-inclusive row sequence is ``trace._layer_list``. A derived accessor
     over a chosen row list (``input_ops``, ``output_ops``, ``saved_ops``, ...)
     keeps the default ``counted_view=False`` and lists exactly its rows.
     """

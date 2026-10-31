@@ -946,7 +946,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     assert _state._active_trace is None
     assert _state._active_owner_thread_id is None
     trace.log_backward(loss)
-    assert int(trace.num_backward_passes) == 1
+    assert int(len(trace.autograd.backward_passes)) == 1
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 

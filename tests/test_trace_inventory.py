@@ -66,7 +66,7 @@ def test_sites_table_groups_ops_by_site_key() -> None:
         "shapes",
     ]
     assert len(frame) == len(set(frame["site_key"]))
-    assert sum(frame["n_ops"]) == len(trace.layer_list)
+    assert sum(frame["n_ops"]) == len(trace._layer_list)
     # The reused-module linear shares ONE site across both passes (per-call-
     # instance ordinal restart), so its row aggregates both pass labels.
     linear = frame.loc[frame["layer_type"] == "linear"].iloc[0]
@@ -83,7 +83,7 @@ def test_sites_table_refuses_keyless_legacy_artifacts() -> None:
 
     torch.manual_seed(1)
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         op.site_key = None
 
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -114,13 +114,13 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     assert bom["capture"]["backend"] == "torch"
     assert bom["capture"]["outcome_status"] == "complete"
     assert bom["capture"]["model_class_name"] == "Sequential"
-    assert bom["graph"]["num_ops"] == len(trace.layer_list)
+    assert bom["graph"]["num_ops"] == len(trace._layer_list)
     assert bom["graph"]["num_layers"] == len(trace.layers)
-    assert bom["graph"]["num_modules"] == trace.num_modules
+    assert bom["graph"]["num_modules"] == len(trace.modules)
     assert bom["parameters"]["num_params"] == trace.num_params
     assert bom["parameters"]["num_param_tensors"] == len(trace.params)
     assert bom["buffers"]["num_buffer_tensors"] == len(trace.buffers)
-    saved = [op for op in trace.layer_list if op.has_saved_activation]
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
     # Payload-scope law (C02; sumfam D8): BOM's byte figures are
     # retained_now; the at_capture facts print BESIDE them.
     assert bom["activations"]["payload_scope"] == "retained_now"

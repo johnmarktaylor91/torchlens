@@ -255,7 +255,7 @@ These derived gradients are not true backward capture, and `op.grads` /
 MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(halt=static_selector)` finalizes an honest partial trace at
-the matched frontier (`trace.halted`, `trace.stop_reason`; parameter accounting is restricted to
+the matched frontier (`trace.is_stopped`, `trace.stop_reason`; parameter accounting is restricted to
 the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
 `tl.label_contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
 `tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate()` (self form), `tl.replace_with(...)`,
@@ -307,7 +307,7 @@ ablated = tl.trace(
     intervene=tl.when(tl.func("functional.relu"), tl.zero_ablate()),
 )
 partial = tl.trace(model, x, backend="paddle", halt=tl.func("functional.relu"))
-assert partial.halted
+assert partial.is_stopped
 ```
 
 Intervention semantics on Paddle are honest by construction. The intervened op keeps its real

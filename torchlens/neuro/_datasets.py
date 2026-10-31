@@ -309,7 +309,7 @@ def _final_trace_output(log: Any) -> Any:
         out = getattr(log[label], "out", None)
         if isinstance(out, torch.Tensor):
             return out
-    for layer in reversed(getattr(log, "layer_list", [])):
+    for layer in reversed(getattr(log, "_layer_list", [])):
         out = getattr(layer, "out", None)
         if getattr(layer, "is_output", False) and isinstance(out, torch.Tensor):
             return out

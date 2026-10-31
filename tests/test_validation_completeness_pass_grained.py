@@ -48,7 +48,7 @@ def _looped_trace() -> tuple[tl.Trace, list[torch.Tensor]]:
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     log._tl_test_model_keepalive = model
-    outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
+    outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     return log, outputs
 
 
@@ -64,7 +64,7 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
 
     log, outputs = _looped_trace()
     victim = next(
-        op for op in log.layer_list if op.num_passes > 1 and op.pass_index == op.num_passes
+        op for op in log._layer_list if op.num_passes > 1 and op.pass_index == op.num_passes
     )
     phantom = copy.copy(victim)
     phantom_label = f"{victim.layer_label}:{victim.num_passes + 1}"
@@ -72,7 +72,7 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
     phantom._internal_set("label_short", phantom_label)
     phantom._internal_set("pass_index", victim.num_passes + 1)
     # Unreachable on purpose: no seed lists it, no real op names it as parent.
-    log.layer_list.append(phantom)
+    log._layer_list.append(phantom)
 
     status = log.validate_forward_pass(outputs, validate_metadata=False)
     assert not status, (

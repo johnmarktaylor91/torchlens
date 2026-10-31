@@ -303,7 +303,7 @@ class TFBackend:
                 save_predicate=save_predicate,
             )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-            trace.raw_output = (
+            trace.transformed_output = (
                 output_transform(static_result.output) if callable(output_transform) else None
             )
             trace.capture_events = static_result.events
@@ -427,7 +427,9 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(result.output) if callable(output_transform) else None
+        trace.transformed_output = (
+            output_transform(result.output) if callable(output_transform) else None
+        )
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
@@ -641,7 +643,7 @@ class TFBackend:
             module_filter=cast(Any, module_filter),
             emit_nvtx=False,
             input_transform=cast(Any, transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast(Any, output_transform),
@@ -683,18 +685,16 @@ class TFBackend:
         """
 
         if module_tree is None:
-            trace.param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
+            trace._param_logs = ParamAccessor({})
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
             trace.param_source = "none"
             return
-        trace.param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.param_source = "native-module"

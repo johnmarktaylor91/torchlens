@@ -47,7 +47,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
     """Each render-flow pass should build and reuse one reverse index."""
 
     trace = tl.trace(_SkipChain(), torch.randn(1, 4))
-    entries = dict(trace.layer_dict_main_keys)
+    entries = dict(trace._layer_dict_main_keys)
     entry_snapshot = tuple(entries.items())
 
     hidden_indexes: list[Mapping[str, Any]] = []

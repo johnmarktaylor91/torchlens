@@ -81,8 +81,8 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     """A repeated functional block becomes multi-pass layers that validate."""
 
     trace = _repeated_trace()
-    matmul_ops = [op for op in trace.layer_list if op.func_name == "matmul"]
-    relu_ops = [op for op in trace.layer_list if op.func_name == "maximum"]
+    matmul_ops = [op for op in trace._layer_list if op.func_name == "matmul"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "maximum"]
 
     assert trace.recurrence_detection is True
     assert [op.pass_index for op in matmul_ops] == [1, 2]
@@ -90,7 +90,7 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*matmul_ops, *relu_ops))
     assert list(matmul_ops[0].recurrent_ops) == [op.label for op in matmul_ops]
-    assert trace.layer_num_calls[matmul_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[matmul_ops[0].layer_label] == 2
     assert MLXBackend().validate_trace(trace) is True
 
 
@@ -98,7 +98,7 @@ def test_mlx_module_reuse_groups_and_validates() -> None:
     """A reused submodule groups per op site and the grouped trace validates."""
 
     trace = tl.trace(_ReusedCell(), mx.ones((2, 4)), backend="mlx")
-    linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "linear"]
 
     assert [op.pass_index for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
@@ -110,7 +110,7 @@ def test_mlx_distinct_module_sites_do_not_group() -> None:
     """Two distinct submodules with identical shapes stay separate layers."""
 
     trace = tl.trace(_TwoCells(), mx.ones((2, 4)), backend="mlx")
-    linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "linear"]
 
     assert len(linear_ops) == 2
     assert all(op.num_passes == 1 for op in linear_ops)
@@ -121,8 +121,8 @@ def test_mlx_grouping_relabel_keeps_lookups_and_edges_coherent() -> None:
     """Raw labels stay resolvable and edges follow grouped ops to final labels."""
 
     trace = _repeated_trace()
-    matmul_ops = [op for op in trace.layer_list if op.func_name == "matmul"]
-    relu_ops = [op for op in trace.layer_list if op.func_name == "maximum"]
+    matmul_ops = [op for op in trace._layer_list if op.func_name == "matmul"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "maximum"]
     pass2_matmul = matmul_ops[1]
 
     assert trace[pass2_matmul._label_raw] is pass2_matmul
@@ -144,7 +144,7 @@ def test_mlx_recurrence_detection_off_preserves_single_pass_layout() -> None:
     )
 
     assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert all(op.num_passes == 1 for op in trace._layer_list)
     assert MLXBackend().validate_trace(trace) is True
 
 
@@ -238,7 +238,7 @@ def test_mlx_intermediate_derived_grads_survive_grouping() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
     grouped = tl.trace(repeated_loss, x, backend="mlx", grad_options=grad_options)
-    grouped_add = [op for op in grouped.layer_list if op.func_name == "add"]
+    grouped_add = [op for op in grouped._layer_list if op.func_name == "add"]
 
     assert {op.num_passes for op in grouped_add} == {2}
     ungrouped_labels = set(ungrouped.autograd.intermediate_derived_grads.keys())

@@ -53,7 +53,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):
-        matches = [op for op in trace.layer_list if op.label == handle]
+        matches = [op for op in trace._layer_list if op.label == handle]
         if len(matches) != 1:
             raise ReceptiveFieldError(
                 f"No operation with exact pass-qualified label {handle!r} exists in this trace."
@@ -286,7 +286,9 @@ def _graph_indexes(
         Canonical operation lookup followed by parent and child adjacency mappings.
     """
 
-    operations = tuple(op for op in trace.layer_list if isinstance(getattr(op, "label", None), str))
+    operations = tuple(
+        op for op in trace._layer_list if isinstance(getattr(op, "label", None), str)
+    )
     by_reference = {
         reference: op
         for op in operations

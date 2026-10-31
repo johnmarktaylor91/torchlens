@@ -86,7 +86,7 @@ _DOCUMENTED_SURFACE = [
     "input_was_parameter",
     "internal_source_ancestors",
     "internal_source_parents",
-    "interventions",
+    "edits",
     "io_role",
     "is_atomic_module",
     "is_buffer",

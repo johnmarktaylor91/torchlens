@@ -174,7 +174,7 @@ def test_operational_status_line_reports_real_streamed_ops_not_a_fake_constant(
     )
     streamed_line = _operational_status_line(streamed_log)
     assert "streamed_ops=0" not in streamed_line
-    num_layers = len(streamed_log.layer_list)
+    num_layers = len(streamed_log._layer_list)
     assert f"streamed_ops={num_layers}" in streamed_line
 
     streamed_text = streamed_log.explain(audience="practitioner")
@@ -280,7 +280,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     log = _captured_log()
     log.capture_verified = False
     log.capture_verification_reason = "mode_rescue_rerun"
-    log.rescue_rerun = True
+    log._rescue_rerun = True
 
     profile = tl.report.profile(log)
     assert profile.is_capture_verified is False

@@ -42,7 +42,7 @@ def _site_index(log: Any) -> tuple[dict[str, Any], str]:
         ``legacy_address_shape``).
     """
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     keys = [getattr(op, "site_key", None) for op in ops]
     if ops and all(key is not None for key in keys):
         index: dict[str, Any] = {}

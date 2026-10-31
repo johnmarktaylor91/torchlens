@@ -65,7 +65,7 @@ def _logits(trace: tl.Trace) -> torch.Tensor:
 def _layer_outs(trace: tl.Trace) -> dict[str, torch.Tensor]:
     return {
         str(layer.layer_label): layer.out.detach()
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if isinstance(getattr(layer, "out", None), torch.Tensor)
     }
 

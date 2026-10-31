@@ -23,7 +23,7 @@ pytestmark = pytest.mark.backend_parity
 
 
 def _assert_depths(trace, expect_recurrence: bool, expected_max_depth: int) -> None:
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     depths = {
         op._label_raw: (op.min_distance_from_input, op.max_distance_from_input)
         for op in ops
@@ -38,7 +38,7 @@ def _assert_depths(trace, expect_recurrence: bool, expected_max_depth: int) -> N
 
 
 def _depth_by_prefix(trace, prefix: str) -> tuple[int, int]:
-    op = next(op for op in trace.layer_list if op._label_raw.startswith(prefix))
+    op = next(op for op in trace._layer_list if op._label_raw.startswith(prefix))
     return op.min_distance_from_input, op.max_distance_from_input
 
 
@@ -50,7 +50,7 @@ def _assert_alias_matches(trace_fn) -> None:
         alias_trace = trace_fn()
     assert alias_trace.mark_layer_depths is True
     assert any(
-        getattr(op, "min_distance_from_input", None) is not None for op in alias_trace.layer_list
+        getattr(op, "min_distance_from_input", None) is not None for op in alias_trace._layer_list
     )
 
 
@@ -68,11 +68,11 @@ def _assert_default_on_and_off_switch(trace_fn) -> None:
     default_trace = trace_fn(CaptureOptions())
     assert default_trace.mark_layer_depths is True
     assert any(
-        getattr(op, "min_distance_from_input", None) is not None for op in default_trace.layer_list
+        getattr(op, "min_distance_from_input", None) is not None for op in default_trace._layer_list
     )
     off_trace = trace_fn(CaptureOptions(compute_input_output_distances=False))
     assert off_trace.mark_layer_depths is False
-    assert all(getattr(op, "min_distance_from_input", None) is None for op in off_trace.layer_list)
+    assert all(getattr(op, "min_distance_from_input", None) is None for op in off_trace._layer_list)
 
 
 @pytest.mark.backend_paddle

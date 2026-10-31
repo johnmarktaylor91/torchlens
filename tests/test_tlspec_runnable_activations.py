@@ -200,7 +200,7 @@ def _physical_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
     """Snapshot physical Op outs without triggering unsaved-payload errors."""
 
     values: list[torch.Tensor | None] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         value = op._slot("out")
         values.append(value.detach().clone() if isinstance(value, torch.Tensor) else None)
     return tuple(values)
@@ -243,7 +243,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     manifest = _manifest(path)
     activation_layer = manifest["run"]["payload_layers"]["activations"]
     members = activation_layer["members"]
-    selected_labels = {str(op.label) for op in trace.layer_list if bool(op.has_saved_activation)}
+    selected_labels = {str(op.label) for op in trace._layer_list if bool(op.has_saved_activation)}
     assert activation_layer["present"] is True
     assert activation_layer["schema"] == "selected_activation_v2"
     assert {member["op_label"] for member in members} == selected_labels
@@ -256,7 +256,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     assert {entry["blob_id"] for entry in entries} == {member["blob_id"] for member in members}
     assert_sparse_core_has_no_tensor_payload(manifest["run"])
     assert_sparse_core_has_no_tensor_payload(_metadata(path))
-    assert all(op.func is None for op in _metadata(path)["layer_list"])
+    assert all(op.func is None for op in _metadata(path)["_layer_list"])
     tl.validation.validate_tlspec(path)
 
 

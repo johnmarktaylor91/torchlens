@@ -429,7 +429,7 @@ def _mark_fixture_manifest_materialized(path: Path) -> None:
 def _first_saved_op(trace: Any) -> Any:
     """Return the first op with a saved activation."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.has_saved_activation:
             return op
     raise AssertionError("trace has no saved activation op")
@@ -442,7 +442,7 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.interventions is False
+    assert spec.capabilities.can_intervene is False
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
@@ -463,7 +463,7 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     x = Tensor([1.0, -2.0, 3.0])
     trace = tl.trace(_tiny_block, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
+    layer_types = {op.layer_type for op in trace._layer_list}
     assert trace.backend == "tinygrad"
     assert trace.module_identity_mode == "function_root"
     assert trace.param_source == "none"
@@ -511,7 +511,7 @@ def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     x = Tensor([1.0, -2.0, 3.0, 4.0, -5.0, 6.0, 7.0, -8.0, 9.0])
     trace = tl.trace(_wide_corpus, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
+    layer_types = {op.layer_type for op in trace._layer_list}
     assert {"mul", "reduce", "where"} <= layer_types
     assert {"permute", "shrink"} & layer_types
     assert len(trace.output_layers) == 2
@@ -592,14 +592,14 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
 
     trace = _trace(save=tl.func("where"))
     saved_ops = list(trace.saved_ops)
-    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+    unsaved_ops = [op for op in trace._layer_list if not op.has_saved_activation]
 
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"where"}
     assert unsaved_ops
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
+    assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
@@ -611,11 +611,11 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
     loaded = tl.load(path)
 
-    assert len(out_entries) == trace.num_saved_ops
+    assert len(out_entries) == len(trace.saved_ops)
     assert loaded.backend == "tinygrad"
-    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
-    assert [op.has_saved_activation for op in loaded.layer_list] == [
-        op.has_saved_activation for op in trace.layer_list
+    assert len(list(loaded.saved_ops)) == len(trace.saved_ops)
+    assert [op.has_saved_activation for op in loaded._layer_list] == [
+        op.has_saved_activation for op in trace._layer_list
     ]
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
@@ -652,7 +652,7 @@ def test_tinygrad_module_predicate_selects_function_root() -> None:
 
     trace = _trace(save=tl.in_module("self"))
 
-    assert trace.num_saved_ops == len(trace.layer_list)
+    assert len(trace.saved_ops) == len(trace._layer_list)
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
 
 
@@ -772,8 +772,8 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     oracle_loss = oracle_scaled.sum()
     oracle_loss.backward()
 
-    hidden_op = next(op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,))
-    scaled_op = [op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
+    hidden_op = next(op for op in trace._layer_list if op.layer_type == "mul" and op.shape == (3,))
+    scaled_op = [op for op in trace._layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
@@ -845,13 +845,13 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.validation_replay_status.state == "passed"
     assert trace.validation_replay_status.source == "live"
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert trace.modules["self"].address == "self"
     assert trace.module_identity_mode == "function_root"
     assert trace.param_source == "none"
     assert list(trace.params.keys()) == []
     assert trace.has_backward_pass is False
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
@@ -865,7 +865,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     loaded = tl.load(audit_path)
     assert loaded.backend == "tinygrad"
     assert loaded.param_source == "none"
-    assert all(op.out is None for op in loaded.layer_list)
+    assert all(op.out is None for op in loaded._layer_list)
     assert loaded.derived_grads["inputs.0"].grad is None
 
     portable_path = tmp_path / "tinygrad_portable.tlspec"

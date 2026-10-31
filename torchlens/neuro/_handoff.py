@@ -395,7 +395,7 @@ def _source_kind(source: Any) -> str:
 
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
-    if hasattr(source, "layers") and hasattr(source, "layer_logs"):
+    if hasattr(source, "layers") and hasattr(source, "_layer_logs"):
         return "trace"
     raise NeuroHandoffError(
         f"unsupported source type {type(source).__name__}: expected a "

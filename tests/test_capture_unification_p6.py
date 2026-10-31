@@ -44,7 +44,7 @@ def _keep_linear_grad(ctx: RecordContext) -> CaptureSpec | bool:
 def _saved_linear(log: tl.Trace) -> tl.Layer:
     """Return the saved linear layer from a trace."""
 
-    return next(layer for layer in log.layer_list if layer.layer_type == "linear")
+    return next(layer for layer in log._layer_list if layer.layer_type == "linear")
 
 
 def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:

@@ -72,7 +72,7 @@ def test_distilgpt2_real_weights_twin() -> None:
     assert digest_equal
     assert discharge.verdict.value == "corroborated"
     assert len(discharge.claims) >= 800
-    assert len(real_trace.layer_list) == len(meta_trace.layer_list)
+    assert len(real_trace._layer_list) == len(meta_trace._layer_list)
 
 
 def test_bert_config_twin_buffer_parity() -> None:
@@ -148,10 +148,10 @@ def test_llama_7b_flagship_structural_anchors() -> None:
     elapsed = time.monotonic() - started
     assert trace.outcome.status.value == "complete"
     assert trace.num_params == 6_738_415_616
-    linear_records = [layer for layer in trace.layer_list if layer.func_name == "linear"]
+    linear_records = [layer for layer in trace._layer_list if layer.func_name == "linear"]
     assert len(linear_records) == 225  # 7 per decoder layer x 32 layers + lm_head
     assert elapsed < 120, f"flagship budget blown: {elapsed:.0f}s"
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         assert getattr(layer, "out", None) is None
     envelope = trace.structure_evidence
     assert envelope is not None and envelope["substrate"] == "meta"
@@ -290,5 +290,5 @@ def test_static_topk_succeeds_with_declared_shape() -> None:
         model, torch.empty(2, 8, device="meta"), capture=CaptureOptions(structure_only=True)
     )
     assert trace.outcome.status.value == "complete"
-    top_layers = [layer for layer in trace.layer_list if layer.func_name == "topk"]
+    top_layers = [layer for layer in trace._layer_list if layer.func_name == "topk"]
     assert top_layers and tuple(top_layers[0].shape) in ((2, 3), (2, 3, 2))

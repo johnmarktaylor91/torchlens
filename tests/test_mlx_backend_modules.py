@@ -230,7 +230,7 @@ def test_mlx_summary_rows_follow_execution_order() -> None:
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
     report = trace.summary()
-    executed = [f"op:{op.layer_label}" for op in trace.layer_list]
+    executed = [f"op:{op.layer_label}" for op in trace._layer_list]
     row_ids = [row.row_id for row in report.rows if row.row_id in executed]
     assert len(row_ids) == len(executed) >= 4
     assert row_ids == executed
@@ -248,7 +248,7 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.modules["l1"].params
     assert trace.module_calls["l1:1"].forward_kwargs == {}
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["l1:1"].to_pandas()) == 1
     dot = trace.draw(
@@ -303,7 +303,7 @@ def test_mlx_object_module_corruption_invariant_fails() -> None:
     """Dropping MLX object-module attribution should fail metadata invariants."""
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
-    victim = next(layer for layer in trace.layer_list if layer.module and not layer.is_input)
+    victim = next(layer for layer in trace._layer_list if layer.module and not layer.is_input)
     victim.module = None
     victim.modules = []
     victim.module_call_stack = []

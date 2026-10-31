@@ -443,24 +443,24 @@ def _check_postprocess_contract(
         assert self._raw_to_final_layer_labels, "Step 8 must build raw-to-final layer labels"
         assert self._raw_to_final_op_labels, "Step 8 must build raw-to-final op labels"
     elif step == "11":
-        for op in self.layer_list:
+        for op in self._layer_list:
             assert op.label, f"Step 11 left {op!r} without a final op label"
             assert op.layer_label, f"Step 11 left {op!r} without a final layer label"
             assert op.lookup_keys, f"Step 11 left {op.label} without lookup keys"
-            assert self.layer_dict_all_keys[op.label] is op
+            assert self._layer_dict_all_keys[op.label] is op
             # The bare layer label resolves to ONE pass of that layer (the
             # public lookup contract keeps the LAST pass for multi-pass
             # layers), never to a foreign layer's op. The former exact
             # `is op` form was wrong by construction for every recurrent
             # model and unreachable outside the debug env flag.
-            resolved = self.layer_dict_all_keys[op.layer_label]
+            resolved = self._layer_dict_all_keys[op.layer_label]
             assert resolved.layer_label == op.layer_label, (
                 f"Step 11 mapped layer label {op.layer_label!r} to a foreign op {resolved.label!r}"
             )
     elif step == "15.5":
-        assert self.layer_logs, "Step 15.5 must build aggregate layer logs"
-        assert len(self.layer_logs) == len(self.layer_labels)
-        assert isinstance(self.by_pass, dict)
+        assert self._layer_logs, "Step 15.5 must build aggregate layer logs"
+        assert len(self._layer_logs) == len(self.layer_labels)
+        assert isinstance(self._by_pass, dict)
     elif step == "16":
         assert getattr(self, "_module_logs", None) is not None, "Step 16 must build module logs"
     elif step == "16.5":
@@ -514,7 +514,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         append_capture_advisory,
     )
 
-    offenders = _unattributed_op_offenders(getattr(self, "layer_list", ()) or ())
+    offenders = _unattributed_op_offenders(getattr(self, "_layer_list", ()) or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
     # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
     # control-flow predicate on a global) would lose its witness with the op;
@@ -578,7 +578,7 @@ def _populate_var_names(self: "Trace") -> None:
 
     if not getattr(self, "save_code_context", False):
         return
-    for op in getattr(self, "layer_list", ()):
+    for op in getattr(self, "_layer_list", ()):
         if getattr(op, "type", None) == "output":
             op.var_names = []
             continue
@@ -676,11 +676,10 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
 
     saved_layers = [
         layer_entry
-        for layer_entry in self.layer_list
+        for layer_entry in self._layer_list
         if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
-    self.num_saved_ops = len(saved_layers)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
     # explorer P4 memory truth (reduce-only captures count the retained
@@ -689,7 +688,6 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     from .._save_budget import retained_activation_bytes
 
     self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
-    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
     refresh_pinned_autograd_memory(self, saved_layers)
 

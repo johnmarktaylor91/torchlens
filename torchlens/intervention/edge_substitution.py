@@ -253,8 +253,8 @@ def apply_edge_substitution_do(
                     reason="site_not_in_trace",
                     site=repr(address),
                 )
-            child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
-            parent_op = trace.layer_dict_all_keys[record.parent_label].ops[0]
+            child_op = trace._layer_dict_all_keys[record.child_label].ops[0]
+            parent_op = trace._layer_dict_all_keys[record.parent_label].ops[0]
             child_func_call_id, arg_kind, arg_path = address
             if len(arg_path) != 1:
                 raise _apply_invalid(
@@ -405,7 +405,7 @@ def _recompute_path(
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     site_key = replay_module._replay_site_key
-    child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
+    child_op = trace._layer_dict_all_keys[record.child_label].ops[0]
     target_key = site_key(trace.ops[target_label])
     cone = replay_module.cone_of_effect(trace, [child_op])
     keys = [site_key(op) for op in cone]

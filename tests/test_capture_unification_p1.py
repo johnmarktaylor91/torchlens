@@ -68,10 +68,10 @@ def _assert_trace_structure(trace: tl.Trace) -> None:
         assert op.shape is None or isinstance(op.shape, tuple)
         assert op.dtype is None or str(op.dtype)
         for parent in op.parents:
-            assert parent in trace.layer_dict_all_keys
+            assert parent in trace._layer_dict_all_keys
             assert op.layer_label in trace[parent].children or op.label in trace[parent].children
         for child in op.children:
-            assert child in trace.layer_dict_all_keys
+            assert child in trace._layer_dict_all_keys
             assert op.layer_label in trace[child].parents or op.label in trace[child].parents
 
 

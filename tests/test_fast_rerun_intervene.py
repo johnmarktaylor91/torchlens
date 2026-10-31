@@ -452,7 +452,7 @@ def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
     model, direction = _build()
     ids = _ids(_CAPTURE_LEN, seed=300)
     trace = _steered_trace(model, direction, ids)
-    unsaved = next(op for op in trace.layer_list if op.func_name == "gelu")
+    unsaved = next(op for op in trace._layer_list if op.func_name == "gelu")
     unsaved_label = unsaved.label
     assert not unsaved.has_saved_activation
     assert unsaved.shape is not None  # capture-time metadata exists, so None is a change

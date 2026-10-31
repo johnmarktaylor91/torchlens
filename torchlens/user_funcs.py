@@ -1394,7 +1394,9 @@ def _warn_zero_match_capture_selectors(
                 "no intervention fired.",
                 selector=repr(intervene_selector),
             )
-        if isinstance(halt_selector, BaseSelector) and not bool(getattr(trace, "halted", False)):
+        if isinstance(halt_selector, BaseSelector) and not bool(
+            getattr(trace, "is_stopped", False)
+        ):
             _record_unmatched("halt", halt_selector)
             warnings.warn(
                 f"Capture-time halt selector {halt_selector!r} matched zero sites; "
@@ -1945,7 +1947,7 @@ def _run_model_and_save_specified_outs(
             distributed_witness=distributed_witness,
             save_budget=save_budget,
             input_transform=transform,
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
@@ -2220,7 +2222,7 @@ def _render_layer_visualizers(
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"
     visualizer_dir.mkdir(parents=True, exist_ok=True)
-    max_fanout = max(1, len(trace.layer_list))
+    max_fanout = max(1, len(trace._layer_list))
 
     for selector, visualizer in layer_visualizers.items():
         try:
@@ -3895,7 +3897,7 @@ def _trace_torch_model(
                     chunk_paths=normalize_chunk_paths(chunk_paths_value),
                 ),
             )
-        trace.append_history = [initial_record, *trace.append_history]
+        trace._append_history = [initial_record, *trace._append_history]
         trace.chunked_forward = True
         trace.last_run = dict(trace.last_run or {})
         trace.last_run["chunk_size"] = normalized_chunk_size
@@ -3904,7 +3906,7 @@ def _trace_torch_model(
         if uses_selective_layers_to_save:
             trace._layer_nums_to_save = [
                 op.raw_index
-                for op in trace.layer_list
+                for op in trace._layer_list
                 if op.has_saved_activation and op.layer_type not in {"input", "output"}
             ]
             if not save_args:
@@ -4083,7 +4085,7 @@ def _trace_torch_model(
                 # masking the user's exception.
                 attach_failed_episode_ledger(capture_exc, episode_resolved)
             raise
-    if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
+    if stop_after_site is not None and not bool(getattr(trace, "is_stopped", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result
         # (the full forward ran; the caller asked for a frontier) and refuses
@@ -4125,7 +4127,7 @@ def _trace_torch_model(
     if (
         capture_options.module_filter is not None
         and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+        and len(getattr(trace, "saved_ops", ())) == 0
     ):
         from .errors import TorchLensWarning as _TorchLensWarning
 
@@ -4150,7 +4152,7 @@ def _trace_torch_model(
     if uses_selective_layers_to_save:
         trace._layer_nums_to_save = [
             op.raw_index
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and op.layer_type not in {"input", "output"}
         ]
         if not save_args:
@@ -4159,8 +4161,8 @@ def _trace_torch_model(
     # Print final summary.
     _vprint(
         trace,
-        f"Done: {len(trace.layer_logs)} layers, "
-        f"{trace.num_saved_ops} saved, "
+        f"Done: {len(trace._layer_logs)} layers, "
+        f"{len(trace.saved_ops)} saved, "
         f"{trace.total_activation_memory}",
     )
 

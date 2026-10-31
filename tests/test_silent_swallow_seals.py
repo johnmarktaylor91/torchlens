@@ -93,7 +93,7 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
     not just a losable warning, and must roll back partial writes."""
 
     def _raising_decode(trace, outputs, *, output_style, output_head):
-        trace.decoded_output = {"kind": "partial"}  # simulate the partial-write window
+        trace._decoded_output = {"kind": "partial"}  # simulate the partial-write window
         raise RuntimeError("synthetic decoder fault")
 
     monkeypatch.setattr(_builtin_output, "_decode_outputs_for_trace_unguarded", _raising_decode)
@@ -104,7 +104,7 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
             capture=tl.options.CaptureOptions(output_style="imagenet"),
         )
 
-    assert trace.decoded_output is None, "partial decode write survived the belt"
+    assert trace._decoded_output is None, "partial decode write survived the belt"
     assert trace.output_postprocessor is None
     rows = trace.annotations.get("decode_skipped")
     assert rows and rows[0]["error"].startswith("RuntimeError"), (

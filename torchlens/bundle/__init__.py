@@ -1702,7 +1702,7 @@ class Bundle:
         baseline_log = self._members[baseline_name]
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
-        baseline_sites = list(getattr(baseline_log, "layer_list", []))
+        baseline_sites = list(getattr(baseline_log, "_layer_list", []))
         if baseline_sites:  # node()'s model-floor gate, once instead of per site
             names = list(self._members)
             pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
@@ -1840,7 +1840,7 @@ class Bundle:
         metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
-        for left_site in getattr(left_log, "layer_list", []):
+        for left_site in getattr(left_log, "_layer_list", []):
             label = str(left_site.layer_label)
             right_label = aligned.get(label, {}).get(right_name, label)
             try:

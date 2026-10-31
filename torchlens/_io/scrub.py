@@ -296,7 +296,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
 
     scrubbed_ops = [
         op
-        for op in (state.get("layer_list") or ())
+        for op in (state.get("_layer_list") or ())
         if getattr(op, "func_name", None) == "intervention_replacement"
         or getattr(op, "is_edited", False)
     ]
@@ -305,7 +305,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
     from ..validation._invariants_backward_flow import op_has_genuine_replacement_evidence
 
     live_ops_by_label = {
-        getattr(op, "label", None): op for op in (getattr(trace, "layer_list", None) or ())
+        getattr(op, "label", None): op for op in (getattr(trace, "_layer_list", None) or ())
     }
     for scrubbed_op in scrubbed_ops:
         live_op = live_ops_by_label.get(getattr(scrubbed_op, "label", None))
@@ -336,10 +336,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     logical identifiers.
     """
 
-    ops = list(state.get("layer_list") or ())
-    layers = list((state.get("layer_logs") or {}).values())
+    ops = list(state.get("_layer_list") or ())
+    layers = list((state.get("_layer_logs") or {}).values())
     params = sorted(
-        (state.get("param_logs") or {}).values(),
+        (state.get("_param_logs") or {}).values(),
         key=lambda param: (
             str(getattr(param, "address", "")),
             str(getattr(param, "name", "")),
@@ -479,7 +479,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         state["op_equivalence_classes"] = remapped_groups
 
     grad_fn_order = list(state.get("grad_fn_order") or ())
-    grad_fn_logs = state.get("grad_fn_logs") or {}
+    grad_fn_logs = state.get("_grad_fn_logs") or {}
     grad_id_map: dict[int, int] = {}
 
     def register_grad_id(value: Any) -> None:
@@ -504,7 +504,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     # reached them, so a raw grad_fn memory address persisted verbatim into
     # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a
     # portable file). Register + remap them through the same trace-local map.
-    backward_pass_logs = state.get("backward_pass_logs")
+    backward_pass_logs = state.get("_backward_pass_logs")
     pass_records = (
         tuple(backward_pass_logs.values()) if isinstance(backward_pass_logs, dict) else ()
     )
@@ -526,7 +526,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
             ]
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["grad_fn_logs"] = remapped_logs
+        state["_grad_fn_logs"] = remapped_logs
     state["grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
     state["backward_root_grad_fn_object_ids"] = [
         remap_grad_id(grad_id) for grad_id in (state.get("backward_root_grad_fn_object_ids") or ())
@@ -1165,7 +1165,7 @@ def _scrub_value(
             scrubbed_state[field_name] = None
             continue
         if policy is FieldPolicy.KEEP and not (
-            owner_is_trace and (field_name == "raw_input" or field_name == "raw_output")
+            owner_is_trace and (field_name == "input" or field_name == "transformed_output")
         ):
             scrubbed_state[field_name] = _scrub_value(
                 field_value,
@@ -1430,13 +1430,13 @@ def _effective_policy(
         "grad_inputs",
         "grad_outputs",
         "input_activations",
-        "orphan_records",
+        "_orphan_records",
         "out",
         "out_versions_by_child",
         "parent_params",
         "payload",
-        "raw_input",
-        "raw_output",
+        "input",
+        "transformed_output",
         "saved_args",
         "saved_kwargs",
         "transformed_grad",
@@ -1515,7 +1515,7 @@ def _scrub_field(
 
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
-    if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
+    if isinstance(owner, Trace) and field_name in {"input", "transformed_output"}:
         return _scrub_raw_value_for_save(
             owner,
             field_name,
@@ -1628,13 +1628,15 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        text_limit = _RAW_OUTPUT_TEXT_LIMIT if field_name == "raw_output" else _RAW_INPUT_TEXT_LIMIT
+        text_limit = (
+            _RAW_OUTPUT_TEXT_LIMIT if field_name == "transformed_output" else _RAW_INPUT_TEXT_LIMIT
+        )
         return value[:text_limit]
     if isinstance(value, torch.Tensor):
         tensor_bytes = value.nelement() * value.element_size()
         tensor_limit = (
             _RAW_OUTPUT_TENSOR_BYTES_LIMIT
-            if field_name == "raw_output"
+            if field_name == "transformed_output"
             else _RAW_INPUT_TENSOR_BYTES_LIMIT
         )
         if tensor_bytes <= tensor_limit:
@@ -1643,7 +1645,7 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
             "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
         )
         return None
-    if field_name == "raw_input":
+    if field_name == "input":
         small_image = _small_raw_image_value(value)
         if small_image is not None:
             return small_image
@@ -2076,7 +2078,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "buffer_initial_value"
     if field_name == "_annotation_blobs":
         return "annotation_blob"
-    if field_name == "orphan_records":
+    if field_name == "_orphan_records":
         return "orphan_payload"
     if field_name == "edge_substitutions":
         # L6 stage 3: tier-(ii) occurrence-granular substituted-value payloads

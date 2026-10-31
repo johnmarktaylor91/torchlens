@@ -79,8 +79,8 @@ def test_late_buffer_append_is_materialized_today() -> None:
     assert seen["session"] is None
 
     # The cooked trace carries the buffer op, output-parent marked.
-    buffer_ops = [op for op in cooked.layer_list if op.raw_label.startswith("buffer")]
-    assert buffer_ops, [op.raw_label for op in cooked.layer_list]
+    buffer_ops = [op for op in cooked._layer_list if op.raw_label.startswith("buffer")]
+    assert buffer_ops, [op.raw_label for op in cooked._layer_list]
     assert all(op.is_output_parent for op in buffer_ops)
 
 

@@ -150,7 +150,7 @@ def test_edge_record_repr_designed() -> None:
         torch.randn(2, 2),
         capture=tl.options.CaptureOptions(replayable=True),
     )
-    records = [e for op in trace.layer_list for e in (getattr(op, "edge_uses", ()) or ())]
+    records = [e for op in trace._layer_list for e in (getattr(op, "edge_uses", ()) or ())]
     assert records
     texts = [repr(e) for e in records]
     assert all(text.startswith("edge ") and " -> " in text for text in texts)

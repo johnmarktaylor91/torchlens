@@ -106,7 +106,7 @@ def _saved_out(layer: Any) -> Any:
     Parameters
     ----------
     layer:
-        A per-pass operation/layer entry from ``log.layer_list``.
+        A per-pass operation/layer entry from ``log._layer_list``.
 
     Returns
     -------
@@ -137,7 +137,7 @@ def _saved_out(layer: Any) -> Any:
 def _layer_list(log: Any) -> Any:
     """Return the finalized layer sequence of a log."""
 
-    return getattr(log, "layer_list", []) or []
+    return getattr(log, "_layer_list", []) or []
 
 
 def _raw_layers(log: Any) -> Any:

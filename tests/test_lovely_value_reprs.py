@@ -71,7 +71,7 @@ def recurrent_trace():
 def _value_records(trace):
     """Every value-bearing record kind of one trace."""
 
-    records = list(trace.layer_list)
+    records = list(trace._layer_list)
     records.extend(trace.layers[label] for label in trace.layer_labels)
     records.extend(trace.params.values())
     records.extend(trace.modules.values())
@@ -133,7 +133,7 @@ def test_predicate_save_not_saved_token() -> None:
     """(not saved) is distinguishable from saved-and-boring (memo 4.4)."""
 
     trace = tl.trace(_Mixed().eval(), torch.randn(2, 8), save=tl.func("relu"))
-    unsaved = next(op for op in trace.layer_list if not op.has_saved_activation)
+    unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
     assert "(not saved)" in repr(unsaved.ops[0])
     saved = trace["relu_1_2"].ops[0]
     assert "(not saved)" not in repr(saved)

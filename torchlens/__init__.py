@@ -454,9 +454,9 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     from ._errors import AmbiguousOpLookupError
     from ._trace_selector_helpers import canonical_module_site_key
 
-    if pattern in trace.layer_dict_all_keys:
+    if pattern in trace._layer_dict_all_keys:
         return [pattern]
-    if pattern in trace.layer_logs:
+    if pattern in trace._layer_logs:
         return [pattern]
     if canonical_module_site_key(trace, pattern) is not None:
         # A wrapper-relative or dot-flattened module name keys by the caller's spelling.

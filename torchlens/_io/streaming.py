@@ -978,7 +978,7 @@ class BundleStreamWriter:
         n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
         n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
         n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
-        layer_list = scrubbed_state.get("layer_list", [])
+        layer_list = scrubbed_state.get("_layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
         # Disclose the harvested module-attribute channel (R62): the documented
         # invariant is that EVERY save writes a custom_attributes_disclosure

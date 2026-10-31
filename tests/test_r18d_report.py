@@ -105,12 +105,12 @@ def test_explain_selective_save_reports_without_crashing() -> None:
 
     saved = [
         layer.layer_label
-        for layer in log.layer_list
+        for layer in log._layer_list
         if getattr(layer, "has_saved_activation", False)
     ]
     unsaved = [
         layer.layer_label
-        for layer in log.layer_list
+        for layer in log._layer_list
         if not getattr(layer, "has_saved_activation", False)
     ]
     # Precondition: the input boundary is genuinely unsaved (the crash trigger).

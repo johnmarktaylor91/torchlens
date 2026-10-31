@@ -1291,7 +1291,7 @@ def _add_reference_fallback_collision(trace: tl.Trace) -> str:
         Relationship label deliberately removed from the fast index.
     """
 
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
     collision_op._label_raw = input_op.layer_label
     return str(input_op.layer_label)
@@ -1929,9 +1929,9 @@ def test_adjacency_index_matches_forced_accessor_reference(
         if case_name == "recurrent":
             assert any(module.num_calls > 1 for module in trace.modules)
         if case_name == "batchnorm_buffer":
-            assert any(op.is_buffer for op in trace.layer_list)
+            assert any(op.is_buffer for op in trace._layer_list)
         if case_name == "write_version":
-            assert any(op.buffer_write_kind is not None for op in trace.layer_list)
+            assert any(op.buffer_write_kind is not None for op in trace._layer_list)
 
         optimized = _collapse_artifact_snapshot(trace, tmp_path, f"{case_name}_indexed")
         if case_name == "external_endpoints":

@@ -67,7 +67,7 @@ class _FakeTrace(SimpleNamespace):
     """
 
     def __getitem__(self, label: str) -> Any:
-        for candidate in getattr(self, "layer_list", ()):
+        for candidate in getattr(self, "_layer_list", ()):
             if getattr(candidate, "layer_label", None) == label:
                 return candidate
             if getattr(candidate, "label", None) == label:
@@ -1060,7 +1060,7 @@ def test_non_torch_backward_inert_fires_on_backward_pass_logs() -> None:
     fake_trace = SimpleNamespace(
         has_backward_pass=False, grad_fn_logs=None, grad_fn_order=None, backward_pass_logs=["x"]
     )
-    with pytest.raises(MetadataInvariantError, match="backward_pass_logs"):
+    with pytest.raises(MetadataInvariantError, match="_backward_pass_logs"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
 
 

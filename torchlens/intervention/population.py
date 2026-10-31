@@ -114,7 +114,7 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
     insertion history).
     """
 
-    table = getattr(member, "layer_dict_all_keys", None) or {}
+    table = getattr(member, "_layer_dict_all_keys", None) or {}
     by_label: dict[str, Any] = {}
     for value in table.values():
         label = getattr(value, "label", None)
@@ -511,7 +511,7 @@ def _prepare_tensor_members(source: Any) -> tuple[torch.Tensor, ...] | None:
 def _looks_like_trace(value: Any) -> bool:
     """Whether a member is a captured-trace-like donor (duck-typed)."""
 
-    return hasattr(value, "layer_dict_all_keys") and hasattr(value, "ops")
+    return hasattr(value, "_layer_dict_all_keys") and hasattr(value, "ops")
 
 
 def population(

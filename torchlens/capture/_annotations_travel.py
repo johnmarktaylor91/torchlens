@@ -202,7 +202,7 @@ def scrub_episode_step_stamps(trace: Any) -> int:
     """
 
     cleared = 0
-    for op in getattr(trace, "layer_list", None) or ():
+    for op in getattr(trace, "_layer_list", None) or ():
         if getattr(op, "episode_step", None) is None:
             continue
         try:

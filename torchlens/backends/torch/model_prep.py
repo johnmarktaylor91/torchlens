@@ -740,7 +740,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     _add_shared_module_aliases(model, param_logs, param_id_to_address)
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
-    trace.param_logs = ParamAccessor(param_logs)
+    trace._param_logs = ParamAccessor(param_logs)
 
 
 def _add_shared_module_aliases(
@@ -1672,7 +1672,7 @@ def _ensure_module_output_tensor_logged(
             "has_saved_activation": False,
             "activation_transform": trace.activation_transform,
             "annotations": {},
-            "interventions": [],
+            "edits": [],
             "is_edited": not is_internal_source,
             "detach_saved_activations": trace.detach_saved_activations,
             "output_device": trace.output_device,
@@ -1830,7 +1830,7 @@ def _ensure_module_output_tensor_logged(
     fire_results = _pop_tensor_live_fire_results(tensor)
     if fire_results:
         fields_dict["fire_results"] = fire_results
-        fields_dict["interventions"] = [
+        fields_dict["edits"] = [
             result.fire_record for result in fire_results if result.fire_record is not None
         ]
         fields_dict["is_edited"] = any(result.replaced for result in fire_results)

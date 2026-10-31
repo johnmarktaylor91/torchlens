@@ -199,7 +199,7 @@ def test_canonical_key_is_none_for_every_existing_name() -> None:
 
     for factory, make_input, _names in _CASES.values():
         trace = tl.trace(factory().eval(), make_input())
-        names = set(trace.layer_dict_all_keys) | set(trace.layer_logs) | set(trace.modules.keys())
+        names = set(trace._layer_dict_all_keys) | set(trace._layer_logs) | set(trace.modules.keys())
         for name in names:
             if isinstance(name, str):
                 assert canonical_module_site_key(trace, name) is None, name

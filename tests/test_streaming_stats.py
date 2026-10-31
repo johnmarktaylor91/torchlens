@@ -124,7 +124,7 @@ def test_aggregate_warns_on_ambiguous_saved_output_selector_and_uses_first_match
     trace = tl.trace(model, batch, save=tl.func("linear"))
     matches = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if "linear" in str(layer.layer_label) and layer.has_saved_activation
     ]
     expected = float(matches[0].out.detach().to(dtype=torch.float64).mean().item())

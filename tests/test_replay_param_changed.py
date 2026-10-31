@@ -75,7 +75,7 @@ EDITS: dict[str, Callable[[nn.Module], None]] = {
 
 
 def _relu_label(trace: tl.Trace) -> str:
-    return next(str(op.label) for op in trace.layer_list if op.func_name == "relu")
+    return next(str(op.label) for op in trace._layer_list if op.func_name == "relu")
 
 
 def _double(out: torch.Tensor, *, hook) -> torch.Tensor:
@@ -97,7 +97,7 @@ def _push(trace: tl.Trace, **options: bool) -> tl.Trace:
 
 def _push_from(trace: tl.Trace, **options: bool) -> tl.Trace:
     fork = trace.fork()
-    origin = fork.layer_dict_all_keys[_relu_label(trace)]
+    origin = fork._layer_dict_all_keys[_relu_label(trace)]
     origin._internal_set("out", origin.out * 2.0)
     return fork.push_from(origin, replay=ReplayOptions(**options))
 
@@ -148,7 +148,7 @@ def test_opt_in_replays_current_weights_and_records_it(door: str) -> None:
     _in_place_no_grad(model)
     result = DOORS[door](trace, allow_changed_params=True)
     out = str(trace.output_layers[0])
-    assert torch.allclose(result.layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
+    assert torch.allclose(result._layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
     assert result.last_run[RUN_KEY] == ("fc2.weight",)
 
 
@@ -157,7 +157,7 @@ def test_unedited_replay_is_unchanged(door: str) -> None:
     model, x, trace = _capture()
     result = DOORS[door](trace)
     out = str(trace.output_layers[0])
-    assert torch.allclose(result.layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
+    assert torch.allclose(result._layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
     assert RUN_KEY not in result.last_run
 
 
@@ -185,7 +185,7 @@ def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
         intervention=InterventionOptions(engine="rerun"),
     )
     out = str(trace.output_layers[0])
-    assert torch.allclose(rerun.layer_dict_all_keys[out].out, _expected_output(model, x))
+    assert torch.allclose(rerun._layer_dict_all_keys[out].out, _expected_output(model, x))
     pushed = _replay_fork_do(rerun)
     assert RUN_KEY not in pushed.last_run
     _in_place_no_grad(model)
@@ -201,7 +201,7 @@ def test_an_edit_through_param_data_is_not_caught() -> None:
     model.fc2.weight.data.add_(1.0)
     result = _replay_fork_do(trace)
     out = str(trace.output_layers[0])
-    assert torch.allclose(result.layer_dict_all_keys[out].out, _expected_output(model, x))
+    assert torch.allclose(result._layer_dict_all_keys[out].out, _expected_output(model, x))
 
 
 def test_a_replaced_parameter_object_keeps_the_captured_values() -> None:
@@ -212,7 +212,7 @@ def test_a_replaced_parameter_object_keeps_the_captured_values() -> None:
     model.fc2.weight = nn.Parameter(model.fc2.weight.detach() + 1.0)
     result = _replay_fork_do(trace)
     out = str(trace.output_layers[0])
-    assert torch.allclose(result.layer_dict_all_keys[out].out, expected)
+    assert torch.allclose(result._layer_dict_all_keys[out].out, expected)
 
 
 @pytest.mark.parametrize("engine", ["replay", "rerun"])
@@ -234,9 +234,9 @@ def test_allow_changed_params_never_changes_the_capture(engine: str) -> None:
         )
         for allow in (False, True)
     ]
-    labels = [[str(op.label) for op in result.layer_list] for result in results]
+    labels = [[str(op.label) for op in result._layer_list] for result in results]
     assert labels[0] == labels[1]
-    for left, right in zip(results[0].layer_list, results[1].layer_list, strict=True):
+    for left, right in zip(results[0]._layer_list, results[1]._layer_list, strict=True):
         if isinstance(left.out, torch.Tensor):
             assert torch.equal(left.out, right.out), left.label
     assert all(RUN_KEY not in result.last_run for result in results)

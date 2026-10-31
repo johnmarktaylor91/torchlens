@@ -65,7 +65,7 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
 
     trace = _captured_two_pass_trace()
     try:
-        assert trace.num_backward_passes == 2
+        assert len(trace.autograd.backward_passes) == 2
         backward_passes = trace.autograd.backward_passes
         assert [backward_pass.pass_index for backward_pass in backward_passes] == [1, 2]
         assert backward_passes[0] is backward_passes.for_pass(1)
@@ -258,7 +258,7 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
         assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
         assert max(resolved_orders) == num_grad_passes + 1
         assert all(
-            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            grad_fn.order == trace._grad_fn_logs[grad_fn.creator_object_id].order + 1
             for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )

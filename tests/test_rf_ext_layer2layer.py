@@ -65,7 +65,7 @@ class _ResidualStage(nn.Module):
 def _ops(trace: object) -> tuple[object, object, object]:
     """Return the early, middle, and post convolution operations in execution order."""
 
-    convolutions = [op for op in trace.layer_list if op.func_name == "conv1d"]  # type: ignore[attr-defined]
+    convolutions = [op for op in trace._layer_list if op.func_name == "conv1d"]  # type: ignore[attr-defined]
     assert len(convolutions) == 3
     return tuple(convolutions)  # type: ignore[return-value]
 

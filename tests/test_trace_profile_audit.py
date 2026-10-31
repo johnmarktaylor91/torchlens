@@ -77,7 +77,7 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
         "device",
     }
     assert required.issubset(op_frame.columns)
-    assert len(op_frame) == len(trace.layer_list)
+    assert len(op_frame) == len(trace._layer_list)
     assert len(module_frame) == len(trace.modules)
     assert len(call_frame) == len(trace.module_calls)
     assert module_frame["flops"].dropna().tolist() == sorted(
@@ -157,7 +157,7 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
 
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
     missing_timing_op = next(
-        op for op in trace.layer_list if not (op.is_input or op.is_output or op.is_buffer)
+        op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)
     )
     missing_timing_op._internal_set("func_duration", None)
     profile = trace.profile(sort_by="activation_memory")

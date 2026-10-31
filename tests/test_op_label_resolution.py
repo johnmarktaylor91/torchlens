@@ -71,7 +71,7 @@ def test_every_label_resolves_to_its_own_op(trace: tl.Trace) -> None:
     """On a clean capture every final label and raw label names its own Op."""
 
     _check_op_label_resolution(trace)
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         assert trace.ops[op.label] is op
         assert trace.ops[op._label_raw] is op
 

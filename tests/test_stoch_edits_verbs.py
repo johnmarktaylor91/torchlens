@@ -225,7 +225,7 @@ def test_mask_equivariance_law() -> None:
     expected = baseline.clone()
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
     assert fire.helper is not None
     metadata = dict(fire.helper.metadata)
     assert "selection_mask_digest" in metadata
@@ -426,7 +426,7 @@ def test_fire_record_carries_the_sampling_note_via_one_builder() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), permute_batch(seed=11, axis=0))
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
     note = fire.determinism_note or ""
     assert "sampling[permute_batch]" in note
     assert "base_seed=11" in note

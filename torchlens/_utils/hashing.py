@@ -215,7 +215,7 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         Each layer's ``_address_normalized`` field is updated in place.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
@@ -263,7 +263,7 @@ def compute_graph_shape_hash(
     order_by_label: dict[Any, int] = {}
     layer_by_label: dict[Any, Any] = {}
     kept_layers: list[Any] = []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         reference_label = (
             layer.layer_label
             if getattr(layer, "num_passes", 1) == 1

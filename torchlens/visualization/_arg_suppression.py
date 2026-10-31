@@ -121,7 +121,7 @@ def _parent_shape(trace: Trace, node: Any, op_by_label: dict[str, Any]) -> tuple
     parent = op_by_label.get(parent_label)
     if parent is not None:
         return _record_output_shape(parent)
-    layer_logs = getattr(trace, "layer_logs", None)
+    layer_logs = getattr(trace, "_layer_logs", None)
     if layer_logs is not None and parent_label in layer_logs:
         return _record_output_shape(layer_logs[parent_label])
     return None
@@ -200,7 +200,7 @@ def compute_suppressed_arg_keys(trace: Trace, universe: Any) -> dict[int, frozen
         # semantics in the table are the PyTorch module contract).
         return {}
     op_by_label: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         label = getattr(op, "label", None)
         if isinstance(label, str):
             op_by_label.setdefault(label, op)

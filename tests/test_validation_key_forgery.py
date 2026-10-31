@@ -49,7 +49,7 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
+        first, second = [lay for lay in log._layer_list if lay.layer_label.startswith("linear")][:2]
         donor = first.ops[0]
         for op in second.ops:
             op._param_barcodes = _copy.copy(donor._param_barcodes)
@@ -79,7 +79,7 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
     try:
         assert log.grouping_policy["detector"] == "callsite_v1"
         classes = dict(contract.call_site_classes_for(log) or {})
-        first, second = [op for op in log.layer_list if op.func_name == "linear"][:2]
+        first, second = [op for op in log._layer_list if op.func_name == "linear"][:2]
         assert classes[first._label_raw] != classes[second._label_raw]
         classes[second._label_raw] = classes[first._label_raw]
         contract.remember_call_site_classes(log, classes)

@@ -1039,7 +1039,7 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
         available.
     """
 
-    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
+    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
         left_sig = (
             getattr(left_layer, "layer_type", None),
             getattr(left_layer, "func_name", None),
@@ -1060,8 +1060,8 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
                 f"{getattr(left_layer, 'func_name', None)!r} vs "
                 f"{getattr(right_layer, 'func_name', None)!r}"
             )
-    if len(left.layer_list) != len(right.layer_list):
-        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    if len(left._layer_list) != len(right._layer_list):
+        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
     return None
 
 
@@ -1160,8 +1160,8 @@ def _warn_if_validation_trace_not_reproducible(
                 extra={
                     "first_graph_hash": first_hash,
                     "retrace_graph_hash": second_hash,
-                    "first_op_count": len(first_trace.layer_list),
-                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_op_count": len(first_trace._layer_list),
+                    "retrace_op_count": len(second_trace._layer_list),
                     "first_divergence": hint,
                 },
             ),
@@ -1171,8 +1171,8 @@ def _warn_if_validation_trace_not_reproducible(
                 message,
                 first_graph_hash=first_hash,
                 retrace_graph_hash=second_hash,
-                first_op_count=len(first_trace.layer_list),
-                retrace_op_count=len(second_trace.layer_list),
+                first_op_count=len(first_trace._layer_list),
+                retrace_op_count=len(second_trace._layer_list),
                 first_divergence=hint,
             ),
             stacklevel=2,

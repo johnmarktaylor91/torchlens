@@ -158,7 +158,7 @@ class _UnregisteredScriptModuleModel(nn.Module):
 def _boundary_ops(trace: tl.Trace) -> list:
     """Return the ``jitscript`` ops of a trace."""
 
-    return [op for op in trace.layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
+    return [op for op in trace._layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
 
 
 def _trace_with_disclosure(model: nn.Module, x: torch.Tensor, **kwargs) -> tl.Trace:
@@ -207,7 +207,7 @@ def test_scripted_helper_is_one_boundary_op_and_validates() -> None:
     assert is_script_function_recorder(op.func)
     assert [trace[label].layer_type for label in op.parents] == ["linear"]
     assert [trace[label].layer_type for label in op.children] == ["relu"]
-    assert not any(other.layer_type in {"sin", "ge", "__ge__"} for other in trace.layer_list)
+    assert not any(other.layer_type in {"sin", "ge", "__ge__"} for other in trace._layer_list)
     torch.testing.assert_close(op.out, scripted_gate(model.fc(x), 0.1))
     _assert_validates_clean(model, x)
 
@@ -260,7 +260,7 @@ def test_scripted_helper_inside_an_autograd_function() -> None:
 
     (op,) = _boundary_ops(trace)
     assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert not any(other.func_name == "autogradfunction" for other in trace.layer_list)
+    assert not any(other.func_name == "autogradfunction" for other in trace._layer_list)
     _assert_validates_clean(model, x)
 
 
@@ -290,7 +290,7 @@ def test_pytorch_jit_disabled_gives_the_op_by_op_graph() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    assert "sin" in {op.layer_type for op in trace.layer_list}
+    assert "sin" in {op.layer_type for op in trace._layer_list}
     _assert_validates_clean(model, x)
 
 
@@ -331,7 +331,7 @@ def test_boundary_selector_row_and_hook_lifecycle() -> None:
     trace = _trace_with_disclosure(
         _GateModel(), torch.randn(2, 4), save=tl.func_transform(SCRIPT_FUNCTION_TRANSFORM_KIND)
     )
-    saved = [op for op in trace.layer_list if op.has_saved_activation]
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
     assert [op.func_name for op in saved] == [SCRIPT_FUNCTION_FUNC_NAME]
     rows = [
         row

@@ -71,20 +71,20 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
 
-    relu_op = next(op for op in ablated.layer_list if op.layer_type == "relu")
+    relu_op = next(op for op in ablated._layer_list if op.layer_type == "relu")
     assert relu_op.is_edited is True
     assert np.allclose(np.asarray(relu_op.out), 0.0)
 
     # The substituted zeros flowed into the downstream linear: its output is
     # the bias alone and differs from the baseline forward.
-    final_ablated = np.asarray(ablated.layer_list[-1].out)
-    final_baseline = np.asarray(baseline.layer_list[-1].out)
+    final_ablated = np.asarray(ablated._layer_list[-1].out)
+    final_baseline = np.asarray(baseline._layer_list[-1].out)
     bias = np.asarray(model.l2.bias)
     assert np.allclose(final_ablated, bias, atol=1e-5)
     assert not np.allclose(final_ablated, final_baseline)
 
     non_intervened = [
-        op for op in ablated.layer_list if op.layer_type != "relu" and not op.is_input
+        op for op in ablated._layer_list if op.layer_type != "relu" and not op.is_input
     ]
     assert all(not op.is_edited for op in non_intervened)
 
@@ -98,11 +98,11 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
     x = _input()
     baseline = tl.trace(model, x, backend="mlx")
     relu_baseline = np.asarray(
-        next(op for op in baseline.layer_list if op.layer_type == "relu").out
+        next(op for op in baseline._layer_list if op.layer_type == "relu").out
     )
 
     scaled = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), tl.scale(0.5)))
-    relu_scaled = np.asarray(next(op for op in scaled.layer_list if op.layer_type == "relu").out)
+    relu_scaled = np.asarray(next(op for op in scaled._layer_list if op.layer_type == "relu").out)
     assert np.allclose(relu_scaled, relu_baseline * 0.5, atol=1e-5)
     assert MLXBackend().validate_trace(scaled) is True
 
@@ -113,7 +113,7 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
         return out * -1.0
 
     negated = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), _negate))
-    relu_negated = np.asarray(next(op for op in negated.layer_list if op.layer_type == "relu").out)
+    relu_negated = np.asarray(next(op for op in negated._layer_list if op.layer_type == "relu").out)
     assert np.allclose(relu_negated, -relu_baseline, atol=1e-5)
     assert MLXBackend().validate_trace(negated) is True
 
@@ -124,9 +124,9 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     model = _TwoLayerMLP()
     trace = tl.trace(model, _input(), backend="mlx", halt=tl.func("relu"))
 
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert str(trace.stop_reason).startswith("relu")
-    labels = [op._label_raw for op in trace.layer_list]
+    labels = [op._label_raw for op in trace._layer_list]
     # Save-then-halt: the relu frontier is captured; the second linear is not.
     assert any(label.startswith("relu") for label in labels)
     assert sum(label.startswith("linear") for label in labels) == 1
@@ -264,7 +264,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     refuses trace(intervene=) typed — the table stays load-bearing on MLX."""
 
     spec = tl.backends.spec("mlx")
-    object.__setattr__(spec.capabilities, "interventions", False)
+    object.__setattr__(spec.capabilities, "can_intervene", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="interventions=False"):
             tl.trace(
@@ -274,7 +274,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
                 intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
             )
     finally:
-        object.__setattr__(spec.capabilities, "interventions", True)
+        object.__setattr__(spec.capabilities, "can_intervene", True)
 
 
 def test_mlx_in_module_intervention_site() -> None:
@@ -307,9 +307,9 @@ def test_mlx_in_module_intervention_site() -> None:
         backend="mlx",
         intervene=tl.when(tl.in_module("encoder") & tl.func("linear"), tl.zero_ablate()),
     )
-    encoder_op = next(op for op in trace.layer_list if op.layer_type == "linear")
+    encoder_op = next(op for op in trace._layer_list if op.layer_type == "linear")
     assert encoder_op.is_edited is True
     assert np.allclose(np.asarray(encoder_op.out), 0.0)
-    head_ops = [op for op in trace.layer_list if op.layer_type == "linear"]
+    head_ops = [op for op in trace._layer_list if op.layer_type == "linear"]
     assert not head_ops[-1].is_edited
     assert MLXBackend().validate_trace(trace) is True

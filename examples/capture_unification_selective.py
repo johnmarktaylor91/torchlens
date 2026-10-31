@@ -59,7 +59,7 @@ def main() -> None:
     x = torch.randn(1, 1, 4, 4)
 
     relu_trace = tl.trace(model, x, save=tl.func("relu"))
-    print("saved relu ops:", [op.label for op in relu_trace.layer_list if op.has_saved_activation])
+    print("saved relu ops:", [op.label for op in relu_trace.ops if op.has_saved_activation])
 
     windowed = tl.trace(
         model,
@@ -70,7 +70,7 @@ def main() -> None:
     )
     print(
         "windowed saves:",
-        [op.label for op in windowed.layer_list if op.has_saved_activation],
+        [op.label for op in windowed.ops if op.has_saved_activation],
     )
 
     patched = tl.trace(
@@ -79,12 +79,12 @@ def main() -> None:
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.scale(0.5)),
     )
-    print("intervened relu count:", sum(op.is_edited for op in patched.layer_list))
+    print("intervened relu count:", sum(op.is_edited for op in patched.ops))
 
     recording = tl.record(model, x, save=tl.func("conv2d"))
     print("recorded ops:", len(recording.records))
     full_structure = recording.to_trace()
-    print("to_trace layers:", len(full_structure.layer_list))
+    print("to_trace layers:", len(full_structure.ops))
 
     with tempfile.TemporaryDirectory(prefix="torchlens_selective_") as tmpdir:
         streamed = tl.trace(
@@ -93,9 +93,7 @@ def main() -> None:
             save=tl.in_module("encoder"),
             storage=tl.to_disk(Path(tmpdir) / "streamed.tlspec"),
         )
-        print(
-            "streamed saves:", [op.label for op in streamed.layer_list if op.has_saved_activation]
-        )
+        print("streamed saves:", [op.label for op in streamed.ops if op.has_saved_activation])
 
 
 if __name__ == "__main__":

@@ -1407,7 +1407,7 @@ def _iter_facet_records(log: Any) -> Iterator[Any]:
         yield from modules
     except TypeError:
         pass
-    yield from getattr(log, "layer_list", ())
+    yield from getattr(log, "_layer_list", ())
 
 
 def _facet_home_label(spec: Any) -> str:

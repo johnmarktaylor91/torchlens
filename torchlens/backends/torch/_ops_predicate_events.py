@@ -454,8 +454,8 @@ def _build_param_fields(
             continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
-        if addr is not None and addr in self.param_logs:
-            param_log = self.param_logs[addr]
+        if addr is not None and addr in self._param_logs:
+            param_log = self._param_logs[addr]
             if getattr(param_log, "_param_ref", None) is not param:
                 # Offload rebind rung (lane F37): accelerate offload hooks
                 # replace the prep-stamped meta parameter with a fresh

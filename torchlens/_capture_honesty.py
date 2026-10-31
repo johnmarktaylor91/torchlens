@@ -116,7 +116,7 @@ def capture_verification(log: Any) -> dict[str, Any]:
         "capture_status": str(status_value) if status_value is not None else "unknown",
         "capture_verified": getattr(log, "capture_verified", None),
         "capture_verification_reason": getattr(log, "capture_verification_reason", None),
-        "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
+        "rescue_rerun": bool(getattr(log, "_rescue_rerun", None) or False),
     }
 
 
@@ -346,8 +346,8 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
 
     replaced: list[str] = []
     fires = 0
-    for layer in getattr(log, "layer_list", None) or ():
-        records = getattr(layer, "interventions", None) or ()
+    for layer in getattr(log, "_layer_list", None) or ():
+        records = getattr(layer, "edits", None) or ()
         fires += len(records)
         if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)

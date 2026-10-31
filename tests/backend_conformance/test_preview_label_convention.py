@@ -23,7 +23,7 @@ pytestmark = pytest.mark.backend_parity
 def _assert_conditional_label(trace, label: str, *, context: str) -> None:
     """A label is bare iff its own layer is single-pass; checked for lineage."""
 
-    layer_num_calls = trace.layer_num_calls
+    layer_num_calls = trace._layer_num_calls
     if ":" in label:
         layer_label, _, pass_suffix = label.rpartition(":")
         assert pass_suffix.isdigit(), f"{label!r} ({context}) has a non-numeric suffix after ':'"
@@ -44,7 +44,7 @@ def _assert_conditional_label(trace, label: str, *, context: str) -> None:
 def _assert_torch_label_convention(trace) -> None:
     """Every parent/child/input/output reference follows the conditional rule."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for neighbor_label in (*op.parents, *op.children):
             _assert_conditional_label(
                 trace, neighbor_label, context=f"referenced from {op.label!r}"

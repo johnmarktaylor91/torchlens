@@ -93,7 +93,7 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
         for tensor in changed
         if not tensor.is_meta
     }
-    for layer in getattr(trace, "layer_list", ()) or ():
+    for layer in getattr(trace, "_layer_list", ()) or ():
         fields = dict(state_items(layer))
         for field_name in ("out", "transformed_out"):
             value = fields.get(field_name)

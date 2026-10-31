@@ -200,7 +200,7 @@ def test_mutated_numeric_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     model.scale = 2.0
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
     assert second.capture_cache_hit is False
-    assert torch.allclose(second.layer_list[-1].out, first.layer_list[-1].out * 2.0)
+    assert torch.allclose(second._layer_list[-1].out, first._layer_list[-1].out * 2.0)
 
 
 def test_attribute_fragments_are_bounded_and_address_free() -> None:

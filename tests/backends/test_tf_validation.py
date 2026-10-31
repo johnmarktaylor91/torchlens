@@ -187,7 +187,7 @@ def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> No
     assert trace.validation_replay_status.state == "passed"
     assert (
         getattr(trace, "_tf_validation_result").classes[
-            next(op._label_raw for op in trace.layer_list if op.func_name == "Identity")
+            next(op._label_raw for op in trace._layer_list if op.func_name == "Identity")
         ]
         == "annotation"
     )
@@ -245,7 +245,7 @@ def test_tf_validation_fails_on_unclassified_op_type() -> None:
         return x + tf.constant([1.0, 2.0])
 
     trace = tl.trace(chain, tf.constant([1.0, 2.0]), backend="tf")
-    add = next(op for op in trace.layer_list if op.func_name == "AddV2")
+    add = next(op for op in trace._layer_list if op.func_name == "AddV2")
     add.func_name = "DefinitelyUnknownTfOp"
 
     assert _validate(trace) is False
@@ -379,7 +379,7 @@ def test_tf_validation_depthwise_and_relu6_corruption_fails() -> None:
 
     for op_type in ("Pad", "DepthwiseConv2dNative", "Relu6"):
         trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
-        target = next(op for op in trace.layer_list if op.func_name == op_type)
+        target = next(op for op in trace._layer_list if op.func_name == op_type)
         target.out = target.out + 0.5
 
         assert _validate(trace) is False

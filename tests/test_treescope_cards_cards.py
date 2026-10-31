@@ -65,7 +65,7 @@ def test_trace_card_content_and_proof_row(recurrent_log) -> None:
 def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
     """A reused layer renders N pass rows via ops[k]; no pooled stats."""
 
-    html = recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    html = recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     assert "3 passes" in html
     for pass_index in (1, 2, 3):
         assert f"pass {pass_index}/3: relu_1_2:{pass_index}" in html
@@ -75,7 +75,7 @@ def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
 def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     """ONE code path: a single-pass layer renders the Op card."""
 
-    html = recurrent_log.layer_logs["linear_2_3"]._repr_html_()
+    html = recurrent_log._layer_logs["linear_2_3"]._repr_html_()
     assert "TorchLens Op" in html
     assert "card unavailable" not in html
 
@@ -192,7 +192,7 @@ def test_render_side_effect_free(recurrent_log) -> None:
     )
     recurrent_log._repr_html_()
     recurrent_log["relu_1_2:2"]._repr_html_()
-    recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     after = (
         recurrent_log.num_ops,
         tuple(recurrent_log.layer_labels),

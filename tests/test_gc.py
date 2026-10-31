@@ -183,7 +183,7 @@ class TestTraceGC:
         """After cleanup, all Param._param_ref should be None."""
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
-        param_logs = list(trace.param_logs)
+        param_logs = list(trace._param_logs)
         trace.cleanup()
         for pl in param_logs:
             assert pl._param_ref is None
@@ -197,13 +197,13 @@ class TestTraceGC:
         out = model(x)
         out.sum().backward()
         # Access grad metadata to cache it
-        for pl in trace.param_logs:
+        for pl in trace._param_logs:
             pl._check_param_grad()
         # Now release
         trace._release_param_refs()
         # Grad metadata should still be accessible
         has_any_grad = False
-        for pl in trace.param_logs:
+        for pl in trace._param_logs:
             assert pl._param_ref is None
             if pl._has_grad:
                 has_any_grad = True
@@ -863,7 +863,7 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
         assert exc_info.value.fields["remedy"], name
 
     # AttributeError lineage keeps hasattr/getattr-default degrade paths.
-    assert getattr(trace, "layer_list", None) is None
+    assert getattr(trace, "_layer_list", None) is None
     assert not hasattr(trace, "_tracing_finished")
 
     # The settled outcome is UNKNOWN (most restrictive), never None.

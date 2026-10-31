@@ -63,7 +63,7 @@ def _iter_layers(log: Any) -> list[Any]:
     """
 
     return list(
-        getattr(log, "layer_list", None) or getattr(log, "layer_dict_main_keys", {}).values()
+        getattr(log, "_layer_list", None) or getattr(log, "_layer_dict_main_keys", {}).values()
     )
 
 

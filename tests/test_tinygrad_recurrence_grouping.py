@@ -59,7 +59,7 @@ def _grouped_ops(trace: Any, func_name: str) -> list[Any]:
         Multi-pass ops with that function name, in pass order.
     """
 
-    return [op for op in trace.layer_list if op.func_name == func_name and op.num_passes > 1]
+    return [op for op in trace._layer_list if op.func_name == func_name and op.num_passes > 1]
 
 
 def test_tinygrad_repeated_block_groups_into_passes() -> None:
@@ -79,7 +79,7 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     assert [op.pass_index for op in where_ops] == [1, 2]
     assert {op.layer_label for op in where_ops} == {where_ops[0].layer_label}
     assert list(where_ops[0].recurrent_ops) == [op.label for op in where_ops]
-    assert trace.layer_num_calls[where_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[where_ops[0].layer_label] == 2
     assert TinygradBackend().validate_trace(trace) is True
 
 
@@ -93,7 +93,7 @@ def test_tinygrad_grouping_relabel_keeps_lookups_coherent() -> None:
     assert trace[pass2._label_raw] is pass2
     assert trace[pass2.label] is pass2
     assert pass2.label == f"{pass2.layer_label}:2"
-    addresses = [op.backend_address for op in trace.layer_list]
+    addresses = [op.backend_address for op in trace._layer_list]
     assert len(addresses) == len(set(addresses)), "backend addresses collided"
 
 
@@ -108,7 +108,7 @@ def test_tinygrad_recurrence_detection_off_preserves_single_pass_layout() -> Non
     )
 
     assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert all(op.num_passes == 1 for op in trace._layer_list)
     assert TinygradBackend().validate_trace(trace) is True
 
 

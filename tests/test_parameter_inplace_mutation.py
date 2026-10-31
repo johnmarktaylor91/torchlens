@@ -456,8 +456,8 @@ def test_keyword_receiver_is_captured_like_a_positional_one() -> None:
         assert torch.equal(value, eager_state[key]), key
 
     positional = tl.trace(_KeywordReceiver("positional"), x)
-    assert [layer.layer_type for layer in trace.layer_list] == [
-        layer.layer_type for layer in positional.layer_list
+    assert [layer.layer_type for layer in trace._layer_list] == [
+        layer.layer_type for layer in positional._layer_list
     ]
     assert tl.validate(copy.deepcopy(keyword_model), x, scope="forward") is True
 
@@ -531,7 +531,7 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
     """Lazy init writes stay out of the graph; an initialized Parameter's write is logged."""
 
     trace = tl.trace(_LazyThenMutate(), torch.randn(3, 4))
-    assert sorted(layer.layer_type for layer in trace.layer_list) == [
+    assert sorted(layer.layer_type for layer in trace._layer_list) == [
         "clamp",
         "input",
         "linear",
@@ -571,11 +571,11 @@ def test_materialized_lazy_parameter_mutation_is_captured() -> None:
     # grouping rule row 27: one weighted module called from two lines is one
     # layer with 2 passes, so the two linear calls are the two passes (ops) of
     # one layer; address every op per pass.
-    mutations = [op for op in trace.layer_list if op.type == "mul"]
-    assert len(mutations) == 1, [op.label for op in trace.layer_list]
+    mutations = [op for op in trace._layer_list if op.type == "mul"]
+    assert len(mutations) == 1, [op.label for op in trace._layer_list]
     mutation = mutations[0]
     assert [p.address for p in mutation.params] == ["lazy.weight"]
-    linears = [op for op in trace.layer_list if op.type == "linear"]
+    linears = [op for op in trace._layer_list if op.type == "linear"]
     assert len(linears) == 2
     assert len({op.layer_label for op in linears}) == 1
     assert mutation.label in _parent_labels(trace, linears[1])

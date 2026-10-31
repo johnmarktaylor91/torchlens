@@ -359,7 +359,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
         )
 
-    ops = list(getattr(trace, "layer_list", ()))
+    ops = list(getattr(trace, "_layer_list", ()))
 
     # Deephunt F1: a user intervention REPLACED at least one op's value during this
     # capture, so the archived provenance (activations, downstream taken path) reflects
@@ -840,7 +840,7 @@ def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
         Cooked trace whose runnable projection is being built.
     """
 
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         for field_name in (
             "non_tensor_pos_args",
             "non_tensor_kwargs",
@@ -1355,7 +1355,7 @@ def _build_parameter_slot_drafts(trace: Any) -> dict[str, _SlotDraft]:
     """Build value-free parameter slots from cooked Param metadata."""
 
     drafts: dict[str, _SlotDraft] = {}
-    param_logs = getattr(trace, "param_logs", {})
+    param_logs = getattr(trace, "_param_logs", {})
     values = getattr(param_logs, "values", lambda: ())()
     for param in values:
         device_type, device_index = _device_parts(getattr(param, "device_ref", None))
@@ -1467,7 +1467,7 @@ def _add_persistent_buffer_slot_drafts(
             snapshot = trace._runnable.embedded_state
         if isinstance(snapshot, Mapping):
             parameter_names = set()
-            param_logs = getattr(trace, "param_logs", None)
+            param_logs = getattr(trace, "_param_logs", None)
             for param_log in tuple(param_logs) if param_logs is not None else ():
                 address = getattr(param_log, "address", None)
                 if address is not None:
@@ -2370,7 +2370,7 @@ def _op_alias_index(trace: Any, ops: Sequence[Any]) -> dict[str, Any]:
 def _resolve_op(trace: Any, label: str) -> Any | None:
     """Resolve one cooked op label through the Trace lookup tables."""
 
-    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    layer_dict = getattr(trace, "_layer_dict_all_keys", {}) or {}
     if label in layer_dict:
         return layer_dict[label]
     try:
@@ -2453,7 +2453,7 @@ def _input_binding_for_op(
             )
         )
         return None
-    input_ops = [item for item in getattr(trace, "layer_list", ()) if item.is_input]
+    input_ops = [item for item in getattr(trace, "_layer_list", ()) if item.is_input]
     input_index = next((index for index, item in enumerate(input_ops) if item is op), 0)
     return InputSlotBinding(
         io_role="model_input",
@@ -2793,10 +2793,10 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     non-intervened capture records no such op and is unchanged.
     """
 
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if not getattr(op, "is_edited", False):
             continue
-        for record in getattr(op, "interventions", ()) or ():
+        for record in getattr(op, "edits", ()) or ():
             direction = getattr(record, "direction", None)
             if bool(getattr(record, "replaced", False)) and direction == "forward":
                 return True

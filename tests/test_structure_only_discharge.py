@@ -97,7 +97,7 @@ def test_positional_join_covers_repeated_ops_and_recurrent_passes() -> None:
     assert discharge.verdict is StructureClaimStatus.CORROBORATED
     # The join compared every layer positionally, including both passes of
     # the shared module and both identical linears.
-    assert len({c.site for c in discharge.claims}) == len(structure.layer_list)
+    assert len({c.site for c in discharge.claims}) == len(structure._layer_list)
 
 
 def test_refute_on_planted_shape_divergence() -> None:
@@ -171,7 +171,7 @@ def test_never_promote_g4_and_refuted_flips_accessors_g5() -> None:
     structure = _structure(model, torch.randn(2, 4))
     # G4: born hypothesis; ordinary reads never promote.
     assert claim_status_for(structure) is StructureClaimStatus.HYPOTHESIS
-    _ = structure.layer_list
+    _ = structure._layer_list
     _ = structure["relu_1_2"].shape
     assert claim_status_for(structure) is StructureClaimStatus.HYPOTHESIS
     # Hypothesis rows pass the chokepoint pre-discharge.

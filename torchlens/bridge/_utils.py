@@ -194,7 +194,7 @@ def _pass_output_owner(log: Any, modules: dict[str, nn.Module], site: str) -> st
     """
 
     owners: set[str] = set()
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         calls = getattr(layer, "output_of_module_calls", ()) or ()
         if not any(_module_call_label(call) == site for call in calls):
             continue
@@ -334,7 +334,7 @@ def _module_num_calls(log: Any, address: str) -> int:
         return int(num_calls)
     # Duck-typed logs without a module record: count the distinct calls instead.
     seen: set[Any] = set()
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         for call in getattr(layer, "output_of_module_calls", ()) or ():
             if _module_call_address(call) == address:
                 seen.add(call if isinstance(call, tuple) else str(call))
@@ -389,7 +389,7 @@ def first_input_tensor(log: Any) -> torch.Tensor:
         If no tensor input out is present.
     """
 
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         out = getattr(layer, "out", None)
         if getattr(layer, "is_input", False) and isinstance(out, torch.Tensor):
             return out
@@ -484,7 +484,7 @@ def _default_tensor_layer_sweep(
 
     selected: list[Any] = []
     skipped: OrderedDict[str, str] = OrderedDict()
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         if getattr(layer, "is_input", False):
             continue
         if not bool(getattr(layer, "has_saved_activation", False)):

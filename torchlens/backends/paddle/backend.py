@@ -475,7 +475,7 @@ class PaddleBackend:
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -562,29 +562,29 @@ class PaddleBackend:
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
-                trace.halted = True
+                trace.is_stopped = True
                 trace.stop_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
-                trace.raw_output = None
+                trace.transformed_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()
             if halt_signal is None:
-                trace.raw_output = output_transform(output) if callable(output_transform) else None
+                trace.transformed_output = (
+                    output_transform(output) if callable(output_transform) else None
+                )
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace._param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
+                trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
+                    param.num_params for param in trace._param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
                 trace.param_source = "native-module"
             else:
-                trace.param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
+                trace._param_logs = ParamAccessor({})
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
@@ -2005,7 +2005,7 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
         return True
     if not bool(getattr(op, "is_edited", False)):
         return False
-    for record in getattr(op, "interventions", ()) or ():
+    for record in getattr(op, "edits", ()) or ():
         if not bool(getattr(record, "replaced", False)):
             continue
         record_call_id = getattr(record, "func_call_id", None)
@@ -2538,7 +2538,7 @@ def _paddle_trace_intermediate_signatures(
     # would collide across passes and ``op.parents`` never uses it anyway).
     # An unresolvable parent keeps its literal label and simply never matches.
     final_to_raw: dict[str, str] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         raw_label = getattr(op, "_label_raw", None)
         if not isinstance(raw_label, str):
             continue
@@ -2548,7 +2548,7 @@ def _paddle_trace_intermediate_signatures(
         layer_label = getattr(op, "layer_label", None)
         if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
             final_to_raw[layer_label] = raw_label
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)
         ):

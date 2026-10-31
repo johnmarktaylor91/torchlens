@@ -82,7 +82,7 @@ def _require_input_role(trace: Trace, input_op: Op | None) -> str | None:
 
     model_inputs = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "is_input", False)) and getattr(op, "io_role", None) is not None
     ]
 
@@ -148,10 +148,10 @@ def _entity_outputs(
     """
 
     if level == "op":
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             yield op.label, "op", 0, op.label
     elif level == "layer":
-        for layer in trace.layer_logs.values():
+        for layer in trace._layer_logs.values():
             for output_index, output_op in enumerate(layer.op_labels):
                 yield layer.layer_label, "layer", output_index, output_op
     elif level == "call":

@@ -193,7 +193,7 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         buffer_initial_values=dict(getattr(trace, "_buffer_initial_values", {}) or {}),
         op_equivalence_classes=trace.op_equivalence_classes,
         source_model_ref=getattr(trace, "_source_model_ref", None),
-        param_logs=trace.param_logs,
+        param_logs=trace._param_logs,
         owning_trace=trace,
         op_row_store=core.ops,
         trace_core=core,
@@ -365,7 +365,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
             input_io_roles.get(event.label_raw),
             output_versions.get(event.label_raw, {}),
             op_events_by_label,
-            inputs.param_logs,
+            inputs._param_logs,
             registered_buffer_names,
         )
         start = time.perf_counter()

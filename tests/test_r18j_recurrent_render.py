@@ -321,7 +321,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     assert relu_keys == ["relu_1_1:1", "relu_1_1:2", "relu_1_1:3"]
     assert [preview[k].ctx.pass_index for k in relu_keys] == [0, 1, 2]
     # The event_index==3 predicate keeps ONLY the second recurrent call.
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     callback = _make_node_spec_fn(
         preview,
         color_kept="green",
@@ -350,7 +350,7 @@ def test_h9_intervention_colors_only_intervened_pass():
     )
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     fake = SimpleNamespace(
         _intervention_spec=SimpleNamespace(
             targets=("pass2",), target_value_specs=(), hook_specs=()
@@ -369,7 +369,7 @@ def test_h9_intervention_colors_only_intervened_pass():
         assert colors[0] is None and colors[2] is None
         # A rolled aggregate Layer node still colors (any pass is a site) and never
         # leaks the multi-pass tripwire.
-        aggregate = log.layer_logs["relu_1_1"]
+        aggregate = log._layer_logs["relu_1_1"]
         assert callback(aggregate, NodeSpec(lines=["relu_1_1"])).color is not None
         # Public helper contract is UNCHANGED: aggregate layer_labels only.
         site_labels, _ = intervention_site_and_cone_labels(fake, show_cone=False)

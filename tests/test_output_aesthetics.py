@@ -352,7 +352,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         )
     # Find a single-pass layer to demonstrate no-pass lookup
     for lbl in log.layer_labels:
-        if lbl in log.layer_dict_all_keys:
+        if lbl in log._layer_dict_all_keys:
             out.write(_capture(f'repr(log["{lbl}"]) — by label no pass', repr(log[lbl])))
             break
 
@@ -369,11 +369,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     # Substring match
     if len(log.layer_labels) > 2:
         # Find a layer type that matches exactly one key in the lookup dict
-        for entry in log.layer_list:
+        for entry in log._layer_list:
             candidate = entry.layer_type
             if candidate in ("input",):
                 continue  # too generic
-            all_key_matches = [k for k in log.layer_dict_all_keys if candidate in str(k)]
+            all_key_matches = [k for k in log._layer_dict_all_keys if candidate in str(k)]
             if len(all_key_matches) == 1:
                 out.write(
                     _capture(f'repr(log["{candidate}"]) — substring match', repr(log[candidate]))
@@ -381,9 +381,9 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 break
 
     # ===== D.1 Layer =====
-    if log.graph.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log._layer_logs) > 0:
         out.write(_section("D.1 Layer (multi-pass)", level=3))
-        for ll in log.layer_logs.values():
+        for ll in log._layer_logs.values():
             if ll.num_passes > 1:
                 out.write(
                     _capture(
@@ -400,7 +400,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture_error('log["nonexistent"] — invalid layer name', lambda: log["nonexistent"]))
 
     # Multi-pass layer without pass specifier
-    for label, num_p in log.layer_num_calls.items():
+    for label, num_p in log._layer_num_calls.items():
         if num_p > 1:
             out.write(
                 _capture_error(
@@ -437,7 +437,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     # F.2 Op — pick a layer with params if possible
     out.write(_section("F.2 Op field dump", level=3))
     tensor_for_dump = None
-    for entry in log.layer_list:
+    for entry in log._layer_list:
         if entry.has_params:
             tensor_for_dump = entry
             break
@@ -447,15 +447,15 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(tensor_for_dump, f"Op: {tensor_for_dump.layer_label}"))
 
     # F.3 Layer (multi-pass)
-    if log.graph.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log._layer_logs) > 0:
         out.write(_section("F.3 Layer field dump (multi-pass)", level=3))
         ll_for_dump = None
-        for ll in log.layer_logs.values():
+        for ll in log._layer_logs.values():
             if ll.num_passes > 1:
                 ll_for_dump = ll
                 break
         if ll_for_dump is None:
-            ll_for_dump = next(iter(log.layer_logs.values()))
+            ll_for_dump = next(iter(log._layer_logs.values()))
         out.write(_code(f"Layer: {ll_for_dump.layer_label}"))
         out.write(_field_dump(ll_for_dump, f"Layer: {ll_for_dump.layer_label}"))
 
@@ -508,7 +508,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             )
 
             # Show grad fields on a Op that has saved grad
-            for entry in grad_log.layer_list:
+            for entry in grad_log._layer_list:
                 if entry.has_grad:
                     out.write(
                         _section(
@@ -525,7 +525,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     break
 
             # Show a Op WITHOUT grad for contrast
-            for entry in grad_log.layer_list:
+            for entry in grad_log._layer_list:
                 if not entry.has_grad:
                     out.write(
                         _section(
@@ -1073,8 +1073,8 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
         # D.1 Layer (multi-pass)
-        if log.graph.is_recurrent and len(log.layer_logs) > 0:
-            for ll in log.layer_logs.values():
+        if log.graph.is_recurrent and len(log._layer_logs) > 0:
+            for ll in log._layer_logs.values():
                 if ll.num_passes > 1:
                     doc.write(
                         _verbatim_box(
@@ -1109,7 +1109,7 @@ def _build_latex_report() -> str:
             log["nonexistent"]
         except Exception as e:
             error_text += f'log["nonexistent"]:\n{type(e).__name__}: {e}\n\n'
-        for label, num_p in log.layer_num_calls.items():
+        for label, num_p in log._layer_num_calls.items():
             if num_p > 1:
                 try:
                     log[label]
@@ -1134,9 +1134,9 @@ def _build_latex_report() -> str:
             if field in {
                 "source_trace",
                 "func_rng_states",
-                "layer_list",
-                "layer_dict_main_keys",
-                "layer_dict_all_keys",
+                "_layer_list",
+                "_layer_dict_main_keys",
+                "_layer_dict_all_keys",
             }:
                 continue
             model_fields += f"{field}: {attr}\n"
@@ -1144,7 +1144,7 @@ def _build_latex_report() -> str:
 
         # Op field dump — pick a layer with params
         tensor_for_dump = None
-        for entry in log.layer_list:
+        for entry in log._layer_list:
             if entry.has_params:
                 tensor_for_dump = entry
                 break

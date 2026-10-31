@@ -1513,7 +1513,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
         {str(parent) for parent in getattr(paired, "parents", ()) or ()} if pass_level else set()
     )
     aliases: list[Any] = []
-    for layer in getattr(trace, "layer_list", ()):
+    for layer in getattr(trace, "_layer_list", ()):
         if getattr(layer, "layer_label", None) == paired_label:
             continue
         if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:

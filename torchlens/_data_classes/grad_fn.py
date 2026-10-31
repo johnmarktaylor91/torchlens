@@ -268,8 +268,8 @@ def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | N
 
     if op_label is None:
         return None
-    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
-    layer = getattr(trace, "layer_logs", {}).get(op_label)
+    entry = getattr(trace, "_layer_dict_all_keys", {}).get(op_label)
+    layer = getattr(trace, "_layer_logs", {}).get(op_label)
     if layer is None or grad_fn_object_id is None:
         return entry
     pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)

@@ -94,7 +94,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
         halt=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert _leaked(trace) == []
 
 
@@ -162,7 +162,7 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     )
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.style == "hf_text"
-    assert trace.decoded_output is not None
+    assert trace._decoded_output is not None
     assert _leaked(trace) == []
 
 

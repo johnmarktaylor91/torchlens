@@ -33,7 +33,7 @@ def _real_retained_bytes(log: object) -> int:
 
     seen: set[tuple[int, int]] = set()
     total = 0
-    for op in log.layer_list:  # type: ignore[attr-defined]  # every row (sumfam F1)
+    for op in log._layer_list:  # type: ignore[attr-defined]  # every row (sumfam F1)
         for payload in (op.out, getattr(op, "transformed_out", None)):
             if not isinstance(payload, torch.Tensor):
                 continue

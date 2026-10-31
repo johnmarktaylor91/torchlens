@@ -1323,7 +1323,7 @@ def test_validate_forward_pass_nonreentrant_checkpoint_validates_true() -> None:
         _state._completeness_witness_mode = mode
         try:
             trace = tl.trace(CheckpointedBlock(), x)
-            names = [getattr(layer, "func_name", None) for layer in trace.layer_list]
+            names = [getattr(layer, "func_name", None) for layer in trace._layer_list]
             trace.cleanup()
             return names
         finally:
@@ -2126,7 +2126,7 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
         trace._validation_captured_dispatchable_op_count = len(
             {
                 getattr(op, "func_call_id")
-                for op in trace.layer_list
+                for op in trace._layer_list
                 if isinstance(getattr(op, "func_call_id", None), int)
             }
         )
@@ -2889,7 +2889,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
     x = torch.tensor([-1.0, 2.0])
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
     try:
-        relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
+        relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
         relu_op.func = None
         relu_op.func_name = "input"
         relu_op.is_internal_source = True
@@ -2939,7 +2939,7 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
         inputs,
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
-    third_pass = next(op for op in trace.layer_list if op.label == "linear_1_1:3")
+    third_pass = next(op for op in trace._layer_list if op.label == "linear_1_1:3")
     assert third_pass.saved_args is not None
     third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
 
@@ -2997,8 +2997,8 @@ def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() ->
         inputs,
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
-    third_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:3")
-    first_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:1")
+    third_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:3")
+    first_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:1")
     assert third_pass.saved_args is not None
     third_pass.saved_args.append(first_pass.out.detach().clone())
     third_pass.parents = tuple(third_pass.parents) + (first_pass.label,)
@@ -3285,7 +3285,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
     healthy_trace = trace_fn(
         CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True)
     )
-    healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
+    healthy_copy = next(op for op in healthy_trace._layer_list if op.func_name == "copy_")
 
     assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
     assert (
@@ -3297,7 +3297,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
     )
 
     broken_trace = trace_fn(CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True))
-    broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
+    broken_copy = next(op for op in broken_trace._layer_list if op.func_name == "copy_")
     saved_output = broken_copy.out.detach().clone()
 
     def ignore_source(destination: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
@@ -3803,7 +3803,7 @@ def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
         The unique matching layer.
     """
 
-    matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matches = [layer for layer in trace._layer_list if layer.func_name == func_name]
     assert len(matches) == 1
     return matches[0]
 
@@ -5622,7 +5622,7 @@ def test_region_replay_annotation_on_plain_capture_fails_invariants() -> None:
 
     log = _make_clean_log()
     try:
-        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        op = next(layer for layer in log._layer_list if not layer.is_input and not layer.is_output)
         op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
 
         with pytest.raises(MetadataInvariantError, match="region_replay_provenance"):
@@ -5636,7 +5636,7 @@ def test_region_replay_annotation_with_importer_provenance_passes_tripwire() -> 
 
     log = _make_clean_log()
     try:
-        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        op = next(layer for layer in log._layer_list if not layer.is_input and not layer.is_output)
         log.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
         op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
         op.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
@@ -5654,7 +5654,7 @@ def test_backend_identity_invariants_reject_torch_param_source_none_with_params(
         assert log.backend == "torch"
         assert log.module_identity_mode == "torch_module"
         assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert len(log.params) > 0
 
         log.param_source = "none"
 
@@ -5674,7 +5674,7 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
         assert log.backend == "torch"
         assert log.module_identity_mode == "torch_module"
         assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert len(log.params) > 0
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -5685,7 +5685,7 @@ def test_backend_neutral_accessor_refs_reject_invalid_torch_status() -> None:
 
     log = _make_clean_log()
     try:
-        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        victim = next(layer for layer in log._layer_list if not layer.is_input)
         assert victim.resolver_status == "resolved"
 
         victim.resolver_status = "bogus"
@@ -5701,7 +5701,7 @@ def test_backend_neutral_accessor_refs_reject_malformed_torch_dtype_ref() -> Non
 
     log = _make_clean_log()
     try:
-        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        victim = next(layer for layer in log._layer_list if not layer.is_input)
         assert victim.dtype_ref is not None
 
         victim.dtype_ref = SimpleNamespace(backend="torch", name="")
@@ -5718,9 +5718,9 @@ def test_backend_neutral_accessor_refs_pass_healthy_torch_trace() -> None:
     log = _make_clean_log()
     try:
         records = [
-            *log.layer_list,
-            *list(log.layer_logs.values()),
-            *list(log.param_logs.values()),
+            *log._layer_list,
+            *list(log._layer_logs.values()),
+            *list(log._param_logs.values()),
         ]
         assert any(getattr(record, "resolver_status", None) == "resolved" for record in records)
         assert any(getattr(record, "dtype_ref", None) is not None for record in records)
@@ -5752,7 +5752,7 @@ def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_pass == 2
 
@@ -5770,7 +5770,7 @@ def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_source is not None
 
@@ -5788,7 +5788,7 @@ def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_source is not None
         assert write_version.saved_args
@@ -5823,7 +5823,7 @@ def test_edge_use_invariant_rejects_invalid_existing_record_kind() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log.layer_list if layer._edge_uses)
+        layer = next(layer for layer in log._layer_list if layer._edge_uses)
         layer._edge_uses = (replace(layer._edge_uses[0], edge_use="bogus"),) + tuple(
             layer._edge_uses[1:]
         )
@@ -5839,7 +5839,7 @@ def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log.layer_list if layer.parent_arg_positions["args"])
+        layer = next(layer for layer in log._layer_list if layer.parent_arg_positions["args"])
         first_position = next(iter(layer.parent_arg_positions["args"]))
         layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
 
@@ -5854,10 +5854,10 @@ def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        edge_use_layers = [layer for layer in log.layer_list if layer._edge_uses]
+        edge_use_layers = [layer for layer in log._layer_list if layer._edge_uses]
         parent_arg_layers = [
             layer
-            for layer in log.layer_list
+            for layer in log._layer_list
             if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
         ]
         assert edge_use_layers
@@ -5873,7 +5873,7 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.parents
         assert not write_version._edge_uses
@@ -5892,7 +5892,7 @@ def test_stale_internal_source_label_is_relogged_not_reused() -> None:
 
     log = trace_fn(model, torch.zeros(2, 2))
     try:
-        raw_labels = {entry._label_raw for entry in log.layer_list}
+        raw_labels = {entry._label_raw for entry in log._layer_list}
         assert "internalsource_1_2_raw" not in raw_labels
         assert get_tensor_label(model.constant) != "internalsource_1_2_raw"
         assert check_metadata_invariants(log) is True
@@ -5925,7 +5925,7 @@ def test_param_deep_xref_rejects_missing_op_back_reference() -> None:
 
     log = _make_clean_log()
     try:
-        param = next(param for param in log.param_logs if param.used_by_ops)
+        param = next(param for param in log._param_logs if param.used_by_ops)
         op = log[param.used_by_ops[0]]
         assert any(candidate.address == param.address for candidate in op._param_logs)
 
@@ -5944,7 +5944,7 @@ def test_param_xref_rejects_nonexistent_parameter_address() -> None:
 
     log = _make_clean_log()
     try:
-        param = next(param for param in log.param_logs if param.used_by_ops)
+        param = next(param for param in log._param_logs if param.used_by_ops)
         param.address = "nonexistent.module.weight"
 
         with pytest.raises(MetadataInvariantError, match="param_xrefs"):
@@ -5958,7 +5958,7 @@ def test_param_deep_xref_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        used_params = [param for param in log.param_logs if len(param.used_by_ops) > 0]
+        used_params = [param for param in log._param_logs if len(param.used_by_ops) > 0]
         assert used_params
         assert any(param.used_by_layers for param in used_params)
         assert log.layers_with_params
@@ -5972,7 +5972,7 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
 
     log = _make_recurrent_log()
     try:
-        recurrent_param = next(param for param in log.param_logs if len(param.used_by_ops) > 1)
+        recurrent_param = next(param for param in log._param_logs if len(param.used_by_ops) > 1)
         assert len(recurrent_param.used_by_ops) == len(recurrent_param.used_by_ops)
         assert len(recurrent_param.used_by_layers) == 1
         assert check_metadata_invariants(log) is True
@@ -5990,7 +5990,7 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
+        victim = next(layer for layer in log._layer_list if layer.transformed_out is not None)
         assert victim.transformed_out_shape == ()
 
         victim.transformed_out_shape = (999,)
@@ -6006,7 +6006,7 @@ def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> Non
 
     log = trace_fn(_SimpleFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        victim = next(layer for layer in log.layer_list if layer.has_saved_activation)
+        victim = next(layer for layer in log._layer_list if layer.has_saved_activation)
         assert victim.out is not None
 
         victim.activation_memory = 999
@@ -6027,8 +6027,8 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert any(layer.out is not None for layer in log.layer_list)
-        assert any(layer.transformed_out is not None for layer in log.layer_list)
+        assert any(layer.out is not None for layer in log._layer_list)
+        assert any(layer.transformed_out is not None for layer in log._layer_list)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -6047,7 +6047,7 @@ def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert any(not layer.has_saved_activation for layer in log.layer_list)
+        assert any(not layer.has_saved_activation for layer in log._layer_list)
         assert log.validate_forward_pass([x], validate_metadata=True) is True
     finally:
         log.cleanup()
@@ -6059,7 +6059,7 @@ def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
     log = _make_clean_log()
     try:
         victim = next(
-            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+            layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         victim.grad = None
         victim.transformed_grad = None
@@ -6079,7 +6079,7 @@ def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
     log = _make_clean_log()
     try:
         victim = next(
-            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+            layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         assert victim.func_call_id is not None
 
@@ -6096,7 +6096,7 @@ def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None
 
     log = _make_func_call_split_log()
     try:
-        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
         assert len({layer.func_call_id for layer in split_layers}) == 1
 
@@ -6113,7 +6113,7 @@ def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
 
     log = _make_func_call_split_log()
     try:
-        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
         assert len({layer.func_call_id for layer in split_layers}) == 1
         assert all(layer.container_path for layer in split_layers)
@@ -6133,7 +6133,7 @@ def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
     log = recording.to_trace()
     try:
         compute_layers = [
-            layer for layer in log.layer_list if not (layer.is_input or layer.is_output)
+            layer for layer in log._layer_list if not (layer.is_input or layer.is_output)
         ]
         assert compute_layers
         assert any(layer.func_call_id is not None for layer in compute_layers)
@@ -6164,7 +6164,7 @@ def test_backward_invariants_with_intervening() -> None:
     """Backward metadata invariants allow intervening grad_fns."""
 
     log = _make_backward_log()
-    assert any(not grad_fn_handle.has_op for grad_fn_handle in log.grad_fn_logs.values())
+    assert any(not grad_fn_handle.has_op for grad_fn_handle in log._grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
@@ -6174,9 +6174,9 @@ def test_grad_fn_topology_rejects_missing_reverse_child_link() -> None:
 
     log = _make_backward_log()
     try:
-        parent = next(grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.children)
+        parent = next(grad_fn for grad_fn in log._grad_fn_logs.values() if grad_fn.children)
         child = next(
-            grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.label == parent.children[0]
+            grad_fn for grad_fn in log._grad_fn_logs.values() if grad_fn.label == parent.children[0]
         )
         child.parents = [label for label in child.parents if label != parent.label]
 
@@ -6191,7 +6191,7 @@ def test_backward_pass_domain_rejects_invalid_status() -> None:
 
     log = _make_backward_log()
     try:
-        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass = next(iter(log._backward_pass_logs.values()))
         backward_pass.status = "finished"
 
         with pytest.raises(MetadataInvariantError, match="invalid status"):
@@ -6205,7 +6205,7 @@ def test_backward_pass_domain_rejects_root_mismatch() -> None:
 
     log = _make_backward_log()
     try:
-        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass = next(iter(log._backward_pass_logs.values()))
         backward_pass.root_grad_fn_ids = []
 
         with pytest.raises(MetadataInvariantError, match="root_grad_fn_ids do not match"):
@@ -6220,11 +6220,11 @@ def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
     log = _make_backward_log()
     try:
         assert log.has_backward_pass
-        assert log.grad_fn_logs
-        assert log.backward_pass_logs
+        assert log._grad_fn_logs
+        assert log._backward_pass_logs
         assert any(
             grad_fn.children or grad_fn.parents or grad_fn.next_grad_fn_ids
-            for grad_fn in log.grad_fn_logs.values()
+            for grad_fn in log._grad_fn_logs.values()
         )
         assert check_metadata_invariants(log) is True
     finally:
@@ -6249,7 +6249,7 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
             layer.grad_fn_object_id is not None
             and layer.grad_fn is None
             and layer.step_index > last_trigger_position
-            for layer in log.layer_list
+            for layer in log._layer_list
         )
 
         assert check_metadata_invariants(log) is True
@@ -6295,7 +6295,7 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         )
         try:
             log.log_backward(log.output_ops[0].out.sum())
-            dead = next(layer for layer in log.layer_list if layer.label.startswith("mean"))
+            dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
             assert dead.grad_fn_object_id is not None
             assert dead.grad_fn is None
             assert check_metadata_invariants(log) is True
@@ -6330,7 +6330,7 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     )
     try:
         log.log_backward(log.output_ops[0].out.sum())
-        victim = next(layer for layer in log.layer_list if layer.label.startswith("linear"))
+        victim = next(layer for layer in log._layer_list if layer.label.startswith("linear"))
         assert victim.grad_fn is not None
         victim.grad_fn = None
 
@@ -6347,7 +6347,7 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
     try:
         victim = next(
             layer
-            for layer in log.layer_list
+            for layer in log._layer_list
             if layer.grad_fn_object_id is not None and layer.grad_fn is not None
         )
         victim.grad_fn = None
@@ -6382,7 +6382,7 @@ def test_bad_layer_grad_fn_backpointer_raises() -> None:
     """A mismatched layer-to-grad_fn_handle backpointer raises an invariant error."""
 
     log = _make_backward_log()
-    for grad_fn_handle in log.grad_fn_logs.values():
+    for grad_fn_handle in log._grad_fn_logs.values():
         if grad_fn_handle.has_op:
             grad_fn_handle.op_label = "missing_layer_1"
             break
@@ -6435,7 +6435,7 @@ def test_ordinary_backward_handle_rejects_invalid_origin_pass() -> None:
     try:
         victim = next(
             grad_fn_handle
-            for grad_fn_handle in log.grad_fn_logs.values()
+            for grad_fn_handle in log._grad_fn_logs.values()
             if grad_fn_handle.creator_object_id is None
         )
         victim.origin_backward_pass = 999
@@ -6450,10 +6450,10 @@ def test_corruption_parent_child_link():
     """Breaking a parent→child link raises MetadataInvariantError."""
     log = _make_clean_log()
     # Find a layer with children and corrupt
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.children:
             child_label = lpl.children[0]
-            child = log.layer_dict_all_keys[child_label]
+            child = log._layer_dict_all_keys[child_label]
             # Remove the parent from the child's parents
             child.parents = [p for p in child.parents if p != lpl.layer_label]
             break
@@ -6478,7 +6478,7 @@ def test_corruption_module_back_reference():
     """Removing a layer from its module's layers raises MetadataInvariantError."""
     log = _make_clean_log()
     # Find a layer with a containing module and corrupt the Module
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         cmo = lpl.module
         if cmo:
             # module may include pass (e.g. 'fc:1'), strip it
@@ -6577,7 +6577,7 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
 
     log = _relabel_as_mlx_object_module(_make_clean_log())
     try:
-        victim = next(layer for layer in log.layer_list if layer.module)
+        victim = next(layer for layer in log._layer_list if layer.module)
         victim.module = None
         victim.modules = []
         victim.module_call_stack = []
@@ -6624,8 +6624,8 @@ def test_corruption_layer_num_calls():
     """Wrong layer_num_calls raises MetadataInvariantError."""
     log = _make_clean_log()
     # Corrupt one entry
-    first_key = list(log.layer_num_calls.keys())[0]
-    log.layer_num_calls[first_key] = 999
+    first_key = list(log._layer_num_calls.keys())[0]
+    log._layer_num_calls[first_key] = 999
     with pytest.raises(MetadataInvariantError, match="recurrence_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6772,7 +6772,7 @@ def test_corruption_graph_ordering_duplicate_rt_num():
     """Duplicate raw_index triggers graph_ordering error."""
     log = _make_clean_log()
     # Set two layers to the same raw_index
-    log.layer_list[0].raw_index = log.layer_list[1].raw_index
+    log._layer_list[0].raw_index = log._layer_list[1].raw_index
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6782,7 +6782,7 @@ def test_corruption_graph_ordering_topo_violation():
     """Parent with higher raw_index than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.parents:
             parent = log[lpl.parents[0]]
             # Give parent a higher rt num than child
@@ -6805,8 +6805,8 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        linear_passes = [op for op in log.layer_list if op.func_name == "linear"]
-        tanh_passes = [op for op in log.layer_list if op.func_name == "tanh"]
+        linear_passes = [op for op in log._layer_list if op.func_name == "linear"]
+        tanh_passes = [op for op in log._layer_list if op.func_name == "tanh"]
         assert [op.pass_index for op in linear_passes] == [1, 2, 3]
         assert [op.pass_index for op in tanh_passes] == [1, 2, 3]
         back_edge_parent = linear_passes[2]
@@ -6829,7 +6829,7 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
 def test_corruption_loop_detection_slo_empty():
     """Empty recurrent_ops triggers loop_detection error."""
     log = _make_clean_log()
-    log.layer_list[0].recurrent_ops = []
+    log._layer_list[0].recurrent_ops = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6848,7 +6848,7 @@ def test_corruption_loop_detection_self_exclusion_into_seen_group() -> None:
 
     log = _make_clean_log()
     try:
-        donor, victim = log.layer_list[0], log.layer_list[1]
+        donor, victim = log._layer_list[0], log._layer_list[1]
         assert donor.label != victim.label
         assert victim.label not in donor.recurrent_ops
         victim.recurrent_ops = list(donor.recurrent_ops)
@@ -6863,7 +6863,7 @@ def test_corruption_loop_detection_slo_asymmetry():
     """Asymmetric recurrent_ops triggers loop_detection error."""
     log = _make_recurrent_log()
     # Find a multi-pass layer and corrupt one member's slo list
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.num_passes > 1:
             # Remove one member from slo
             lpl.recurrent_ops = [lpl.layer_label]
@@ -6876,7 +6876,7 @@ def test_corruption_loop_detection_slo_asymmetry():
 def test_corruption_loop_detection_ops_total():
     """Mismatched num_calls vs len(recurrent_ops) triggers error."""
     log = _make_clean_log()
-    log.layer_list[0].num_passes = 99
+    log._layer_list[0].num_passes = 99
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6889,7 +6889,7 @@ def test_corruption_distance_min_gt_max():
     """min_distance > max_distance triggers distance_invariants error."""
     log = _make_clean_log()
     # Find a non-input layer with distances set
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if (
             lpl.min_distance_from_input is not None
             and lpl.max_distance_from_input is not None
@@ -6916,7 +6916,7 @@ def test_corruption_distance_input_nonzero():
         log.cleanup()
         pytest.skip("mark_layer_depths is off; input-distance plant has no target")
     for label in log.input_layers:
-        lpl = log.layer_dict_all_keys[label]
+        lpl = log._layer_dict_all_keys[label]
         lpl.min_distance_from_input = 5
         lpl.max_distance_from_input = 5
         break
@@ -6933,7 +6933,7 @@ def test_corruption_distance_ancestor_flag():
         # must SKIP, not silently green.
         log.cleanup()
         pytest.skip("mark_layer_depths is off; ancestor-flag plant has no target")
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.has_input_ancestor and len(lpl.input_ancestors) > 0:
             lpl.has_input_ancestor = False
             break
@@ -6958,7 +6958,7 @@ def test_corruption_raw_label_in_elif_children_dict():
     from torchlens.validation.invariants import _check_graph_ordering
 
     log = _make_clean_log()
-    log.layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
+    log._layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
     with pytest.raises(MetadataInvariantError, match="Raw label"):
         _check_graph_ordering(log)
     with pytest.raises(MetadataInvariantError):
@@ -6977,9 +6977,9 @@ def test_corruption_raw_label_in_parent_arg_positions_key():
     """
 
     log = _make_clean_log()
-    positions = dict(log.layer_list[1].parent_arg_positions or {})
+    positions = dict(log._layer_list[1].parent_arg_positions or {})
     positions["linear_1_1_raw"] = 0
-    log.layer_list[1].parent_arg_positions = positions
+    log._layer_list[1].parent_arg_positions = positions
     with pytest.raises(MetadataInvariantError, match="parent_arg_positions"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7093,10 +7093,10 @@ def test_raw_label_survival_roster_is_closed():
         torch.randn(3, 3),
         capture=tl.options.CaptureOptions(seed=42),
     )
-    labels = {lpl.layer_label for lpl in log.layer_list} | {lpl.label for lpl in log.layer_list}
+    labels = {lpl.layer_label for lpl in log._layer_list} | {lpl.label for lpl in log._layer_list}
     fields = set(constants.OP_LOG_FIELD_ORDER) | set(constants.LAYER_LOG_FIELD_ORDER)
     offenders: dict[str, list[str]] = {}
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         foreign = labels - {lpl.layer_label, lpl.label}
         for field in fields - rostered - allowlist:
             hits = _collect_strings(getattr(lpl, field, None)) & foreign
@@ -7223,7 +7223,7 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
     corruption is exactly the post-witness silent edge-drop class. Returns the
     corrupted op.
     """
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if (
             not lpl.is_input
             and not lpl.is_buffer
@@ -7232,7 +7232,7 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
             and lpl.parents
         ):
             for p_label in lpl.parents:
-                parent = log.layer_dict_all_keys[p_label]
+                parent = log._layer_dict_all_keys[p_label]
                 parent.children = [c for c in parent.children if c != lpl.layer_label]
                 parent.has_children = len(parent.children) > 0
             lpl.parents = []
@@ -7361,7 +7361,7 @@ def test_corruption_functionless_sentinel_on_computational_op() -> None:
     try:
         lpl = next(
             lpl
-            for lpl in log.layer_list
+            for lpl in log._layer_list
             if not (lpl.is_input or lpl.is_buffer or lpl.is_output)
             and callable(lpl.func)
             and lpl.func_name
@@ -7404,7 +7404,7 @@ def test_corruption_capture_witnessed_slot_permutation_is_rejected() -> None:
     log = trace_fn(_TwoParentCatModel(), torch.randn(2, 5))
     try:
         target = None
-        for op in log.layer_list:
+        for op in log._layer_list:
             positions = (op.parent_arg_positions or {}).get("args") or {}
             if len(set(positions.values())) >= 2:
                 target = (op, sorted(positions)[:2])
@@ -7440,7 +7440,7 @@ def test_corruption_plain_parent_witnessed_edge_drop_is_rejected() -> None:
         truth = log.__dict__.get("_capture_parent_edge_truth")
         assert truth, "fixture sealed no capture-time edge witness"
         target = None
-        for op in log.layer_list:
+        for op in log._layer_list:
             raw_label = getattr(op, "_label_raw", None)
             edges = truth.get(raw_label) if raw_label is not None else None
             if not edges:
@@ -7565,7 +7565,7 @@ def test_param_xrefs_accept_used_param_whose_owner_module_is_never_entered() -> 
     ):
         log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
         try:
-            used = [param for param in log.param_logs if len(param.used_by_ops)]
+            used = [param for param in log._param_logs if len(param.used_by_ops)]
             assert used, "fixture no longer records used params"
             check_metadata_invariants(log)
         finally:
@@ -7597,7 +7597,7 @@ def test_corruption_module_nested_path_leaf():
     not which redundant layer wins the race.
     """
     log = _make_nested_log()
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if len(lpl.modules) >= 2 and lpl.module:
             # Swap the last nested module to a different valid module so it
             # doesn't fail the module_layer_containment check but does fail
@@ -8502,7 +8502,7 @@ def _first_computational_layer(log):
     """Return the first non-boundary layer of a clean single-pass capture."""
 
     return next(
-        lpl for lpl in log.layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
     )
 
 
@@ -8541,7 +8541,7 @@ def test_corruption_arm_op_log_fields_dropped_module_roster() -> None:
 
     log = _make_clean_log()
     try:
-        lpl = next(lpl for lpl in log.layer_list if getattr(lpl, "modules", ()))
+        lpl = next(lpl for lpl in log._layer_list if getattr(lpl, "modules", ()))
         lpl.modules = ()
         with pytest.raises(MetadataInvariantError, match="module attribution was DROPPED"):
             _check_op_log_fields(log)
@@ -8587,7 +8587,7 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
 
     log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log.layer_list for op in lay.ops]
+        ops = [op for lay in log._layer_list for op in lay.ops]
         parent = next(op for op in ops if len(op.children) >= 2)
         victim = parent.children[0]
         parent.children = tuple(c for c in parent.children if c != victim)
@@ -8602,7 +8602,7 @@ def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
 
     log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log.layer_list for op in lay.ops]
+        ops = [op for lay in log._layer_list for op in lay.ops]
         relu_op = next(op for op in ops if op.label.startswith("relu"))
         tanh_op = next(op for op in ops if op.label.startswith("tanh"))
         positions = relu_op.parent_arg_positions["args"]
@@ -8676,7 +8676,7 @@ def test_corruption_arm_param_address_outside_canonical_set() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        log.param_logs[0].address = "forged.weight"
+        log._param_logs[0].address = "forged.weight"
         with pytest.raises(MetadataInvariantError, match="absent from its canonical address set"):
             _check_param_xrefs(log)
     finally:

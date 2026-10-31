@@ -62,10 +62,10 @@ def test_neutral_finalizer_bare_label_is_last_pass_and_on_every_pass() -> None:
     _finalize_single_op(trace, first, "cell_raw_0", 0, _assignment(1))
     _finalize_single_op(trace, second, "cell_raw_1", 1, _assignment(2))
 
-    assert trace.layer_dict_all_keys["cell:1"] is first
-    assert trace.layer_dict_all_keys["cell:2"] is second
+    assert trace._layer_dict_all_keys["cell:1"] is first
+    assert trace._layer_dict_all_keys["cell:2"] is second
     # Incidental raw-index artifact: last pass wins, matching torch.
-    assert trace.layer_dict_all_keys["cell"] is second
+    assert trace._layer_dict_all_keys["cell"] is second
     # Torch parity: EVERY pass lists the bare label among its lookup keys.
     assert "cell" in first.lookup_keys
     assert "cell" in second.lookup_keys
@@ -95,12 +95,12 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
     log = tl.trace(Loop(), torch.randn(2, 4))
     multi_pass_bare = [
         key
-        for key, record in log.layer_dict_all_keys.items()
+        for key, record in log._layer_dict_all_keys.items()
         if isinstance(key, str) and ":" not in key and record.num_passes > 1
     ]
     assert multi_pass_bare, "expected multi-pass layers in the loop trace"
     for key in multi_pass_bare:
-        record = log.layer_dict_all_keys[key]
+        record = log._layer_dict_all_keys[key]
         if key != record.layer_label:
             continue  # raw/address spellings, not the bare layer label
         assert record.pass_index == record.num_passes, (
@@ -138,7 +138,7 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     assert trace.layer_labels == ["input_1_1"]
     # Raw labels stay resolvable through the lookup keys, just not as the
     # presented layer label.
-    assert trace.layer_dict_all_keys["input_1_1_raw"] is op_log
+    assert trace._layer_dict_all_keys["input_1_1_raw"] is op_log
 
 
 @pytest.mark.smoke

@@ -254,6 +254,9 @@ PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
         "_warned_direct_write": "once-per-trace warn sentinel; a fresh load must warn again",
         "_warned_mutate_in_place": "once-per-trace warn sentinel; a fresh load must warn again",
         "_last_hook_handle_ids": "session hook-handle bookkeeping for teardown",
+        "_rescue_rerun": "session-time rescue-rerun disclosure record; the forward ran twice, never portable",
+        "_parent_run": "weak reference from a fork to its source trace; never portable",
+        "_module_filter": "capture-time per-op module veto callable; opaque, session-only",
     },
     "Op": {
         "_construction_done": "construction-phase latch read by the direct-write guard",
@@ -293,6 +296,20 @@ PRIVATE_ORDERED_PERSISTED_FIELDS: frozenset[str] = frozenset(
         "Trace._orphan_logs",
         "Trace._phase_timings",
         "Trace._grad_fn_param_refs",
+        "Trace._decoded_output",
+        "Trace._append_history",
+        "Trace._layer_list",
+        "Trace._layer_dict_main_keys",
+        "Trace._layer_dict_all_keys",
+        "Trace._layer_logs",
+        "Trace._layer_num_calls",
+        "Trace._by_pass",
+        "Trace._buffer_num_calls",
+        "Trace._orphan_records",
+        "Trace._param_logs",
+        "Trace._grad_fn_logs",
+        "Trace._backward_pass_logs",
+        "Trace._num_backward_passes",
         "Op._label_raw",
         "Op._layer_label_raw",
         "Op._tracing_finished",
@@ -1152,7 +1169,7 @@ def test_the_axis_sweep_is_not_vacuous() -> None:
     """
 
     names = _postprocess_axis_names()
-    assert "halted" in names
+    assert "is_stopped" in names
     assert "intervention" in names
     assert len(names) >= 20
 

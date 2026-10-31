@@ -47,7 +47,7 @@ TEXT_MARKERS: dict[str, str | None] = {
     "capture_status": None,
     "capture_verified": "unverified",
     "capture_verification_reason": None,
-    "rescue_rerun": "rescue re-run",
+    "_rescue_rerun": "rescue re-run",
     "structure_only": "structure-only",
     "claim_status": None,
     "values_available": "no tensor payloads",
@@ -127,7 +127,7 @@ def _planted_disclosing_trace() -> tl.Trace:
     )
     trace.capture_verified = False
     trace.capture_verification_reason = "PROBE_REASON"
-    trace.rescue_rerun = True
+    trace._rescue_rerun = True
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
     trace._runnable.first_mismatch = "PROBE_MISMATCH"

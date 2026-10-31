@@ -193,7 +193,7 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
         capture=CaptureOptions(replayable=True),
     )
 
-    split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert len({layer.func_call_id for layer in split_layers}) == 1
     assert len({layer.container_path for layer in split_layers}) == 2
@@ -235,7 +235,9 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
         capture=CaptureOptions(replayable=True),
     )
 
-    templates = [layer.args_template for layer in log.layer_list if layer.args_template is not None]
+    templates = [
+        layer.args_template for layer in log._layer_list if layer.args_template is not None
+    ]
     flattened = [component for template in templates for component in template.args]
 
     assert any(isinstance(component, ParentRef) for component in flattened)
@@ -271,7 +273,7 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
         capture=CaptureOptions(replayable=True),
     )
 
-    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
         loc_labels = set(layer.parent_arg_positions["args"].values()) | set(
@@ -314,9 +316,9 @@ def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persist
 
     log = tl.trace(TinyModel(), torch.randn(2, 3))
 
-    assert all(layer.args_template is None for layer in log.layer_list)
-    assert all(layer.kwargs_template is None for layer in log.layer_list)
-    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    assert all(layer.args_template is None for layer in log._layer_list)
+    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
         assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)

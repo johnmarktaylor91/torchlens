@@ -58,13 +58,13 @@ class _ConditionalBuildTrace:
             (0, "then"): [("gt_1_3", "then_1")],
             (1, "then"): [("gt_1_3", "then_2")],
         }
-        self.layer_list = [
+        self._layer_list = [
             _make_layer_stub("gt_1_3:1", "gt_1_3", terminal_conditional_id=0),
             _make_layer_stub("then_1:1", "then_1"),
             _make_layer_stub("gt_1_3:2", "gt_1_3", terminal_conditional_id=1),
             _make_layer_stub("then_2:1", "then_2"),
         ]
-        self.layer_dict_all_keys = {
+        self._layer_dict_all_keys = {
             "gt_1_3": SimpleNamespace(
                 bool_value=True,
                 parents=[],
@@ -203,7 +203,7 @@ def test_equivalent_ops_are_renamed_to_final_labels() -> None:
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
     repeated_ops = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     ]
 
@@ -215,7 +215,7 @@ def test_equivalent_ops_are_renamed_to_final_labels() -> None:
 
     repeated_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if len(getattr(layer, "equivalent_ops", set())) > 1
     ]
     assert repeated_layers
@@ -231,11 +231,11 @@ def test_equivalence_invariant_rejects_stale_per_op_views() -> None:
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
     target_op = next(
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     )
     target_op.equivalent_ops = {"linear_1_2_raw"}
-    trace.layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
+    trace._layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
 
     with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
         trace.check_metadata_invariants()
@@ -245,7 +245,7 @@ def test_synthetic_output_node_resets_equivalent_ops() -> None:
     """Synthetic output nodes should not inherit their parent equivalence set."""
 
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
-    output_op = next(op for op in trace.layer_list if op.is_output)
+    output_op = next(op for op in trace._layer_list if op.is_output)
 
     assert output_op.equivalent_ops == {output_op.label}
 
@@ -261,12 +261,12 @@ def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None
         "cond_gt_1_3__event_0",
         "cond_gt_1_3__event_1",
     ]
-    assert trace.layer_list[0].terminal_bool_for == ("cond_gt_1_3__event_0", 0)
-    assert trace.layer_list[2].terminal_bool_for == ("cond_gt_1_3__event_1", 0)
-    assert {role.conditional_id for role in trace.layer_list[1].in_conditionals} == {
+    assert trace._layer_list[0].terminal_bool_for == ("cond_gt_1_3__event_0", 0)
+    assert trace._layer_list[2].terminal_bool_for == ("cond_gt_1_3__event_1", 0)
+    assert {role.conditional_id for role in trace._layer_list[1].in_conditionals} == {
         "cond_gt_1_3__event_0"
     }
-    assert {role.conditional_id for role in trace.layer_list[3].in_conditionals} == {
+    assert {role.conditional_id for role in trace._layer_list[3].in_conditionals} == {
         "cond_gt_1_3__event_1"
     }
 

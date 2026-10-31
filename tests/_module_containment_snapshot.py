@@ -318,7 +318,7 @@ def build_snapshot(trace: Any, fixture_name: str) -> dict[str, Any]:
             _call_dict(call) for module in trace.modules for call in module.ops.values()
         ],
         "modules": [_module_dict(module) for module in trace.modules],
-        "ops": [_op_dict(op) for op in trace.layer_list],
+        "ops": [_op_dict(op) for op in trace._layer_list],
         "trace_summary": {
             "total_flops_forward": trace.cost.total_flops_forward,
             "uncalled_modules": sorted(str(value) for value in trace.uncalled_modules),

@@ -143,7 +143,7 @@ def _reference_fill_layer_shells(
     fork_equivalent_ops = fork.op_equivalence_classes
     equivalent_view_memo: dict[Any, Any] = {}
     remap = translator.map
-    for label, parent_layer in (parent.__dict__.get("layer_logs") or {}).items():
+    for label, parent_layer in (parent.__dict__.get("_layer_logs") or {}).items():
         parent_layer_id = id(parent_layer)
         if parent_layer_id in consumed_shells:
             shell = state_new(type(parent_layer))
@@ -174,7 +174,7 @@ def _reference_fill_layer_shells(
             else:
                 shell.equivalent_ops = view
         fork_layer_logs[label] = shell
-    fork.layer_logs = fork_layer_logs
+    fork._layer_logs = fork_layer_logs
 
 
 _REFERENCES = {
@@ -547,9 +547,9 @@ def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
 
 def _labels(trace: Any) -> dict[int, Any]:
     labels: dict[int, Any] = {id(trace): "trace"}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         labels[id(op)] = ("op", op.layer_label)
-    for label, layer in (trace.__dict__.get("layer_logs") or {}).items():
+    for label, layer in (trace.__dict__.get("_layer_logs") or {}).items():
         labels.setdefault(id(layer), ("layer", label))
     modules = trace.__dict__.get("_module_logs")
     for key, module in modules._dict.items() if modules is not None else ():
@@ -557,7 +557,7 @@ def _labels(trace: Any) -> dict[int, Any]:
         calls = getattr(getattr(module, "calls", None), "_dict", None) or {}
         for call_key, call in calls.items():
             labels.setdefault(id(call), ("call", key, call_key))
-    params = trace.__dict__.get("param_logs")
+    params = trace.__dict__.get("_param_logs")
     for key, param in params._dict.items() if params is not None else ():
         labels.setdefault(id(param), ("param", key))
     return labels
@@ -613,7 +613,7 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
     parent_ids: set[int] = set()
     for _name, value in state_items(parent):
         _collect_ids(value, parent_ids)
-    for layer in (parent.__dict__.get("layer_logs") or {}).values():
+    for layer in (parent.__dict__.get("_layer_logs") or {}).values():
         _collect_ids(list(layer.__dict__.values()), parent_ids)
     picture: dict[str, Any] = {}
     for name, value in state_items(fork):
@@ -626,7 +626,7 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
             picture[f"module-cells:{key}"] = _normalize(cells, labels, parent_ids)
         extras = {k: v for k, v in module.__dict__.items() if k not in (CORE_KEY, ROW_KEY)}
         picture[f"module-extras:{key}"] = _normalize(extras, labels, parent_ids)
-    for label, layer in fork.layer_logs.items():
+    for label, layer in fork._layer_logs.items():
         shadow = {k: v for k, v in layer.__dict__.items() if k not in ("ops", "source_trace")}
         picture[f"layer:{label}"] = _normalize(shadow, labels, parent_ids)
     return picture
@@ -664,23 +664,23 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
     # Values: fork outputs equal the parent's, and the same edit on a fork built
     # by each code gives tensor-equal results on every op.
     # The last linear op: a single-pass layer in every fixture.
-    label = [op.layer_label for op in trace.layer_list if "linear" in op.layer_label][-1]
+    label = [op.layer_label for op in trace._layer_list if "linear" in op.layer_label][-1]
     edited = [
         fork.fork().do(label, tl.scale(0.5), intervention=InterventionOptions(engine="replay"))
         for fork in (former, new)
     ]
-    for former_op, new_op in zip(edited[0].layer_list, edited[1].layer_list, strict=True):
+    for former_op, new_op in zip(edited[0]._layer_list, edited[1]._layer_list, strict=True):
         assert former_op.layer_label == new_op.layer_label
         if isinstance(former_op.out, torch.Tensor):
             assert torch.equal(former_op.out, new_op.out), former_op.layer_label
     # Isolation: fork tables are their own.
     for fork in (former, new):
-        for parent_op, fork_op in zip(trace.layer_list, fork.layer_list, strict=True):
+        for parent_op, fork_op in zip(trace._layer_list, fork._layer_list, strict=True):
             if isinstance(parent_op.out, torch.Tensor):
                 assert torch.equal(parent_op.out, fork_op.out)
-        assert fork.layer_dict_all_keys is not trace.layer_dict_all_keys
-        fork.layer_dict_all_keys["probe"] = None
-        assert "probe" not in trace.layer_dict_all_keys
+        assert fork._layer_dict_all_keys is not trace._layer_dict_all_keys
+        fork._layer_dict_all_keys["probe"] = None
+        assert "probe" not in trace._layer_dict_all_keys
 
 
 def _fork_events(trace: Any) -> int:

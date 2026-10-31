@@ -155,7 +155,7 @@ def run(
         trace.replace_state_from(new_log)
     trace.is_appended = False
     trace._append_sequence_id = 0
-    trace.append_history = []
+    trace._append_history = []
 
     history_record = _build_ledger_record(
         trace,
@@ -316,7 +316,7 @@ def _chunked_rerun(
             replay=ReplayOptions(append=True, strict=strict),
             output_transform=output_transform,
         )
-    result.append_history = [initial_record, *result.append_history]
+    result._append_history = [initial_record, *result._append_history]
     result.chunked_forward = True
     result.last_run = dict(result.last_run or {})
     result.last_run["chunk_size"] = chunk_size
@@ -431,7 +431,7 @@ def _append_rerun(
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(new_log, "graph_shape_hash", None),
     }
-    log.append_history.append(dict(log.last_run))
+    log._append_history.append(dict(log.last_run))
     log._record_operation(
         "append",
         engine="append",
@@ -631,21 +631,21 @@ def _validate_append_candidate(
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
-    old_labels = tuple(layer._layer_label_raw for layer in old_log.layer_list)
-    new_labels = tuple(layer._layer_label_raw for layer in new_log.layer_list)
+    old_labels = tuple(layer._layer_label_raw for layer in old_log._layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_log._layer_list)
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
-    old_by_raw = {layer._layer_label_raw: layer for layer in old_log.layer_list}
-    new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+    old_by_raw = {layer._layer_label_raw: layer for layer in old_log._layer_list}
+    new_by_raw = {layer._layer_label_raw: layer for layer in new_log._layer_list}
     old_by_label = {
         key: layer
-        for layer in old_log.layer_list
+        for layer in old_log._layer_list
         for key in (layer._layer_label_raw, layer.layer_label)
     }
     new_by_label = {
         key: layer
-        for layer in new_log.layer_list
+        for layer in new_log._layer_list
         for key in (layer._layer_label_raw, layer.layer_label)
     }
     grads_supported = _hook_plan_supports_append_grads(hook_plan)
@@ -842,7 +842,7 @@ def _first_saved_batch_size(log: Trace) -> int | None:
         Leading dimension from the first tensor out, if any.
     """
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         out = getattr(layer, "out", None)
         if isinstance(out, torch.Tensor) and out.ndim > 0:
             return int(out.shape[0])
@@ -1252,7 +1252,7 @@ def _rerun_save_scope(log: Trace) -> tuple[str | list[int | str] | None, Any | N
                 # fall back to "metadata_only".
                 str(options.lookback_payload_policy),
             )
-    if getattr(log, "num_saved_ops", 0) == 0:
+    if len(getattr(log, "saved_ops", ())) == 0:
         return None, None, 0, "metadata_only"
     layer_nums = getattr(log, "_layer_nums_to_save", "all")
     if layer_nums == "all":
@@ -1288,12 +1288,12 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
     if (
         request.get("replayable", False)
         or getattr(options, "keep_op", None) is not None
-        or getattr(old_log, "num_saved_ops", 0) == 0
+        or len(getattr(old_log, "saved_ops", ())) == 0
         or getattr(old_log, "_layer_nums_to_save", "all") == "all"
     ):
         return
-    old_labels = [layer._layer_label_raw for layer in old_log.layer_list]
-    new_labels = [layer._layer_label_raw for layer in new_log.layer_list]
+    old_labels = [layer._layer_label_raw for layer in old_log._layer_list]
+    new_labels = [layer._layer_label_raw for layer in new_log._layer_list]
     if old_labels == new_labels:
         return
     first = next(
@@ -1509,14 +1509,14 @@ def _reconcile_rerun_hook_fires(
     # channel keeps its multiplicity semantics without letting one entry's
     # FireResult-channel fires hide another entry's miss.
     fallback_fired: Counter[str] = Counter()
-    for op in getattr(new_log, "layer_list", ()):
+    for op in getattr(new_log, "_layer_list", ()):
         fire_results = tuple(getattr(op, "fire_results", None) or ())
         if fire_results:
             fired.update(str(result.plan_id) for result in fire_results)
             continue
         fallback_fired.update(
             str(record.helper_name)
-            for record in (getattr(op, "interventions", None) or ())
+            for record in (getattr(op, "edits", None) or ())
             if getattr(record, "direction", None) == "forward"
             and getattr(record, "helper_name", None) is not None
         )
@@ -1633,7 +1633,7 @@ def _is_where_predicate_entry(entry: Any) -> bool:
 def _matched_site_count(log: Trace, entry: Any) -> int:
     """Count the sites an entry's selector resolves to on a finished trace (0 if it cannot)."""
 
-    fanout = len(getattr(log, "layer_list", ()) or ()) + 1
+    fanout = len(getattr(log, "_layer_list", ()) or ()) + 1
     try:
         return len(log.resolve_sites(entry.site_target, max_fanout=fanout))
     except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path

@@ -96,5 +96,5 @@ def test_window_edge_artifacts_load_or_refuse_governed(corpus_dir, artifact):
         ArtifactRuntimeIncompatibleError,
     ):
         return
-    assert loaded.layer_list, artifact
+    assert loaded._layer_list, artifact
     assert loaded.outcome.status in (CaptureStatus.COMPLETE, CaptureStatus.UNATTESTED)

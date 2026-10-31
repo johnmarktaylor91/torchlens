@@ -322,7 +322,7 @@ def _op_name_counts(trace: Trace) -> Counter[str]:
 
     return Counter(
         _canonical_op_name(name)
-        for op in getattr(trace, "layer_list", ())
+        for op in getattr(trace, "_layer_list", ())
         if (name := getattr(op, "func_name", None)) and name != "none"
     )
 
@@ -378,7 +378,7 @@ def _buffer_write_labels(trace: Trace) -> tuple[str, ...]:
     """
 
     labels: list[str] = []
-    for op in getattr(trace, "layer_list", ()) or ():  # buffer rows included
+    for op in getattr(trace, "_layer_list", ()) or ():  # buffer rows included
         if getattr(op, "buffer_write_kind", None) is None:
             continue
         if getattr(op, "buffer_value_changed", None) is False:
@@ -582,7 +582,7 @@ def _warn_rescue_success(trigger: str) -> None:
         "TorchLens re-ran the forward pass once to recover ops hidden by a "
         f"stale pre-wrap torch reference (trigger: {trigger}). The returned "
         "trace is the rescue capture (capture_verified=False, reason "
-        "'mode_rescue_rerun', details on trace.rescue_rerun) and the model's "
+        "'mode_rescue_rerun', details on trace._rescue_rerun) and the model's "
         "forward executed TWICE -- undeclared Python side effects inside "
         "forward() double-applied. Remedy: fix the stale torch reference "
         "(bind/import torch functions after TorchLens has wrapped torch) to "
@@ -616,7 +616,7 @@ def _mark(trace: Trace, reason: str, info: dict[str, Any]) -> None:
         pass
     elif reason == "mode_rescue_rerun" or not existing_reason:
         trace.capture_verification_reason = reason
-    trace.rescue_rerun = info
+    trace._rescue_rerun = info
 
 
 def capture_with_rescue(
@@ -739,7 +739,7 @@ def capture_with_rescue(
             partial_trace = getattr(getattr(primary_error, "partial_log", None), "trace", None)
             if partial_trace is not None:
                 try:
-                    partial_trace.rescue_rerun = _disclosure(
+                    partial_trace._rescue_rerun = _disclosure(
                         trigger=trigger,
                         recovered=False,
                         primary_error=str(primary_error),
@@ -872,7 +872,7 @@ def capture_with_rescue(
                 partial_trace = getattr(getattr(primary_error, "partial_log", None), "trace", None)
                 if partial_trace is not None:
                     try:
-                        partial_trace.rescue_rerun = _disclosure(
+                        partial_trace._rescue_rerun = _disclosure(
                             trigger=trigger,
                             recovered=False,
                             primary_error=str(primary_error),

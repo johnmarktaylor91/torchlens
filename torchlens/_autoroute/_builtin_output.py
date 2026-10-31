@@ -54,7 +54,7 @@ def decode_outputs_for_trace(
     output_style: str | None,
     output_head: str | None,
 ) -> None:
-    """Decode live model outputs into ``trace.decoded_output`` when safely resolved.
+    """Decode live model outputs into ``trace._decoded_output`` when safely resolved.
 
     Parameters
     ----------
@@ -89,7 +89,7 @@ def decode_outputs_for_trace(
 
         from torchlens.errors import TorchLensWarning
 
-        trace.decoded_output = None
+        trace._decoded_output = None
         trace.output_postprocessor = None
         annotations = getattr(trace, "annotations", None)
         if isinstance(annotations, dict):
@@ -157,7 +157,7 @@ def _decode_outputs_for_trace_unguarded(
     if decoded is None:
         return
 
-    trace.decoded_output = (
+    trace._decoded_output = (
         {"kind": "batch_topk", "rows": decoded} if resolved.style != "hf_text" else decoded
     )
     trace.output_postprocessor = replace(

@@ -188,7 +188,7 @@ def _dropout_out(trace: Trace) -> torch.Tensor:
         Saved dropout output.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if layer.func_name == "dropout" and layer.has_saved_activation:
             return cast(torch.Tensor, layer.out)
     raise AssertionError("dropout output was not saved")
@@ -242,7 +242,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
         halt=lambda ctx: ctx.label.startswith("relu"),
     )
 
-    assert trace.halted is True
+    assert trace.is_stopped is True
     # stop_reason/halt_frontier are now remapped from raw to FINAL labels in
     # postprocess Step 10 (_rename_model_history_layer_names), consistently for
     # both the exhaustive tl.trace(halt=...) and cooked Recording.to_trace()
@@ -250,7 +250,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
     # capture modes (was raw "relu_1_3_raw", capture-mode-local).
     assert trace.stop_reason == "relu_1_2"
     assert trace.halt_frontier == "relu_1_2"
-    assert [layer.func_name for layer in trace.layer_list] == ["none", "__add__", "relu", "none"]
+    assert [layer.func_name for layer in trace._layer_list] == ["none", "__add__", "relu", "none"]
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
 
@@ -265,9 +265,9 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=["relu"], seed=1703),
     )
 
-    saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
+    saved = [(layer.func_name, layer.has_saved_activation) for layer in trace._layer_list]
     assert trace.capture_mode == "exhaustive"
-    assert trace.num_saved_ops == 3
+    assert len(trace.saved_ops) == 3
     assert saved == [
         ("none", False),
         ("linear", False),
@@ -324,7 +324,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     trace = tl.trace(
         model, torch.ones(2, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    buffer_versions = [layer for layer in trace.layer_list if layer.is_buffer]
+    buffer_versions = [layer for layer in trace._layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
     # grouping rule row 74 (tests/test_grouping_call_sites.py; docs/guides/grouping.md):

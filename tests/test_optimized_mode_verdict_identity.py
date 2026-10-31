@@ -62,7 +62,7 @@ trace = tl.trace(
     torch.randn(3, 4),
     capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
 )
-op = [o for o in trace.layer_list if o.func_name == "__gt__"][0]
+op = [o for o in trace._layer_list if o.func_name == "__gt__"][0]
 saved = op.out.detach().clone()
 object.__setattr__(op, "func", lambda *a, **k: saved.clone())
 result = _check_whether_func_on_saved_parents_yields_saved_tensor(

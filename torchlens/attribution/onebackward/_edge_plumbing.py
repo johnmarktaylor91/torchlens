@@ -249,7 +249,7 @@ def backward_pass_origins(trace: Any) -> dict[int, PassOriginStamp]:
     """
 
     stamps = dict(_PASS_STAMPS.get(trace, {}))
-    recorded = int(getattr(trace, "num_backward_passes", 0) or 0)
+    recorded = int(getattr(trace, "_num_backward_passes", 0) or 0)
     for pass_index in range(1, recorded + 1):
         stamps.setdefault(pass_index, PassOriginStamp(origin="user"))
     return stamps

@@ -127,7 +127,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
     child._internal_set("edge_replacement_stamps", stamps)
 
     records = []
-    for record in child.interventions:
+    for record in child.edits:
         if record.edge_address:
             records.append(
                 dataclasses.replace(
@@ -137,7 +137,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
             )
         else:
             records.append(record)
-    child._internal_set("interventions", records)
+    child._internal_set("edits", records)
 
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed

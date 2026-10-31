@@ -152,7 +152,7 @@ def _saved_arg_tensors(trace: Any, outputs: bool = True) -> list[torch.Tensor]:
     """
 
     tensors: list[torch.Tensor] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if not outputs and getattr(op, "is_output", False):
             continue
         values = [*(op.saved_args or ()), *(op.saved_kwargs or {}).values()]
@@ -312,8 +312,8 @@ class _FakeOp:
 
 class _FakeTrace:
     def __init__(self, op: _FakeOp) -> None:
-        self.layer_logs: dict[str, Any] = {}
-        self.layer_dict_all_keys = {"op": op}
+        self._layer_logs: dict[str, Any] = {}
+        self._layer_dict_all_keys = {"op": op}
 
 
 def _tagged(value: torch.Tensor) -> torch.Tensor:
@@ -398,7 +398,7 @@ def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() ->
         held = 0
         output_refs = {
             t.untyped_storage().data_ptr()
-            for op in trace.layer_list
+            for op in trace._layer_list
             if getattr(op, "is_output", False)
             for t in op.saved_args or ()
             if isinstance(t, torch.Tensor)
@@ -465,17 +465,17 @@ def test_accelerator_verdicts_equal_the_same_device_run(model_name: str) -> None
 
 
 def _corrupt_relu_input(trace: Any, model: Any) -> None:
-    relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "relu")
     relu.saved_args[0].add_(1.0)
 
 
 def _corrupt_scale_argument(trace: Any, model: Any) -> None:
-    mul = next(op for op in trace.layer_list if op.func_name in {"mul", "__mul__"})
+    mul = next(op for op in trace._layer_list if op.func_name in {"mul", "__mul__"})
     mul.saved_args[1].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any, model: Any) -> None:
-    linear = next(op for op in trace.layer_list if op.func_name == "linear")
+    linear = next(op for op in trace._layer_list if op.func_name == "linear")
     with torch.no_grad():
         linear.saved_args[1].add_(1.0)
 
@@ -536,7 +536,7 @@ def _no_corruption(trace: Any, model: Any) -> None:
 
 
 def _corrupt_matmul_weight(trace: Any, model: Any) -> None:
-    matmul = next(op for op in trace.layer_list if op.func_name in {"matmul", "__matmul__"})
+    matmul = next(op for op in trace._layer_list if op.func_name in {"matmul", "__matmul__"})
     with torch.no_grad():
         matmul.saved_args[1].add_(1.0)
 

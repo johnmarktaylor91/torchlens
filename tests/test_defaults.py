@@ -19,7 +19,7 @@ class _DummyLog:
     def __init__(self) -> None:
         """Initialize a capture object with the attributes the wrappers expect."""
         self.cleanup_calls = 0
-        self.layer_logs: dict[str, Any] = {}
+        self._layer_logs: dict[str, Any] = {}
         self.num_saved_ops = 0
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []

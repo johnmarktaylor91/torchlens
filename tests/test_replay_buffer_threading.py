@@ -85,7 +85,7 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
     model, x, log = _traced_buf_loop()
     assert not torch.equal(model.cell.bias.detach(), torch.zeros(4)), "bias confound guard"
     for key, expected in zip(BUF_KEYS, (0.0, 1.0, 2.0, 3.0)):
-        assert torch.equal(log.layer_dict_all_keys[key].out, torch.full((4,), expected))
+        assert torch.equal(log._layer_dict_all_keys[key].out, torch.full((4,), expected))
 
     fork = log.fork()
     edit = torch.full((4,), 7.0)
@@ -99,7 +99,7 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
     # The origin keeps the substituted value (honest readback, no +1 from the
     # downstream in-place add), and each later version is the threaded state.
     for key, expected in zip(BUF_KEYS, (7.0, 8.0, 9.0, 10.0)):
-        got = fork.layer_dict_all_keys[key].out
+        got = fork._layer_dict_all_keys[key].out
         assert torch.equal(got, torch.full((4,), expected)), (key, got)
 
     # Downstream per-pass fidelity against a hand-computed forward with b0=7.
@@ -109,7 +109,7 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
         for pass_num in range(1, 4):
             b = b + 1.0
             h = torch.relu(model.cell(h) + b)
-            got = fork.layer_dict_all_keys[f"relu_1_4:{pass_num}"].out
+            got = fork._layer_dict_all_keys[f"relu_1_4:{pass_num}"].out
             assert torch.allclose(got, h, atol=ATOL), f"relu_1_4:{pass_num}"
 
     assert torch.equal(edit, torch.full((4,), 7.0)), "user edit tensor was mutated"
@@ -121,7 +121,7 @@ def test_replay_leaves_source_trace_capture_untouched() -> None:
     _model, _x, log = _traced_buf_loop()
     snapshot = {
         key: record.out.clone()
-        for key, record in log.layer_dict_all_keys.items()
+        for key, record in log._layer_dict_all_keys.items()
         if isinstance(key, str) and isinstance(record.out, torch.Tensor)
     }
 
@@ -132,7 +132,7 @@ def test_replay_leaves_source_trace_capture_untouched() -> None:
     )
 
     for key, saved in snapshot.items():
-        assert torch.equal(log.layer_dict_all_keys[key].out, saved), (
+        assert torch.equal(log._layer_dict_all_keys[key].out, saved), (
             f"source trace record {key!r} mutated by a fork's replay"
         )
 
@@ -172,13 +172,13 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
         tl.replace_with(edit),
     )
 
-    relu_out = fork.layer_dict_all_keys["relu_1_2:1"].out
+    relu_out = fork._layer_dict_all_keys["relu_1_2:1"].out
     assert torch.equal(relu_out, torch.full((2, 4), 5.0)), (
         "origin readback corrupted by downstream in-place add_"
     )
-    add_out = fork.layer_dict_all_keys["add_1_3:1"].out
+    add_out = fork._layer_dict_all_keys["add_1_3:1"].out
     assert torch.equal(add_out, torch.full((2, 4), 6.0))
-    final = fork.layer_dict_all_keys["mul_1_4:1"].out
+    final = fork._layer_dict_all_keys["mul_1_4:1"].out
     assert torch.equal(final, torch.full((2, 4), 12.0))
 
 
@@ -190,7 +190,7 @@ def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
     fork = log.fork()
     # Simulate a write the engine cannot certify (e.g. a fused mutator whose
     # op output is not the post-write buffer state).
-    fork.layer_dict_all_keys["buffer_1:2"]._internal_set("buffer_write_kind", "fused")
+    fork._layer_dict_all_keys["buffer_1:2"]._internal_set("buffer_write_kind", "fused")
 
     with pytest.warns(BufferThreadGapWarning, match="buffer_1:2"):
         fork.do(
@@ -200,5 +200,5 @@ def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
 
     # The uncertified version keeps its captured value; later versions thread
     # from the stale-but-honest state (add_ re-executes from 1s -> 2s -> 3s).
-    assert torch.equal(fork.layer_dict_all_keys["buffer_1:1"].out, torch.full((4,), 7.0))
-    assert torch.equal(fork.layer_dict_all_keys["buffer_1:2"].out, torch.full((4,), 1.0))
+    assert torch.equal(fork._layer_dict_all_keys["buffer_1:1"].out, torch.full((4,), 7.0))
+    assert torch.equal(fork._layer_dict_all_keys["buffer_1:2"].out, torch.full((4,), 1.0))

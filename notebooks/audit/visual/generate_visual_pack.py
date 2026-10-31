@@ -111,7 +111,7 @@ def _intervened_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
-        relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
+        relu = next(layer for layer in trace.ops if layer.func_name == "relu")
         trace.set(tl.func("relu"), torch.zeros(relu.shape))
         return trace
 
@@ -151,7 +151,7 @@ def _raw_input_first_trace(model_key: str):
 def _decoded_output_trace(model_key: str):
     """Trace with a decoded-output record (label-score rows on the output node).
 
-    In the wild trace.decoded_output is populated by output autorouting
+    In the wild trace._decoded_output is populated by output autorouting
     (classification labels / HF text decoding); injected here to demonstrate
     the output-node label grammar.
     """
@@ -159,7 +159,7 @@ def _decoded_output_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
+        trace._decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
         return trace
 
     return _build
@@ -323,7 +323,7 @@ def _skip_relus(layer_log):
 
 def _custom_overlay_kwargs(trace) -> dict:
     """Custom node_overlay mapping: score = op position in the graph."""
-    labels = [layer.layer_label for layer in trace.layer_list]
+    labels = [layer.layer_label for layer in trace.ops]
     return {"node_overlay": {lab: float(i) for i, lab in enumerate(labels)}}
 
 
@@ -1848,7 +1848,7 @@ SECTIONS: list[Section] = [
                     "practice). MIDDLE: batch_render='first' renders only the first batch item -- the other "
                     "policies ('auto' shows up to 4 with a '+N more' note, 'all' up to 16, 'first_n:<N>', "
                     "and 'shape_only' which disables thumbnails entirely) tune the same montage. RIGHT: the "
-                    "OUTPUT side -- when trace.decoded_output carries decoded predictions (populated by "
+                    "OUTPUT side -- when trace._decoded_output carries decoded predictions (populated by "
                     "output autorouting for classifiers/HF text; injected here), the output node renders "
                     "label-score rows instead of a bare shape.\n"
                     "CHECK: montage items are individually visible; the 'first' panel shows exactly one "

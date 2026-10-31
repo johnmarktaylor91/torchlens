@@ -66,7 +66,7 @@ def test_op_count_disclosure_fires_once_at_threshold(monkeypatch) -> None:
         w for w in caught if "recorded 10 ops" in str(w.message) and w.category is TorchLensWarning
     ]
     assert len(disclosures) == 1
-    assert len(log.layer_list) > 10
+    assert len(log._layer_list) > 10
 
 
 def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
@@ -94,7 +94,7 @@ def test_dense_mask_batch_declines_above_node_ceiling(monkeypatch) -> None:
 
     monkeypatch.setattr(lga, "_DENSE_BATCH_MAX_NODES", 1)
     log = tl.trace(_Chain(steps=20), torch.randn(2))
-    assert len(log.layer_list) > 1  # capture + grouping completed
+    assert len(log._layer_list) > 1  # capture + grouping completed
 
 
 @pytest.mark.usefixtures("legacy_structural_grouper")
@@ -113,7 +113,7 @@ def test_cohort_pair_probe_ceiling_discloses(monkeypatch) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         log = tl.trace(_ParallelStreams(streams=12), torch.randn(3))
-    assert len(log.layer_list) > 12
+    assert len(log._layer_list) > 12
     ceiling_warnings = [w for w in caught if "pair-probe ceiling" in str(w.message)]
     # The ceiling only fires when a same-signature cohort survives to the
     # triangle; the parallel-stream shape does that by construction.
@@ -129,7 +129,7 @@ def test_fixpoint_work_budget_degrades_to_singletons(monkeypatch) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         log = tl.trace(_Chain(steps=20), torch.randn(2))
-    assert len(log.layer_list) > 1
+    assert len(log._layer_list) > 1
     budget_warnings = [w for w in caught if "refinement" in str(w.message)]
     if budget_warnings:  # fires only when the fixpoint had multi-member classes
         assert "ungrouped" in str(budget_warnings[0].message)

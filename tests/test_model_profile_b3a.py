@@ -81,7 +81,7 @@ def test_model_profile_recognizes_image_classifier_with_raw_images() -> None:
         torch.ones(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
-    trace.raw_input = [_ImageLike(), _ImageLike()]
+    trace.input = [_ImageLike(), _ImageLike()]
     trace.input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
@@ -118,7 +118,7 @@ def test_model_profile_plain_tensor_trace_is_not_keystone_applicable() -> None:
 
     x = torch.ones(3, 4)
     trace = tl.trace(_ProfileTiny(), x, capture=tl.options.CaptureOptions(layers_to_save="none"))
-    trace.raw_input = x
+    trace.input = x
 
     profile = trace.model_profile
 

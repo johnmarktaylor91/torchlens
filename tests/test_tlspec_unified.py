@@ -480,8 +480,8 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     assert manifest["kind"] == "trace"
     assert manifest["tlspec_version"] == TLSPEC_VERSION
     assert manifest["save_level"] == level
-    assert [layer.layer_label for layer in loaded.layer_list] == [
-        layer.layer_label for layer in log.layer_list
+    assert [layer.layer_label for layer in loaded._layer_list] == [
+        layer.layer_label for layer in log._layer_list
     ]
 
 
@@ -489,7 +489,7 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     """Current manifests must not apply the v4 backend-address repair."""
 
     trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
-    plain_buffer_op = next(op for op in trace.layer_list if op.is_buffer and op.address == "scale")
+    plain_buffer_op = next(op for op in trace._layer_list if op.is_buffer and op.address == "scale")
     assert plain_buffer_op.backend_address is None
     assert trace[plain_buffer_op.layer_label].backend_address is None
 
@@ -613,9 +613,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
 
     assert isinstance(loaded, tl.Trace)
     records = [
-        record
-        for layer in loaded.layer_list
-        for record in getattr(layer, "interventions", []) or []
+        record for layer in loaded._layer_list for record in getattr(layer, "edits", []) or []
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
@@ -641,7 +639,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert isinstance(loaded, tl.Trace)
     refs = [
         call.fire_record
-        for grad_fn in loaded.grad_fn_logs.values()
+        for grad_fn in loaded._grad_fn_logs.values()
         for call in grad_fn.calls._list
         if call.fire_record is not None
     ]
@@ -662,7 +660,7 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
         capture=CaptureOptions(seed=1),
     )
     path = tmp_path / "orphan_records.tlspec"
-    expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
+    expected_payload = log._orphan_records[0]["payload_ref"].detach().clone()
 
     log.save(path, level="portable")
     validate_tlspec(path)
@@ -670,10 +668,10 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.orphan_records
-    assert loaded.orphan_records[0]["raw_label"].startswith("randn")
-    assert isinstance(loaded.orphan_records[0]["payload_ref"], torch.Tensor)
-    assert torch.equal(loaded.orphan_records[0]["payload_ref"], expected_payload)
+    assert loaded._orphan_records
+    assert loaded._orphan_records[0]["raw_label"].startswith("randn")
+    assert isinstance(loaded._orphan_records[0]["payload_ref"], torch.Tensor)
+    assert torch.equal(loaded._orphan_records[0]["payload_ref"], expected_payload)
     assert any(entry["intended_use"] == "orphan_payload" for entry in manifest["body_index"])
 
 
@@ -694,7 +692,9 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.num_ops == log.num_ops
-    assert [layer.label for layer in loaded.layer_list] == [layer.label for layer in log.layer_list]
+    assert [layer.label for layer in loaded._layer_list] == [
+        layer.label for layer in log._layer_list
+    ]
     assert any(entry["intended_use"] == "buffer_initial_value" for entry in manifest["body_index"])
 
 
@@ -784,7 +784,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     assert loaded.has_backward_pass is True
     assert loaded.autograd.backward_passes.for_pass(1).pass_index == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
-    assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
+    assert manifest["backward_summary"]["num_backward_passes"] == len(log.autograd.backward_passes)
     assert manifest["backward_summary"]["num_grad_fns"] == len(log.autograd.grad_fns)
     assert manifest["backward_summary"]["gradient_blob_count"] >= 1
     assert "grad" in manifest["backward_summary"]["gradient_blob_kinds"]
@@ -921,7 +921,7 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert isinstance(loaded, tl.Trace)
     assert loaded.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
-    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
     assert saved_ops
     assert all(isinstance(op.out, mx.array) for op in saved_ops)
     assert loaded.validation_replay_status.state == "unavailable"
@@ -946,7 +946,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
 
     validate_tlspec(path)
     loaded = tl.load(path)
-    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.backend == "mlx"
@@ -1147,12 +1147,10 @@ def test_intervene_trace_round_trips_transient_dedup_state(
 
     trace.save(path)
     loaded = tl.load(path)
-    replaced_ops = [op for op in loaded.layer_list if op.is_edited]
+    replaced_ops = [op for op in loaded._layer_list if op.is_edited]
 
     assert replaced_ops
-    assert any(
-        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
-    )
+    assert any(record.helper_name == helper_name for op in replaced_ops for record in op.edits)
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:

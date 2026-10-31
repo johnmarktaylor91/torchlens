@@ -185,7 +185,7 @@ def _first_func(log: Any, func_name: str) -> Any:
         Matching layer pass.
     """
 
-    return next(layer for layer in log.layer_list if layer.func_name == func_name)
+    return next(layer for layer in log._layer_list if layer.func_name == func_name)
 
 
 def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
@@ -202,8 +202,8 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert log.last_run["engine"] == "replay"
-    assert relu_site.interventions[-1].engine == "replay"
-    assert relu_site.interventions[-1].replaced is True
+    assert relu_site.edits[-1].engine == "replay"
+    assert relu_site.edits[-1].replaced is True
     assert relu_site.is_edited is True
 
 
@@ -314,14 +314,14 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     last_run = cast(dict[str, Any], replayed.last_run)
     source_cone_labels = set(fork_payload["source_cone_labels"])
     replay_cone_labels = set(last_run["cone"])
-    all_labels = {site.layer_label for site in log.layer_list}
+    all_labels = {site.layer_label for site in log._layer_list}
     outside_cone_label = next(iter(all_labels - replay_cone_labels))
 
     assert source_cone_labels == replay_cone_labels
     assert source_cone_labels < all_labels
     assert replayed[outside_cone_label] is not log[outside_cone_label]
     assert replayed[outside_cone_label].source_trace is replayed
-    assert replayed[outside_cone_label].interventions is not log[outside_cone_label].interventions
+    assert replayed[outside_cone_label].edits is not log[outside_cone_label].edits
 
 
 def test_replay_failure_rolls_back_partial_out_updates(
@@ -333,10 +333,10 @@ def test_replay_failure_rolls_back_partial_out_updates(
     log = _interventions(ResidualRelu(), torch.randn(2, 3))
     original_tensors = {
         layer.layer_label: layer.out.clone()
-        for layer in log.layer_list
+        for layer in log._layer_list
         if isinstance(layer.out, torch.Tensor)
     }
-    original_records = {layer.layer_label: list(layer.interventions) for layer in log.layer_list}
+    original_records = {layer.layer_label: list(layer.edits) for layer in log._layer_list}
     original_state = log.state
     real_execute = replay_mod._execute_replay_func_strict
     execute_count = 0
@@ -356,10 +356,10 @@ def test_replay_failure_rolls_back_partial_out_updates(
         log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook}))
 
     assert log.state is original_state
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         if layer.layer_label in original_tensors:
             assert torch.equal(layer.out, original_tensors[layer.layer_label])
-        assert list(layer.interventions) == original_records[layer.layer_label]
+        assert list(layer.edits) == original_records[layer.layer_label]
 
 
 def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
@@ -410,7 +410,7 @@ def test_cone_of_effect_includes_all_func_call_id_siblings_once() -> None:
     """Cone traversal expands same-call multi-output siblings."""
 
     log = _interventions(SplitModel(), torch.randn(4, 5))
-    max_sites = [layer for layer in log.layer_list if layer.func_name == "max"]
+    max_sites = [layer for layer in log._layer_list if layer.func_name == "max"]
     assert len(max_sites) == 2
 
     cone_labels = [site.layer_label for site in cone_of_effect(log, [max_sites[0]])]
@@ -423,7 +423,7 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
     """Replay executes one saved function call for all output siblings."""
 
     log = _interventions(SplitModel(), torch.randn(4, 5))
-    max_sites = [layer for layer in log.layer_list if layer.func_name == "max"]
+    max_sites = [layer for layer in log._layer_list if layer.func_name == "max"]
     original_func: Callable[..., Any] = max_sites[0].func
     calls = {"count": 0}
 

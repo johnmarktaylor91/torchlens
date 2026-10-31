@@ -151,8 +151,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     first = _save_seeded_trace(first_path, seed=1)
     second = _save_seeded_trace(second_path, seed=2)
 
-    first_param_ops = [op for op in first.layer_list if op.has_params]
-    second_param_ops = [op for op in second.layer_list if op.has_params]
+    first_param_ops = [op for op in first._layer_list if op.has_params]
+    second_param_ops = [op for op in second._layer_list if op.has_params]
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]
@@ -181,12 +181,12 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
     loaded = tl.load(path)
     expected_ids = list(range(1, len(loaded.grad_fn_order) + 1))
     assert loaded.grad_fn_order == expected_ids
-    assert list(loaded.grad_fn_logs) == expected_ids
+    assert list(loaded._grad_fn_logs) == expected_ids
     assert set(loaded.backward_root_grad_fn_object_ids) <= set(expected_ids)
     assert all(
         grad_fn.grad_fn_object_id == grad_fn_id
         and set(grad_fn.next_grad_fn_ids) <= set(expected_ids)
-        for grad_fn_id, grad_fn in loaded.grad_fn_logs.items()
+        for grad_fn_id, grad_fn in loaded._grad_fn_logs.items()
     )
 
 
@@ -285,7 +285,7 @@ def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     op = trace.output_ops[0]
     op.resolver_status = None
-    layer = trace.layer_logs[op.layer_label]
+    layer = trace._layer_logs[op.layer_label]
     layer.resolver_status = None
 
     restored_op = pickle.loads(pickle.dumps(op))

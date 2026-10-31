@@ -169,7 +169,7 @@ def _decoded_output_preview(trace: Trace) -> str | None:
         Preview text, if a batch top-k table is available.
     """
 
-    rows = _decoded_batch_topk_rows(getattr(trace, "decoded_output", None))
+    rows = _decoded_batch_topk_rows(getattr(trace, "_decoded_output", None))
     if not rows:
         return None
     parts: list[str] = []
@@ -466,7 +466,7 @@ def _parent_run_summary(trace: Trace) -> str:
         Parent summary.
     """
 
-    parent_ref = getattr(trace, "parent_run", None)
+    parent_ref = getattr(trace, "_parent_run", None)
     if parent_ref is None:
         return "none"
     parent = parent_ref()
@@ -493,7 +493,7 @@ def _fork_chain_summary(trace: Trace) -> str:
     seen = {id(trace)}
     current = trace
     while True:
-        parent_ref = getattr(current, "parent_run", None)
+        parent_ref = getattr(current, "_parent_run", None)
         if parent_ref is None:
             break
         parent = parent_ref()
@@ -589,8 +589,8 @@ def _rng_note_summary(trace: Trace) -> str:
     """
 
     notes = []
-    for layer in getattr(trace, "layer_list", []) or []:
-        for record in getattr(layer, "interventions", []) or []:
+    for layer in getattr(trace, "_layer_list", []) or []:
+        for record in getattr(layer, "edits", []) or []:
             note = getattr(record, "determinism_note", None)
             if note:
                 notes.append(str(note))

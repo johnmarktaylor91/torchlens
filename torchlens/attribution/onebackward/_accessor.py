@@ -170,7 +170,7 @@ def _validity_token(trace: Any) -> tuple[Any, ...]:
 
     refs = trace.__dict__.get("_backward_gradfn_refs")
     return (
-        int(getattr(trace, "num_backward_passes", 0)),
+        int(getattr(trace, "_num_backward_passes", 0)),
         None if refs is None else len(refs),
         bool(trace.__dict__.get("_tl_cleaned_up", False)),
     )
@@ -288,7 +288,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
     edges: dict[str, SiteEdge] = {}
     unaddressable: dict[str, str] = {}
     alias_members: dict[tuple[int, int], list[str]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         label = op.label
         resolved = _resolve_node(op, rejoin_map)
         if resolved is None:

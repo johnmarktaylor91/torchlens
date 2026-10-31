@@ -526,7 +526,7 @@ def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:
         return ctx.kind == "op" and ctx.func_name == "relu"
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=_halt_without_frontier)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert order  # cleanup ran (after the scan; a broken order crashes above)
 
 

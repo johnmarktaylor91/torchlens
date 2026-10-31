@@ -79,7 +79,7 @@ def _restamp_materialized_params(trace: Trace, module: nn.Module, hook: Any) -> 
     defeating the offload the user configured.
     """
 
-    param_accessor = getattr(trace, "param_logs", None)
+    param_accessor = getattr(trace, "_param_logs", None)
     records = getattr(param_accessor, "_dict", None)
     if not records:
         return  # predicate-mode capture: no session param logs to mirror.

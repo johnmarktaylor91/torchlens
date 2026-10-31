@@ -371,7 +371,7 @@ def _is_hidden_buffer_update_node(
     for label in endpoint_labels:
         endpoint = entries_to_plot.get(label) or entries_by_layer_label.get(label)
         if endpoint is None and vis_mode == "unrolled":
-            endpoint = trace.layer_dict_all_keys.get(label)
+            endpoint = trace._layer_dict_all_keys.get(label)
         if endpoint is None:
             return False
         endpoints.append(endpoint)
@@ -401,9 +401,9 @@ def _entries_to_plot_for_context(
     """
 
     if vis_mode == "unrolled":
-        return dict(trace.layer_dict_main_keys)
+        return dict(trace._layer_dict_main_keys)
     if vis_mode == "rolled":
-        return dict(trace.layer_logs)
+        return dict(trace._layer_logs)
     raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
 
 
@@ -1618,7 +1618,7 @@ def _expand_edges_through_skipped(
     for child_label in parent_node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
-            child_node = trace.layer_dict_all_keys.get(child_label)
+            child_node = trace._layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         parent_label = _render_node_label(parent_node, vis_mode)
@@ -1716,7 +1716,7 @@ def _walk_skipped_successors(
     for child_label in node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
-            child_node = trace.layer_dict_all_keys.get(child_label)
+            child_node = trace._layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         walked = _walk_skipped_successors(

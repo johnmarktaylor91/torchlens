@@ -52,7 +52,7 @@ def _op(trace: tl.Trace, func_name: str) -> Any:
         Matching operation.
     """
 
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 def _bundle_bytes(path: Path) -> dict[str, bytes]:

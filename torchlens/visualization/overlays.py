@@ -22,7 +22,7 @@ def _overlay_candidate_labels(trace: Any) -> set[str]:
     """Every label spelling the per-node overlay lookup can realize on ``trace``."""
 
     candidates: set[str] = set(getattr(trace, "op_labels", ()) or ())
-    for node in getattr(trace, "layer_list", ()) or ():
+    for node in getattr(trace, "_layer_list", ()) or ():
         for attr in ("layer_label", "label", "layer_label_short", "label_short"):
             value = getattr(node, attr, None)
             if isinstance(value, str):
@@ -247,7 +247,7 @@ def builtin_overlay_value(node: Any, overlay: str) -> Any:
             return None
         return _has_nonfinite(tensor)
     if name == "intervention":
-        value = get_multipass_attr(node, "interventions", (), multipass=None)
+        value = get_multipass_attr(node, "edits", (), multipass=None)
         return None if value is None else len(value or ())
     if name == "bundle_delta":
         return get_multipass_attr(node, "bundle_delta", None, multipass=None)

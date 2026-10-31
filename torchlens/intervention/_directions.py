@@ -433,7 +433,7 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
 def _captured_mask(trace: Any) -> torch.Tensor | None:
     """Return the saved ``attention_mask`` input of a trace, if any."""
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in getattr(trace, "_layer_list", []):
         role = getattr(layer, "io_role", None)
         if not getattr(layer, "is_input", False) or not isinstance(role, str):
             continue

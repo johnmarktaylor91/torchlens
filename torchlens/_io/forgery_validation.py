@@ -228,7 +228,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
         Retained ops in the order used by the site-key minter.
     """
 
-    return tuple(getattr(trace, "layer_list", ()) or ())
+    return tuple(getattr(trace, "_layer_list", ()) or ())
 
 
 def _validate_site_keys(trace: Trace) -> None:
@@ -620,7 +620,7 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
 
     recipes: list[tuple[str, Mapping[str, Any]]] = []
     for op in _trace_ops(trace):
-        for record in getattr(op, "interventions", ()) or ():
+        for record in getattr(op, "edits", ()) or ():
             helper = getattr(record, "helper", None)
             recipe = getattr(helper, "selection_recipe", None) if helper is not None else None
             if recipe is None:

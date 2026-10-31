@@ -22,7 +22,7 @@ def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
     layer_label
         The expected final layer label.
     """
-    assert layer_label in [layer.layer_label for layer in trace.layer_list]
+    assert layer_label in [layer.layer_label for layer in trace._layer_list]
 
 
 def test_two_pass_succeeds_with_inplace_relu_module() -> None:
@@ -88,7 +88,7 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
 
     exhaustive_log = tl.trace(model, x)
     identity_labels = [
-        layer.layer_label for layer in exhaustive_log.layer_list if layer.layer_type == "identity"
+        layer.layer_label for layer in exhaustive_log._layer_list if layer.layer_type == "identity"
     ]
     assert identity_labels
     identity_label = identity_labels[0]

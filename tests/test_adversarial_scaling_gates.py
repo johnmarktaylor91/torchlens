@@ -146,7 +146,7 @@ def chain_capture():
 
 
 def _mult_labels(log) -> list[str]:
-    return [layer.label for layer in log.layer_list if layer.label.startswith("mul")]
+    return [layer.label for layer in log._layer_list if layer.label.startswith("mul")]
 
 
 def test_giant_equivalence_class_is_exact(wide_capture) -> None:
@@ -155,7 +155,7 @@ def test_giant_equivalence_class_is_exact(wide_capture) -> None:
     log, _ = wide_capture
     mults = _mult_labels(log)
     assert len(mults) == N_STREAMS
-    assert len(log.layer_list) == N_STREAMS + 5  # input, linear, stack, sum, output
+    assert len(log._layer_list) == N_STREAMS + 5  # input, linear, stack, sum, output
     members = log[mults[0]].equivalent_ops
     assert len(members) == N_STREAMS
     assert all(label in members for label in mults)
@@ -222,7 +222,7 @@ def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
     """300 calls of one cell group into single layers with exactly 300 passes."""
 
     log = deep_capture
-    assert len(log.layer_list) == 2 * N_PASSES + 2  # linear+tanh per step, input, output
+    assert len(log._layer_list) == 2 * N_PASSES + 2  # linear+tanh per step, input, output
     for label in ("linear_1_1", "tanh_1_2"):
         layer = log[label]
         assert layer.num_passes == N_PASSES, label
@@ -269,7 +269,7 @@ def test_graph_diameter_capture_is_iterative(chain_capture) -> None:
 
     log, limit_before, limit_after = chain_capture
     assert limit_before == limit_after
-    assert len(log.layer_list) == N_CHAIN + 2
+    assert len(log._layer_list) == N_CHAIN + 2
 
 
 @pytest.mark.heavy
@@ -412,7 +412,7 @@ def test_depth_overflow_fails_clean_and_restores() -> None:
         "expected the capture-failed restore disclosure"
     )
     follow_up = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
-    assert [layer.label for layer in follow_up.layer_list] == [
+    assert [layer.label for layer in follow_up._layer_list] == [
         "input_1:1",
         "linear_1_1:1",
         "output_1:1",
@@ -432,7 +432,7 @@ def test_wide_fanout_and_fanin_relations_exact() -> None:
     input_children = log["input_1:1"].children
     assert len(input_children) == N_FANOUT
     assert set(input_children) == set(mults)
-    stack_labels = [layer.label for layer in log.layer_list if layer.label.startswith("stack")]
+    stack_labels = [layer.label for layer in log._layer_list if layer.label.startswith("stack")]
     assert len(stack_labels) == 1
     stack_parents = log[stack_labels[0]].parents
     assert list(stack_parents) == mults  # arg order preserved

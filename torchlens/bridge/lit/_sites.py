@@ -62,7 +62,7 @@ def module_output_ops(trace: Any) -> list[Any]:
         Ops (one per pass) in execution order carrying ``output_of_modules``.
     """
 
-    return [op for op in trace.layer_list if getattr(op, "output_of_modules", ())]
+    return [op for op in trace._layer_list if getattr(op, "output_of_modules", ())]
 
 
 def _ops_for_address(trace: Any, address: str) -> list[Any]:
@@ -358,7 +358,7 @@ def resolve_pinned(trace: Any, specs: list[SiteSpec]) -> dict[str, Any]:
     """
 
     index: dict[tuple[str, int], list[Any]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         key = (str(op.site_key), int(op.pass_index))
         index.setdefault(key, []).append(op)
 

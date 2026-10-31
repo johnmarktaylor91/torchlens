@@ -56,7 +56,7 @@ def test_zero_match_save_predicate_warns() -> None:
     trace = _stub_trace()
     with pytest.warns(UserWarning, match="matched zero"):
         apply_static_label_save_policy(trace, tl.label("no_such_label"), backend_name="mlx")
-    assert trace.num_saved_ops == 0
+    assert len(trace.saved_ops) == 0
 
 
 @pytest.mark.smoke
@@ -69,7 +69,7 @@ def test_matching_save_predicate_does_not_warn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         apply_static_label_save_policy(trace, tl.label("relu_1_1"), backend_name="mlx")
-    assert trace.num_saved_ops == 1
+    assert len(trace.saved_ops) == 1
 
 
 @pytest.mark.smoke
@@ -82,7 +82,7 @@ def test_none_predicate_does_not_warn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         apply_static_label_save_policy(trace, None, backend_name="mlx")
-    assert all(op.has_saved_activation for op in trace.layer_list)
+    assert all(op.has_saved_activation for op in trace._layer_list)
 
 
 # ---------------------------------------------------------------------------

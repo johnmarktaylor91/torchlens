@@ -70,7 +70,7 @@ def _grouped_ops(trace: Any, func_name: str) -> list[Any]:
         Multi-pass ops with that function name.
     """
 
-    return [op for op in trace.layer_list if op.func_name == func_name and op.num_passes > 1]
+    return [op for op in trace._layer_list if op.func_name == func_name and op.num_passes > 1]
 
 
 def test_tf_repeated_dense_groups_into_passes() -> None:
@@ -86,7 +86,7 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert {op.num_passes for op in (*matmul_ops, *relu_ops)} == {3}
     assert list(relu_ops[0].recurrent_ops) == [op.label for op in relu_ops]
-    assert trace.layer_num_calls[relu_ops[0].layer_label] == 3
+    assert trace._layer_num_calls[relu_ops[0].layer_label] == 3
     # validate_trace() itself returns the bare pass/fail bool when fully
     # verified (torch-parity convention: see
     # test_mlx_backend_validation/test_paddle_backend_validation), or the
@@ -133,7 +133,7 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
     assert grouped_status.num_failed_ops == ungrouped_status.num_failed_ops == 0
     assert grouped_status.num_replayed_ops == ungrouped_status.num_replayed_ops
     assert ungrouped.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in ungrouped.layer_list)
+    assert all(op.num_passes == 1 for op in ungrouped._layer_list)
 
 
 def test_tf_distinct_module_sites_do_not_group() -> None:
@@ -143,7 +143,7 @@ def test_tf_distinct_module_sites_do_not_group() -> None:
     inputs = tf.ones((2, 4))
     model(inputs)
     trace = tl.trace(model, inputs, backend="tf")
-    matmul_ops = [op for op in trace.layer_list if op.func_name == "MatMul"]
+    matmul_ops = [op for op in trace._layer_list if op.func_name == "MatMul"]
 
     assert len(matmul_ops) == 2
     assert all(op.num_passes == 1 for op in matmul_ops)
@@ -181,7 +181,7 @@ def test_tf_static_funcgraph_path_stays_ungrouped() -> None:
     trace = tl.trace(compiled, inputs, backend="tf")
 
     assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert all(op.num_passes == 1 for op in trace._layer_list)
 
 
 def test_tf_tamper_swapped_sidecar_labels_fail_validation() -> None:

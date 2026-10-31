@@ -119,10 +119,10 @@ def test_single_module_selector_escrows_one_decoder_layer():
         trace = tl.trace(model, ids, save=tl.module(_LAYER))
 
     assert torch.equal(trace.modules[_LAYER].out, reference)
-    saved = [op.layer_label for op in trace.layer_list if op.has_saved_activation]
+    saved = [op.layer_label for op in trace._layer_list if op.has_saved_activation]
     assert len(saved) == len(full.modules[_LAYER]._single_call_or_error().output_ops) == 1
     # One of four decoder layers plus embedding and head: far below a third of all ops.
-    assert 0 < counts["copies"] * 3 < len(full.layer_list), counts
+    assert 0 < counts["copies"] * 3 < len(full._layer_list), counts
 
 
 @pytest.mark.heavy
@@ -137,7 +137,7 @@ def test_module_selector_fits_a_bound_the_whole_pass_escrow_crosses():
     full = tl.trace(model, ids)
     whole_pass_bytes = sum(
         op.out.nelement() * op.out.element_size()
-        for op in full.layer_list
+        for op in full._layer_list
         if op.has_saved_activation and isinstance(op.out, torch.Tensor)
     )
     spill_bound = 2 * layer_bytes

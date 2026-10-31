@@ -66,7 +66,7 @@ def _check_backward_graph_invariants(trace: Trace) -> None:
         sync_projection()
     _check_journal_seq_invariants(trace, name)
     _check_backward_event_flow_invariants(trace, name)
-    if not trace.grad_fn_logs:
+    if not trace._grad_fn_logs:
         _refuse_backward_evidence_without_registry(trace, name)
         return
 
@@ -112,13 +112,13 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
     """
 
     evidence: list[str] = []
-    backward_pass_logs = getattr(trace, "backward_pass_logs", None) or {}
+    backward_pass_logs = getattr(trace, "_backward_pass_logs", None) or {}
     ok_pass_count = sum(
         1 for record in backward_pass_logs.values() if getattr(record, "status", "ok") == "ok"
     )
     if ok_pass_count:
         evidence.append(f"backward_pass_logs holds {ok_pass_count} ok-status pass record(s)")
-    num_backward_passes = getattr(trace, "num_backward_passes", 0) or 0
+    num_backward_passes = getattr(trace, "_num_backward_passes", 0) or 0
     if isinstance(num_backward_passes, int) and num_backward_passes > len(backward_pass_logs):
         evidence.append(
             f"num_backward_passes={num_backward_passes} exceeds the "
@@ -161,7 +161,7 @@ def _check_backward_grad_fn_registry(trace: Trace, name: str) -> set[int]:
         If registry or root references are inconsistent.
     """
 
-    grad_fn_ids = set(trace.grad_fn_logs)
+    grad_fn_ids = set(trace._grad_fn_logs)
     order_ids = set(trace.grad_fn_order)
     if not order_ids <= grad_fn_ids:
         missing = sorted(order_ids - grad_fn_ids)
@@ -173,14 +173,14 @@ def _check_backward_grad_fn_registry(trace: Trace, name: str) -> set[int]:
             name,
             f"backward_root_grad_fn_object_ids must be a list, got {type(root_ids).__name__}",
         )
-    missing_root_ids = [root_id for root_id in root_ids if root_id not in trace.grad_fn_logs]
+    missing_root_ids = [root_id for root_id in root_ids if root_id not in trace._grad_fn_logs]
     if missing_root_ids:
         raise MetadataInvariantError(
             name,
             f"backward_root_grad_fn_object_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
-    return set(getattr(trace, "backward_pass_logs", {}).keys())
+    return set(getattr(trace, "_backward_pass_logs", {}).keys())
 
 
 def _check_backward_grad_fn_handle_records(
@@ -206,7 +206,7 @@ def _check_backward_grad_fn_handle_records(
     """
 
     layer_labels = set(trace.layer_labels)
-    for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
+    for grad_fn_object_id, grad_fn_handle in trace._grad_fn_logs.items():
         if not re.fullmatch(r"[a-z0-9_]+_back_[1-9]\d*_[1-9]\d*", grad_fn_handle.label):
             raise MetadataInvariantError(
                 name,
@@ -261,7 +261,7 @@ def _check_backward_grad_fn_handle_records(
             )
         creator_object_id = getattr(grad_fn_handle, "creator_object_id", None)
         if creator_object_id is not None:
-            creator = trace.grad_fn_logs.get(creator_object_id)
+            creator = trace._grad_fn_logs.get(creator_object_id)
             if creator is None:
                 raise MetadataInvariantError(
                     name,
@@ -316,7 +316,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
         If a layer points to a missing or severed GradFn handle.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         grad_fn_object_id = layer.grad_fn_object_id
         if grad_fn_object_id is None:
             continue
@@ -334,7 +334,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
             # reachability walk — which fails closed on every resolution
             # gap — cannot reach any visited op downstream.
             if grad_fn_object_id not in getattr(
-                trace, "grad_fn_logs", {}
+                trace, "_grad_fn_logs", {}
             ) and not _layer_feeds_recorded_backward_roots(trace, layer):
                 continue
             raise MetadataInvariantError(
@@ -342,7 +342,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
                 f"Layer {layer.layer_label} with grad_fn_handle id {grad_fn_object_id!r} "
                 "is missing its GradFn backpointer",
             )
-        if grad_fn_object_id not in trace.grad_fn_logs:
+        if grad_fn_object_id not in trace._grad_fn_logs:
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label} points to missing grad_fn_handle id "
@@ -366,7 +366,7 @@ def _check_backward_saved_grad_records(trace: Trace, name: str) -> None:
         If saved-grad op labels and layer ``has_grad`` flags disagree.
     """
 
-    expected_saved_grad_labels = {layer.label for layer in trace.layer_list if layer.has_grad}
+    expected_saved_grad_labels = {layer.label for layer in trace._layer_list if layer.has_grad}
     saved_grad_labels = {op.label for op in trace.saved_grad_ops}
     if saved_grad_labels != expected_saved_grad_labels:
         raise MetadataInvariantError(
@@ -397,7 +397,7 @@ def _check_backward_pass_record_consistency(
         If backward pass logs are not dense or calls reference missing passes.
     """
 
-    for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
+    for pass_index, backward_pass in getattr(trace, "_backward_pass_logs", {}).items():
         if backward_pass.pass_index != pass_index:
             raise MetadataInvariantError(
                 name,
@@ -410,7 +410,7 @@ def _check_backward_pass_record_consistency(
                     f"{call.call_label} is attached to pass {pass_index} but records "
                     f"pass {call.backward_pass_index}",
                 )
-    for grad_fn_handle in trace.grad_fn_logs.values():
+    for grad_fn_handle in trace._grad_fn_logs.values():
         for call in grad_fn_handle.calls.values():
             if call.backward_pass_index not in valid_pass_indices:
                 raise MetadataInvariantError(
@@ -435,13 +435,13 @@ def _check_backward_pass_index_density(trace: Trace, name: str) -> None:
         If backward pass log keys are not exactly ``1..num_backward_passes``.
     """
 
-    expected_pass_indices = list(range(1, trace.num_backward_passes + 1))
-    actual_pass_indices = sorted(getattr(trace, "backward_pass_logs", {}).keys())
+    expected_pass_indices = list(range(1, trace._num_backward_passes + 1))
+    actual_pass_indices = sorted(getattr(trace, "_backward_pass_logs", {}).keys())
     if actual_pass_indices != expected_pass_indices:
         raise MetadataInvariantError(
             name,
             f"backward_pass_logs keys {actual_pass_indices!r} are not dense "
-            f"1..{trace.num_backward_passes}",
+            f"1..{trace._num_backward_passes}",
         )
 
 
@@ -449,7 +449,7 @@ def _check_grad_fn_topology_invariants(trace: Trace, name: str) -> None:
     """Check backward GradFn relation lists for reciprocal, resolvable links.
 
     The precondition contract is backward-capture only: callers invoke this
-    helper after proving ``trace.grad_fn_logs`` is populated. Forward-only
+    helper after proving ``trace._grad_fn_logs`` is populated. Forward-only
     traces legitimately have no GradFn topology and are skipped by
     ``_check_backward_graph_invariants`` before this helper is reached.
 
@@ -468,10 +468,10 @@ def _check_grad_fn_topology_invariants(trace: Trace, name: str) -> None:
     """
 
     grad_fns_by_label = {
-        grad_fn_handle.label: grad_fn_handle for grad_fn_handle in trace.grad_fn_logs.values()
+        grad_fn_handle.label: grad_fn_handle for grad_fn_handle in trace._grad_fn_logs.values()
     }
-    grad_fn_ids = set(trace.grad_fn_logs)
-    for grad_fn_handle in trace.grad_fn_logs.values():
+    grad_fn_ids = set(trace._grad_fn_logs)
+    for grad_fn_handle in trace._grad_fn_logs.values():
         missing_next_ids = [
             next_id for next_id in grad_fn_handle.next_grad_fn_ids if next_id not in grad_fn_ids
         ]

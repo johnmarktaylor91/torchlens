@@ -341,7 +341,7 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     fork.do(tl.units(f"{sites[0]}:1", mask).resolve(fork), tl.zero_ablate())
     assert torch.all(fork[f"{sites[0]}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     output_nodes = [
-        op for op in fork.layer_list if getattr(op, "is_output", False) and op.out is not None
+        op for op in fork._layer_list if getattr(op, "is_output", False) and op.out is not None
     ]
     assert output_nodes, "no boundary output nodes on the ModelOutput-container trace"
     for node in output_nodes:
@@ -416,8 +416,8 @@ def test_config_fingerprint_use_cache_row():
     ids = torch.randint(0, VOCAB, (1, 8), generator=generator)
     # Every captured row (layer_list): use_cache adds output rows, which the
     # counted ``trace.ops`` view leaves out (sumfam F1).
-    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids}).layer_list)
-    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids}).layer_list)
+    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids})._layer_list)
+    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids})._layer_list)
     assert ops_no_cache != ops_cache, (
         "use_cache flipped without changing the captured graph? the"
         " config-fingerprint class lost its measured basis; re-measure"

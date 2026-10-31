@@ -688,7 +688,7 @@ def _ops_from_log(trace: Any) -> list[tuple[str, int]]:
     """
 
     counts: Counter[str] = Counter()
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         op_name = getattr(layer, "func_name", None) or getattr(layer, "layer_type", "unknown")
         counts[str(op_name)] += 1
     return sorted(counts.items())

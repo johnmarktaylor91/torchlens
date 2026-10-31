@@ -582,7 +582,7 @@ class JAXBackend:
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
@@ -747,7 +747,7 @@ class JAXBackend:
         # single-pass parent reference. Index the bare label too (safe: a
         # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
+        for op in getattr(trace, "_layer_list", []):
             labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
             if getattr(op, "num_passes", 1) == 1:
                 labels.append(getattr(op, "layer_label", None))
@@ -809,7 +809,7 @@ class JAXBackend:
         # single-pass parent reference. Index the bare label too (safe: a
         # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
+        for op in getattr(trace, "_layer_list", []):
             labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
             if getattr(op, "num_passes", 1) == 1:
                 labels.append(getattr(op, "layer_label", None))
@@ -1534,8 +1534,7 @@ class JAXBackend:
             param._param_ref = None
             param.trace = trace
             param_logs[address] = param
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
@@ -1566,8 +1565,7 @@ class JAXBackend:
             param_logs = equinox_param_logs(tree, trace)
         else:
             param_logs = nnx_param_logs(tree, trace)
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = sum(
             param.num_params for param in param_logs.values() if param.is_trainable
@@ -1965,13 +1963,13 @@ class JAXBackend:
         # this sibling mapping feeds ``_relabel_jax_graph_edges`` instead.
         raw_to_final_layer_label: dict[str, str] = {}
 
-        trace.layer_list = []
-        trace.layer_dict_main_keys.clear()
-        trace.layer_dict_all_keys.clear()
-        trace.layer_logs.clear()
+        trace._layer_list = []
+        trace._layer_dict_main_keys.clear()
+        trace._layer_dict_all_keys.clear()
+        trace._layer_logs.clear()
         trace.op_labels = []
         trace.layer_labels = []
-        trace.layer_num_calls.clear()
+        trace._layer_num_calls.clear()
         trace._lookup_keys_to_layer_num_dict.clear()
         trace._layer_num_to_lookup_keys_dict.clear()
 
@@ -2040,26 +2038,26 @@ class JAXBackend:
             # ``Module.layer_labels``, tripping the ``module_attribution``
             # metadata invariant.
             op_log.lookup_keys = [label, op_log.label, op_log.layer_label]
-            trace.layer_list.append(op_log)
-            trace.layer_dict_main_keys[op_log.label] = op_log
+            trace._layer_list.append(op_log)
+            trace._layer_dict_main_keys[op_log.label] = op_log
             for lookup_key in op_log.lookup_keys:
-                if lookup_key not in trace.layer_dict_all_keys:
-                    trace.layer_dict_all_keys[lookup_key] = op_log
+                if lookup_key not in trace._layer_dict_all_keys:
+                    trace._layer_dict_all_keys[lookup_key] = op_log
                     trace._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
                 trace._layer_num_to_lookup_keys_dict[raw_index].append(lookup_key)
             if op_log.num_passes > 1:
                 # Incidental raw-index artifact, not a contract: every pass
                 # overwrites the bare layer label (last wins, torch parity).
-                trace.layer_dict_all_keys[op_log.layer_label] = op_log
+                trace._layer_dict_all_keys[op_log.layer_label] = op_log
                 trace._lookup_keys_to_layer_num_dict[op_log.layer_label] = raw_index
             trace.op_labels.append(op_log.label)
             if op_log.layer_label not in trace.layer_labels:
                 trace.layer_labels.append(op_log.layer_label)
-            trace.layer_num_calls[op_log.layer_label] = op_log.num_passes
-            layer_log = trace.layer_logs.get(op_log.layer_label)
+            trace._layer_num_calls[op_log.layer_label] = op_log.num_passes
+            layer_log = trace._layer_logs.get(op_log.layer_label)
             if layer_log is None:
                 layer_log = Layer(op_log)
-                trace.layer_logs[op_log.layer_label] = layer_log
+                trace._layer_logs[op_log.layer_label] = layer_log
             layer_log.num_passes = op_log.num_passes
             layer_log.ops[op_log.pass_index] = op_log
             layer_log.call_labels.append(op_log.label)
@@ -2075,7 +2073,7 @@ class JAXBackend:
         trace.op_equivalence_classes.update(equivalent_labels_by_key)
         trace.num_ops = sum(
             1
-            for op_log in trace.layer_list
+            for op_log in trace._layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
         )
         if module_tree is None:
@@ -2101,22 +2099,22 @@ class JAXBackend:
             # ``_relabel_jax_graph_edges``), and a source op is always
             # single-pass, so both keys point at the one param.
             param_log_by_source_label: dict[str, Param] = {}
-            for op_log in trace.layer_list:
+            for op_log in trace._layer_list:
                 path = getattr(op_log, "annotations", {}).get("jax_container_path")
                 if not isinstance(path, str) or not path.startswith("0."):
                     continue
                 param_address = path.removeprefix("0.")
-                if param_address not in trace.param_logs:
+                if param_address not in trace._param_logs:
                     continue
-                param_log_by_source_label[op_log.label] = trace.param_logs[param_address]
+                param_log_by_source_label[op_log.label] = trace._param_logs[param_address]
                 if op_log.num_passes == 1:
-                    param_log_by_source_label[op_log.layer_label] = trace.param_logs[param_address]
+                    param_log_by_source_label[op_log.layer_label] = trace._param_logs[param_address]
 
             if param_log_by_source_label:
                 from .._finalize import _attach_param_usage
 
                 usage_membership: dict[int, tuple[set[str], set[str], set[str]]] = {}
-                for op_log in trace.layer_list:
+                for op_log in trace._layer_list:
                     seen_barcodes: set[str] = set()
                     consumed_params: list[Param] = []
                     for parent_label in op_log.parents:
@@ -2154,7 +2152,7 @@ class JAXBackend:
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
             trace.num_layers_with_params = len(
-                {op.layer_label for op in trace.layer_list if op.has_params}
+                {op.layer_label for op in trace._layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
             # param reused across more than one op/layer (a tied weight, or a
@@ -2164,10 +2162,9 @@ class JAXBackend:
             # ``trace_self_consistency`` invariant's
             # ``num_param_tensors != len(param_logs)`` check (same fix as
             # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
+                param.num_params for param in trace._param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2268,7 +2265,7 @@ class JAXBackend:
                     param_addresses.append(address)
             if not param_addresses:
                 continue
-            params = [trace.param_logs[address] for address in param_addresses]
+            params = [trace._param_logs[address] for address in param_addresses]
             op_log._param_barcodes = [param.barcode for param in params]
             op_log._param_logs = params
             op_log.param_shapes = [param.shape for param in params]
@@ -2282,16 +2279,15 @@ class JAXBackend:
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
         trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
+            {op.layer_label for op in trace._layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in
         # ``_jax_recurrence_assignments``'s sibling counter block above):
         # a per-layer-label dedup sum still double-counts a param shared
         # across more than one layer.
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2330,7 +2326,7 @@ class JAXBackend:
             if address != "self" and "." not in address:
                 mbd["top_level_modules"].append(address)
 
-        for param in trace.param_logs:
+        for param in trace._param_logs:
             owner = param.module_address
             mbd["module_nparams"][owner] += param.num_params
             if param.is_trainable:
@@ -2363,7 +2359,7 @@ class JAXBackend:
         seen_pass_children: dict[str, set[str]] = defaultdict(set)
         seen_addresses = set(mbd["addresses"])
 
-        for op_log in trace.layer_list:
+        for op_log in trace._layer_list:
             normalized_calls = normalize_op_module_calls(op_log.modules)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
@@ -3760,7 +3756,7 @@ def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in getattr(trace, "_layer_list", ())
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in ALL_JAX_EQUATION_KINDS
     )
@@ -3782,7 +3778,7 @@ def _jax_region_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in getattr(trace, "_layer_list", ())
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in {"region", "region_output"}
     )

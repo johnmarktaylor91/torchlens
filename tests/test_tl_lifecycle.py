@@ -103,7 +103,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     assert module_meta.address == "linear"
     assert module_meta.module_type == "Linear"
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         _assert_tensor_tree_clean(layer.out)
         _assert_tensor_tree_clean(getattr(layer, "transformed_out", None))
         _assert_tensor_tree_clean(getattr(layer, "saved_args", None))

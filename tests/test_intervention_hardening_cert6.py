@@ -95,7 +95,7 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
 
     log = tl.trace(_ReluMul(), torch.randn(4), capture=tl.options.CaptureOptions(replayable=True))
     log.annotate("input_1", data={"owner": "original"})
-    parent_op = log.layer_dict_all_keys["input_1"]
+    parent_op = log._layer_dict_all_keys["input_1"]
     original_annotations = {"user": {"data": {"owner": "original"}}}
     assert parent_op.annotations == original_annotations
 
@@ -106,9 +106,9 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     fork.annotate("input_1", data={"owner": "fork-only"})
 
     # The parent's out-of-cone op must be untouched (previously it leaked).
-    assert log.layer_dict_all_keys["input_1"].annotations == original_annotations
+    assert log._layer_dict_all_keys["input_1"].annotations == original_annotations
     # The fork carries the new annotation independently.
-    assert fork.layer_dict_all_keys["input_1"].annotations == {
+    assert fork._layer_dict_all_keys["input_1"].annotations == {
         "user": {"data": {"owner": "fork-only"}}
     }
 

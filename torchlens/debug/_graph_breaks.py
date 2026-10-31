@@ -337,7 +337,7 @@ def _correlate_break(trace: Any, record: Any) -> GraphBreak:
         )
     source_file = os.path.abspath(record.source_file)
     distances: list[tuple[int, int, str]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         label = str(getattr(op, "label", getattr(op, "layer_label", "<unknown>")))
         same_file_lines = [line for filename, line in _op_locations(op) if filename == source_file]
         if same_file_lines:

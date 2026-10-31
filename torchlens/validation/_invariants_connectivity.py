@@ -55,7 +55,7 @@ def _check_distance_invariants(ml: Trace) -> None:
     input_set = set(ml.input_layers)
     output_set = set(ml.output_layers)
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # min <= max for input distances
@@ -244,7 +244,7 @@ def _check_ancestry_closure(ml: Trace) -> None:
     input_set = set(ml.input_layers)
     orphan_labels = _retained_orphan_layer_labels(ml) | _retained_orphan_op_labels(ml)
 
-    entries = [lpl for lpl in ml.layer_list if lpl.layer_label not in orphan_labels]
+    entries = [lpl for lpl in ml._layer_list if lpl.layer_label not in orphan_labels]
     by_label: dict[str, Any] = {}
     for lpl in entries:
         by_label.setdefault(lpl.layer_label, lpl)
@@ -519,7 +519,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
     input_set = set(ml.input_layers)
     buffer_set = set(ml.buffer_layers)
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # Non-input, non-buffer, non-internally-initialized layers must have parents
@@ -692,7 +692,7 @@ def _check_module_containment_logic(ml: Trace) -> None:
     # Per-layer: modules path validity
     # Format after postprocessing: list of "addr:pass" strings, ordered from
     # outermost enclosing submodule to innermost. Does NOT include "self".
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         nested = lpl.modules
         if not nested:
             continue

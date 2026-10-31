@@ -197,7 +197,7 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
 
     trace_dict = trace.__dict__
     return _ProbeSnapshot(
-        num_backward_passes=int(getattr(trace, "num_backward_passes", 0)),
+        num_backward_passes=int(getattr(trace, "_num_backward_passes", 0)),
         has_gradients=bool(getattr(trace, "has_gradients", False)),
         backward_event_count=_backward_event_count(trace),
         active_index_present="_active_backward_pass_index" in trace_dict,
@@ -349,7 +349,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
 
     return {
         str(op.io_role or op.label): op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "is_input", False))
     }
 

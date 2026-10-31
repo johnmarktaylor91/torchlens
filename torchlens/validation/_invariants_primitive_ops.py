@@ -229,9 +229,9 @@ def _check_profile_rows(trace: Trace, profile: Any) -> list[Any]:
         _primitive_failure("event-owner evidence contains duplicate sequences")
     if set(evidence) != {row.sequence for row in rows}:
         _primitive_failure("event-owner evidence does not exactly cover primitive rows")
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     grad_fn_labels = {
-        str(grad_fn.label) for grad_fn in (getattr(trace, "grad_fn_logs", {}) or {}).values()
+        str(grad_fn.label) for grad_fn in (getattr(trace, "_grad_fn_logs", {}) or {}).values()
     }
     labels: set[str] = set()
     sequences: set[int] = set()

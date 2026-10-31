@@ -50,7 +50,7 @@ def test_witness_side_one_constructions_are_zero_by_rule() -> None:
     )
     try:
         by_func: dict[str, list] = {}
-        for op in log.layer_list:
+        for op in log._layer_list:
             by_func.setdefault(op.func_name, []).append(op)
         for name in ("arange", "tensor", "zeros", "ones_like"):
             assert name in by_func, f"construction {name} not captured"
@@ -126,7 +126,7 @@ def test_four_way_classification_is_total() -> None:
         log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
         try:
             coverage = log.compute_coverage
-            assert sum(coverage.values()) == len(log.layer_list)
+            assert sum(coverage.values()) == len(log._layer_list)
             assert coverage["unknown"] == len(log.unknown_flop_ops) or coverage["unknown"] == sum(
                 group.count for group in log.unknown_flop_ops
             )

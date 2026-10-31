@@ -173,11 +173,11 @@ def _fingerprint(log: tl.Trace) -> dict:
     """Everything a failed batch must leave as it was (values, spec, ledger rows)."""
 
     ops = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         store = op.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
-            tuple(repr(record) for record in op.interventions or ()),
+            tuple(repr(record) for record in op.edits or ()),
             bool(op.is_edited),
             tuple(sorted(repr(key) for key in store)),
         )
@@ -212,7 +212,7 @@ def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...])
     sequential = log.fork()
     for selection, edit in _cross_kind_pairs(sequential, order):
         sequential.do(selection, edit)
-    for batch_op, seq_op in zip(batch.layer_list, sequential.layer_list, strict=True):
+    for batch_op, seq_op in zip(batch._layer_list, sequential._layer_list, strict=True):
         assert batch_op.label == seq_op.label
         assert batch_op.out.dtype == torch.float64
         assert torch.equal(batch_op.out, seq_op.out), batch_op.label
@@ -258,7 +258,7 @@ def test_cross_kind_batch_with_a_refusing_pair_leaves_the_fork_as_before(bad: st
     assert added[0]["status"] == "error", "the fire-evidence rule: one aborted record"
     assert added[0]["selection_batch"]["kinds"] == list(order)
     fork.do(_cross_kind_pairs(fork, order[:2]))
-    for fork_op, probe_op in zip(fork.layer_list, probe.layer_list, strict=True):
+    for fork_op, probe_op in zip(fork._layer_list, probe._layer_list, strict=True):
         assert torch.equal(fork_op.out, probe_op.out), "the fork is usable after the abort"
 
 

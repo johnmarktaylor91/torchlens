@@ -236,7 +236,7 @@ def _make_layer_log_entry(
     fire_results = tuple(fields_dict.pop("fire_results", ()))
 
     keep_by_predicate = True
-    module_filter = getattr(self, "module_filter", None)
+    module_filter = getattr(self, "_module_filter", None)
     if module_filter is not None:
         keep_by_predicate = bool(module_filter(_module_filter_namespace(fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)

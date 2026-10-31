@@ -58,7 +58,7 @@ def _raw_recurrent_member_sets(trace: Any) -> set[frozenset[str]]:
         Raw-label recurrent groups with at least two members.
     """
     member_sets: set[frozenset[str]] = set()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if len(op.recurrent_ops) <= 1:
             continue
         raw_members = frozenset(_raw_label(trace, label) for label in op.recurrent_ops)
@@ -81,13 +81,13 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
     """
     nodes: dict[str, RecurrenceNode] = {}
     raw_labels: list[str] = []
-    raw_label_set = {op._label_raw for op in trace.layer_list}
+    raw_label_set = {op._label_raw for op in trace._layer_list}
     # ``equivalent_ops`` holds finalized OP labels (pass-qualified), which are keyed
     # differently from the final LAYER labels in ``_final_to_raw_layer_labels`` --
     # map them back to raw labels through the ops themselves.
-    op_label_to_raw = {op.label: op._label_raw for op in trace.layer_list}
+    op_label_to_raw = {op.label: op._label_raw for op in trace._layer_list}
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         raw_label = op._label_raw
         raw_labels.append(raw_label)
         nodes[raw_label] = RecurrenceNode(
@@ -102,12 +102,12 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
             data_parents=tuple(
                 _raw_label(trace, parent)
                 for parent in op.parents
-                if parent in trace.layer_dict_all_keys
+                if parent in trace._layer_dict_all_keys
             ),
             data_children=tuple(
                 _raw_label(trace, child)
                 for child in op.children
-                if child in trace.layer_dict_all_keys
+                if child in trace._layer_dict_all_keys
             ),
             layer_label=raw_label,
             recurrent_labels=(),

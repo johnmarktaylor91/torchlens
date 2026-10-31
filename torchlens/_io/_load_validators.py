@@ -475,7 +475,7 @@ def _validate_executed_flops_records(trace: Trace) -> None:
 
     from ..report._backward_attribution import executed_flops_record_problem
 
-    for record in (getattr(trace, "backward_pass_logs", None) or {}).values():
+    for record in (getattr(trace, "_backward_pass_logs", None) or {}).values():
         value = getattr(record, "executed_flops_record", None)
         if value is None:
             continue

@@ -96,7 +96,7 @@ def test_aggregate_grad_basic_norms() -> None:
         )
         loss = _mse_loss(trace[trace.output_layers[-1]].out, targets)
         trace.log_backward(loss)
-        grad = next(layer.grad for layer in trace.layer_list if layer.layer_type == "relu")
+        grad = next(layer.grad for layer in trace._layer_list if layer.layer_type == "relu")
         expected_norms.append(float(torch.linalg.vector_norm(grad.reshape(-1)).item()))
         trace.cleanup()
 
@@ -117,7 +117,7 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
     trace.log_backward(loss)
     matches = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if "linear" in str(layer.layer_label) and layer.has_grad and layer.grad is not None
     ]
     expected = float(torch.linalg.vector_norm(matches[0].grad.reshape(-1)).item())

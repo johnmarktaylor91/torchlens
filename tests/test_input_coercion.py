@@ -320,9 +320,9 @@ def test_trace_with_attached_tokenizer_string() -> None:
     model = TokenEmbeddingModel()
     trace = tl.trace(model, "hello world")
     try:
-        assert len(trace.layer_list) > 0
+        assert len(trace._layer_list) > 0
         assert model.tokenizer_calls == [("hello world", "pt")]
-        assert trace.raw_input == "hello world"
+        assert trace.input == "hello world"
     finally:
         trace.cleanup()
 
@@ -337,7 +337,7 @@ def test_trace_with_numpy_array_preserves_raw_input() -> None:
 
     trace = tl.trace(model, array, capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert trace.raw_input is array
+    assert trace.input is array
 
 
 def test_fastlog_record_with_attached_tokenizer_string() -> None:
@@ -379,7 +379,7 @@ def test_trace_with_transformerlens_gpt2_string_if_available() -> None:
 
     trace = tl.trace(model, "hello world", capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
-        assert len(trace.layer_list) > 0
+        assert len(trace._layer_list) > 0
     finally:
         trace.cleanup()
 
@@ -438,8 +438,8 @@ def test_trace_with_pil_image_and_attached_processor() -> None:
     model = TinyVisionModel()
     trace = tl.trace(model, pil_image.new("RGB", (8, 8)))
     try:
-        assert len(trace.layer_list) > 0
+        assert len(trace._layer_list) > 0
         assert model.processor_calls == 1
-        assert trace.raw_input is not None
+        assert trace.input is not None
     finally:
         trace.cleanup()

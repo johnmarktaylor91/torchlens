@@ -661,7 +661,7 @@ def _assert_pytree_tabular_and_summary_surface(trace: Any, tmp_path: Path) -> No
 
     del tmp_path
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["fc1:1"].to_pandas()) == 1
 
@@ -674,7 +674,7 @@ def _assert_pytree_save_load_surface(trace: Any, tmp_path: Path) -> None:
     loaded = tl.load(audit_path)
     assert loaded.backend == "jax"
     assert loaded.module_identity_mode == "pytree_module"
-    assert all(op.out is None for op in loaded.layer_list)
+    assert all(op.out is None for op in loaded._layer_list)
 
     portable_path = tmp_path / "jax_pytree_portable.tlspec"
     expected = np.asarray(trace[trace.output_layers[0]].out)

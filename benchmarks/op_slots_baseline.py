@@ -196,7 +196,7 @@ def _op_object_bytes(trace: Any) -> int:
 
     total = 0
     seen_stores: set[int] = set()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         instance_dict = getattr(op, "__dict__", None)
         total += sys.getsizeof(op)
         if instance_dict is not None:
@@ -246,7 +246,7 @@ def measure_fixture(fixture: BenchmarkFixture) -> BaselineRow:
     model, x = fixture.build()
     with torch.no_grad():
         trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
-    op_count = len(trace.layer_list)
+    op_count = len(trace._layer_list)
     total_bytes = _op_object_bytes(trace)
     construction_total_s, construction_count = _construction_stats(trace)
     return BaselineRow(
@@ -274,7 +274,7 @@ def _seed_fields_for_synthetic_ops() -> dict[str, Any]:
     model, x = _build_parity_mlp()
     with torch.no_grad():
         trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
-    seed_op = next(op for op in trace.layer_list if op.func_name not in {None, "none"})
+    seed_op = next(op for op in trace._layer_list if op.func_name not in {None, "none"})
     from torchlens._data_classes.op import _OP_SLOT_NAMES
 
     physical_fields = set(_OP_SLOT_NAMES)
@@ -335,14 +335,14 @@ def measure_synthetic_op_trace(num_ops: int) -> BaselineRow:
         fields = _synthetic_field_dict(seed_fields, index)
         with _timed_phase(trace, "object_construction:op"):
             synthetic_ops.append(Op(fields))
-    trace.layer_list = synthetic_ops
+    trace._layer_list = synthetic_ops
     total_bytes = _op_object_bytes(trace)
     construction_total_s, construction_count = _construction_stats(trace)
     return BaselineRow(
         fixture=f"synthetic_{num_ops:,}_ops",
-        op_count=len(trace.layer_list),
+        op_count=len(trace._layer_list),
         total_object_bytes=total_bytes,
-        bytes_per_op=total_bytes / len(trace.layer_list) if trace.layer_list else 0.0,
+        bytes_per_op=total_bytes / len(trace._layer_list) if trace._layer_list else 0.0,
         construction_total_ms=construction_total_s * 1000.0,
         construction_us_per_op=(construction_total_s * 1_000_000.0 / construction_count)
         if construction_count

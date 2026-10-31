@@ -176,7 +176,7 @@ def test_imagenet_default_opt_in_applies_and_discloses() -> None:
     assert record.status == "unverified_fallback"
     assert record.config["resolution_method"] == "explicit_opt_in"
     assert "UNVERIFIED" in record.description
-    assert log.raw_input is not None
+    assert log.input is not None
     first_input = log[log.input_layers[0]].out
     assert tuple(first_input.shape) == (1, 3, 224, 224)
 
@@ -274,7 +274,7 @@ def test_list_of_pil_images_batches() -> None:
     assert log.input_preprocessor.source == "imagenet_default"
     assert tuple(log[log.input_layers[0]].out.shape) == (2, 3, 224, 224)
     assert log.num_ops > 0
-    assert isinstance(log.raw_input, list)
+    assert isinstance(log.input, list)
 
 
 def test_pil_import_failure_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:

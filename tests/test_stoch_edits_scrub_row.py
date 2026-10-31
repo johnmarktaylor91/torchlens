@@ -166,7 +166,7 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
     assert len(envelopes) == 1 and envelopes[0]["status"] == "fired"
-    fires = list(fork.ops[site].interventions or ())
+    fires = list(fork.ops[site].edits or ())
     assert fires and "sampling[patch_from]" in (fires[-1].determinism_note or "")
     assert record["digest_kind"] == "address"
     assert record["population_count"] == 6

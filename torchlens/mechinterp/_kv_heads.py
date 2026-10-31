@@ -340,7 +340,7 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
     op = candidates[0]
     twins = [
         row
-        for row in corrupted_log.layer_list
+        for row in corrupted_log._layer_list
         if str(row.label) == str(op.label)
         and str(row.raw_label) == str(op.raw_label)
         and row.site_key == op.site_key
@@ -399,7 +399,7 @@ def _op_index(log: Any) -> dict[str, list[Any]]:
     """Map every final and layer label to its op records (several for multi-pass layers)."""
 
     index: dict[str, list[Any]] = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         for key in {str(op.label), str(op.layer_label)}:
             index.setdefault(key, []).append(op)
     return index

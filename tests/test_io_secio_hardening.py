@@ -177,9 +177,9 @@ def test_visualizer_path_outside_bundle_is_dropped(tmp_path: Path) -> None:
     spec = _save(tmp_path)
     trace = tl.load(str(spec))
     # Simulate a tampered field pointing at an out-of-bundle file.
-    trace.layer_list[0].visualizer_path = str(victim_png)
+    trace._layer_list[0].visualizer_path = str(victim_png)
     _reanchor_visualizer_paths(trace, spec)
-    assert trace.layer_list[0].visualizer_path is None
+    assert trace._layer_list[0].visualizer_path is None
 
 
 def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
@@ -190,9 +190,9 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
     thumb = spec / "visualizers" / "00000_layer.png"
     thumb.write_bytes(b"\x89PNG\r\n\x1a\n")
     trace = tl.load(str(spec))
-    trace.layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
+    trace._layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
     _reanchor_visualizer_paths(trace, spec)
-    kept = trace.layer_list[0].visualizer_path
+    kept = trace._layer_list[0].visualizer_path
     assert kept is not None
     assert Path(kept).resolve() == thumb.resolve()
 

@@ -108,9 +108,9 @@ def test_metric_and_joint_metric_contracts() -> None:
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
 
-    assert bundle.map(lambda member: len(member.layer_list)) == {
-        "a": len(bundle["a"].layer_list),
-        "b": len(bundle["b"].layer_list),
+    assert bundle.map(lambda member: len(member._layer_list)) == {
+        "a": len(bundle["a"]._layer_list),
+        "b": len(bundle["b"]._layer_list),
     }
     assert bundle.joint_metric(lambda b: b.names) == ["a", "b"]
 

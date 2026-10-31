@@ -292,7 +292,7 @@ def _selected_mds_sites(
 
     selected: list[tuple[str, Any, Any, str]] = []
     for layer_label, layer_sites in selected_by_layer.items():
-        layer = trace.layer_logs[layer_label]
+        layer = trace._layer_logs[layer_label]
         if int(getattr(layer, "num_passes", 1)) > 1:
             if len(layer_sites) != 1 and not expand_passes:
                 _raise_recurrent_layer_requires_pass(layer, verb=verb)

@@ -280,7 +280,7 @@ def _add_output_layers(
         new_output_node.is_output = True
         new_output_node.is_input = False
         new_output_node.is_buffer = False
-        new_output_node._internal_set("interventions", [])
+        new_output_node._internal_set("edits", [])
         new_output_node._internal_set("is_edited", False)
         if i == len(paired_outputs) - 1:
             new_output_node.is_final_output = True
@@ -624,7 +624,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     self._orphan_logs = tuple(
         self._raw_graph_ws.raw_layer_dict[label] for label in self._orphan_labels
     )
-    self.orphan_records = [
+    self._orphan_records = [
         {
             "raw_label": orphan._label_raw,
             "label": orphan.label,

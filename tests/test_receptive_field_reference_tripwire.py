@@ -150,7 +150,7 @@ def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPat
         save_mode="reference",
         capture=CaptureOptions(layers_to_save="all"),
     )
-    version_nodes = [op for op in trace.layer_list if op._slot("buffer_write_kind") == "fused"]
+    version_nodes = [op for op in trace._layer_list if op._slot("buffer_write_kind") == "fused"]
     assert version_nodes, "eval BatchNorm logged no buffer version node"
     for node in version_nodes:
         assert isinstance(node.out, torch.Tensor)

@@ -92,7 +92,7 @@ def _first_compute_op(trace: Trace) -> Any:
         First compute op.
     """
 
-    return next(op for op in trace.layer_list if not op.is_input and not op.is_output)
+    return next(op for op in trace._layer_list if not op.is_input and not op.is_output)
 
 
 def test_annotation_tensor_blob_round_trips_tlspec(tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ def test_json_breadcrumb_round_trips_and_ndarray_rejects(tmp_path: Path) -> None
     trace.annotate(tl.func("relu"), data=breadcrumb)
     relu = trace.resolve_sites(tl.func("relu"), max_fanout=10).first()
     assert relu.annotations["user"]["data"] == breadcrumb
-    assert trace.layer_logs[relu.layer_label].annotations["user"]["data"] == breadcrumb
+    assert trace._layer_logs[relu.layer_label].annotations["user"]["data"] == breadcrumb
 
     bundle_path = tmp_path / "breadcrumb.tlspec"
     trace.save(bundle_path)
@@ -131,7 +131,7 @@ def test_json_breadcrumb_round_trips_and_ndarray_rejects(tmp_path: Path) -> None
     loaded_relu = loaded.resolve_sites(tl.func("relu"), max_fanout=10).first()
 
     assert loaded_relu.annotations["user"]["data"] == breadcrumb
-    assert loaded.layer_logs[loaded_relu.layer_label].annotations["user"]["data"] == breadcrumb
+    assert loaded._layer_logs[loaded_relu.layer_label].annotations["user"]["data"] == breadcrumb
     with pytest.raises(ValueError, match="JSON-serializable or a torch.Tensor"):
         trace.annotate(tl.func("relu"), data=np.zeros((2, 2)))
 
@@ -150,7 +150,7 @@ def test_annotate_uses_large_default_fanout() -> None:
 
     annotated = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "relu" and op.annotations.get("user", {}).get("data") == {"fanout": True}
     ]
     assert len(annotated) == 10
@@ -167,7 +167,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     trace.annotate(tl.func("relu"), data=torch.ones(2, 2))
     trace.annotate(tl.func("relu"), data={"node_note": "keep"})
     relu.annotations["dedup_reference_label"] = "stale"
-    trace.layer_logs[relu.layer_label].annotations["dedup_reference_label"] = "stale"
+    trace._layer_logs[relu.layer_label].annotations["dedup_reference_label"] = "stale"
 
     result = trace.run(model, x + 0.125)
     rerun_relu = result.resolve_sites(tl.func("relu"), max_fanout=10).first()
@@ -178,11 +178,11 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     assert result._annotation_blobs is not None
     assert torch.equal(result._annotation_blobs[key], torch.ones(2, 2))
     assert rerun_relu.annotations["user"]["data"] == {"node_note": "keep"}
-    assert result.layer_logs[rerun_relu.layer_label].annotations["user"]["data"] == {
+    assert result._layer_logs[rerun_relu.layer_label].annotations["user"]["data"] == {
         "node_note": "keep"
     }
     assert "dedup_reference_label" not in rerun_relu.annotations
-    assert "dedup_reference_label" not in result.layer_logs[rerun_relu.layer_label].annotations
+    assert "dedup_reference_label" not in result._layer_logs[rerun_relu.layer_label].annotations
 
 
 def test_non_torch_backend_rejects_torch_tensor_annotation() -> None:

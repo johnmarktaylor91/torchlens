@@ -93,13 +93,13 @@ def test_tf_static_captures_loaded_saved_model_structure_values_and_modules(
     loaded = tf.saved_model.load(str(save_dir))
 
     trace = tl.trace(loaded, x, backend="tf", save=tl.func("relu"))
-    op_types = {op.func_name for op in trace.layer_list}
+    op_types = {op.func_name for op in trace._layer_list}
     assert trace.backend == "tf"
     assert trace.module_identity_mode == "function_root"
-    relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
     if relu_ops:
         relu = relu_ops[0]
-        matmul = next(op for op in trace.layer_list if op.func_name == "MatMul")
+        matmul = next(op for op in trace._layer_list if op.func_name == "MatMul")
         assert {"MatMul", "BiasAdd", "Relu"} <= op_types
         assert matmul.parents
         assert relu.parents
@@ -114,14 +114,14 @@ def test_tf_static_captures_loaded_saved_model_structure_values_and_modules(
         # ``is_output`` (which previews never set).
         assert all(
             op.out is None
-            for op in trace.layer_list
+            for op in trace._layer_list
             if not op.is_input
             and not op.is_output
             and not op.is_output_parent
             and op.func_name not in {"Relu"}
         )
     else:
-        regions = [op for op in trace.layer_list if str(op.func_name).startswith("region:")]
+        regions = [op for op in trace._layer_list if str(op.func_name).startswith("region:")]
         assert regions
         assert all(not region.has_saved_activation for region in regions)
 
@@ -134,8 +134,8 @@ def test_tf_static_captures_tf_function_compiled_model() -> None:
     model(x)
 
     trace = tl.trace(model, x, backend="tf")
-    op_types = {op.func_name for op in trace.layer_list}
-    relu = next(op for op in trace.layer_list if op.func_name == "Relu")
+    op_types = {op.func_name for op in trace._layer_list}
+    relu = next(op for op in trace._layer_list if op.func_name == "Relu")
 
     assert trace.backend == "tf"
     assert {"MatMul", "AddV2", "Relu"} <= op_types
@@ -147,7 +147,7 @@ def test_tf_static_control_flow_regions_are_unverified() -> None:
     """Represent static TensorFlow control flow as unverified regions."""
 
     trace = tl.trace(ControlFlowModel(), tf.constant([1.0, 2.0]), backend="tf")
-    regions = [op for op in trace.layer_list if str(op.func_name).startswith("region:")]
+    regions = [op for op in trace._layer_list if str(op.func_name).startswith("region:")]
     status = TFBackend().validate_trace(trace)
 
     assert trace.backend == "tf"

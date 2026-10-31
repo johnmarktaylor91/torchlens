@@ -97,10 +97,10 @@ def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     assert log.structure_only is True
     # No value payloads are retained anywhere: the contract records structure
     # and shape/dtype hypotheses only.
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         assert getattr(layer, "out", None) is None
     # The structural record itself is intact.
-    assert len(log.layer_list) >= 3  # input + linear + relu
+    assert len(log._layer_list) >= 3  # input + linear + relu
     assert tuple(log["relu_1_2"].shape) == (2, 4)
 
 

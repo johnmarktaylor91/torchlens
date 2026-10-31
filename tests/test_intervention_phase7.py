@@ -161,11 +161,11 @@ def test_rerun_with_hook_updates_downstream_out() -> None:
 
     log.run(ReluAdd(), x)
 
-    relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
     assert torch.equal(log[log.output_layers[0]].out, torch.ones_like(original_output))
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert relu_site.interventions[-1].engine == "live"
+    assert relu_site.edits[-1].engine == "live"
     assert log.last_run["hooks_fired"] >= 1
     assert log.last_run["hooks_unfired"] == 0
 
@@ -360,11 +360,11 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     x = torch.randn(2, 3)
     log = tl.trace(ReluAdd(), x, save=lambda _ctx: False)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
 
     log.run(ReluAdd(), x + 1)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
     assert log.last_run["engine"] == "rerun"
 
 
@@ -381,12 +381,12 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
         capture=tl.options.CaptureOptions(replayable=True),
         save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
     )
-    relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     original_relu_site_id = id(relu_site)
     original_out = relu_site.out.clone()
 
     log.run(ReluAdd(), new_x)
-    refreshed_relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    refreshed_relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     assert id(refreshed_relu_site) == original_relu_site_id
     assert log.last_run["fast_refresh"] is True
@@ -502,7 +502,7 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
         x,
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    assert log.layer_logs["add_1_3"].num_passes == 2
+    assert log._layer_logs["add_1_3"].num_passes == 2
 
     log.run(model, new_x)
 
@@ -530,7 +530,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     spec = InterventionSpec(targets=[TargetSpec("func", "relu")], hook=_zero_hook)
     history: list[Any] = [{"engine": "before"}]
     log.name = "kept"
-    log.parent_run = "parent-sentinel"  # type: ignore[assignment]
+    log._parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
     log.state_history = history
     log._warned_direct_write = True
@@ -548,7 +548,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     log.replace_state_from(new_log)
 
     assert log.name == "kept"
-    assert log.parent_run == "parent-sentinel"
+    assert log._parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
     assert log.state_history is history
     assert log._warned_direct_write is True

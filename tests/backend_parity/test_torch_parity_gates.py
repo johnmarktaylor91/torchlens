@@ -425,11 +425,11 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
         "module_identity_mode": trace.module_identity_mode,
         "param_source": trace.param_source,
         "num_ops": trace.num_ops,
-        "num_saved_ops": trace.num_saved_ops,
+        "num_saved_ops": len(trace.saved_ops),
         "has_backward_pass": trace.has_backward_pass,
-        "num_backward_passes": trace.num_backward_passes,
+        "num_backward_passes": len(trace.autograd.backward_passes),
         "output_layers": list(trace.output_layers),
-        "ops": [_op_projection(op) for op in trace.layer_list],
+        "ops": [_op_projection(op) for op in trace._layer_list],
         "lookup_keys": {
             "ops": list(trace.ops.keys()),
             "layers": list(trace.layers.keys()),
@@ -553,7 +553,7 @@ def _public_accessor_projection(trace: Trace) -> dict[str, Any]:
         Stable public accessor projection.
     """
 
-    first_compute = next(op for op in trace.layer_list if op.func_name not in {"none", None})
+    first_compute = next(op for op in trace._layer_list if op.func_name not in {"none", None})
     return {
         "ops": {
             "keys": list(trace.ops.keys()),
@@ -650,7 +650,7 @@ def test_semantic_output_fields_do_not_add_dataframe_columns() -> None:
     projection = _dataframe_projection(_default_trace())
     semantic_fields = {
         "transform_repr",
-        "decoded_output",
+        "_decoded_output",
         "output_postprocessor",
         "output_id2label",
         "output_num_classes",

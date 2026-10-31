@@ -233,7 +233,7 @@ def _compare_module_output_grads(
             continue
         coverage.setdefault(f"{addr}:{call_index}", "missing_module_call")
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if not getattr(layer, "has_grad", False):
             continue
         candidate_grad_count += 1

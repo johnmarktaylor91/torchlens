@@ -63,7 +63,7 @@ def test_single_output_fast_path_traces_shared_fields() -> None:
 
     trace = tl.trace(_SingleOutputModel(), torch.randn(2, 3))
 
-    relu_layers = [layer for layer in trace.layer_list if layer.func_name == "relu"]
+    relu_layers = [layer for layer in trace._layer_list if layer.func_name == "relu"]
     assert len(relu_layers) == 1
     relu_layer = relu_layers[0]
     assert relu_layer.in_multi_output is False
@@ -76,7 +76,7 @@ def test_single_output_fast_path_traces_shared_fields() -> None:
 def test_multi_output_keeps_sibling_field_isolation(split_trace: tl.Trace) -> None:
     """Multi-output torch calls still isolate per-output mutable metadata."""
 
-    split_layers = [layer for layer in split_trace.layer_list if layer.func_name == "split"]
+    split_layers = [layer for layer in split_trace._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
 
     first_positions = split_layers[0].parent_arg_positions

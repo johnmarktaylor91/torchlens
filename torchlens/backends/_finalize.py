@@ -128,7 +128,7 @@ def finalize_single_pass_trace(
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
             _attach_param_usage(trace, op_log, param_usage_membership)
-        layer_log = trace.layer_logs.get(op_log.layer_label)
+        layer_log = trace._layer_logs.get(op_log.layer_label)
         layer_created = layer_log is None
         if layer_log is None:
             layer_log = Layer(op_log)
@@ -139,11 +139,11 @@ def finalize_single_pass_trace(
         if layer_created:
             if enrich_layer is not None:
                 enrich_layer(layer_log, op_log)
-            trace.layer_logs[op_log.layer_label] = layer_log
+            trace._layer_logs[op_log.layer_label] = layer_log
 
     trace.num_ops = sum(
         1
-        for op_log in trace.layer_list
+        for op_log in trace._layer_list
         if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
     )
     if compute_input_output_distances is None:
@@ -222,7 +222,7 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
     Returns
     -------
     None
-        Every op reachable via ``trace.layer_dict_main_keys`` is mutated in place.
+        Every op reachable via ``trace._layer_dict_main_keys`` is mutated in place.
 
     Notes
     -----
@@ -233,8 +233,8 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
     on non-torch tensors.
     """
 
-    for layer_label in trace.layer_dict_main_keys:
-        op_log = trace.layer_dict_main_keys[layer_label]
+    for layer_label in trace._layer_dict_main_keys:
+        op_log = trace._layer_dict_main_keys[layer_label]
         op_log._tracing_finished = True
 
 
@@ -325,7 +325,7 @@ def attach_object_module_logs(
         if metadata_top_level(address, metadata, metadata_by_address):
             mbd["top_level_modules"].append(address)
 
-    for param in trace.param_logs:
+    for param in trace._param_logs:
         owner = param.module_address
         mbd["module_nparams"][owner] += param.num_params
         if param.is_trainable:
@@ -371,7 +371,7 @@ def populate_object_module_build_data(
     seen_top_level_ops: set[str] = set()
     seen_pass_children: dict[str, set[str]] = defaultdict(set)
     seen_addresses = set(mbd["addresses"])
-    for op_log in trace.layer_list:
+    for op_log in trace._layer_list:
         normalized_calls = normalize_module_calls(op_log.modules)
         op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
         op_log.module = op_log.modules[-1] if op_log.modules else None
@@ -441,7 +441,7 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
     """
 
     ops_by_label: dict[str, Any] = {}
-    for op_log in trace.layer_list:
+    for op_log in trace._layer_list:
         for field_name in ("input_ancestors", "output_descendants"):
             value = getattr(op_log, field_name, None)
             if not isinstance(value, set):
@@ -618,16 +618,16 @@ def _finalize_single_op(
     op_log.num_passes = num_passes
     if assignment is not None:
         op_log.equivalence_class = assignment.equivalence_key
-    trace.layer_list.append(op_log)
+    trace._layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
     # op.label (_postprocess/labeling.py's
-    # ``self.layer_dict_main_keys[layer_entry.label] = layer_entry``), never
+    # ``self._layer_dict_main_keys[layer_entry.label] = layer_entry``), never
     # the raw backend label -- a single-pass op's raw label was never a valid
     # main key, so any lookup of a relabeled (bare or pass-qualified) final
     # label through this dict raised KeyError for every single-pass op.
-    trace.layer_dict_main_keys[pass_label] = op_log
-    trace.layer_dict_all_keys[label] = op_log
-    trace.layer_dict_all_keys[pass_label] = op_log
+    trace._layer_dict_main_keys[pass_label] = op_log
+    trace._layer_dict_all_keys[label] = op_log
+    trace._layer_dict_all_keys[pass_label] = op_log
     # Torch parity: always register the bare layer label (not just for
     # multi-pass groups). Without this, single-pass ops -- the common case --
     # were never resolvable by bare layer_label through layer_dict_all_keys,
@@ -636,12 +636,12 @@ def _finalize_single_op(
     # layer up by its bare label via this exact dict) of every single-pass
     # op, leaving Module.layer_labels empty for any module whose ops never
     # recur and tripping the module_layer_containment invariant.
-    trace.layer_dict_all_keys[layer_label] = op_log
+    trace._layer_dict_all_keys[layer_label] = op_log
     op_log.lookup_keys.append(layer_label)
     trace.op_labels.append(pass_label)
-    if layer_label not in trace.layer_num_calls:
+    if layer_label not in trace._layer_num_calls:
         trace.layer_labels.append(layer_label)
-    trace.layer_num_calls[layer_label] = num_passes
+    trace._layer_num_calls[layer_label] = num_passes
     trace._lookup_keys_to_layer_num_dict[label] = raw_index
     trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
 
@@ -819,7 +819,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
 
     Notes
     -----
-    Totals derive from ``trace.param_logs`` (the deduped-by-identity param
+    Totals derive from ``trace._param_logs`` (the deduped-by-identity param
     registry), not from summing each op's own ``num_param_tensors`` across
     unique layer labels: a param reused by more than one op/layer (a tied
     weight, or a composite op decomposed into several primitive ops that
@@ -830,14 +830,13 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
     """
 
     if trace.param_source != "none":
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
+            {op.layer_label for op in trace._layer_list if op.has_params}
         )
 
 
@@ -1143,7 +1142,7 @@ def attach_module_owned_op_params(
     owner = module_calls[-1][0]
     params = [
         param
-        for param in trace.param_logs
+        for param in trace._param_logs
         if param.module_address == owner and param.barcode not in seen_param_barcodes
     ]
     if not params:
@@ -1240,7 +1239,7 @@ def new_preview_function_trace(
         module_filter=None,
         emit_nvtx=False,
         input_transform=None,
-        raw_input=raw_input,
+        input=raw_input,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=cast("Callable[[Any], Any] | None", output_transform),

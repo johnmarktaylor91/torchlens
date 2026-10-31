@@ -74,9 +74,9 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
     pass_a = next(iter(_capture_tiny_log()))
     pass_b = next(iter(_capture_tiny_log()))
-    pass_a.interventions.append({"op": "sentinel"})
-    assert pass_b.interventions == []
-    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
+    pass_a.edits.append({"op": "sentinel"})
+    assert pass_b.edits == []
+    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["edits"] is ForkFieldPolicy.FORK_COPY
 
 
 def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
@@ -107,7 +107,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     for layer in log:
         assert hasattr(layer, "func_call_id")
         assert hasattr(layer, "container_path")
-        assert hasattr(layer, "interventions")
+        assert hasattr(layer, "edits")
         assert hasattr(layer, "_edge_uses")
         assert hasattr(layer, "edge_uses")
         assert isinstance(layer.edge_uses, tuple)

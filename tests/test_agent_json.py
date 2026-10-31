@@ -95,7 +95,7 @@ def test_to_agent_json_graph_matches_the_live_trace() -> None:
     # identity-partition split names compute rows separately.
     assert dump["counts"]["operations"] == len(log.layer_labels)
     assert dump["counts"]["compute_ops"] == log.num_ops
-    assert dump["counts"]["tensors_saved"] == log.num_saved_ops
+    assert dump["counts"]["tensors_saved"] == len(log.saved_ops)
     assert dump["layer_labels"] == list(log.layer_labels)
     assert dump["truncation"] is None
 

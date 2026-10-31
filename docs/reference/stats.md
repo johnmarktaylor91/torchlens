@@ -115,7 +115,7 @@ sae_encoder = nn.Sequential(nn.Linear(8, 16), nn.ReLU()).eval()  # a tiny SAE en
 stimuli = [torch.randn(3, 4) for _ in range(3)]  # 9 examples, ragged batches welcome
 
 relu_label = next(
-    op.layer_label for op in tl.trace(mlp, stimuli[0]).layer_list if op.layer_type == "relu"
+    op.layer_label for op in tl.trace(mlp, stimuli[0]).ops if op.layer_type == "relu"
 )
 per_unit = tl.stats.aggregate(
     mlp,

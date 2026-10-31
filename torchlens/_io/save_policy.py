@@ -33,7 +33,7 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
         return
     from .forgery_validation import _OP_VALUE_PAYLOAD_FIELDS
 
-    for entry in scrubbed_state.get("layer_list") or ():
+    for entry in scrubbed_state.get("_layer_list") or ():
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
             if getattr(entry, field_name, None) is not None:
                 label = getattr(entry, "label", "<unknown>")

@@ -67,7 +67,7 @@ def _first_internal_label(log: Any) -> str:
         First internal layer label.
     """
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         if not (layer.is_input or layer.is_output or layer.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
@@ -222,7 +222,7 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
     _scrub_intervention_fields_after_removal(
         log,
         {target},
-        [layer for layer in log.layer_list if layer.layer_label != target],
+        [layer for layer in log._layer_list if layer.layer_label != target],
     )
 
     assert log._intervention_spec.targets == []
@@ -249,7 +249,7 @@ def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
     _scrub_intervention_fields_after_removal(
         log,
         {target},
-        [layer for layer in log.layer_list if layer.layer_label != target],
+        [layer for layer in log._layer_list if layer.layer_label != target],
     )
 
     frozen_after = log.recipe
@@ -296,7 +296,7 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
     fork = log.fork("candidate")
     assert fork is not log
     assert fork.name == "candidate"
-    assert fork.parent_run() is log
+    assert fork._parent_run() is log
 
     result = log.do(
         {tl.func("relu"): _identity_hook},

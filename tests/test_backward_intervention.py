@@ -164,7 +164,7 @@ def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
 
     trace = _logged_backward_trace()
     accumulate_logs = [
-        gfl for gfl in trace.grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
+        gfl for gfl in trace._grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
     ]
     assert accumulate_logs
     assert all(gfl.num_calls >= 1 for gfl in accumulate_logs)
@@ -572,7 +572,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
     assert torch.equal(x.grad, torch.zeros_like(x.grad))
     records = [
         call.fire_record
-        for grad_fn in trace.grad_fn_logs.values()
+        for grad_fn in trace._grad_fn_logs.values()
         for call in grad_fn.calls._list
         if call.fire_record is not None
     ]
@@ -884,12 +884,12 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
     )
     trace.attach_hooks(tl.grad_fn(name="pow"), scale_grad, confirm_mutation=True)
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
-    pow_sites = [site for site in trace.grad_fn_logs.values() if site.type == "pow"]
+    pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 
     assert pow_sites
     assert any(
         site.creator_object_id == pow_sites[0].grad_fn_object_id
-        for site in trace.grad_fn_logs.values()
+        for site in trace._grad_fn_logs.values()
         if site is not pow_sites[0]
     )
 

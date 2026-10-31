@@ -301,7 +301,7 @@ def test_postprocess_contract_assertions_run_over_standard_model(
     )
     try:
         assert trace.graph_shape_hash is not None
-        assert trace.layer_logs
+        assert trace._layer_logs
         assert trace.modules
     finally:
         trace.cleanup()
@@ -357,7 +357,7 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
         capture=tl.options.CaptureOptions(save_source_context=True, save_grads=False),
     )
     try:
-        assert any(op.var_names for op in trace.layer_list if op.type != "output")
+        assert any(op.var_names for op in trace._layer_list if op.type != "output")
     finally:
         trace.cleanup()
 
@@ -383,7 +383,7 @@ def test_postprocess_write_audit_covers_streaming_axis(
         capture=tl.options.CaptureOptions(save_grads=False),
     )
     try:
-        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
         assert streamed, "step 18 must attach streamed out refs"
         assert all(op._slot("out") is None for op in streamed), "step 19 must evict outs"
     finally:
@@ -447,8 +447,8 @@ def test_postprocess_write_audit_covers_orphan_removal_scrub_axis(
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     trace = tl.trace(_OrphanEquivalenceModel(), torch.ones(5, 5))
     try:
-        labels = {op.label for op in trace.layer_list}
-        for op in trace.layer_list:
+        labels = {op.label for op in trace._layer_list}
+        for op in trace._layer_list:
             assert set(op.equivalent_ops) <= labels, "scrub left a dead equivalence label"
     finally:
         trace.cleanup()
@@ -534,7 +534,7 @@ def test_postprocess_write_audit_allows_sanctioned_row_removal(
     model = _PolicyModel().eval()
     recording = tl.record(model, torch.randn(2, 3), save=tl.func("linear"))
     trace = recording.to_trace()
-    assert trace.layer_logs
+    assert trace._layer_logs
     trace.cleanup()
 
 

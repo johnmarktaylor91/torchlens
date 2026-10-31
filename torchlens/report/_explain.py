@@ -642,12 +642,12 @@ def _capture_summary_lines(log: Any) -> list[str]:
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
         return [
-            f"- Layers logged: {_safe_len(getattr(log, 'layer_list', None))}.",
+            f"- Layers logged: {_safe_len(getattr(log, '_layer_list', None))}.",
             f"- Operations logged: {int(getattr(log, 'num_ops', 0) or 0)}.",
         ]
     pass_counts = [
         int(value)
-        for value in (getattr(log, "layer_num_calls", {}) or {}).values()
+        for value in (getattr(log, "_layer_num_calls", {}) or {}).values()
         if isinstance(value, int)
     ]
     max_ops = max(pass_counts, default=1)
@@ -682,7 +682,7 @@ def _backward_summary_lines(log: Any) -> list[str]:
 
     if not bool(getattr(log, "has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
-    pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
+    pass_count = int(getattr(log, "_num_backward_passes", 0) or 0)
     grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
     grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
@@ -905,7 +905,7 @@ def _shared_parameter_line(log: Any) -> str:
     """
 
     shared = 0
-    for param_log in getattr(log, "param_logs", []) or []:
+    for param_log in getattr(log, "_param_logs", []) or []:
         used_by_ops = set(getattr(param_log, "used_by_ops", ()) or ())
         try:
             num_calls = int(getattr(param_log, "num_calls", 0) or 0)
@@ -980,7 +980,7 @@ def _operation_mix_line(log: Any) -> str:
 
     names = [
         str(getattr(layer, "func_name", "unknown"))
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in getattr(log, "_layer_list", []) or []
         if str(getattr(layer, "func_name", "none")) != "none"
     ]
     if not names:
@@ -1006,7 +1006,7 @@ def _operational_status_line(log: Any) -> str:
     cache_hit = bool(getattr(log, "capture_cache_hit", False))
     streamed = sum(
         1
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in getattr(log, "_layer_list", []) or []
         if getattr(layer, "out_ref", None) is not None
         or getattr(layer, "grad_ref", None) is not None
     )

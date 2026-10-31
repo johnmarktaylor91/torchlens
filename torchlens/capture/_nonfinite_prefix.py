@@ -159,7 +159,7 @@ def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
         orphan_labels = trace.__dict__.get("_orphan_labels") if hasattr(trace, "__dict__") else None
         if isinstance(orphan_labels, list) and raw_label in orphan_labels:
             return None, LABEL_STATUS_PRUNED
-        for record in getattr(trace, "orphan_records", ()) or ():
+        for record in getattr(trace, "_orphan_records", ()) or ():
             if isinstance(record, dict) and record.get("raw_label") == raw_label:
                 return None, LABEL_STATUS_PRUNED
     return None, LABEL_STATUS_UNAVAILABLE
@@ -298,7 +298,7 @@ def maybe_finalize_nonfinite_prefix(
             backend,
         )
         trace.__dict__.pop("_output_attribution_input_tensors", None)
-        trace.raw_output = None
+        trace.transformed_output = None
         trace._postprocess(output_tensors, output_tensor_addresses)
         trace.__dict__["_nonfinite_prefix_finalized"] = True
     except Exception as finalize_exc:  # noqa: BLE001 - secondary evidence, never the primary error.

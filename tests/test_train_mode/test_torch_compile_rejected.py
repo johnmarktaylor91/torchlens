@@ -48,7 +48,7 @@ def _op_structure(trace: tl.Trace) -> list[tuple[str, str | None]]:
         Operation type and function-name pairs in execution order.
     """
 
-    return [(op.layer_type, op.func_name) for op in trace.layer_list]
+    return [(op.layer_type, op.func_name) for op in trace._layer_list]
 
 
 def test_trace_unwraps_torch_compile_once(
@@ -118,4 +118,4 @@ def test_fastlog_record_unwraps_torch_compile(
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
         )
-    assert recording.to_trace().layer_list
+    assert recording.to_trace()._layer_list

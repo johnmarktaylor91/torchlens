@@ -87,7 +87,7 @@ def _normalized_append_history(trace: tl.Trace) -> list[dict[str, Any]]:
     volatile = {"timestamp", "started_at", "duration_s"}
     return [
         {key: value for key, value in row.items() if key not in volatile}
-        for row in trace.append_history
+        for row in trace._append_history
     ]
 
 
@@ -95,8 +95,8 @@ def _assert_equivalent_chunked_trace(actual: tl.Trace, expected: tl.Trace) -> No
     """Compare chunked traces while ignoring intentionally last-chunk metadata."""
 
     assert actual.layer_labels == expected.layer_labels
-    assert [layer._layer_label_raw for layer in actual.layer_list] == [
-        layer._layer_label_raw for layer in expected.layer_list
+    assert [layer._layer_label_raw for layer in actual._layer_list] == [
+        layer._layer_label_raw for layer in expected._layer_list
     ]
     assert actual.graph_shape_hash == expected.graph_shape_hash
     assert actual.output_layers == expected.output_layers
@@ -125,8 +125,8 @@ def test_trace_chunk_size_matches_manual_append_loop() -> None:
     expected = _manual_chunk_trace(model, x, 4)
 
     _assert_equivalent_chunked_trace(actual, expected)
-    assert len(actual.append_history) == 3
-    assert [row["chunk_size"] for row in actual.append_history] == [4, 4, 2]
+    assert len(actual._append_history) == 3
+    assert [row["chunk_size"] for row in actual._append_history] == [4, 4, 2]
 
 
 def test_chunk_size_default_matches_plain_trace() -> None:
@@ -142,7 +142,7 @@ def test_chunk_size_default_matches_plain_trace() -> None:
 
     _assert_equivalent_chunked_trace(default, plain)
     assert default.chunked_forward is False
-    assert default.append_history == plain.append_history
+    assert default._append_history == plain._append_history
 
 
 def test_chunk_size_rejects_explicit_jax_control_flow() -> None:
@@ -172,8 +172,8 @@ def test_chunk_size_shape_and_remainder() -> None:
 
     output_label = trace.output_layers[0]
     assert trace[output_label].out.shape[0] == 10
-    assert len(trace.append_history) == 3
-    assert [row["chunk_size"] for row in trace.append_history] == [4, 4, 2]
+    assert len(trace._append_history) == 3
+    assert [row["chunk_size"] for row in trace._append_history] == [4, 4, 2]
     assert trace.chunked_forward is True
 
 
@@ -224,7 +224,7 @@ def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
     assert "relu_1_2:1" in trace.layers_to_save
     saved_types = {
         op.layer_type
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.has_saved_activation and op.layer_type not in {"input", "output"}
     }
     assert saved_types == {"relu", "linear"}
@@ -307,7 +307,7 @@ def test_chunk_size_edges() -> None:
         model, x, chunk_size=20, capture=tl.options.CaptureOptions(layers_to_save="all")
     )
     assert large.chunked_forward is False
-    assert large.append_history == []
+    assert large._append_history == []
 
     with pytest.raises(ChunkedForwardConfigError, match="positive integer"):
         tl.trace(model, x, chunk_size=0)
@@ -391,7 +391,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
                 backward_capture=False,
                 has_validation_replay=False,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=False,
                 has_streaming=False,
@@ -429,7 +429,7 @@ def test_rerun_chunk_size_matches_manual_append_loop() -> None:
     expected.run(model, x[8:], input_transform=False, replay=tl.options.ReplayOptions(append=True))
 
     _assert_equivalent_chunked_trace(actual, expected)
-    assert [row["chunk_size"] for row in actual.append_history] == [4, 4, 2]
+    assert [row["chunk_size"] for row in actual._append_history] == [4, 4, 2]
 
 
 def test_chunked_forward_marker_survives_tlspec(tmp_path: Path) -> None:

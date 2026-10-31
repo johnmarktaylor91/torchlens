@@ -62,7 +62,7 @@ def main() -> None:
     finally:
         handle.remove()
 
-    replaced = [layer.layer_label for layer in log.layer_list if layer.is_edited]
+    replaced = [layer.layer_label for layer in log.ops if layer.is_edited]
     print(f"replacement layers: {replaced}")
 
 

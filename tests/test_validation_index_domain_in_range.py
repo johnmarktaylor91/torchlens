@@ -295,7 +295,7 @@ def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_fun
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
-        index_op = next(op for op in trace.layer_list if op.func_name == index_func)
+        index_op = next(op for op in trace._layer_list if op.func_name == index_func)
         index_op.out.copy_(index_op.out.roll(1, 0))
         assert trace.validate_forward_pass(ground_truth) is False
     finally:
@@ -319,7 +319,7 @@ def test_index_add_never_reaches_the_scatter_overwrite_exemption(replay_record) 
     ):
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
         try:
-            op = next(o for o in trace.layer_list if o.func_name == func)
+            op = next(o for o in trace._layer_list if o.func_name == func)
             assert (_get_scatter_destination_dim_index(op) is not None) is expect_components, func
         finally:
             trace.cleanup()
@@ -352,11 +352,11 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
-        gather = next(op for op in trace.layer_list if op.func_name == "gather")
+        gather = next(op for op in trace._layer_list if op.func_name == "gather")
         if corrupt == "saved_gather_output":
             gather.out.add_(1.0)
         else:
-            index_op = next(op for op in trace.layer_list if op.func_name == "argsort")
+            index_op = next(op for op in trace._layer_list if op.func_name == "argsort")
             index_op.out.copy_(index_op.out.flip(1))
         assert trace.validate_forward_pass(ground_truth) is False
     finally:

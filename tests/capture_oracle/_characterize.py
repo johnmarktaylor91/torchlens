@@ -810,8 +810,8 @@ def _final_op_projection(product: Any) -> list[dict[str, Any]]:
     layers: Iterable[Any]
     if hasattr(product, "raw_layers"):
         layers = product.raw_layers
-    elif hasattr(trace, "layer_list"):
-        layers = trace.layer_list
+    elif hasattr(trace, "_layer_list"):
+        layers = trace._layer_list
     else:
         return []
     rows: list[dict[str, Any]] = []
@@ -865,7 +865,7 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
         return payloads
     trace = getattr(product, "trace", product)
     layers = (
-        product.raw_layers if hasattr(product, "raw_layers") else getattr(trace, "layer_list", ())
+        product.raw_layers if hasattr(product, "raw_layers") else getattr(trace, "_layer_list", ())
     )
     for op in layers:
         if not getattr(op, "has_saved_activation", False):
@@ -911,7 +911,7 @@ def _gradient_projection(product: Any) -> dict[str, Any]:
         ]
     else:
         payloads = []
-        for op in getattr(product, "layer_list", ()):
+        for op in getattr(product, "_layer_list", ()):
             for grad in getattr(op, "grads", ()):
                 if isinstance(grad, torch.Tensor):
                     payloads.append(
@@ -972,7 +972,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "error_type": type(exception).__name__,
             "error_message": str(exception),
         }
-    halted = bool(getattr(product, "halted", False))
+    halted = bool(getattr(product, "is_stopped", False))
     return {
         "status": "halted" if halted else "complete",
         "failed": False,

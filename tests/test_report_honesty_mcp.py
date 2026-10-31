@@ -195,7 +195,7 @@ def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
         for _ in range(200):
             mcp.call_tool("torchlens_payload_stats", {"path": str(artifact), "metrics": ["mean"]})
         resident = sum(
-            1 for op in trace.layer_list if callable(op._slot) and op._slot("out") is not None
+            1 for op in trace._layer_list if callable(op._slot) and op._slot("out") is not None
         )
         assert resident == 0, (
             f"{resident} payloads attached to the cached trace -- the stats "

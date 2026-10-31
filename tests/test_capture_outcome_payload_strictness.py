@@ -202,7 +202,7 @@ def test_contradictory_payload_degrades_to_unknown_with_one_warning() -> None:
 
     state = {
         "_capture_outcome": dict(_CONTRADICTORY_COMPLETE),
-        "halted": False,
+        "is_stopped": False,
         "_tracing_finished": True,
     }
     with pytest.warns(RuntimeWarning, match="internally contradictory") as records:
@@ -219,7 +219,7 @@ def test_unknown_key_payload_degrades_to_unknown_with_one_warning() -> None:
 
     state = {
         "_capture_outcome": {"status": "complete", "future_verdict_field": "x"},
-        "halted": False,
+        "is_stopped": False,
         "_tracing_finished": True,
     }
     with pytest.warns(RuntimeWarning, match="could not parse"):

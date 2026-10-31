@@ -80,7 +80,7 @@ def _rerun_fork(trace: Trace, model: nn.Module, x: torch.Tensor) -> Trace:
 
 
 def _label(trace: Trace, fragment: str, index: int = 0) -> str:
-    return [op.layer_label for op in trace.layer_list if fragment in op.layer_label][index]
+    return [op.layer_label for op in trace._layer_list if fragment in op.layer_label][index]
 
 
 def _push(trace: Trace, label: str, *, allow: bool = False) -> torch.Tensor:
@@ -94,7 +94,7 @@ def _push(trace: Trace, label: str, *, allow: bool = False) -> torch.Tensor:
 
 def _param_literals(trace: Trace) -> list[torch.Tensor]:
     literals = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         template = getattr(op, "args_template", None)
         if template is None:
             continue
@@ -104,7 +104,7 @@ def _param_literals(trace: Trace) -> list[torch.Tensor]:
 
 def _recorded(trace: Trace) -> dict[str, torch.Tensor]:
     return {
-        op.layer_label: op.out.detach().clone() for op in trace.layer_list if op.out is not None
+        op.layer_label: op.out.detach().clone() for op in trace._layer_list if op.out is not None
     }
 
 
@@ -189,7 +189,7 @@ def test_refreshed_fork_matches_a_push_of_the_same_edit() -> None:
     fork = _rerun_fork(trace, model, x)
     relu = _label(trace, "relu")
     pushed = trace.fork().do(relu, tl.scale(2.0), intervention=InterventionOptions(engine="replay"))
-    for op in pushed.layer_list:
+    for op in pushed._layer_list:
         if op.out is not None:
             assert torch.equal(fork[op.layer_label].out, op.out), op.layer_label
     fc1 = _label(trace, "linear")

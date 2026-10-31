@@ -194,21 +194,21 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_buffer_persistence": {},
     "is_replayable": False,
     "save_arg_templates": False,
-    "raw_input": None,
+    "input": None,
     "_transform": None,
     "save_raw_input": "small",
     "batch_render": "auto",
-    "raw_output": None,
+    "transformed_output": None,
     "_output_transform": None,
     "save_raw_output": "small",
     "layer_visualizers": None,
     "save_visualizations": False,
     "_visualizer_dir": None,
-    "parent_run": None,
+    "_parent_run": None,
     "_intervention_spec": None,
     "state_history": [],
     "last_run": None,
-    "append_history": [],
+    "_append_history": [],
     "_has_direct_writes": False,
     "_warned_direct_write": False,
     "_warned_mutate_in_place": False,
@@ -227,7 +227,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "input_object_id": None,
     "input_signature_hash": None,
     "graph_shape_hash": None,
-    "module_filter": None,
+    "_module_filter": None,
     "emit_nvtx": False,
     "measure_python_peak_memory": False,
     "distributed_witness": "none",
@@ -274,10 +274,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "total_gradient_memory": 0,
     "total_backward_memory": 0,
     "saved_gradient_memory": 0,
-    "num_saved_layers": 0,
-    "num_saved_module_calls": 0,
-    "num_saved_grad_fns": 0,
-    "num_saved_grad_fn_calls": 0,
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
@@ -317,18 +313,18 @@ _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "input_annotations": {},
     "_source_code_blob": {},
     "state_history": [],
-    "append_history": [],
+    "_append_history": [],
     "_last_hook_handle_ids": (),
     "relationship_evidence": {},
     "_replay_frontier": {},
-    "layer_list": [],
-    "layer_dict_main_keys": {},
-    "layer_dict_all_keys": {},
-    "layer_logs": {},
+    "_layer_list": [],
+    "_layer_dict_main_keys": {},
+    "_layer_dict_all_keys": {},
+    "_layer_logs": {},
     "layer_labels": [],
     "op_labels": [],
-    "layer_num_calls": {},
-    "by_pass": {},
+    "_layer_num_calls": {},
+    "_by_pass": {},
     "_raw_to_final_layer_labels": {},
     "_raw_to_final_parent_layer_labels": {},
     "_raw_to_final_op_labels": {},
@@ -339,7 +335,7 @@ _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "input_layers": [],
     "output_layers": [],
     "buffer_layers": [],
-    "buffer_num_calls": {},
+    "_buffer_num_calls": {},
     "internal_source_ops": [],
     "internal_sink_ops": [],
     "internally_terminated_bool_ops": [],
@@ -351,11 +347,11 @@ _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "op_equivalence_classes": {},
     "_orphan_labels": [],
     "_orphan_logs": (),
-    "orphan_records": [],
+    "_orphan_records": [],
     "_phase_timings": {},
-    "grad_fn_logs": {},
+    "_grad_fn_logs": {},
     "grad_fn_order": [],
-    "backward_pass_logs": {},
+    "_backward_pass_logs": {},
     "_grad_fn_param_refs": {},
     "backward_root_grad_fn_object_ids": [],
     "backward_durations": [],
@@ -589,7 +585,7 @@ class ConditionalArm:
         if self._trace is None or self._conditional_id is None or self._arm_index is None:
             return []
         labels: list[str] = []
-        for op in self._trace.layer_list:
+        for op in self._trace._layer_list:
             if any(
                 ref.conditional_id == self._conditional_id
                 and ref.arm_index == self._arm_index
@@ -1035,7 +1031,7 @@ class Trace(
     distributed_scope: str | None
     _primitive_op_profile: Any | None
     backward_root_grad_fn_object_ids: list[int]
-    backward_pass_logs: dict[int, BackwardPass]
+    _backward_pass_logs: dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
     jax_closed_jaxpr: Any
     jax_equation_captures: tuple[Any, ...]
@@ -1141,14 +1137,14 @@ class Trace(
         # stays session-time per docs/migration/scoped_detached_patching.md.
         "capture_verified": FieldPolicy.KEEP,
         "capture_verification_reason": FieldPolicy.KEEP,
-        "rescue_rerun": FieldPolicy.DROP,
+        "_rescue_rerun": FieldPolicy.DROP,
         "capture_owner_thread_id": FieldPolicy.DROP,
         "capture_owner_thread_qualified": FieldPolicy.DROP,
         "capture_thread_count_start": FieldPolicy.DROP,
         "capture_thread_count_end": FieldPolicy.DROP,
         "capture_thread_activity_detected": FieldPolicy.DROP,
         "capture_guard_passes": FieldPolicy.DROP,
-        "halted": FieldPolicy.KEEP,
+        "is_stopped": FieldPolicy.KEEP,
         "stop_reason": FieldPolicy.KEEP,
         "halt_frontier": FieldPolicy.KEEP,
         "_layers_logged": FieldPolicy.KEEP,
@@ -1156,14 +1152,14 @@ class Trace(
         "keep_orphans": FieldPolicy.KEEP,
         "is_replayable": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
-        "raw_input": FieldPolicy.KEEP,
+        "input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
         "transform_repr": FieldPolicy.KEEP,
         "save_raw_input": FieldPolicy.KEEP,
         "batch_render": FieldPolicy.KEEP,
-        "raw_output": FieldPolicy.KEEP,
-        "decoded_output": FieldPolicy.KEEP,
+        "transformed_output": FieldPolicy.KEEP,
+        "_decoded_output": FieldPolicy.KEEP,
         "output_postprocessor": FieldPolicy.KEEP,
         "output_id2label": FieldPolicy.KEEP,
         "output_num_classes": FieldPolicy.KEEP,
@@ -1181,7 +1177,7 @@ class Trace(
         "_source_model_ref": FieldPolicy.DROP,
         # Session-time: recorded at the module build while the model is live.
         "_uncalled_module_addresses": FieldPolicy.DROP,
-        "parent_run": FieldPolicy.DROP,
+        "_parent_run": FieldPolicy.DROP,
         "model_object_id": FieldPolicy.KEEP,
         "model_class_qualname": FieldPolicy.KEEP,
         "param_hash_quick": FieldPolicy.KEEP,
@@ -1199,7 +1195,7 @@ class Trace(
         "backward_ready": FieldPolicy.DROP,
         "inference_only": FieldPolicy.KEEP,
         "chunked_forward": FieldPolicy.KEEP,
-        "module_filter": FieldPolicy.DROP,
+        "_module_filter": FieldPolicy.DROP,
         "emit_nvtx": FieldPolicy.KEEP,
         # Session-time measurement knob (like ``backward_ready``): it selects how
         # ``forward_peak_memory`` was measured during this capture and has no
@@ -1262,7 +1258,6 @@ class Trace(
         "capture_tensor_grad_hooks": FieldPolicy.KEEP,
         "_grad_op_nums_to_save": FieldPolicy.KEEP,
         "grad_transform": FieldPolicy.DROP,
-        "grad_transform_repr": FieldPolicy.KEEP,
         "save_raw_gradients": FieldPolicy.KEEP,
         "save_code_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
@@ -1289,7 +1284,7 @@ class Trace(
         "_intervention_spec": FieldPolicy.DROP,
         "state_history": FieldPolicy.KEEP,
         "last_run": FieldPolicy.DROP,
-        "append_history": FieldPolicy.KEEP,
+        "_append_history": FieldPolicy.KEEP,
         "_has_direct_writes": FieldPolicy.KEEP,
         "_warned_direct_write": FieldPolicy.DROP,
         "_warned_mutate_in_place": FieldPolicy.DROP,
@@ -1320,17 +1315,16 @@ class Trace(
         "relationship_evidence": FieldPolicy.KEEP,
         "_replay_frontier": FieldPolicy.DROP,
         "_output_container_specs_by_raw_label": FieldPolicy.DROP,
-        "layer_list": FieldPolicy.KEEP,
-        "layer_dict_main_keys": FieldPolicy.KEEP,
-        "layer_dict_all_keys": FieldPolicy.KEEP,
-        "layer_logs": FieldPolicy.KEEP,
+        "_layer_list": FieldPolicy.KEEP,
+        "_layer_dict_main_keys": FieldPolicy.KEEP,
+        "_layer_dict_all_keys": FieldPolicy.KEEP,
+        "_layer_logs": FieldPolicy.KEEP,
         "layer_labels": FieldPolicy.KEEP,
         "op_labels": FieldPolicy.KEEP,
-        "layer_num_calls": FieldPolicy.KEEP,
-        "by_pass": FieldPolicy.KEEP,
+        "_layer_num_calls": FieldPolicy.KEEP,
+        "_by_pass": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
-        "num_modules": FieldPolicy.DROP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_parent_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_op_labels": FieldPolicy.KEEP,
@@ -1344,7 +1338,7 @@ class Trace(
         "_containers": FieldPolicy.BLOB_RECURSIVE,
         "_annotation_blobs": FieldPolicy.BLOB_RECURSIVE,
         "buffer_layers": FieldPolicy.KEEP,
-        "buffer_num_calls": FieldPolicy.KEEP,
+        "_buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
         "_buffer_write_tracker": FieldPolicy.DROP,
         "_param_storage_addresses": FieldPolicy.DROP,
@@ -1360,7 +1354,7 @@ class Trace(
         "conditionals": FieldPolicy.KEEP,
         "_orphan_labels": FieldPolicy.KEEP,
         "_orphan_logs": FieldPolicy.KEEP,
-        "orphan_records": FieldPolicy.BLOB_RECURSIVE,
+        "_orphan_records": FieldPolicy.BLOB_RECURSIVE,
         "_saved_grad_labels": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "ops_with_params": FieldPolicy.DROP,
@@ -1370,15 +1364,9 @@ class Trace(
         "total_backward_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
         "pinned_autograd_memory": FieldPolicy.DROP,  # live graph only
-        "num_saved_ops": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
-        "num_saved_layers": FieldPolicy.KEEP,
-        "num_saved_module_calls": FieldPolicy.KEEP,
-        "num_saved_grad_fns": FieldPolicy.KEEP,
-        "num_saved_grad_fn_calls": FieldPolicy.KEEP,
-        "param_logs": FieldPolicy.KEEP,
-        "num_param_tensors": FieldPolicy.KEEP,
+        "_param_logs": FieldPolicy.KEEP,
         "num_layers_with_params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
@@ -1475,9 +1463,9 @@ class Trace(
         "cleanup_duration": FieldPolicy.KEEP,
         "func_calls_duration": FieldPolicy.KEEP,
         "has_backward_pass": FieldPolicy.KEEP,
-        "grad_fn_logs": FieldPolicy.KEEP,
+        "_grad_fn_logs": FieldPolicy.KEEP,
         "grad_fn_order": FieldPolicy.KEEP,
-        "backward_pass_logs": FieldPolicy.KEEP,
+        "_backward_pass_logs": FieldPolicy.KEEP,
         "_grad_fn_param_refs": FieldPolicy.KEEP,
         "_grad_fn_param_refs_by_object_id": FieldPolicy.DROP,
         "_param_log_by_pid": FieldPolicy.DROP,
@@ -1486,7 +1474,7 @@ class Trace(
         "_session_buffer_identity": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
-        "num_backward_passes": FieldPolicy.KEEP,
+        "_num_backward_passes": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
         "backward_peak_memory_reason": FieldPolicy.KEEP,
@@ -1579,11 +1567,11 @@ class Trace(
         save_budget: SaveBudgetOption = "auto",
         facet_functions: Any | None = None,
         input_transform: Callable[[Any], Any] | None = None,
-        raw_input: Any | None = None,
+        input: Any | None = None,
         save_raw_input: str | bool = "small",
         batch_render: str = "auto",
         output_transform: Callable[[Any], Any] | None = None,
-        raw_output: Any | None = None,
+        transformed_output: Any | None = None,
         save_transformed_output: str | bool = "small",
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None,
         save_visualizations: bool = False,
@@ -1642,13 +1630,13 @@ class Trace(
                 this trace.
             input_transform: Optional callable used to convert raw user input into
                 model-ready input.
-            raw_input: Original user input before ``input_transform`` was applied.
-            save_raw_input: Portable save policy for ``raw_input``.
+            input: Original user input before ``input_transform`` was applied.
+            save_raw_input: Portable save policy for ``input``.
             batch_render: Raw-input batch rendering policy for visualization.
             output_transform: Optional callable used to convert model output into
                 human-readable metadata.
-            raw_output: Human-readable model output after ``output_transform``.
-            save_transformed_output: Portable save policy for ``raw_output``.
+            transformed_output: Human-readable model output after ``output_transform``.
+            save_transformed_output: Portable save policy for ``transformed_output``.
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """
@@ -1703,7 +1691,7 @@ class Trace(
         # journal for armed captures (census criteria 2-4 evidence). DROP
         # under its private name; never survives save/load. DOCUMENTED-UNSTABLE.
         self._distributed_plane_p: Any | None = None
-        self.halted = False
+        self.is_stopped = False
         self.stop_reason: str | None = None
         self.halt_frontier: str | None = None
         self._layers_logged = False
@@ -1711,14 +1699,14 @@ class Trace(
         self.keep_orphans = keep_orphans
         self.is_replayable = False
         self.save_arg_templates = False
-        self.raw_input = raw_input
+        self.input = input
         self.input_preprocessor: ResolvedPreprocessing | None = None
         self._transform = input_transform
         self.transform_repr = repr(input_transform) if input_transform is not None else None
         self.save_raw_input = save_raw_input
         self.batch_render = batch_render
-        self.raw_output = raw_output
-        self.decoded_output: Any | None = None
+        self.transformed_output = transformed_output
+        self._decoded_output: Any | None = None
         self.output_postprocessor: ResolvedPostprocessing | None = None
         self.output_id2label: dict[int, str] | None = None
         self.output_num_classes: int | None = None
@@ -1732,12 +1720,11 @@ class Trace(
         self.save_raw_activations = save_raw_activations
         self.input_annotations: dict[str, Any] = {}
         self.grad_transform = grad_transform
-        self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
         self.save_raw_gradients = save_raw_grads
         self.save_mode = save_mode
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
-        self.parent_run: weakref.ReferenceType[Trace] | None = None
+        self._parent_run: weakref.ReferenceType[Trace] | None = None
         self.model_object_id: int | None = None
         self.model_class_qualname: str | None = None
         self.param_hash_quick: str | None = None
@@ -1751,7 +1738,7 @@ class Trace(
         self.backward_ready = backward_ready
         self.inference_only = inference_only
         self.chunked_forward = chunked_forward
-        self.module_filter = module_filter
+        self._module_filter = module_filter
         self.emit_nvtx = emit_nvtx
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
@@ -1819,7 +1806,7 @@ class Trace(
         self.state_history: list[Any] = []
         self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans.get())
         self.last_run: Any | None = None
-        self.append_history: list[dict[str, Any]] = []
+        self._append_history: list[dict[str, Any]] = []
         self._has_direct_writes = False
         self._warned_direct_write = False
         self._warned_mutate_in_place = False
@@ -1849,14 +1836,14 @@ class Trace(
         # max_layer_op_count, is_branching, has_conditional_branching)
 
         # Tensor Tracking - post-processed (populated after _tracing_finished=True):
-        self.layer_list: list[Op] = []  # ordered list of all layer ops
-        self.layer_dict_main_keys: dict[str, Op] = OrderedDict()  # primary label -> entry
-        self.layer_dict_all_keys: dict[str, Op] = OrderedDict()  # all lookup keys -> entry
-        self.layer_logs: dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
+        self._layer_list: list[Op] = []  # ordered list of all layer ops
+        self._layer_dict_main_keys: dict[str, Op] = OrderedDict()  # primary label -> entry
+        self._layer_dict_all_keys: dict[str, Op] = OrderedDict()  # all lookup keys -> entry
+        self._layer_logs: dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
         self.op_labels: list[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: list[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
-        self.layer_num_calls: dict[str, int] = OrderedDict()  # no-pass label -> pass count
-        self.by_pass: dict[int, list[int]] = {}
+        self._layer_num_calls: dict[str, int] = OrderedDict()  # no-pass label -> pass count
+        self._by_pass: dict[int, list[int]] = {}
         self._layer_nums_to_save: list[int] = []  # ordinal positions of layers to save
         self._grad_op_nums_to_save: list[int] | str = []
         self.num_ops: int = 0  # total operations after postprocessing
@@ -1876,7 +1863,7 @@ class Trace(
         self.output_layers: list[str] = []
         self._annotation_blobs: dict[str, Any] | None = None
         self.buffer_layers: list[str] = []
-        self.buffer_num_calls: dict[str, int] = {}
+        self._buffer_num_calls: dict[str, int] = {}
         self._buffer_accessor = None
         self._buffer_write_tracker: Any | None = None
         self._buffer_initial_values: dict[str, Any] = {}
@@ -1890,7 +1877,7 @@ class Trace(
         self.conditionals = ConditionalAccessor()
         self._orphan_labels: list[str] = []
         self._orphan_logs: tuple[Op, ...] = ()
-        self.orphan_records: list[dict[str, Any]] = []
+        self._orphan_records: list[dict[str, Any]] = []
         self._saved_grad_labels: set[str] = set()
         self.layers_with_params: dict[str, list[Any]] = defaultdict(list)
         # Maps equivalence_class -> set of layer labels that share
@@ -1903,17 +1890,11 @@ class Trace(
         self.total_backward_memory: Bytes = Bytes(0)
         self.total_autograd_memory: Bytes | None = None
         self.pinned_autograd_memory: Bytes | None = None  # pinned-autograd disclosure
-        self.num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: Bytes = Bytes(0)
         self.saved_gradient_memory: Bytes = Bytes(0)
-        self.num_saved_layers: int = 0
-        self.num_saved_module_calls: int = 0
-        self.num_saved_grad_fns: int = 0
-        self.num_saved_grad_fn_calls: int = 0
 
         # Param info:
-        self.param_logs: ParamAccessor = ParamAccessor({})
-        self.num_param_tensors: int = 0
+        self._param_logs: ParamAccessor = ParamAccessor({})
         self.num_layers_with_params: int = 0
         self.num_params: int = 0
         self.num_params_trainable: int = 0
@@ -1939,9 +1920,9 @@ class Trace(
         self.cleanup_duration: Duration = Duration(0)
         self.func_calls_duration: Duration = Duration(0)
         self.has_backward_pass: bool = False
-        self.grad_fn_logs: dict[int, GradFn] = OrderedDict()
+        self._grad_fn_logs: dict[int, GradFn] = OrderedDict()
         self.grad_fn_order: list[int] = []
-        self.backward_pass_logs: dict[int, BackwardPass] = OrderedDict()
+        self._backward_pass_logs: dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
         # r79 session-leak fix: the RECORDED prep inventories of stamped
@@ -1959,7 +1940,7 @@ class Trace(
         self._session_buffer_identity: dict[int, Any] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
-        self.num_backward_passes: int = 0
+        self._num_backward_passes: int = 0
         self.backward_peak_memory: Bytes | None = Bytes(0)  # CPU None: see the reason
         self.backward_memory_backend: str = "unknown"
         self.backward_peak_memory_reason: str | None = None
@@ -1972,7 +1953,7 @@ class Trace(
     def __len__(self) -> int:
         """Number of layer-pass entries. Uses final list after postprocessing, raw dict during logging."""
         if self._tracing_finished:
-            return len(self.layer_list)
+            return len(self._layer_list)
         else:
             return len(self._raw_graph_ws.raw_layer_dict)
 
@@ -2281,7 +2262,7 @@ class Trace(
         """
 
         layer_label = str(getattr(site, "layer_label"))
-        if self.layer_num_calls.get(layer_label, 1) == 1:
+        if self._layer_num_calls.get(layer_label, 1) == 1:
             return f"layer:{layer_label}"
         return f"op:{getattr(site, 'label')}"
 
@@ -2355,7 +2336,7 @@ class Trace(
         """
 
         self._user_annotation_dict(site.annotations)[name] = value
-        layer_log = self.layer_logs.get(str(getattr(site, "layer_label")))
+        layer_log = self._layer_logs.get(str(getattr(site, "layer_label")))
         if layer_log is not None:
             self._user_annotation_dict(layer_log.annotations)[name] = value
 
@@ -2503,7 +2484,7 @@ class Trace(
             ``None`` for root traces and deserialized traces.
         """
 
-        parent_ref = getattr(self, "parent_run", None)
+        parent_ref = getattr(self, "_parent_run", None)
         if isinstance(parent_ref, weakref.ReferenceType):
             parent = parent_ref()
             return parent if isinstance(parent, Trace) else None
@@ -2543,7 +2524,7 @@ class Trace(
         if layer_nums == "all":
             return "all"
         selected_nums = set(layer_nums)
-        return [op.label for op in self.layer_list if op.raw_index in selected_nums]
+        return [op.label for op in self._layer_list if op.raw_index in selected_nums]
 
     def _source_model_class(self) -> type[Any] | None:
         """Return the live source model class if it is still retained.
@@ -2739,7 +2720,7 @@ class Trace(
     def __iter__(self) -> Iterator[Any]:
         """Loops through all tensors in the log."""
         if self._tracing_finished:
-            return iter(self.layer_list)
+            return iter(self._layer_list)
         else:
             return iter(list(self._raw_graph_ws.raw_layer_dict.values()))
 
@@ -2890,7 +2871,7 @@ class Trace(
         state["_module_logs"] = None
         state["_buffer_accessor"] = None
         state["_source_model_ref"] = None
-        state["parent_run"] = None
+        state["_parent_run"] = None
         state["last_run"] = None
         state["_out_identity_cache"] = {}
         state["_out_hash_cache"] = {}
@@ -3075,7 +3056,7 @@ class Trace(
             **_MODEL_LOG_DEFAULT_FILL,
             "tlspec_version": serialized_tlspec_version,
             "transform_repr": None,
-            "decoded_output": None,
+            "_decoded_output": None,
             "output_postprocessor": None,
             "output_id2label": None,
             "output_num_classes": None,
@@ -3086,7 +3067,7 @@ class Trace(
             "_optimizer": None,
             "save_raw_activations": True,
             "save_mode": "copy",
-            "raw_output": None,
+            "transformed_output": None,
             "_output_transform": None,
             "save_raw_output": "small",
             "layer_visualizers": None,
@@ -3094,18 +3075,17 @@ class Trace(
             "_visualizer_dir": None,
             "input_annotations": {},
             "grad_transform": None,
-            "grad_transform_repr": None,
             "save_raw_gradients": True,
             "save_grads": None,
             "capture_tensor_grad_hooks": True,
             "_grad_op_nums_to_save": [],
             "has_backward_pass": False,
-            "grad_fn_logs": OrderedDict(),
+            "_grad_fn_logs": OrderedDict(),
             "grad_fn_order": [],
-            "backward_pass_logs": OrderedDict(),
+            "_backward_pass_logs": OrderedDict(),
             "backward_root_grad_fn_object_ids": [],
             "backward_durations": [],
-            "num_backward_passes": 0,
+            "_num_backward_passes": 0,
             "backward_peak_memory": 0,
             "backward_memory_backend": "unknown",
             "backward_peak_memory_reason": None,
@@ -3117,13 +3097,13 @@ class Trace(
             "_keep_outs_in_memory": True,
             "_defer_streaming_bundle_finalization": False,
             "_out_sink": None,
-            "append_history": [],
+            "_append_history": [],
             "_source_code_blob": {},
             "_source_model_ref": None,
             "backward_ready": False,
             "inference_only": False,
             "chunked_forward": False,
-            "module_filter": None,
+            "_module_filter": None,
             "raise_on_nan": False,
             "track_nonfinite": False,
             "track_device_memory": False,
@@ -3285,13 +3265,13 @@ class Trace(
             self._module_logs = ModuleAccessor({})
         if "_buffer_accessor" not in self.__dict__:
             self._buffer_accessor = None
-        for layer_log in self.layer_logs.values():
+        for layer_log in self._layer_logs.values():
             layer_log.source_trace = self
             for layer_pass in layer_log.ops.values():
                 layer_pass.source_trace = self
-        for layer_pass in self.layer_list:
+        for layer_pass in self._layer_list:
             layer_pass.source_trace = self
-        for grad_fn_handle in self.grad_fn_logs.values():
+        for grad_fn_handle in self._grad_fn_logs.values():
             grad_fn_handle.trace = self
             if grad_fn_handle.op is not None:
                 grad_fn_handle.op.grad_fn_handle = grad_fn_handle
@@ -3400,7 +3380,7 @@ class Trace(
 
         preserved_fields = (
             "name",
-            "parent_run",
+            "_parent_run",
             "_intervention_spec",
             "_transform",
             "save_raw_input",
@@ -3419,7 +3399,7 @@ class Trace(
             "input_signature_hash",
             "is_appended",
             "_append_sequence_id",
-            "append_history",
+            "_append_history",
             "relationship_evidence",
             "_source_model_ref",
             "_has_direct_writes",
@@ -3469,10 +3449,10 @@ class Trace(
             use ``replace_state_from``.
         """
 
-        old_raw_labels = tuple(layer._layer_label_raw for layer in self.layer_list)
-        new_raw_labels = tuple(layer._layer_label_raw for layer in new_log.layer_list)
-        old_final_labels = tuple(layer.layer_label for layer in self.layer_list)
-        new_final_labels = tuple(layer.layer_label for layer in new_log.layer_list)
+        old_raw_labels = tuple(layer._layer_label_raw for layer in self._layer_list)
+        new_raw_labels = tuple(layer._layer_label_raw for layer in new_log._layer_list)
+        old_final_labels = tuple(layer.layer_label for layer in self._layer_list)
+        new_final_labels = tuple(layer.layer_label for layer in new_log._layer_list)
         if old_raw_labels != new_raw_labels or old_final_labels != new_final_labels:
             return False
 
@@ -3484,7 +3464,7 @@ class Trace(
         # passes' activations and pass labels. The label-sequence equality checked
         # just above is exactly the precondition that makes index i of one list the
         # same op as index i of the other.
-        for layer, new_layer in zip(self.layer_list, new_log.layer_list):
+        for layer, new_layer in zip(self._layer_list, new_log._layer_list):
             self._refresh_rerun_op_from(layer, new_layer)
         self._refresh_rerun_layer_logs_from(new_log)
         self._refresh_rerun_trace_fields_from(new_log)
@@ -3540,7 +3520,7 @@ class Trace(
             "_pending_grad_blob_id",
             "_pending_transformed_grad_blob_id",
             "annotations",
-            "interventions",
+            "edits",
             "container_spec",
             "args_template",
             "kwargs_template",
@@ -3567,8 +3547,8 @@ class Trace(
             Fresh rerun trace with layer aggregates already postprocessed.
         """
 
-        new_layer_logs = getattr(new_log, "layer_logs", {}) or {}
-        for label, layer_log in self.layer_logs.items():
+        new_layer_logs = getattr(new_log, "_layer_logs", {}) or {}
+        for label, layer_log in self._layer_logs.items():
             new_layer_log = new_layer_logs.get(label)
             if new_layer_log is None:
                 continue
@@ -3643,7 +3623,7 @@ class Trace(
         """
 
         field_names = (
-            "raw_output",
+            "transformed_output",
             "save_raw_output",
             "has_gradients",
             "random_seed",
@@ -3653,7 +3633,6 @@ class Trace(
             "graph_shape_hash",
             "_raw_event_shape_hash",
             "_raw_call_fingerprint",
-            "num_saved_ops",
             "saved_activation_memory",
             "total_activation_memory",
             "saved_gradient_memory",
@@ -3726,13 +3705,13 @@ class Trace(
             have already been validated against this log.
         """
 
-        new_by_raw = {layer._layer_label_raw: layer for layer in trace.layer_list}
+        new_by_raw = {layer._layer_label_raw: layer for layer in trace._layer_list}
         old_by_label = {
             key: layer
-            for layer in self.layer_list
+            for layer in self._layer_list
             for key in (layer._layer_label_raw, layer.layer_label)
         }
-        for layer in self.layer_list:
+        for layer in self._layer_list:
             new_layer = new_by_raw[layer._layer_label_raw]
             if not (
                 getattr(layer, "is_buffer", False)
@@ -3810,7 +3789,7 @@ class Trace(
             "is_inplace",
             "grad_fn_class_name",
             "grad_fn_object_id",
-            "interventions",
+            "edits",
             "annotations",
         ):
             if hasattr(new_layer, field_name):

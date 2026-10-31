@@ -145,7 +145,7 @@ def _first_batch_out(log: tl.Trace) -> torch.Tensor:
         First out with at least one dimension.
     """
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         if isinstance(layer.out, torch.Tensor) and layer.out.ndim > 0:
             return layer.out
     raise AssertionError("no batch out found")

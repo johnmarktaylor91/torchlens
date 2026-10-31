@@ -86,7 +86,7 @@ def _q_head(model: _AttnModel, x: torch.Tensor, head: int) -> torch.Tensor:
 def _q_label(trace: tl.Trace) -> str:
     """Layer label of ``q_lin``'s output: the first linear in execution order."""
 
-    return next(op.layer_label for op in trace.layer_list if op.func_name == "linear")
+    return next(op.layer_label for op in trace._layer_list if op.func_name == "linear")
 
 
 def _set_door_value(trace: tl.Trace, selector) -> torch.Tensor:

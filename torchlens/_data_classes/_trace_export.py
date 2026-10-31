@@ -182,7 +182,7 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         "grad_fn_handle",
         "grad_fn_object_id",
         "activation_transform",
-        "interventions",
+        "edits",
         "code_context",
         "transform_fn_source",
         "args_template",
@@ -358,7 +358,7 @@ class TraceExportMixin(_TraceMixinBase):
         }
 
         model_df_dictlist: list[dict[str, Any]] = []
-        for layer_entry in self.layer_list:
+        for layer_entry in self._layer_list:
             layer_dict: dict[str, Any] = {}
             for field_name in fields_for_df:
                 if field_name == "conditional_branch_stack":
@@ -419,7 +419,7 @@ class TraceExportMixin(_TraceMixinBase):
         from .._quickstart._gate import require_gold
 
         require_gold(self, "decoded output labels")
-        if self.decoded_output is None:
+        if self._decoded_output is None:
             recomputed = self._recompute_decoded_output(top_n=k)
             if recomputed is None:
                 raise PayloadUnavailableError(
@@ -432,7 +432,7 @@ class TraceExportMixin(_TraceMixinBase):
                 )
             return recomputed
         if k is None:
-            return self.decoded_output
+            return self._decoded_output
         captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
         if captured_top_n is not None and k > captured_top_n:
             recomputed = self._recompute_decoded_output(top_n=k)
@@ -447,20 +447,20 @@ class TraceExportMixin(_TraceMixinBase):
                 ),
                 captured_top_n=captured_top_n,
             )
-        if _is_batch_topk_decoded(self.decoded_output):
+        if _is_batch_topk_decoded(self._decoded_output):
             return {
                 "kind": "batch_topk",
                 "rows": [
                     row
-                    for row in self.decoded_output["rows"]
+                    for row in self._decoded_output["rows"]
                     if isinstance(row, dict) and int(row.get("rank", 1)) <= k
                 ],
             }
-        if not isinstance(self.decoded_output, list):
-            return self.decoded_output
+        if not isinstance(self._decoded_output, list):
+            return self._decoded_output
         return [
             row
-            for row in self.decoded_output
+            for row in self._decoded_output
             if not isinstance(row, dict) or int(row.get("rank", 1)) <= k
         ]
 
@@ -567,7 +567,7 @@ class TraceExportMixin(_TraceMixinBase):
             First decoded row summary, or ``None`` when unavailable.
         """
 
-        rows = _decoded_batch_topk_rows(getattr(self, "decoded_output", None))
+        rows = _decoded_batch_topk_rows(getattr(self, "_decoded_output", None))
         if not rows:
             return None
         first_item = int(rows[0].get("batch_item", 0))

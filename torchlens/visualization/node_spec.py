@@ -220,7 +220,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
 
     by_label: dict[str, Op] = {}
     for target in targets:
-        table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
+        table = resolve_sites(trace, target, max_fanout=max(1, len(trace._layer_list)))
         for site in table:
             forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so
@@ -233,7 +233,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
             if isinstance(site_label, str):
                 by_label.setdefault(site_label, cast("Op", forward_site))
     execution_order = {
-        _site_sort_key(op): index for index, op in enumerate(getattr(trace, "layer_list", ()))
+        _site_sort_key(op): index for index, op in enumerate(getattr(trace, "_layer_list", ()))
     }
     return sorted(by_label.values(), key=lambda site: execution_order.get(_site_sort_key(site), 0))
 

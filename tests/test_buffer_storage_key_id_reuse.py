@@ -91,7 +91,7 @@ def test_id_reuse_never_reroots_a_newborn_tensor_as_a_buffer() -> None:
     # The scenario must actually happen, or this test proves nothing.
     assert _reused_across_kinds(stashed(trace, "alias_ids")) > 0, stashed(trace, "alias_ids")[:8]
 
-    buffer_ops = [op for op in trace.layer_list if op.is_buffer]
+    buffer_ops = [op for op in trace._layer_list if op.is_buffer]
     assert buffer_ops
     consumer_types = {trace[child].func_name for op in buffer_ops for child in op.children}
     assert consumer_types == {"view"}, consumer_types

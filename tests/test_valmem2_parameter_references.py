@@ -170,7 +170,7 @@ def test_validation_capture_saves_an_alias_of_its_copys_parameters() -> None:
         forward_storages.append(module.lin.weight.untyped_storage().data_ptr())
 
     def observe(trace: Any) -> None:
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.func_name == "linear" and op.saved_args:
                 saved_weights.append(op.saved_args[1])
 
@@ -204,7 +204,7 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
     trace = tl.trace(
         model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     )
-    linears = [op for op in trace.layer_list if op.func_name == "linear"]
+    linears = [op for op in trace._layer_list if op.func_name == "linear"]
     assert len(linears) == 2
     for op, parameter in zip(linears, (model.lin.weight, model.out.weight), strict=True):
         saved = op.saved_args[1]

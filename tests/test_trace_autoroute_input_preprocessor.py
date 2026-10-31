@@ -83,7 +83,7 @@ def test_input_transform_summary_render_is_opt_in() -> None:
     log = tl.trace(
         _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    log.raw_input = "hello world"
+    log.input = "hello world"
     default_dot = log.draw(vis_save_only=True, file_format="dot")
     log.input_preprocessor = ResolvedPreprocessing(
         source="unit_test",

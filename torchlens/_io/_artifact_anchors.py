@@ -46,7 +46,7 @@ def persisted_anchor_facts(scrubbed_state: Mapping[str, Any]) -> tuple[Any, int 
     row count must be read from the bytes as written.
     """
 
-    rows = scrubbed_state.get("layer_list")
+    rows = scrubbed_state.get("_layer_list")
     return scrubbed_state.get("tlspec_version"), (len(rows) if isinstance(rows, list) else None)
 
 

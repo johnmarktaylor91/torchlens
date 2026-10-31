@@ -673,7 +673,7 @@ def test_live_fast_run_refreshes_every_multipass_activation(plan_kind: str) -> N
         save = tl.module("shared")
     captured = tl.trace(model, torch.tensor([-5.0, 1.0]), save=save)
     selected = [
-        op for op in captured.layer_list if op.has_saved_activation and op.func_name == "relu"
+        op for op in captured._layer_list if op.has_saved_activation and op.func_name == "relu"
     ]
     captured_first = selected[0].out.clone()
 
@@ -686,7 +686,7 @@ def test_live_fast_run_refreshes_every_multipass_activation(plan_kind: str) -> N
 
     result = captured.run(inputs=runtime_input, fast=True)
     refreshed = [
-        op for op in result.trace.layer_list if op.has_saved_activation and op.func_name == "relu"
+        op for op in result.trace._layer_list if op.has_saved_activation and op.func_name == "relu"
     ]
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -752,8 +752,8 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
     trace.save(path, level="runnable")
 
     result = tl.load(path).run(inputs=inputs.clone())
-    live_relu = next(op for op in trace.layer_list if op.func_name == "relu")
-    fork_relu = next(op for op in result.trace.layer_list if op.func_name == "relu")
+    live_relu = next(op for op in trace._layer_list if op.func_name == "relu")
+    fork_relu = next(op for op in result.trace._layer_list if op.func_name == "relu")
     fork_relu_before_output_edit = fork_relu.out.detach().clone()
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -1087,7 +1087,7 @@ def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
     assert result.report.state_source is StateSource.LIVE_MODEL_STATE
     assert torch.equal(result.output, model(inputs))
     _assert_outs_equal(trace, source_outs)
-    for actual_op, expected_op in zip(result.trace.layer_list, expected.layer_list):
+    for actual_op, expected_op in zip(result.trace._layer_list, expected._layer_list):
         if expected_op.out is None:
             assert actual_op.out is None
         else:
@@ -1107,7 +1107,7 @@ def test_live_run_forward_failure_unregisters_transactional_fork() -> None:
     transactional_forks = tuple(
         log
         for log in _state.list_logs()
-        if callable(getattr(log, "parent_run", None)) and log.parent_run() is trace
+        if callable(getattr(log, "_parent_run", None)) and log._parent_run() is trace
     )
     assert transactional_forks == ()
     assert {id(log) for log in _state.list_logs()} <= prior_log_ids
@@ -1223,7 +1223,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
     with pytest.raises(PoisonedRunError):
         tl.debug.compare(poisoned, poisoned)
     with pytest.raises(PoisonedRunError):
-        poisoned.push_from(poisoned.layer_list[0])
+        poisoned.push_from(poisoned._layer_list[0])
     with pytest.raises(PoisonedRunError):
         poisoned.save_intervention(tmp_path / "poisoned-intervention.tlspec")
 
@@ -1304,13 +1304,13 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
 def _clone_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
     """Clone one Trace's current activation payloads for mutation assertions."""
 
-    return tuple(None if op.out is None else op.out.detach().clone() for op in trace.layer_list)
+    return tuple(None if op.out is None else op.out.detach().clone() for op in trace._layer_list)
 
 
 def _assert_outs_equal(trace: tl.Trace, expected: tuple[torch.Tensor | None, ...]) -> None:
     """Assert that a Trace retains exactly the snapshotted activation values."""
 
-    for op, value in zip(trace.layer_list, expected):
+    for op, value in zip(trace._layer_list, expected):
         if value is None:
             assert op.out is None
         else:

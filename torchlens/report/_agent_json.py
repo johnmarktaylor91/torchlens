@@ -108,7 +108,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         "nonfinite_evidence": "trace.first_nonfinite()",
         "nonfinite_coverage": "trace.nonfinite_coverage",
     }
-    if int(getattr(log, "num_saved_ops", 0) or 0) > 0:
+    if len(getattr(log, "saved_ops", ())) > 0:
         steps["one_activation"] = "trace[<layer_label>].out"
     steps["receptive_field"] = "trace[<layer_label>].receptive_field"
     steps["draw_graph"] = "trace.draw()"
@@ -116,7 +116,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         steps["op_table"] = "trace.to_pandas()"
         if _first_op_site_key(log) is not None:
             steps["sites_table"] = "trace.sites()"
-        if getattr(log, "decoded_output", None) is not None:
+        if getattr(log, "_decoded_output", None) is not None:
             steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
@@ -139,7 +139,7 @@ def _pandas_available() -> bool:
 def _first_op_site_key(log: Any) -> str | None:
     """Return the first op's site key, or ``None`` on keyless artifacts."""
 
-    for op in getattr(log, "layer_list", []) or []:
+    for op in getattr(log, "_layer_list", []) or []:
         return getattr(op, "site_key", None)
     return None
 
@@ -253,7 +253,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
             "layers": _safe_len(getattr(log, "layer_labels", None)),
             "operations": int(getattr(log, "num_ops", 0) or 0),
             "tensors_total": len(log) if hasattr(log, "__len__") else 0,
-            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
+            "tensors_saved": len(getattr(log, "saved_ops", ())),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
         }
@@ -352,7 +352,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     Parameters
     ----------
     op:
-        Operation record from ``trace.layer_list``.
+        Operation record from ``trace._layer_list``.
 
     Returns
     -------
@@ -472,7 +472,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
             "omit it to dump every op."
         )
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     truncation: dict[str, Any] | None = None
     if max_ops is not None and len(ops) > max_ops:
         truncation = {

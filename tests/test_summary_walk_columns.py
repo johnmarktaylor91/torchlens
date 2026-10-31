@@ -261,7 +261,7 @@ def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None
     from torchlens.visualization._render_nodes import compute_default_node_lines
 
     trace = _attention_trace()
-    layers = list(trace.layer_logs.values())
+    layers = list(trace._layer_logs.values())
     sdpa = next(layer for layer in layers if layer.func_name == "scaled_dot_product_attention")
     proj = next(layer for layer in layers if layer.func_name == "linear")
 

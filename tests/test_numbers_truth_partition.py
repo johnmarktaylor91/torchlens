@@ -89,12 +89,12 @@ def test_compute_partition_totals_are_owned_exactly_once() -> None:
 
     for name, log in _fixture_traces():
         try:
-            real_ops = [op for op in log.layer_list if not (op.is_input or op.is_output)]
+            real_ops = [op for op in log._layer_list if not (op.is_input or op.is_output)]
             partition_sum = sum(
                 int(op.flops_forward) for op in real_ops if op.flops_forward is not None
             )
             assert int(log.cost.total_flops_forward) == partition_sum, name
-            for op in log.layer_list:
+            for op in log._layer_list:
                 if op.is_output:
                     assert op.flops_forward is None, (name, op.label)
                 if op.is_input:
@@ -108,7 +108,9 @@ def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
 
     for name, log in _fixture_traces():
         try:
-            owned = sum(int(op.activation_memory or 0) for op in log.layer_list if not op.is_output)
+            owned = sum(
+                int(op.activation_memory or 0) for op in log._layer_list if not op.is_output
+            )
             assert int(log.total_activation_memory) == owned, name
         finally:
             log.cleanup()
@@ -119,11 +121,11 @@ def test_param_partition_each_identity_owned_once() -> None:
 
     for name, log in _fixture_traces():
         try:
-            barcodes = [pl.barcode for pl in log.param_logs]
+            barcodes = [pl.barcode for pl in log._param_logs]
             assert len(barcodes) == len(set(barcodes)), name
-            addresses = [pl.address for pl in log.param_logs]
+            addresses = [pl.address for pl in log._param_logs]
             assert len(addresses) == len(set(addresses)), name
-            assert log.num_params == sum(int(pl.num_params) for pl in log.param_logs), name
+            assert log.num_params == sum(int(pl.num_params) for pl in log._param_logs), name
         finally:
             log.cleanup()
 

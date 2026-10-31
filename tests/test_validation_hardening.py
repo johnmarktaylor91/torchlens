@@ -99,8 +99,8 @@ class _Diamond(nn.Module):
 def _drop_diamond_edge(trace) -> None:
     """Consistently drop the p->c1 edge exactly as a capture bug would."""
 
-    p_op = [op for op in trace.layer_list if op.func_name == "__mul__"][0]
-    c1_op = [op for op in trace.layer_list if op.func_name == "__add__"][0]
+    p_op = [op for op in trace._layer_list if op.func_name == "__mul__"][0]
+    c1_op = [op for op in trace._layer_list if op.func_name == "__add__"][0]
     p_labels = {p_op.label, p_op.layer_label}
     c1_labels = {c1_op.label, c1_op.layer_label}
     assert p_op.layer_label in c1_op.parents
@@ -178,7 +178,7 @@ def test_w32_forged_placeholder_in_plain_capture_fails() -> None:
     """
 
     trace, ground_truth = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)
@@ -226,13 +226,11 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    replaced_ops = [op for op in trace.layer_list if getattr(op, "is_edited", False)]
+    replaced_ops = [op for op in trace._layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
     assert getattr(trace, "_intervention_spec", None) is not None
     assert any(
-        getattr(record, "replaced", False)
-        for op in replaced_ops
-        for record in (op.interventions or [])
+        getattr(record, "replaced", False) for op in replaced_ops for record in (op.edits or [])
     )
     assert check_metadata_invariants(trace) is True
     ground_truth = [trace[label].out for label in trace.output_layers]
@@ -255,8 +253,8 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
     )
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
-    relu_op.interventions.append(FireRecord(target_label=relu_op.label, replaced=True))
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
+    relu_op.edits.append(FireRecord(target_label=relu_op.label, replaced=True))
     # A plain capture may own an EMPTY InterventionSpec object; that must not
     # count as an armed spec for the fallback.
     assert _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)) is False
@@ -278,7 +276,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
     finally:
         handle.remove()
 
-    linear_op = next(op for op in trace.layer_list if op.func_name == "linear")
+    linear_op = next(op for op in trace._layer_list if op.func_name == "linear")
     assert linear_op.is_edited is False
     assert _is_intentional_intervention_replacement(linear_op) is False
 
@@ -289,7 +287,7 @@ def test_callable_op_needs_own_live_fire_to_use_replacement_exemption() -> None:
     from torchlens.validation.core import _is_intentional_intervention_replacement
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
     relu_op.is_edited = True
     _note_replacement_event(trace, relu_op._label_raw)
 
@@ -312,8 +310,8 @@ def test_w33_arg_map_naming_non_parent_now_fails() -> None:
     """
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
-    add_ops = [op for op in trace.layer_list if op.func_name == "__add__"]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
+    add_ops = [op for op in trace._layer_list if op.func_name == "__add__"]
     foreign = add_ops[-1].layer_label
     assert foreign not in relu_op.parents
     relu_op.parent_arg_positions["args"][1] = foreign
@@ -327,7 +325,7 @@ def test_w33_has_children_corruption_still_caught() -> None:
     """The stored has_children flag check (the one real flag check) survives."""
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
-    p_op = [op for op in trace.layer_list if op.func_name == "__mul__"][0]
+    p_op = [op for op in trace._layer_list if op.func_name == "__mul__"][0]
     assert p_op.children
     p_op.has_children = False
 
@@ -340,7 +338,7 @@ def test_w33_derived_flag_properties_are_read_only_truths() -> None:
     """Documented ground truth: the removed comparisons were tautologies."""
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
-    op_type = type(trace.layer_list[1])
+    op_type = type(trace._layer_list[1])
     for name in ("has_parents", "has_siblings", "has_co_parents"):
         assert isinstance(getattr(op_type, name), property)
     assert not isinstance(getattr(op_type, "has_children", None), property)
@@ -354,7 +352,7 @@ def test_w33_derived_flag_properties_are_read_only_truths() -> None:
 def _op_by_layer_label(trace, layer_label: str):
     """Return the raw op record (stored labels, no canonicalizing view)."""
 
-    for record in trace.layer_list:
+    for record in trace._layer_list:
         if record.layer_label == layer_label:
             return record
     raise KeyError(layer_label)
@@ -427,7 +425,7 @@ def test_module_call_stack_is_single_fact_containment() -> None:
     """
 
     trace, _ = _capture(_Nested(), torch.randn(2, 4))
-    by_label = {op.layer_label: op for op in trace.layer_list}
+    by_label = {op.layer_label: op for op in trace._layer_list}
 
     # Top-level ops (the model input, an op between modules) run in NO module
     # call: the stack must be empty, not the fed call's stack.
@@ -443,7 +441,7 @@ def test_module_call_stack_is_single_fact_containment() -> None:
     assert tuple(by_label["relu_1_2"].module_call_stack) == ("a:1", "a.1:1")
 
     # The three facts are tied on every op: stack == modules, depth == len.
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         assert tuple(op.module_call_stack) == tuple(op.modules)
         assert op.module_call_depth == len(op.module_call_stack)
 
@@ -475,7 +473,7 @@ def test_parent_arg_positions_foreign_domain_fails() -> None:
     """
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
     relu_op.parent_arg_positions["nosuchop_9_9"] = {"args": [0]}
 
     with pytest.raises(MetadataInvariantError) as exc_info:
@@ -878,7 +876,7 @@ def test_check_norm_zero_weight_reads_the_real_captured_weight_slot() -> None:
                 bn.weight.zero_()
         bn.eval()
         trace, _ = _capture(bn, torch.randn(2, 4, 8, 8))
-        op = next(op for op in trace.layer_list if op.func_name == "batch_norm")
+        op = next(op for op in trace._layer_list if op.func_name == "batch_norm")
         assert torch.equal(op.saved_args[1], bn.weight.detach())
         assert torch.equal(op.saved_args[3], bn.running_mean)
         positions = op.parent_arg_positions["args"]
@@ -1426,7 +1424,7 @@ def _replay_status_with_noisy_relu(action: str) -> str:
     """Replay a capture whose relu re-execution warns, under one warning action."""
 
     trace, ground_truth = _capture(_ReluScale(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
     original = relu_op.func
 
     def noisy(*args, **kwargs):
@@ -1471,7 +1469,7 @@ def test_w35_perturbation_net_still_fails_true_insensitivity() -> None:
             return torch.relu(x * 2.0)
 
     trace, _ground_truth = _capture(_Mul(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
     saved = relu_op.out.detach().clone()
     object.__setattr__(relu_op, "func", lambda *args, **kwargs: saved.clone())
     parent_label = relu_op.parents[0]
@@ -1537,7 +1535,7 @@ def test_unit_step_retry_still_fails_true_insensitivity() -> None:
     )
 
     trace, _ground_truth = _capture(_ZeroConstIntCast(), torch.randn(4, 5))
-    long_op = [op for op in trace.layer_list if op.func_name == "long"][0]
+    long_op = [op for op in trace._layer_list if op.func_name == "long"][0]
     saved = long_op.out.detach().clone()
     object.__setattr__(long_op, "func", lambda *args, **kwargs: saved.clone())
     parent_label = long_op.parents[0]
@@ -1603,7 +1601,7 @@ def test_geometric_ladder_still_fails_spurious_discretizing_edge() -> None:
     )
 
     trace, _ground_truth = _capture(_WideBucketize(), torch.randn(4, 5))
-    bucketize_op = [op for op in trace.layer_list if op.func_name == "bucketize"][0]
+    bucketize_op = [op for op in trace._layer_list if op.func_name == "bucketize"][0]
     saved = bucketize_op.out.detach().clone()
     object.__setattr__(bucketize_op, "func", lambda *args, **kwargs: saved.clone())
     parent_label = bucketize_op.parents[0]
@@ -1630,7 +1628,7 @@ def test_geometric_ladder_scoped_to_value_discretizing_children() -> None:
     from torchlens.validation.core import _perturbation_retry_strategies
 
     bucketize_trace, _ = _capture(_WideBucketize(), torch.randn(4, 5))
-    bucketize_op = [op for op in bucketize_trace.layer_list if op.func_name == "bucketize"][0]
+    bucketize_op = [op for op in bucketize_trace._layer_list if op.func_name == "bucketize"][0]
     ladder = _perturbation_retry_strategies(bucketize_op)
     assert any(strategy.startswith("unit_step_up:") for strategy in ladder)
 
@@ -1641,7 +1639,7 @@ def test_geometric_ladder_scoped_to_value_discretizing_children() -> None:
     swamped_trace, _ = _capture(
         _SwampedAdd(), torch.tensor([10000.0, 10001.0], dtype=torch.float32)
     )
-    add_op = [op for op in swamped_trace.layer_list if op.func_name == "__add__"][0]
+    add_op = [op for op in swamped_trace._layer_list if op.func_name == "__add__"][0]
     assert _perturbation_retry_strategies(add_op) == [
         "step_up",
         "step_down",
@@ -1700,7 +1698,7 @@ def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
 
     model, x = _saturated_softmax_case()
     trace, _ = _capture(model, x)
-    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    softmax_op = [op for op in trace._layer_list if op.func_name == "softmax"][0]
     parent_label = softmax_op.parents[0]
     assert "lift_min_entry" in _perturbation_retry_strategies(softmax_op, [parent_label])
     changed = {}
@@ -1758,7 +1756,7 @@ def test_lift_retry_still_fails_a_disconnected_softmax_parent() -> None:
 
     model, x = _saturated_softmax_case()
     trace, _ = _capture(model, x)
-    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    softmax_op = [op for op in trace._layer_list if op.func_name == "softmax"][0]
     saved = softmax_op.out.detach().clone()
     object.__setattr__(softmax_op, "func", lambda *args, **kwargs: saved.clone())
 
@@ -1774,7 +1772,7 @@ def test_disconnected_softmax_parent_fails_public_validation() -> None:
 
     model, x = _saturated_softmax_case()
     trace, ground_truth = _capture(model, x)
-    softmax_op = [op for op in trace.layer_list if op.func_name == "softmax"][0]
+    softmax_op = [op for op in trace._layer_list if op.func_name == "softmax"][0]
     saved = softmax_op.out.detach().clone()
     object.__setattr__(softmax_op, "func", lambda *args, **kwargs: saved.clone())
     status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
@@ -1816,7 +1814,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
         handle.remove()
 
     boundary_layers = [
-        layer for layer in trace.layer_list if layer.func_name == "intervention_replacement"
+        layer for layer in trace._layer_list if layer.func_name == "intervention_replacement"
     ]
     assert boundary_layers, "the untraceable replacement must synthesize a boundary op"
     edits = [
@@ -1855,7 +1853,7 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     from torchlens._ir.events import InterventionAppliedEvent
 
     trace, ground_truth = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)
@@ -1880,7 +1878,7 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     # A forged binding built from stale facts (a plausible-looking target seq
     # that names no real op event in this journal) is refused the same way.
     trace2, ground_truth2 = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op2 = [op for op in trace2.layer_list if op.func_name == "relu"][0]
+    relu_op2 = [op for op in trace2._layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op2, "func", None)
     object.__setattr__(relu_op2, "func_name", "intervention_replacement")
     object.__setattr__(relu_op2, "is_edited", True)
@@ -1936,7 +1934,7 @@ def test_cross_run_replayed_edit_does_not_bless_placeholder() -> None:
 
     # Run B: plain capture; forge the placeholder and replay run A's edit.
     trace_b, ground_truth_b = _capture(_Tiny(), torch.randn(3, 4))
-    relu_op = [op for op in trace_b.layer_list if op.func_name == "relu"][0]
+    relu_op = [op for op in trace_b._layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)

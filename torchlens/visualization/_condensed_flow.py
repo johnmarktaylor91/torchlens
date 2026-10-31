@@ -171,7 +171,7 @@ def _compute_child_condensed_flow_graphs(
     """
 
     graphs: dict[str, ChildCondensedFlowGraph] = {}
-    op_order = {op.label: index for index, op in enumerate(trace.layer_list)}
+    op_order = {op.label: index for index, op in enumerate(trace._layer_list)}
     for module in trace.modules:
         parent = module.address
         child_addresses = tuple(

@@ -117,7 +117,7 @@ def _channel_summary(trace, tmp_path):
 
 
 def _channel_slice_summary(trace, tmp_path):
-    labels = [layer.label for layer in trace.layer_list]
+    labels = [layer.label for layer in trace._layer_list]
     return trace.between([labels[0]], [labels[-1]]).summary()
 
 

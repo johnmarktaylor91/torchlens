@@ -74,9 +74,9 @@ def _assert_fork_equivalent(restored: tl.Trace, fork: tl.Trace) -> None:
     """Assert the restored trace mirrors the fork's structure and payloads."""
 
     assert restored.name == fork.name
-    assert len(restored.layer_list) == len(fork.layer_list)
-    assert list(restored.layer_logs.keys()) == list(fork.layer_logs.keys())
-    for source_op, restored_op in zip(fork.layer_list, restored.layer_list):
+    assert len(restored._layer_list) == len(fork._layer_list)
+    assert list(restored._layer_logs.keys()) == list(fork._layer_logs.keys())
+    for source_op, restored_op in zip(fork._layer_list, restored._layer_list):
         assert restored_op.layer_label == source_op.layer_label
         assert restored_op.parents == source_op.parents
         assert restored_op.children == source_op.children
@@ -136,7 +136,7 @@ def test_fork_deepcopy(parent_trace: tl.Trace) -> None:
 
     fork = parent_trace.fork()
     duplicate = copy.deepcopy(fork)
-    assert len(duplicate.layer_list) == len(fork.layer_list)
+    assert len(duplicate._layer_list) == len(fork._layer_list)
 
 
 def test_fork_of_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
@@ -145,7 +145,7 @@ def test_fork_of_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
     fork = parent_trace.fork()
     grandfork = fork.fork()
     restored = pickle.loads(pickle.dumps(grandfork))
-    assert len(restored.layer_list) == len(grandfork.layer_list)
+    assert len(restored._layer_list) == len(grandfork._layer_list)
 
 
 def test_pickle_and_deepcopy_after_receptive_field_access() -> None:

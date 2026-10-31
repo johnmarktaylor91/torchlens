@@ -555,7 +555,7 @@ def test_emit_nvtx_capture_option_does_not_change_capture(
     )
 
     assert log.emit_nvtx is True
-    assert len(log.layer_list) > 0
+    assert len(log._layer_list) > 0
 
 
 def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:

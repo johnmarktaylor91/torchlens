@@ -39,10 +39,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     name = "trace_self_consistency"
 
     # op_labels vs layer_list length
-    if len(ml.op_labels) != len(ml.layer_list):
+    if len(ml.op_labels) != len(ml._layer_list):
         raise MetadataInvariantError(
             name,
-            f"len(op_labels)={len(ml.op_labels)} != len(layer_list)={len(ml.layer_list)}",
+            f"len(op_labels)={len(ml.op_labels)} != len(layer_list)={len(ml._layer_list)}",
         )
 
     # No duplicate labels
@@ -55,7 +55,7 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     # sets because buffer_layers stores pass-qualified labels while
     # layer_labels strips the pass suffix -- they use different formats.
     expected_ops = sum(
-        1 for lpl in ml.layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        1 for lpl in ml._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
     )
     expected_ops += _retained_orphan_computational_count(ml, name)
     if ml.num_ops != expected_ops:
@@ -72,13 +72,13 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     # dropped declared-but-never-executed parameters; the tripwire now checks
     # the identity partition it once contradicted. This matches the summation
     # logic in labeling.py (_tally_params_by_identity).
-    param_logs = list(getattr(ml, "param_logs", []) or [])
+    param_logs = list(getattr(ml, "_param_logs", []) or [])
     expected_param_sum = len(param_logs)
     expected_num_params = sum(int(pl.num_params) for pl in param_logs)
-    if ml.num_param_tensors != expected_param_sum:
+    if len(ml.params) != expected_param_sum:
         raise MetadataInvariantError(
             name,
-            f"num_param_tensors={ml.num_param_tensors} != "
+            f"num_param_tensors={len(ml.params)} != "
             f"len(param_logs)={expected_param_sum} (parameter-identity basis)",
         )
     if ml.num_params != expected_num_params:
@@ -109,10 +109,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         )
 
     # Tensor counts
-    if len(ml) < ml.num_saved_ops:
+    if len(ml) < len(ml.saved_ops):
         raise MetadataInvariantError(
             name,
-            f"len(trace)={len(ml)} < num_saved_ops={ml.num_saved_ops}",
+            f"len(trace)={len(ml)} < num_saved_ops={len(ml.saved_ops)}",
         )
 
 
@@ -161,7 +161,7 @@ def _retained_orphan_computational_count(ml: Trace, name: str) -> int:
             "retained orphan islands must mark every _orphan_logs entry is_orphan=True",
         )
 
-    active_labels = {layer.layer_label for layer in ml.layer_list}
+    active_labels = {layer.layer_label for layer in ml._layer_list}
     for orphan in retained_orphans:
         island_edges = set(orphan.parents) | set(orphan.children)
         active_edges = island_edges & active_labels
@@ -266,7 +266,7 @@ def _check_special_layer_lists(ml: Trace) -> None:
                 )
 
         # Reverse: every layer/op with the flag is in the list.
-        for lpl in ml.layer_list:
+        for lpl in ml._layer_list:
             label = lpl.label if label_kind == "op" else lpl.layer_label
             if getattr(lpl, flag_attr) and label not in special_set:
                 raise MetadataInvariantError(
@@ -316,15 +316,15 @@ def _check_capture_edge_survival(trace: Trace) -> None:
     # otherwise) -- the many-to-one raw->layer_label map cannot.
     ops_by_raw = {
         getattr(op, "_label_raw", None): op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "_label_raw", None) is not None
     }
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         raw_label = getattr(op, "_label_raw", None)
         edges = truth.get(raw_label) if raw_label is not None else None
         if not edges:
             continue
-        if getattr(op, "interventions", None):
+        if getattr(op, "edits", None):
             continue
         positions = getattr(op, "parent_arg_positions", None) or {}
         recorded = set(op.parents or ())
@@ -410,7 +410,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         )
         return
     ops = ml.ops
-    for entry in ml.layer_list:
+    for entry in ml._layer_list:
         layer_label = getattr(entry, "layer_label", None)
         pass_index = getattr(entry, "pass_index", None)
         num_passes = getattr(entry, "num_passes", None)
@@ -526,7 +526,7 @@ def _check_graph_topology(ml: Trace) -> None:
                 aliases.add(f"{layer_label}:{pass_index}")
         return aliases
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         lpl_aliases = label_aliases(lpl, lpl.layer_label)
         # Report the PASS-QUALIFIED spelling: on a multi-pass layer the bare layer
         # label names every pass, so a bare-label message could not tell the reader
@@ -706,7 +706,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
         resolution_cache[entry_label] = record
         return record
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         own_spellings = label_aliases(lpl, lpl.layer_label)
         report_label = max(own_spellings, key=len)
         for relation, forward_field, reverse_field in (

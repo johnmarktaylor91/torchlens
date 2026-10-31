@@ -200,6 +200,6 @@ def test_attribute_held_original_relu_is_rebound_and_witnessed(device: str) -> N
     )
 
     assert "relu" in [op.func_name for op in trace.ops]
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert trace.completeness_witness_verified is True
     assert model.stale_relu is stale_relu

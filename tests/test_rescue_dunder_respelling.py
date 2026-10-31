@@ -193,8 +193,8 @@ def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
 
     assert result is rescued
     assert result.capture_verification_reason == "mode_rescue_rerun"
-    assert result.rescue_rerun["recovered_ops"] == ("relu",)
-    assert result.rescue_rerun["lost_ops"] == ()
+    assert result._rescue_rerun["recovered_ops"] == ("relu",)
+    assert result._rescue_rerun["lost_ops"] == ()
 
 
 @pytest.mark.parametrize(
@@ -218,8 +218,8 @@ def test_genuine_loss_still_refuses_the_rescue(
 
     assert result is primary
     assert result.capture_verification_reason == "escape_rescue_unrecovered"
-    assert result.rescue_rerun["recovered"] is False
-    assert result.rescue_rerun["lost_ops"] == lost
+    assert result._rescue_rerun["recovered"] is False
+    assert result._rescue_rerun["lost_ops"] == lost
 
 
 @pytest.fixture()
@@ -270,7 +270,7 @@ def test_stale_ref_rescue_with_operators_returns_the_rescued_trace(
     with pytest.warns(UserWarning, match="no graph/source provenance"):
         trace = tl.trace(Model(), torch.tensor([0.25, 0.5, 0.75]))
 
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None and info["recovered"] is True, info
     assert info["lost_ops"] == ()
     assert trace.capture_verification_reason == "mode_rescue_rerun"

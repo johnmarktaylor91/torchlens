@@ -117,7 +117,7 @@ def apply_static_label_save_policy(
     _reject_non_static_save_predicate(predicate, backend_name=backend_name)
     hidden_payloads = _hidden_payloads_by_label(trace)
     matched_any = False
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         if bool(predicate(op)):
             matched_any = True
         else:
@@ -155,7 +155,7 @@ def warn_zero_match_save_predicate(backend_name: str, *, stacklevel: int = 3) ->
     warnings.warn(
         f"{backend_name} trace(save=...) predicate matched zero operations; "
         "the returned trace retains no saved activation payloads. Check the "
-        "selector against the captured op labels (trace.layer_list) -- a "
+        "selector against the captured op labels (trace._layer_list) -- a "
         "mistyped label or function name silently saves nothing.",
         stacklevel=stacklevel,
     )
@@ -176,7 +176,7 @@ def _hidden_payloads_by_label(trace: Any) -> dict[str, Any]:
     """
 
     hidden_payloads: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         output = getattr(op, "out", None)
         if output is None:
             continue
@@ -286,10 +286,9 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
 
     saved_ops = [
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in getattr(trace, "_layer_list", ())
         if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
     ]
-    trace.num_saved_ops = len(saved_ops)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
     # explorer P4 memory truth (reduce-only captures count the retained
@@ -297,10 +296,9 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     from .._save_budget import retained_activation_bytes
 
     trace.saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
-    trace.num_saved_layers = len({op.layer_label for op in saved_ops})
     refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
     refresh_pinned_autograd_memory(trace, saved_ops)
-    trace._layers_saved = trace.num_saved_ops == len(getattr(trace, "layer_list", ()))
+    trace._layers_saved = len(saved_ops) == len(getattr(trace, "_layer_list", ()))
 
 
 def _reject_non_static_save_predicate(

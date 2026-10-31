@@ -90,7 +90,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         filter. Spelling DOCUMENTED-UNSTABLE.
         """
 
-        return tuple(self.layer_list)
+        return tuple(self._layer_list)
 
     def save_intervention(
         self: "Trace",
@@ -976,7 +976,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether the caller explicitly accepted in-place mutation.
         """
 
-        if confirm_mutation or self.parent_run is not None or self._warned_mutate_in_place:
+        if confirm_mutation or self._parent_run is not None or self._warned_mutate_in_place:
             return
         from ..intervention.errors import TraceMutationWarning
         from ..options import suppress_mutate_warnings
@@ -1792,10 +1792,10 @@ class TraceInterventionMixin(_TraceMixinBase):
         owner reference (and drop stale facet caches) afterwards.
         """
 
-        for layer_pass in self.layer_list:
+        for layer_pass in self._layer_list:
             layer_pass.source_trace = self
             del layer_pass.facets
-        for layer_log in self.layer_logs.values():
+        for layer_log in self._layer_logs.values():
             layer_log.source_trace = self
         for module_log in self.modules:
             module_log._source_trace = self
@@ -1870,7 +1870,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 return
         except SiteResolutionError:
             pass
-        max_fanout = max(1, len(self.layer_list))
+        max_fanout = max(1, len(self._layer_list))
         self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
     def _target_spec_from_site(self: "Trace", site: Any, *, strict: bool) -> TargetSpec:

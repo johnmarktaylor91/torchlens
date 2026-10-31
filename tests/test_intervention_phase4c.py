@@ -283,7 +283,7 @@ def test_module_selector_matches_capture_time_module_context() -> None:
         ),
     )
 
-    hooked_layers = [layer for layer in log.layer_list if layer.interventions]
+    hooked_layers = [layer for layer in log._layer_list if layer.edits]
 
     assert hooked_layers
     assert hooked_layers[0].out is not None
@@ -302,7 +302,7 @@ def test_module_selector_does_not_overmatch_other_live_modules() -> None:
         ),
     )
 
-    hooked_labels = {layer.layer_label for layer in log.layer_list if layer.interventions}
+    hooked_labels = {layer.layer_label for layer in log._layer_list if layer.edits}
 
     assert hooked_labels == {"interventionreplacement_1_3"}
 
@@ -316,7 +316,7 @@ def test_module_selector_matches_exact_multi_op_boundary() -> None:
         intervene=tl.when(tl.module("block"), tl.zero_ablate()),
     )
 
-    intervened = {op.layer_label for op in log.ops if op.interventions}
+    intervened = {op.layer_label for op in log.ops if op.edits}
     resolved_boundary = {
         op.layer_label for op in log.resolve_sites(tl.module("block"), max_fanout=len(log.ops))
     }
@@ -449,10 +449,8 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
         ),
     )
 
-    assert any(layer.interventions for layer in regex_log.layer_list if layer.func_name == "relu")
-    hooked_chunk_paths = {
-        layer.container_path for layer in chunk_log.layer_list if layer.interventions
-    }
+    assert any(layer.edits for layer in regex_log._layer_list if layer.func_name == "relu")
+    hooked_chunk_paths = {layer.container_path for layer in chunk_log._layer_list if layer.edits}
     assert len(hooked_chunk_paths) == 1
 
 
@@ -479,7 +477,7 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
         capture=CaptureOptions(replayable=True),
     )
     raw_label = next(
-        layer._layer_label_raw for layer in raw_log.layer_list if layer.func_name == "relu"
+        layer._layer_label_raw for layer in raw_log._layer_list if layer.func_name == "relu"
     )
 
     label_log = tl.trace(
@@ -507,9 +505,9 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
         ),
     )
 
-    assert any(layer.interventions for layer in label_log.layer_list)
-    assert any(layer.interventions for layer in where_log.layer_list)
-    assert any(layer.interventions for layer in in_module_log.layer_list)
+    assert any(layer.edits for layer in label_log._layer_list)
+    assert any(layer.edits for layer in where_log._layer_list)
+    assert any(layer.edits for layer in in_module_log._layer_list)
 
 
 def test_no_hooks_preserves_pristine_run_state() -> None:
@@ -535,7 +533,7 @@ def test_live_replacement_metadata_matches_saved_out() -> None:
             hooks={tl.func("relu"): _zero_hook},
         ),
     )
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     assert relu_layer.out is not None
     assert relu_layer.has_saved_activation is True

@@ -247,7 +247,7 @@ def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
     except ValueError:
         return None
     layer_labels = {
-        str(getattr(layer, "layer_label", "")) for layer in getattr(trace, "layer_list", ())
+        str(getattr(layer, "layer_label", "")) for layer in getattr(trace, "_layer_list", ())
     }
     if base not in layer_labels:
         return None

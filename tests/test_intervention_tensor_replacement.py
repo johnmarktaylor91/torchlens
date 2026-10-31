@@ -108,7 +108,7 @@ def _replacement_layers(log: tl.Trace) -> list[tl.Op]:
         Replacement-marked layer passes.
     """
 
-    return [layer for layer in log.layer_list if getattr(layer, "is_edited", False)]
+    return [layer for layer in log._layer_list if getattr(layer, "is_edited", False)]
 
 
 def test_intervention_api_replaces_op_output_preserves_graph() -> None:
@@ -121,12 +121,12 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
         capture=tl.options.CaptureOptions(replayable=True, hooks={tl.func("relu"): _zero_hook}),
     )
 
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
-    fc1_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_1"))
+    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
+    fc1_layer = next(layer for layer in log._layer_list if layer.layer_label.startswith("linear_1"))
 
     assert relu_layer.is_edited is True
     assert relu_layer.parents == (fc1_layer.layer_label,)
-    assert len(relu_layer.interventions) == 1
+    assert len(relu_layer.edits) == 1
     assert torch.count_nonzero(relu_layer.out) == 0
 
 
@@ -140,12 +140,12 @@ def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
             replayable=True, hooks={tl.func("relu_"): tl.zero_ablate()}
         ),
     )
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu_")
+    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu_")
 
     assert torch.equal(log[log.output_layers[0]].out, torch.ones(2))
     assert torch.equal(relu_layer.out, torch.zeros(2))
     assert relu_layer.is_edited is True
-    assert relu_layer.interventions[-1].replaced is True
+    assert relu_layer.edits[-1].replaced is True
 
 
 def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
@@ -169,12 +169,12 @@ def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
     finally:
         handle.remove()
 
-    mul_layer = next(layer for layer in log.layer_list if layer.func_name == "__mul__")
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    mul_layer = next(layer for layer in log._layer_list if layer.func_name == "__mul__")
+    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     assert mul_layer.is_edited is True
     assert mul_layer.parents == (relu_layer.layer_label,)
-    assert log.layer_dict_main_keys[mul_layer.label] is mul_layer
+    assert log._layer_dict_main_keys[mul_layer.label] is mul_layer
 
 
 def test_chain_of_interventions_preserves_graph() -> None:
@@ -193,9 +193,9 @@ def test_chain_of_interventions_preserves_graph() -> None:
         ),
     )
 
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
-    sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
-    fc2_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_2"))
+    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
+    sigmoid_layer = next(layer for layer in log._layer_list if layer.func_name == "sigmoid")
+    fc2_layer = next(layer for layer in log._layer_list if layer.layer_label.startswith("linear_2"))
 
     assert relu_layer.is_edited is True
     assert sigmoid_layer.is_edited is True
@@ -214,7 +214,7 @@ def test_quantization_sensitivity_pattern() -> None:
         ),
     )
 
-    sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
+    sigmoid_layer = next(layer for layer in log._layer_list if layer.func_name == "sigmoid")
 
     assert sigmoid_layer.is_edited is True
     assert sigmoid_layer.parents
@@ -256,5 +256,5 @@ def test_fresh_tensor_replacement_at_nested_boundary_and_model_output() -> None:
 
     assert log.output_layers
     assert log[log.output_layers[0]].out is not None
-    assert any(getattr(layer, "is_edited", False) for layer in log.layer_list)
-    assert all(getattr(layer, "layer_label", None) for layer in log.layer_list)
+    assert any(getattr(layer, "is_edited", False) for layer in log._layer_list)
+    assert all(getattr(layer, "layer_label", None) for layer in log._layer_list)

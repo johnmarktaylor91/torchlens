@@ -628,7 +628,7 @@ class TestCleanupReleasesReferences:
         # Force each Param's live reference to rehydrate (iteration triggers
         # rehydrate-on-iter after a normal capture) so we have a genuine
         # non-None reference to prove cleanup() releases.
-        param_logs = list(log.param_logs)
+        param_logs = list(log._param_logs)
         assert param_logs, "expected at least one captured Param"
         for param_log in param_logs:
             assert param_log._param_ref is not None
@@ -643,7 +643,7 @@ class TestCleanupReleasesReferences:
         # Op -> Trace circular reference via source_trace), and internal
         # containers not in MODEL_LOG_FIELD_ORDER must be gone.
         assert not hasattr(first_entry, "out")
-        assert not hasattr(log, "layer_logs")
+        assert not hasattr(log, "_layer_logs")
 
 
 # ---------------------------------------------------------------------------

@@ -91,9 +91,9 @@ def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
     spec = tl.when(tl.func("relu"), _sae_like) & tl.when(tl.func("tanh"), tl.scale(0.5))
     base = tl.trace(model, x, intervene=spec)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    assert [op.label for op in logged.layer_list] == [op.label for op in base.layer_list]
-    assert [op.raw_label for op in logged.layer_list] == [op.raw_label for op in base.layer_list]
-    assert [op.site_key for op in logged.layer_list] == [op.site_key for op in base.layer_list]
+    assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
+    assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
+    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
     # the LATER edit fired identically: same tanh output in both runs
     assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
     assert len(logged.injected_ops) > 0
@@ -156,7 +156,7 @@ def test_injection_query_split_and_model_family_untouched(chain) -> None:
 
     model, x = chain
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    assert [op.label for op in logged.model_ops] == [op.label for op in logged.layer_list]
+    assert [op.label for op in logged.model_ops] == [op.label for op in logged._layer_list]
     injected_labels = {record.label for record in logged.injected_ops}
     model_labels = {op.label for op in logged.model_ops}
     assert injected_labels and not (injected_labels & model_labels)
@@ -188,7 +188,7 @@ def test_injection_selectors_never_fire_on_injected_ops(chain) -> None:
         from torchlens._errors import PayloadUnavailableError
 
         saved = []
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             try:
                 if op.out is not None:
                     saved.append(op.label)
@@ -278,7 +278,7 @@ def test_injection_off_by_default_and_plain_capture_unaffected(chain) -> None:
     assert tl.options.CaptureOptions().log_injections is False
     plain = tl.trace(model, x)
     assert plain.injected_ops == ()
-    assert [op.label for op in plain.model_ops] == [op.label for op in plain.layer_list]
+    assert [op.label for op in plain.model_ops] == [op.label for op in plain._layer_list]
 
 
 def test_intervene_fire_counter_is_a_declared_session_transient() -> None:

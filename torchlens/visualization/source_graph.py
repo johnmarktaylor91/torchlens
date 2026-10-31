@@ -61,9 +61,9 @@ def build_source_graph(trace: Trace, request: ResolvedRenderRequest) -> SourceGr
     from ._render_nodes import _normalize_buffer_visibility
 
     if request.vis_mode == "unrolled":
-        entries_to_plot: dict[str, Any] = dict(trace.layer_dict_main_keys)
+        entries_to_plot: dict[str, Any] = dict(trace._layer_dict_main_keys)
     elif request.vis_mode == "rolled":
-        entries_to_plot = dict(trace.layer_logs)
+        entries_to_plot = dict(trace._layer_logs)
     else:
         # First-to-fire validation of the flagship draw option: typed with the
         # same code as the backward/combined siblings (R65) instead of a bare

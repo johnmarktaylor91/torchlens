@@ -52,7 +52,7 @@ def _ambiguous_lookup_match_labels(self: "Trace", key: str) -> list[str]:
     ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
     raw_indices = ambiguous_lookup_keys.get(key, [])
     matches: list[str] = []
-    for op in self.layer_list:
+    for op in self._layer_list:
         if op.raw_index in raw_indices:
             matches.append(op.label)
     return matches
@@ -136,11 +136,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         return table.first()
 
     if isinstance(ix, slice):
-        return self.layer_list[ix]  # #78: slice indexing support
+        return self._layer_list[ix]  # #78: slice indexing support
 
     if isinstance(ix, int):
         try:
-            return self.layer_list[ix]  # every row, like the slice form above
+            return self._layer_list[ix]  # every row, like the slice form above
         except IndexError:
             _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
             raise
@@ -149,15 +149,15 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
-        if ix in self.layer_logs:
-            return self.layer_logs[ix]
+        if ix in self._layer_logs:
+            return self._layer_logs[ix]
 
         ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
         if ix in ambiguous_lookup_keys:
             _raise_ambiguous_lookup_key(self, ix, ix)
 
-        if ix in self.layer_dict_all_keys:
-            return self.layer_dict_all_keys[ix]
+        if ix in self._layer_dict_all_keys:
+            return self._layer_dict_all_keys[ix]
 
         for accessor in (
             self.ops,
@@ -187,7 +187,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
                 # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.
                 keys = (
-                    [op.label for op in self.layer_list]
+                    [op.label for op in self._layer_list]
                     if accessor is self.ops
                     else accessor.keys()
                 )
@@ -197,17 +197,17 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
-        for key in self.layer_dict_all_keys:
+        for key in self._layer_dict_all_keys:
             if str(key).lower() == lower_ix:
                 if key in ambiguous_lookup_keys:
                     _raise_ambiguous_lookup_key(self, ix, key)
-                return self.layer_dict_all_keys[key]
+                return self._layer_dict_all_keys[key]
 
         keys_with_substr = [
-            key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
+            key for key in self._layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
         entries_with_substr = {
-            self.layer_dict_all_keys[key].raw_index: self.layer_dict_all_keys[key]
+            self._layer_dict_all_keys[key].raw_index: self._layer_dict_all_keys[key]
             for key in keys_with_substr
         }
         if len(entries_with_substr) == 1:
@@ -322,7 +322,7 @@ def _str_after_pass(self: "Trace") -> str:
         f"\n\t\t- {bound}{len(self)} total tensors ({self.total_activation_memory}) "
         f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
     )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
+    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self.saved_activation_memory}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -346,7 +346,7 @@ def _str_after_pass(self: "Trace") -> str:
     s += "\n\tLayers"
     if self._layers_saved:
         s += " (all have saved outs):"
-    elif self.num_saved_ops == 0:
+    elif len(self.saved_ops) == 0:
         s += " (no layer outs are saved):"
     else:
         s += " (* means layer has saved outs):"
@@ -389,7 +389,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
 
     roster: list[str] = []
     num_buffer_rows = 0
-    for layer_ind, layer_entry in enumerate(self.layer_list):
+    for layer_ind, layer_entry in enumerate(self._layer_list):
         if getattr(layer_entry, "is_buffer", False):
             num_buffer_rows += 1
             continue

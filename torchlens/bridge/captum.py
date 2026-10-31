@@ -115,7 +115,7 @@ def _positional_inputs(log: Any) -> tuple[tuple[torch.Tensor, ...], str | None]:
     """Collect the logged inputs in ``forward`` order, or say why they cannot be."""
 
     by_name: dict[str, torch.Tensor] = {}
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         if not getattr(layer, "is_input", False):
             continue
         role = str(getattr(layer, "io_role", "") or "")

@@ -225,7 +225,7 @@ class _OwnedElsewhere:
 def _has_op_in_pass(trace: Any, object_id: int, pass_index: int) -> bool:
     """Whether ``trace`` recorded this node with a forward op and a call in ``pass_index``."""
 
-    grad_fn = (getattr(trace, "grad_fn_logs", {}) or {}).get(object_id)
+    grad_fn = (getattr(trace, "_grad_fn_logs", {}) or {}).get(object_id)
     if grad_fn is None or not getattr(grad_fn, "has_op", False):
         return False
     calls = getattr(grad_fn, "calls", None) or {}
@@ -348,7 +348,7 @@ def attribute_census(
     """
 
     pass_index = int(backward_pass.pass_index)
-    grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
+    grad_fn_logs = getattr(trace, "_grad_fn_logs", {}) or {}
     builds_graph = _pass_builds_graph(backward_pass)
     checkpoint = _checkpoint_evidence(trace)
     rows: dict[tuple[int, int], _RowAccumulator] = {}

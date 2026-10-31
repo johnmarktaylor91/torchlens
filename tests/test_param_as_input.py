@@ -171,7 +171,7 @@ def _first_non_boundary_op(trace: tl.Trace) -> Any:
         First non-boundary operation.
     """
 
-    return next(op for op in trace.layer_list if not op.is_input and not op.is_output)
+    return next(op for op in trace._layer_list if not op.is_input and not op.is_output)
 
 
 def _assert_input_parent_edge(trace: tl.Trace) -> None:
@@ -184,7 +184,7 @@ def _assert_input_parent_edge(trace: tl.Trace) -> None:
     """
 
     input_label = trace.input_layers[0]
-    assert any(input_label in op.parents for op in trace.layer_list if not op.is_input)
+    assert any(input_label in op.parents for op in trace._layer_list if not op.is_input)
 
 
 def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> None:
@@ -277,7 +277,7 @@ def test_parameter_input_fanout_links_to_each_consuming_op() -> None:
     trace = tl.trace(_FanoutStimulusModel(), _parameter_stimulus())
 
     input_label = trace.input_layers[0]
-    children = [op for op in trace.layer_list if input_label in op.parents]
+    children = [op for op in trace._layer_list if input_label in op.parents]
     assert {child.func_name for child in children} >= {"relu", "sigmoid"}
 
 
@@ -324,7 +324,7 @@ def test_loop_detection_groups_recurrent_ops_with_parameter_input() -> None:
     relu_layer = trace["relu_1_2"]
     assert add_layer.num_passes == 3
     assert relu_layer.num_passes == 3
-    assert all(op.input_was_parameter is False for op in trace.layer_list if not op.is_input)
+    assert all(op.input_was_parameter is False for op in trace._layer_list if not op.is_input)
     assert trace[trace.input_layers[0]].input_was_parameter is True
 
 
@@ -339,7 +339,7 @@ def test_parameter_input_tlspec_roundtrip_preserves_metadata(tmp_path: Path) -> 
 
     input_label = loaded.input_layers[0]
     assert loaded[input_label].input_was_parameter is True
-    assert any(input_label in op.parents for op in loaded.layer_list if not op.is_input)
+    assert any(input_label in op.parents for op in loaded._layer_list if not op.is_input)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="Cross-device check requires CUDA.")
@@ -352,5 +352,5 @@ def test_cross_device_parameter_input_matches_plain_tensor_path_if_cuda_availabl
     trace = tl.trace(model, z)
 
     input_label = trace.input_layers[0]
-    assert any(input_label in op.parents for op in trace.layer_list if not op.is_input)
+    assert any(input_label in op.parents for op in trace._layer_list if not op.is_input)
     assert trace[input_label].input_was_parameter is True

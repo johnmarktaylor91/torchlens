@@ -57,7 +57,7 @@ def test_tensorboard_writes_layer_count_memory_and_model_name() -> None:
     returned = tl.export.tensorboard(log, writer, step=7, prefix="tlx")
 
     assert returned is writer
-    assert writer.scalars["tlx/num_layers"] == (len(log.layer_list), 7)
+    assert writer.scalars["tlx/num_layers"] == (len(log._layer_list), 7)
     memory_value, memory_step = writer.scalars["tlx/total_activation_memory"]
     assert memory_step == 7
     assert memory_value == int(log.total_activation_memory or 0)
@@ -119,7 +119,7 @@ def test_mlflow_logs_prefixed_metrics_and_returns_them() -> None:
         "capture_honesty",
     }
     assert metrics["capture_honesty"]["capture_status"] == "complete"
-    assert metrics["num_layers"] == len(log.layer_list)
+    assert metrics["num_layers"] == len(log._layer_list)
     numeric = {
         key: metrics[key] for key in ("num_layers", "num_saved_ops", "total_activation_memory")
     }
@@ -210,7 +210,7 @@ def test_wandb_builds_scalar_safe_table_and_logs_to_run(
     assert result["artifact"] is None
     assert run.logged["my_table"] is built[0]
     dataframe = built[0].dataframe
-    assert len(dataframe) == len(log.layer_list)
+    assert len(dataframe) == len(log._layer_list)
     primitive = (str, int, float, bool)
     for column in dataframe.columns:
         for cell in dataframe[column]:

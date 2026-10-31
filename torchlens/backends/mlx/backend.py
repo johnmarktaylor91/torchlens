@@ -247,7 +247,7 @@ class _MLXIntermediateTapObserver:
             Finalized trace containing input operations.
         """
 
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if not op.is_input or op.out is None:
                 continue
             self.labels_by_id[id(op.out)] = str(op._label_raw)
@@ -1151,7 +1151,7 @@ class MLXBackend:
         halt_selector = None
         if intervene is not None or halt is not None:
             spec = get_backend_spec("mlx")
-            if not spec.capabilities.interventions:
+            if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares interventions=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
@@ -1160,7 +1160,7 @@ class MLXBackend:
             # The registered binding IS the dispatch surface: resolution and
             # application come from the capability implementation, so a bound-
             # but-unregistered or in-place-flipped table refuses typed.
-            resolve = cast(Any, require_capability_implementation(spec, "interventions"))
+            resolve = cast(Any, require_capability_implementation(spec, "can_intervene"))
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
@@ -1203,7 +1203,7 @@ class MLXBackend:
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -1270,7 +1270,7 @@ class MLXBackend:
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
                 output = signal.frontier_output
-                trace.halted = True
+                trace.is_stopped = True
                 trace.stop_reason = signal.reason
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
@@ -1299,25 +1299,25 @@ class MLXBackend:
                 )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
             if halt_signal is not None:
-                trace.raw_output = None
+                trace.transformed_output = None
             else:
-                trace.raw_output = output_transform(output) if callable(output_transform) else None
+                trace.transformed_output = (
+                    output_transform(output) if callable(output_transform) else None
+                )
             self.finalize_forward_session(trace, trace._raw_graph_ws)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace._param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+                trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
+                    param.num_params for param in trace._param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
                 trace.param_source = "native-module"
             else:
-                trace.param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
+                trace._param_logs = ParamAccessor({})
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
@@ -1366,14 +1366,13 @@ class MLXBackend:
 
         attached = {
             barcode
-            for op in trace.layer_list
+            for op in trace._layer_list
             for barcode in (getattr(op, "_param_barcodes", None) or ())
         }
         kept = {
             address: param for address, param in trace.params.items() if param.barcode in attached
         }
-        trace.param_logs = ParamAccessor(kept)
-        trace.num_param_tensors = len(kept)
+        trace._param_logs = ParamAccessor(kept)
         trace.num_params = sum(param.num_params for param in kept.values())
         trace.num_params_trainable = sum(
             param.num_params for param in kept.values() if param.is_trainable
@@ -1577,7 +1576,7 @@ class MLXBackend:
 
         selected_ops = tuple(
             op
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and not op.is_input and _is_float_mlx_array(op.out)
         )
         if len(selected_ops) > grad_options.max_intermediate_grads:
@@ -2825,7 +2824,7 @@ def _mlx_trace_intermediate_signatures(
         source_trace = op._source_trace_or_none()
         if source_trace is None:
             continue
-        for trace_op in getattr(source_trace, "layer_list", ()):
+        for trace_op in getattr(source_trace, "_layer_list", ()):
             label_raw = getattr(trace_op, "_label_raw", None)
             if not isinstance(label_raw, str):
                 continue
@@ -3118,7 +3117,7 @@ def _max_mlx_input_raw_index(trace: Trace) -> int:
 
     indexes = [
         int(getattr(op, "step_index", 0) or 0)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_input", False)
     ]
     return max(indexes, default=0)

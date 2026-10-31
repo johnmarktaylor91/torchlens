@@ -457,7 +457,7 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
         return tuple(records)
     import dataclasses
 
-    ops = tuple(getattr(trace, "layer_list", ()) or ())
+    ops = tuple(getattr(trace, "_layer_list", ()) or ())
     by_raw: dict[str, Any] = {}
     for op in ops:
         raw = getattr(op, "raw_label", None)

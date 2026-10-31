@@ -528,7 +528,7 @@ def test_traced_quantile_tensor_q_recorded_as_parent(call_style: str, func_name:
         QuantileWithTensorQ(), [torch.tensor([0.0, 10.0, 20.0]), torch.tensor(0.25)]
     )
     quantile = next(op for op in trace.ops if op.func_name == func_name)
-    inputs = [op for op in trace.layer_list if op.is_input]
+    inputs = [op for op in trace._layer_list if op.is_input]
 
     assert set(quantile.parents) == {op.layer_label for op in inputs}
     for input_op in inputs:
@@ -613,7 +613,7 @@ def test_traced_three_input_losses_record_all_tensor_parents(
 
     trace = _trace_with_args_templates(ThreeInputLoss(), inputs)
     loss = next(op for op in trace.ops if op.func_name == func.__name__)
-    input_ops = [op for op in trace.layer_list if op.is_input]
+    input_ops = [op for op in trace._layer_list if op.is_input]
 
     assert set(loss.parents) == {op.layer_label for op in input_ops}
     for input_op in input_ops:

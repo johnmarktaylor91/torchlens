@@ -160,8 +160,8 @@ def test_tf_derived_grads_do_not_create_backward_logs() -> None:
     trace = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
 
     assert trace.has_backward_pass is False
-    assert not trace.backward_pass_logs
-    assert not trace.grad_fn_logs
+    assert not trace._backward_pass_logs
+    assert not trace._grad_fn_logs
     with pytest.raises(ValueError, match="derived_grads"):
         trace.autograd.backward_passes
 
@@ -185,9 +185,9 @@ def test_tf_intermediate_grads_match_direct_oracle_and_skip_disconnected() -> No
     )
 
     records = trace.autograd.intermediate_derived_grads
-    relu_op = next(op for op in trace.layer_list if op.func_name == "Relu")
+    relu_op = next(op for op in trace._layer_list if op.func_name == "Relu")
     _assert_close(records[relu_op.label].grad, np.ones((2, 2), dtype="float32"))
-    stop_gradient_op = next(op for op in trace.layer_list if op.func_name == "StopGradient")
+    stop_gradient_op = next(op for op in trace._layer_list if op.func_name == "StopGradient")
     assert stop_gradient_op.label not in records
     assert records[relu_op.label].provenance["status"] == "exact"
 
@@ -209,7 +209,7 @@ def test_tf_same_shape_relus_are_disambiguated_by_stream_position() -> None:
         grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=32),
     )
 
-    relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
     assert len(relu_ops) == 2
     _assert_close(
         trace.autograd.intermediate_derived_grads[relu_ops[0].label].grad,
@@ -230,7 +230,7 @@ def test_tf_duplicate_trace_signature_group_is_ambiguous() -> None:
         return tf.nn.relu(x) + tf.nn.relu(x)
 
     trace = tl.trace(model, tf.ones((2, 2), dtype="float32"), backend="tf")
-    relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
     relu_ops[1].func_call_id = relu_ops[0].func_call_id
     relu_ops[1].parents = tuple(relu_ops[0].parents)
     groups = _tf_trace_intermediate_signatures(trace)
@@ -245,7 +245,7 @@ def test_tf_duplicate_trace_signature_group_is_ambiguous() -> None:
     # through the identical dual-key resolution, or it never matches the
     # production grouping.
     label_to_raw: dict[str, str] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         label_to_raw[op.label] = op._label_raw
         if op.num_passes == 1:
             label_to_raw[op.layer_label] = op._label_raw
