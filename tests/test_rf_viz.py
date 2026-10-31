@@ -112,18 +112,18 @@ class _View:
         self._box = _box(descriptor)
         self._gradient = gradient_result
 
-    def at(self, unit: Sequence[int], *, input: Any | None = None) -> ReceptiveFieldBox:
+    def at(self, unit: Sequence[int], *, input_op: Any | None = None) -> ReceptiveFieldBox:
         """Return the configured geometric box."""
 
-        _ = unit, input
+        _ = unit, input_op
         return self._box
 
     def gradient(
-        self, unit: Sequence[int], *, input: Any | None = None, retain_graph: bool = False
+        self, unit: Sequence[int], *, input_op: Any | None = None, retain_graph: bool = False
     ) -> GradReceptiveField:
         """Return the configured empirical result."""
 
-        _ = unit, input, retain_graph
+        _ = unit, input_op, retain_graph
         assert self._gradient is not None
         return self._gradient
 

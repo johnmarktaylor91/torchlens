@@ -871,7 +871,7 @@ def gradient_for_unit(
         )
 
     results: dict[str, GradReceptiveField] = {}
-    for (role, input_op, descriptor), grad in zip(selected, grads):
+    for (role, selected_op, descriptor), grad in zip(selected, grads):
         state = solution.states.get((target.label, role))
         if grad is None and descriptor is not None:
             raise ReceptiveFieldUnavailableError(
@@ -880,7 +880,7 @@ def gradient_for_unit(
                 f"save mode (the default); recapture with {_RECAPTURE_RECIPE}."
             )
         if grad is None:
-            grad = torch.zeros_like(_saved_tensor(input_op, "input"))
+            grad = torch.zeros_like(_saved_tensor(selected_op, "input"))
         results[role] = _build_result(
             target=target,
             role=role,
