@@ -286,7 +286,7 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
     # Ops WITHOUT device facts are no evidence: fall back to the stamped
     # backend rule (unknown -> flush), never a false "provably non-CUDA".
     class _NoRefTrace:
-        forward_memory_backend = "unknown"
+        _provenance_forward_memory_backend = "unknown"
         _layer_list = None
 
         def __iter__(self):

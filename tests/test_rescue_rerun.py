@@ -84,6 +84,7 @@ def test_rescue_restores_rng_to_capture_entry() -> None:
             ops=[],
             _layer_list=[],
             _provenance_verified=None,
+            _provenance_verification_reason=None,
         )
 
     capture_with_rescue(run_capture)
