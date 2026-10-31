@@ -130,3 +130,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 669cc6e9efc3f733645794ca03e3a65e618a0b5a (dirty)
 recorded: 2026-10-16T21:49:02.292942+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:16.312675+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: renderer rulings 29 Oct 2026: legacy default palette, drawn-node header, key in the header block, top-left module captions, skinned backward and bundle pictures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7830f146c880f97735381763f07537cabc6c0e72 (dirty)
+recorded: 2026-10-29T22:36:38.311183+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d2defdd6388075d47eeb2e797030a05a5bcdabfb (dirty)
+recorded: 2026-10-30T01:14:50.646289+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d2defdd6388075d47eeb2e797030a05a5bcdabfb (dirty)
+recorded: 2026-10-30T01:15:15.959153+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:04.051782+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: intervention marks 29 Oct 2026 (JMT F2): purple ring and edit row, header edit line, downstream highlighter off by default
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
+recorded: 2026-10-30T02:07:25.692724+00:00

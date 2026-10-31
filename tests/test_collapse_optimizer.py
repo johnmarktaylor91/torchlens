@@ -1552,8 +1552,12 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert representative_label in source
         assert f"{representative.num_params} params (all trainable)" in source
-        assert aggregate_label not in source
-        assert f"{aggregate_params} params (all trainable)" not in source
+        # The header counts drawn nodes ("N ops (X B)"); only node labels matter here.
+        body = "\n".join(
+            line for line in source.splitlines() if not line.strip().startswith("graph [")
+        )
+        assert aggregate_label not in body
+        assert f"{aggregate_params} params (all trainable)" not in body
     finally:
         trace.cleanup()
 

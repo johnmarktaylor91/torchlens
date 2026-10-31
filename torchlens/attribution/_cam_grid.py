@@ -62,6 +62,21 @@ class _TokenGrid:
     evidence: tuple[str, ...]
 
 
+def _lookup_label(op: Any) -> str:
+    """Return the label that names exactly this op in parent and child references.
+
+    The bare layer label for a single-pass layer, the pass-qualified label for
+    each pass of a multi-pass layer (``labeling.py``'s lookup label). Keying by
+    the bare layer label collapses every pass of a multi-pass layer onto its
+    last pass: one module called twice (a ResNet block's shared ReLU) is one
+    layer with two passes, and the collapsed graph loses the first pass.
+    """
+
+    if int(getattr(op, "num_passes", 1) or 1) > 1:
+        return str(op.label)
+    return str(op.layer_label)
+
+
 class _TraceGraph:
     """Label-indexed view of a metadata-only trace's op graph."""
 
@@ -78,7 +93,7 @@ class _TraceGraph:
         self.ops: dict[str, Any] = {}
         self.order: dict[str, int] = {}
         for index, op in enumerate(trace.ops):
-            label = str(op.layer_label)
+            label = _lookup_label(op)
             self.ops[label] = op
             self.order[label] = index
         self._add_boundary_nodes()
@@ -110,7 +125,7 @@ class _TraceGraph:
         label = str(ref)
         if label in self.ops:
             return label
-        return str(self.trace[ref].layer_label)
+        return _lookup_label(self.trace[ref])
 
     def parents(self, label: str) -> list[str]:
         """Return the parent labels of ``label`` in argument order."""

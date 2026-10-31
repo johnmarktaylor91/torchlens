@@ -138,7 +138,7 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "vis_node_placement": (PAIRED, "rank"),
     "vis_theme": (PAIRED, "paper"),
     "vis_intervention_mode": (PAIRED, "as_node"),
-    "vis_show_cone": (PAIRED, False),
+    "vis_show_cone": (PAIRED, True),
     "code_panel": (PAIRED, True),
     "node_overlay": (PAIRED, _unit_overlay),
     "node_label_fields": (PAIRED, ["label", "time"]),

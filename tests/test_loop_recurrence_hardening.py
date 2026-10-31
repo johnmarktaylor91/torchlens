@@ -21,6 +21,7 @@ from collections import OrderedDict, defaultdict
 import pytest
 import torch
 import torch.nn as nn
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
 from torchlens import trace as trace_fn
 from torchlens.postprocess.loop_grouping_adapter import (
@@ -29,6 +30,11 @@ from torchlens.postprocess.loop_grouping_adapter import (
     group_recurrent_nodes,
 )
 from torchlens.validation.invariants import check_metadata_invariants
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 # ---------------------------------------------------------------------------
 # Helpers

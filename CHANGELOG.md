@@ -13,6 +13,18 @@
   `inventory`, `kernel_telemetry`, `observe`, `preprocessing`, `quickstart`, the four
   `selection_*`, `snoop`, `trace_slice`, `trackers`) are gone too; import them the same way.
   A subpackage already imported (by you or by TorchLens itself) still resolves as `tl.<name>`.
+- **visualization**: interventions draw in one purple (`#7B1FA2`; `#C084FC` on the dark skin).
+  An edited node keeps its fill, shape and dash and gets a 2.5 pt purple ring and a last label
+  row naming the edit (`Δ zero_ablate`, `Δ scale(0.5)`, `Δ steer(v)`; full spelling in the
+  tooltip); the header gets a line such as `1 edit: Δ zero_ablate on linear_1_1`. The magenta
+  site outline and pink cone outline are gone. `vis_show_cone` is now off by default; with
+  `vis_show_cone=True` the arrows and node outlines downstream of the edit keep their normal
+  strokes and gain a translucent purple underlay, laid into the SVG after layout (PDF and PNG
+  are written from that SVG and need `cairosvg`; without it TorchLens warns and draws the
+  edited node only). `intervention_cone_color` and `intervention_cone_penwidth` now set the
+  underlay's colour and width (default 8). The `vis_intervention_mode="as_node"` hook is a small
+  purple delta diamond. With `show_legend=True` the key lists `edited` and `changed by the edit`
+  instead of `intervention/cone`, and its `module` entry is a module frame.
 - **visualization**: when a module's only child hides exactly the module's operations, the
   module (the name you wrote) is the collapse box and the child is not; a chain of such
   wrappers keeps the outermost. `Module.collapse_score` and `Trace.module_collapse_order` read

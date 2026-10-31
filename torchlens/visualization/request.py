@@ -100,7 +100,7 @@ class ResolvedRenderRequest:
     overrides: Any = None
     theme: str = "torchlens"
     intervention_mode: VisInterventionModeLiteral = "node_mark"
-    show_cone: bool = True
+    show_cone: bool = False
     code_panel: Any = False
     node_overlay: Any = None
     node_label_fields: tuple[str, ...] | None = None

@@ -106,11 +106,11 @@ class TestMechanismIsRedCapable:
 
         planted = (
             *coverage.legend_universe(),
-            LegendText("TorchLens legend", "sparkle node", "theme_role_sections(fake)"),
+            LegendText("key", "sparkle node", "key_swatches(fake)"),
             LegendText("TorchLens sparkles", "sparkle", "fake_sections()"),
         )
         failures = coverage.check_legend_rows(planted, coverage.filled_deck_text())
-        assert _reported(failures, "`sparkle node`", "theme_role_sections(fake)")
+        assert _reported(failures, "`sparkle node`", "key_swatches(fake)")
         assert _reported(failures, "`TorchLens sparkles`", "LEGEND_SECTION_ROWS")
 
     def test_new_hex_token_is_reported(self, tmp_path: Path) -> None:

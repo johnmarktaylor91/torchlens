@@ -10,6 +10,7 @@ from typing import Any
 import example_models
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
 import torchlens.postprocess.loop_grouping_adapter as lga
 from torchlens import trace as trace_fn
@@ -18,6 +19,11 @@ from torchlens.postprocess.loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 
 def _raw_label(trace: Any, final_label: str) -> str:

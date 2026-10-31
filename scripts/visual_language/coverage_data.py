@@ -304,8 +304,8 @@ ROWS: Mapping[str, Row] = {
     "VR13": _R("region.orphan_cluster", "orphans", P, "_render_dot:_add_orphan_island_nodes"),
     "VR14": _R("region.stack_groups", "stack-by", P, "_stacking:compute_stack_groups"),
     # Caption, views
-    "VC01": _R("caption.graph", "grey-params", P, "_render_dot:_graph_caption_body"),
-    "VC02": _R("caption.direct_writes", "surgery", C, "_render_dot:_graph_caption_body"),
+    "VC01": _R("caption.graph", "grey-params", P, "_header_block:graph_caption_body"),
+    "VC02": _R("caption.direct_writes", "surgery", C, "_header_block:graph_caption_body"),
     "VC03": _R(
         "caption.honesty_banner",
         "start-here",
@@ -415,14 +415,12 @@ ROWS: Mapping[str, Row] = {
         caption_variants=("constants", "non_module_ops"),
     ),
     # Legend, skins, typography, layout, output
-    "VI01": _R("legend.role_section", "builtin-legend", P, "_legend:theme_role_sections"),
+    "VI01": _R("legend.role_section", "builtin-legend", P, "_header_block:key_swatches"),
     "VI02": _R(
         "legend.show_legend_tristate", "builtin-legend", P, "_render_dot:_emit_and_finish_forward"
     ),
     "VI03": _R("legend.backward_key", "backward-legend", P, "_legend:backward_key_sections"),
-    "VI04": _R(
-        "legend.rank_engine", "layout-engine", P, "_legend:legend_table_lines_for_rank_path"
-    ),
+    "VI04": _R("legend.rank_engine", "layout-engine", P, "_header_block:header_block_label"),
     "VI05": _R("legend.bundle_diff", "other-pictures", C, "bundle_diff:bundle_diff"),
     "VT01": _R(
         "skin.presets",
@@ -554,6 +552,7 @@ ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
         "bwd",
         "show_module_paths",
         "show_grad_values",
+        "theme",
     ),
     "Trace.draw_combined": (
         "vis_outpath",
@@ -578,7 +577,7 @@ VOCABULARY_EXEMPT: Mapping[str, str] = {
 
 #: Legend section title to the row that teaches it.
 LEGEND_SECTION_ROWS: Mapping[str, str] = {
-    "TorchLens legend": "VI01",
+    "key": "VI01",
     "backward key": "VI03",
     "TorchLens encoding": "VK06",
 }
@@ -586,9 +585,11 @@ LEGEND_SECTION_ROWS: Mapping[str, str] = {
 #: Legend row text to the slide whose render draws it (confirmed against the real DOT by
 #: the slide test). Rows the deck states in words need no entry.
 LEGEND_ROW_WITNESS: Mapping[str, str] = {
-    "TorchLens legend": "builtin-legend",
-    "parameterized": "builtin-legend",
-    "plain op": "builtin-legend",
+    "trainable weights": "builtin-legend",
+    "frozen weights": "builtin-legend",
+    "module": "builtin-legend",
+    "edited": "interventions",
+    "changed by the edit": "interventions",
     "mutated parameter": "mutated-param",
     "backward op (grad_fn)": "backward-legend",
     "order 2+: grad-of-grad (double backprop)": "backward-legend",

@@ -368,8 +368,15 @@ def _add_intervention_hook_nodes(
     graphviz_graph: graphviz.Digraph,
     site_labels: set[str],
     graph_overrides: dict[str, Any] | None,
+    theme: VisualizationTheme | None = None,
 ) -> None:
     """Add standalone hook nodes for ``vis_intervention_mode='as_node'``.
+
+    Each hook is a small diamond in the edit purple (ring and a bold delta,
+    pale purple fill) between the edited node and its consumers; its tooltip
+    names the site. It carries the ``tl_edited`` SVG class, so with the
+    downstream highlighter on its out-edges are highlighted like the edited
+    node's.
 
     Parameters
     ----------
@@ -379,6 +386,8 @@ def _add_intervention_hook_nodes(
         Layer-pass labels with intervention specs.
     graph_overrides:
         Graph override dictionary, including optional intervention style keys.
+    theme:
+        Resolved skin; the dark skin draws the ring in its lighter purple.
 
     Returns
     -------
@@ -386,6 +395,9 @@ def _add_intervention_hook_nodes(
         The graph is mutated in place.
     """
 
+    from ._edit_marks import DELTA, EDIT_RING_PENWIDTH, EDITED_NODE_CLASS, EditRow, edit_ink
+
+    ink = edit_ink(theme)
     fillcolor = str(
         intervention_graph_override(
             graph_overrides,
@@ -393,17 +405,15 @@ def _add_intervention_hook_nodes(
             INTERVENTION_HOOK_FILL_COLOR,
         )
     )
-    color = str(
+    color = str(intervention_graph_override(graph_overrides, "intervention_hook_color", ink))
+    penwidth = str(
         intervention_graph_override(
-            graph_overrides,
-            "intervention_hook_color",
-            INTERVENTION_HOOK_BORDER_COLOR,
+            graph_overrides, "intervention_hook_penwidth", EDIT_RING_PENWIDTH
         )
     )
-    penwidth = str(intervention_graph_override(graph_overrides, "intervention_hook_penwidth", 2.0))
     for site_label in sorted(site_labels):
         spec = NodeSpec(
-            lines=["intervention", site_label],
+            lines=[EditRow(DELTA, INTERVENTION_HOOK_BORDER_COLOR)],
             shape="diamond",
             fillcolor=fillcolor,
             fontcolor="black",
@@ -411,7 +421,12 @@ def _add_intervention_hook_nodes(
             color=color,
             penwidth=float(penwidth),
             tooltip=f"Intervention hook after {site_label}",
-            extra_attrs={"ordering": "out", "width": "0.35", "height": "0.25"},
+            extra_attrs={
+                "ordering": "out",
+                "width": "0.35",
+                "height": "0.25",
+                "class": EDITED_NODE_CLASS,
+            },
         )
         node_args = _node_spec_to_graphviz_args(spec)
         node_args["name"] = _intervention_hook_node_name(site_label)
@@ -1590,7 +1605,7 @@ def _label_node_arguments_if_needed(
         arg_labels = []
         for arg_type in ["args", "kwargs"]:
             for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
-                if parent_node.layer_label == arg_label:
+                if arg_label in (parent_node.layer_label, _relation_label(parent_node)):
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     if not arg_labels:

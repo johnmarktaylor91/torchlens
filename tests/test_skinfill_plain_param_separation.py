@@ -169,7 +169,7 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
         "intervention": "#CC79A7",
     }
     expected = {
-        "torchlens": (OKABE_ITO_SEMANTIC_PALETTE, "white", "black", "black"),
+        "torchlens": (LEGACY_SEMANTIC_PALETTE, "white", "black", "black"),
         "paper": (LEGACY_SEMANTIC_PALETTE, "#F7F7F7", "#222222", "#111111"),
         "high_contrast": (LEGACY_SEMANTIC_PALETTE, "white", "black", "black"),
     }
@@ -181,16 +181,23 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
 
 
 def test_changed_skins_keep_their_role_colours() -> None:
-    """Only the plain fill moved: the dark and colorblind role colours are as before."""
+    """Role colours as shipped: colorblind keeps history; dark frozen weights are lighter."""
 
     assert THEME_PRESETS["colorblind"].semantic_palette is LEGACY_SEMANTIC_PALETTE
     dark = THEME_PRESETS["dark"]
     assert {role: dark.semantic_palette[role] for role in _PARAM_ROLES} == {
         "params_generic": "#374151",
         "params_trainable": "#374151",
-        "params_frozen": "#374151",
-        "params_gradient": "#374151:#4B5563",
+        "params_frozen": "#6B7280",
+        "params_gradient": "#374151:#6B7280",
     }
     assert dark.default_fill == dark.graph["bgcolor"]
     colorblind = THEME_PRESETS["colorblind"]
     assert colorblind.default_fill == colorblind.graph["bgcolor"]
+
+
+def test_dark_weight_grays_separate() -> None:
+    """Trainable and frozen weights read apart on the dark page (12 dE floor)."""
+
+    dark = THEME_PRESETS["dark"].semantic_palette
+    assert _min_delta_e(dark["params_trainable"], dark["params_frozen"]) >= 12.0

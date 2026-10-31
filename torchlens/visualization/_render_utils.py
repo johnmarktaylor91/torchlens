@@ -421,52 +421,29 @@ def make_module_cluster_label(
     return f"<<B>@{title_str}</B><br align='left'/>>"
 
 
-def cluster_caption_attrs(
-    caption_end: str | None, rankdir: str | None, pierced: bool = False
-) -> dict[str, str]:
-    """Return ``labelloc``/``labeljust`` for a cluster caption.
+def cluster_caption_attrs(rankdir: str | None = None) -> dict[str, str]:
+    """Return ``labelloc``/``labeljust`` that put a module box caption top left on the page.
 
-    Vizmech item 15 (memo D18b): captions were emitted ``labelloc=b`` and
-    INHERITED the graph-level ``labeljust=left``, pinning every caption to a
-    fixed corner of the cluster bounding box -- on wide clusters whose members
-    do not fill that corner, the caption floated up to 1121.9 pt from anything
-    it names (p90 732.6 pt over 1066 measured clusters). The fix: horizontal
-    centering always (no more corner pinning), and the vertical end chosen
-    from where the cluster's DIRECT members actually sit in the flow.
+    JMT ruled on 29 Oct 2026 that nested-module labels sit in the top-left
+    corner of their box, where they are least in the way, whatever the flow
+    direction or where the members sit. Graphviz's dot engine reads a cluster's
+    ``labelloc`` and ``labeljust`` in rank coordinates: under ``rankdir=BT``
+    ``t`` lands at the page bottom, and under ``rankdir=RL`` ``l`` lands at the
+    right (measured on Graphviz 2.43). Those two directions get the swapped
+    value so the caption lands top left. ``rankdir=None`` is for engines that
+    place clusters in page coordinates (``neato -n``, the rank engine).
 
     Parameters
     ----------
-    caption_end:
-        ``"entry"`` when the direct members concentrate at the flow's entry
-        end of the cluster, ``"exit"`` for the exit end, ``None`` when member
-        geometry is unavailable (fallback callers keep the historical bottom).
     rankdir:
-        Graphviz rank direction (``"TB"``/``"BT"``/``"LR"``/``"RL"``), which
-        maps flow entry/exit onto page top/bottom (or left/right).
-    pierced:
-        ``True`` when boundary-crossing splines pierce the caption-end border
-        near the flow spine, shifting the caption to the corner so it stays
-        clear of the spline channel (vertical flow only).
+        The dot graph's rank direction (``"TB"``, ``"BT"``, ``"LR"``, ``"RL"``),
+        or ``None`` for page coordinates.
     """
 
-    attrs = {"labelloc": "b", "labeljust": "c"}
-    if caption_end is None or rankdir is None:
-        return attrs
-    if rankdir in ("TB", "BT"):
-        entry_is_top = rankdir == "TB"
-        attrs["labelloc"] = "t" if (caption_end == "entry") == entry_is_top else "b"
-        if pierced:
-            # Boundary-crossing splines pierce the border near the flow
-            # spine (center); a centered caption on a pierced end gets
-            # struck through (the widened audit's first live catch). The
-            # corner keeps clear of the channel at a bounded findability
-            # cost (half the cluster width, vs the 732.6 pt p90 the
-            # end-choice already recovered).
-            attrs["labeljust"] = "l"
-    elif rankdir in ("LR", "RL"):
-        entry_is_left = rankdir == "LR"
-        attrs["labeljust"] = "l" if (caption_end == "entry") == entry_is_left else "r"
-    return attrs
+    return {
+        "labelloc": "b" if rankdir == "BT" else "t",
+        "labeljust": "r" if rankdir == "RL" else "l",
+    }
 
 
 def make_module_cluster_attrs(
@@ -477,15 +454,13 @@ def make_module_cluster_attrs(
     penwidth: float,
     fillcolor: str = "white",
     title_already_escaped: bool = False,
-    caption_end: str | None = None,
     rankdir: str | None = None,
-    caption_pierced: bool = False,
 ) -> dict[str, str]:
     """Return the standard cluster attribute dict used by both renderers.
 
     Centralises the Graphviz attrs that Trace and bundle clusters share:
-    HTML label, caption placement (member-geometry-aware when ``caption_end``
-    and ``rankdir`` are given -- vizmech item 15), ``filled,<line_style>``
+    HTML label, caption placement (top left on the page for ``rankdir``),
+    ``filled,<line_style>``
     style, fill colour, and depth-aware penwidth.  Module-type information is
     optional: bundle clusters omit it because the supergraph doesn't preserve
     the module class, while Trace clusters always pass it through.
@@ -495,7 +470,7 @@ def make_module_cluster_attrs(
         "label": make_module_cluster_label(
             title, module_type, title_already_escaped=title_already_escaped
         ),
-        **cluster_caption_attrs(caption_end, rankdir, pierced=caption_pierced),
+        **cluster_caption_attrs(rankdir),
         "style": f"filled,{line_style}",
         "fillcolor": fillcolor,
         "penwidth": str(penwidth),

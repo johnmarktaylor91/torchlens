@@ -166,7 +166,10 @@ def _reaches(trace: Any, from_label: str, target_label: str, *, limit: int = 200
 
     Bounded breadth-first search over parent edges; the bound refuses rather
     than silently truncating (a wrong reachability answer would misassign
-    spine membership).
+    spine membership). Parent edges name a single-pass op by its bare layer
+    label and a pass of a multi-pass layer pass-qualified, while
+    ``target_label`` is an op's ``label`` (always pass-qualified), so each
+    visited edge is compared through the op it resolves to.
     """
 
     seen: set[str] = set()
@@ -191,6 +194,8 @@ def _reaches(trace: Any, from_label: str, target_label: str, *, limit: int = 200
             op = trace.ops[label]
         except (KeyError, ValueError):
             continue
+        if str(getattr(op, "label", label)) == target_label:
+            return True
         frontier.extend(str(parent) for parent in (getattr(op, "parents", ()) or ()))
     return False
 

@@ -121,7 +121,7 @@ def constants() -> dict[str, Any]:
         for name, param in inspect.signature(TraceVisualizationMixin.draw).parameters.items()
     }
     typo = DEFAULT_TYPOGRAPHY
-    # Role colors as the default skin renders them (Okabe-Ito since R2-29), not the
+    # Role colors as the default skin renders them, not the
     # historical constants the skin translates.
     palette = themes.resolve_theme("torchlens").semantic_palette
     return {
@@ -165,7 +165,9 @@ FULL = {"node_label_fields": None}
 CALLS = {"node_label_fields": ["label", "module"]}
 CAP = {"vis_graph_overrides": {}}
 QUIET = {"show_legend": False}
-LEGEND = "node(text~TorchLens)"
+#: The key rides in the header label; its weight entries name it (a crop, then a mark).
+LEGEND = "text:trainable weights"
+LEGEND_KEY = 'graph(label~"trainable weights")'
 
 SLIDES: tuple[Slide, ...] = (
     Slide(
@@ -482,7 +484,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Clamp",
                 kwargs={"show_legend": True, **FULL},
                 label="show_legend=True",
-                crop=(LEGEND,),
+                crop=("text:mutated parameter",),
             ),
         ),
         keys=(
@@ -490,7 +492,7 @@ SLIDES: tuple[Slide, ...] = (
             Key("Dashed black edges to its earlier readers", "edge(style=dashed)"),
             Key(
                 "The legend gains this row only now",
-                'node(text~"mutated parameter")',
+                'graph(label~"mutated parameter")',
                 "b",
                 at="mutated parameter",
             ),
@@ -707,17 +709,22 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="interventions",
-        title="Interventions: site and cone",
-        rule="Magenta 3 pt border is the edited site; pink 1.75 pt is its downstream cone; "
-        '"as_node" draws the hook as a diamond.',
+        title="Interventions: the edit and what it changed",
+        rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
+        "vis_show_cone=True a translucent purple underlay runs under the arrows and outlines "
+        'it changed; "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
                 "Flow",
                 capture={"intervention_ready": True},
                 intervene="zero_tanh",
-                kwargs={"vis_intervention_mode": "node_mark"},
-                label='"node_mark"',
+                kwargs={
+                    "vis_intervention_mode": "node_mark",
+                    "vis_show_cone": True,
+                    "show_legend": True,
+                },
+                label='"node_mark", vis_show_cone=True, show_legend=True',
             ),
             Panel(
                 "b",
@@ -729,10 +736,11 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("Site: magenta border {site_color}", "node(color={site_color})"),
-            Key("Cone: pink border downstream", "node(color={cone_color})"),
-            Key("The hook as a diamond", "node(shape=diamond)", panel="b"),
-            Key("vis_show_cone=False hides the cone", None),
+            Key("Edited: purple ring {site_color}", "node(color={site_color})"),
+            Key("The edit, named in the node", "node(text~\u0394)"),
+            Key("Changed downstream: purple underlay", "node(class~tl_downstream)"),
+            Key("The hook as a purple diamond", "node(shape=diamond)", panel="b"),
+            Key("vis_show_cone=False (the default) leaves the underlay out", None),
         ),
         rows=("VN16", "VN17", "VN18"),
     ),
@@ -798,15 +806,15 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": "flops", "show_legend": None},
                 label="its legend",
-                crop=("node(text~color_by)",),
+                crop=("text:color_by",),
             ),
         ),
         keys=(
             Key("Most FLOPs: the darkest fill", "node(text~linear_1_1)"),
-            Key("The encoding legend appears by itself", "node(text~color_by)", panel="b"),
+            Key("The encoding legend appears by itself", "graph(label~color_by)", panel="b"),
             Key(
                 "Unencoded nodes stay white and are counted",
-                "node(text~encoded)",
+                "graph(label~encoded)",
                 panel="b",
                 at="encoded",
             ),
@@ -852,12 +860,12 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"size_by": "dims", "scale": "sqrt", "show_legend": None},
                 label="its legend",
-                crop=("node(text~size_by)",),
+                crop=("text:size_by",),
             ),
         ),
         keys=(
             Key("Bigger tensor, bigger node", "node(text~linear_1)"),
-            Key("The legend states the size rule", "node(text~size_by)", panel="b"),
+            Key("The legend states the size rule", "graph(label~size_by)", panel="b"),
             Key('scale="sqrt" by default; "linear" grows faster', None),
         ),
         rows=("VK04", "VK06"),
@@ -879,12 +887,12 @@ SLIDES: tuple[Slide, ...] = (
                 "Loop2",
                 kwargs={"view": "unrolled", "stack_by": True, "show_legend": None},
                 label="its legend",
-                crop=("node(text~stack_by)",),
+                crop=("text:stack_by",),
             ),
         ),
         keys=(
             Key("Each pass shares a rank", "node(name=linear_1_1pass2)"),
-            Key("The legend explains the rank rule", "node(text~stack_by)", panel="b"),
+            Key("The legend explains the rank rule", "graph(label~stack_by)", panel="b"),
             Key("Sibling ordering is off while stacking", None),
         ),
         footnote="The caption adds the line stacked by pass_index.",
@@ -1124,13 +1132,13 @@ SLIDES: tuple[Slide, ...] = (
         panels=(
             Panel(
                 "a",
-                "Tiny",
+                "Params",
                 kwargs={"layout": "rank", "show_legend": True},
                 label='layout="rank", show_legend=True',
                 crop=(LEGEND, "node(text~input_1)"),
             ),
         ),
-        keys=(Key("The rank engine pins its legend at the left", LEGEND),),
+        keys=(Key("The rank engine keeps the key under the header", LEGEND_KEY),),
         footnote="The rank engine draws no orphans and does not order siblings.",
         rows=("VY02", "VI04"),
     ),
@@ -1187,9 +1195,10 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="builtin-legend",
         title="The legend TorchLens draws",
-        rule="show_legend=True adds a row only for each fill role drawn (input, output, plain op, "
-        "parameterized, buffer, boolean, intervention/cone); None shows only an active channel's "
-        "section.",
+        rule="show_legend=True adds the key under the header, one entry per mark drawn, each with its "
+        "real shape and fill (input, output, trainable and frozen weights, module, and buffer, "
+        "true/false test, mutated parameter or intervention/cone when drawn); None shows only an "
+        "active channel's section.",
         panels=(
             Panel(
                 "a",
@@ -1200,8 +1209,8 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The built-in legend table", 'node(text~"TorchLens legend")'),
-            Key("No shapes, dashes, double borders, box weights or arrow words", None),
+            Key("The key sits under the header", LEGEND_KEY),
+            Key("Real shapes and fills; no operation or arrow rows", None),
             Key("Channel and backward sections join when they apply", None),
             Key("show_legend=False hides even those", None),
         ),
@@ -1476,7 +1485,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
             ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
-            ("downstream of an edit", "interventions", "a", "node(color={cone_color})"),
+            ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
             ("hook node", "interventions", "b", "node(shape=diamond)"),
             ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
         ),

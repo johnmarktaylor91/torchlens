@@ -1356,7 +1356,6 @@ docs-md	docs/reference/lenses.md	16,
 docs-md	docs/reference/lenses.md	160
 docs-md	docs/reference/lenses.md	17
 docs-md	docs/reference/lenses.md	220
-docs-md	docs/reference/lenses.md	29
 docs-md	docs/reference/lenses.md	77
 docs-md	docs/reference/lenses.md	99
 docs-md	docs/reference/limitations.md	1.01
@@ -4714,15 +4713,10 @@ package-docstrings	torchlens/visualization/_label_format.py	32
 package-docstrings	torchlens/visualization/_label_format.py	768
 package-docstrings	torchlens/visualization/_legend.py	1048
 package-docstrings	torchlens/visualization/_legend.py	13,
-package-docstrings	torchlens/visualization/_legend.py	17,
 package-docstrings	torchlens/visualization/_legend.py	2.3
 package-docstrings	torchlens/visualization/_legend.py	2.86
 package-docstrings	torchlens/visualization/_legend.py	28
-package-docstrings	torchlens/visualization/_legend.py	30
 package-docstrings	torchlens/visualization/_legend.py	366
-package-docstrings	torchlens/visualization/_legend.py	50
-package-docstrings	torchlens/visualization/_legend.py	77
-package-docstrings	torchlens/visualization/_legend.py	839
 package-docstrings	torchlens/visualization/_rank_layout_internal/layout.py	17
 package-docstrings	torchlens/visualization/_rank_layout_internal/layout.py	20
 package-docstrings	torchlens/visualization/_rank_layout_internal/layout.py	24
@@ -4754,15 +4748,9 @@ package-docstrings	torchlens/visualization/_render_ordering.py	11
 package-docstrings	torchlens/visualization/_render_ordering.py	16
 package-docstrings	torchlens/visualization/_render_ordering.py	2.43
 package-docstrings	torchlens/visualization/_render_regions.py	19
-package-docstrings	torchlens/visualization/_render_utils.py	1066
-package-docstrings	torchlens/visualization/_render_utils.py	1121.9
-package-docstrings	torchlens/visualization/_render_utils.py	15
-package-docstrings	torchlens/visualization/_render_utils.py	18
 package-docstrings	torchlens/visualization/_render_utils.py	19
 package-docstrings	torchlens/visualization/_render_utils.py	40
 package-docstrings	torchlens/visualization/_render_utils.py	65
-package-docstrings	torchlens/visualization/_render_utils.py	732.6
-package-docstrings	torchlens/visualization/_render_utils.py	90
 package-docstrings	torchlens/visualization/_segment_descriptors.py	19
 package-docstrings	torchlens/visualization/_segment_descriptors.py	24
 package-docstrings	torchlens/visualization/_segment_descriptors.py	27
@@ -4867,8 +4855,6 @@ package-docstrings	torchlens/visualization/render_execution.py	23
 package-docstrings	torchlens/visualization/render_execution.py	233
 package-docstrings	torchlens/visualization/render_execution.py	24
 package-docstrings	torchlens/visualization/render_execution.py	32767
-package-docstrings	torchlens/visualization/render_ir.py	1121.9
-package-docstrings	torchlens/visualization/render_ir.py	15
 package-docstrings	torchlens/visualization/renderer_registry.py	16
 package-docstrings	torchlens/visualization/renderer_registry.py	6.3
 package-docstrings	torchlens/visualization/renderers/base.py	14
@@ -4888,7 +4874,6 @@ package-docstrings	torchlens/visualization/themes.py	23
 package-docstrings	torchlens/visualization/themes.py	29
 package-docstrings	torchlens/visualization/themes.py	300
 package-docstrings	torchlens/visualization/themes.py	36
-package-docstrings	torchlens/visualization/themes.py	37
 package-docstrings	torchlens/visualization/themes.py	777777
 package-docstrings	torchlens/viz/__init__.py	32.
 package-docstrings	torchlens/viz/feature_maps.py	32
@@ -6733,7 +6718,6 @@ test-docstrings	tests/test_themes_roster.py	13.4
 test-docstrings	tests/test_themes_roster.py	16
 test-docstrings	tests/test_themes_skins.py	13
 test-docstrings	tests/test_themes_skins.py	17
-test-docstrings	tests/test_themes_skins.py	29
 test-docstrings	tests/test_themes_skins.py	3.11,
 test-docstrings	tests/test_themes_stage0.py	100
 test-docstrings	tests/test_themes_stage0.py	20000
@@ -7238,7 +7222,6 @@ test-docstrings	tests/test_vizmech_axis_gate.py	16
 test-docstrings	tests/test_vizmech_axis_gate.py	2.2
 test-docstrings	tests/test_vizmech_axis_gate.py	21
 test-docstrings	tests/test_vizmech_axis_gate.py	91
-test-docstrings	tests/test_vizmech_envelopes.py	1.0
 test-docstrings	tests/test_vizmech_envelopes.py	100
 test-docstrings	tests/test_vizmech_envelopes.py	1121.9
 test-docstrings	tests/test_vizmech_envelopes.py	2.29

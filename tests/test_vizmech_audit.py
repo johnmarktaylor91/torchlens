@@ -181,8 +181,8 @@ def test_node_labels_and_captions_are_audited(tmp_path: Path) -> None:
     counts = parsed.class_counts()
     assert counts.get("node-label", 0) >= 3
     assert counts.get("cluster-caption", 0) >= 1
-    assert counts.get("legend-text", 0) >= 5
-    assert counts.get("graph-caption", 0) >= 1
+    # The key rides in the header label: three header lines plus its entries.
+    assert counts.get("graph-caption", 0) >= 6
     envelope = compute_usability_envelope(parsed)
     assert envelope.min_text_size > 0.0
 

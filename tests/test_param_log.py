@@ -16,7 +16,7 @@ from torchlens.types import Param
 from torchlens.visualization import show_model_graph
 from torchlens.visualization.themes import resolve_theme
 
-#: Parameter fills as the DEFAULT skin renders them (Okabe-Ito since R2-29).
+#: Parameter fills as the DEFAULT skin renders them.
 _TRAINABLE = resolve_theme("torchlens").semantic_palette["params_trainable"]
 _FROZEN = resolve_theme("torchlens").semantic_palette["params_frozen"]
 _MIXED = resolve_theme("torchlens").semantic_palette["params_gradient"]

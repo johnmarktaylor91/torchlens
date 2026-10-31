@@ -328,9 +328,11 @@ def _parse_text_ops(ops: list[dict], kind: str, owner: str) -> list[TextBox]:
     boxes: list[TextBox] = []
     size = 14.0
     for op in ops or []:
-        if op["op"] == "F":
+        # Image ops (the key's swatches) carry no "op" field in dot's JSON.
+        kind_code = op.get("op")
+        if kind_code == "F":
             size = float(op["size"])
-        elif op["op"] == "T":
+        elif kind_code == "T":
             x, y = float(op["pt"][0]), float(op["pt"][1])
             width = float(op["width"])
             align = op.get("align", "l")
@@ -357,10 +359,10 @@ def _shape_outlines(draw_ops: list[dict] | None) -> list[list[Point]]:
 
     outlines: list[list[Point]] = []
     for op in draw_ops or []:
-        if op["op"] in ("e", "E"):
+        if op.get("op") in ("e", "E"):
             cx, cy, rx, ry = (float(v) for v in op["rect"])
             outlines.append(_sample_ellipse(cx, cy, rx, ry))
-        elif op["op"] in ("p", "P"):
+        elif op.get("op") in ("p", "P"):
             outlines.append(_sample_polygon([(float(p[0]), float(p[1])) for p in op["points"]]))
     return outlines
 
@@ -389,7 +391,7 @@ def _parse_edges(
         name = f"{tail}->{head}#{index}"
         spline_points: list[Point] = []
         for op in edge.get("_draw_", []) or []:
-            if op["op"] in ("b", "B"):
+            if op.get("op") in ("b", "B"):
                 spline_points.extend(
                     _sample_beziers([(float(p[0]), float(p[1])) for p in op["points"]])
                 )

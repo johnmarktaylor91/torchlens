@@ -22,10 +22,13 @@ if TYPE_CHECKING:
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
-INTERVENTION_SITE_COLOR = "#FF00FF"
-INTERVENTION_CONE_COLOR = "#FFB3FF"
-INTERVENTION_HOOK_FILL_COLOR = "#FFE6FF"
-INTERVENTION_HOOK_BORDER_COLOR = "#CC00CC"
+# One edit purple marks the edited node's ring, its edit text, the header's
+# edit token and the downstream highlighter (JMT, 29 Oct 2026). The dark skin
+# swaps in a lighter tint (``visualization._edit_marks.edit_ink``).
+INTERVENTION_SITE_COLOR = "#7B1FA2"
+INTERVENTION_CONE_COLOR = "#7B1FA2"
+INTERVENTION_HOOK_FILL_COLOR = "#F3E5F5"
+INTERVENTION_HOOK_BORDER_COLOR = "#7B1FA2"
 INTERVENTION_OVERRIDE_KEYS = frozenset(
     {
         "intervention_site_color",

@@ -17,6 +17,7 @@ import torch
 from torchlens.ir.events import OpEvent
 
 from ..utils import safe_copy
+from ..utils.tensor_utils import tensor_nanequal
 
 
 def _buffer_addresses_by_label(
@@ -86,6 +87,14 @@ def _buffer_addresses_by_label(
         if address not in used_addresses and not address.endswith(".num_batches_tracked")
     ]
     unmatched_address_names = {address for address, _value in unmatched_addresses}
+    # A recorded address may name the same registered buffer on several events
+    # (a read re-logged after an overlapping write cleared its live label is a
+    # second node for the same buffer). Only the value/shape ladder consumes an
+    # address; a recorded one is checked against the whole registered universe,
+    # so every read of one buffer joins its equivalence group at step 0.
+    registered_address_names = unmatched_address_names | {
+        address for address in used_addresses if not address.endswith(".num_batches_tracked")
+    }
     for event in source_buffer_events:
         if event.label_raw in by_label:
             continue
@@ -110,7 +119,7 @@ def _buffer_addresses_by_label(
             # `UNSUPPORTED_TENSOR_CONSTANT` refusal on runnable save. Skipping
             # the ladder here is what both blocks the theft AND preserves the
             # recorded-vs-heuristic `address`/`backend_address` distinction.
-            if recorded not in unmatched_address_names:
+            if recorded not in registered_address_names:
                 continue
             address = recorded
         else:
@@ -271,7 +280,8 @@ def _tensor_values_match(left: object, right: object) -> bool:
     Returns
     -------
     bool
-        True when both values are tensors with equal shape, dtype, and values.
+        True when both values are tensors with equal shape, dtype, and values
+        (NaN positions equal).
     """
 
     if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
@@ -281,6 +291,6 @@ def _tensor_values_match(left: object, right: object) -> bool:
         # meta substrate (aten::equal has no meta kernel); an UNKNOWN verdict
         # never claims a match — the address ladder simply does not fill.
         return False
-    return bool(
-        left.shape == right.shape and left.dtype == right.dtype and torch.equal(left, right)
-    )
+    # Exact and NaN-aware: a NaN-bearing buffer still matches an exact copy of
+    # itself, so the fallback address never depends on the values reached.
+    return tensor_nanequal(left, right)

@@ -1365,18 +1365,45 @@ def test_f3_tuple_out_model_validates() -> None:
     assert _quiet_validate(_TupleOut(), torch.randn(3, 4)) is True
 
 
-def test_buffer_rewrite_verdict_is_false_under_plain_filters() -> None:
-    """Plain python filters: the re-trace mismatch downgrades validation to False."""
+def test_buffer_rewrite_verdict_is_true_under_plain_filters() -> None:
+    """Plain python filters: a buffer-rewriting forward validates with no re-trace warning.
+
+    The re-trace starts from the buffers the first forward wrote and reaches NaN
+    where the first trace does not; buffer provenance is recorded, never
+    inferred from values, so both traces have the same structure.
+    """
 
     model = BufferRewriteModel()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("default")
-        assert validate_forward_pass(model, torch.rand(12, 12)) is False
-    assert any(issubclass(w.category, TraceNotReproducibleWarning) for w in caught)
+        assert validate_forward_pass(model, torch.rand(12, 12)) is True
+    assert not any(issubclass(w.category, TraceNotReproducibleWarning) for w in caught)
 
 
-def test_buffer_rewrite_promoted_warning_propagates_never_reads_unavailable() -> None:
-    """The suite's error filter must not flip the verdict to True.
+def test_buffer_rewrite_verdict_is_true_under_the_suite_error_filter() -> None:
+    """The suite's ``error::UserWarning:torchlens`` filter leaves the True verdict alone."""
+
+    model = BufferRewriteModel()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
+        assert validate_forward_pass(model, torch.rand(12, 12)) is True
+
+
+class _ToggleBranch(nn.Module):
+    """Takes a different branch after its first forward: genuinely stateful."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.use_mul = False
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = x * 2 if self.use_mul else x + 1
+        self.use_mul = True
+        return out
+
+
+def test_retrace_mismatch_promoted_warning_propagates_never_reads_unavailable() -> None:
+    """The suite's error filter must not flip a stateful model's verdict to True.
 
     Under ``error::UserWarning:torchlens`` the re-trace warning arrived as an
     exception inside the check's own ``try`` and was recorded as an
@@ -1384,11 +1411,10 @@ def test_buffer_rewrite_promoted_warning_propagates_never_reads_unavailable() ->
     returned True. A promoted warning now propagates.
     """
 
-    model = BufferRewriteModel()
     with warnings.catch_warnings():
         warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
         with pytest.raises(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
-            validate_forward_pass(model, torch.rand(12, 12))
+            validate_forward_pass(_ToggleBranch(), torch.rand(3, 4))
 
 
 class _ReluScale(nn.Module):

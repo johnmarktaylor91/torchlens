@@ -19,9 +19,9 @@ from .renderers.graphviz import GraphvizRenderer
 from .request import RenderContext, RenderTarget
 from .source_graph import build_source_graph
 
-#: The default skin's font family. Forward ``draw`` reaches it through the theme
-#: attribute helpers; the backward and combined entrypoints take no theme, so
-#: they name it directly instead of leaving Graphviz to its serif default.
+#: The default skin's font family. Forward ``draw`` and ``draw_backward`` reach it
+#: through the theme attribute helpers; the combined entrypoint takes no theme, so
+#: it names it directly instead of leaving Graphviz to its serif default.
 _DEFAULT_FONT_FAMILY = DEFAULT_TYPOGRAPHY.family
 
 
@@ -29,6 +29,7 @@ def _emit_backward_key(
     ir_builder: Any,
     show_legend: bool | None,
     inventory: "BackwardStyleInventory",
+    theme: "VisualizationTheme | None" = None,
 ) -> None:
     """Emit the in-frame backward key (vizmech item 17) into a builder.
 
@@ -44,7 +45,7 @@ def _emit_backward_key(
         return
     add_legend_table_to_graphviz(
         cast(graphviz.Digraph, ir_builder),
-        THEME_PRESETS["torchlens"],
+        theme if theme is not None else THEME_PRESETS["torchlens"],
         backward_key_sections(
             has_higher_order=inventory.has_higher_order,
             has_intervening=inventory.has_intervening,
@@ -71,6 +72,7 @@ def render_backward_graph(
     bwd: int | Iterable[int] | None = None,
     show_legend: bool | None = None,
     *,
+    theme: str = "torchlens",
     show_module_paths: bool = False,
     show_grad_values: bool = False,
 ) -> str:
@@ -117,6 +119,10 @@ def render_backward_graph(
         ``accum``, ...; vizmech item 17/D30, the WGAN-GP acceptance
         contract's "every active style has an automatic legend row").
         ``False`` suppresses it.
+    theme:
+        Skin preset, the names forward ``draw`` takes. It sets the page colour, the
+        text ink, the typography and the key's ink; backward node fills and
+        gradient arrows keep their colours.
     show_module_paths:
         Opt-in row naming the module that owns each node (``module
         <address>``; AccumulateGrad nodes read ``param <address>``). Nodes no
@@ -152,17 +158,21 @@ def render_backward_graph(
             argument="vis_mode",
         )
     pass_filter = _normalize_backward_pass_filter(bwd)
+    from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
+
+    skin = resolve_theme(theme)
 
     rankdir = direction_to_rankdir(direction)
 
     vis_outpath = _strip_render_extension(vis_outpath)
 
     graph_caption = (
-        f"<<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
+        f"<<FONT COLOR='{skin.default_font}'>"
+        f"<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
         f"{self.num_grad_fns} grad_fn_handle nodes"
         f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}"
-        f"<br align='left'/>mode: {vis_mode}<br align='left'/>>"
+        f"<br align='left'/>mode: {vis_mode}<br align='left'/></FONT>>"
     )
     graph_args = {
         "rankdir": rankdir,
@@ -171,7 +181,9 @@ def render_backward_graph(
         "labeljust": "left",
         "ordering": "out",
         "compound": "true",
-        "fontname": _DEFAULT_FONT_FAMILY,
+        **theme_graph_attrs(skin, fileformat=vis_fileformat),
+        # Backward-pass cluster captions inherit the page's text ink.
+        "fontcolor": skin.default_font,
     }
     for arg_name, arg_val in (vis_graph_overrides or {}).items():
         if callable(arg_val):
@@ -180,9 +192,9 @@ def render_backward_graph(
             graph_args[arg_name] = str(arg_val)
 
     edge_args = {
+        **theme_edge_attrs(skin),
         "color": GRADIENT_ARROW_COLOR,
         "fontcolor": GRADIENT_ARROW_COLOR,
-        "fontname": _DEFAULT_FONT_FAMILY,
     }
     for arg_name, arg_val in (vis_edge_overrides or {}).items():
         if callable(arg_val):
@@ -192,7 +204,7 @@ def render_backward_graph(
 
     ir_builder = _RenderIRDecisionBuilder()
     ir_builder.attr("graph", **graph_args)
-    ir_builder.attr("node", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
+    ir_builder.attr("node", ordering="out", **theme_node_attrs(skin))
     ir_builder.attr("edge", **edge_args)
 
     inventory = compute_backward_style_inventory(self, pass_filter)
@@ -235,7 +247,7 @@ def render_backward_graph(
             )
     finally:
         _BACKWARD_ROWS.reset(rows_token)
-    _emit_backward_key(ir_builder, show_legend, inventory)
+    _emit_backward_key(ir_builder, show_legend, inventory, skin)
 
     source_text = resolve_code_panel_source(
         code_panel,

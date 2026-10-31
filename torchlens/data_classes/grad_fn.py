@@ -208,6 +208,74 @@ def _clone_grad_value(value: Any) -> Any:
     return value
 
 
+def _pass_op_for_grad_fn(record: Any, grad_fn_object_id: int) -> Any:
+    """Return the forward pass one GradFn differentiates, from per-pass evidence.
+
+    ``GradFn.op_label`` is the paired LAYER label, so on a multi-pass layer it
+    resolves to the whole ``Layer``, whose per-pass fields (``label``) refuse by
+    design. A GradFn belongs to exactly one pass: the pass whose recorded
+    ``grad_fn_object_id`` is this GradFn's autograd identity.
+
+    Parameters
+    ----------
+    record:
+        The Op or Layer the GradFn's ``op_label`` resolves to, or ``None``.
+    grad_fn_object_id:
+        The GradFn's autograd node identity.
+
+    Returns
+    -------
+    Any
+        ``record`` itself when it is already one pass (an Op or a single-pass
+        Layer), the matching pass of a multi-pass Layer, or ``None`` when no
+        pass of a multi-pass Layer carries this autograd identity.
+    """
+
+    if record is None:
+        return None
+    passes = tuple(getattr(record, "ops", None) or ())
+    if len(passes) <= 1:
+        return record
+    for pass_op in passes:
+        if getattr(pass_op, "grad_fn_object_id", None) == grad_fn_object_id:
+            return pass_op
+    return None
+
+
+def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | None) -> Any:
+    """Return the forward pass a grad-fn node differentiates.
+
+    ``op_label`` is the paired LAYER label (``GradFn.op_label`` contract). On a
+    multi-pass layer that label's lookup entry is one fixed pass, so the pass
+    is chosen from per-pass evidence instead: the pass whose recorded
+    ``grad_fn_object_id`` is this node's autograd identity.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing op logs.
+    op_label:
+        Paired layer label, or ``None`` for an unpaired node.
+    grad_fn_object_id:
+        Autograd identity of the grad-fn node, if known.
+
+    Returns
+    -------
+    Any
+        The paired pass's Op, the label's lookup entry when no pass evidence
+        applies (single-pass layers, unknown identity), or ``None``.
+    """
+
+    if op_label is None:
+        return None
+    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
+    layer = getattr(trace, "layer_logs", {}).get(op_label)
+    if layer is None or grad_fn_object_id is None:
+        return entry
+    pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)
+    return entry if pass_op is None or pass_op is layer else pass_op
+
+
 @dataclass
 class GradFn:
     """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
@@ -484,7 +552,7 @@ class GradFn:
         # L1 narrowing (r3): a lookup miss/ambiguity or a collected owner means
         # "no live handle" (None); any other exception is a bug and propagates.
         try:
-            op = self.op
+            op = _pass_op_for_grad_fn(self.op, self.grad_fn_object_id)
         except (AmbiguousOpLookupError, RecordBindingError, KeyError, ValueError):
             op = None
         if op is None:

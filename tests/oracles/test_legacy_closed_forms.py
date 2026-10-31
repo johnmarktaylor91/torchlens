@@ -305,8 +305,10 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
             ) == (positional, keyword, positional + keyword), label
     _, trace, _, _ = outer_case
     ops, layers, _, _ = _by_label(trace)
-    # torch.sum(h, dim=1, keepdim=True): one positional, two keywords.
-    for record in (layers["sum_1_6"], ops["sum_1_6:1"]):
+    # torch.sum(h, dim=1, keepdim=True): one positional, two keywords. Grouping
+    # rule rows 26-27 and section 1 (argument values are never evidence): both
+    # block calls' ``* scale`` muls are one Layer, so the sum is the 5th Layer.
+    for record in (layers["sum_1_5"], ops["sum_1_5:1"]):
         assert (int(record.num_pos_args), int(record.num_kwargs), int(record.num_args_total)) == (
             1,
             2,
@@ -456,7 +458,9 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     # head (3, 2) = 24 B, the sum (3, 1) = 12 B (shared by the output copy).
     assert int(layers["linear_1_1"].total_gradient_memory) == 2 * 48  # two passes
     assert int(layers["relu_1_2"].total_gradient_memory) == 2 * 48
-    assert int(layers["sum_1_6"].total_gradient_memory) == 12
+    # grouping rule rows 26-27: the two block calls' muls are one Layer (mul_1_3, 2 passes).
+    assert int(layers["mul_1_3"].total_gradient_memory) == 2 * 48
+    assert int(layers["sum_1_5"].total_gradient_memory) == 12
     assert int(trace.total_gradient_memory) == 6 * 48 + 24 + 12
     block = modules["block"]
     assert (int(block.total_output_gradient_memory), int(block.total_internal_gradient_memory)) == (

@@ -170,8 +170,13 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   such as `relu_1_2`.
 
 **Layer**
-: The user-facing grouping of equivalent or recurrent Ops. A recurrent layer may have multiple
-  passes, addressed with a one-based suffix such as `linear_1:2`.
+: The user-facing grouping of Ops that run one place in a module's code. Running that place
+  again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
+  suffix such as `linear_1:2`; `op.pass_index` is the pass and `num_passes` the count. A module
+  object called again is another module call (`m:1`, `m:2`), a separate concept: each op inside it
+  runs once per module call, so its passes match the module's calls. Two different places are two layers even with the same weights, so a
+  loop written out by hand is N layers. The exact rule (scope, call site, operation, output slot)
+  and the case table are in `docs/guides/grouping.md`.
 
 **Module**
 : A captured framework module or backend-neutral module-like object. A module contains Ops but is
@@ -179,7 +184,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Parameter / Buffer**
 : Registered model state. Parameters are trainable state; buffers are non-parameter state and may
-  have multiple captured versions. A training-mode `BatchNorm2d` collapse label can say
+  have multiple captured versions. Every journaled write (a reassignment, a `.data =` or `set_`
+  swap, a tracked in-place write) is its own version whatever value it wrote, so a capture records
+  the same buffer structure whatever values the buffers start from. A training-mode `BatchNorm2d` collapse label can say
   “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
   leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
   BatchNorm calls. An in-place op on a Parameter inside `forward`
@@ -951,9 +958,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **show_legend tri-state**
 : `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
-  then a channel-only disclosure legend), `True` (full theme legend, plus channel rows when
-  active; its `mutated parameter` row appears only when the render draws one), and `False` (no legend, honored even with channels active — the encoding is then
-  undisclosed). The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
+  then a channel-only disclosure legend), `True` (the key: one compact row per drawn mark, each
+  drawn with its real shape and fill -- input, output, trainable and frozen weights, module, and
+  buffer, true/false test, mutated parameter or intervention only when the picture has one -- plus
+  channel rows when active), and `False` (no legend, honored even with channels active — the
+  encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
+  header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
 ## Backend-neutral identity
 
@@ -1556,8 +1566,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 
 **Layer.site_key** — *unstable — no deprecation shim owed*
 : The layer's single site key iff every op in the layer shares exactly one.
-  A site-SPANNING layer (within-call-instance recurrence such as transformer
-  residual-add pairs, or root-context loops) refuses typed
+  A site-SPANNING layer (a loop inside one module call, including
+  root-context loops) refuses typed
   `layer_site_ambiguous` — read per-pass keys via `.ops[k].site_key`.
   Site-uniformity and pass-uniformity are DIFFERENT axes: a reused-module
   multi-pass layer has one key. Legacy pre-site-key artifacts refuse typed
@@ -1609,8 +1619,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 
 **grouping= (trace kwarg) / trace.grouping** — *unstable — no deprecation
 shim owed; S2-gated vocabulary*
-: Closed-vocabulary grouping-policy knob: `"structural"` (default — today's
-  recurrence grouping), `"strict_shapes"` (reserved; refuses typed until its
+: Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
+  grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
   own reviewed design lands), `"fold_sites"` (the D1 within-capture folding
   axis; refuses typed on plain captures until an affirmative D1 ruling).
   Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
@@ -1625,7 +1635,10 @@ vocabulary*
   trace was grouped: `policy` (the step-7 grouping that actually ran —
   `structural` / `params_only` / later `fold_sites`), `requested` (the knob
   mirror), `folded_sites` and `site_join` (two distinct site-granular axes:
-  step-7 folds vs product-layer joins), `detector`, `effective`, and
+  step-7 folds vs product-layer joins), `detector` (`callsite_v1` for
+  call-site grouping, `grouper_v1` for the structural grouper that serves
+  captures without call-site evidence, `unknown` when grouping did not run),
+  `effective`, and
   `settlement_note`. Loads validate against the exact writer key set, closed
   vocabularies, and coherence rules C1–C8; parse failure or incoherence
   warns once and settles to THE canonical degraded representation
@@ -1679,6 +1692,13 @@ S2-gated*
   entry for it. Set at capture entry, read when finalization builds the root module pass, then
   cleared with the other temporary build state (`None` outside a capture). The
   `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
+
+**tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
+: Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
+  key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
+  buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
+  the field goes away with the raw-graph workspace once the trace is projected. The
+  `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
 
 **PredicateProtocol** — *unstable — no deprecation shim owed*
 : `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
@@ -2138,6 +2158,20 @@ shim owed*
   adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
   captured` when the capture kept none). Both default to `False`, leaving the default render
   unchanged.
+
+**theme (draw_backward kwarg)** — *unstable — no deprecation shim owed; keyword-only*
+: The skin preset on `Trace.draw_backward`, the same names `Trace.draw(vis_theme=)` takes
+  (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
+  colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
+  keep their colours. The functional form with grouped options reads it from
+  `VisualizationOptions.theme`.
+
+**theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
+: `tl.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+  `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
+  one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
+  `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
+  not every member runs.
 
 **Bundled render font** — *unstable — no deprecation shim owed*
 : Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5

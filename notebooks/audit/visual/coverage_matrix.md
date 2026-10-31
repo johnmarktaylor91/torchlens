@@ -69,8 +69,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `overrides:module` | vis_module_overrides dict | p22 |
 | `intervention:node_mark` | vis_intervention_mode='node_mark' | p62 |
 | `intervention:as_node` | vis_intervention_mode='as_node' hook nodes | p62 |
-| `cone:on` | vis_show_cone=True downstream cone styling | p63 |
-| `cone:off` | vis_show_cone=False | p63 |
+| `cone:on` | vis_show_cone=True downstream highlighter | p63 |
+| `cone:off` | vis_show_cone=False (default) | p63 |
 | `input_transform_summary` | show_input_transform_summary=True input xlabel | p51 |
 | `raw_io_render` | save_raw_input/save_raw_output thumbnails on boundary nodes | p50 |
 | `draw_backward:rolled` | draw_backward default rolled grad_fn graph | p55 |

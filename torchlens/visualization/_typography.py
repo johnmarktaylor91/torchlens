@@ -28,10 +28,16 @@ from dataclasses import dataclass, replace
 
 __all__ = [
     "DEFAULT_TYPOGRAPHY",
+    "EDIT_GAP_SIZE",
     "HIGH_CONTRAST_TYPOGRAPHY",
     "TypographyRecord",
     "format_pt",
 ]
+
+
+#: Height in points of the blank row between a node's label and its edit rows
+#: (the F2 spec's 4 pt gap; it holds a space, so only its size matters).
+EDIT_GAP_SIZE = 4.0
 
 
 def format_pt(value: float) -> str:

@@ -165,12 +165,15 @@ def _build_shared_fields_dict(
     if code_context_cache is None:
         code_context_cache = {}
         self._code_context_cache = code_context_cache
+    call_site_out: list[Any] = []
     fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self.save_code_context,
         disable_col_offset=False,
         context_cache=code_context_cache,
+        call_site_out=call_site_out,
     )
+    self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
     fields_dict["var_names"] = []
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states

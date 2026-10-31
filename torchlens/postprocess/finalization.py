@@ -49,6 +49,7 @@ from ..ir.container_registry import _iter_tensor_leaves
 from ..quantities import Bytes, Duration, Flops
 from ..utils._torch_symbols import torch_attr
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
+from ._multipass_params import pass_param_addresses, union_multipass_params
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
@@ -1064,7 +1065,7 @@ def _build_module_logs(self: "Trace") -> None:
 # passes (variable-length recurrence, autocast dtype shifts, tied-site module
 # attribution) and therefore must never be silently projected from pass 1.
 # Fields absent here are structurally uniform per the grouping identity
-# (function, parameters, output slot, module address, non-tensor args).
+# (function, call site, output slot); parameters are unioned (_multipass_params).
 _MULTIPASS_SHAPE_FIELDS = ("shape", "transformed_out_shape")
 _MULTIPASS_BYTES_FIELDS = ("activation_memory", "transformed_activation_memory")
 _MULTIPASS_FLOPS_FIELDS = ("flops_forward", "flops_backward")
@@ -1178,6 +1179,9 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
     ]
     record_if_varying("modules", module_stacks)
 
+    if record_if_varying("params", pass_param_addresses(pass_ops)):
+        union_multipass_params(layer_log, pass_ops)
+
     if varying:
         layer_log.annotations["varying_across_passes"] = varying
 
@@ -1203,9 +1207,9 @@ def _build_layer_logs(self: "Trace") -> None:
     Derived aggregate views (cond_branch_then/elif/else/start_children) are
     recomputed after the merge from the cond-id-aware primary structures.
 
-    All other 78+ fields use first-pass values only. This is correct because
-    same-layer grouping requires same structural position, so module containment,
-    function info, param info, etc. are identical across ops.
+    All other 78+ fields use first-pass values only: passes of one layer share
+    the call site, function and output slot; fields that can still differ (shapes,
+    memory, modules, parameters) are reconciled by _reconcile_multipass_layer_fields.
 
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).

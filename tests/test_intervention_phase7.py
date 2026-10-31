@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import warnings
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -424,7 +425,11 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
 
 class MultiPassAddBlock(torch.nn.Module):
-    """Block whose two chained adds group into one two-pass layer."""
+    """Block whose one loop-body add is one two-pass layer.
+
+    Grouping rule row 52: an add written once in a loop over modules is one Layer
+    with a pass per iteration (two adds on one line would be two Layers, row 21).
+    """
 
     def __init__(self) -> None:
         """Initialize three summed projections plus an output projection."""
@@ -436,7 +441,7 @@ class MultiPassAddBlock(torch.nn.Module):
         self.out_proj = torch.nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Sum three projections through two structurally corresponding adds.
+        """Sum three projections through one add run twice from a loop.
 
         Parameters
         ----------
@@ -449,7 +454,10 @@ class MultiPassAddBlock(torch.nn.Module):
             Projected sum.
         """
 
-        return self.out_proj(self.first(x) + self.second(x) + self.third(x))
+        total = self.first(x)
+        for proj in (self.second, self.third):
+            total = total + proj(x)
+        return self.out_proj(total)
 
 
 class MultiPassAdd(torch.nn.Module):
@@ -605,23 +613,31 @@ def test_rerun_unwraps_compiled_model() -> None:
     assert result is log
 
 
-def test_rerun_rejects_fsdp_when_constructible() -> None:
-    """Rerun rejects FSDP wrappers when the local environment can build one."""
+@pytest.mark.skipif(
+    not torch.distributed.is_available(), reason="torch is built without torch.distributed"
+)
+def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
+    """Rerun rejects a real FSDP wrapper.
 
-    try:
-        from torch.distributed.fsdp import FullyShardedDataParallel
-    except (ImportError, RuntimeError):
-        pytest.skip("FSDP unavailable")
+    FSDP needs a process group, so the test builds a single-process CPU (gloo)
+    group and constructs the wrapper on CPU; any construction failure fails the
+    test loudly instead of skipping it.
+    """
+
+    import torch.distributed as dist
+    from torch.distributed.fsdp import FullyShardedDataParallel
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
+    dist.init_process_group(
+        "gloo", init_method=f"file://{tmp_path / 'fsdp_pg'}", rank=0, world_size=1
+    )
     try:
-        fsdp_model = FullyShardedDataParallel(ReluAdd())
-    except Exception as exc:
-        pytest.skip(f"FSDP cannot be constructed in this environment: {exc}")
-
-    with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
-        log.run(fsdp_model, x)
+        fsdp_model = FullyShardedDataParallel(ReluAdd(), device_id=torch.device("cpu"))
+        with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
+            log.run(fsdp_model, x)
+    finally:
+        dist.destroy_process_group()
 
 
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:

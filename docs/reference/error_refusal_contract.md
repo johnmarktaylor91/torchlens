@@ -1183,6 +1183,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `visualization_theme_invalid` | Visualization theme is unknown | Choose a supported theme |
 | `visualization_mode_invalid` | Backend visualization mode is unsupported | Choose a backend-supported mode |
 | `visualization_node_style_invalid` | Node style is unknown | Choose a documented style |
+| `viz_highlighter_not_drawn` | WARNING (S-18 contract, not a refusal): `draw(vis_show_cone=True)` could not lay the downstream highlighter into the requested format (PDF or PNG without `cairosvg`, or another raster format); the graph is drawn without it and the edited node keeps its ring and edit row; once per call site | Draw with `vis_fileformat='svg'`, or install `cairosvg` for PDF and PNG |
 | `watch_budget_exceeded` | A hard preflight cap (sites/bytes/elements per step) is exceeded by the resolved plan FACTS; nothing was emitted and no loop time was spent (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Narrow `select=`, reduce requested signals, or raise the budget deliberately |
 | `watch_budget_invalid` | An unknown budget key was passed; the budget vocabulary is closed (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Use `max_sites`, `max_bytes_per_step`, or `max_elements_per_step` |
 | `watch_check_outcome_invalid` | A check outcome outside the closed 0/1/2 (pass/warn/fail) vocabulary; dashboards threshold on these exact values (`WatchRuntimeError`; spelling DOCUMENTED-UNSTABLE) | Pass 0, 1, or 2 |

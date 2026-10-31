@@ -10,12 +10,12 @@
 <title>RNNCellLoop</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-430.85 214,-430.85 214,4 -4,4"/>
 <text text-anchor="start" x="8" y="-412.65" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">RNNCellLoop</text>
-<text text-anchor="start" x="8" y="-398.65" font-family="Helvetica,sans-Serif" font-size="14.00">6 tensors total (80 B)</text>
-<text text-anchor="start" x="8" y="-384.65" font-family="Helvetica,sans-Serif" font-size="14.00">16 params (all trainable, 64 B)</text>
+<text text-anchor="start" x="8" y="-398.65" font-family="Helvetica,sans-Serif" font-size="14.00">3 layers (48 B)</text>
+<text text-anchor="start" x="8" y="-384.65" font-family="Helvetica,sans-Serif" font-size="14.00">16 params (64 B, all trainable)</text>
 <!-- input_1 -->
 <g id="node1" class="node">
 <title>input_1</title>
-<ellipse fill="#009e73" stroke="black" cx="74" cy="-45.96" rx="53.98" ry="45.92"/>
+<ellipse fill="#98fb98" stroke="black" cx="74" cy="-45.96" rx="53.98" ry="45.92"/>
 <text text-anchor="start" x="49.5" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
 <text text-anchor="start" x="46" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text text-anchor="start" x="46.5" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
@@ -23,7 +23,7 @@
 <!-- linear_1_1 -->
 <g id="node2" class="node">
 <title>linear_1_1</title>
-<polygon fill="#56b4e9" stroke="black" points="148,-239.92 0,-239.92 0,-136.92 148,-136.92 148,-239.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="148,-239.92 0,-239.92 0,-136.92 148,-136.92 148,-239.92"/>
 <text text-anchor="start" x="27" y="-223.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_1 (x4)</text>
 <text text-anchor="start" x="46" y="-203.22" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text text-anchor="start" x="32.5" y="-184.22" font-family="Helvetica,sans-Serif" font-size="14.00">in_features=4</text>
@@ -48,7 +48,7 @@
 <!-- output_1 -->
 <g id="node3" class="node">
 <title>output_1</title>
-<ellipse fill="#d55e00" stroke="black" cx="74" cy="-330.89" rx="55.31" ry="45.92"/>
+<ellipse fill="#ff9999" stroke="black" cx="74" cy="-330.89" rx="55.31" ry="45.92"/>
 <text text-anchor="start" x="45" y="-346.69" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text text-anchor="start" x="46" y="-326.69" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text text-anchor="start" x="48" y="-307.69" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>

@@ -664,14 +664,14 @@
       {
         "decision": "validated",
         "func_name": "__getitem__",
-        "op_label": "getitem_3_5:1",
+        "op_label": "getitem_1_2:3",
         "phase": "replay",
         "reason": "replay_matched"
       },
       {
         "decision": "validated",
         "func_name": "__getitem__",
-        "op_label": "getitem_3_5:1",
+        "op_label": "getitem_1_2:3",
         "phase": "perturbation",
         "reason": "perturbation_changed"
       },
@@ -699,14 +699,14 @@
       {
         "decision": "validated",
         "func_name": "__getitem__",
-        "op_label": "getitem_2_4:1",
+        "op_label": "getitem_1_2:2",
         "phase": "replay",
         "reason": "replay_matched"
       },
       {
         "decision": "validated",
         "func_name": "__getitem__",
-        "op_label": "getitem_2_4:1",
+        "op_label": "getitem_1_2:2",
         "phase": "perturbation",
         "reason": "perturbation_changed"
       },

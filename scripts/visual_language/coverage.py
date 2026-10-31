@@ -222,14 +222,16 @@ def vocabulary_universe() -> tuple[VocabValue, ...]:
 def legend_universe() -> tuple[LegendText, ...]:
     """Every legend row text the forward, backward and encoding legends can show."""
 
-    from torchlens.visualization import _legend, themes
+    from torchlens.visualization import _header_block, _legend, themes
 
+    every_role = frozenset(_legend.LEGEND_ROLES)
     sections: list[tuple[str, Any]] = []
     for name, theme in themes.THEME_PRESETS.items():
-        sections += [
-            (f"theme_role_sections({name})", s)
-            for s in _legend.theme_role_sections(theme, mutated_parameter=True)
-        ]
+        swatches = _header_block.key_swatches(
+            theme, every_role, has_module=True, mutated_parameter=True
+        )
+        rows = tuple(_legend.LegendRow(text=swatch.text) for swatch in swatches)
+        sections.append((f"key_swatches({name})", _legend.LegendSection(title="key", rows=rows)))
     for passes in (1, 2):
         built = _legend.backward_key_sections(
             has_higher_order=True,

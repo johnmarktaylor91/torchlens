@@ -136,7 +136,9 @@ def test_axis_combo_renders_clean(
     parsed = parse_layout_json(run_layout_json(dot, engine), engine=engine, dot_source=dot)
     result = audit_layout(parsed)
     assert result.hard_violation_count == 0, f"{_context(combo)}\n{result.describe('axis combo')}"
-    result.require_minimums(node=3, legend_text=3)
+    # The key rides in the header label: its words are graph-caption text
+    # (three header lines plus at least three key entries).
+    result.require_minimums(node=3, graph_caption=6)
     envelope = compute_usability_envelope(parsed)
     assert envelope.arrowhead_fused_pairs == 0, _context(combo)
     # Engine discriminator (D8): pinned positions exactly on the rank path.

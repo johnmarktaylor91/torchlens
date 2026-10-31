@@ -201,21 +201,132 @@ def test_always_on_interior_site_counts_per_call(moe_episode: dict) -> None:
 def test_expert_interior_sites_are_per_occurrence(moe_episode: dict) -> None:
     """Expert-interior sites count their OWN occurrences; nothing is padded.
 
-    A grouper that invented rectangularity would stamp every expert-interior
-    site with one pass per episode step; the honest record keeps ragged
-    sites below the step count (and never above it).
+    grouping rule rows 17, 26 and 51: a layer is one place in the experts
+    module's code, so an op there has one pass per time that place ran. An op
+    that runs once per call of the experts module has one pass per step (row
+    26); an op inside a Python loop over the hit experts would have one pass
+    per expert execution, summed over the steps (rows 17 and 51: a different
+    expert weight per pass is not evidence). Measured on this fused
+    implementation, every interior op runs once per call. A grouper that
+    padded sites to a rectangular count (``N_STEPS * max hits``, or one per
+    expert per step) or split them per expert weight lands outside both
+    honest counts and fails here.
     """
 
     log = moe_episode["log"]
+    hits = moe_episode["hits"]
+    total_hits = sum(len(step_hits) for step_hits in hits)
+    assert total_hits not in {N_STEPS, N_STEPS * max(len(step_hits) for step_hits in hits)}
     expert_ops = [
         op for op in log if any("experts" in str(module) for module in (op.modules or ()))
     ]
     assert expert_ops, "expected op records inside the fused experts module"
-    assert all(op.num_passes <= N_STEPS for op in expert_ops)
-    assert any(op.num_passes < N_STEPS for op in expert_ops), (
-        "every expert-interior site claims one pass per episode step on a "
-        "RAGGED capture — the grouper is inventing rectangularity"
+    counts = {op.num_passes for op in expert_ops}
+    assert counts <= {N_STEPS, total_hits}, (
+        f"expert-interior pass counts {counts} are neither per-call ({N_STEPS}) nor the "
+        f"recorded per-occurrence execution count ({total_hits}) — the grouper is "
+        "inventing rectangularity or splitting a site by its weights"
     )
+
+
+# Per-step expert routing for the in-test Python-loop MoE: expert 0 is hit on
+# every step, expert 1 on two of three, expert 2 never.
+LOOP_ROUTES = ([0, 1, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0])
+
+
+class _LoopExpert(nn.Module):
+    """One expert: a linear map and a relu."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x))
+
+
+class _LoopMoE(nn.Module):
+    """MoE with a Python loop over experts that skips experts with no tokens."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.experts = nn.ModuleList(_LoopExpert() for _ in range(3))
+        self.scales = nn.ParameterList(
+            nn.Parameter(torch.full((4,), 0.5 + e)) for e in range(len(self.experts))
+        )
+
+    def forward(self, x: torch.Tensor, route: list[int]) -> torch.Tensor:
+        out = torch.zeros_like(x)
+        for e, expert in enumerate(self.experts):
+            idx = [i for i, r in enumerate(route) if r == e]
+            if not idx:
+                continue
+            y = expert(x[idx]) * self.scales[e]
+            out = out.index_add(0, torch.tensor(idx), y)
+        return out
+
+
+class _LoopMoESteps(nn.Module):
+    """Calls the MoE once per route from one loop line."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.moe = _LoopMoE()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for route in LOOP_ROUTES:
+            x = torch.tanh(x + self.moe(x, route))
+        return x
+
+
+def _address(op: object) -> str:
+    """Innermost module address of an op, without its call index."""
+
+    module = getattr(op, "module", None)
+    return str(module).rsplit(":", 1)[0] if module else ""
+
+
+def test_python_loop_moe_pass_counts_show_ragged_routing() -> None:
+    """A per-expert Python loop exposes ragged routing in the pass counts.
+
+    The fused Qwen3Moe experts above run every interior op once per call, so
+    their pass counts cannot show routing. This in-test MoE restores that
+    coverage. Grouping rule rows 26 and 29: each expert is a distinct module
+    instance, so its ops are its own layers, and one pass per step it was hit
+    (an expert with no tokens has no passes at all). Rows 17 and 51: the scale
+    multiply is one place in the MoE loop, so it is one layer with one pass
+    per expert execution summed over the steps, although each pass uses a
+    different expert's parameter. Padding (every expert every step) or
+    splitting the scale multiply by parameter fails these counts.
+    """
+
+    hits = [sum(e in route for route in LOOP_ROUTES) for e in range(3)]
+    assert hits == [3, 2, 0]
+    model = _LoopMoESteps()
+    trace = tl.trace(model, torch.randn(4, 4))
+    try:
+        linear_passes = {
+            _address(op): op.num_passes for op in trace.layer_list if op.func_name == "linear"
+        }
+        assert linear_passes == {"moe.experts.0.lin": 3, "moe.experts.1.lin": 2}
+        assert not any(_address(op).startswith("moe.experts.2") for op in trace.layer_list)
+
+        moe_ops = [op for op in trace.layer_list if _address(op) == "moe"]
+        scale_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name in {"mul", "__mul__"}
+        }
+        assert list(scale_layers.values()) == [sum(hits)], scale_layers
+        add_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name == "index_add"
+        }
+        assert list(add_layers.values()) == [sum(hits)], add_layers
+        zeros_layers = {
+            op.layer_label: op.num_passes for op in moe_ops if op.func_name == "zeros_like"
+        }
+        assert list(zeros_layers.values()) == [len(LOOP_ROUTES)], zeros_layers
+    finally:
+        tl.release_model(model)
+        trace.cleanup()
 
 
 def test_pass_window_on_moe_episode_discloses(moe_episode: dict) -> None:

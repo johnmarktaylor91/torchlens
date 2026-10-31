@@ -327,7 +327,11 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     buffer_versions = [layer for layer in trace.layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
-    assert [layer.pass_index for layer in buffer_versions] == [1, 2]
+    # grouping rule row 74 (tests/test_grouping_call_sites.py; docs/guides/grouping.md):
+    # buffer versions group by the line that wrote them, and a buffer written once
+    # keeps its starting value and its new value as two single-pass layers.
+    assert [layer.pass_index for layer in buffer_versions] == [1, 1]
+    assert len({layer.layer_label for layer in buffer_versions}) == 2
     assert buffer_versions[0].buffer_write_kind is None
     assert buffer_versions[0].buffer_source is None
     assert buffer_versions[1].buffer_write_kind == "inplace"

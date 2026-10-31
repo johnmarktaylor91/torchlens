@@ -5205,7 +5205,7 @@
    "graph_shape_hash": "baff870bbc0a9f8ec8c3091eada3a5f40b55ffec5625f2dec6a8eb2489d20c13",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -11085,7 +11085,7 @@
    "graph_shape_hash": "baff870bbc0a9f8ec8c3091eada3a5f40b55ffec5625f2dec6a8eb2489d20c13",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -16979,7 +16979,7 @@
    "graph_shape_hash": "baff870bbc0a9f8ec8c3091eada3a5f40b55ffec5625f2dec6a8eb2489d20c13",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -22864,7 +22864,7 @@
    "graph_shape_hash": "baff870bbc0a9f8ec8c3091eada3a5f40b55ffec5625f2dec6a8eb2489d20c13",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -28628,7 +28628,7 @@
    "graph_shape_hash": "baff870bbc0a9f8ec8c3091eada3a5f40b55ffec5625f2dec6a8eb2489d20c13",
    "grouping": "structural",
    "grouping_policy": {
-    "\"detector\"": "grouper_v1",
+    "\"detector\"": "callsite_v1",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",

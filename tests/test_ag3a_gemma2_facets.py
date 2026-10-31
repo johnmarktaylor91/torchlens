@@ -16,18 +16,21 @@ import torchlens as tl
 from tests.test_ag2_gemma2_sites import _frozen_ops, _model, _trace, _transcoders
 
 #: The tiny Gemma-2's attention patterns (one per layer) and norm scales (four
-#: per layer plus the final norm), as captured.
-PATTERN_OPS = ("softmax_1_105:1", "softmax_2_199:1")
+#: per layer plus the final norm), as captured. Grouping rule rows 1 and 17: the
+#: mask builder's one call line (masking_utils.py:522) runs twice, so its mask ops
+#: are 2-pass layers; row 14: the rotary ``.float()`` pair on two source lines
+#: (modeling_gemma2.py:127 and :131) is two single layers. Both shift these labels.
+PATTERN_OPS = ("softmax_1_104:1", "softmax_2_198:1")
 INV_RMS_OPS = (
-    "rsqrt_1_55:1",
-    "rsqrt_2_118:1",
-    "rsqrt_3_128:1",
-    "rsqrt_4_142:1",
-    "rsqrt_5_152:1",
-    "rsqrt_6_212:1",
-    "rsqrt_7_222:1",
-    "rsqrt_8_236:1",
-    "rsqrt_9_246:1",
+    "rsqrt_1_54:1",
+    "rsqrt_2_117:1",
+    "rsqrt_3_127:1",
+    "rsqrt_4_141:1",
+    "rsqrt_5_151:1",
+    "rsqrt_6_211:1",
+    "rsqrt_7_221:1",
+    "rsqrt_8_235:1",
+    "rsqrt_9_245:1",
 )
 NORMS = (
     "input_layernorm",
