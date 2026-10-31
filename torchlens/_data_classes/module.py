@@ -86,8 +86,6 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
         "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
         "params",  # ParamAccessor -- use trace.params.to_pandas()
         "recursive_params",  # ParamAccessor -- same as params
-        "call_parent_module",  # Module reference -- call_parent already carries the label
-        "call_children_modules",  # list[Module] -- call_children already carries the labels
         "output_structure",  # ContainerSpec -- structural, not a flat scalar
         "forward_args_template",  # arbitrary structural template, not a flat scalar
         "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
@@ -533,14 +531,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops in this module call."""
-
-        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -618,7 +610,7 @@ class ModuleCall:
     def num_param_tensors(self) -> int:
         """Number of parameter tensors owned by the called Module."""
 
-        return self.module.num_param_tensors
+        return len(self.module.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:
@@ -1597,11 +1589,6 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
-    def num_layers(self) -> int:
-        """Number of unique layers in this module."""
-        return len(self.layer_labels)
-
-    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -1661,41 +1648,6 @@ class Module:
 
         return module_collapse_score(self)
 
-    @property
-    def call_parent_address(self) -> str | None:
-        """Parent Module address (label string) in the dynamic call tree.
-
-        Glossary stored-form name; ``call_parent_module`` resolves the record.
-        """
-
-        return cast("str | None", self.call_parent)
-
-    @property
-    def call_children_addresses(self) -> list[str]:
-        """Child Module addresses (label strings) in the dynamic call tree.
-
-        Glossary stored-form name; ``call_children_modules`` resolves the records.
-        """
-
-        return list(self.call_children)
-
-    @property
-    def call_parent_module(self) -> "Module | None":
-        """Parent Module in the dynamic call tree, if any."""
-
-        if self.call_parent is None or self._source_trace is None:
-            return None
-        return cast("Module", self._source_trace.modules[self.call_parent])
-
-    @property
-    def call_children_modules(self) -> list["Module"]:
-        """Child Modules in the dynamic call tree."""
-
-        trace = self._source_trace
-        if trace is None:
-            return []
-        return [cast("Module", trace.modules[address]) for address in self.call_children]
-
     def _recursive_modules_depth_first(self) -> list["Module"]:
         """Return this Module and address descendants in stable depth-first order."""
 
@@ -1740,12 +1692,6 @@ class Module:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
-
-    @property
-    def recursive_param_addresses(self) -> list[str]:
-        """Parameter addresses in the same order as ``recursive_params``."""
-
-        return list(self.recursive_params.keys())
 
     @property
     def num_recursive_params(self) -> int:
@@ -1801,12 +1747,6 @@ class Module:
         """
 
         return Bytes(sum(int(param.param_memory or 0) for param in self.params))
-
-    @property
-    def total_param_memory(self) -> Bytes:
-        """Bytes used by this Module's own-address parameters."""
-
-        return self.param_memory
 
     @property
     def internal_param_memory(self) -> Bytes:
@@ -2201,12 +2141,6 @@ class Module:
             )
 
     @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module (the root owns all)."""
-
-        return len(self.params)
-
-    @property
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors owned by this Module (the root owns all)."""
 
@@ -2427,7 +2361,7 @@ class Module:
 
     def __len__(self) -> int:
         """Return the total number of layers across all ops of this module."""
-        return self.num_layers
+        return len(self.layer_labels)
 
     def __getitem__(self, ix: int | str) -> Any:
         """Return the Op at position ix within this module's layer list.
@@ -2530,7 +2464,7 @@ class Module:
         for label in self.layer_labels:
             entry = self._source_trace[label]
             row = _layer_log_to_row(entry)
-            row["num_ops"] = getattr(entry, "num_ops", 1)
+            row["num_ops"] = len(entry.ops) if hasattr(entry, "ops") else 1
             rows.append(row)
         return pd.DataFrame(rows, columns=columns)
 
@@ -2678,7 +2612,7 @@ class ModuleAccessor(Accessor["Module"]):
             lines.append(
                 f"{ml.address:<40} {ml.class_name:<20} "
                 f"{ml.call_depth:>5} {ml.num_params:>10} "
-                f"{ml.num_layers:>7} {ml.num_calls:>7}"
+                f"{len(ml.layer_labels):>7} {ml.num_calls:>7}"
             )
         return "\n".join(lines)
 

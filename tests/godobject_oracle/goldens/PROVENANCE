@@ -572,3 +572,9 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bb0cb7acce49263f7bca1b7f7d0ca0dac0f54f44 (dirty)
 recorded: 2026-10-31T03:51:16.204988+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:38.269162+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:31.867983+00:00

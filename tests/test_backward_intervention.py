@@ -340,7 +340,7 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
     for selector in selectors:
         trace_stub, grad_fn_handle = _hook_trace()
         trace_stub._active_backward_pass_index = 1  # type: ignore[attr-defined]
-        grad_fn_handle.source_trace = trace_stub  # type: ignore[attr-defined]
+        grad_fn_handle.trace = trace_stub  # type: ignore[attr-defined]
         _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp_grad(0, 0))
         hook = _make_grad_fn_hook(trace_stub, 1)
 

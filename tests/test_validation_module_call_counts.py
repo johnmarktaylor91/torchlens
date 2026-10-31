@@ -5,7 +5,7 @@ and ``ModuleCall.num_layers`` counts the distinct Layers among them, so a call
 that runs one Layer twice has fewer Layers than Ops. The function-root check
 compares the root call with ``trace.op_labels`` (exact order) and its Layer
 projection with ``trace.layer_labels``; the containment check compares
-``num_ops`` and ``num_layers`` with the call's own Op list. Each corruption
+``num_layers`` with the call's own Op list. Each corruption
 below must raise; each clean multi-pass trace must pass.
 """
 
@@ -90,11 +90,11 @@ def graph_trace():
 
 def test_clean_multi_pass_root_passes_containment(graph_trace) -> None:
     root = graph_trace.module_calls["self:1"]
-    assert root.num_layers < root.num_ops
+    assert root.num_layers < len(root.ops)
     assert check_metadata_invariants(graph_trace) is True
 
 
-@pytest.mark.parametrize("count", ["num_layers", "num_ops"])
+@pytest.mark.parametrize("count", ["num_layers"])
 def test_off_by_one_call_counts_raise(graph_trace, monkeypatch, count: str) -> None:
     true_count = getattr(ModuleCall, count)
     monkeypatch.setattr(ModuleCall, count, property(lambda call: true_count.fget(call) + 1))

@@ -1885,7 +1885,7 @@ def tinygrad_param_logs(tree: TinygradModuleTree, trace: Trace) -> dict[str, Par
             param.backend_address = f"object:{param_address}"
             param.resolver_status = "resolved"
             param._param_ref = cast(Any, tensor)
-            param.source_trace = trace
+            param.trace = trace
             param.all_module_addresses = list(
                 tree.metadata.get(owner, {}).get("all_addresses", [owner])
             )

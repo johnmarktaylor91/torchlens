@@ -90,7 +90,7 @@ def _module_structural_signature(module: Module) -> StructuralSignature:
         for layer in module.layers
     )
     return (
-        int(module.num_layers),
+        len(module.layer_labels),
         int(module.num_params),
         int(module.num_params_trainable),
         int(module.num_params_frozen),
@@ -315,7 +315,7 @@ class MemberFingerprintCache:
             for layer in module.layers
         )
         signature: StructuralSignature = (
-            int(module.num_layers),
+            len(module.layer_labels),
             int(module.num_params),
             int(module.num_params_trainable),
             int(module.num_params_frozen),

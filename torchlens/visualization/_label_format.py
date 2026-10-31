@@ -400,7 +400,8 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
-    if getattr(params, "num_param_tensors", None) == 0:
+    barcodes = getattr(params, "_param_barcodes", None)
+    if barcodes is not None and len(barcodes) == 0:
         return []
 
     param_logs = getattr(params, "_param_logs", None)

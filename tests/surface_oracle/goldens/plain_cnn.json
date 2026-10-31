@@ -137,6 +137,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -199,16 +200,12 @@
     "multi_output_name": null,
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "op_labels": [
@@ -297,18 +294,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -334,7 +319,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "input_1": {
@@ -421,6 +405,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -477,16 +462,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -545,18 +526,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -582,7 +551,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "output_1": {
@@ -661,6 +629,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -717,16 +686,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -808,18 +773,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -845,7 +798,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_2": {
@@ -944,6 +896,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -999,16 +952,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -1077,18 +1026,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -1114,7 +1051,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -1197,7 +1133,6 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
-    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1341,7 +1276,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 3,
     "num_layers": 4,
-    "num_ops": 4,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1432,18 +1366,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "conv:1"
     ],
     "call_parent": "self",
-    "call_parent_address": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "conv"
@@ -1541,9 +1468,7 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
-    "num_layers": 1,
     "num_output_edges": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -1607,10 +1532,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -1626,7 +1547,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -1652,22 +1572,11 @@
     "call_children": [
      "conv"
     ],
-    "call_children_addresses": [
-     "conv"
-    ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "conv"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -1757,9 +1666,7 @@
     "num_edges": 3,
     "num_input_edges": 0,
     "num_internal_edges": 3,
-    "num_layers": 4,
     "num_output_edges": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -1823,10 +1730,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -1842,7 +1745,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -2038,7 +1940,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
     "grad_fn_class_qualname": "builtins.ConvolutionBackward0",
-    "grad_fn_cls": "<callable ConvolutionBackward0>",
     "grad_fn_handle": "<callable ConvolutionBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -2054,10 +1955,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -2185,16 +2087,13 @@
     ],
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "ops": [
@@ -2295,18 +2194,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -2333,7 +2220,6 @@
     "type": "conv2d",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -2432,7 +2318,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -2448,10 +2333,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -2550,16 +2436,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -2633,18 +2516,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -2671,7 +2542,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -2783,7 +2653,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -2799,10 +2668,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -2910,16 +2780,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -3010,18 +2877,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -3046,7 +2901,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -3178,7 +3032,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -3194,10 +3047,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -3304,16 +3158,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -3391,18 +3242,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -3429,7 +3268,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -3454,8 +3292,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -3469,6 +3307,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -3487,18 +3326,11 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      2
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -3539,8 +3371,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -3557,6 +3389,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -3575,9 +3408,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 18,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -3586,10 +3416,6 @@
      3,
      3
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -4623,6 +4449,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -4685,16 +4512,12 @@
     "multi_output_name": null,
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "op_labels": [
@@ -4783,18 +4606,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -4820,7 +4631,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "input_1": {
@@ -4907,6 +4717,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -4963,16 +4774,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -5031,18 +4838,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -5068,7 +4863,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "output_1": {
@@ -5147,6 +4941,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5203,16 +4998,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -5294,18 +5085,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -5331,7 +5110,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_2": {
@@ -5430,6 +5208,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -5485,16 +5264,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -5563,18 +5338,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -5600,7 +5363,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -5683,7 +5445,6 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
-    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -5827,7 +5588,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 3,
     "num_layers": 4,
-    "num_ops": 4,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -5918,18 +5678,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "conv:1"
     ],
     "call_parent": "self",
-    "call_parent_address": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "conv"
@@ -6027,9 +5780,7 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
-    "num_layers": 1,
     "num_output_edges": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -6093,10 +5844,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -6112,7 +5859,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -6138,22 +5884,11 @@
     "call_children": [
      "conv"
     ],
-    "call_children_addresses": [
-     "conv"
-    ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "conv"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -6243,9 +5978,7 @@
     "num_edges": 3,
     "num_input_edges": 0,
     "num_internal_edges": 3,
-    "num_layers": 4,
     "num_output_edges": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -6309,10 +6042,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -6328,7 +6057,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -6524,7 +6252,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
     "grad_fn_class_qualname": "builtins.ConvolutionBackward0",
-    "grad_fn_cls": "<callable ConvolutionBackward0>",
     "grad_fn_handle": "<callable ConvolutionBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -6540,10 +6267,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -6671,16 +6399,13 @@
     ],
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "ops": [
@@ -6781,18 +6506,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -6819,7 +6532,6 @@
     "type": "conv2d",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -6918,7 +6630,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -6934,10 +6645,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -7036,16 +6748,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -7119,18 +6828,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -7157,7 +6854,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -7269,7 +6965,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -7285,10 +6980,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -7396,16 +7092,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -7496,18 +7189,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -7532,7 +7213,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -7664,7 +7344,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -7680,10 +7359,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -7790,16 +7470,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -7877,18 +7554,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -7915,7 +7580,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -7940,8 +7604,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -7955,6 +7619,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -7973,18 +7638,11 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      2
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -8025,8 +7683,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -8043,6 +7701,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -8061,9 +7720,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 18,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -8072,10 +7728,6 @@
      3,
      3
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -9100,6 +8752,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9162,16 +8815,12 @@
     "multi_output_name": null,
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "op_labels": [
@@ -9260,18 +8909,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -9297,7 +8934,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "input_1": {
@@ -9384,6 +9020,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9440,16 +9077,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -9508,18 +9141,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -9545,7 +9166,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "output_1": {
@@ -9624,6 +9244,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9680,16 +9301,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -9771,18 +9388,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -9808,7 +9413,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_2": {
@@ -9907,6 +9511,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -9962,16 +9567,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -10040,18 +9641,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -10077,7 +9666,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -10160,7 +9748,6 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
-    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -10304,7 +9891,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 3,
     "num_layers": 4,
-    "num_ops": 4,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -10395,18 +9981,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "conv:1"
     ],
     "call_parent": "self",
-    "call_parent_address": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "conv"
@@ -10504,9 +10083,7 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
-    "num_layers": 1,
     "num_output_edges": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -10570,10 +10147,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -10589,7 +10162,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -10615,22 +10187,11 @@
     "call_children": [
      "conv"
     ],
-    "call_children_addresses": [
-     "conv"
-    ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "conv"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -10720,9 +10281,7 @@
     "num_edges": 3,
     "num_input_edges": 0,
     "num_internal_edges": 3,
-    "num_layers": 4,
     "num_output_edges": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -10786,10 +10345,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -10805,7 +10360,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -11001,7 +10555,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
     "grad_fn_class_qualname": "builtins.ConvolutionBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -11017,10 +10570,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -11148,16 +10702,13 @@
     ],
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "ops": [
@@ -11258,18 +10809,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -11296,7 +10835,6 @@
     "type": "conv2d",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -11395,7 +10933,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -11411,10 +10948,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -11513,16 +11051,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -11596,18 +11131,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -11634,7 +11157,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -11746,7 +11268,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -11762,10 +11283,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -11873,16 +11395,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -11973,18 +11492,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -12009,7 +11516,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -12141,7 +11647,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -12157,10 +11662,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -12267,16 +11773,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -12354,18 +11857,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -12392,7 +11883,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -12417,13 +11907,14 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -12434,15 +11925,11 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      2
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "conv2d_1_1"
@@ -12472,13 +11959,14 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -12489,9 +11977,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 18,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -12500,7 +11985,6 @@
      3,
      3
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "conv2d_1_1"
@@ -13514,6 +12998,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -13576,16 +13061,12 @@
     "multi_output_name": null,
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "op_labels": [
@@ -13674,18 +13155,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -13711,7 +13180,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "input_1": {
@@ -13798,6 +13266,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -13854,16 +13323,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -13922,18 +13387,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -13959,7 +13412,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "output_1": {
@@ -14038,6 +13490,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -14094,16 +13547,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -14185,18 +13634,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -14222,7 +13659,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_2": {
@@ -14321,6 +13757,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -14376,16 +13813,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -14454,18 +13887,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -14491,7 +13912,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -14574,7 +13994,6 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
-    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -14718,7 +14137,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 3,
     "num_layers": 4,
-    "num_ops": 4,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -14809,18 +14227,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "conv:1"
     ],
     "call_parent": "self",
-    "call_parent_address": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "conv"
@@ -14918,9 +14329,7 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
-    "num_layers": 1,
     "num_output_edges": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -14984,10 +14393,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -15003,7 +14408,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -15029,22 +14433,11 @@
     "call_children": [
      "conv"
     ],
-    "call_children_addresses": [
-     "conv"
-    ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "conv"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -15134,9 +14527,7 @@
     "num_edges": 3,
     "num_input_edges": 0,
     "num_internal_edges": 3,
-    "num_layers": 4,
     "num_output_edges": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -15200,10 +14591,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -15219,7 +14606,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -15415,7 +14801,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
     "grad_fn_class_qualname": "builtins.ConvolutionBackward0",
-    "grad_fn_cls": "<callable ConvolutionBackward0>",
     "grad_fn_handle": "<callable ConvolutionBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -15431,10 +14816,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -15562,16 +14948,13 @@
     ],
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "ops": [
@@ -15672,18 +15055,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -15710,7 +15081,6 @@
     "type": "conv2d",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -15809,7 +15179,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -15825,10 +15194,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -15927,16 +15297,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -16010,18 +15377,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -16048,7 +15403,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -16160,7 +15514,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -16176,10 +15529,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -16287,16 +15641,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -16387,18 +15738,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -16423,7 +15762,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -16555,7 +15893,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": "<callable ReluBackward0>",
     "grad_fn_handle": "<callable ReluBackward0>",
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -16571,10 +15908,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -16681,16 +16019,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -16768,18 +16103,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -16806,7 +16129,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -16831,8 +16153,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -16846,6 +16168,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 1,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -16864,18 +16187,11 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      2
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -16916,8 +16232,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -16934,6 +16250,7 @@
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": 0,
     "is_quantized": false,
     "is_trainable": true,
     "module": {
@@ -16952,9 +16269,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 18,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": 0,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -16963,10 +16277,6 @@
      3,
      3
     ],
-    "source_trace": {
-     "__ref__": "Trace",
-     "label": null
-    },
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -18008,6 +17318,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -18070,16 +17381,12 @@
     "multi_output_name": null,
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "op_labels": [
@@ -18168,18 +17475,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18205,7 +17500,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": true,
     "visualizer_path": null
    },
    "input_1": {
@@ -18292,6 +17586,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -18348,16 +17643,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -18416,18 +17707,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18453,7 +17732,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "output_1": {
@@ -18532,6 +17810,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -18588,16 +17867,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -18666,18 +17941,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18703,7 +17966,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    },
    "relu_1_2": {
@@ -18802,6 +18064,7 @@
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_siblings": false,
@@ -18857,16 +18120,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -18935,18 +18194,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18972,7 +18219,6 @@
     "transformed_out_dtype": null,
     "transformed_out_shape": null,
     "type_index": 1,
-    "uses_params": false,
     "visualizer_path": null
    }
   },
@@ -19055,7 +18301,6 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
-    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -19199,7 +18444,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 3,
     "num_layers": 4,
-    "num_ops": 4,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -19290,18 +18534,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "conv:1"
     ],
     "call_parent": "self",
-    "call_parent_address": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "conv"
@@ -19399,9 +18636,7 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
-    "num_layers": 1,
     "num_output_edges": 1,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -19465,10 +18700,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -19484,7 +18715,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -19510,22 +18740,11 @@
     "call_children": [
      "conv"
     ],
-    "call_children_addresses": [
-     "conv"
-    ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "conv"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -19615,9 +18834,7 @@
     "num_edges": 3,
     "num_input_edges": 0,
     "num_internal_edges": 3,
-    "num_layers": 4,
     "num_output_edges": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -19681,10 +18898,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "conv.weight",
-     "conv.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -19700,7 +18913,6 @@
     "total_macs_forward": 288,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -19888,7 +19100,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
     "grad_fn_class_qualname": "builtins.ConvolutionBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -19904,10 +19115,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": true,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": true,
     "in_conditionals": [],
@@ -20015,16 +19227,13 @@
     ],
     "num_args_total": 7,
     "num_autograd_tensors": 2,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
     "num_params_frozen": 0,
     "num_params_trainable": 20,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 7,
     "ops": [
@@ -20125,18 +19334,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "254fea592d88d4b6f6a3dbfb088f1bedbd1ce36601fdee764c90ba77020032d7",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -20163,7 +19360,6 @@
     "type": "conv2d",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": true,
     "var_names": [],
     "visualizer_path": null
    },
@@ -20262,7 +19458,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20278,10 +19473,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -20377,16 +19573,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -20460,18 +19653,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "cae3a3b1673d883dc842fd39568655880ccb751e85db0a07226643797c3bb372",
-     "shape": [
-      1,
-      1,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -20498,7 +19679,6 @@
     "type": "input",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -20610,7 +19790,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20626,10 +19805,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -20717,16 +19897,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -20804,18 +19981,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -20840,7 +20005,6 @@
     "type": "output",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    },
@@ -20970,7 +20134,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
     "grad_fn_class_qualname": "builtins.ReluBackward0",
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20986,10 +20149,11 @@
     "has_internal_source_ancestor": false,
     "has_out_variations": false,
     "has_output_descendant": true,
+    "has_params": false,
     "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
-    "has_saved_gradient": false,
+    "has_saved_grad": false,
     "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
@@ -21076,16 +20240,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": 1,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -21163,18 +20324,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": true,
-     "sha256": "cd538c11bad1c4cbe99c5d4076119fd20d56281394a099a7c7b99b80175535ee",
-     "shape": [
-      1,
-      2,
-      4,
-      4
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -21201,7 +20350,6 @@
     "type": "relu",
     "type_index": 1,
     "unattributed_tensor_args": [],
-    "uses_params": false,
     "var_names": [],
     "visualizer_path": null
    }
@@ -21226,13 +20374,14 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -21243,15 +20392,11 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
      2
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "conv2d_1_1"
@@ -21281,13 +20426,14 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
+    "grad_memory": "<measured>",
     "grad_shape": null,
-    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
     "has_optimizer": null,
+    "index": -1,
     "is_quantized": false,
     "is_trainable": true,
     "module": null,
@@ -21298,9 +20444,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 18,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
-    "ordinal_index": -1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -21309,7 +20452,6 @@
      3,
      3
     ],
-    "source_trace": null,
     "trace": null,
     "used_by_layers": [
      "conv2d_1_1"

@@ -1797,7 +1797,7 @@ def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
         Active one-based backward pass index, when available.
     """
 
-    trace = getattr(grad_fn_handle, "source_trace", None)
+    trace = getattr(grad_fn_handle, "trace", None)
     if trace is None:
         return None
     value = getattr(trace, "_active_backward_pass_index", None)

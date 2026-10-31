@@ -431,7 +431,7 @@ def module_call_repr_line(call: Any) -> str:
     if not module_class:
         module_class = fail_open(lambda: call.module.class_name, lambda _error: "?")
     label = getattr(call, "call_label", "?")
-    core = f"{module_class} ops={getattr(call, 'num_ops', '?')}"
+    core = f"{module_class} ops={len(getattr(call, 'ops', ()) or ())}"
     return envelope_line(core, address=label, bracket=("module_call",))
 
 
@@ -482,7 +482,7 @@ def module_repr_line(module: Any) -> str:
     tokens = [
         f"{getattr(module, 'class_name', '?')}",
         f"calls={getattr(module, 'num_calls', '?')}",
-        f"ops={getattr(module, 'num_layers', '?')}",
+        f"ops={len(getattr(module, 'layer_labels', ()) or ())}",
         f"params={getattr(module, 'num_params', '?')}",
         mode,
     ]

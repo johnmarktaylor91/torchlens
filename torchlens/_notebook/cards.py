@@ -233,7 +233,7 @@ def _value_zone(op: Any) -> tuple[CardNode, ...]:
 def _grad_zone(op: Any) -> tuple[CardNode, ...]:
     """Grad stats appear ONLY when a gradient was captured (row X7)."""
 
-    if not getattr(op, "has_saved_gradient", False):
+    if not getattr(op, "has_saved_grad", False):
         return ()
     tensor = _resident_tensor(op, "grad")
     if tensor is None:

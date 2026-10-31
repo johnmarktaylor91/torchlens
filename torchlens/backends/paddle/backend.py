@@ -1839,7 +1839,7 @@ def paddle_param_logs(tree: PaddleModuleTree, trace: Trace) -> dict[str, Param]:
         param.backend_address = f"object:{existing_address}"
         param.resolver_status = "resolved"
         param._param_ref = cast(Any, value)
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(owner, {}).get("all_addresses", [owner])
         )

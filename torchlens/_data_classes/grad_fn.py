@@ -377,7 +377,7 @@ class GradFn:
             self.calls._label = self.label
         for call in self.calls.values():
             call.label = self.label
-            call.source_trace = self.source_trace
+            call.source_trace = self.trace
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped and an IO format marker.
@@ -473,7 +473,7 @@ class GradFn:
         self.__post_init__()
 
     @property
-    def source_trace(self) -> Any:
+    def trace(self) -> Any:
         """Return the owning Trace if it is still alive.
 
         Returns
@@ -485,8 +485,8 @@ class GradFn:
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @trace.setter
+    def trace(self, value: Any) -> None:
         """Set the owning Trace weakref.
 
         Parameters
@@ -500,12 +500,6 @@ class GradFn:
             call.source_trace = value
 
     @property
-    def trace(self) -> Any:
-        """Alias for the owning Trace."""
-
-        return self.source_trace
-
-    @property
     def op(self) -> Layer | None:
         """Return the forward Op or Layer associated with this GradFn.
 
@@ -517,7 +511,7 @@ class GradFn:
 
         if self.op_label is None:
             return None
-        trace = self.source_trace
+        trace = self.trace
         if trace is None:
             return None
         return trace[self.op_label]
@@ -534,7 +528,7 @@ class GradFn:
             runtime handle is not portable.
         """
 
-        trace = self.source_trace
+        trace = self.trace
         handle = runtime_handle_from_owner(
             trace,
             lambda owner: next(

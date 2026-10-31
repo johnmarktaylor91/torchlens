@@ -1328,3 +1328,39 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
 recorded: 2026-10-31T03:20:16.945363+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.713991+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.735525+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.755046+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.775354+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.793097+00:00
+reason: rename codemod: node member renames and removals
+source: 6feeb682bade32f973994317293f3688f2474920 (dirty)
+recorded: 2026-10-31T02:32:28.820376+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.102784+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.124050+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.146249+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.168684+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.188133+00:00
+reason: rename codemod: node member renames and removals
+source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
+recorded: 2026-10-31T02:56:22.213248+00:00

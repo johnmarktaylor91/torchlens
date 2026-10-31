@@ -2345,19 +2345,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return self.source_trace
 
     @property
-    def grad_fn_cls(self) -> type[Any] | None:
-        """Return the live grad_fn_handle class when the autograd object is retained.
-
-        Returns
-        -------
-        type[Any] | None
-            Runtime grad_fn_handle class, or ``None`` when the object is unavailable.
-        """
-
-        grad_fn_handle = self.grad_fn_handle
-        return None if grad_fn_handle is None else type(grad_fn_handle)
-
-    @property
     def grads(self) -> GradientRecordAccessor:
         """Per-pass gradient records saved for this Op."""
 
@@ -2688,18 +2675,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return len(self.parents) > 0
 
     @property
-    def num_parents(self) -> int:
-        """Number of distinct parent Ops feeding this Op."""
-
-        return len(self.parents)
-
-    @property
-    def num_children(self) -> int:
-        """Number of distinct child Ops fed by this Op."""
-
-        return len(self.children)
-
-    @property
     def edge_uses(self) -> tuple[EdgeUseRecord, ...]:
         """Per-edge parent-use records captured for this Op.
 
@@ -2849,14 +2824,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
-    def uses_params(self) -> bool:
+    def has_params(self) -> bool:
         """Whether this operation used model parameters."""
         return len(self._param_barcodes) > 0
-
-    @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors used by this operation."""
-        return len(self._param_barcodes)
 
     @property
     def input_ops(self) -> "OpAccessor":
@@ -3075,7 +3045,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return bool(self.is_buffer)
 
     @property
-    def has_saved_gradient(self) -> bool:
+    def has_saved_grad(self) -> bool:
         """Whether this Op's gradient was saved.
 
         Glossary name for the backward-side saved predicate; mirrors
@@ -3083,12 +3053,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         return bool(self.has_grad)
-
-    @property
-    def tensor(self) -> Any:
-        """Alias for the raw saved out."""
-
-        return self.out
 
     @property
     def ops(self) -> tuple["Op", ...]:
@@ -3676,35 +3640,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     # ************* Logging Functions ************
     # ********************************************
 
-    def copy(self, *, _store: Any = None) -> "Op":
-        """Return a selective-depth copy of this entry.
-
-        ``_store`` is the private internal-synthesis hook: postprocess output
-        node synthesis passes the owning trace's row store so the clone is
-        appended as a shared columnar row. Public callers omit it and receive
-        a detached single-row copy.
-
-        Most fields are ``copy.deepcopy``'d so the clone is fully independent.
-        However, certain fields are shallow-copied (shared by reference) because:
-
-        * ``func``, ``grad_fn_class_name``, ``grad_fn_handle`` - function or
-          autograd handle objects, immutable/shared.
-        * ``source_trace`` - must point to the same Trace instance.
-        * ``func_rng_states`` - large state dicts, not mutated after capture.
-        * ``saved_args``, ``saved_kwargs``, ``args_template``,
-          ``kwargs_template`` - may contain large tensors or structured
-          templates; deep-copying them is expensive and unnecessary.
-        * ``parent_params`` - references to nn.Parameters, must stay shared.
-        * ``out``, ``transformed_out``, ``transformed_grad``,
-          ``out_versions_by_child`` - large tensors;
-          shared references are safe since they're replaced (not mutated).
-        * ``container_spec`` - frozen dataclass shared by sibling output leaves.
-
-        Returns:
-            A new Op (or subclass) with the same field values.
-        """
-        return self._copy_with_shallow_fields(frozenset(), _store=_store)
-
     def _copy_for_output(self, *, _store: Any = None) -> "Op":
         """Clone this op for immediate conversion into a synthetic output node.
 
@@ -3959,7 +3894,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             self._internal_set("saved_args", None)
             self._internal_set("saved_kwargs", None)
 
-    def log_tensor_grad(
+    def _log_tensor_grad(
         self,
         grad: torch.Tensor,
         prebuilt: "tuple[torch.Tensor | None, Any | None] | None" = None,
@@ -4390,7 +4325,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
         s += f"\n\tPass: {self.pass_index}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
-        s += f"\n\tComputed from params: {self.uses_params}"
+        s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
         s += f"\n\tOutput of modules: {self.output_of_module_calls}"
         if self.is_atomic_module:

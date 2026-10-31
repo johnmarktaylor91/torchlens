@@ -145,8 +145,6 @@ class TestParamLogFields:
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
-        assert isinstance(pl.num_uses_by_ops, int)
-        assert isinstance(pl.num_uses_by_layers, int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
@@ -232,13 +230,13 @@ class TestParamAccessorMH:
 class TestParamAccessorTLE:
     def test_access_by_address(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         pl = entry.params[entry._param_logs[0].address]
         assert isinstance(pl, Param)
 
     def test_access_by_short_name(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         w = entry.params["weight"]
         b = entry.params["bias"]
         assert "weight" in w.name
@@ -246,17 +244,17 @@ class TestParamAccessorTLE:
 
     def test_access_by_index(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert isinstance(entry.params[0], Param)
 
     def test_len(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert len(entry.params) == 2  # weight + bias
 
     def test_iterable(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         params = list(entry.params)
         assert len(params) == 2
 
@@ -338,7 +336,7 @@ class TestTrainableFrozenTallies:
     def test_tle_tallies(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.num_params == entry.num_params_trainable + entry.num_params_frozen
         # First linear is frozen
         linear1 = [e for e in mh if "linear_1" in e.layer_label][0]
@@ -490,8 +488,8 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.gradient_memory > 0
-            assert len(str(pl.gradient_memory)) > 0
+            assert pl.grad_memory > 0
+            assert len(str(pl.grad_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
@@ -516,7 +514,7 @@ class TestGradientTracking:
 
         # TLEs with param layers should have saved grads
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.has_grad is True
                 assert entry.grad is not None
                 assert entry.grad_shape is not None

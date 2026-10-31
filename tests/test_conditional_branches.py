@@ -1498,7 +1498,7 @@ def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None
         bias_view_layer.layer_label,
         branch_add_layer.layer_label,
     ) in trace.conditional_arm_entry_edges[(event.id, "then")]
-    assert bias_view_layer.uses_params is True
+    assert bias_view_layer.has_params is True
     assert branch_add_layer.parents == (bias_view_layer.layer_label,)
     assert bias_view_layer.conditional_branch_stack == ()
 
@@ -1528,7 +1528,7 @@ def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() ->
         for layer in trace.layer_list
         if layer.func_name == "__add__"
         and layer.conditional_branch_stack == ()
-        and layer.uses_params is True
+        and layer.has_params is True
     ]
     assert len(bias_view_layers) == 1
     bias_view_layer = bias_view_layers[0]

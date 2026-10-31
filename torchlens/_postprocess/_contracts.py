@@ -404,7 +404,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
             )
         ),
         # Row creation carries the row-clone read legality (design-ppdag-v3
-        # §2.4d): step 1 clones the output node via Op.copy(), whose
+        # §2.4d): step 1 clones the output node via Op._copy_with_shallow_fields(), whose
         # whole-schema getattr loop is a mechanical row_clone access kind,
         # not a per-column dependency.
         row_effects=frozenset(("creates",)),

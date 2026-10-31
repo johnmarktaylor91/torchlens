@@ -984,12 +984,12 @@ def test_read_enforcement_trips_on_undeclared_read(
 
 
 def test_row_clone_scope_free_when_unarmed() -> None:
-    """Op.copy works outside any audit (pickle/fork/preview paths)."""
+    """The Op clone works outside any audit (pickle/fork/preview paths)."""
 
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
         op = trace.layer_list[0]
-        copied = op.copy()
+        copied = op._copy_with_shallow_fields(frozenset())
         assert copied is not op
         from torchlens._trace_core.op_store import (
             _AUDIT_CLONE_READS,

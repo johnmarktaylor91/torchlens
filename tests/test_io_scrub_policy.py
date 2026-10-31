@@ -381,7 +381,6 @@ _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
-    "log_tensor_grad": "capture-internal gradient writer",
     "save_activation": "capture-internal payload writer",
 }
 
@@ -391,9 +390,7 @@ _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "set": "intervention editor (mutates fork state)",
 }
 
-_PARAM_METHOD_EXCLUSIONS: dict[str, str] = {
-    "release_param_ref": "destructive; nulls the live param ref",
-}
+_PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}
 
 _MODULE_METHOD_EXCLUSIONS: dict[str, str] = {}
 _MODULE_CALL_METHOD_EXCLUSIONS: dict[str, str] = {}
@@ -475,7 +472,6 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     """Return caller-per-method for every swept public ``Op`` method."""
 
     return {
-        "copy": lambda o: o.copy(),
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
         "grad_for": lambda o: o.grad_for(bwd=0),

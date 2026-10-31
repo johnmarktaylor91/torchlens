@@ -1529,13 +1529,13 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         fold = result.repeat_folds[run_fold.rep.call.rsplit(":", 1)[0]]
         representative = trace.modules[fold.representative]
         aggregate_layers = sum(
-            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in fold.addresses
+            len(trace.modules[address].layer_labels) for address in fold.addresses
         )
         aggregate_params = sum(
             int(getattr(trace.modules[address], "num_params", 0) or 0) for address in fold.addresses
         )
         representative_label = format_collapsed_module_contents(
-            representative.num_layers,
+            len(representative.layer_labels),
             sum(trace[label].is_buffer for label in representative.layer_labels),
         )
         aggregate_label = format_collapsed_module_contents(
@@ -1547,7 +1547,7 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
             ),
         )
 
-        assert aggregate_layers != representative.num_layers
+        assert aggregate_layers != len(representative.layer_labels)
         assert aggregate_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert representative_label in source

@@ -1453,7 +1453,7 @@ def _build_collapsed_module_node(
         # A rolled box stands for every call of the module, so the mode
         # presets aggregate per-pass op records across all calls.
         scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
-        module_num_tensors = ml.num_layers
+        module_num_tensors = len(ml.layer_labels)
         module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
         # Rolled boxes need the same surfaced-exit remainder belt as the
@@ -1873,7 +1873,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = BOOL_NODE_COLOR
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
-    elif node.uses_params:
+    elif node.has_params:
         param_logs = getattr(node, "_param_logs", [])
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]

@@ -663,7 +663,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
     # the bias broadcast (b1).
     assert trace.num_layers_with_params == 3
 
-    param_using_ops = {op.label: op for op in trace.layer_list if op.uses_params}
+    param_using_ops = {op.label: op for op in trace.layer_list if op.has_params}
     assert param_using_ops
     # No bare input-echo op should be reported as "using" a param -- params
     # are consumed downstream, not at the point they enter the trace.

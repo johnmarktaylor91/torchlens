@@ -110,7 +110,7 @@ def test_runtime_handles_return_none_after_source_release_without_raising() -> N
     assert buffer.handle is not None
     assert module.handle is not None
 
-    param.release_param_ref()
+    param._release_param_ref()
     del model
     gc.collect()
 
@@ -157,7 +157,7 @@ def test_param_handle_does_not_cache_after_release() -> None:
     model, trace = _make_trace()
     param = trace.params["linear.weight"]
 
-    param.release_param_ref()
+    param._release_param_ref()
     assert param._param_ref is None
     assert param.handle is model.get_parameter("linear.weight")
     assert param._param_ref is None

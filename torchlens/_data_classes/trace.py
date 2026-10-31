@@ -3432,7 +3432,7 @@ class Trace(
         for layer_pass in self.layer_list:
             layer_pass.source_trace = self
         for grad_fn_handle in self.grad_fn_logs.values():
-            grad_fn_handle.source_trace = self
+            grad_fn_handle.trace = self
             if grad_fn_handle.op is not None:
                 grad_fn_handle.op.grad_fn_handle = grad_fn_handle
                 op_passes = getattr(grad_fn_handle.op, "ops", None)

@@ -78,8 +78,9 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     by_name = {param.address: param for param in trace.param_logs}
     assert int(by_name["weight"].num_params) == 8 * 16
     assert int(by_name["bias"].num_params) == 16
-    for value in (trace, layer, op, module, call):
+    for value in (trace, call):
         assert int(value.num_param_tensors) == A_TENSORS
+    assert len(module.params) == A_TENSORS
 
     trace, report = fixture_b
     layers = {layer.layer_label: layer for layer in trace.compute_layers}
@@ -109,7 +110,6 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
         op.param_memory,
         layer.total_param_memory,
         module.param_memory,
-        module.total_param_memory,
         call.param_memory,
         trace.total_param_memory,
     ):
@@ -163,9 +163,9 @@ def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
     trace, _ = fixture_a
     layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
-    assert int(layer.num_ops) == 1 and int(layer.num_passes) == 1 and int(op.num_passes) == 1
+    assert len(layer.ops) == 1 and int(layer.num_passes) == 1 and int(op.num_passes) == 1
     # A module call counts its boundary ops: input, linear, output.
-    assert int(call.num_ops) == 3
+    assert len(call.ops) == 3
     # input -> linear -> output.
     assert int(module.num_edges) == int(call.num_edges) == 2
     trace, _ = fixture_b

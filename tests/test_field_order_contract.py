@@ -306,10 +306,11 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
     assert "memory" not in constants.OP_LOG_FIELD_ORDER
     assert "memory" not in constants.LAYER_LOG_FIELD_ORDER
 
-    assert "buffer_overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
-    assert "buffer_pass" in constants.BUFFER_LOG_FIELD_ORDER
-    assert hasattr(Buffer, "buffer_overwrite_index")
-    assert hasattr(Buffer, "buffer_pass")
+    assert "overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_overwrite_index" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert hasattr(Buffer, "overwrite_index")
+    assert not hasattr(Buffer, "buffer_overwrite_index")
+    assert not hasattr(Buffer, "buffer_pass")
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER

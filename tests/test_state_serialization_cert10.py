@@ -121,11 +121,11 @@ def test_gradfn_weakref_pickle_roundtrip_with_real_backward_pass() -> None:
     assert restored.num_backward_passes == live_trace.num_backward_passes
     assert len(restored.grad_fn_logs) == len(live_trace.grad_fn_logs)
     # `Trace.__setstate__` deliberately reconnects each GradFn's
-    # `source_trace` back-reference to the newly-restored (live) Trace, so
+    # `trace` back-reference to the newly-restored (live) Trace, so
     # the weakref should point at `restored`, not at a stale intermediate
     # object from the pickle stream.
     for grad_fn_handle in restored.grad_fn_logs.values():
-        assert grad_fn_handle.source_trace is restored
+        assert grad_fn_handle.trace is restored
 
 
 def test_gradfn_standalone_pickle_does_not_crash() -> None:

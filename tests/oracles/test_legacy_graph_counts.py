@@ -247,19 +247,19 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
     add_inner, add_outer = by_type["add"]
     # mul consumes the second linear pass and the buffer read, and feeds
     # sigmoid, the inner add and relu.
-    assert int(mul.num_parents) == int(mul.num_inputs) == 2
-    assert int(mul.num_children) == 3
-    assert int(first.num_parents) == int(first.num_children) == 1
-    assert int(second.num_parents) == int(second.num_children) == 1
-    assert int(add_inner.num_parents) == 2  # mul, ones
-    assert int(add_outer.num_parents) == int(add_outer.num_inputs) == 2  # inner add, y
-    assert int(relu.num_parents) == int(relu.num_children) == 1
+    assert len(mul.parents) == int(mul.num_inputs) == 2
+    assert len(mul.children) == 3
+    assert len(first.parents) == len(first.children) == 1
+    assert len(second.parents) == len(second.children) == 1
+    assert len(add_inner.parents) == 2  # mul, ones
+    assert len(add_outer.parents) == int(add_outer.num_inputs) == 2  # inner add, y
+    assert len(relu.parents) == len(relu.children) == 1
     # The linear Layer: parents {x, itself}, children {itself, mul}.
     linear_layer = layers[first.layer_label]
-    assert int(linear_layer.num_parents) == 2
-    assert int(linear_layer.num_children) == 2
-    assert int(layers[mul.layer_label].num_parents) == 2
-    assert int(layers[mul.layer_label].num_children) == 3
+    assert len(linear_layer.parents) == 2
+    assert len(linear_layer.children) == 2
+    assert len(layers[mul.layer_label].parents) == 2
+    assert len(layers[mul.layer_label].children) == 3
 
 
 def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
@@ -269,7 +269,7 @@ def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
     fc = modules["fc"]
     # fc holds both linear passes: one Layer; internal edge pass1 -> pass2,
     # input edge x -> pass1, output edge pass2 -> mul.
-    assert int(fc.num_layers) == 1
+    assert len(fc.layer_labels) == 1
     assert (int(fc.num_internal_edges), int(fc.num_input_edges), int(fc.num_output_edges)) == (
         1,
         1,
@@ -285,7 +285,7 @@ def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
         ) == (0, 1, 1)
     # The root holds every node, so every edge is internal.
     root, root_call = modules["self"], calls["self:1"]
-    assert int(root.num_layers) == G_LAYERS
+    assert len(root.layer_labels) == G_LAYERS
     for scope in (root, root_call):
         assert (
             int(scope.num_internal_edges),

@@ -929,7 +929,7 @@ def _module_has_single_rendered_op(module_log: "Module") -> bool:
         True when the module contains one op and should keep op rendering.
     """
 
-    return int(getattr(module_log, "num_layers", 0) or 0) == 1
+    return len(getattr(module_log, "layer_labels", ()) or ()) == 1
 
 
 def _single_op_module_should_keep_op_render(trace: "Trace", address: str) -> bool:

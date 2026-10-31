@@ -261,12 +261,12 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     assert int(trace.max_layer_op_count) == 2
     params = {param.address: param for param in trace.param_logs}
     for address in ("fc.weight", "fc.bias"):
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (len(params[address].used_by_ops), len(params[address].used_by_layers)) == (
             2,
             1,
         )
     for address in ("idle.weight", "idle.bias"):  # registered, never called
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (len(params[address].used_by_ops), len(params[address].used_by_layers)) == (
             0,
             0,
         )
@@ -276,8 +276,8 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
         assert int(loop.max_layer_op_count) == 3  # fc three times, one Layer
         params = {param.address: param for param in loop.param_logs}
         assert (
-            int(params["fc.weight"].num_uses_by_ops),
-            int(params["fc.weight"].num_uses_by_layers),
+            len(params["fc.weight"].used_by_ops),
+            len(params["fc.weight"].used_by_layers),
         ) == (3, 1)
     finally:
         loop.cleanup()
@@ -426,7 +426,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
     params = {param.address: param for param in trace.param_logs}
     for address, nbytes in raw.items():
-        assert int(params[address].gradient_memory) == nbytes, address
+        assert int(params[address].grad_memory) == nbytes, address
     assert int(trace.total_param_gradient_memory) == sum(raw.values())
     for label, pair in (("a:1", (96, 0)), ("b:1", (24, 0)), ("self:1", (24, 96 + 96 + 24))):
         call = calls[label]
@@ -474,8 +474,8 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     try:
         buffered.backward(buffered[buffered.output_layers[0]].out.sum())
         by_address = {buffer.address: buffer for buffer in buffered.buffers}
-        assert int(by_address["w"].gradient_memory) == 4 * FP32  # d/dw of x * w: (4,)
-        assert int(by_address["c"].gradient_memory) == 0  # c needs no gradient
+        assert int(by_address["w"].grad_memory) == 4 * FP32  # d/dw of x * w: (4,)
+        assert int(by_address["c"].grad_memory) == 0  # c needs no gradient
     finally:
         buffered.cleanup()
 

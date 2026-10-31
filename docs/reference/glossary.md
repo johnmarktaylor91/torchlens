@@ -1358,7 +1358,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   exceed what an eager forward saves; with `backward_ready=True` they match eager.
 
 **Module and call counts**
-: `ModuleCall.num_ops` counts the call's pass-qualified Ops (the root call included: a Layer it
+: `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
   runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
   `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
   the number of Ops that consumed the parameter (0 for a never-called module's parameters).
@@ -1623,6 +1623,31 @@ shims, by declared contract. Each carries the same tag at its definition.
   summary (`ModuleRepeatFold.shape_summary`), which summarizes across a
   repeated MODULE RUN. The string legitimately contains `->`; renderers must
   HTML-escape it (escape-at-render, never assert-absence).
+
+**Op.has_params** / **Layer.has_params** — *unstable — no deprecation shim owed*
+: Whether the operation (or any pass of the layer) consumed a parameter tensor.
+  Derived from the captured parameter barcodes; read-only.
+
+**Op.has_saved_grad** — *unstable — no deprecation shim owed*
+: Whether a gradient was captured and saved for this operation's output.
+
+**Buffer.overwrite_index** — *unstable — no deprecation shim owed*
+: The buffer pass of the buffer's most recent graph version (how many times the
+  buffer was overwritten when that version was read); `None` when the buffer has
+  no graph version.
+
+**Buffer.writer_label** — *unstable — no deprecation shim owed*
+: The final label of the op that produced the buffer's current value (the most
+  recent write), or `None` when nothing in the forward pass wrote it. Always a
+  live lookup key into the trace.
+
+**Buffer.write_ops** — *unstable — no deprecation shim owed*
+: The buffer's graph versions produced by writes, excluding the static initial
+  read.
+
+**Buffer.grad_memory** / **Param.grad_memory** — *unstable — no deprecation shim owed*
+: Size in bytes of the captured gradient: the final observed gradient of the
+  buffer, or the parameter's `.grad` tensor.
 
 **Trace.nonfinite_ops** — *unstable — no deprecation shim owed*
 : The queryable per-op NaN/Inf record: a tuple of pass-qualified op labels

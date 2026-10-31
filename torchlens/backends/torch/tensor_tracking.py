@@ -1023,11 +1023,11 @@ def _log_tensor_grad(
             else _build_grad_payloads(self, grad, layer_label)
         )
         if payload_source[2]:
-            layer.log_tensor_grad(grad, prebuilt=(payload_source[0], payload_source[1]))
+            layer._log_tensor_grad(grad, prebuilt=(payload_source[0], payload_source[1]))
         else:
             # Retention policy denies a payload for this label through the
             # charged chokepoint; keep the historical bare slot write.
-            layer.log_tensor_grad(grad)
+            layer._log_tensor_grad(grad)
         self.saved_gradient_memory += layer.gradient_memory
         self.total_gradient_memory += layer.gradient_memory
 

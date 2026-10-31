@@ -255,11 +255,11 @@ def test_payload_identity_and_distinctness() -> None:
 
 
 def test_op_copy_selective_depth() -> None:
-    """Row 6: Op.copy() honors the documented share/deep split, field by field."""
+    """Row 6: the Op clone honors the documented share/deep split, field by field."""
 
     trace = _capture_cnn()
     op = next(op for op in trace.ops.values() if isinstance(op.out, torch.Tensor))
-    clone = op.copy()
+    clone = op._copy_with_shallow_fields(frozenset())
     assert clone is not op
     assert type(clone) is type(op)
 

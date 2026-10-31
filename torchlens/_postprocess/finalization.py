@@ -149,7 +149,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     # Populate num_calls: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
         pl.num_calls = len(pl.used_by_ops)
-        pl.source_trace = self
+        pl.trace = self
 
     # Adopt the finished Param rows into the per-trace kind table (M8): each
     # record's detached single row moves into ONE shared store owned by the

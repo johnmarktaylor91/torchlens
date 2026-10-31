@@ -151,18 +151,12 @@ class Buffer:
         record_state_restore(self, state)
 
     @property
-    def source_trace(self) -> Trace | None:
+    def trace(self) -> Trace | None:
         """Return the owning trace if it is still alive."""
 
         if self._source_ref is None:
             return None
         return self._source_ref()
-
-    @property
-    def trace(self) -> Trace | None:
-        """Compatibility alias for ``source_trace``."""
-
-        return self.source_trace
 
     @property
     def handle(self) -> Any | None:
@@ -176,7 +170,7 @@ class Buffer:
         """
 
         return runtime_handle_from_trace(
-            self.source_trace,
+            self.trace,
             lambda model: dict(model.named_buffers()).get(self.address),
         )
 
@@ -225,19 +219,13 @@ class Buffer:
         return self.num_overwrites > 0
 
     @property
-    def write_versions(self) -> list[Op]:
+    def write_ops(self) -> list[Op]:
         """Return versions produced by writes, excluding static initial reads."""
 
         return [version for version in self.versions if version.buffer_write_kind is not None]
 
     @property
-    def buffer_overwrite_index(self) -> int | None:
-        """Return the most recent version's overwrite index."""
-
-        return self.buffer_pass
-
-    @property
-    def buffer_pass(self) -> int | None:
+    def overwrite_index(self) -> int | None:
         """Return the most recent graph version pass index."""
 
         return None if not self.versions else self.versions[-1].buffer_pass
@@ -246,7 +234,7 @@ class Buffer:
     def call_index(self) -> int | None:
         """Return the most recent graph version call index."""
 
-        return self.buffer_pass
+        return self.overwrite_index
 
     @property
     def layer_label(self) -> str | None:
@@ -297,13 +285,13 @@ class Buffer:
         return None if not self.versions else self.versions[-1].grad_dtype
 
     @property
-    def gradient_memory(self) -> Any:
+    def grad_memory(self) -> Any:
         """Return final observed gradient memory."""
 
         return None if not self.versions else self.versions[-1].gradient_memory
 
     @property
-    def buffer_source(self) -> str | None:
+    def writer_label(self) -> str | None:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):
@@ -331,7 +319,7 @@ class Buffer:
     def value_after(self, overwrite_index: int) -> Any:
         """Return the value after a 1-based overwrite index."""
 
-        writes = self.write_versions
+        writes = self.write_ops
         return writes[overwrite_index - 1].out
 
     def to_pandas(self) -> pd.DataFrame:

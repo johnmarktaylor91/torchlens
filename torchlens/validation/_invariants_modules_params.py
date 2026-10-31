@@ -284,7 +284,7 @@ def _check_param_xrefs(ml: Trace) -> None:
     Precondition contract: this torch-native check asserts deep reciprocal
     references only for parameters that are actually used by at least one
     operation in the captured graph. Unused or skipped-module parameters may
-    legitimately have no usage lists. ``Param.num_uses_by_ops`` is the
+    legitimately have no usage lists. ``len(Param.used_by_ops)`` is the
     pass-qualified usage source of truth for reciprocal usage checks; the
     stored ``num_calls`` field is compatibility metadata and is not used as the
     invariant oracle. Layer-level aggregate checks deduplicate by no-pass
@@ -297,7 +297,7 @@ def _check_param_xrefs(ml: Trace) -> None:
     - Used Param usage lists reciprocate through Op/Layer ``_param_logs``.
     - ``layers_with_params`` layer membership matches Param.used_by_layers.
     - Co-parent params are symmetric and resolve.
-    - uses_params == True implies _param_logs is non-empty.
+    - has_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
     name = "param_xrefs"
@@ -345,7 +345,7 @@ def _check_param_xrefs(ml: Trace) -> None:
                 f"{param.all_addresses!r}",
             )
 
-        if param.num_uses_by_ops == 0 and not param.used_by_layers:
+        if len(param.used_by_ops) == 0 and not param.used_by_layers:
             continue
         _check_param_usage_reciprocal_links(ml, param, name)
         # Guarding on a non-empty co-parent list is behavior-neutral: with no
@@ -355,13 +355,13 @@ def _check_param_xrefs(ml: Trace) -> None:
                 param_address_index = _param_address_index(ml)
             _check_param_co_parent_links(param_address_index, param, name)
 
-    # uses_params forward check
+    # has_params forward check
     for lpl in ml.layer_list:
-        if lpl.uses_params:
+        if lpl.has_params:
             if not lpl._param_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' has uses_params=True but _param_logs is empty",
+                    f"Layer '{lpl.layer_label}' has has_params=True but _param_logs is empty",
                 )
 
     # layers_with_params labels exist
@@ -468,7 +468,9 @@ def _check_layers_with_params_matches_param_usage(ml: Trace, name: str) -> None:
 
     expected_layer_union: set[str] = set()
     for param in ml.param_logs:
-        if getattr(param, "num_uses_by_ops", 0) == 0 and not getattr(param, "used_by_layers", ()):
+        if len(getattr(param, "used_by_ops", ()) or ()) == 0 and not getattr(
+            param, "used_by_layers", ()
+        ):
             continue
         expected_layer_union.update(getattr(param, "used_by_layers", ()) or ())
     actual_layer_union: set[str] = set()
