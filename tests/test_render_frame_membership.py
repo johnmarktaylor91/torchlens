@@ -7,9 +7,9 @@ Two structural pins (frame membership and frame boxes, not byte goldens):
   the second parent, and the rolled edge from it used to be placed by the
   first pass's modules only, so the second parent's frame was never drawn.
 - rank layout of a residual stack: drawing intervention marks leaves every
-  module frame box exactly as it is without edits. The rank engine used to
-  measure a table label as one line holding every row, so the edit row widened
-  the edited node and every frame around it.
+  module frame box exactly as it is without edits. The rank engine measures a
+  table label as one line holding every row, so the edit row used to widen the
+  edited node and every frame around it; it now sizes nodes without edit rows.
 """
 
 from __future__ import annotations
@@ -196,12 +196,16 @@ def test_rank_layout_edit_marks_keep_module_frames(
     assert edited == plain
 
 
-def test_rank_size_estimate_measures_table_rows_separately() -> None:
-    """A table label is as wide as its widest row; entities count as one character."""
+def test_rank_size_estimate_ignores_edit_rows() -> None:
+    """An edited node is sized from its unedited rows, whatever its edit rows say."""
 
-    one_row = "<<TABLE><TR><TD>params: weight (8, 8)</TD></TR></TABLE>>"
-    two_rows = (
-        "<<TABLE><TR><TD>params: weight (8, 8)</TD></TR>"
-        "<TR><TD><B>Δ</B>&#160;zero</TD></TR></TABLE>>"
+    from torchlens.visualization._edit_marks import EditRow
+    from torchlens.visualization.node_spec import render_lines_to_html
+
+    rows = ["linear_1_1", "(1, 8), 32 B", "params: weight (8, 8)"]
+    plain = render_lines_to_html(rows)
+    edited = render_lines_to_html(
+        [*rows, EditRow("\u0394 zero_ablate", "#7B1FA2"), EditRow("+2 more", "#7B1FA2")]
     )
-    assert layout_mod._estimate_node_size(two_rows) == layout_mod._estimate_node_size(one_row)
+    assert layout_mod._without_edit_rows(edited) == plain
+    assert layout_mod._without_edit_rows(plain) == plain

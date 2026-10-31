@@ -7,7 +7,6 @@ direct DOT/SVG writer backed by Kahn topological ranks.
 
 from __future__ import annotations
 
-import html
 import os
 import re
 import subprocess
@@ -397,32 +396,48 @@ def get_node_placement_engine(vis_node_placement: str, layout_cost: int) -> str:
     return "dot"
 
 
+#: One edit-mark row as ``render_lines_to_html`` writes it: bold text in the edit ink.
+#: Ordinary rows hold escaped text, so only edit rows open a ``FONT COLOR`` cell.
+_EDIT_ROW_RE = re.compile(r'<TR><TD ALIGN="CENTER"><FONT COLOR="[^"]*"><B>.*?</B></FONT></TD></TR>')
+
+
+def _without_edit_rows(label: str) -> str:
+    """Return ``label`` without its edit-mark gap and rows.
+
+    Edit marks annotate a node the layout has already placed: the rank layout
+    sizes the node from its unedited rows, so drawing marks never moves a node
+    or a module frame. The size estimate sums every row's characters into one
+    line, so an edit row would otherwise widen the node and every frame around it.
+    """
+
+    from .._edit_marks import EDIT_GAP_ROW
+
+    head, gap, tail = label.partition(EDIT_GAP_ROW)
+    if not gap:
+        return label
+    return head + _EDIT_ROW_RE.sub("", tail)
+
+
 def _estimate_node_size(label: str) -> tuple[float, float]:
     """Estimate graphviz node dimensions in points from an HTML label.
 
-    Width is the widest line: lines end at ``<br/>`` and at HTML-table row ends
-    (node labels are one ``<TR>`` per line), with tags stripped and character
-    entities decoded.  Height counts ``<br/>`` lines only, so every table label
-    keeps one height and the nodes of a rank share one centre line.  Returns
-    (width, height) in points.
+    Splits on ``<br/>`` to count lines, strips HTML tags to measure character
+    width.  Returns (width, height) in points.
     """
     text = label.strip()
     if text.startswith("<") and text.endswith(">"):
         text = text[1:-1]
 
     # Split on <br/>, <br>, <BR/> etc.
-    br_lines = re.split(r"<br\s*/?>", text, flags=re.IGNORECASE)
-    br_lines = [ln for ln in (re.sub(r"<[^>]+>", "", line).strip() for line in br_lines) if ln]
+    lines = re.split(r"<br\s*/?>", text, flags=re.IGNORECASE)
+    lines = [re.sub(r"<[^>]+>", "", line).strip() for line in lines]
+    lines = [ln for ln in lines if ln]
 
-    if not br_lines:
+    if not lines:
         return _DEFAULT_NODE_WIDTH, _DEFAULT_NODE_HEIGHT
 
-    # Width per row: measuring a whole table as one line summed every row, so an
-    # extra row (an edit mark) widened the node, its frame and the frames around it.
-    rows = re.split(r"<br\s*/?>|</tr\s*>", text, flags=re.IGNORECASE)
-    rows = [html.unescape(re.sub(r"<[^>]+>", "", row)).strip() for row in rows]
-    max_chars = max(len(row) for row in rows)
-    n_lines = len(br_lines)
+    max_chars = max(len(ln) for ln in lines)
+    n_lines = len(lines)
 
     # Generous estimate — neato renders text wider than raw char count suggests
     # due to font metrics, bold text, and internal node padding.
@@ -653,7 +668,7 @@ def render_rank_layout(
     for dot_name, nd in node_data.items():
         node_label = nd["node_label"]
         label = nd["attrs"].get("label", "")
-        node_label_sizes[node_label] = _estimate_node_size(str(label))
+        node_label_sizes[node_label] = _estimate_node_size(_without_edit_rows(str(label)))
 
     num_rank_nodes = len(node_data)
     positions, compound_bboxes, max_y = _compute_topological_layout(
