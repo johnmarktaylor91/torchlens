@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import weakref
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -16,33 +16,6 @@ from .buffer_writes import peek_buffer_write_tracker
 from .escape_detection import (
     ExpectedOriginalToken,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-        _HOST_ESCAPE_RAW_POINTER,
-        _ORIG_TENSORBASE_UNTYPED_STORAGE,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-        _PLAIN_PARAM_CLS,
-        _PLAIN_TENSOR_CLS,
-        _PURE_VIEW_DISPATCH_OPERATORS,
-        _RUNNABLE_LEDGER_FACTS,
-        HOST_ESCAPE_OPERATORS,
-        MUTABLE_ALIAS_ESCAPE_FUNCS,
-        STATE_METADATA_MIRROR,
-        STORAGE_BRIDGE_ESCAPE_FUNCS,
-        _dispatch_callsite,
-        _DispatchEvent,
-        _internal_read_active,
-        _is_expected_opaque_dispatch,
-        _nonowner_escape_observe,
-        _observe_state_metadata_read,
-        _operator_base_name,
-        _record_escape_source_tensor,
-        _register_storage_origin,
-        _WitnessState,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "record_uncaptured_owner_callsite",
@@ -816,3 +789,42 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         return original(self, *args, **kwargs)
 
     return wrapper
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_boundaries import (  # noqa: E402
+    _is_expected_opaque_dispatch,
+)
+from ._completeness_cross_thread import (  # noqa: E402
+    _internal_read_active,
+    _nonowner_escape_observe,
+)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _dispatch_callsite,
+    _operator_base_name,
+    _record_escape_source_tensor,
+)
+from ._completeness_metadata import (  # noqa: E402
+    _observe_state_metadata_read,
+    _register_storage_origin,
+)
+from ._completeness_origins import (  # noqa: E402
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _HOST_ESCAPE_MUTABLE_WRITEBACK,
+    _HOST_ESCAPE_RAW_POINTER,
+    _ORIG_TENSORBASE_UNTYPED_STORAGE,
+    _ORIG_UNTYPED_STORAGE_DATA_PTR,
+    _PLAIN_PARAM_CLS,
+    _PLAIN_TENSOR_CLS,
+    _PURE_VIEW_DISPATCH_OPERATORS,
+    _RUNNABLE_LEDGER_FACTS,
+    HOST_ESCAPE_OPERATORS,
+    MUTABLE_ALIAS_ESCAPE_FUNCS,
+    STATE_METADATA_MIRROR,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
+    _DispatchEvent,
+    _WitnessState,
+)

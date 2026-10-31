@@ -800,7 +800,7 @@ def test_user_call_into_witness_storage_helper_degrades_verification() -> None:
     ``capture_verified`` with empty escape diagnostics.
     """
 
-    from torchlens.backends.torch.completeness_witness import _raw_storage_ptr_no_observe
+    from torchlens.backends.torch._completeness_escape_state import _raw_storage_ptr_no_observe
     from torchlens.options import CaptureOptions
 
     class CallsAuthorizedWitnessFrame(nn.Module):
@@ -857,7 +857,7 @@ def test_forged_frame_metadata_cannot_impersonate_witness_authorization() -> Non
     """
 
     from torchlens.backends.torch import completeness_witness as witness_module
-    from torchlens.backends.torch.completeness_witness import _raw_storage_ptr_no_observe
+    from torchlens.backends.torch._completeness_escape_state import _raw_storage_ptr_no_observe
     from torchlens.options import CaptureOptions
 
     forged_globals = {

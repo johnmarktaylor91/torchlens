@@ -25,6 +25,10 @@ from typing import Any
 import pytest
 import torch
 
+import torchlens.backends.torch._completeness_cross_thread
+import torchlens.backends.torch._completeness_finalize
+import torchlens.backends.torch._completeness_patches
+import torchlens.backends.torch._completeness_storage
 from torchlens.backends.torch import completeness_witness as cw
 
 # The ONLY install-loop skip arms that are classified benign, keyed by the exact unparsed
@@ -78,7 +82,11 @@ def _observer_function_ast() -> ast.FunctionDef:
         Parsed observer install/restore context manager.
     """
 
-    source = textwrap.dedent(inspect.getsource(cw._observe_invisible_host_escapes))
+    source = textwrap.dedent(
+        inspect.getsource(
+            torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes
+        )
+    )
     function = ast.parse(source).body[0]
     assert isinstance(function, ast.FunctionDef)
     return function
@@ -304,17 +312,22 @@ def test_absent_observer_member_marks_trace_failed(monkeypatch: pytest.MonkeyPat
         that the public verdict predicate reports it.
     """
 
-    monkeypatch.setattr(
+    widened = frozenset(cw.INVISIBLE_HOST_ESCAPE_FUNCS | {"tl_w1f3_absent_member"})
+    # The defining module and every witness module that binds the name by import.
+    for module in (
         cw,
-        "INVISIBLE_HOST_ESCAPE_FUNCS",
-        frozenset(cw.INVISIBLE_HOST_ESCAPE_FUNCS | {"tl_w1f3_absent_member"}),
-    )
+        torchlens.backends.torch._completeness_patches,
+        torchlens.backends.torch._completeness_storage,
+    ):
+        monkeypatch.setattr(module, "INVISIBLE_HOST_ESCAPE_FUNCS", widened)
     assert getattr(torch.Tensor, "tl_w1f3_absent_member", None) is None
     trace, state = _fresh_state()
-    with cw._observe_invisible_host_escapes(state):
+    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
         pass
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED
-    assert cw.host_escape_observer_install_failed(trace)
+    assert torchlens.backends.torch._completeness_cross_thread.host_escape_observer_install_failed(
+        trace
+    )
 
 
 def test_failed_observer_restore_marks_trace_failed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -346,9 +359,14 @@ def test_failed_observer_restore_marks_trace_failed(monkeypatch: pytest.MonkeyPa
             object.__setattr__(self, name, value)
 
     poisoned = _PoisonedModule()
-    monkeypatch.setattr(cw, "_MODULE_ESCAPE_TARGETS", lambda: ((poisoned, "target"),))
+    # The home module and every module that binds the name by import.
+    for module in (
+        torchlens.backends.torch._completeness_finalize,
+        torchlens.backends.torch._completeness_patches,
+    ):
+        monkeypatch.setattr(module, "_MODULE_ESCAPE_TARGETS", lambda: ((poisoned, "target"),))
     trace, state = _fresh_state()
-    with cw._observe_invisible_host_escapes(state):
+    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
         pass
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED
 
@@ -379,10 +397,12 @@ def test_mro_inherited_descriptor_observer_installs(monkeypatch: pytest.MonkeyPa
     legacy = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
     assert legacy is None, "fixture premise: the non-MRO lookup misses this descriptor"
     assert inspect.getattr_static(torch.Tensor, name, None) is not None
-    monkeypatch.setattr(cw, "INVISIBLE_HOST_ESCAPE_PROPERTIES", frozenset({name}))
+    # The defining module and every witness module that binds the name by import.
+    for module in (cw, torchlens.backends.torch._completeness_patches):
+        monkeypatch.setattr(module, "INVISIBLE_HOST_ESCAPE_PROPERTIES", frozenset({name}))
     trace, state = _fresh_state()
     try:
-        with cw._observe_invisible_host_escapes(state):
+        with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
             installed = isinstance(torch.Tensor.__dict__.get(name), property)
     finally:
         if name in torch.Tensor.__dict__:  # drop the restore shadow: pristine class layout
@@ -416,10 +436,12 @@ def test_unwrappable_wrap_required_storage_member_fails_closed(
         cw._STORAGE_ACCESSOR_VALUE_READ,
         "w1f3 fixture: wrap-required row whose member is a plain non-descriptor attribute",
     )
-    monkeypatch.setattr(cw, "STORAGE_METADATA_ACCESSOR_DISPOSITIONS", patched_rows)
+    # The defining module and every witness module that binds the name by import.
+    for module in (cw, torchlens.backends.torch._completeness_patches):
+        monkeypatch.setattr(module, "STORAGE_METADATA_ACCESSOR_DISPOSITIONS", patched_rows)
     monkeypatch.setattr(torch.UntypedStorage, member, 42, raising=False)
     trace, state = _fresh_state()
-    with cw._observe_invisible_host_escapes(state):
+    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
         pass
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED
 
@@ -439,8 +461,13 @@ def test_empty_storage_scan_fails_closed(monkeypatch: pytest.MonkeyPatch) -> Non
         ``_HOST_ESCAPE_OBSERVER_FAILED``.
     """
 
-    monkeypatch.setattr(cw, "_STORAGE_RAW_POINTER_TARGETS", lambda: ())
+    # The home module and every module that binds the name by import.
+    for module in (
+        torchlens.backends.torch._completeness_finalize,
+        torchlens.backends.torch._completeness_patches,
+    ):
+        monkeypatch.setattr(module, "_STORAGE_RAW_POINTER_TARGETS", lambda: ())
     trace, state = _fresh_state()
-    with cw._observe_invisible_host_escapes(state):
+    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
         pass
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED

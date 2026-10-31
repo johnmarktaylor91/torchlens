@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -16,25 +16,6 @@ from ._tl import (
 from .escape_detection import (
     ExpectedOriginalToken,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _ALIAS_DERIVED_VIEW,
-        _ALIAS_EQUIVALENT,
-        _EXPECTED_OPAQUE_WRAPPERS,
-        _INPUT_METADATA_ALIAS_SAFE_NAMES,
-        _INPUT_METADATA_CONJ_NEG_NAMES,
-        _INPUT_METADATA_LAYOUT_NAMES,
-        _INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES,
-        _INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES,
-        _INPUT_METADATA_VIEW_READ,
-        _REPLACEMENT_HOOK_FILE,
-        _REPLACEMENT_HOOK_FUNC,
-        _RUNNABLE_INPUT_STORAGE_SITES,
-        AUDITED_COMPLETENESS_BOUNDARIES,
-        _observe_input_derived_layout_read,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "_in_replacement_hook_frame",
@@ -344,3 +325,28 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
                 # input, the read steers on the runtime input's layout -- attribute
                 # by traced ancestry (see ``INPUT_DERIVED_LAYOUT_FACT_NAME``).
                 _observe_input_derived_layout_read(trace, source)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_metadata import (  # noqa: E402
+    _observe_input_derived_layout_read,
+)
+from ._completeness_origins import (  # noqa: E402
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _ALIAS_DERIVED_VIEW,
+    _ALIAS_EQUIVALENT,
+    _EXPECTED_OPAQUE_WRAPPERS,
+    _INPUT_METADATA_ALIAS_SAFE_NAMES,
+    _INPUT_METADATA_CONJ_NEG_NAMES,
+    _INPUT_METADATA_LAYOUT_NAMES,
+    _INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES,
+    _INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES,
+    _INPUT_METADATA_VIEW_READ,
+    _REPLACEMENT_HOOK_FILE,
+    _REPLACEMENT_HOOK_FUNC,
+    _RUNNABLE_INPUT_STORAGE_SITES,
+    AUDITED_COMPLETENESS_BOUNDARIES,
+)

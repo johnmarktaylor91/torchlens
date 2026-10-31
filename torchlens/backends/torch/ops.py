@@ -168,6 +168,8 @@ from ...recording.types import (
     StorageIntent,
 )
 from . import module_stack as _mstack
+from ._completeness_escape_state import record_alias_mutation_candidate
+from ._completeness_origins import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
 from ._tl import (
     active_label_session_token,
@@ -194,7 +196,6 @@ from .aliasing import (
     parent_label_has_alias_contract,
 )
 from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
-from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
 from .sources import log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,

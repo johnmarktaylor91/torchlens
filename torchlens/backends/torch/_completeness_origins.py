@@ -5,7 +5,7 @@ from __future__ import annotations
 import weakref
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -16,28 +16,6 @@ from ._tl import (
     get_tensor_label,
 )
 from .buffer_writes import session_validated_buffer_address
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _CAPTURED_STORAGE_PTRS,
-        _DISPATCH_TENSOR_ORIGINS,
-        _ORIGIN_FLATTEN_DEPTH_LIMIT,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_STATE_PREFIX,
-        _ORIGIN_UNINIT,
-        _ORIGIN_UNKNOWN,
-        _STORAGE_REBIND_BARRIER_LABELS,
-        HOST_ESCAPE_OPERATORS,
-        _as_strided_result_contained,
-        _internal_read_active,
-        _internal_read_state,
-        _is_aten_operator,
-        _operator_base_name,
-        _raw_storage_ptr_no_observe,
-        _record_escape_source_tensor,
-        _TensorOriginRegistry,
-    )
 
 __all__ = (
     "internal_scalar_read",
@@ -551,3 +529,35 @@ def _register_dispatch_result_origins(
         # atomic dict-value reassignment).
         live = tuple(ref for ref in captured_ptrs.get(produced_ptr, ()) if ref() is not None)
         captured_ptrs[produced_ptr] = (*live, produced_ref)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_cross_thread import (  # noqa: E402
+    _internal_read_active,
+)
+from ._completeness_dispatch import (  # noqa: E402
+    _as_strided_result_contained,
+)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _is_aten_operator,
+    _operator_base_name,
+    _record_escape_source_tensor,
+)
+from ._completeness_escape_state import (  # noqa: E402
+    _raw_storage_ptr_no_observe,
+)
+from .completeness_witness import (  # noqa: E402
+    _CAPTURED_STORAGE_PTRS,
+    _DISPATCH_TENSOR_ORIGINS,
+    _ORIGIN_FLATTEN_DEPTH_LIMIT,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_STATE_PREFIX,
+    _ORIGIN_UNINIT,
+    _ORIGIN_UNKNOWN,
+    _STORAGE_REBIND_BARRIER_LABELS,
+    HOST_ESCAPE_OPERATORS,
+    _internal_read_state,
+    _TensorOriginRegistry,
+)

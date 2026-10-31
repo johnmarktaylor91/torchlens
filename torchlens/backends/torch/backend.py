@@ -41,14 +41,15 @@ from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_
 from ..._utils.tensor_utils import _is_cuda_available, safe_copy
 from ...recording.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from . import _tl
+from ._completeness_finalize import capture_completeness_witness
 from ._completeness_origins import internal_scalar_read
+from ._completeness_storage import capture_scalar_escape_warning
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
 from ._ops_autograd import _get_autograd_saved_stats_for_tensor
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
 from ._ops_emission import log_function_output_tensors
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
-from .completeness_witness import capture_completeness_witness, capture_scalar_escape_warning
 from .escape_detection import capture_escape_guard
 from .model_prep import (
     _cleanup_model_session,

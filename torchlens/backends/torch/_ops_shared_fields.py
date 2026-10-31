@@ -25,6 +25,7 @@ from ..._utils.introspection import (
 from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_live_label_list,
     get_tensor_label,
@@ -35,7 +36,6 @@ from .aliasing import (
     parent_label_has_alias_contract,
 )
 from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
-from .completeness_witness import internal_scalar_read
 from .sources import log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,

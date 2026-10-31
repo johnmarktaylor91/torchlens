@@ -16,6 +16,10 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
+import torchlens.backends.torch._completeness_cross_thread
+import torchlens.backends.torch._completeness_dispatch
+import torchlens.backends.torch._completeness_finalize
+import torchlens.backends.torch._completeness_patches
 from torchlens import _state
 from torchlens._errors import CaptureGapWarning
 from torchlens._utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
@@ -39,7 +43,11 @@ def _observer_patch_ast() -> ast.FunctionDef:
         Parsed function definition for the observer-install context manager.
     """
 
-    source = textwrap.dedent(inspect.getsource(cw._observe_invisible_host_escapes))
+    source = textwrap.dedent(
+        inspect.getsource(
+            torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes
+        )
+    )
     function = ast.parse(source).body[0]
     assert isinstance(function, ast.FunctionDef)
     return function
@@ -1136,14 +1144,20 @@ def test_writeback_sampling_outer_failures_are_fail_closed(
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
     state.writeback_watch.append((torch.tensor([1.0]), None, torch.tensor([1], dtype=torch.uint8)))
     monkeypatch.setattr(
-        cw,
+        torchlens.backends.torch._completeness_dispatch,
         "_iter_dispatch_tensors",
         lambda args, kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
-    monkeypatch.setattr(cw, "_has_state_toctou_watch", lambda _trace: False)
+    monkeypatch.setattr(
+        torchlens.backends.torch._completeness_dispatch,
+        "_has_state_toctou_watch",
+        lambda _trace: False,
+    )
 
     assert trace not in cw._HOST_ESCAPE_MUTABLE_WRITEBACK
-    cw._sample_writeback_at_consumption(state, (torch.tensor([2.0]),), None)
+    torchlens.backends.torch._completeness_dispatch._sample_writeback_at_consumption(
+        state, (torch.tensor([2.0]),), None
+    )
     assert trace in cw._HOST_ESCAPE_MUTABLE_WRITEBACK
 
 
@@ -1162,7 +1176,7 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
     )
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=2)
 
-    cw._finalize_census(state)
+    torchlens.backends.torch._completeness_finalize._finalize_census(state)
 
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
@@ -1197,7 +1211,7 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
     )
 
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
-        cw._finalize_census(state)
+        torchlens.backends.torch._completeness_finalize._finalize_census(state)
 
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
@@ -1277,7 +1291,7 @@ def test_tensor_data_getter_dispatch_is_captured() -> None:
 def test_is_mutating_operator_reads_schema_not_name() -> None:
     """Mutation detection uses the operator schema, covering out= overloads too."""
 
-    from torchlens.backends.torch.completeness_witness import _is_mutating_operator
+    from torchlens.backends.torch._completeness_dispatch_names import _is_mutating_operator
 
     assert _is_mutating_operator(torch.ops.aten.mul_.Tensor) is True
     assert _is_mutating_operator(torch.ops.aten.add_.Tensor) is True
@@ -1434,8 +1448,12 @@ def test_witness_arm_install_failure_strands_no_patches(
     def _interrupted() -> object:
         raise KeyboardInterrupt
 
-    # The runtime observer is the cw-rebound copy, so patch cw's globals.
-    monkeypatch.setattr(cw, "_private_c_module_callables", _interrupted)
+    # The home module and every module that binds the name by import.
+    for module in (
+        torchlens.backends.torch._completeness_cross_thread,
+        torchlens.backends.torch._completeness_patches,
+    ):
+        monkeypatch.setattr(module, "_private_c_module_callables", _interrupted)
 
     class Model(nn.Module):
         def __init__(self) -> None:
@@ -1488,7 +1506,7 @@ def test_observer_restore_leaves_no_shadow_entries() -> None:
     storage_classes = (torch.UntypedStorage, torch.TypedStorage)
     storage_keys_before = {cls: set(vars(cls)) for cls in storage_classes}
 
-    with cw._observe_invisible_host_escapes(state):
+    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
         # The belt is armed: the census-invisible conversions are shadowed in.
         assert "tolist" in vars(torch.Tensor)
         assert "stride" in vars(torch.Tensor)
@@ -1571,9 +1589,11 @@ def test_observer_install_succeeds_regardless_of_dynamo_import_state() -> None:
     def _install_succeeds() -> bool:
         trace = _Trace()
         state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
-        with cw._observe_invisible_host_escapes(state):
+        with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
             pass
-        return not cw.host_escape_observer_install_failed(trace)
+        return not torchlens.backends.torch._completeness_cross_thread.host_escape_observer_install_failed(
+            trace
+        )
 
     assert _install_succeeds(), "observer install failed before torch._dynamo was imported"
 

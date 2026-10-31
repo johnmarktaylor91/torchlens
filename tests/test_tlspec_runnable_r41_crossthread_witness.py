@@ -65,18 +65,20 @@ from torchlens._utils.rng import (
     _torch_rng_holder_module,
     host_nondeterminism_monitor,
 )
-from torchlens.backends.torch.completeness_witness import (
-    HOST_VALUE_ESCAPE_METHODS,
-    HOST_VALUE_ESCAPE_MODULE_FUNCS,
-    INVISIBLE_HOST_ESCAPE_FUNCS,
-    INVISIBLE_HOST_ESCAPE_PROPERTIES,
-    STORAGE_BRIDGE_ESCAPE_FUNCS,
+from torchlens.backends.torch._completeness_escape_state import (
     host_escape_has_cross_thread_captured_tensor,
     host_escape_has_raw_pointer,
     host_escape_has_unattributable_bool,
     host_escape_has_unattributable_opaque,
     host_escape_source_labels,
     host_escape_state_source_names,
+)
+from torchlens.backends.torch.completeness_witness import (
+    HOST_VALUE_ESCAPE_METHODS,
+    HOST_VALUE_ESCAPE_MODULE_FUNCS,
+    INVISIBLE_HOST_ESCAPE_FUNCS,
+    INVISIBLE_HOST_ESCAPE_PROPERTIES,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
 )
 from torchlens.errors.runnable import (
     PathDivergenceError,

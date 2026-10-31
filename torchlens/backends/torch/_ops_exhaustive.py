@@ -23,6 +23,7 @@ from ..._utils.display import _timed_phase
 from ..._utils.tensor_utils import (
     safe_copy,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
     set_tensor_label,
@@ -31,7 +32,6 @@ from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
 )
-from .completeness_witness import internal_scalar_read
 from .tensor_tracking import (
     _add_tensor_backward_hook,
 )

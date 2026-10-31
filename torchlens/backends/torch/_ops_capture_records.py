@@ -26,6 +26,7 @@ from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     active_label_session_token,
     get_param_meta,
@@ -33,7 +34,6 @@ from ._tl import (
     set_same_object_mutation,
     set_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

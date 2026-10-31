@@ -33,13 +33,15 @@ from torchlens._runnable_state import (
     _state_placement_canonical,
 )
 from torchlens.backends.torch import completeness_witness as cw
+from torchlens.backends.torch._completeness_escape_state import host_escape_state_source_names
+from torchlens.backends.torch._completeness_metadata import (
+    host_escape_state_metadata_observations,
+    host_escape_state_metadata_reads,
+)
 from torchlens.backends.torch.completeness_witness import (
     _STORAGE_WRAPPED_DISPOSITIONS,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
     STORAGE_METADATA_ACCESSOR_DISPOSITIONS,
-    host_escape_state_metadata_observations,
-    host_escape_state_metadata_reads,
-    host_escape_state_source_names,
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions

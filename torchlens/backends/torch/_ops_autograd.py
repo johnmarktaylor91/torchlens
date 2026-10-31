@@ -23,10 +23,10 @@ from ..._utils.collections import ensure_iterable
 from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

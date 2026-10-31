@@ -57,6 +57,10 @@ from torchlens._runnable_state import (
     state_metadata_full_violations,
     state_metadata_read_violations,
 )
+from torchlens.backends.torch._completeness_metadata import (
+    host_escape_state_metadata_facts,
+    host_escape_state_metadata_reads,
+)
 from torchlens.backends.torch.completeness_witness import (
     _STATE_METADATA_ALIAS_SAFE_STATE_NAMES,
     _STATE_METADATA_DIRECT_ONLY_NAMES,
@@ -67,8 +71,6 @@ from torchlens.backends.torch.completeness_witness import (
     INPUT_METADATA_PREDICATE_FUNCS,
     INPUT_METADATA_PROPERTY_NAMES,
     STATE_METADATA_MIRROR,
-    host_escape_state_metadata_facts,
-    host_escape_state_metadata_reads,
 )
 from torchlens.errors import RunCapabilityUnavailableError, RunnablePreflightError
 from torchlens.options import CaptureOptions

@@ -29,11 +29,11 @@ from ...recording.types import (
     ActivationRecord,
     CaptureSpec,
 )
+from ._completeness_origins import internal_scalar_read
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

@@ -23,7 +23,7 @@ from torchlens import _state
 from torchlens._capture._weightsfree_admission import enforce_settlement_invariants
 from torchlens._capture_honesty import honesty_preamble_lines
 from torchlens._errors import WeightsfreeIntegrityError
-from torchlens.backends.torch import completeness_witness, rescue
+from torchlens.backends.torch import _completeness_finalize, rescue
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
@@ -159,8 +159,8 @@ def test_witness_still_verifies_a_valued_capture() -> None:
 def test_incoherent_value_free_settlement_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """With the carve-out removed the witness settles True and the invariant fires."""
 
-    # The finalizer runs rebound into completeness_witness, so patch that namespace.
-    monkeypatch.setattr(completeness_witness, "_is_value_free_capture", lambda trace: False)
+    # The finalizer reads the predicate from its own module, so patch it there.
+    monkeypatch.setattr(_completeness_finalize, "_is_value_free_capture", lambda trace: False)
 
     with pytest.raises(WeightsfreeIntegrityError) as excinfo:
         _structure_only_trace("meta")

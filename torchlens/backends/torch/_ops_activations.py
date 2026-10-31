@@ -29,12 +29,13 @@ from ..._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
+from ._completeness_escape_state import record_alias_mutation_candidate
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
     pop_same_object_mutation,
 )
-from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_equivalence_class,

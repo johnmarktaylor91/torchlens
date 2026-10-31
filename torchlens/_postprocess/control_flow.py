@@ -112,7 +112,7 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
     predicate witness family.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_bool_source_labels
+    from ..backends.torch._completeness_escape_state import host_escape_bool_source_labels
 
     proven_labels = host_escape_bool_source_labels(self)
     # Shadow set over the list[str] ledger: the per-label list scan was
@@ -177,7 +177,7 @@ def _build_file_indexes(
         file could not be parsed or loaded.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_bool_consumer_locations
+    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
 
     file_indexes: dict[str, ast_branches.FileIndex | None] = {}
     consumer_locations = host_escape_bool_consumer_locations(self)
@@ -219,7 +219,7 @@ def _classify_bool_layers(
         the bool participates in no conditional).
     """
 
-    from ..backends.torch.completeness_witness import host_escape_bool_consumer_locations
+    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
 
     bool_classifications: dict[str, list[ast_branches.BoolClassification]] = {}
     ordered_conditional_keys: dict[ast_branches.ConditionalKey, None] = {}
