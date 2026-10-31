@@ -6,12 +6,11 @@ The MEMO 3.3 test obligations, on real bytes where the spec demands it:
   (``Trace`` -- the must-not-drop case: it never crashed, it silently
   absorbed), the hook-restored columnar path (``Op`` -- previously an
   untyped ``AttributeError``), and a slotted value class.
-- TWO-DIRECTION load: every artifact in the harvested 2.x golden corpus
-  refuses typed (this release reads no 2.x file), and a newer-shaped state
-  under this reader's inventory refuses typed -- proven END-TO-END through
-  disk and the bundle wrappers on a bundle this release wrote (the D-ECO-10
-  on-disk cell plus the anti-laundering guarantee: the stable code survives
-  ``tl.load``).
+- A newer-shaped state under this reader's inventory refuses typed -- proven
+  END-TO-END through disk and the bundle wrappers on a bundle this release
+  wrote (the D-ECO-10 on-disk cell plus the anti-laundering guarantee: the
+  stable code survives ``tl.load``). Files a 2.x release saved refuse in
+  ``tests/test_load_refuses_saved_by_2x.py``.
 - INERT inventory: ``torchlens.io.inspect_state_contract`` reports unknown
   names with owning record types without loading anything and without
   refusing.
@@ -24,10 +23,7 @@ The MEMO 3.3 test obligations, on real bytes where the spec demands it:
 
 from __future__ import annotations
 
-import json
 import pickle
-import shutil
-import tarfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -35,29 +31,17 @@ import pytest
 import torch
 import torch.nn as nn
 from _oracle_env import expect_bundle_minor_version_mismatch
-from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import (
-    MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
-    ArtifactError,
     UnknownPersistedFieldError,
 )
 from torchlens._io.state_contract import governed_artifact_load
 
 pytestmark = [pytest.mark.heavy]
 
-CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
 UNKNOWN_KEY = "a_field_a_future_release_added"
-
-
-@pytest.fixture(scope="module")
-def corpus_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    root = tmp_path_factory.mktemp("release_corpus")
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(root)
-    return root
 
 
 @pytest.fixture(scope="module")
@@ -162,52 +146,6 @@ def test_session_pickle_stays_outside_the_contract(tiny_trace) -> None:
     finally:
         param.__dict__.pop("user_note", None)
     assert restored.user_note == "keep_me"
-
-
-# ---------------------------------------------------------------------------
-# Two-direction gate on the harvested corpus.
-# ---------------------------------------------------------------------------
-
-
-def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Path) -> None:
-    """Every governed 2.x writer's artifact refuses typed at load, naming the remedy.
-
-    TorchLens 3 reads no file a 2.x release wrote. The harvested corpus stays as
-    refusal input: each formerly loadable 2.x artifact now refuses with the one
-    typed 2.x error, and the below-floor stamps still refuse through the same
-    typed family.
-    """
-
-    import warnings
-
-    from torchlens._io import ArtifactTooOldError
-
-    for name in (
-        "art_v2.31.0_portable",
-        "art_v2.31.0_audit",
-        "art_v2.32.4_portable",
-        "art_v2.33.0_portable",
-        "art_v2.34.1_portable",
-        "art_main_portable",
-    ):
-        assert_refuses_as_2x(corpus_dir / name)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # Below-floor stamps refuse typed. The genuine v2.16 bundle predates
-        # the integer stamp entirely, so it refuses through the same typed
-        # family; this pins that it cannot crash untyped or load wrong.
-        assert MIN_TLSPEC_VERSION == 6
-        with pytest.raises(ArtifactError):
-            tl.load(corpus_dir / "art_v2.16.0_portable")
-        # An integer stamp below the floor refuses with the floor-specific type.
-        below_floor = tmp_path / "art_below_floor.tlspec"
-        shutil.copytree(corpus_dir / "art_v2.31.0_portable", below_floor)
-        manifest_path = below_floor / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
-        manifest_path.write_text(json.dumps(manifest))
-        with pytest.raises(ArtifactTooOldError):
-            tl.load(below_floor)
 
 
 @pytest.fixture()

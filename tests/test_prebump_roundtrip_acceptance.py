@@ -946,7 +946,7 @@ def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
 # a newer stamp refuses.
 # ---------------------------------------------------------------------------
 
-_V7_FIXTURE = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
+_V7_FIXTURE = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
 
 
 def test_real_v7_artifact_refuses_as_2x() -> None:

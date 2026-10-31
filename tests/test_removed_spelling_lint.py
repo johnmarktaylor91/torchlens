@@ -256,12 +256,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"tl_moved"}),
         "audit checklist/prose records the former record_span spelling as removed",
     ),
-    "tests/release_goldens/generators/write216.py": (
-        frozenset({"paper_era"}),
-        "harvest-time provenance script committed AS RUN: it executes under the "
-        "harvested torchlens 2.16 wheel (G1 golden corpus), whose API IS the "
-        "paper-era spelling; it never runs against current torchlens",
-    ),
     "tests/test_deprecation_inventory.py": (
         frozenset({"ALL"}),
         "the package deprecation scanners recognize the deleted helper names",

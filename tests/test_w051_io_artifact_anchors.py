@@ -12,8 +12,6 @@ from __future__ import annotations
 import json
 import pickle
 import shutil
-import tarfile
-import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -21,14 +19,10 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-from _oracle_env import expect_bundle_minor_version_mismatch
-from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
-
-CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
 
 
 class _Model(nn.Module):
@@ -114,32 +108,6 @@ def test_root_stamp_disagreeing_with_manifest_refuses(source_bundle: Path, tmp_p
 
     path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
     _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="tlspec_version")
-
-
-def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> None:
-    from torchlens._ecosystem.migrate import migrate
-
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(tmp_path)
-    artifact = tmp_path / "art_v2.31.0_portable"
-    manifest = json.loads((artifact / "manifest.json").read_text())
-    assert manifest["tlspec_version"] < tl._io.TLSPEC_VERSION
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        migrate(artifact)
-    migrated = json.loads((artifact / "manifest.json").read_text())
-    assert migrated["tlspec_version"] == tl._io.TLSPEC_VERSION
-    # The migrated manifest names the current stamp, but the bytes were still
-    # written by torchlens 2.x, which this release does not read.
-    assert_refuses_as_2x(artifact)
-    # Delete the witness: the same bytes now refuse (the lineage is unproven).
-    (artifact / "tl_migration_provenance.json").unlink()
-    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
-        tl.load(artifact)
-    assert excinfo.value.fields["code"] in {
-        "bundle_manifest_metadata_mismatch",
-        "artifact_producer_pair_ungoverned",
-    }
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
@@ -395,24 +363,19 @@ def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> 
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
 
 
-def test_absent_root_entry_point_refuses_from_v10_and_2x_files_refuse(
-    source_bundle: Path, tmp_path: Path
-) -> None:
+def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path: Path) -> None:
     """A current-stamp artifact with ``root_entry_point`` deleted refuses typed.
 
     The fail-closed rule was armed for the next coordinated bump
     (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the v10 write is that
     bump. Earlier stamps carried pre-C07X writers without the fact, but those
-    files were written by torchlens 2.x, which this release does not read:
-    they refuse with the typed 2.x error before the fact is consulted.
+    files were written by torchlens 2.x, which this release does not read
+    (``tests/test_load_refuses_saved_by_2x.py``).
     """
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
     assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(tmp_path)
-    assert_refuses_as_2x(tmp_path / "art_main_portable")
     path = _tampered(
         source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
     )
@@ -439,15 +402,6 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     assert excinfo.value.fields["reason"] == "absent_on_current_schema"
     # Outside the governed window (plain session state) the same trace passes.
     facts._validate_root_entry_point(trace)
-
-
-def test_pre_v9_artifact_without_root_entry_point_refuses_as_2x(tmp_path: Path) -> None:
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(tmp_path)
-    artifact = tmp_path / "art_v2.34.1_portable"
-    manifest = json.loads((artifact / "manifest.json").read_text())
-    assert manifest["tlspec_version"] < 9
-    assert_refuses_as_2x(artifact)
 
 
 def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:

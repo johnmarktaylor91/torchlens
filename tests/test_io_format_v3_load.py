@@ -17,7 +17,7 @@ from torchlens._ir.workspaces import (
     WrapperRuntimeWorkspace,
 )
 
-V3_GOLDEN = Path(__file__).parent / "golden" / "io_v3_sample.tlspec"
+V3_GOLDEN = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v1.tlspec"
 _DROPPED_CAPTURE_FIELDS = (
     "_raw_layer_dict",
     "_raw_layer_labels_list",
@@ -26,11 +26,11 @@ _DROPPED_CAPTURE_FIELDS = (
 
 
 def test_load_pre_floor_golden_refuses_typed() -> None:
-    """The checked-in pre-floor golden bundle refuses with the floor named."""
+    """The checked-in pre-floor golden bundle refuses as a file saved by torchlens 2.x."""
 
     from torchlens.errors import ArtifactTooOldError
 
-    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         tl.load(str(V3_GOLDEN))
 
 

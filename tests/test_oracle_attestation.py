@@ -59,10 +59,6 @@ _CANONICAL_GOLDENS: dict[str, tuple[Path, ...]] = {
         for key in ("viz_cnn", "viz_recurrent")
         for mode in ("unrolled", "rolled")
     ),
-    "godobject_legacy": (
-        _TESTS_DIR / "godobject_oracle" / "goldens" / "legacy_baseline_cnn.tlspec",
-        _TESTS_DIR / "godobject_oracle" / "goldens" / "legacy_baseline_cnn_runnable.tlspec",
-    ),
     "state_keysets": (_TESTS_DIR / "godobject_oracle" / "goldens" / "state_keysets.json",),
     "selector_matrix": (_TESTS_DIR / "golden" / "selector_semantics_matrix.json",),
     "viz_render_identity": (_TESTS_DIR / "golden" / "viz_render_identity_oracle.json",),

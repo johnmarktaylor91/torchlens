@@ -1205,7 +1205,7 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # registry in tests/test_schema_v10_contract_and_goldens.py), the floor
     # text corrected to 2.31.0 in the writer contract, and the reserved
     # generation step-score vocabulary credited to inseq (U22.3). Contract of
-    # record: torchlens/schemas/writer_contract_v10.json (v9 frozen beside it).
+    # record: torchlens/schemas/writer_contract_v10.json.
     # v9: the completeness-work coordinated schema write (2026-08-27,
     # lane C07) — audit-row grammar admissions (ACT site source, PARAM
     # rows/recipes, EVENT envelope + hash-chain extension), the sidecar
@@ -1213,8 +1213,7 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # (health_facts, capture_advisories), and the entry-dark v9 field slots
     # (injection provenance, source snapshots, structure evidence), each
     # with fail-closed load validation. Contract of record:
-    # torchlens/schemas/writer_contract_v9.json (v8 pinned at
-    # tests/release_goldens/writer_contract_v8.json). MERGED_TLSPEC_VERSION
+    # torchlens/schemas/writer_contract_v10.json. MERGED_TLSPEC_VERSION
     # versions the merged ROOT manifest independently and did not move.
     "TLSPEC_VERSION": 10,
     "MIN_TLSPEC_VERSION": 6,

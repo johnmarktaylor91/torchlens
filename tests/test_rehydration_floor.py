@@ -1,8 +1,8 @@
-"""The tlspec_version 6 rehydration floor (drop-not-resurrect; first writer 2.31.0).
+"""Anything older than the current format refuses as a file saved by torchlens 2.x.
 
-Artifacts written by torchlens >= 2.31.0 (``tlspec_version >= 6``) load; anything
-older refuses with the typed ``ArtifactTooOldError`` naming the
-floor, instead of being resurrected through legacy field-alias ladders.
+Artifacts written at the current ``tlspec_version`` load; any older stamp refuses with the
+typed ``ArtifactTooOldError`` that names the 2.x origin, instead of being resurrected through
+legacy field-alias ladders.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from torchlens._io import (
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.errors import ArtifactTooOldError
 
-FLOOR_MATCH = "torchlens 2.31.0"
+FLOOR_MATCH = "saved by torchlens 2.x"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:
@@ -88,8 +88,28 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     ]
 
 
+def test_between_floor_stamp_refuses_as_2x(tmp_path: Path) -> None:
+    """A coherent artifact stamped older than the current format refuses, never loads.
+
+    Every stamp from the floor up to the current one was written by torchlens 2.x, so each
+    refuses at load with the one typed error naming the 2.x origin and the remedy.
+    """
+
+    trace = _build_trace()
+    assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
+    for version in range(MIN_TLSPEC_VERSION, TLSPEC_VERSION):
+        path = tmp_path / f"between_floor_{version}.tlspec"
+        trace.save(path)
+        _stamp_between_floor(path, version)
+        with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
+            tl.load(path)
+        assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+        assert excinfo.value.fields["observed"] == f"tlspec_version={version}"
+    trace.cleanup()
+
+
 @pytest.mark.parametrize("cls_and_state", ["trace", "op", "layer"])
-@pytest.mark.parametrize("version", [None, 0, 2, 5])
+@pytest.mark.parametrize("version", [None, 0, 2, 5, 9])
 def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int | None) -> None:
     """Sub-floor and unversioned object states raise the typed floor error."""
 
@@ -212,82 +232,6 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     assert fields["remedy"]
     # The one site with the artifact path in scope now reports it.
     assert fields["path"] == str(path)
-
-
-def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> None:
-    """The between-floor artifact-age advisory is visible, not a ``DeprecationWarning``.
-
-    R15-F1: the advisory deprecates no API -- it reports the AGE of one
-    artifact -- and Python's default filters hide ``DeprecationWarning`` from
-    end users, so the category made the advisory invisible exactly where it
-    matters. It is an ``ArtifactSchemaAgeWarning`` (``UserWarning`` subclass),
-    reachable through ``tl.errors``, and it must survive the default filters.
-    """
-
-    assert issubclass(ArtifactSchemaAgeWarning, UserWarning)
-    assert not issubclass(ArtifactSchemaAgeWarning, DeprecationWarning)
-    assert issubclass(ArtifactSchemaAgeWarning, tl.errors.TorchLensWarning)
-    assert tl.errors.ArtifactSchemaAgeWarning is ArtifactSchemaAgeWarning
-
-    trace = _build_trace()
-    path = tmp_path / "between_floor.tlspec"
-    trace.save(path)
-    assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
-    _stamp_between_floor(path, MIN_TLSPEC_VERSION)
-
-    # resetwarnings() drops pytest's own filters so this asserts against the
-    # DEFAULT interpreter filters -- the exact regime that hid the old category.
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.resetwarnings()
-        loaded = tl.load(path)
-
-    assert isinstance(loaded, tl.Trace)
-    advisories = [w for w in caught if issubclass(w.category, ArtifactSchemaAgeWarning)]
-    assert advisories, [str(w.category) for w in caught]
-    assert "older than runtime tlspec_version" in str(advisories[0].message)
-
-
-def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
-    """A (writer, stamp) pair no governed ledger window covers refuses typed.
-
-    Historically this forged pair (an old writer version stamped onto a
-    current-schema save) refused through the hand-typed ``< "2.33"``
-    inequality as a below-floor error -- a misclassification that ALSO
-    orphaned lawful released v2.31.0/v2.32.4 artifacts. Producer
-    pair-consistency (ecosystem MEMO 3.1, gate G5) keys the same
-    forgery-detection on the governed compatibility ledger: released 2.32.4
-    only ever wrote tlspec 6, so claiming tlspec 9 under that writer is an
-    inconsistent pair and refuses with the ledger's stable code.
-    """
-
-    trace = _build_trace()
-    path = tmp_path / "forged_release.tlspec"
-    trace.save(path)
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest["tlspec_version"] == TLSPEC_VERSION
-    manifest["torchlens_version"] = "2.32.4"
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-    with pytest.raises(ArtifactError, match="torchlens_version=2.32.4") as excinfo:
-        tl.load(path)
-    assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
-
-
-@pytest.mark.parametrize(
-    "fixture",
-    [
-        "golden/io_v3_sample.tlspec",
-        "fixtures/tlspec_v2_16/F2_modellog_tiny_cnn.tlspec",
-        "fixtures/tlspec_v2_16/F3_modellog_tiny_transformer.tlspec",
-    ],
-)
-def test_real_pre_floor_artifacts_refuse_typed(fixture: str) -> None:
-    """Checked-in real pre-floor artifacts refuse with the floor named."""
-
-    fixture_path = Path(__file__).parent / fixture
-    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH):
-        tl.load(fixture_path, trust_custom_callables=True)
 
 
 @pytest.mark.smoke

@@ -9,9 +9,7 @@ a declared re-export facade. Two invariants gate it:
 - ZERO PERSISTED-BYTE CHANGES: pickle-visible identity of every persisted
   type stays ``torchlens._io`` (bundle metadata references types by
   (module, qualname) and the guarded unpickler allowlists exactly those
-  paths). The committed genuine-release artifacts in
-  ``tests/release_goldens`` rehydrating green is the real pre-move gate;
-  this suite pins the mechanism that keeps them green.
+  paths). This suite pins the mechanism that keeps them stable.
 """
 
 from __future__ import annotations

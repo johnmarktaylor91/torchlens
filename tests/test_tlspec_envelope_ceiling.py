@@ -55,18 +55,21 @@ def test_validation_entry_raises_typed_not_bare_valueerror() -> None:
 
 
 def _reference_manifest_dict() -> dict:
-    """A real harvested writer manifest (main_portable, tlspec 8)."""
+    """The manifest of a freshly saved tiny trace (the current writer's own)."""
 
     import json
+    import tempfile
     from pathlib import Path
 
-    path = (
-        Path(__file__).parent
-        / "release_goldens"
-        / "reference_manifests"
-        / "main_portable.manifest.json"
-    )
-    return json.loads(path.read_text(encoding="utf-8"))
+    import torch
+    from torch import nn
+
+    import torchlens as tl
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "trace.tlspec"
+        tl.trace(nn.Linear(2, 2), torch.randn(1, 2)).save(path)
+        return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
 
 
 def test_manifest_policy_gate_raises_typed() -> None:
@@ -113,10 +116,8 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
             item.message
         )
 
-    # The reference manifest's own tlspec_version may also be older than this
-    # runtime's, which independently fires the unrelated ArtifactSchemaAgeWarning
-    # (also a TorchLensWarning subclass) -- filter by message, not just category,
-    # so that advisory never gets conflated with the one under test here.
+    # Filter by message, not just category, so no other TorchLensWarning is
+    # conflated with the one under test here.
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
         enforce_version_policy(Manifest.from_dict({**base, "torch_version": drifted}))
