@@ -70,6 +70,10 @@ DOOR_PATHS = {
     "SummaryReport": "torchlens.report._summary_report.SummaryReport",
     "SummaryTotals": "torchlens.report._summary_report.SummaryTotals",
     "CaptureFacts": "torchlens.report._summary_report.CaptureFacts",
+    "TraceCost": "torchlens.data_classes._trace_groups.TraceCost",
+    "TraceGraph": "torchlens.data_classes._trace_groups.TraceGraph",
+    "TraceAutograd": "torchlens.data_classes._trace_groups.TraceAutograd",
+    "ParamAccessor": "torchlens.data_classes.param.ParamAccessor",
 }
 
 SCOPE = (
@@ -83,6 +87,10 @@ SCOPE = (
     "SummaryReport",
     "SummaryTotals",
     "CaptureFacts",
+    "TraceCost",
+    "TraceGraph",
+    "TraceAutograd",
+    "ParamAccessor",
 )
 
 
