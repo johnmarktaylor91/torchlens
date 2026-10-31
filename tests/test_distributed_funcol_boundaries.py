@@ -328,7 +328,7 @@ class TestFuncolRefusalParity:
         with pytest.raises(RunnablePreflightError) as excinfo:
             log.save(str(tmp_path / "funcol.tlspec"), level="runnable")
         codes = {diagnostic.code for diagnostic in excinfo.value.fields["diagnostics"]}
-        assert "collective_boundary_runnable_unsupported" in codes
+        assert "collective_boundary_unsupported" in codes
 
     def test_forward_replay_validation_refuses_typed(self, gloo_world):
         """Forward-replay validation is refused exactly like the c10d boundary case."""
@@ -339,7 +339,7 @@ class TestFuncolRefusalParity:
         log = tl.trace(WaitedFuncol(), torch.ones(3))
         with pytest.raises(CollectiveBoundaryReplayError) as excinfo:
             log.validate_forward_pass([torch.zeros(3)])
-        assert excinfo.value.fields["code"] == "collective_boundary_runnable_unsupported"
+        assert excinfo.value.fields["code"] == "collective_boundary_unsupported"
 
     def test_fastlog_funcol_refuses_instead_of_dropping_journal(self, gloo_world):
         """tl.record cannot represent the boundary journal: typed refusal."""

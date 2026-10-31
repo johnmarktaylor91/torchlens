@@ -3,7 +3,7 @@
 The ``empty`` factory family (and a GROWING ``resize_``) produces bytes that are
 not a function of the recorded computation, yet carried no nondeterministic-source
 recognition (r52 finding): an escape was a silent nondeterministic VERIFIED with
-zero report signal, an archived family slot RAISED ``numeric_attestation_failed``
+zero report signal, an archived family slot RAISED ``replay_value_mismatch``
 (inconsistent with the declared-RNG ``not_applicable`` posture), and an
 empty-driven branch had no ceiling.
 
@@ -331,7 +331,7 @@ def test_archive_pair_honest_asymmetry_and_no_raise(tmp_path: Path) -> None:
 
 def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
     """LOCKED tripwire: a byte mismatch on an UNTAINTED slot still raises
-    ``numeric_attestation_failed`` -- the uninit gate is never a tolerance."""
+    ``replay_value_mismatch`` -- the uninit gate is never a tolerance."""
 
     torch.manual_seed(7)
     model = ZerosScratchLinear().eval()

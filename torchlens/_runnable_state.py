@@ -170,7 +170,7 @@ def snapshot_persistent_buffer_universe(model: object) -> dict[str, dict[str, An
     with it: a dead-model save whose r75 fallback silently returned dropped
     never-forward-used persistent buffers (BatchNorm's ``num_batches_tracked``) from
     the declared universe, so an honest tensor-only ``load_state_dict`` refused with
-    ``state_unexpected_key`` while the live lane bound fine. This record derives the
+    ``state_key_unknown`` while the live lane bound fine. This record derives the
     SAME name set the live save computes -- ``state_dict()`` names that are buffers
     (present in ``named_buffers``, absent from ``named_parameters``) with tensor
     values -- plus the per-slot geometry the value-free slot drafts need, so the dead

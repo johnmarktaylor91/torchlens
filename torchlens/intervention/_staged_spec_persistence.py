@@ -5,7 +5,7 @@ ordinary save keeps the INTERVENED activations and their per-op provenance
 (``is_edited``, fire records, ``intervention_audit``) but not the
 recipe that produced them. The recipe travels separately through
 ``save_intervention``; the runnable save already refuses intervened captures
-(``user_intervention_not_replayable``) and names the analysis save as the door
+(``user_intervention_unsupported``) and names the analysis save as the door
 for them. The one place the split could mislead is the legacy rerun of a loaded
 artifact whose recorded values were intervened: it would re-execute without
 the recorded intervention (an edit staged after loading would run alone), so it

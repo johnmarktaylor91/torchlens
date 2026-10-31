@@ -1142,7 +1142,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
   `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
-  `verified` (diagnostic `user_intervention_not_replayable`, stage `hooked_run_unverified`):
+  `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
   it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns

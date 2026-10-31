@@ -590,7 +590,7 @@ class TestGraphConsistencyValidation:
 # contradiction belt, the refreshed rerun's own journal as the O1 write
 # tripwire, and target-vs-refreshed evidence equality as the O2 widening.
 # Every refusal is the TYPED BufferSinkRoutingError carrying the frozen
-# ``buffer_sink_routing_mutable`` code and the pinned "computational graph
+# ``buffer_sink_routing_unsupported`` code and the pinned "computational graph
 # changed" message term.
 #
 # O3 (honesty rule): the train-mode refusal tests below are PINNED FOREVER --

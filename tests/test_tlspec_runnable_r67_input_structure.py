@@ -63,7 +63,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
     with pytest.raises(RunnablePreflightError) as excinfo:
         _save(trace, path)
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     for needle in needles:
         assert needle in diagnostics, needle
 

@@ -18,7 +18,7 @@ Two fail-closed attestation defects on very common eval-mode layers:
   (``p > 0``) stays ``not_applicable``.
 
 The byte-exact tripwire stays armed: a tampered activation archive still raises
-``numeric_attestation_failed`` and a plain CNN still attests byte-exact.
+``replay_value_mismatch`` and a plain CNN still attests byte-exact.
 """
 
 from __future__ import annotations
@@ -308,7 +308,7 @@ def test_plain_cnn_include_activations_still_attests(tmp_path: Path) -> None:
 
 
 def test_tampered_activation_archive_still_raises(tmp_path: Path) -> None:
-    """Tripwire: a corrupted activation archive still raises numeric_attestation_failed."""
+    """Tripwire: a corrupted activation archive still raises replay_value_mismatch."""
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.ReLU(), nn.Flatten(), nn.Linear(4 * 6 * 6, 5))
@@ -334,7 +334,7 @@ def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) ->
     The layout-nonreproducible fallback is narrow: it only excuses a tight ULP
     divergence on an intact archive. A grossly corrupted archived linear slot
     breaks both the intact-archive guard and the ULP bound, so it must still
-    raise numeric_attestation_failed rather than being silently excused.
+    raise replay_value_mismatch rather than being silently excused.
     """
 
     torch.manual_seed(0)

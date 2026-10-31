@@ -376,7 +376,7 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
-# (code "buffer_sink_routing_mutable", provisional/documented-unstable).
+# (code "buffer_sink_routing_unsupported", provisional/documented-unstable).
 run_result = torch_trace.run(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)

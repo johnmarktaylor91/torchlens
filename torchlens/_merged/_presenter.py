@@ -332,7 +332,7 @@ class MergedTrace:
         properties, findings, and ``degradations`` stay readable, but
         every surface that resolves a member trace (``ranks``,
         ``__getitem__``, ``super_op()``, ``join_ops()``, ``save()``) refuses
-        typed with ``fields["code"] = "merged_member_released"`` afterwards
+        typed with ``fields["code"] = "merged_member_unavailable"`` afterwards
         -- never a bare ``KeyError``, and never a zero-member presence lie.
         Idempotent.
         """

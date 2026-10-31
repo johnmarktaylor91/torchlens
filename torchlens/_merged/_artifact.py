@@ -340,7 +340,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
     # a live input trace whose distributed annotations were mutated between
     # merge_ranks and save() would otherwise produce an artifact whose members
     # never rederive to the cached descriptor -- every future load refuses as
-    # merged_descriptor_tamper, a permanent false tamper accusation for an
+    # merged_descriptor_invalid, a permanent false tamper accusation for an
     # honest sequence. The refusal belongs at save time, where it is fixable.
     reverified = derive_merge(
         {
@@ -453,7 +453,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
         # cannot leave a "successfully saved" artifact holding zero-length or
         # partial files. load_merged requires EXACT descriptor-sha + per-member
         # tree-hash equality, so a torn publish reads back as a PERMANENT false
-        # merged_descriptor_tamper accusation on an honest save (deep-hunt F12);
+        # merged_descriptor_invalid accusation on an honest save (deep-hunt F12);
         # the previous version is already renamed aside. Mirrors the .tlspec
         # writers (_io/bundle.py, _io/tlspec.py).
         fsync_tree(staging_root)

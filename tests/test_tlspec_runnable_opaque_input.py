@@ -109,7 +109,7 @@ def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     An ``enum.Enum`` input leaf is a SEMANTIC-typed scalar: its type/member
     identity steers host control flow (``mode is _Mode.A``), which no persisted
     value fact can carry. The runnable save now refuses typed
-    (``missing_input_container_contract`` / ``semantic_scalar_type``) instead of
+    (``input_container_contract_missing`` / ``semantic_scalar_type``) instead of
     producing an artifact that could ever replay the wrong arm; analysis saves
     stay available. Strictly stronger than the former UNVERIFIABLE ceiling.
     """
@@ -119,7 +119,7 @@ def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
         _save_runnable(model, [x, _Mode.A], tmp_path / "enum.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "semantic_scalar_type" in diagnostics
 
 

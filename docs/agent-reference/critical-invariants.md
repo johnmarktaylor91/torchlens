@@ -137,7 +137,7 @@
     family, whose eligibility metadata includes physical `InputAttestationFingerprint` records.
     `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
     Original-input, capture-equivalent real-state runs must byte-attest saved raw slots before
-    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input
+    exposure; mismatch raises `replay_value_mismatch` with rollback, while changed-input
     (logical OR physical), random/non-equivalent-state, and nondeterministic-capture-context runs
     report `not_applicable`. `attested` implies `verified` and unpoisoned, always.
 17c. Runnable descriptors are `sparse_recorded_taken_path_v2` (call recipe
@@ -195,7 +195,7 @@
     `docs/reference/runnable_tlspec_contract.md`.
 19a. r37 honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
     containers carrying extra per-instance state refuse at runnable save
-    (`missing_output_container_contract`; one per-kind capability table --
+    (`output_container_contract_missing`; one per-kind capability table --
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
     load recompute; `tl.types.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.

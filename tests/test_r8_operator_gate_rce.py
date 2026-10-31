@@ -238,12 +238,12 @@ def test_decode_literal_admits_torch_device() -> None:
 )
 def test_decode_literal_device_malformed_payload_typed(qualname: str) -> None:
     """r41 secC: a malformed ``torch.device(...)`` payload raises the SAME typed
-    ``unsupported_literal`` refusal as every other decoder branch -- never a raw
+    ``literal_unsupported`` refusal as every other decoder branch -- never a raw
     torch ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary."""
 
     with pytest.raises(RunPreconditionError) as exc:
         _decode_literal(LiteralTorchSymbol(qualname))
-    assert exc.value.fields.get("code") == "unsupported_literal"
+    assert exc.value.fields.get("code") == "literal_unsupported"
 
 
 @pytest.mark.parametrize(

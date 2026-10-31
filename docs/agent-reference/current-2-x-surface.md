@@ -132,7 +132,7 @@
   chokepoint with stable codes on `tl.errors.CaptureOutcomeError.fields["code"]`:
   N1 (failed/aborted/unknown exports refuse), N2 (validation ENTRY refusal only
   — tripwire bodies untouched, UNATTESTED enters), N3 (replay/backward), N4
-  (halted runnable save, code `"halted_capture_not_runnable"`), N5
+  (halted runnable save, code `"stopped_capture_unsupported"`), N5
   (halted LIVE-provider replay refuses — loaded-sparse `run()` stays allowed).
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
@@ -543,7 +543,7 @@
   session-time witness knob (`FieldPolicy.DROP`; `"payload"` reserved for C1). Typed refusals:
   `ambiguous_group_lifetime` (unprovable pre-arming group lifetime),
   `uncaptured_collective_op` (arm-time recognizer set-inequality or dispatcher schema-scan hit),
-  `wildcard_recv_unsupported`, and `collective_boundary_runnable_unsupported` (runnable save +
+  `wildcard_recv_unsupported`, and `collective_boundary_unsupported` (runnable save +
   forward-replay validation refuse on collective-crossing traces; metadata invariants run in
   full). The pre-join membership-lineage audit over per-rank ledgers lives in
   `torchlens.distributed.verify_membership_lineages` and is run by the C1 merge engine. Arming

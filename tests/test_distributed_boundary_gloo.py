@@ -421,7 +421,7 @@ class TestReplayRefusals:
         log = tl.trace(HandRolledTP(), torch.randn(2, 4))
         with pytest.raises(CollectiveBoundaryReplayError) as excinfo:
             log.validate_forward_pass([torch.zeros(2, 4)])
-        assert excinfo.value.fields["code"] == "collective_boundary_runnable_unsupported"
+        assert excinfo.value.fields["code"] == "collective_boundary_unsupported"
 
     def test_runnable_save_refuses_typed(self, gloo_world, tmp_path):
         from torchlens.errors import RunnablePreflightError
@@ -432,7 +432,7 @@ class TestReplayRefusals:
         with pytest.raises(RunnablePreflightError) as excinfo:
             log.save(str(tmp_path / "boundary.tlspec"), level="runnable")
         codes = {d.code for d in excinfo.value.fields["diagnostics"]}
-        assert "collective_boundary_runnable_unsupported" in codes
+        assert "collective_boundary_unsupported" in codes
 
     def test_metadata_invariants_still_run_in_full(self, gloo_world):
         from torchlens.validation import check_metadata_invariants

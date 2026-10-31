@@ -80,7 +80,7 @@ def _top_level_input_site_contract_checks(
         return ()
     return (
         _contract_check(
-            "input_arity_extra",
+            "input_arity_mismatch",
             False,
             RunnableErrorCode.INPUT_ARITY_EXTRA,
             "Runtime call carries top-level model-input sites not present at capture; the "

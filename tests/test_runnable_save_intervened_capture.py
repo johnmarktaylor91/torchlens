@@ -59,7 +59,7 @@ def test_runnable_save_refuses_intervention_replaced_capture(tmp_path: Path) -> 
         trace.save(tmp_path / "intervened.tlspec", level="runnable")
     assert excinfo.value.fields.get("code") == "sparse_preflight_failed"
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "user_intervention_not_replayable" in diagnostics
+    assert "user_intervention_unsupported" in diagnostics
     assert "relu" in diagnostics
 
 

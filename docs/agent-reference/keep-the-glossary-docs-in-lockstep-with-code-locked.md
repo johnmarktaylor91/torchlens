@@ -46,7 +46,7 @@ transformed outputs, as `selected_activation_v2` with physical `InputAttestation
 eligibility records. Load exposes them through
 `trace.archived_activations` for inspection. They never seed the sparse DAG. On original-input runs
 with embedded or capture-equivalent staged state, recomputed saved raw slots are compared by exact
-bytes and report `attested`; the first mismatch raises `numeric_attestation_failed` and rolls back.
+bytes and report `attested`; the first mismatch raises `replay_value_mismatch` and rolls back.
 Changed-input (logical or physical), random-state, non-equivalent-state, and
 nondeterministic-capture-context runs report `not_applicable`; `attested` always implies
 `verified`.
@@ -67,7 +67,7 @@ and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-chang
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a
 value-changing write the target does not prove, or diverging target-vs-refreshed evidence
 (compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying
-code `"buffer_sink_routing_mutable"` (provisional spelling, documented-unstable;
+code `"buffer_sink_routing_unsupported"` (provisional spelling, documented-unstable;
 pinned "computational graph changed" message term preserved). A loaded sparse Trace binds cloned
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
@@ -91,7 +91,7 @@ keeps the full transactional validation/attestation path. The fast-mode handle
 `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`). Model outputs with ZERO
 tensor leaves (all-literal trees, literal roots, empty containers) and namedtuple/mapping/
 registered-container outputs carrying extra per-instance state refuse at save
-(`missing_output_container_contract`; one per-kind capability table governs capture proof, save
+(`output_container_contract_missing`; one per-kind capability table governs capture proof, save
 refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
 -- RNG instances (incl. outside-held NumPy Generators, witnessed by a chained
 `sys`/`threading.setprofile` receiver classifier + a cheap model-attribute state digest -- NO

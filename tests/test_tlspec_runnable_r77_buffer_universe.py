@@ -7,7 +7,7 @@ non-tensor (``get_extra_state()``, packed/quantized entries), and the dead-model
 silent early return. A model with benign extra state whose source object died before the
 save therefore DECLARED A DIFFERENT STATE UNIVERSE than the live lane -- never-forward-used
 persistent buffers (BatchNorm's ``num_batches_tracked`` in eval mode) were dropped -- so an
-honest tensor-only ``load_state_dict`` refused with ``state_unexpected_key``. The r74-F2
+honest tensor-only ``load_state_dict`` refused with ``state_key_unknown``. The r74-F2
 over-refusal class surviving for non-tensor-state models, violating the contract sentence
 "a runnable save never requires the SOURCE MODEL to still be alive."
 
@@ -120,7 +120,7 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     """RED-now-fixed: dead-save universe == live-save universe; honest bind succeeds.
 
     Pre-fix the dead save silently dropped ``bn.num_batches_tracked`` and the honest
-    tensor-only ``load_state_dict`` refused ``state_unexpected_key``. The run verdict
+    tensor-only ``load_state_dict`` refused ``state_key_unknown``. The run verdict
     stays the pre-existing extra-state ceiling (no ``verified`` without a capture-state
     comparison basis) IDENTICALLY in both lanes -- lane parity, never a wrong bind.
     """

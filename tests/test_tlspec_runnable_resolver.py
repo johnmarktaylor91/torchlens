@@ -548,5 +548,5 @@ def test_load_time_failure_taxonomy_and_execution_skeletons(
     assert RunnableErrorCode.CALLABLE_MOVED_OR_RENAMED in _codes(moved)
     monkeypatch.setattr(runnable_load, "_unwrap_decorated", lambda func: func)
     assert RunnableErrorCode.WRAPPER_SHADOWED in _codes(descriptor)
-    assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_drift"
-    assert RunnableErrorCode.SEMANTIC_DRIFT.value == "semantic_drift"
+    assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_mismatch"
+    assert RunnableErrorCode.SEMANTIC_DRIFT.value == "semantic_mismatch"

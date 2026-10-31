@@ -38,7 +38,7 @@
   byte-exact contribution/destination digests. Async completions record
   `completion_binding="unobserved"`; wildcard recv refuses typed; collective-crossing traces
   refuse runnable save and forward-replay validation
-  (`collective_boundary_runnable_unsupported`) while metadata invariants run in full. Arming
+  (`collective_boundary_unsupported`) while metadata invariants run in full. Arming
   relaxes no tier-(a) refusal (DTensor/TP/FSDP2/PP still refuse). Distributed rank processes
   (initialized process group, non-daemonic) are the sanctioned exception to the
   main-process-only capture guard.

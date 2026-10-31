@@ -18,7 +18,7 @@ class SparseCorePayloadError(RunnableTLSPECError, ValidationError, AssertionErro
 
     Raised by the sparse-core tripwire
     (:func:`torchlens._io.runnable.assert_sparse_core_has_no_tensor_payload`)
-    with ``fields["code"] == "sparse_core_tensor_payload"``. ``AssertionError``
+    with ``fields["code"] == "sparse_core_payload_invalid"``. ``AssertionError``
     stays in the MRO deliberately: the tripwire's historical raise class was a
     bare ``AssertionError``, so existing ``except AssertionError`` callers keep
     working while new callers branch on the stable code."""
@@ -43,7 +43,7 @@ class RunPreconditionError(RunnableTLSPECError, ConfigurationError, ValueError):
 class BufferSinkRoutingError(RunnableTLSPECError, ConfigurationError, ValueError):
     """The live refresh projector refused mutable or unproven buffer-sink routing.
 
-    Raised with ``fields["code"] == "buffer_sink_routing_mutable"`` (a
+    Raised with ``fields["code"] == "buffer_sink_routing_unsupported"`` (a
     ``RunnableErrorCode`` member; provisional spelling, documented-unstable)
     by all four typed buffer-sink arms of the mode-aware refresh projector
     (D18): a train-mode buffer WRITER (``buffer_value_changed=True``),

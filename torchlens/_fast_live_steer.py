@@ -204,7 +204,7 @@ def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
     Returns
     -------
     RunnableDiagnostic | None
-        A ``user_intervention_not_replayable`` diagnostic (detection stage
+        A ``user_intervention_unsupported`` diagnostic (detection stage
         ``hooked_run_unverified``) when the trace stages a user entry.
     """
 

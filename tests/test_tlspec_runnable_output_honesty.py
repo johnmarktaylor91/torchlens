@@ -406,7 +406,7 @@ def test_r26_host_escaped_scalar_output_refuses_at_save(
 
     ``trace.output_layers == []`` (no output tensor slot), so the v2 descriptor has
     no carrier for the output contract. r37 corr1_1/INV-3 hardening: the runnable
-    save REFUSES uniformly at preflight (missing_output_container_contract) --
+    save REFUSES uniformly at preflight (output_container_contract_missing) --
     accept-then-``None`` (the pre-r37 posture this test used to pin as a run-time
     UNVERIFIABLE ceiling) is gone; the artifact is never produced.
     """
@@ -419,7 +419,7 @@ def test_r26_host_escaped_scalar_output_refuses_at_save(
     path = tmp_path / "scalar_out.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(path, level="runnable", include_activations=True)
-    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
 
 
 @pytest.mark.filterwarnings(
@@ -501,7 +501,7 @@ class _H4FloatScalarModel(nn.Module):
 
 def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
     """A dropped (host-escaped) output can never reach attestation: since r37 the
-    zero-tensor-slot artifact is refused at SAVE (missing_output_container_contract),
+    zero-tensor-slot artifact is refused at SAVE (output_container_contract_missing),
     so no run -- attested or otherwise -- exists to mis-report."""
 
     from torchlens.errors import RunnablePreflightError
@@ -510,7 +510,7 @@ def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
     trace = _capture(_H4FloatScalarModel(), x)
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "h4_scalar.tlspec", level="runnable", include_activations=True)
-    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
 
 
 def test_h4_lossy_container_output_not_attested(tmp_path: Path) -> None:
@@ -600,7 +600,7 @@ def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: 
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(str(tmp_path / f"{kind}.tlspec"), level="runnable")
     codes = {diag.code.value for diag in excinfo.value.fields["diagnostics"]}
-    assert "missing_output_container_contract" in codes
+    assert "output_container_contract_missing" in codes
     # No runnable artifact was written.
     assert not (tmp_path / f"{kind}.tlspec").exists()
     # Ordinary analysis save remains available for the same capture.

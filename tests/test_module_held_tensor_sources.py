@@ -751,7 +751,7 @@ def test_runnable_save_refuses_a_dict_held_source_typed(tmp_path: Any) -> None:
     x = torch.randn(2, 5, 5)
     model = _warm(_DictCachedBias(), x)  # kept alive: runnable save reads live state
     trace = tl.trace(model, x)
-    with pytest.raises(RunnablePreflightError, match="unsupported_tensor_constant"):
+    with pytest.raises(RunnablePreflightError, match="tensor_constant_unsupported"):
         trace.save(tmp_path / "held.tlspec", level="runnable")
 
 

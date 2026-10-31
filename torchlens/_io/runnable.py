@@ -1190,7 +1190,7 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     ------
     SparseCorePayloadError
         If a tensor, parameter, or portable tensor blob reference is present.
-        The error carries ``fields["code"] == "sparse_core_tensor_payload"``
+        The error carries ``fields["code"] == "sparse_core_payload_invalid"``
         (:attr:`RunnableErrorCode.SPARSE_CORE_TENSOR_PAYLOAD`) plus the dotted
         payload path; ``AssertionError`` remains in its MRO for historical
         callers of this ``assert_``-named tripwire.
@@ -1405,7 +1405,7 @@ def _add_persistent_buffer_slot_drafts(
     buffers, and the capture-time alias-topology snapshot supplies buffer alias groups.
     A silent early return here DROPPED never-forward-used persistent buffers (BN's
     ``num_batches_tracked``) from the declared slot universe, so the embedded snapshot
-    failed strict binding with ``state_unexpected_key`` -- the second, downstream leg of
+    failed strict binding with ``state_key_unknown`` -- the second, downstream leg of
     the same gc-timing honest-save over-refusal as the parameter-identity rung.
 
     Parameters
@@ -1510,7 +1510,7 @@ def _add_persistent_buffer_slot_drafts(
             # names against ``named_parameters``/``named_buffers`` and survives
             # extra state). A silent return here DROPPED never-forward-used
             # buffers (``num_batches_tracked``) and refused honest binds with
-            # ``state_unexpected_key``.
+            # ``state_key_unknown``.
             universe = trace._runnable.persistent_buffer_universe
             if not isinstance(universe, Mapping):
                 # No capture-time record either (``state_dict()`` failed at the
@@ -2216,7 +2216,7 @@ def _match_parameter(
       with the model (postprocess releases ``_param_ref``, session cleanup strips the
       registry meta; a caller that never held the model plus one ``gc.collect()`` between
       trace and save kills the weakref), so BN-like models with two same-shape+dtype
-      params refused ``unsupported_tensor_constant`` nondeterministically. A missing
+      params refused ``tensor_constant_unsupported`` nondeterministically. A missing
       snapshot (pre-r75 template, foreign/unstamped parameter) falls back to the live
       registry meta and then simply falls through -- this rung only ever ADDS a positive
       match, never blocks the others.
@@ -2427,7 +2427,7 @@ def _input_binding_for_op(
                             RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
                             "Model input binding path carries a non-grammar mapping "
                             "key; the runnable save is refused "
-                            "(missing_input_container_contract).",
+                            "(input_container_contract_missing).",
                             affected_ops=(str(op.label),),
                             detection_stage="producer_input_binding",
                         )
@@ -3679,7 +3679,7 @@ def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
     (non-grammar) mapping key, undeclared dataclass/namedtuple/subclass instance state,
     throwing/nonconforming/state-incomplete container registration, unsafe registered
     aux -- refuses the runnable save through the EXISTING
-    ``missing_input_container_contract`` (no new enum). An absent snapshot on an
+    ``input_container_contract_missing`` (no new enum). An absent snapshot on an
     intervention-ready capture refuses the same way: absence of proof is never proof.
     """
 
@@ -3705,7 +3705,7 @@ def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
                     f"path {tuple(refusal.get('path', ()))!r}: {refusal.get('reason')!r}. "
                     "Opaque mapping keys, undeclared per-instance container state, and "
                     "unproven container registrations cannot be replayed faithfully, so "
-                    "the runnable save is refused (missing_input_container_contract); "
+                    "the runnable save is refused (input_container_contract_missing); "
                     "analysis save levels remain available.",
                     detection_stage="producer_input_structure",
                 )
@@ -4267,7 +4267,7 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
                 "Model output contains no tensor leaves (zero output slots), so the "
                 "v2 descriptor has no carrier for its container contract and the "
                 "loaded artifact could not reconstruct it "
-                "(missing_output_container_contract). The runnable save is refused; "
+                "(output_container_contract_missing). The runnable save is refused; "
                 "ordinary analysis save levels remain available.",
                 detection_stage="producer_output_binding",
                 details=(("reason", "zero_tensor_slot_output"),),

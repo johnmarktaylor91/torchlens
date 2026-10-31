@@ -68,7 +68,7 @@ def test_traced_return_keeps_disclosure_stamp_and_validates() -> None:
     producing = next(op for op in trace.layer_list if op.func_name == "linear")
 
     # The capture IS intervened: the durable per-op disclosure must survive
-    # (the runnable-save user_intervention_not_replayable refusal keys on it).
+    # (the runnable-save user_intervention_unsupported refusal keys on it).
     assert producing.is_edited is True
     # The op still carries its real replayable function and full metadata.
     assert callable(producing.func)

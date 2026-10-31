@@ -69,11 +69,11 @@ merge_scope_unsupported
 group_lifetime_evidence_conflict
 merge_conflict
 merged_schema_invalid
-merged_descriptor_tamper
+merged_descriptor_invalid
 merge_run_unsupported
 merged_selector_unsupported
 merged_surface_unsupported
-merged_member_released
+merged_member_unavailable
 ```
 
 ### 3.2 Merge finding kinds
@@ -233,7 +233,7 @@ At every load:
 
 1. **Integrity.** Descriptor bytes vs the root-manifest SHA-256; each member's
    canonical tree hash vs BOTH recorded copies. Mismatch = typed
-   `merged_descriptor_tamper` refusal. Tamper is never a gap.
+   `merged_descriptor_invalid` refusal. Tamper is never a gap.
 2. **Independent rederivation.** The same `derive_merge` function reruns over
    the parsable rank cores' boundary records alone; when every member parses,
    canonical-JSON EXACT equality with the descriptor cache is required — any
@@ -287,7 +287,7 @@ unreachable. After `release()`:
   `happens_before()` all keep working.
 - Every surface that must resolve a member trace — `ranks`, `__getitem__` (all
   spellings), `super_op()`, `join_ops()`, and `save()` — refuses typed with
-  `fields["code"] = "merged_member_released"`. A released presenter never
+  `fields["code"] = "merged_member_unavailable"`. A released presenter never
   presents as a zero-member merge and never leaks a bare `KeyError`.
 - `release()` is idempotent.
 
