@@ -84,9 +84,11 @@ def _commit_msg(tmp_path: Path, message: str) -> subprocess.CompletedProcess[str
     )
 
 
-@pytest.mark.parametrize("message", [_BANG_SUBJECT, *(f"feat: x\n\n{f}\n" for f in _FOOTERS)])
-def test_commit_msg_hook_rejects_major_markers(tmp_path: Path, message: str) -> None:
-    assert _commit_msg(tmp_path, message).returncode == 1
+def test_commit_msg_hook_rejects_major_markers(tmp_path: Path) -> None:
+    """A ``type!:`` subject and both breaking-footer spellings are each rejected."""
+
+    for message in (_BANG_SUBJECT, *(f"feat: x\n\n{footer}\n" for footer in _FOOTERS)):
+        assert _commit_msg(tmp_path, message).returncode == 1, message
 
 
 def test_commit_msg_hook_accepts_a_normal_message_and_approval_file(tmp_path: Path) -> None:
