@@ -68,8 +68,6 @@ class UnknownPersistedFieldError(ArtifactError):
     alias is a reader regression. ``fields`` carries ``code``
     (``unknown_persisted_field``), ``record_type``, ``unknown_fields``,
     ``declared_tlspec_version``, ``runtime_tlspec_version``, and ``remedy``.
-    Inert inventory (see everything without loading anything):
-    ``torchlens.io.inspect_state_contract``.
     """
 
 

@@ -1176,7 +1176,7 @@ def _safe_load_from_bytes(data: bytes) -> Any:
     # bypassed -- so forwarding attacker bytes into it is not a safe restricted
     # load at all. Fail closed on any runtime that lacks the 2.6.0 fix (feature-
     # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
-    # ``tl.compat.report()`` / ``doctor()``). Imported lazily to keep this early
+    # ``tl.report.doctor()``). Imported lazily to keep this early
     # security front door free of import-order coupling (mirrors ``_safe_getattr``).
     from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 

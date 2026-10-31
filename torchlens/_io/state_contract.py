@@ -16,8 +16,8 @@ paths all route through the one chokepoint in
 - hook-restored columnar facades (``Op`` -- the path that crashed untyped),
 - slotted/value classes (everything else).
 
-The INERT inventory lives in :func:`inspect_state_contract`
-(``torchlens.io``): a surrogate-unpickler scan of ``metadata.pkl`` that
+The INERT inventory lives in :func:`inspect_state_contract` (private to
+this module; release goldens use it): a surrogate-unpickler scan of ``metadata.pkl`` that
 builds NO live objects, imports NO foreign code, and reports unknown names
 with their owning record types so a user can always see everything without
 loading anything.
@@ -142,16 +142,13 @@ def _unknown_field_remedy(declared_version: int | None) -> str:
         return (
             "The artifact carries fields this same-stamp reader does not "
             "declare (same-stamp writer drift); load it under the exact "
-            "release that wrote it, or inspect inertly with "
-            "torchlens.io.inspect_state_contract."
+            "release that wrote it."
         )
     return (
         "The artifact was written by an older torchlens whose field this "
-        "reader no longer declares; load it under the writing release (or "
-        "one that still declares the field) and re-save, or inspect inertly "
-        "with torchlens.io.inspect_state_contract. A reader that dropped a "
-        "persisted field must carry an alias (_PORTABLE_STATE_ALIASES) -- "
-        "report this refusal if the artifact is a governed release artifact."
+        "reader no longer declares; load it under the writing release and "
+        "re-save. If the artifact is a governed release artifact, report "
+        "this refusal."
     )
 
 
