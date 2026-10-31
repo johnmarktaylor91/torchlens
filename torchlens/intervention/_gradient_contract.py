@@ -194,7 +194,7 @@ def keep_grad(edit: Any) -> Any:
     if getattr(edit, "_torchlens_keep_grad", False):
         return edit
     if isinstance(edit, Edit):
-        if edit.kind != "forward" or edit.signal == "backward" or edit.factory is None:
+        if edit.kind != "forward" or edit.direction == "backward" or edit.factory is None:
             raise InvalidArgumentError(
                 f"keep_grad() got {edit.helper_name!r}, which is not a forward edit with a "
                 "runtime hook; the check applies to the values a forward edit writes",

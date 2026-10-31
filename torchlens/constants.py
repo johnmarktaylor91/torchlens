@@ -798,7 +798,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "inputs_before_pre_hooks",
     "inputs_after_pre_hooks",
     "forward_pre_hook_effects",
-    "has_pre_hook_input_change",
+    "had_pre_hook_input_change",
     "forward_duration",
     "backward_duration",
     "output_activation_memory",

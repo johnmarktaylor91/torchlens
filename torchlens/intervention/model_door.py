@@ -116,9 +116,7 @@ def _is_binding(model: Any) -> bool:
     """
 
     cls = type(model)
-    return cls.__name__ == "BoundInterventionExecutor" and cls.__module__.startswith(
-        "torchlens.intervention"
-    )
+    return cls.__name__ == "BoundModel" and cls.__module__.startswith("torchlens.intervention")
 
 
 def resolve_model_operand(model: Any, *, door: str, intervene: Any = None) -> DoorResolution:

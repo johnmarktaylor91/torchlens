@@ -251,7 +251,7 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     assert isinstance(result, tuple)
     record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert record.call_index == 1
     assert record.grad_kind == "grad_input"
     assert record.tuple_index == 0
@@ -707,7 +707,7 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert record.call_index == 1
 
 
@@ -926,7 +926,9 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
         intervene=tl.when(selector, helper),
     )
     trace.backward(trace[trace.output_layers[0]].out, retain_graph=True)
-    records = [record for record in trace._intervention_spec.records if record.signal == "backward"]
+    records = [
+        record for record in trace._intervention_spec.records if record.direction == "backward"
+    ]
     return trace[trace.input_layers[0]].grad, records
 
 

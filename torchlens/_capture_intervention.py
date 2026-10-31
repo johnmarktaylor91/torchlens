@@ -146,7 +146,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         from .intervention.spec import _canonical_repr
 
         fired_action_reprs = {
-            _canonical_repr(record.edit) for record in fired_records if record.edit is not None
+            _canonical_repr(record.helper) for record in fired_records if record.helper is not None
         }
         zero_fire_rule_ids = tuple(
             str(rule["rule_id"]) for rule in rules if str(rule["action"]) not in fired_action_reprs

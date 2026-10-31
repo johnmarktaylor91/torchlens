@@ -74,21 +74,21 @@ def test_typo_can_never_flip_batch_independent_open() -> None:
     with pytest.raises(InvalidArgumentError):
         tl.mean_ablate(dim="btach")
     # The only constructible spellings derive fail-closed flags:
-    assert tl.mean_ablate().is_batch_independent is False
-    assert tl.mean_ablate(dim="self").is_batch_independent is False
+    assert tl.mean_ablate().batch_independent is False
+    assert tl.mean_ablate(dim="self").batch_independent is False
 
 
 def test_tensor_source_derives_batch_independent_true() -> None:
     """A1c: an external tensor source never reads the traced batch."""
 
     spec = tl.mean_ablate(source=torch.ones(8))
-    assert spec.is_batch_independent is True
+    assert spec.batch_independent is True
 
 
 def test_self_mean_derives_batch_independent_false() -> None:
     """A1c inverse: the self-mean couples batch rows."""
 
-    assert tl.mean_ablate().is_batch_independent is False
+    assert tl.mean_ablate().batch_independent is False
 
 
 def test_append_refuses_self_mean_and_permits_tensor_source() -> None:

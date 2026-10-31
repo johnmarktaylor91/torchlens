@@ -262,12 +262,12 @@ def _value_mark(value: Any, *, detail: str) -> EditMark:
 
 
 def _fire_mark(record: FireRecord) -> EditMark:
-    """Return the mark for one fire record (``FireRecord.edit`` first, then its name)."""
+    """Return the mark for one fire record (``FireRecord.helper`` first, then its name)."""
 
     detail = ", ".join(str(part) for part in (record.engine, record.timing) if part)
-    if record.edit is not None:
-        return _helper_mark(record.edit, detail=detail)
-    name = str(record.edit_name or "hook")
+    if record.helper is not None:
+        return _helper_mark(record.helper, detail=detail)
+    name = str(record.helper_name or "hook")
     if any(marker in name for marker in _SET_HOOK_MARKERS):
         return EditMark(short="set(v)", full="set(v)", detail=detail)
     leaf = name.rsplit(".", 1)[-1]

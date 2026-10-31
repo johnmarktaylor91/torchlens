@@ -41,8 +41,8 @@ class TensorInputObservation:
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.KEEP,
         "source_op": FieldPolicy.KEEP,
-        "python_object_id": FieldPolicy.DROP,
-        "mutation_version": FieldPolicy.DROP,
+        "object_id": FieldPolicy.DROP,
+        "version": FieldPolicy.DROP,
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "device": FieldPolicy.KEEP,
@@ -56,8 +56,8 @@ class TensorInputObservation:
 
     path: TypedInputPath
     source_op: str | None
-    python_object_id: int | None
-    mutation_version: int | None
+    object_id: int | None
+    version: int | None
     shape: tuple[int, ...]
     dtype: str
     device: str
@@ -98,7 +98,7 @@ class ModuleInputSnapshot:
         "_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "structure": FieldPolicy.KEEP,
         "tensor_observations": FieldPolicy.KEEP,
-        "is_capture_complete": FieldPolicy.KEEP,
+        "capture_complete": FieldPolicy.KEEP,
         "incomplete_reasons": FieldPolicy.KEEP,
         "summary": FieldPolicy.KEEP,
     }
@@ -107,7 +107,7 @@ class ModuleInputSnapshot:
     _kwargs: dict[str, Any]
     structure: tuple[Any, ...]
     tensor_observations: tuple[TensorInputObservation, ...]
-    is_capture_complete: bool
+    capture_complete: bool
     incomplete_reasons: tuple[str, ...]
     summary: str
 
@@ -163,7 +163,7 @@ class PreHookEffect:
         "hook": FieldPolicy.KEEP,
         "with_kwargs": FieldPolicy.KEEP,
         "outcome": FieldPolicy.KEEP,
-        "has_changes": FieldPolicy.KEEP,
+        "changed": FieldPolicy.KEEP,
         "change_kinds": FieldPolicy.KEEP,
         "changed_paths": FieldPolicy.KEEP,
         "before_fingerprint": FieldPolicy.KEEP,
@@ -179,7 +179,7 @@ class PreHookEffect:
     hook: HookInfo
     with_kwargs: bool
     outcome: PreHookOutcome
-    has_changes: bool | None
+    changed: bool | None
     change_kinds: tuple[str, ...]
     changed_paths: tuple[TypedInputPath, ...]
     before_fingerprint: tuple[Any, ...]

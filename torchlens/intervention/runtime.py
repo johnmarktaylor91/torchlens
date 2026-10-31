@@ -274,7 +274,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         callback and the context is a forward one; otherwise returns.
     """
 
-    if hook_context.signal != "forward":
+    if hook_context.direction != "forward":
         return
     try:
         parameters = inspect.signature(hook_callable).parameters

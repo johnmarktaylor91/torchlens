@@ -291,11 +291,14 @@ def test_real_pre_floor_artifacts_refuse_typed(fixture: str) -> None:
 
 
 @pytest.mark.smoke
-def test_legacy_intervention_specs_stay_loadable() -> None:
-    """The floor covers Trace rehydration only; 2.16 intervention specs load."""
+def test_legacy_intervention_specs_refuse_on_stored_keywords_not_the_floor() -> None:
+    """The floor covers Trace rehydration only; a 2.16 intervention spec gets past it
+    and refuses typed on its pre-rename stored edit keywords instead."""
 
-    from torchlens.intervention.types import InterventionSpec
+    from torchlens._errors import InvalidArgumentError
 
     fixture_path = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
-    loaded = tl.load(fixture_path / "F1_intervention_default.tlspec", trust_custom_callables=True)
-    assert isinstance(loaded, InterventionSpec)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.load(fixture_path / "F1_intervention_default.tlspec", trust_custom_callables=True)
+    assert not isinstance(excinfo.value, ArtifactVersionBelowFloorError)
+    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"

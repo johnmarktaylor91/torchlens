@@ -748,15 +748,15 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
     """
 
     return (
-        record.signal,
+        record.direction,
         record.engine,
         record.target_label,
         record.call_label,
         record.site_label,
-        record.edit_name,
-        _helper_identity(record.edit),
+        record.helper_name,
+        _helper_identity(record.helper),
         record.timing,
-        record.backward_pass_number,
+        record.backward_pass_index,
         record.call_index,
         record.grad_kind,
         record.tuple_index,
@@ -821,7 +821,7 @@ def _serialize_fire_record(
     # payload shallowly: the two structured fields are serialized below and
     # every other FireRecord field is a scalar/string.
     data = {field.name: getattr(record, field.name) for field in dataclass_fields(record)}
-    data["helper"] = _serialize_value(record.edit, save_level, state)
+    data["helper"] = _serialize_value(record.helper, save_level, state)
     data["container_path"] = _serialize_value(record.container_path, save_level, state)
     return data
 
@@ -1116,7 +1116,7 @@ def _serialize_helper(
             "portability": "opaque_audit",
             "name": helper.name,
             "repr": repr(helper),
-            "batch_independent": bool(helper.is_batch_independent),
+            "batch_independent": bool(helper.batch_independent),
             "compatible_with_append": bool(helper.compatible_with_append),
         }
 
@@ -1124,11 +1124,11 @@ def _serialize_helper(
         "portability": "builtin",
         "name": helper.name,
         "kind": helper.kind,
-        "direction": helper.signal,
+        "direction": helper.direction,
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
-        "batch_independent": bool(helper.is_batch_independent),
+        "batch_independent": bool(helper.batch_independent),
         "compatible_with_append": bool(helper.compatible_with_append),
     }
 
@@ -1321,15 +1321,15 @@ def _deserialize_fire_record(
         func_call_id=data.get("func_call_id"),
         container_path=tuple(container_path or ()),
         engine=data.get("engine"),
-        edit=helper if isinstance(helper, Edit) else None,
+        helper=helper if isinstance(helper, Edit) else None,
         site_label=data.get("site_label"),
         timing=data.get("timing"),
-        signal=data.get("direction"),
-        edit_name=data.get("helper_name"),
+        direction=data.get("direction"),
+        helper_name=data.get("helper_name"),
         seed=data.get("seed"),
         determinism_note=data.get("determinism_note"),
         timestamp=data.get("timestamp"),
-        backward_pass_number=data.get("backward_pass_index"),
+        backward_pass_index=data.get("backward_pass_index"),
         call_index=data.get("call_index"),
         grad_kind=data.get("grad_kind"),
         tuple_index=data.get("tuple_index"),

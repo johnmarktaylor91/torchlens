@@ -129,9 +129,9 @@ class CouplingSession:
                     site=str(
                         getattr(record, "site_label", None) or getattr(record, "target_label", "")
                     ),
-                    helper=getattr(record, "edit_name", None),
+                    helper=getattr(record, "helper_name", None),
                     timing=getattr(record, "timing", None),
-                    direction=getattr(record, "signal", None),
+                    direction=getattr(record, "direction", None),
                     replaced=bool(getattr(record, "replaced", False)),
                 )
             )

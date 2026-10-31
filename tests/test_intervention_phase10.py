@@ -171,7 +171,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
 
     assert spec.records
     assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.signal == "forward" for record in spec.records)
+    assert any(record.direction == "forward" for record in spec.records)
     assert any(record.replaced is True for record in spec.records)
 
 
@@ -442,7 +442,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path, trust_custom_callables=True)
 
-    backward_records = [record for record in spec.records if record.signal == "backward"]
+    backward_records = [record for record in spec.records if record.direction == "backward"]
     assert backward_records
     assert backward_records[0].backward_pass_index == 1
     assert backward_records[0].call_index == 1
@@ -550,13 +550,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        edit=tl.clamp_grad(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
-        signal="backward",
-        edit_name="grad_clamp",
+        direction="backward",
+        helper_name="clamp_grad",
         timestamp=1.0,
-        backward_pass_number=1,
+        backward_pass_index=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -566,13 +566,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        edit=tl.clamp_grad(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
-        signal="backward",
-        edit_name="grad_clamp",
+        direction="backward",
+        helper_name="clamp_grad",
         timestamp=2.0,
-        backward_pass_number=1,
+        backward_pass_index=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -582,13 +582,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        edit=tl.clamp_grad(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
-        signal="backward",
-        edit_name="grad_clamp",
+        direction="backward",
+        helper_name="clamp_grad",
         timestamp=1.0,
-        backward_pass_number=1,
+        backward_pass_index=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=1,

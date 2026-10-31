@@ -96,10 +96,10 @@ def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     """Flags AND-combine; a SEEDED stochastic leaf composes (granularity mixing legal)."""
 
     seeded = compose(tl.scale(2.0), tl.add_noise(0.1, seed=7))
-    assert [leaf.helper_name for leaf in seeded.args] == ["scale", "noise"]
-    assert seeded.is_batch_independent is True
+    assert [leaf.helper_name for leaf in seeded.args] == ["scale", "add_noise"]
+    assert seeded.batch_independent is True
     baseline_flags = compose(tl.scale(2.0), tl.mean_ablate())
-    assert baseline_flags.is_batch_independent is False, "mean_ablate self-mean couples the batch"
+    assert baseline_flags.batch_independent is False, "mean_ablate self-mean couples the batch"
 
 
 def test_matches_explicit_sequential_hooks_bytewise() -> None:

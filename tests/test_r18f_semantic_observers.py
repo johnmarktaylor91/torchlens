@@ -208,7 +208,7 @@ def test_backward_record_span_direction_enforced() -> None:
 
     assert tap.records
     record = tap.records[0]
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert "fwd_only" not in record.span_names
     assert "bwd_ok" in record.span_names
 
@@ -226,7 +226,7 @@ def test_forward_record_span_direction_enforced() -> None:
 
     assert tap.records
     record = tap.records[0]
-    assert record.signal == "forward"
+    assert record.direction == "forward"
     assert "bwd_only" not in record.span_names
     assert "fwd_ok" in record.span_names
 

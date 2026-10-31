@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 112 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -39,7 +39,7 @@
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - Contrastive directions (DOCUMENTED-UNSTABLE):
-  `tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
+  `tl.intervention.fit_direction(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
   returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `num_pairs`,
   `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
   steer; `direction.to_steering_vectors()`, `direction.to_repeng()` and `direction.to_dialz()`
@@ -797,7 +797,7 @@
   within=None, k=|fraction=, by=, largest=)` select by HOW VALUES DIFFER
   between two runs — the SUBJECT is the resolution trace, the REFERENCE one
   explicit Trace (pairwise, directional `subject - reference` in float64;
-  bare `has_changes(ref)` = the "every element that moved" intervention-effect
+  bare `changed(ref)` = the "every element that moved" intervention-effect
   mask; `relation="exact"`). Structures NEVER silently intersect: reference
   missing-site/unsaved/shape-drift refusals name the reference, a
   structural-site-key disagreement refuses (label coincidence across
@@ -1327,7 +1327,7 @@
   or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes
   the `tl_counterfactual_harvest_v1` block plus per-shard fire receipts, and the intervention
   identity rides the signature's `model_mode` value (module and op-type address classes run;
-  finer ones refuse `harvest_address_class_ungated`; helpers must be `is_batch_independent`).
+  finer ones refuse `harvest_address_class_ungated`; helpers must be `batch_independent`).
   `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
   token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
   `TokenRows` (one row per token, with `stimulus_row` and `position`), and

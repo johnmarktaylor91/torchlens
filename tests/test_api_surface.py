@@ -88,7 +88,6 @@ TARGET_ALL = [
     "splice_module",
     "span",
     "steer",
-    "direction_from_pairs",
     "sweep",
     "zero_ablate",
     "when",
@@ -213,7 +212,9 @@ def test_all_matches_frozen_target_ledger() -> None:
     producer wave adds `subspace` (direction/subspace support selection with
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
     completeness work F39 unhide promotes the shipped streaming-stats
-    surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
+    surface `stats` and `aggregate` (conflict-ledger row 8) = 116. The
+    interventions rename removes `do`, `push`, `push_from`, `run`, `swap_with`
+    and `direction_from_pairs` and adds `Recipe` and `positions` = 112.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

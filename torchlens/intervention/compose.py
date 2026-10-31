@@ -213,7 +213,7 @@ def compose(*edits: Any) -> Edit:
         args=tuple(leaves),
         factory=factory,
         portability=portability,
-        is_batch_independent=all(leaf.is_batch_independent for leaf in leaves),
+        batch_independent=all(leaf.batch_independent for leaf in leaves),
         compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
         metadata={
             "compose_leaves": "|".join(leaf.helper_name for leaf in leaves),

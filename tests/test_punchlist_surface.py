@@ -268,10 +268,10 @@ def test_retired_spellings_stay_unadvertised() -> None:
 def test_canonical_replacement_verbs_stay_advertised() -> None:
     """The retirement tail's canonical verbs remain the advertised surface."""
 
-    intervention = importlib.import_module("torchlens.intervention")
-    for canonical in ("push", "push_from", "run", "do"):
-        assert canonical in intervention.__all__, canonical
     import torchlens
 
-    for canonical in ("push", "push_from", "run", "pluck", "extract_dataset", "span"):
+    # The replay verbs (do, push, push_from, run) left the module surfaces in the
+    # 2.x rename; ``Trace.do`` is the one edit verb.
+    assert callable(getattr(torchlens.Trace, "do", None))
+    for canonical in ("pluck", "extract_dataset", "span"):
         assert canonical in torchlens.__all__, canonical

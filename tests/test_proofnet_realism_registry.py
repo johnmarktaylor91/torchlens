@@ -21,7 +21,11 @@ DOCS_TIERS = {"referenced", "executed-R0", "executed-R1", "NONE"}
 #: R1_REFERENCED_FLOOR only rises (realism fill rate is the launch number);
 #: UNDOCUMENTED_CEILING only falls (three class names lacked a
 #: ``torchlens.``-prefixed docs reference at the freeze -- D01 burns them).
-R1_REFERENCED_FLOOR = 24
+#: 24 -> 22: the R1 rows ``do`` and ``run`` left with their public symbols
+#: (decided-surface rows ``root:tl.do`` and ``root:tl.run``, both removed); their
+#: real-model evidence calls ``Trace.do`` and model ``run()`` methods, and no
+#: successor in ``torchlens.__all__`` is referenced from the real-model trees.
+R1_REFERENCED_FLOOR = 22
 UNDOCUMENTED_CEILING = 3
 
 #: Named realism rows OUTSIDE the symbol grid: whole-workflow recipes whose

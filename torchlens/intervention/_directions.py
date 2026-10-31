@@ -1,6 +1,6 @@
 """Contrastive directions built natively from paired traces.
 
-:func:`direction_from_pairs` reads one row per prompt at one site from the
+:func:`fit_direction` reads one row per prompt at one site from the
 positive and the negative traces and fits a direction with one of three
 methods. The math lives here only: the steering-vectors, repeng and dialz
 bridges convert the returned :class:`Direction` to their library objects
@@ -87,7 +87,7 @@ class Direction:
         """Return a one-line summary without the tensor values."""
 
         return (
-            f"Direction(site={self.site!r}, method={self.method!r}, n_pairs={self.num_pairs}, "
+            f"Direction(site={self.site!r}, method={self.method!r}, num_pairs={self.num_pairs}, "
             f"dim={self.vector.shape[0]}, sha256={self.provenance.sha256[:16]})"
         )
 
@@ -351,8 +351,8 @@ def fit_direction(
         rows_digest.update(rows.detach().cpu().double().numpy().tobytes())
     site_name = str(label)
     origin = (
-        f"direction_from_pairs(site={site_name!r}, method={method!r}, "
-        f"n_pairs={positive.shape[0]}, read_token_index={read_token_index!r}, "
+        f"fit_direction(site={site_name!r}, method={method!r}, "
+        f"num_pairs={positive.shape[0]}, read_token_index={read_token_index!r}, "
         f"pairs_sha256={rows_digest.hexdigest()})"
     )
     canonical = vector.detach().cpu().to(torch.float64).reshape(1, -1)

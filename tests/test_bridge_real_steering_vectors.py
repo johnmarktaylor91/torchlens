@@ -1,6 +1,6 @@
 """steering-vectors converter against the real package on a tiny cached Llama.
 
-A native ``direction_from_pairs`` direction converted with
+A native ``fit_direction`` direction converted with
 ``Direction.to_steering_vectors()`` must reproduce the native steer's logits
 when the package applies it, for every method. The native methods are also
 checked against the package's own aggregators on the same saved rows. Skips

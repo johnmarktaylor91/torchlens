@@ -344,7 +344,7 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
         )
     hook = decision.hook
     edits_gradients = decision.direction in ("backward", "both") or (
-        isinstance(hook, Edit) and (hook.kind == "backward" or hook.signal == "backward")
+        isinstance(hook, Edit) and (hook.kind == "backward" or hook.direction == "backward")
     )
     if edits_gradients:
         return (
@@ -1265,9 +1265,9 @@ class BoundModel:
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse rebinding the read-only surface; allow internal state."""
 
-        if name in {"spec", "base_model", "last_report", "_spec", "_base_model"}:
+        if name in {"recipe", "base_model", "last_report", "_spec", "_base_model"}:
             raise AttributeError(
-                f"BoundInterventionExecutor.{name} is read-only; build a new "
+                f"BoundModel.{name} is read-only; build a new "
                 "binding from the immutable spec instead"
             )
         object.__setattr__(self, name, value)

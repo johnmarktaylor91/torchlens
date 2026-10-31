@@ -842,7 +842,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
         kwargs={"plan": "sampling_plan", **plan.identity_kwargs()},
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=True,
+        batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
     # Session-only handle for the D8 batch normalizer (object-identity
@@ -1032,7 +1032,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
         "permute_batch",
         kwargs={"seed": validated_seed, "axis": explicit_axis},
         factory=factory,
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
         metadata={
             "stochastic": True,
@@ -1218,7 +1218,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         },
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
         metadata={
             "stochastic": True,
@@ -1291,7 +1291,7 @@ def mean_from(
         },
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=True,
+        batch_independent=True,
         metadata={"stochastic": False},
     )
 
@@ -1384,7 +1384,7 @@ def mean_fill(
         },
         factory=factory,
         portability="builtin" if reference is None else "opaque_audit",
-        is_batch_independent=batch_independent,
+        batch_independent=batch_independent,
         compatible_with_append=not allow_shape_change and batch_independent,
         metadata={
             "stochastic": False,
@@ -1551,6 +1551,6 @@ def set_direction_mean(
         },
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=True,
+        batch_independent=True,
         metadata={"stochastic": False},
     )

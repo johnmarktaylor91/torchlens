@@ -160,7 +160,6 @@ _LAZY_ATTRS = {
     "splice_module": ("torchlens.intervention.helpers", "splice_module"),
     "stats": ("torchlens.stats", None),
     "steer": ("torchlens.intervention.helpers", "steer"),
-    "direction_from_pairs": ("torchlens.intervention", "fit_direction"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "trace": ("torchlens.user_funcs", "trace"),
     # Built-in activation transforms (transforms memo s7 home; the submodule
@@ -837,7 +836,6 @@ __all__ = [
     "splice_module",
     "span",
     "steer",
-    "direction_from_pairs",
     "sweep",
     "zero_ablate",
     "when",

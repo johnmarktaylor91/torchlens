@@ -161,8 +161,8 @@ def _fire_row(record: Any) -> tuple[Any, ...]:
         record.engine,
         record.site_label,
         record.timing,
-        record.signal,
-        record.edit_name,
+        record.direction,
+        record.helper_name,
         record.seed,
     )
 

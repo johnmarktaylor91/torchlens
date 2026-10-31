@@ -196,7 +196,7 @@ def _verb_meaning(edit: Any) -> str:
     if not isinstance(edit, Edit):
         return "coordinates"
     verb = edit.helper_name
-    if edit.kind != "forward" or edit.signal == "backward":
+    if edit.kind != "forward" or edit.direction == "backward":
         raise _unsupported(
             verb,
             "backward-direction verbs edit gradients, not the forward component",

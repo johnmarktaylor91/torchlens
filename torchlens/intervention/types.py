@@ -180,8 +180,8 @@ class Edit:
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,
         "metadata": FieldPolicy.KEEP,
-        "signal": FieldPolicy.KEEP,
-        "is_batch_independent": FieldPolicy.KEEP,
+        "direction": FieldPolicy.KEEP,
+        "batch_independent": FieldPolicy.KEEP,
         "compatible_with_append": FieldPolicy.KEEP,
         # L6 Query-Selection recipe family: persists as of tlspec v8 as
         # BLOB_RECURSIVE (recipe ASTs may embed unit-term masks), with the
@@ -199,8 +199,8 @@ class Edit:
         default=None, compare=False, repr=False
     )
     metadata: tuple[tuple[str, Any], ...] = ()
-    signal: HelperDirection | None = None
-    is_batch_independent: bool = False
+    direction: HelperDirection | None = None
+    batch_independent: bool = False
     compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
 
@@ -443,15 +443,15 @@ class FireRecord:
         "func_call_id": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "engine": FieldPolicy.KEEP,
-        "edit": FieldPolicy.KEEP,
+        "helper": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
-        "signal": FieldPolicy.KEEP,
-        "edit_name": FieldPolicy.KEEP,
+        "direction": FieldPolicy.KEEP,
+        "helper_name": FieldPolicy.KEEP,
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
-        "backward_pass_number": FieldPolicy.KEEP,
+        "backward_pass_index": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
         "grad_kind": FieldPolicy.KEEP,
         "tuple_index": FieldPolicy.KEEP,
@@ -466,15 +466,15 @@ class FireRecord:
     func_call_id: int | None = None
     container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
-    edit: Edit | None = None
+    helper: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
-    signal: Literal["forward", "backward"] | None = None
-    edit_name: str | None = None
+    direction: Literal["forward", "backward"] | None = None
+    helper_name: str | None = None
     seed: int | None = None
     determinism_note: str | None = None
     timestamp: float | None = None
-    backward_pass_number: int | None = None
+    backward_pass_index: int | None = None
     call_index: int | None = None
     grad_kind: Literal["grad_input", "grad_output"] | None = None
     tuple_index: int | None = None

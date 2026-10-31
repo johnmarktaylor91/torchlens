@@ -172,7 +172,7 @@ class Rule:
 
     target: Any
     edit: Any
-    signal: HelperDirection | None = None
+    direction: HelperDirection | None = None
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
@@ -203,7 +203,7 @@ class Rule:
                 remedy="pass a selector or predicate callable as the WHERE term",
                 argument="where",
             )
-        decision = as_intervention_decision(self.edit, direction=self.signal)
+        decision = as_intervention_decision(self.edit, direction=self.direction)
         action_tensors: list[torch.Tensor] = []
         collect_tensors(self.edit, action_tensors)
         object.__setattr__(self, "decision", decision)
@@ -238,7 +238,7 @@ class Rule:
             return memo[1]
         action_repr = _canonical_repr(self.edit, exact=exact)
         digest = hashlib.sha256(
-            f"{self.where_repr}||{action_repr}||{self.signal}".encode()
+            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
         ).hexdigest()[:10]
         identity = (action_repr, f"r-{digest}")
         object.__setattr__(self, "_identity_memo", (versions, identity))
@@ -260,8 +260,8 @@ class Rule:
         """Render the clause with its current rule identity."""
 
         return (
-            f"InterventionRule(where={self.target!r}, action={self.edit!r}, "
-            f"direction={self.signal!r}, rule_id={self.rule_id!r}, "
+            f"Rule(target={self.target!r}, edit={self.edit!r}, "
+            f"direction={self.direction!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 
@@ -496,7 +496,7 @@ class Recipe:
 
         Returns
         -------
-        BoundInterventionExecutor
+        BoundModel
             The bound executor (``torchlens.intervention.binding``).
         """
 
@@ -609,7 +609,7 @@ def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
         rule_entries = normalize_hook_plan(
             rule.target,
             rule.edit,
-            direction=rule.signal,
+            direction=rule.direction,
             allow_replay_only_site_targets=True,
         )
         for entry in rule_entries:

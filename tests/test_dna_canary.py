@@ -85,7 +85,7 @@ def test_demo_1_zero_ablation_via_do():
 
     # FireRecords + state + last_run honest
     records = list(fork["relu_1_2"].interventions)
-    assert records and records[-1].edit_name == "zero_ablate"
+    assert records and records[-1].helper_name == "zero_ablate"
     assert records[-1].replaced is True
     assert records[-1].engine == "replay"
     assert fork["relu_1_2"].intervention_replaced
@@ -121,7 +121,7 @@ def test_demo_2_same_run_patch_identity():
     assert torch.equal(patched["output_1"].out, trace["output_1"].out)
     # provenance present: FireRecords at the patched site
     records = list(patched["relu_1_2"].interventions)
-    assert records and records[-1].edit_name == "patch_from"
+    assert records and records[-1].helper_name == "patch_from"
     assert patched.intervention_audit[-1]["patch_source"]["source_model_class"].endswith(
         "_CanaryNet"
     )

@@ -165,7 +165,7 @@ def _refuse_batch_dependent(rule: Any) -> None:
     """
 
     helper = _rule_helper(rule)
-    if helper is not None and bool(helper.is_batch_independent):
+    if helper is not None and bool(helper.batch_independent):
         return
     name = helper.helper_name if helper is not None else rule.action_repr
     raise InvalidArgumentError(
@@ -236,7 +236,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
             "rule_id": str(rule.rule_id),
             "where": str(rule.where_repr),
             "action": str(rule.action_repr),
-            "direction": str(rule.signal),
+            "direction": str(rule.direction),
         }
         for rule in intervene.rules
     )

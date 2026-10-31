@@ -151,7 +151,7 @@ def test_tap_backward_both_directions_fire() -> None:
     tap = tl.tap(tl.contains("linear"), direction="both")
     _trace_with_tap(tap)
 
-    assert [record.signal for record in tap.records] == ["forward", "backward"]
+    assert [record.direction for record in tap.records] == ["forward", "backward"]
     assert tap.records[0].backward_call_index is None
     assert tap.records[1].backward_call_index == 1
 
@@ -163,7 +163,7 @@ def test_tap_backward_intervening_grad_fn_only_grad_fn_mount() -> None:
     _trace_with_tap(tap)
 
     assert tap.records
-    assert all(record.signal == "backward" for record in tap.records)
+    assert all(record.direction == "backward" for record in tap.records)
     assert any(
         record.site_label is not None and "sum_back" in record.site_label for record in tap.records
     )

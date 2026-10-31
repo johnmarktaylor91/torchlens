@@ -228,8 +228,8 @@ def test_mask_equivariance_law() -> None:
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
     fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
-    assert fire.edit is not None
-    metadata = dict(fire.edit.metadata)
+    assert fire.helper is not None
+    metadata = dict(fire.helper.metadata)
     assert "selection_mask_digest" in metadata
     assert metadata["selection_mask_rows_equal"] is True
     # Per-row-differing masks refuse typed, stably across seeds.
@@ -322,9 +322,9 @@ def test_mean_fill_axis_semantics_and_derived_flag() -> None:
         mean_fill(dim="batch")
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
     # D18: derived, never tabled. Self-sourced reads the traced batch.
-    assert mean_fill(dim="all").is_batch_independent is False
+    assert mean_fill(dim="all").batch_independent is False
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
-    assert mean_fill(donors, dim="all").is_batch_independent is True
+    assert mean_fill(donors, dim="all").batch_independent is True
     # 'self' warns and maps to 'all' (one migration window).
     with pytest.warns(UserWarning, match="over='all'") as aliased_warnings:
         aliased = mean_fill(dim="self")

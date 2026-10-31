@@ -54,7 +54,7 @@ def as_intervention_decision(
             return dataclasses.replace(action, hook=keep_grad(action.hook))
         return action
     if isinstance(action, Edit):
-        resolved_direction = direction or action.signal or action.kind
+        resolved_direction = direction or action.direction or action.kind
         return InterventionDecision(action="add_hook", hook=action, direction=resolved_direction)
     if callable(action):
         callable_direction = direction or getattr(action, "direction", "forward")
@@ -118,7 +118,7 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
         args=(delta,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -170,7 +170,7 @@ def replace_with(
         args=(value,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 

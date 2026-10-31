@@ -478,11 +478,11 @@ def test_axis_i_log_registry_uses_weakref_cleanup() -> None:
 
 
 def test_helper_axis_ambiguity_uses_catalog_error() -> None:
-    """Vector helpers fail with ``AxisAmbiguityError`` when feature_axis is omitted."""
+    """Vector helpers fail with ``AxisAmbiguityError`` when dim is omitted."""
 
     hook = tl.steer(torch.ones(3))()
 
-    with pytest.raises(terrors.AxisAmbiguityError, match="feature_axis"):
+    with pytest.raises(terrors.AxisAmbiguityError, match="dim"):
         hook(torch.ones(2, 3), hook=None)
 
 

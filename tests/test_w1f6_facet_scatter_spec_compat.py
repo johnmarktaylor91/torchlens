@@ -297,46 +297,17 @@ def test_check_spec_compat_nonexecutable_mismatch_still_confirmation(tmp_path: A
         "F6_intervention_portable.tlspec",
     ],
 )
-def test_v2_16_executable_fixtures_compat_is_confirmation_not_refusal(fixture_name: str) -> None:
-    """Regression: the shipped v2.16 executable fixtures load and their loaded
-    spec compat-checks against a fresh same-recipe counterpart WITHOUT raising.
+def test_v2_16_executable_fixtures_refuse_typed_at_load(fixture_name: str) -> None:
+    """The shipped v2.16 executable fixtures refuse typed at load.
 
-    These fixtures carry a v2.16-era graph_shape_hash that differs from the
-    current-algorithm hash for the identical CNN graph; the over-broad W1_F6
-    compat raise made all three FAIL at the gate. This pins that cross-version
-    executable-spec reuse stays load-and-matchable.
+    They store builtin edit keywords from before the 2.x surface rename
+    (``force_shape_change``); files saved by 2.x are not read, so the load
+    refuses with a typed error and never reaches the compat check.
     """
 
+    from torchlens._errors import InvalidArgumentError
+
     fixture_path = FIXTURE_ROOT / fixture_name
-    spec = tl.load(fixture_path, trust_custom_callables=True)
-    assert spec.metadata.get("executable") is True
-    # Cross-version drift: saved hash differs from the current-algo hash for the
-    # same graph, yet targets resolve identically.
-    saved_hashes = {e.get("graph_shape_hash") for e in spec.metadata["target_manifest"]}
-
-    log = _capture_cnn_relu_ablation()
-    assert log.graph_shape_hash not in saved_hashes  # confirm the mismatch is real
-    compat = check_spec_compat(spec, log)
-    assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
-
-
-def _capture_cnn_relu_ablation() -> Any:
-    """Fresh in-memory counterpart matching the v2.16 intervention fixtures."""
-
-    class _CNN(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.conv = nn.Conv2d(3, 4, 3, padding=1)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.relu(self.conv(x))
-
-    torch.manual_seed(1101)
-    log = tl.trace(
-        _CNN(),
-        torch.randn(1, 3, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
-    )
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-    return log
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.load(fixture_path, trust_custom_callables=True)
+    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"

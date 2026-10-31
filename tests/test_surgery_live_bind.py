@@ -173,7 +173,7 @@ def test_bind_report_contents(toy) -> None:
     assert report.door == "call"
     assert report.status == "fired"
     assert report.trace is None
-    assert report.digest == spec.digest
+    assert report.spec_digest == spec.digest
     assert report.model_class == "_Toy"
     assert report.fire_count == 1
     assert report.rule_fire_counts == {spec.rules[0].rule_id: 1}

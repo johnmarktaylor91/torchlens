@@ -62,14 +62,14 @@ def test_edit_text_rule() -> None:
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
     assert short_edit_text(tl.scale(0.5)) == "scale(0.5)"
-    assert short_edit_text(tl.clamp(low=0, high=1)) == "clamp(min=0, max=1)"
-    assert short_edit_text(tl.add_noise(0.1)) == "noise(0.1)"
+    assert short_edit_text(tl.clamp(low=0, high=1)) == "clamp(low=0, high=1)"
+    assert short_edit_text(tl.add_noise(0.1)) == "add_noise(0.1)"
     assert short_edit_text(tl.steer(torch.ones(3))) == "steer(v)"
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
-    assert short_edit_text(tl.hook_grad(named_fn)) == "bwd_hook(named_fn)"
-    assert short_edit_text(tl.hook_grad(lambda g, *, hook: g)) == "bwd_hook(fn)"
-    assert short_edit_text(tl.zero_grad()) == "grad_zero"
+    assert short_edit_text(tl.hook_grad(named_fn)) == "hook_grad(named_fn)"
+    assert short_edit_text(tl.hook_grad(lambda g, *, hook: g)) == "hook_grad(fn)"
+    assert short_edit_text(tl.zero_grad()) == "zero_grad"
 
 
 def test_node_rows_cap_at_three_then_more() -> None:
@@ -102,7 +102,7 @@ def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
     """Return a stand-in site whose fire records name ``edits``."""
 
     records = [
-        FireRecord(target_label=label, edit=edit, timestamp=float(index))
+        FireRecord(target_label=label, helper=edit, timestamp=float(index))
         for index, edit in enumerate(edits)
     ]
     return SimpleNamespace(label=label, layer_label=label, interventions=records)
@@ -394,7 +394,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         sites = intervention_sites_for_log(trace)
         assert [site.label for site in sites] == [second.label]
         marks = edit_marks_by_site(trace, sites)
-        assert [mark.short for mark in marks[second.label]] == ["bwd_hook(named_backward)"]
+        assert [mark.short for mark in marks[second.label]] == ["hook_grad(named_backward)"]
         dot = trace.draw(
             vis_save_only=True,
             vis_fileformat="dot",
@@ -405,7 +405,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         trace.cleanup()
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
     assert len(edited) == 1
-    assert "bwd_hook(named_backward)" in edited[0]
+    assert "hook_grad(named_backward)" in edited[0]
 
 
 def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:

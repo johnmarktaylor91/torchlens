@@ -846,7 +846,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             edit_names = tuple(str(rule["action"]) for rule in rules)
             selection_repr = " | ".join(str(rule["where"]) for rule in rules)
             fired_action_reprs = {
-                _canonical_repr(record.edit) for record in fires if record.edit is not None
+                _canonical_repr(record.helper) for record in fires if record.helper is not None
             }
             zero_fire_rule_ids = tuple(
                 str(rule["rule_id"])
@@ -1836,7 +1836,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         self._spec_revision += 1
-        self.__dict__.pop("intervention_spec", None)
+        self.__dict__.pop("recipe", None)
         self.__dict__.pop("_frozen_intervention_spec", None)
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
         self.state = TraceState.SPEC_STALE

@@ -202,7 +202,7 @@ def subspace_ablate(
         kwargs={"mode": mode, "dim": axis, "mean": mean, "seed": seed},
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=mode != "resample",
+        batch_independent=mode != "resample",
     )
 
 
@@ -260,5 +260,5 @@ def subspace_interchange(
         kwargs={**dict(donor_spec.kwargs), "dim": axis},
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=True,
+        batch_independent=True,
     )

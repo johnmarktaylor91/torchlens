@@ -79,7 +79,7 @@ def test_fork_do_gradient_edit_refuses_and_the_remedy_runs(verb: str) -> None:
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     assert model.l1.weight.grad is not None
-    if verb == "grad_zero":
+    if verb == "zero_grad":
         assert torch.count_nonzero(model.l1.weight.grad) == 0
 
 

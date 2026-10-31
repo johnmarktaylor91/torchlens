@@ -29,7 +29,7 @@ import torch.nn.functional as F
 import transformers
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs, steer_generate
+from torchlens.intervention import fit_direction, steer_generate
 
 torch.manual_seed(0)
 config = transformers.LlamaConfig(
@@ -57,7 +57,7 @@ def prompts(n, triggered, seed):
 capture = tl.options.CaptureOptions(layers_to_save="all")
 pos = tl.trace(model, prompts(8, True, 1), capture=capture)
 neg = tl.trace(model, prompts(8, False, 2), capture=capture)
-condition = direction_from_pairs(pos, neg, CONDITION_SITE, method="pca")
+condition = fit_direction(pos, neg, CONDITION_SITE, method="pca")
 
 
 def score(activation):

@@ -259,13 +259,13 @@ the same capture it was saved from comes back `EXACT`.
 print(
     edited_log.find_sites(
         tl.intervention.site(
-            module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+            module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
         )
     )
 )
 recipe_v2 = tl.when(
     tl.intervention.site(
-        module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+        module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
     ),
     tl.zero_ablate(),
 )

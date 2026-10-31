@@ -207,7 +207,7 @@ def _backward_fires(trace: Any) -> int:
 
     spec = trace._intervention_spec
     records = getattr(spec, "records", ()) if spec is not None else ()
-    return sum(1 for record in records if record.signal == "backward")
+    return sum(1 for record in records if record.direction == "backward")
 
 
 def _assert_matches_oracle(got: Grads, want: Grads, clean: Grads) -> None:

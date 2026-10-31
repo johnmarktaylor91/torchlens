@@ -633,7 +633,7 @@ def _record_predicate_intervention_spec(
             helper=entry.helper_spec,
             metadata=_predicate_hook_metadata(entry, decision),
         )
-    trace.__dict__.pop("intervention_spec", None)
+    trace.__dict__.pop("recipe", None)
     trace.__dict__.pop("_frozen_intervention_spec", None)
     trace.__dict__.pop("_cached_frozen_intervention_spec", None)
 

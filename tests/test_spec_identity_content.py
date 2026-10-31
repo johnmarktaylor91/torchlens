@@ -188,8 +188,8 @@ def test_bind_report_tracks_an_edit_between_calls() -> None:
 
     assert first_out.tolist() == [4.0]
     assert second_out.tolist() == [22.0]
-    assert first_report.digest != second_report.digest
-    assert second_report.digest == _steer_spec(torch.tensor([10.0])).digest
+    assert first_report.spec_digest != second_report.spec_digest
+    assert second_report.spec_digest == _steer_spec(torch.tensor([10.0])).digest
     for report in (first_report, second_report):
         assert set(report.rule_fire_counts) == set(report.resolved_static_targets)
         assert report.zero_fire_rule_ids == ()

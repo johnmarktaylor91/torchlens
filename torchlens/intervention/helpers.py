@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -56,7 +57,7 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
         "zero_ablate",
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -148,7 +149,7 @@ def mean_ablate(
         args=(source,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=batch_independent,
+        batch_independent=batch_independent,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -253,7 +254,7 @@ def scramble_elements(
         args=(source_value,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -316,7 +317,7 @@ def steer(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -358,7 +359,7 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
         args=(factor,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -409,7 +410,7 @@ def clamp(
         "clamp",
         kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -473,7 +474,7 @@ def add_noise(
         args=(std,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -533,7 +534,7 @@ def project_onto(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -590,7 +591,7 @@ def project_out(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -668,7 +669,7 @@ def swap_with(
         args=(other_label,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        is_batch_independent=True,
+        batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
 
@@ -752,7 +753,7 @@ def splice_module(
         kwargs={"input": input, "output": output, "allow_shape_change": allow_shape_change},
         factory=factory,
         metadata={"input": input, "output": output},
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -792,7 +793,7 @@ def hook_grad(fn: Callable[..., torch.Tensor]) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -834,7 +835,7 @@ def zero_grad(*, allow_shape_change: bool = False) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -879,7 +880,7 @@ def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -939,7 +940,7 @@ def clip_grad(max_norm: float, norm_type: float = 2.0) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -1001,7 +1002,7 @@ def add_grad_noise(std: float, *, seed: int | None = None) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -1053,7 +1054,7 @@ def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        is_batch_independent=False,
+        batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -1068,7 +1069,7 @@ def _helper_spec(
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
     direction: HelperDirection | None = None,
-    is_batch_independent: bool = False,
+    batch_independent: bool = False,
     compatible_with_append: bool = False,
 ) -> Edit:
     """Build a Edit with stable tuple metadata.
@@ -1091,7 +1092,7 @@ def _helper_spec(
         Extra helper metadata.
     direction:
         Optional default signal direction requested by legacy helpers.
-    is_batch_independent:
+    batch_independent:
         Whether this helper can be applied independently to each batch item.
     compatible_with_append:
         Whether this helper opts into append when it changes out shape.
@@ -1110,8 +1111,8 @@ def _helper_spec(
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
-        signal=direction,
-        is_batch_independent=is_batch_independent,
+        direction=direction,
+        batch_independent=batch_independent,
         compatible_with_append=compatible_with_append,
     )
 
@@ -1174,7 +1175,7 @@ def helper_from_serialized(
             helper_name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            is_batch_independent=bool(data.get("batch_independent", False)),
+            batch_independent=bool(data.get("batch_independent", False)),
             compatible_with_append=bool(data.get("compatible_with_append", False)),
         )
 
@@ -1313,13 +1314,28 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             "not load",
             code="intervention_helper_renamed",
             remedy=(
-                f"rebuild the edit with {renamed_to}(...) (the same "
+                f"rebuild the edit with {_public_helper_spelling(renamed_to)}(...) (the same "
                 "helper under its new name, same arguments and bytes) and save it again"
             ),
             argument="name",
             renamed_to=renamed_to,
         )
-    return constructors[name](*args, **kwargs)
+    constructor = constructors[name]
+    try:
+        inspect.signature(constructor).bind(*args, **kwargs)
+    except TypeError as exc:
+        raise InvalidArgumentError(
+            f"The saved intervention calls builtin helper {name!r} with arguments its "
+            f"constructor does not take ({exc}); the spec was saved by a torchlens whose "
+            "helper keywords differ",
+            code="intervention_helper_arguments_invalid",
+            remedy=(
+                "load the spec with the torchlens version that saved it, or rebuild the "
+                "edit with the current constructor and save it again"
+            ),
+            argument="kwargs",
+        ) from exc
+    return constructor(*args, **kwargs)
 
 
 def _is_non_executable_placeholder(value: Any) -> bool:
@@ -1430,13 +1446,13 @@ def _non_executable_builtin_placeholder(
         helper_name=name,
         portability="opaque_audit",
         kind=cast(Any, data.get("kind", "forward")),
-        signal=cast(Any, data.get("direction")),
+        direction=cast(Any, data.get("direction")),
         factory=factory,
         metadata=(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
             ("executable", False),
         ),
-        is_batch_independent=bool(data.get("batch_independent", False)),
+        batch_independent=bool(data.get("batch_independent", False)),
         compatible_with_append=bool(data.get("compatible_with_append", False)),
     )
 
@@ -1600,6 +1616,30 @@ _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
 
 #: Old builtin helper names a saved spec may still carry -> the new name. A load
 #: refuses them typed (``intervention_helper_renamed``); there is no load alias.
+#: Renamed builtin helpers whose public home is the package root; the others
+#: stay under ``torchlens.intervention``.
+_ROOT_HOMED_RENAMED_HELPERS: frozenset[str] = frozenset(
+    {
+        "hook_grad",
+        "clamp_grad",
+        "clip_grad",
+        "add_grad_noise",
+        "scale_grad",
+        "zero_grad",
+        "add_noise",
+        "project_out",
+    }
+)
+
+
+def _public_helper_spelling(name: str) -> str:
+    """Return the importable public spelling of a renamed builtin helper."""
+
+    if name in _ROOT_HOMED_RENAMED_HELPERS:
+        return f"torchlens.{name}"
+    return f"torchlens.intervention.{name}"
+
+
 _RENAMED_HELPER_NAMES: dict[str, str] = {
     "resample_ablate": "scramble_elements",
     "bwd_hook": "hook_grad",
@@ -1883,5 +1923,5 @@ def patch_from(
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
-        is_batch_independent=True,
+        batch_independent=True,
     )

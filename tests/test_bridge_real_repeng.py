@@ -1,6 +1,6 @@
 """repeng converter against the real package on a tiny cached Llama.
 
-A native ``direction_from_pairs`` direction converted with
+A native ``fit_direction`` direction converted with
 ``Direction.to_repeng()`` must reproduce the native steer's logits when
 ``repeng.ControlModel`` applies it, for every method. Skips when repeng,
 transformers, or the checkpoint is unavailable.

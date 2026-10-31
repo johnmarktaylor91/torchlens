@@ -129,7 +129,7 @@ def test_reloaded_edit_keeps_the_complement_and_the_basis_provenance(tmp_path: P
     delta = (reapplied[_SITE].out - base).detach()
     assert torch.allclose(delta @ complement, torch.zeros_like(delta), atol=1e-12)
     assert not torch.allclose(reapplied[_SITE].out, base * 3.0)
-    fired = [record.edit for record in reapplied[_SITE].interventions]
+    fired = [record.helper for record in reapplied[_SITE].interventions]
     assert any(dict(helper.kwargs).get("origin") == _ORIGIN for helper in fired)
 
 

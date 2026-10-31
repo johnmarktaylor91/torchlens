@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 import torch
@@ -252,32 +251,28 @@ def _assert_intervention_matches(
 
 
 @pytest.mark.parametrize(
-    ("fixture_name", "expected_format", "expected_type", "seed"),
+    "fixture_name",
     [
-        ("F1_intervention_default.tlspec", "v2.16_intervention", InterventionSpec, 1101),
-        ("F4_intervention_audit.tlspec", "v2.16_intervention", InterventionSpec, 1104),
-        (
-            "F5_intervention_executable_with_callables.tlspec",
-            "v2.16_intervention",
-            InterventionSpec,
-            1105,
-        ),
-        ("F6_intervention_portable.tlspec", "v2.16_intervention", InterventionSpec, 1106),
+        "F1_intervention_default.tlspec",
+        "F4_intervention_audit.tlspec",
+        "F5_intervention_executable_with_callables.tlspec",
+        "F6_intervention_portable.tlspec",
     ],
 )
-def test_v2_16_tlspec_fixture_loads_and_matches_in_memory_counterpart(
-    fixture_name: str,
-    expected_format: str,
-    expected_type: type[Any],
-    seed: int,
-) -> None:
-    """Every 2.16.0 golden fixture should detect, load, and match a live object."""
+def test_v2_16_tlspec_fixture_refuses_typed(fixture_name: str) -> None:
+    """Every 2.16.0 intervention fixture is detected, then refuses typed at load.
+
+    The fixtures store builtin edit keywords from before the 2.x surface rename
+    (``force_shape_change``); files saved by 2.x are not read, so the load
+    refuses with a typed error instead of a raw ``TypeError``.
+    """
+
+    from torchlens._errors import InvalidArgumentError
 
     fixture_path = FIXTURE_ROOT / fixture_name
-    assert tl.io.detect_tlspec_format(fixture_path) == expected_format
+    assert tl.io.detect_tlspec_format(fixture_path) == "v2.16_intervention"
 
-    loaded = tl.load(fixture_path, trust_custom_callables=True)
-    assert isinstance(loaded, expected_type)
-    if isinstance(loaded, InterventionSpec):
-        live_log = _build_intervention_counterpart(seed)
-        _assert_intervention_matches(loaded, live_log)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.load(fixture_path, trust_custom_callables=True)
+    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"
+    assert "force_shape_change" in str(excinfo.value)

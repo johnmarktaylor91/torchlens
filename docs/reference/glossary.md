@@ -577,7 +577,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   value refuses `transform_mask_incompatible`). Unsupported spellings refuse
   `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
-**tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
+**tl.intervention.fit_direction(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
 : Builds one contrastive steering direction from saved activations. `pos_traces` and
   `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
   negatives pairs with row `i` of the positives. One token per prompt is read at `site`
@@ -1144,7 +1144,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
   `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
   (`tl.func`) addressed specs run; finer address classes refuse
-  `harvest_address_class_ungated`, and every helper must declare `is_batch_independent=True`.
+  `harvest_address_class_ungated`, and every helper must declare `batch_independent=True`.
   Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
   block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
   ledgers each shard's fire receipt, and puts the intervention identity in the resume
@@ -1791,7 +1791,7 @@ shim owed*
 **Graph-structural producers: tl.neighborhood / tl.between** — *unstable —
 no deprecation shim owed*
 : Select by WHERE OPS SIT IN THE EXECUTED DAG.
-  `neighborhood(of, hops=, signal=)` selects every op within N recorded
+  `neighborhood(of, hops=, direction=)` selects every op within N recorded
   dataflow hops of a seed region (`hops=0` is the seed family itself;
   `direction` is `'both' | 'upstream' | 'downstream'`).
   `between(sources, sinks)` selects the executed sub-DAG carrying influence
@@ -1842,7 +1842,7 @@ deprecation shim owed*
   `by='abs'` (default) compares `|delta|`, `by='signed'` the signed delta
   (increased/decreased). `changed(reference, within=None, above=, below=)`
   applies strict bounds (neither given defaults to `above=0.0` — bare
-  `has_changes(ref)` is the "every element that moved" intervention-effect
+  `changed(ref)` is the "every element that moved" intervention-effect
   mask); `top_changed(reference, within=None, k= | fraction=, by=,
   largest=)` globally ranks deltas with the deterministic stable tie-break
   (exactly one of `k`/`fraction`; `largest=False` selects the least-moved
@@ -1972,7 +1972,7 @@ default-keep); mask-application semantics documented-unstable*
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `kind`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `direction`, `is_batch_independent`,
+  disclosure a masked `do()` adds), `direction`, `batch_independent`,
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`

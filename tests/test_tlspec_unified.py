@@ -619,7 +619,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
-    assert records[0].signal == "forward"
+    assert records[0].direction == "forward"
 
 
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
@@ -1151,7 +1151,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
 
     assert replaced_ops
     assert any(
-        record.edit_name == helper_name for op in replaced_ops for record in op.interventions
+        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
     )
 
 
