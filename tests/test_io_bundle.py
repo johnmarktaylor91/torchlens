@@ -634,15 +634,23 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "999.0.0",
         ),
         (
-            # Gate G5 (compat ledger): a pre-floor writer claiming a
-            # current-schema stamp is an ungoverned (writer, stamp) pair, so
-            # the pair-consistency refusal fires, not the old torchlens
-            # version-floor text (that hand-typed inequality was replaced by
-            # the governed ledger windows).
+            # Gate G5 (compat ledger): a pre-floor writer of the running major
+            # release claiming a current-schema stamp is an ungoverned
+            # (writer, stamp) pair, so the pair-consistency refusal fires, not
+            # the old torchlens version-floor text (that hand-typed inequality
+            # was replaced by the governed ledger windows).
             "torchlens_pair_ungoverned",
-            lambda manifest: manifest.__setitem__("torchlens_version", "0.0.1"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.0.0"),
             "raise",
             "no governed ledger window covers that writer",
+        ),
+        (
+            # A writer from an earlier major release refuses at the load door
+            # before any ledger lookup: one typed error naming the saver.
+            "torchlens_earlier_major",
+            lambda manifest: manifest.__setitem__("torchlens_version", "0.0.1"),
+            "raise",
+            "does not read files saved by torchlens 0.x",
         ),
         (
             # Older-but-governed writer: the current runtime is the FIRST

@@ -57,7 +57,7 @@ def test_ram_only_roundtrip_records_in_memory() -> None:
 
     recording = tl.record(TinyModel(), torch.ones(1, 3), default_op=True)
 
-    assert recording.bundle_path is None
+    assert recording.path is None
     assert recording.is_recovered is False
     assert len(recording) > 0
     assert recording.n_records == len(recording)
@@ -85,7 +85,7 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
     )
     loaded = tl.load(bundle_path)
 
-    assert recording.bundle_path == bundle_path
+    assert recording.path == bundle_path
     assert (bundle_path / "manifest.json").exists()
     assert (bundle_path / "metadata.json").exists()
     assert loaded.is_recovered is False

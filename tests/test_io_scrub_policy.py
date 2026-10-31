@@ -451,6 +451,9 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # other pure report reads.
         "capabilities": lambda t: t.capabilities(),
         "to_agent_json": lambda t: t.to_agent_json(),
+        # The plain-language explanation is a pure read over the same facts
+        # as to_agent_json, so it is swept like the other report reads.
+        "explain": lambda t: t.explain(),
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),
         "find_sites": lambda t: t.find_sites("relu"),
