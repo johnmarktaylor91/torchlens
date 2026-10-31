@@ -202,7 +202,7 @@ log = tl.trace(model, x, save=conv_before_relu,
                lookback=4, lookback_payload_policy='detached_raw')
 
 # Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('features.6'))
+log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
@@ -217,7 +217,7 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
                    batch_size=32, path='torchlens-activations/')
 ```
 
-**Performance note:** With `halt=` and `tl.record`, capture can run *faster
+**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
@@ -471,7 +471,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`halt=`) | yes (+`halt=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
+| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
 | Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory

@@ -34,7 +34,7 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on tinygrad (unlike the tf/mlx/
+- `intervene=` / `stop_after=` are NOT supported on tinygrad (unlike the tf/mlx/
   paddle previews); unsupported trace options refuse typed through the
   `.._options` TINYGRAD policies, never silently no-op.
 - Capture correctness depends on unrealized UOp lineage: anything that forces
