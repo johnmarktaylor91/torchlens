@@ -69,7 +69,7 @@ def test_audit_params_nonfinite_named_critical() -> None:
 
     audit = torchlens.report.param_health(model)
 
-    critical = {f.names[0]: f for f in audit.findings if f.severity == "critical"}
+    critical = {f.param_names[0]: f for f in audit.findings if f.severity == "critical"}
     assert set(critical) == {"0.weight", "2.running_mean"}
     weight_finding = critical["0.weight"]
     assert weight_finding.code == "param_value_nonfinite"
@@ -90,7 +90,7 @@ def test_audit_params_severity_mapping() -> None:
 
     audit = torchlens.report.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
 
-    by_check = {(f.check_name, f.names[0]): f for f in audit.findings}
+    by_check = {(f.check_name, f.param_names[0]): f for f in audit.findings}
     assert by_check[("dtype_headroom", "near_max")].severity == "warning"
     assert by_check[("param_subnormal", "subnormal_heavy")].severity == "warning"
     assert by_check[("param_all_same", "constant")].severity == "warning"
@@ -256,7 +256,7 @@ def test_scan_counts_are_exact_on_fp16() -> None:
 
     (row,) = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert (row.num_nan, row.n_posinf, row.n_neginf) == (3, 1, 1)
+    assert (row.num_nan, row.num_posinf, row.n_neginf) == (3, 1, 1)
     assert row.finite_min == -1.25 and row.finite_max == 2.5 and row.abs_max == 2.5
     assert row.zero_fraction == pytest.approx(993 / 1000)
     assert row.dtype_max == pytest.approx(65504.0)

@@ -398,7 +398,9 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     tinygrad_spec = get_backend_spec("tinygrad")
 
     assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
-    assert jax_spec.capabilities.validation_replay == jax_capabilities.supports_validation_replay
+    assert (
+        jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
+    )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
     assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
     assert (

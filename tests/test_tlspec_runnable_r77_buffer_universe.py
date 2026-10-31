@@ -161,7 +161,7 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     # Lane parity: the pre-existing extra-state verdict ceiling is identical in both
     # lanes; the dead lane never diverges into refusal or a differing verdict class.
     assert dead_result.report.path_faithfulness is live_result.report.path_faithfulness
-    assert dead_result.report.poisoned == live_result.report.poisoned
+    assert dead_result.report.is_poisoned == live_result.report.is_poisoned
 
 
 def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:

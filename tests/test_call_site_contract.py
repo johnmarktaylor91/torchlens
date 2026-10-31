@@ -260,7 +260,9 @@ def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
     assert contract.call_site_classes_for(loaded) is None
     check_metadata_invariants(loaded)
     unchecked = [
-        d for d in get_validation_diagnostics(loaded) if d.check == "call_site_contract_unchecked"
+        d
+        for d in get_validation_diagnostics(loaded)
+        if d.check_name == "call_site_contract_unchecked"
     ]
     assert len(unchecked) == 1
     assert "not checked" in unchecked[0].message

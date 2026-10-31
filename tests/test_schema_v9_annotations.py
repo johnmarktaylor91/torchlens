@@ -137,7 +137,7 @@ def test_health_facts_round_trip_serves_persisted_basis(tmp_path):
     loaded = tl.load(path)
     served = health_facts(loaded)
     assert served.nonfinite_labels == record.nonfinite_labels
-    assert served.checked == record.checked
+    assert served.num_checked_ops == record.num_checked_ops
 
 
 def test_tampered_health_facts_are_never_the_authority(tmp_path):

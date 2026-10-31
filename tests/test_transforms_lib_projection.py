@@ -115,7 +115,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
         assert -1.0 <= row["corr_rdm_spearman"] <= 1.0
     text = str(first)
     assert "scoped to THIS batch" in text and "empirical_only" in text
-    assert first.canonical_json().startswith('{"algorithm_version"')
+    assert first.to_json().startswith('{"algorithm_version"')
 
 
 @pytest.mark.smoke

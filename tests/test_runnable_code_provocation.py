@@ -328,7 +328,7 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "poison.tlspec"))
     result = loaded.run(inputs=-_branch_input(), on_divergence="return_diverged")
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
         tl.save(result.trace, tmp_path / "poisoned-export.tlspec")
     assert export_caught.value.fields["code"] == RunnableErrorCode.POISONED_RUN_REFUSED.value

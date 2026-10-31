@@ -48,7 +48,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert status.executed_flops == live.executed_flops is not None
         assert status.executed_evidence == "formula_exact"
         assert status.executed_flops_per_pass == live.executed_flops_per_pass
-        assert status.uncounted_ops == live.uncounted_ops
+        assert status.uncounted_op_counts == live.uncounted_op_counts
         assert status.unattributed_flops == live.unattributed_flops
         assert _row_facts(status) == _row_facts(live)
         (attribution,) = status.attributions
@@ -68,7 +68,7 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
         loaded = _save_load(trace, tmp_path, "checkpointed")
         status = backward_status(loaded)
         assert status.recompute_flops == SEGMENT_FORWARD
-        assert [a.recompute for a in status.attributions] == ["labeled"]
+        assert [a.recompute for a in status.flops_attributions] == ["labeled"]
     finally:
         trace.cleanup()
 

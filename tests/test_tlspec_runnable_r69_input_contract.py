@@ -265,7 +265,7 @@ def test_r69_admitted_capture_semantic_runtime_replacement_diverges(tmp_path: Pa
         )
         assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
         assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-        assert diverged.report.poisoned
+        assert diverged.report.is_poisoned
     # stock numpy capture -> float-enum / custom-float runtime swaps.
     path = _save(_trace(_FloatBranch(), [x, np.float64(2.0)]), tmp_path / "np_float.tlspec")
     for swap in (_CustomFloat(2.0), _StatefulFloat(2.0)):

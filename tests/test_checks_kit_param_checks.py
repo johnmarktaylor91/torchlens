@@ -72,7 +72,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
         session.detach()
 
     no_grad_names = {
-        finding.names[0]
+        finding.param_names[0]
         for finding in report.findings
         if finding.check_name == "param_received_no_gradient"
     }
@@ -127,7 +127,7 @@ def test_no_grad_findings_distinguish_none_from_zero() -> None:
         session.detach()
 
     kinds = {
-        finding.names[0]: finding.message
+        finding.param_names[0]: finding.message
         for finding in report.findings
         if finding.check_name == "param_received_no_gradient"
     }

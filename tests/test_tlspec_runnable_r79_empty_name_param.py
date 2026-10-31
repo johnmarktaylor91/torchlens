@@ -130,7 +130,7 @@ def test_r79_named_param_still_saves_and_loads(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:

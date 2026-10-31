@@ -71,7 +71,7 @@ def test_r35_any_failed_input_contract_caps_attestation(tmp_path: Path) -> None:
     )
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
@@ -82,7 +82,7 @@ def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
     result = tl.load(path).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
 
 
 def test_r35_report_constructor_rejects_attested_nonverified() -> None:

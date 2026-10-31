@@ -202,7 +202,7 @@ def test_validation_replay_unverified_status_semantics() -> None:
         reason="region_not_per_op_replayable",
         message="synthetic partial replay",
         num_replayed_ops=3,
-        unverified_node_count=2,
+        num_unverified_ops=2,
     )
 
     assert status.state == "unverified"
@@ -221,7 +221,7 @@ def test_validation_replay_status_aggregate_fold() -> None:
         backend="jax",
         source="live",
         num_replayed_ops=4,
-        unverified_node_count=1,
+        num_unverified_ops=1,
     )
     failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
@@ -1839,7 +1839,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
         )
         refusal = get_validation_failure(None)
         assert refusal is not None
-        assert refusal.check == "precondition_refusal"
+        assert refusal.check_name == "precondition_refusal"
         assert "cannot prove model-state restoration" in refusal.summary()
 
 
