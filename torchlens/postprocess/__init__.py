@@ -16,37 +16,20 @@ stable contract steps 0-20, split into thematic submodules:
   finalize any streamed bundle, optionally evict in-memory outs, and release
   live parameter references.
 
-Step ordering is DERIVED, not hand-maintained (design-ppdag-v3): each step's
-``PostprocessStepContract`` (``_contracts.py``) declares op-column
-writes/reads, placeholder probes, row effects, and trace-state tokens; the
-derivation (``_executor.py``) orients every conflict by the frozen
-``LEGACY_STEP_RANK`` and reproduces the registry order exactly (import
-checks R1/R2). The semantic direction authority is the reason-bearing
-``PINNED_ORDER_PAIRS`` corpus (import check K1; test-side K2 in
-``tests/test_postprocess_dag.py``) — the historical prose invariants
-("1-3 precede 5", "7 precedes 8", "15.5 precedes 16", ...) live there as
-machine-checked entries. Reordering steps requires editing the named corpus
-entry, re-recording the axes matrix, and the byte-identity oracles;
-warnings and first-exception order are pinned solely by day-1 order
-identity (a reorder adds a review gate for them).
+Step order is load-bearing: ``_executor.STEP_REGISTRY`` lists the steps in the
+order they run, and a reorder is verified by the byte-identity oracles. Warnings
+and first-exception order are pinned by that order.
 
-The read-triggers-write class: exactly one member is live inside steps
-1-20 — reading ``op.arg_expressions`` writes ``_arg_expressions_cache``.
-A write-audit trip on a ``*_cache`` column from a read site is
-ROOT-CAUSED, never widened away. Out-of-model, disclosed: deferred
-gradient streaming re-runs step-18/19-equivalent code after backward,
-outside the pipeline and its windows.
-
+Out-of-model, disclosed: deferred gradient streaming re-runs step-18/19-equivalent
+code after backward, outside the pipeline.
 """
 
-import os
 import time
 import warnings
 from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._errors import InvalidArgumentError
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
 from ..backends.torch.ops import _compact_ancestor_sets
 from ..capture.session import capture_session_for_events
@@ -59,26 +42,7 @@ from ..utils.hashing import (
 )
 from ..utils.tensor_utils import _is_cuda_available
 from . import ast_branches
-
-# Historical import surface: the contract artifacts live in _contracts.py
-# and the derivation in _executor.py (import-cycle hygiene);
-# torchlens.postprocess remains their public address. Importing _executor
-# here runs the 7.1-family structural checks on every torchlens import.
-from ._contracts import (
-    CAPTURE_BASELINE_TOKENS as CAPTURE_BASELINE_TOKENS,
-    LEGACY_STEP_RANK as LEGACY_STEP_RANK,
-    PINNED_ORDER_PAIRS as PINNED_ORDER_PAIRS,
-    POSTPROCESS_STEP_CONTRACTS as POSTPROCESS_STEP_CONTRACTS,
-    PinnedPair as PinnedPair,
-    PostprocessStepContract as PostprocessStepContract,
-    tokens as tokens,
-)
-from ._executor import (
-    REGISTRY_ORDER as REGISTRY_ORDER,
-    StepContext,
-    execution_order as execution_order,
-    run_pipeline,
-)
+from ._executor import StepContext, run_pipeline
 from ._materialize import materialize_from_events
 from ._primitive_profile import _finalize_forward_primitive_profile
 from .ast_branches import resolve_var_names
@@ -119,7 +83,6 @@ from .loop_grouping_adapter import (
 from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
 if TYPE_CHECKING:
-    from .._trace_core.op_store import StepAuditResult
     from ..data_classes.trace import Trace
 
 from ..quantities import Bytes
@@ -163,310 +126,6 @@ _EXECUTOR_STEP_NAMESPACE: tuple[object, ...] = (
     _finalize_streamed_bundle,
     _evict_streamed_outs,
 )
-
-
-_POSTPROCESS_ASSERT_ENV = "TORCHLENS_POSTPROCESS_ASSERTIONS"
-
-
-def _postprocess_assertions_enabled() -> bool:
-    """Return whether postprocess boundary assertions are enabled.
-
-    Refuses under ``python -O``. Every check in this audit -- undeclared column
-    writes, unsanctioned row releases, out-of-contract reads -- is spelled as an
-    ``assert``, and ``-O`` strips all of them. An audit that runs its windows,
-    checks nothing, and reports clean is worse than one that does not run: it
-    reads as evidence. So arming it in an environment that cannot execute it is a
-    hard error rather than a silent no-op.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``TORCHLENS_POSTPROCESS_ASSERTIONS`` is set to a truthy value.
-
-    Raises
-    ------
-    InvalidArgumentError
-        When the value is unrecognized (``postprocess_audit_env_invalid``) or
-        the audit is armed with assertions disabled under ``-O`` / ``-OO``
-        (``postprocess_audit_asserts_stripped``).
-    """
-
-    raw = os.environ.get(_POSTPROCESS_ASSERT_ENV, "")
-    value = raw.lower()
-    if value not in {"", "0", "1", "false", "true", "no", "yes", "off", "on"}:
-        # Closed vocabulary (grind b7 R47-3): an audit knob whose typo turns
-        # the audit OFF is a disarmed tripwire. Unset/empty is the only
-        # implicit off; anything unrecognized refuses instead of silently
-        # capturing without the audit.
-        raise InvalidArgumentError(
-            f"{_POSTPROCESS_ASSERT_ENV}={raw!r} is not a recognized value",
-            code="postprocess_audit_env_invalid",
-            remedy=(
-                "use '1'/'true'/'yes'/'on' to arm the audit, '0'/'false'/'no'/'off' "
-                "to disarm it explicitly, or unset the variable"
-            ),
-            argument=_POSTPROCESS_ASSERT_ENV,
-        )
-    enabled = value in {"1", "true", "yes", "on"}
-    if enabled and not __debug__:
-        raise InvalidArgumentError(
-            f"{_POSTPROCESS_ASSERT_ENV} is set but Python assertions are disabled "
-            "(-O / -OO), so every postprocess contract check would be stripped and "
-            "the audit would report clean without verifying anything",
-            code="postprocess_audit_asserts_stripped",
-            remedy="re-run without -O, or unset the variable to capture without the audit",
-            argument=_POSTPROCESS_ASSERT_ENV,
-        )
-    return enabled
-
-
-_WRITE_AUDIT_RECORD_ENV = "TORCHLENS_POSTPROCESS_WRITE_AUDIT"
-_READ_AUDIT_ENV = "TORCHLENS_POSTPROCESS_READ_AUDIT"
-
-#: Recording-mode sink: step id -> union of observed written column names
-#: across every audited postprocess run in this process. Read by the
-#: declaration-generation tooling; never consulted in enforcement mode.
-RECORDED_STEP_WRITES: dict[str, set[str]] = {}
-
-#: Read-audit recording sinks (design-ppdag-v3 §2.4/§2.5): per step, the
-#: union of observed read columns, row-clone-scope read columns, and
-#: content-effective write columns across every audited run in this
-#: process. Inputs to the declaration seeding and the four-category
-#: findings classification; never consulted in enforcement mode.
-RECORDED_STEP_READS: dict[str, set[str]] = {}
-RECORDED_STEP_CLONE_READS: dict[str, set[str]] = {}
-RECORDED_STEP_EFFECTIVE_WRITES: dict[str, set[str]] = {}
-
-
-def _write_audit_record_mode() -> bool:
-    """Return whether the write audit RECORDS instead of enforcing.
-
-    Closed vocabulary (grind b7 R47-3): the historical ``== "record"``
-    comparison meant a typo (``recrod``) silently selected ENFORCE and any
-    other junk silently selected the default — a config knob that reroutes on
-    typos. Unrecognized values now refuse.
-    """
-
-    raw = os.environ.get(_WRITE_AUDIT_RECORD_ENV, "")
-    value = raw.lower()
-    if value not in {"", "record"}:
-        raise InvalidArgumentError(
-            f"{_WRITE_AUDIT_RECORD_ENV}={raw!r} is not a recognized value",
-            code="postprocess_audit_env_invalid",
-            remedy="use 'record' for recording mode or unset the variable for enforcement mode",
-            argument=_WRITE_AUDIT_RECORD_ENV,
-        )
-    return value == "record"
-
-
-def _read_audit_mode() -> str:
-    """Return the read-audit mode: '' (off), 'record', or 'enforce'.
-
-    Closed vocabulary (grind b7 R47-3): the historical parser mapped every
-    unrecognized value — a typo, ``1``, ``true``, a trailing space — to OFF
-    with no diagnostic, silently disarming the read audit. Unset/empty is the
-    only implicit off; anything else must be a recognized mode.
-
-    The read audit only runs inside the assertion-armed audit windows;
-    requesting a mode without ``TORCHLENS_POSTPROCESS_ASSERTIONS`` armed
-    refuses at postprocess entry (``_require_read_audit_armable``, r7 R04-1)
-    instead of being silently inert (grind b7 R47-6).
-    """
-
-    raw = os.environ.get(_READ_AUDIT_ENV, "")
-    mode = raw.lower()
-    if mode not in {"", "record", "enforce"}:
-        raise InvalidArgumentError(
-            f"{_READ_AUDIT_ENV}={raw!r} is not a recognized value",
-            code="postprocess_audit_env_invalid",
-            remedy=("use 'record' or 'enforce', or unset the variable to leave the read audit off"),
-            argument=_READ_AUDIT_ENV,
-        )
-    return mode
-
-
-def _require_read_audit_armable() -> None:
-    """Refuse a requested read audit that cannot actually run (r7 R04-1).
-
-    The read audit acts only inside the assertion-armed audit windows, so
-    ``TORCHLENS_POSTPROCESS_READ_AUDIT=enforce`` with
-    ``TORCHLENS_POSTPROCESS_ASSERTIONS`` unset was silently inert: a CI leg or
-    agent lane exporting only the read knob got a green run and reported
-    read-contract enforcement while a genuine undeclared read sailed through
-    (demonstrated live on the step-16 R04-2 finding). The sibling
-    ``_postprocess_assertions_enabled`` already HARD-ERRORS when armed under
-    ``python -O`` for exactly this vacuous-audit reason; requesting a read
-    audit without the windows it runs in is the same class and refuses the
-    same way.
-    """
-
-    if _read_audit_mode() and not _postprocess_assertions_enabled():
-        raise InvalidArgumentError(
-            f"{_READ_AUDIT_ENV} is set but {_POSTPROCESS_ASSERT_ENV} is not: the read "
-            "audit only acts inside the assertion-armed audit windows, so this "
-            "configuration checks nothing while reading as enforcement",
-            code="postprocess_audit_env_invalid",
-            remedy=(f"also set {_POSTPROCESS_ASSERT_ENV}=1, or unset {_READ_AUDIT_ENV}"),
-            argument=_READ_AUDIT_ENV,
-        )
-
-
-def _open_step_write_audit(self: "Trace") -> None:
-    """Start the op-store column audit for the next step window."""
-
-    core = self.__dict__.get("_trace_core")
-    if core is None or core.ops is None:
-        return
-    from .._trace_core.op_store import begin_cell_write_audit
-
-    begin_cell_write_audit(core.ops, record_reads=bool(_read_audit_mode()))
-
-
-def _close_step_write_audit(self: "Trace") -> "StepAuditResult | None":
-    """Stop the audit; return the window's ``StepAuditResult``.
-
-    ``None`` when unarmed (no core-backed store yet).
-    """
-
-    core = self.__dict__.get("_trace_core")
-    if core is None or core.ops is None:
-        return None
-    from .._trace_core.op_store import end_cell_write_audit
-
-    return end_cell_write_audit(core.ops)
-
-
-def _assert_no_open_window(self: "Trace") -> None:
-    """Assert the executor left no audit window armed past step 20.
-
-    Review note N11: this replaces the historical trailing-window discard —
-    the freeze seam after step 20 legitimately rewrites relation cells
-    wholesale and must run UNAUDITED by construction, not by a
-    discard-and-hope.
-
-    The ``assert`` spelling is deliberate and safe here, unlike the
-    import-time structural checks the executor header bans it for (B1-23a,
-    reviewed and left as-is): this whole audit family is assert-based by
-    design, and ``_postprocess_assertions_enabled`` HARD-ERRORS when the audit
-    is armed under ``python -O``. Assertions-off therefore means the audit
-    never runs and this function is never called -- it cannot be silently
-    stripped mid-audit. Pinned by
-    ``tests/test_postprocess_retention_epilogue.py``.
-    """
-
-    core = self.__dict__.get("_trace_core")
-    if core is None or core.ops is None:
-        return
-    from .._trace_core.op_store import _AUDIT_COLLECTORS
-
-    assert id(core.ops) not in _AUDIT_COLLECTORS, (
-        "postprocess left an audit window open past step 20; the freeze "
-        "seam would trip it on its wholesale relation rewrites."
-    )
-
-
-def _assert_postprocess_contract(self: "Trace", step: str) -> None:
-    """Close the current window and check one completed step's contract.
-
-    Kept for the step-0 prologue (whose store is born mid-window and closes
-    unarmed); steps 1-20 run through the executor loop, which owns the
-    begin/end boundaries explicitly.
-    """
-
-    if not _postprocess_assertions_enabled():
-        return
-    audit_result = _close_step_write_audit(self)
-    _check_postprocess_contract(self, step, audit_result)
-
-
-def _check_postprocess_contract(
-    self: "Trace", step: str, audit_result: "StepAuditResult | None"
-) -> None:
-    """Check a closed window against the step contract, then postconditions.
-
-    Postconditions run OUTSIDE any window (the executor opens the next
-    window only before the next step body): with reads audited, the
-    historical order — open next window, then run postcondition reads —
-    would attribute step N's assert reads to step N+1 as phantom reads
-    (review note N10).
-    """
-
-    contract = POSTPROCESS_STEP_CONTRACTS.get(step)
-    assert contract is not None, f"Unknown postprocess step contract: {step!r}"
-    if audit_result is not None:
-        observed_writes = audit_result.written_columns
-        released_rows = audit_result.released_rows
-        assert not released_rows or "deletes" in contract.row_effects, (
-            f"Step {step} ({contract.name}) released {released_rows} whole op "
-            "row(s) without a 'deletes' row_effects sanction in "
-            "POSTPROCESS_STEP_CONTRACTS; declaring row removal is a reviewed "
-            "contract diff, never a silent drift."
-        )
-        if _write_audit_record_mode():
-            RECORDED_STEP_WRITES.setdefault(step, set()).update(observed_writes)
-        else:
-            undeclared_writes = observed_writes - contract.writes
-            assert not undeclared_writes, (
-                f"Step {step} ({contract.name}) wrote undeclared op-store "
-                f"columns {sorted(undeclared_writes)}; widen the declared "
-                "write set in POSTPROCESS_STEP_CONTRACTS as a reviewed "
-                "schema-contract diff if the writes are intended."
-            )
-        read_mode = _read_audit_mode()
-        if read_mode == "record":
-            RECORDED_STEP_READS.setdefault(step, set()).update(audit_result.read_columns)
-            RECORDED_STEP_CLONE_READS.setdefault(step, set()).update(
-                audit_result.clone_read_columns
-            )
-            RECORDED_STEP_EFFECTIVE_WRITES.setdefault(step, set()).update(
-                audit_result.effective_write_columns
-            )
-        elif read_mode == "enforce":
-            undeclared_reads = audit_result.read_columns - (
-                contract.reads | contract.placeholder_probes
-            )
-            assert not undeclared_reads, (
-                f"Step {step} ({contract.name}) read undeclared op-store "
-                f"columns {sorted(undeclared_reads)}; declared reads are the "
-                "derivation authority — root-cause the dependency and land it "
-                "as a reviewed contract diff, never a silent widen."
-            )
-            assert not audit_result.clone_read_columns or "creates" in contract.row_effects, (
-                f"Step {step} ({contract.name}) performed row-clone reads "
-                "without a 'creates' row_effects sanction; cloning is only "
-                "legal as part of row creation (design-ppdag-v3 §2.4d)."
-            )
-    step_name = f"Step {contract.step} ({contract.name})"
-    if step == "1":
-        assert self.output_layers, f"{step_name} must register output layers"
-    elif step == "8":
-        assert self._raw_to_final_layer_labels, "Step 8 must build raw-to-final layer labels"
-        assert self._raw_to_final_op_labels, "Step 8 must build raw-to-final op labels"
-    elif step == "11":
-        for op in self.layer_list:
-            assert op.label, f"Step 11 left {op!r} without a final op label"
-            assert op.layer_label, f"Step 11 left {op!r} without a final layer label"
-            assert op.lookup_keys, f"Step 11 left {op.label} without lookup keys"
-            assert self.layer_dict_all_keys[op.label] is op
-            # The bare layer label resolves to ONE pass of that layer (the
-            # public lookup contract keeps the LAST pass for multi-pass
-            # layers), never to a foreign layer's op. The former exact
-            # `is op` form was wrong by construction for every recurrent
-            # model and unreachable outside the debug env flag.
-            resolved = self.layer_dict_all_keys[op.layer_label]
-            assert resolved.layer_label == op.layer_label, (
-                f"Step 11 mapped layer label {op.layer_label!r} to a foreign op {resolved.label!r}"
-            )
-    elif step == "15.5":
-        assert self.layer_logs, "Step 15.5 must build aggregate layer logs"
-        assert len(self.layer_logs) == len(self.layer_labels)
-        assert isinstance(self.by_pass, dict)
-    elif step == "16":
-        assert getattr(self, "_module_logs", None) is not None, "Step 16 must build module logs"
-    elif step == "16.5":
-        assert self.graph_shape_hash is not None, "Step 16.5 must compute graph_shape_hash"
-    elif step == "17":
-        assert self._tracing_finished is True, "Step 17 must mark tracing finished"
 
 
 def _unattributed_op_offenders(ops: Any) -> list[str]:
@@ -739,9 +398,6 @@ def _postprocess_body(
         Hierarchical address strings for each output.
     """
 
-    # r7 R04-1: a requested-but-unarmable read audit refuses HERE, before any
-    # step window, so the knob can never be silently inert for a whole run.
-    _require_read_audit_armable()
     capture_events = getattr(self, "capture_events", None)
     capture_session = None
     # Resolve each output tensor's graph parent BEFORE materializing events:
@@ -768,7 +424,6 @@ def _postprocess_body(
         with _vtimed(self, "  Step 0: Materialize capture events"):
             materialize_from_events(self, working_events)
         working_events.release_working_projection()
-        _assert_postprocess_contract(self, "0")
         delattr(self, "capture_events")
 
     # Guard: if the model produced no logged layers, skip postprocessing (#153)
@@ -796,12 +451,8 @@ def _postprocess_body(
     )
     _post_t0 = time.time() if getattr(self, "verbose", False) else 0
 
-    # Steps 1-20 run through the derived-order executor (_executor.py): the
-    # registry mirrors the historical hand order (R2 pins them equal), each
-    # step body resolves its callable through this module's namespace at
-    # call time, and the audit windows are explicit per-step boundaries
-    # with postconditions outside any window. No window survives the loop,
-    # so the freeze seam below runs unaudited by construction.
+    # Steps 1-20 run through the executor (_executor.py): each step body
+    # resolves its callable through this module's namespace at call time.
     run_pipeline(
         StepContext(
             trace=self,

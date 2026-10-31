@@ -30,14 +30,6 @@ _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
 #: with its reason -- silence is not an option.
 _LEDGERED_RAW_READS: dict[str, str] = {
     "TORCHLENS_CACHE_DIR": "kind=path: filesystem path, no boolean semantics",
-    "TORCHLENS_POSTPROCESS_ASSERTIONS": (
-        "reviewed inline closed-vocabulary parser: adds the -O/-OO "
-        "stripped-assertions refusal and the audit-specific refusal code"
-    ),
-    "TORCHLENS_POSTPROCESS_WRITE_AUDIT": "kind=enum ('' / 'record'), inline closed vocabulary",
-    "TORCHLENS_POSTPROCESS_READ_AUDIT": (
-        "kind=enum ('' / 'record' / 'enforce'), inline closed vocabulary"
-    ),
 }
 
 

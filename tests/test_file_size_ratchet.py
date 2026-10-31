@@ -464,7 +464,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the landed T85 train (3258 alone) unions with F20's reviewed contract
     # additions to 3301 on the merged tree; the F20-side 3350 ceiling already
     # clears the union and stays.
-    "torchlens/postprocess/_contracts.py": 3350,
     # 3200 -> 3250 (2026-08-29 F28 re-reconcile): merge union -- the F41
     # owner-identity source-metadata derivation (3184) fits 3200 alone, and
     # the F28 echo module-seam emits (duck-typed _echo_session reads at the

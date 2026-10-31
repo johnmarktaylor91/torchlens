@@ -15,8 +15,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 |------|-------|---------|
 | `__init__.py` | orchestrator | `postprocess()` prologue/epilogue, audit helpers, re-exports |
 | `_call_site_contract.py` | 7 support | Call-site grouping side table (call-site class per raw label, never persisted) and the grouping contract checked at step 7 and by validation |
-| `_contracts.py` | contracts | Step contracts, frozen rank, pinned-pair corpus, capture baseline |
-| `_executor.py` | derivation + executor | Edge derivation, rank-keyed Kahn, import checks, StepSpec registry, run_pipeline |
+| `_executor.py` | executor | StepSpec registry (steps 1-20 in run order), `run_pipeline` |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
@@ -32,53 +31,11 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers |
 | `incremental.py` | fastlog enrichment | Adds module paths to sparse recordings; `add_param_addresses` is DEAD on current builds (ActivationRecord carries no `parent_param_addresses` field, so it always raises `RecordingConfigError`) |
 
-## Step Contracts and the Derived Order (M10 + design-ppdag-v3)
+## Step Order
 
-Every step's `PostprocessStepContract` (`_contracts.py`) declares its exact
-op-store COLUMN write set AND read set, plus `placeholder_probes` (reviewed
-reads that legally observe the step-0 placeholder), `row_effects`
-(`creates`/`deletes` whole-row sanctions — `creates` also carries row-clone
-read legality), and `trace_state` tokens (closed 20-token vocabulary,
-`r:`/`w:` stored form, `rw:` construction shorthand). The step order is
-DERIVED from these declarations (`_executor.py`): every RAW/WW/WAR,
-two-sided row-barrier, token, and barrier edge orients by the frozen
-`LEGACY_STEP_RANK`, rank-keyed Kahn reproduces the registry exactly (import
-checks R1/R2), and the semantic direction authority is the reason-bearing
-`PINNED_ORDER_PAIRS` corpus (import check K1; test-side K2). A coordinated
-rank+registry reversal passes the drift checks by construction — only the
-corpus catches it, by named reviewed entry.
-
-Under `TORCHLENS_POSTPROCESS_ASSERTIONS` a zero-cost-when-off audit
-(class-swap instrumentation on the op row store) verifies each step writes
-only declared columns; `TORCHLENS_POSTPROCESS_READ_AUDIT=enforce`
-additionally verifies reads stay inside declared reads+probes (the write
-audit keeps a read-free class so enforcing writes never pays a `cell_get`
-override). The read-audit knob only acts inside the assertion-armed audit
-windows; setting it without `TORCHLENS_POSTPROCESS_ASSERTIONS` REFUSES at
-postprocess entry (r7 R04-1 — the silently-inert combination read as
-enforcement while checking nothing). All three knobs parse against a closed
-vocabulary and REFUSE
-unrecognized values (a typo can no longer silently disarm an audit). The audit covers assignment/deletion AND in-place container
-mutation (per-step order-canonical content fingerprints of mutable
-dict/list/set cells on rows that existed at step begin). Whole-row lifecycle
-is separate: creation is a produces contract; REMOVAL (husking releases and
-re-reads every cell) checks the `row_effects` `deletes` sanction, and
-released-row reads/deletes are row-lifecycle events, not column accesses.
-`Op.copy()`'s whole-schema getattr loop is tagged by `row_clone_scope` as
-the row-clone access kind — legal only on `creates` steps, no per-column
-edges (the row barrier carries ordering). Recording mode additionally tags
-writes content-effective vs no-op (a permanent no-op writer cannot
-discharge a read-before-write finding). The recording/enforcement axes
-matrix lives in `tests/support/postprocess_axes.py`; per-axis enforcement
-and the phantom-declaration/no-op-writer union reports run in
-`tests/test_postprocess_enforcement.py`. THE day-1 finding is pinned by
-name in `tests/test_postprocess_dag.py` (`PINNED_FINDINGS = {("3", "label")}`:
-step 3 reads `label` as data before its step-8 writer — root-cause pending,
-never silenced; the formerly co-pinned `layer_label` read was split off as
-the `_label_for_reference_removal` fallback PROBE it actually is). Disclosed residuals:
-mutables nested inside non-builtin custom objects; kind-table cells; the
-`is OpRowStore` swap guard silently skips fork `OpStoreView`s and sealed
-stores (sealing happens after step 20, outside every window). Transient
+Step order is load-bearing and is the order of `STEP_REGISTRY` in `_executor.py`.
+Reordering steps requires the byte-identity oracles and a warnings/exception-order
+review (those are pinned only by the existing order). Transient
 build scratch lives in three named per-phase workspaces (`ir/workspaces.py`),
 not a flat `TraceBuildState` (deleted in M10): `RawGraphWorkspace` (capture
 ingress + steps 0-11, also the backend `finalize_forward_session` ownership
@@ -166,41 +123,14 @@ existing graph, and the single `postprocess()` entry point preserves the ordered
 Step 0-20 contracts. Saved-output summaries are refreshed after Step 11 finalizes the
 retained op list.
 
-## Ordering Is Derived (design-ppdag-v3)
-
-Step order is NOT hand-maintained. `_contracts.py` holds each step's declared
-contract (op-column `writes`/`reads`, `placeholder_probes`, `row_effects`,
-`trace_state` tokens) plus the two frozen direction authorities:
-`LEGACY_STEP_RANK` (every derived edge orients by rank, never by registry
-position) and the reason-bearing `PINNED_ORDER_PAIRS` corpus. `_executor.py`
-derives the edges (RAW/WW/WAR, two-sided row barriers, token conflicts, the
-step-17 barrier), runs rank-keyed Kahn, and refuses import when the derived
-order, registry, rank, or corpus disagree (checks R1/R2/K1 + the token
-read-before-write analogue). `tests/test_postprocess_dag.py` freezes the
-goldens (multi-writer table, probe set, rank), pins the day-1 findings by
-name, and holds K2 (every derived producer->consumer pair must be pinned
-with a reviewed reason).
-
-Reordering steps therefore requires: editing the named corpus entry (the
-semantic review), re-recording the axes matrix
-(`tests/support/postprocess_axes.py`), the byte-identity oracles, and a
-warnings/exception-order review (those are pinned only by day-1 identity).
-The historical prose invariants (1-3 before 5, 7 before 8, 9/10 before 11,
-15.5 before 16, 18/19 before 20) are corpus entries now; there is NO
-("16.5","17") pair — 16.5's pinned successors are 18, and 17 pairs with
-17.5/18 (read `PINNED_ORDER_PAIRS` in `_contracts.py` for the authority).
-
 ## Executor
 
 `postprocess()` keeps the prologue (pre-0 + step-0 materialize block), the
 no-layers early exit, and the freeze epilogue; steps 1-20 run through
 `_executor.run_pipeline` over `STEP_REGISTRY`. Every step body resolves its
-callable through the `torchlens.postprocess` module namespace AT CALL TIME —
-monkeypatching a step function on the module still works and still trips the
-audit (the seam test proves it). Audit windows are explicit per-step
-boundaries: begin -> run -> end-in-finally -> contract check ->
-postconditions OUTSIDE any window; no window survives the loop, so the
-freeze seam runs unaudited by construction. Step 18's `should_run` IS the
+callable through the `torchlens.postprocess` module namespace AT CALL
+TIME, so monkeypatching a step function on the module still works
+(`tests/test_postprocess_executor.py` proves it). Step 18's `should_run` IS the
 streaming snapshot point (context-writing, never trace-writing); step 19
 gates on the snapshot; `should_run` evaluates exactly once per step.
 

@@ -186,12 +186,11 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     """Check-shaped functions in the direct-target scope are all mutant targets.
 
     b9-sol round-5 R74-2: the direct roster covered exactly one validation
-    comparator and one postprocess checker while validation/core.py carried
-    five more raise-on-violation entry points and postprocess/__init__.py two
-    assert seams — claimed-exhaustive tripwire coverage derived from the
+    comparator while validation/core.py carried five more raise-on-violation
+    entry points — claimed-exhaustive tripwire coverage derived from the
     metadata-contract registry alone. Registry contracts are enrolled by
     construction; this census makes the DIRECT scope structural too: a new
-    ``_check_*``/``_validate_*``/``_assert_*`` def in either file must join
+    ``_check_*``/``_validate_*``/``_assert_*`` def in that file must join
     MUTANTS or EXEMPT_MUTANTS (or a reasoned exclusion here) before it ships.
     """
 
@@ -203,7 +202,7 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     }
     # Reasoned exclusions only — every entry needs a why.
     excluded: set[tuple[str, str]] = set()
-    scope = ("torchlens/validation/core.py", "torchlens/postprocess/__init__.py")
+    scope = ("torchlens/validation/core.py",)
     unenrolled = []
     for rel in scope:
         source = (_REPO_ROOT / rel).read_text(encoding="utf-8")

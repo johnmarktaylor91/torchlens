@@ -90,19 +90,12 @@ MUTANTS: dict[str, tuple[str, str]] = {
     # comparison result at the callsite must be killed by the corruption
     # battery, not by a single diagnostics test.
     "M13": ("torchlens/validation/core.py", "_deep_numeric_replay_matches_saved"),
-    # The postprocess step-contract checker (b9-sol R74-1): a return-None
-    # disarm previously survived because this suite listed only validation
-    # files. Killed directly by tests/test_postprocess_contract_arming.py and
-    # through real armed captures by the test_postprocess_dag enforcement
-    # plants below.
-    "M14": ("torchlens/postprocess/__init__.py", "_check_postprocess_contract"),
     # The b9-sol round-5 enrollment gap (R74-2): the direct roster covered
-    # exactly one validation comparator and one postprocess checker while
-    # validation/core.py carries five more raise-on-violation entry points
-    # and postprocess/__init__.py two assert seams, all previously
-    # margin-unmeasured. tests/test_mutation_driver_governance.py now
-    # censuses the check-shaped functions in both files against this roster,
-    # so the next entry point cannot ship unenrolled.
+    # exactly one validation comparator while validation/core.py carries five
+    # more raise-on-violation entry points, all previously margin-unmeasured.
+    # tests/test_mutation_driver_governance.py now censuses the check-shaped
+    # functions in that file against this roster, so the next entry point
+    # cannot ship unenrolled.
     "M15": ("torchlens/validation/core.py", "_check_layer_arguments_logged_correctly"),
     "M16": ("torchlens/validation/core.py", "_validate_layer_against_arg"),
     "M17": ("torchlens/validation/core.py", "_check_arglocs_correct_for_arg"),
@@ -111,8 +104,6 @@ MUTANTS: dict[str, tuple[str, str]] = {
         "torchlens/validation/core.py",
         "_check_whether_func_on_saved_parents_yields_saved_tensor",
     ),
-    "M20": ("torchlens/postprocess/__init__.py", "_assert_no_open_window"),
-    "M21": ("torchlens/postprocess/__init__.py", "_assert_postprocess_contract"),
 }
 
 #: mutant id -> (relative file, core-validation checker). The checkers of
@@ -266,12 +257,6 @@ SUITE = [
     # on non-defects; score the real killers instead of writing duplicates.
     "tests/surface_oracle/test_surface_oracle.py",
     "tests/test_capture_outcome_characterization.py",
-    # M14 killers: the direct synthetic-input liveness file plus the two
-    # armed-capture enforcement plants (undeclared read, in-place write
-    # smuggle) that exercise the checker through a real postprocess run.
-    "tests/test_postprocess_contract_arming.py",
-    "tests/test_postprocess_dag.py::test_read_enforcement_trips_on_undeclared_read",
-    "tests/test_postprocess_dag.py::test_executor_seam_patched_step_executes_and_audits",
     # W2 executor killers (lane L3 triage step 21, 2026-10-01): the bucket-name
     # golden pins every _vtimed-wrapped step's timing bucket on a default
     # capture, so a whole-function return-None disarm of _run_step_11_5,
@@ -282,15 +267,10 @@ SUITE = [
     # registry_clears; step 19
     # and its gate are conditional (absent from the bucket golden's default
     # axis either way), so their killer asserts the eviction effect directly
-    # on a streaming capture. (test_postprocess_enforcement.py's
-    # write-audit matrix test, test_matrix_union_reports, would independently
-    # prove several of these too, but its EXPECTED_PHANTOM_WRITES golden is
-    # red on its own in the CI mutation env's narrower EXTRAS=dev,tabular --
-    # confirmed red on main, unrelated to this change -- so it cannot be
-    # added here without breaking the pristine control.)
-    "tests/test_postprocess_dag.py::test_phase_timing_bucket_names_default_capture",
-    "tests/test_postprocess_dag.py::test_step17_5_adopts_container_records_before_the_registry_clears",
-    "tests/test_postprocess_dag.py::test_step19_and_gate_evict_streamed_outs_from_memory",
+    # on a streaming capture.
+    "tests/test_postprocess_executor.py::test_phase_timing_bucket_names_default_capture",
+    "tests/test_postprocess_executor.py::test_step17_5_adopts_container_records_before_the_registry_clears",
+    "tests/test_postprocess_executor.py::test_step19_and_gate_evict_streamed_outs_from_memory",
     # W3 exempt killers (X02, X07): direct negative-case calls already proved
     # the data parent/destination must stay strictly perturbed; they lived
     # outside this suite. X05/X06 killers are in test_bug_fixes_phase14.py.
