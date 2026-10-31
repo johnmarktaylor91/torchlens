@@ -2840,8 +2840,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent_ops[parent_index] = trace.ops[parent_label]
             except KeyError:
-                if parent_label in trace.layer_dict_all_keys:
-                    parent_ops[parent_index] = trace.layer_dict_all_keys[parent_label]
+                if parent_label in trace._layer_dict_all_keys:
+                    parent_ops[parent_index] = trace._layer_dict_all_keys[parent_label]
         return OpAccessor(parent_ops)
 
     @input_ops.deleter
@@ -2860,9 +2860,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = trace.ops[parent_label]
             except KeyError:
-                if parent_label not in trace.layer_dict_all_keys:
+                if parent_label not in trace._layer_dict_all_keys:
                     continue
-                parent = trace.layer_dict_all_keys[parent_label]
+                parent = trace._layer_dict_all_keys[parent_label]
             if parent.is_buffer and parent.buffer_write_kind is None:
                 source_ops[parent_index] = parent
         return OpAccessor(source_ops)
@@ -2883,9 +2883,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 child = trace.ops[child_label]
             except KeyError:
-                if child_label not in trace.layer_dict_all_keys:
+                if child_label not in trace._layer_dict_all_keys:
                     continue
-                child = trace.layer_dict_all_keys[child_label]
+                child = trace._layer_dict_all_keys[child_label]
             if child.is_buffer and child.buffer_write_kind is not None:
                 sink_ops[child_index] = child
         return OpAccessor(sink_ops)
@@ -2920,7 +2920,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = ops[parent_label]
             except KeyError:
-                parent = cast("Op | None", trace.layer_dict_all_keys.get(parent_label))
+                parent = cast("Op | None", trace._layer_dict_all_keys.get(parent_label))
             if parent is None:
                 activations.append(None)
                 continue
@@ -3499,7 +3499,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         solution = _engine.solve(trace)
         cache = self._slot("_receptive_field_cache")
         if cache is not None and cache._solution is not solution:
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op._slot("_receptive_field_cache") is not None:
                     object.__setattr__(
                         op,

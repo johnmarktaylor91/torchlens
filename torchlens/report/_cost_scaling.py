@@ -203,7 +203,7 @@ def padding_waste(
     unclassified = 0
     largest: tuple[str | None, int] = (None, 0)
     forward = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if classify_row(op) != "known":
             continue
         flops = int(getattr(op, "flops_forward", 0) or 0)

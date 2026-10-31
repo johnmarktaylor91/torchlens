@@ -2,7 +2,7 @@
 
 Branch A of the sumfam memo (accepted with the defaults.2 batch, JMT
 2026-10-12): the accessor's length agrees with the same-named count, and the
-alias-inclusive row sequence keeps its own spelling, ``trace.layer_list``.
+alias-inclusive row sequence keeps its own spelling, ``trace._layer_list``.
 Label lookup still resolves every row (the documented asymmetry, pinned
 below).
 """
@@ -28,7 +28,7 @@ def _sequential_trace() -> Any:
 
 
 def _assert_counts_agree(trace: Any) -> None:
-    counted = [op for op in trace.layer_list if not (op.is_input or op.is_output or op.is_buffer)]
+    counted = [op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)]
     assert len(trace.ops) == trace.num_ops == len(counted)
     assert list(trace.ops) == counted
     assert trace.ops.values() == counted
@@ -42,7 +42,7 @@ def test_sequential_linear_relu_linear_counts_three() -> None:
 
     assert trace.num_ops == 3
     assert len(trace.ops) == 3
-    assert len(trace.layer_list) == 5
+    assert len(trace._layer_list) == 5
     _assert_counts_agree(trace)
     assert [op.func_name for op in trace.ops] == ["linear", "relu", "linear"]
 
@@ -60,7 +60,7 @@ def test_alias_rows_stay_addressable_but_uncounted() -> None:
     counted_labels = trace.ops.keys()  # a list: membership here differs from ``in trace.ops``
     assert input_label not in counted_labels
     assert output_label not in counted_labels
-    assert trace.layer_list[0].is_input and trace.layer_list[-1].is_output
+    assert trace._layer_list[0].is_input and trace._layer_list[-1].is_output
 
 
 def test_derived_accessors_and_trace_indexing_keep_every_row() -> None:
@@ -72,7 +72,7 @@ def test_derived_accessors_and_trace_indexing_keep_every_row() -> None:
     """
 
     trace = _sequential_trace()
-    rows = list(trace.layer_list)
+    rows = list(trace._layer_list)
 
     assert [op.layer_label for op in trace.input_ops] == list(trace.input_layers)
     assert [op.layer_label for op in trace.output_ops] == list(trace.output_layers)
@@ -92,7 +92,7 @@ def test_counts_agree_on_a_real_model() -> None:
     model = transformers.GPT2Model(config).eval()
     trace = tl.trace(model, torch.randint(0, 32, (1, 6)))
 
-    assert len(trace.layer_list) > trace.num_ops
+    assert len(trace._layer_list) > trace.num_ops
     _assert_counts_agree(trace)
 
 
@@ -109,7 +109,7 @@ def test_counts_agree_on_a_recurrent_model_with_buffers() -> None:
             return x
 
     trace = tl.trace(_Recurrent(), torch.randn(1, 3))
-    assert any(op.is_buffer for op in trace.layer_list)
+    assert any(op.is_buffer for op in trace._layer_list)
     _assert_counts_agree(trace)
 
 
@@ -127,7 +127,7 @@ def test_primitive_profile_dense_rows_are_the_layer_list() -> None:
 
     ``op_row_index`` indexes the full row sequence (inputs and outputs
     included). Before F1 the check read ``list(trace.ops)``, which iterated the
-    accessor's every-row list; it now reads ``list(trace.layer_list)``, the
+    accessor's every-row list; it now reads ``list(trace._layer_list)``, the
     identical sequence.
     """
 
@@ -136,11 +136,11 @@ def test_primitive_profile_dense_rows_are_the_layer_list() -> None:
     assert profile is not None and profile.primitive_ops
 
     every_row = trace.ops._list  # the sequence list(trace.ops) produced before F1
-    assert list(trace.layer_list) == every_row
-    assert len(trace.layer_list) > len(trace.ops)
+    assert list(trace._layer_list) == every_row
+    assert len(trace._layer_list) > len(trace.ops)
     for row in profile.primitive_ops:
         for ref in row.parent_op_refs:
-            op = trace.layer_list[ref.op_row_index]
+            op = trace._layer_list[ref.op_row_index]
             assert op.layer_label == ref.op_label
             assert op.func_call_id == ref.func_call_id
     assert check_metadata_invariants(trace)
@@ -152,7 +152,7 @@ def test_a_wrong_op_row_index_still_raises() -> None:
     ref = row.parent_op_refs[0]
     wrong = next(
         index
-        for index, op in enumerate(trace.layer_list)
+        for index, op in enumerate(trace._layer_list)
         if index != ref.op_row_index and op.layer_label != ref.op_label
     )
     row.parent_op_refs = (

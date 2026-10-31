@@ -48,7 +48,7 @@ def test_builtin_rules_are_available_to_the_first_descriptor_query() -> None:
 
     model = nn.Conv2d(1, 1, 3, padding=1)
     trace = tl.trace(model, torch.ones(1, 1, 5, 5))
-    op = next(item for item in trace.layer_list if item.func_name == "conv2d")
+    op = next(item for item in trace._layer_list if item.func_name == "conv2d")
     descriptor = next(iter(op.receptive_field.per_input.values()))
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT

@@ -1008,7 +1008,7 @@ def _require_effective_patch(
     if isinstance(started_at, (int, float)):
         # Fire records are minted DURING the run, so they are filtered by the
         # run's start time; the run's end ``timestamp`` would exclude them all.
-        for layer in getattr(patched_log, "layer_list", []) or []:
+        for layer in getattr(patched_log, "_layer_list", []) or []:
             for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= started_at:

@@ -185,7 +185,7 @@ def rehydrate_trace(
     # flow). Building accessors first captured the still-unresolved BlobRef
     # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
     # after a plain `tl.load()` instead of a torch.Tensor. Nothing
-    # rebuild_trace_accessors() reads (trace.layer_list, module_accessor_state)
+    # rebuild_trace_accessors() reads (trace._layer_list, module_accessor_state)
     # depends on _rehydrate_object() having run first, so this reorder is safe.
     if module_accessor_state is not None:
         rebuild_trace_accessors(
@@ -1177,7 +1177,7 @@ def _has_pending_lazy_payload(trace: Trace) -> bool:
         Whether an out/grad lazy ref exists whose payload slot is empty.
     """
 
-    for op in getattr(trace, "layer_list", []) or []:
+    for op in getattr(trace, "_layer_list", []) or []:
         slot = getattr(op, "_slot", None)
         if not callable(slot):
             continue
@@ -1548,7 +1548,7 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in getattr(trace, "_layer_list", []):
         out_ref = getattr(layer, "out_ref", None)
         if isinstance(out_ref, LazyActivationRef):
             return out_ref.source_bundle_path

@@ -152,7 +152,7 @@ def test_find_sites_repr_empty_one_and_many() -> None:
 
     empty = SiteTable(())
     one = log.find_sites(tl.func("relu"))
-    many = SiteTable(tuple(log.layer_list + log.layer_list))
+    many = SiteTable(tuple(log._layer_list + log._layer_list))
 
     assert repr(empty) == "SiteTable(0 sites)"
     assert repr(one).startswith("SiteTable(1 site: relu")

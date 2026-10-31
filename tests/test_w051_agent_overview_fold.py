@@ -53,9 +53,9 @@ def test_anomaly_block_reads_the_tri_state() -> None:
 def _expected_edges(log: tl.Trace, fold_membership: dict[str, str]) -> dict[str, set[str]]:
     """Derive each class's parent classes from the op records' own edges."""
 
-    by_bare = {str(op.layer_label): fold_membership[str(op.label)] for op in log.layer_list}
+    by_bare = {str(op.layer_label): fold_membership[str(op.label)] for op in log._layer_list}
     expected: dict[str, set[str]] = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         cls = fold_membership[str(op.label)]
         for parent in op.parents:
             spelled = str(parent)  # pass-qualified OR bare, both occur
@@ -107,16 +107,16 @@ def test_realistic_fixture_folds_flat_with_edges() -> None:
 
     log = tl.trace(MiniTransformer().eval(), mini_ids(), save=tl.func("softmax") | tl.func("gelu"))
     fold = fold_trace(log)
-    n_ops = len(log.layer_list)
+    n_ops = len(log._layer_list)
     assert n_ops > 100
     assert len(fold.classes) < n_ops // 2
-    assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
+    assert fold.membership().keys() == {str(op.label) for op in log._layer_list}
     block_classes = [
         cls for cls in fold.classes if any(p.startswith("blocks.*") for p in cls.module_path)
     ]
     assert block_classes and all(cls.n_instances % 4 == 0 for cls in block_classes)
     expected = _expected_edges(log, fold.membership())
-    by_label = {str(op.label): op for op in log.layer_list}
+    by_label = {str(op.label): op for op in log._layer_list}
     for cls in fold.classes:
         assert set(cls.parent_classes) == expected.get(cls.class_id, set()), cls.class_id
         # Empty parent classes iff NO member records a parent (a mid-forward

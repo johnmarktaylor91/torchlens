@@ -83,7 +83,7 @@ def _op_with_func_name(trace: Any, func_name: str) -> Any:
         The matching op.
     """
 
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 def _freeze_op_replay(op: Any) -> None:

@@ -273,7 +273,7 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
         x,
         capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
     )
-    devices = {op.out.device.type for op in trace.layer_list if op.out is not None}
+    devices = {op.out.device.type for op in trace._layer_list if op.out is not None}
     assert devices == {"cpu"}
 
 
@@ -291,7 +291,7 @@ def _assert_corrupted_activation_fails(device: str) -> None:
     def corrupting_runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
         if kwargs["save_args"]:
-            relu = next(op for op in trace.layer_list if op.func_name == "relu")
+            relu = next(op for op in trace._layer_list if op.func_name == "relu")
             assert relu.out.device.type == "cpu"
             relu.out = relu.out + 1.0
         return trace

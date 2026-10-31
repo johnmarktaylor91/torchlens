@@ -305,7 +305,7 @@ def _build_dot(
     left_unmatched = (
         [
             layer
-            for layer in getattr(bundle[left_name], "layer_list", [])
+            for layer in getattr(bundle[left_name], "_layer_list", [])
             if id(layer) not in paired_left_ids
         ]
         if include_unmatched
@@ -314,7 +314,7 @@ def _build_dot(
     right_unmatched = (
         [
             layer
-            for layer in getattr(bundle[right_name], "layer_list", [])
+            for layer in getattr(bundle[right_name], "_layer_list", [])
             if id(layer) not in paired_right_ids
         ]
         if include_unmatched

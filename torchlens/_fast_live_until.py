@@ -81,7 +81,7 @@ def resolve_fast_until(
     ]
     if text and by_address:
         return "module", by_address[-1]
-    op = trace.layer_dict_all_keys.get(text) if text else None
+    op = trace._layer_dict_all_keys.get(text) if text else None
     op_label = str(getattr(op, "label", text))
     for kind, plans in (("module", module_plans), ("function", function_plans)):
         for index, plan in enumerate(plans):
@@ -99,7 +99,7 @@ def resolve_fast_until(
 def _raw_index(trace: Any, label: str) -> int:
     """Return an op's raw index by final label (``0`` when unknown)."""
 
-    return int(getattr(trace.layer_dict_all_keys[label], "raw_index", 0) or 0)
+    return int(getattr(trace._layer_dict_all_keys[label], "raw_index", 0) or 0)
 
 
 def _stop_raw_index(trace: Any, stop_plan: _FastOutputPlan) -> int:
@@ -135,7 +135,7 @@ def function_prefix_count(
 def _frontier_label(trace: Any, label: str) -> str:
     """Spell the stop site as the ordinary until= report does (no pass suffix on one pass)."""
 
-    op = trace.layer_dict_all_keys[label]
+    op = trace._layer_dict_all_keys[label]
     if int(getattr(op, "num_passes", 1) or 1) == 1:
         return str(getattr(op, "layer_label", label))
     return label
@@ -168,7 +168,7 @@ def truncate_after(
     executed: list[str] = []
     skipped: list[str] = []
     cleared: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         raw_label = str(getattr(op, "_label_raw", op.label))
         if int(getattr(op, "raw_index", 0) or 0) <= stop_raw:
             executed.append(raw_label)
@@ -205,4 +205,4 @@ def rearm_cleared_sites(trace: Any, labels: Sequence[str]) -> None:
     """
 
     for label in labels:
-        trace.layer_dict_all_keys[label]._internal_set("has_saved_activation", True)
+        trace._layer_dict_all_keys[label]._internal_set("has_saved_activation", True)

@@ -301,7 +301,7 @@ def test_invert_stays_out_of_place_and_masked_fill_verifies(tmp_path: Path) -> N
 
     x = torch.tensor([-1.0, 2.0])
     trace = tl.trace(MaskedFillInvertModel(), x.clone(), capture=_CAPTURE)
-    invert_ops = [op for op in trace.layer_list if op.func_name == "__invert__"]
+    invert_ops = [op for op in trace._layer_list if op.func_name == "__invert__"]
 
     assert invert_ops
     assert all(not op.is_inplace for op in invert_ops)
@@ -321,7 +321,7 @@ def test_genuine_inplace_methods_stay_inplace_and_verified(op: str, tmp_path: Pa
     x = torch.tensor([-2.0, 4.0])
     factory: Callable[[], nn.Module] = partial(GenuineInplaceModel, op)
     trace = tl.trace(factory(), x.clone(), capture=_CAPTURE)
-    matching = [item for item in trace.layer_list if item.func_name == op]
+    matching = [item for item in trace._layer_list if item.func_name == op]
 
     assert matching
     assert all(item.is_inplace for item in matching)

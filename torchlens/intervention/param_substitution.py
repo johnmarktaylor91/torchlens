@@ -466,7 +466,7 @@ def _derive_entry_occurrences(
     rows: list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]] = []
     staged_op_ids: set[int] = set()
     for consumer_label in consumers:
-        layer = trace.layer_dict_all_keys.get(consumer_label)
+        layer = trace._layer_dict_all_keys.get(consumer_label)
         if layer is None or not getattr(layer, "ops", None):
             raise _underivable(
                 f"consumer {consumer_label!r} of parameter {param_address!r} "
@@ -595,7 +595,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
         preserve_origins=False,
     )
     for label, records in staging.pending_records.items():
-        trace.layer_dict_all_keys[label].ops[0].edits.extend(records)
+        trace._layer_dict_all_keys[label].ops[0].edits.extend(records)
 
 
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:

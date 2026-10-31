@@ -22,7 +22,7 @@ def _overlay_candidate_labels(trace: Any) -> set[str]:
     """Every label spelling the per-node overlay lookup can realize on ``trace``."""
 
     candidates: set[str] = set(getattr(trace, "op_labels", ()) or ())
-    for node in getattr(trace, "layer_list", ()) or ():
+    for node in getattr(trace, "_layer_list", ()) or ():
         for attr in ("layer_label", "label", "layer_label_short", "label_short"):
             value = getattr(node, attr, None)
             if isinstance(value, str):

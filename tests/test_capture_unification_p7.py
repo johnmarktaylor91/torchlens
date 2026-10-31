@@ -102,7 +102,7 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
             tuple(op.parents),
             tuple(op.children),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
 
 
@@ -137,11 +137,11 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
     # postprocess but records its true origin; a live capture carries no marker.
     assert getattr(cooked, "_cooked_from", None) == "recording"
     assert getattr(full, "_cooked_from", None) is None
-    saved = [op for op in cooked.layer_list if op.has_saved_activation]
+    saved = [op for op in cooked._layer_list if op.has_saved_activation]
     assert saved
     assert {op.layer_type for op in saved} == {"conv2d"}
 
-    unsaved = next(op for op in cooked.layer_list if op.layer_type == "relu")
+    unsaved = next(op for op in cooked._layer_list if op.layer_type == "relu")
     with pytest.raises(ValueError, match="no saved payload.*save="):
         _ = unsaved.out
 
@@ -189,7 +189,7 @@ def test_recording_to_trace_materializes_input_layers_and_backfills_timing() -> 
     # input_layers must be symmetrically back-filled just like output_layers
     # already was, and must match the set of Ops actually flagged is_input.
     assert cooked.input_layers
-    expected_inputs = {op.layer_label for op in cooked.layer_list if op.is_input}
+    expected_inputs = {op.layer_label for op in cooked._layer_list if op.is_input}
     assert set(cooked.input_layers) == expected_inputs
 
     # The two invariant groups this fix targets must pass cleanly.
@@ -262,7 +262,7 @@ def test_recording_to_trace_passes_full_metadata_invariants(model_factory) -> No
     check_metadata_invariants(cooked)
 
     # graph_ordering specifics: raw_index unique AND monotonically increasing.
-    raw_indices = [op.raw_index for op in cooked.layer_list]
+    raw_indices = [op.raw_index for op in cooked._layer_list]
     assert len(raw_indices) == len(set(raw_indices)), "raw_index values must be unique"
     assert raw_indices == sorted(raw_indices), "raw_index must be monotonically increasing"
 
@@ -545,8 +545,8 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     rec = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
     trace1 = rec.to_trace()
     trace2 = rec.to_trace()
-    assert [op.layer_label for op in trace1.layer_list] == [
-        op.layer_label for op in trace2.layer_list
+    assert [op.layer_label for op in trace1._layer_list] == [
+        op.layer_label for op in trace2._layer_list
     ]
     assert trace1.num_ops == trace2.num_ops
     check_metadata_invariants(trace1)
@@ -621,8 +621,8 @@ def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() ->
 
     assert trace1.output_layers == trace2.output_layers
     assert len(trace1.output_layers) == 2
-    assert [op.layer_label for op in trace1.layer_list] == [
-        op.layer_label for op in trace2.layer_list
+    assert [op.layer_label for op in trace1._layer_list] == [
+        op.layer_label for op in trace2._layer_list
     ]
     check_metadata_invariants(trace1)
     check_metadata_invariants(trace2)

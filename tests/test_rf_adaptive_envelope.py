@@ -42,7 +42,7 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
 def _op(trace: object, name: str) -> object:
     """Return the last captured operation with a raw function name."""
 
-    matches = [item for item in trace.layer_list if item.func_name == name]  # type: ignore[union-attr]
+    matches = [item for item in trace._layer_list if item.func_name == name]  # type: ignore[union-attr]
     assert matches
     return matches[-1]
 

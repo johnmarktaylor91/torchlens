@@ -513,7 +513,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
             hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
         ),
     )
-    sigmoid = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
+    sigmoid = next(layer for layer in log._layer_list if layer.func_name == "sigmoid")
     replacement = log[sigmoid.parents[0]]
 
     assert torch.equal(replacement.out, x * 2)

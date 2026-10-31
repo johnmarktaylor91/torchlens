@@ -1024,7 +1024,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     list[Op]
         Terminal scalar bool layers in execution order.
     """
-    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_only_layer(
@@ -1048,7 +1048,7 @@ def _find_only_layer(
     Op
         Matching layer.
     """
-    matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matching_layers = [layer for layer in trace._layer_list if layer.func_name == func_name]
     if branch_stack is not None:
         matching_layers = [
             layer
@@ -1084,7 +1084,7 @@ def _find_only_layer_log(
     """
     matching_layers = [
         layer_log
-        for layer_log in trace.layer_logs.values()
+        for layer_log in trace._layer_logs.values()
         if layer_log.func_name == func_name and predicate(layer_log)
     ]
     assert len(matching_layers) == 1
@@ -1525,7 +1525,7 @@ def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() ->
     inner_event = _get_child_event(trace, outer_event.id)
     bias_view_layers = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if layer.func_name == "__add__"
         and layer.conditional_branch_stack == ()
         and layer.has_params is True
@@ -1881,7 +1881,7 @@ def test_documented_false_negatives_do_not_materialise_branch_events(
     _assert_branchless_log(trace)
     branch_layers = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if layer.func_name in {"relu", "sigmoid", "where"} and not layer.is_output
     ]
     assert all(layer.conditional_branch_stack == () for layer in branch_layers)
@@ -1907,7 +1907,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
         return original_getlines(*args, **kwargs)
 
     captured_entries = [
-        entry for entry in trace.layer_list if not entry.is_input and entry.func_name != "none"
+        entry for entry in trace._layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert captured_entries
     assert all(len(entry.code_context) > 0 for entry in captured_entries)
@@ -1938,7 +1938,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
     roundtrip_stack = next(
-        entry.code_context for entry in roundtrip_log.layer_list if not entry.is_input
+        entry.code_context for entry in roundtrip_log._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1975,7 +1975,7 @@ def test_selective_save_preserves_conditional_metadata_for_unsaved_layers() -> N
     assert log.num_saved_ops == 0
     assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
     assert all(
-        parent_label in log.layer_logs and child_label in log.layer_logs
+        parent_label in log._layer_logs and child_label in log._layer_logs
         for parent_label, child_label, _, _ in log.conditional_edge_call_indices
     )
     assert all(
@@ -2105,7 +2105,7 @@ def test_ternary_with_bool_cast_model_marks_conditional_wrapper_kind() -> None:
 def test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution() -> None:
     """Pre-3.11 same-line ternaries fail closed when no column offsets are available."""
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
-    linear_layers = [layer for layer in trace.layer_list if layer.func_name == "linear"]
+    linear_layers = [layer for layer in trace._layer_list if layer.func_name == "linear"]
 
     assert len(trace.conditional_records) == 1
     assert trace.conditional_arm_entry_edges == {}

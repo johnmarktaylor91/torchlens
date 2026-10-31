@@ -25,7 +25,7 @@ The r79 closure is two-layered:
    as belt-and-suspenders). A popped object can escape the tree, never the list.
 2. DEFENSE IN DEPTH (consumers): a non-empty prep address counts as provenance
    ONLY when it resolves in THIS capture's session -- the address maps in
-   ``trace.param_logs`` AND the recorded log's live object IS the value (exact
+   ``trace._param_logs`` AND the recorded log's live object IS the value (exact
    identity). ``_build_param_fields`` applies the same identity gate before
    resolving, closing the wrong-bind even if a stamp ever leaks again.
 

@@ -52,7 +52,7 @@ def _op(trace: object, name: str, *, last: bool = True) -> object:
 
     matches = [
         item
-        for item in trace.layer_list  # type: ignore[union-attr]
+        for item in trace._layer_list  # type: ignore[union-attr]
         if item.func_name is not None and _normalize_func_name(item.func_name) == name
     ]
     assert matches

@@ -330,7 +330,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     assert do_log.state is TraceState.SPEC_STALE
 
     fork = do_log.fork("phase14")
-    assert fork.parent_run() is do_log
+    assert fork._parent_run() is do_log
 
     model = _LinearRelu()
     x = torch.randn(2, 3)
@@ -449,7 +449,7 @@ def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     assert errors == []
     assert snapshots
     assert all(isinstance(snapshot, tuple) for snapshot in snapshots)
-    assert all(hasattr(log, "layer_list") for snapshot in snapshots for log in snapshot)
+    assert all(hasattr(log, "_layer_list") for snapshot in snapshots for log in snapshot)
 
 
 def _weak_log_reference() -> tuple[int, weakref.ReferenceType[tl.Trace]]:
@@ -526,7 +526,7 @@ def test_intervention_ready_composes_with_deferred_selective_grads() -> None:
         ),
     )
     trace[trace.output_layers[0]].out.sum().backward()
-    assert {op.layer_type for op in trace.layer_list if op.has_grad} == {"relu"}
+    assert {op.layer_type for op in trace._layer_list if op.has_grad} == {"relu"}
 
 
 def test_splice_module_device_error_raised_for_device_mismatch() -> None:
@@ -547,7 +547,7 @@ def test_direct_write_executable_save_error_raised(tmp_path: Path) -> None:
     """Executable intervention saves reject direct activation writes by default."""
 
     log = _capture()
-    relu = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu = next(layer for layer in log._layer_list if layer.func_name == "relu")
     with pytest.warns(terrors.DirectActivationWriteWarning, match="direct Op out writes"):
         relu.out = relu.out
 

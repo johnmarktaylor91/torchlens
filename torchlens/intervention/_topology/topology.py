@@ -91,7 +91,7 @@ def _ordered_layers(trace: Trace) -> list[Layer]:
         Ordered layer list.
     """
 
-    return list(trace.layer_logs.values())
+    return list(trace._layer_logs.values())
 
 
 def _structural_parent_labels(layer: Layer, layers_by_label: dict[str, Layer]) -> set[str]:
@@ -637,7 +637,7 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
             if child_canonical is None:
                 continue
             for parent_label in layer.parents:
-                parent_layer = trace.layer_logs.get(parent_label)
+                parent_layer = trace._layer_logs.get(parent_label)
                 if parent_layer is None:
                     try:
                         ref = trace[parent_label]
@@ -646,7 +646,7 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
                     parent_no_pass = getattr(ref, "layer_label", None)
                     if parent_no_pass is None:
                         continue
-                    parent_layer = trace.layer_logs.get(parent_no_pass)
+                    parent_layer = trace._layer_logs.get(parent_no_pass)
                 if parent_layer is None:
                     continue
                 parent_canonical = canonical_for_layer.get(str(parent_layer.layer_label))

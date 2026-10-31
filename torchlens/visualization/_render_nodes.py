@@ -112,7 +112,7 @@ def _get_hidden_parent_buffer_addresses(
         if isinstance(source_node, Op):
             parent_node = trace[parent_label]
         else:
-            parent_node = trace.layer_logs[parent_label]
+            parent_node = trace._layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         address = parent_node.address
@@ -312,7 +312,7 @@ def _op_for_occurrence_label(trace: "Trace", label: str | None) -> Op | None:
         return None
     if label in trace.ops:
         return trace.ops[label]
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if (
             getattr(op, "layer_label_raw", None) == label
             or getattr(op, "_layer_label_raw", None) == label
@@ -341,13 +341,13 @@ def _render_output_node_name_for_path(
     """
 
     output_labels = set(getattr(trace, "output_layers", ()) or ())
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if getattr(op, "layer_label", None) not in output_labels:
             continue
         if tuple(getattr(op, "container_path", ()) or ()) == path:
             return _render_node_name(op, "unrolled")
     for output_label in getattr(trace, "output_layers", ()) or ():
-        output_op = trace.layer_dict_all_keys.get(output_label)
+        output_op = trace._layer_dict_all_keys.get(output_label)
         if output_op is None:
             continue
         if tuple(getattr(output_op, "container_path", ()) or ()) == path:
@@ -673,7 +673,7 @@ def _build_layer_node(
         if show_input_transform_summary:
             node_args.update(_input_transform_summary_attrs(self, node_args))
     elif node.is_output:
-        raw_output_attrs = _render_raw_output(getattr(self, "decoded_output", None))
+        raw_output_attrs = _render_raw_output(getattr(self, "_decoded_output", None))
         if raw_output_attrs is None:
             raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
         if raw_output_attrs is not None:
@@ -1616,7 +1616,7 @@ def _atomic_module_sibling_counts(trace: "Trace") -> dict[str, int]:
     """
 
     counts: dict[str, int] = {}
-    for other in trace.layer_logs.values():
+    for other in trace._layer_logs.values():
         if isinstance(other, Layer) and getattr(other, "is_atomic_module", False) and other.modules:
             other_address = other.modules[-1].rsplit(":", 1)[0]
             counts[other_address] = counts.get(other_address, 0) + 1
@@ -1788,7 +1788,7 @@ def _get_node_address_shape_color(
         )
         if annotation is not None and annotation.buffer_versions:
             address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
-        elif self.buffer_num_calls[source_node.address] == 1:
+        elif self._buffer_num_calls[source_node.address] == 1:
             address = source_node.address
         else:
             address = f"{source_node.address}:{source_node.buffer_pass}"
@@ -1843,7 +1843,7 @@ def _is_only_non_buffer_in_module(
         if isinstance(source_node, Op):
             parent_layer = self[parent_layer_label]
         else:
-            parent_layer = self.layer_logs[parent_layer_label]
+            parent_layer = self._layer_logs[parent_layer_label]
         if (
             (not parent_layer.is_buffer) or _is_buffer_visible(parent_layer, show_buffer_layers)
         ) and ((len(parent_layer.modules) > 0) and parent_layer.modules[-1] == node.modules[-1]):
@@ -1969,7 +1969,7 @@ def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":
         raise ValueError("Synthetic boundary nodes do not have Layer metadata.")
     if isinstance(node, Layer):
         return node
-    return trace.layer_logs[node.layer_label]
+    return trace._layer_logs[node.layer_label]
 
 
 def compute_default_node_lines(

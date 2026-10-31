@@ -315,7 +315,7 @@ def _leaf_condition(op: str, value: Any) -> str:
     """Render one leaf as a Python condition over the loop variable ``op``.
 
     Every rendered condition is comment-free and runnable verbatim inside a
-    comprehension over ``log.layer_list`` -- the handoff test executes it.
+    comprehension over ``log._layer_list`` -- the handoff test executes it.
 
     Parameters
     ----------
@@ -405,7 +405,7 @@ def _python_handoff(node: dict[str, Any]) -> str:
     """
 
     if not _contains_closure(node):
-        return f"[str(op.label) for op in log.layer_list if {_condition_expr(node)}]"
+        return f"[str(op.label) for op in log._layer_list if {_condition_expr(node)}]"
     if node["op"] in ("followed_by", "preceded_by") and not _contains_closure(node["item"]):
         # A literal mirror of ``_eval_query``'s closure pass: edges spell
         # single-pass neighbours BARE and multi-pass neighbours pass-
@@ -419,7 +419,7 @@ def _python_handoff(node: dict[str, Any]) -> str:
             "range(len(rows) - 1, -1, -1)" if node["op"] == "followed_by" else "range(len(rows))"
         )
         return (
-            "rows = list(log.layer_list)\n"
+            "rows = list(log._layer_list)\n"
             f"inner = [bool({_condition_expr(node['item'])}) for op in rows]\n"
             "index = {}\n"
             "for i, op in enumerate(rows):\n"
@@ -470,7 +470,7 @@ def query_sites(log: Any, query: Any | None) -> tuple[list[dict[str, Any]], dict
 
     if query is not None:
         validate_query(query)
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     input_labels = {
         str(getattr(item, "label", item)) for item in getattr(log, "input_ops", []) or []
     }
@@ -489,7 +489,7 @@ def query_sites(log: Any, query: Any | None) -> tuple[list[dict[str, Any]], dict
         matched = rows
         for row in matched:
             row["matched"] = [{"op": "all"}]
-        handoff = "[str(op.label) for op in log.layer_list]"
+        handoff = "[str(op.label) for op in log._layer_list]"
     else:
         mask = _eval_query(query, rows)
         matched = []

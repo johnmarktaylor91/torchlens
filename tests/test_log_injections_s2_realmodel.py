@@ -87,5 +87,5 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     assert {row.status for row in report.rows} == {"attested"}
     # the model op family is untouched by the injected rows after load
     assert not any(
-        getattr(op, "injection_provenance", None) is not None for op in loaded.layer_list
+        getattr(op, "injection_provenance", None) is not None for op in loaded._layer_list
     )

@@ -2078,7 +2078,7 @@ def attach_sparse_run_readiness(
     # left to the resolver's own richer readiness/``ReattachError`` path.
     recorded_func_names = {
         str(getattr(layer, "layer_label", "")): getattr(layer, "func_name", None)
-        for layer in getattr(trace, "layer_list", []) or ()
+        for layer in getattr(trace, "_layer_list", []) or ()
     }
     report, attachments = preflight_sparse_run_descriptor(
         descriptor, recorded_func_names=recorded_func_names

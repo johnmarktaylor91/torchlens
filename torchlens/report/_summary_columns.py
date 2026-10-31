@@ -56,7 +56,7 @@ def label_shapes(trace: Trace) -> dict[str, Shape | None]:
     """Op label (pass-qualified and layer label) -> output shape."""
 
     shapes: dict[str, Shape | None] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         shape = shape_tuple(getattr(op, "shape", None))
         for key in (getattr(op, "label", None), getattr(op, "layer_label", None)):
             if key is not None:

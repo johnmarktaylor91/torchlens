@@ -123,7 +123,7 @@ def layer_site_peers(layer: Layer) -> tuple[Layer, ...]:
         )
     peers: list[Layer] = []
     for candidate_label in trace.layer_labels:
-        candidate = trace.layer_logs.get(candidate_label)
+        candidate = trace._layer_logs.get(candidate_label)
         if candidate is None or candidate is layer:
             continue
         candidate_keys = {op.site_key for op in candidate.ops.values()}

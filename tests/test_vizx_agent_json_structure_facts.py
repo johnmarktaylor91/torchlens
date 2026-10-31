@@ -21,7 +21,7 @@ _PLAIN_CAPTURE_KEYS = frozenset(
         "capture_status",
         "capture_verified",
         "capture_verification_reason",
-        "rescue_rerun",
+        "_rescue_rerun",
         "backend",
         "model_class",
         "structure_only",

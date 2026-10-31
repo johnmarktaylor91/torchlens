@@ -407,7 +407,7 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     store = trace._trace_core.ops
     fork = trace.fork()
     fork.do(tl.func("linear") if model_cls is _Long else tl.func("relu"), tl.scale(2.0))
-    kept_op = fork.layer_list[2]
+    kept_op = fork._layer_list[2]
     before: dict[int, Any] = {}
     cells_before = {loc: container[key] for loc, container, key in _store_cells(store)}
     for loc, value in cells_before.items():

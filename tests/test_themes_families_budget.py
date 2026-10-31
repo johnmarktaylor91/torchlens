@@ -141,7 +141,7 @@ def test_source_coverage_counts_op_population(mlp_log: Any) -> None:
     """Coverage counts the op population, encoded and total."""
 
     coverage = lenses.source_coverage(mlp_log, "func_duration")
-    assert coverage.total == len(mlp_log.layer_list)
+    assert coverage.total == len(mlp_log._layer_list)
     assert coverage.encoded == coverage.total
     assert coverage.fraction == 1.0
 

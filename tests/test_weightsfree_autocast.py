@@ -55,7 +55,7 @@ def test_shim_unlocks_disabled_autocast_on_admitted_meta() -> None:
         model, torch.empty(2, 4, device="meta"), capture=CaptureOptions(structure_only=True)
     )
     assert trace.outcome.status.value == "complete"
-    funcs = [layer.func_name for layer in trace.layer_list]
+    funcs = [layer.func_name for layer in trace._layer_list]
     assert "linear" in funcs and "relu" in funcs
 
 

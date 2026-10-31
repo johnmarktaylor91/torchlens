@@ -113,18 +113,18 @@ def test_gradfn_weakref_pickle_roundtrip_with_real_backward_pass() -> None:
 
     live_trace = _build_backward_trace()
     assert live_trace.num_backward_passes >= 1
-    assert len(live_trace.grad_fn_logs) > 0
+    assert len(live_trace._grad_fn_logs) > 0
 
     data = pickle.dumps(live_trace)
     restored = pickle.loads(data)
 
     assert restored.num_backward_passes == live_trace.num_backward_passes
-    assert len(restored.grad_fn_logs) == len(live_trace.grad_fn_logs)
+    assert len(restored._grad_fn_logs) == len(live_trace._grad_fn_logs)
     # `Trace.__setstate__` deliberately reconnects each GradFn's
     # `trace` back-reference to the newly-restored (live) Trace, so
     # the weakref should point at `restored`, not at a stale intermediate
     # object from the pickle stream.
-    for grad_fn_handle in restored.grad_fn_logs.values():
+    for grad_fn_handle in restored._grad_fn_logs.values():
         assert grad_fn_handle.trace is restored
 
 
@@ -132,7 +132,7 @@ def test_gradfn_standalone_pickle_does_not_crash() -> None:
     """A standalone ``GradFn`` (outside its owning Trace) must pickle cleanly."""
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
 
     data = pickle.dumps(grad_fn_handle)
     restored = pickle.loads(data)
@@ -188,7 +188,7 @@ def test_layer_setstate_absent_container_field_restores_typed() -> None:
     """An absent Layer container field must restore as its typed default."""
 
     live_trace = _build_buffer_trace()
-    layer_log = next(iter(live_trace.layer_list))
+    layer_log = next(iter(live_trace._layer_list))
     state = layer_log.__getstate__()
     state.pop("equivalent_ops", None)
 
@@ -284,7 +284,7 @@ def test_grad_fn_setstate_present_but_wrong_typed_co_parents_is_coerced() -> Non
     """
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
     state = grad_fn_handle.__getstate__()
     state["co_parents"] = {"legacy_as_set"}
 
@@ -306,7 +306,7 @@ def test_grad_fn_call_setstate_survives_default_fill() -> None:
     """
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
     call = next(iter(grad_fn_handle.calls.values()))
     state = call.__getstate__()
 
@@ -362,7 +362,7 @@ def test_coerce_container_typed_state_raises_on_incompatible_corruption() -> Non
     # `layer_dict_main_keys` is declared a `dict`; an `int` cannot be
     # converted to a `dict` (`dict(12345)` raises `TypeError`), so this is
     # unambiguous corruption, not a legacy container-type migration.
-    state["layer_dict_main_keys"] = 12345
+    state["_layer_dict_main_keys"] = 12345
 
     restored = Trace.__new__(Trace)
     with pytest.raises(ArtifactError):

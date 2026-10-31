@@ -256,7 +256,7 @@ def _solve_uncached(
         Newly computed immutable solution.
     """
 
-    operations = tuple(op for op in trace.layer_list if _operation_is_live(op))
+    operations = tuple(op for op in trace._layer_list if _operation_is_live(op))
     by_reference = {
         reference: op
         for op in operations
@@ -1639,7 +1639,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             _geometry_args_snapshot(op),
             _edge_uses_snapshot(op),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
         if _operation_is_live(op)
     )
 

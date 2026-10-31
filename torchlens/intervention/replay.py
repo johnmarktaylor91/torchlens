@@ -260,7 +260,7 @@ def _run_differentiable_replay(
     _reset_backward_projection(replay_log)
     _run_replay(
         replay_log,
-        [replay_log.layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
+        [replay_log._layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
         hook_entries=hook_entries,
         strict=strict,
         preserve_origins=preserve_origins,
@@ -328,9 +328,9 @@ def _reset_backward_projection(log: Trace) -> None:
     log.has_backward_pass = False
     log.has_gradients = False
     log._saved_grad_labels = set()
-    log.grad_fn_logs = OrderedDict()
+    log._grad_fn_logs = OrderedDict()
     log.grad_fn_order = []
-    log.backward_pass_logs = OrderedDict()
+    log._backward_pass_logs = OrderedDict()
     log.backward_root_grad_fn_object_ids = []
     log.backward_durations = []
     log.num_backward_passes = 0
@@ -342,9 +342,9 @@ def _reset_backward_projection(log: Trace) -> None:
     log.total_param_gradient_memory = Bytes(0)
     log.backward_memory_backend = "unknown"
     log._replay_frontier = {}
-    for op in getattr(log, "layer_list", ()):
+    for op in getattr(log, "_layer_list", ()):
         _clear_op_gradient_projection(op)
-    for param_log in getattr(log, "param_logs", {}).values():
+    for param_log in getattr(log, "_param_logs", {}).values():
         _clear_param_gradient_projection(param_log)
 
 
@@ -410,7 +410,7 @@ def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     """
 
     mapping: dict[str, list[str]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         key = _replay_site_key(op)
         spellings = {key, op.layer_label}
         for spelling in getattr(op, "lookup_keys", ()) or ():
@@ -468,7 +468,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     """
 
     origins = _validated_cone_origins(origins)
-    all_keys = trace.layer_dict_all_keys
+    all_keys = trace._layer_dict_all_keys
     label_keys = _label_key_map(trace)
     call_groups = _func_call_groups(trace)
     visited: set[str] = set()
@@ -512,7 +512,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
 
         _enqueue_children(layer)
 
-    return [layer for layer in trace.layer_list if _replay_site_key(layer) in visited]
+    return [layer for layer in trace._layer_list if _replay_site_key(layer) in visited]
 
 
 def _run_replay(
@@ -893,10 +893,12 @@ def _boundary_slot_parent_op(
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
-        trace.layer_dict_all_keys[key] for key in candidate_keys if key in trace.layer_dict_all_keys
+        trace._layer_dict_all_keys[key]
+        for key in candidate_keys
+        if key in trace._layer_dict_all_keys
     ]
-    if not candidates and parent_label in trace.layer_dict_all_keys:
-        candidates = [trace.layer_dict_all_keys[parent_label]]
+    if not candidates and parent_label in trace._layer_dict_all_keys:
+        candidates = [trace._layer_dict_all_keys[parent_label]]
     same_call = [
         candidate
         for candidate in candidates
@@ -979,7 +981,7 @@ def _resolve_arg_component(
         label_keys = _label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
-        if parent_label not in trace.layer_dict_all_keys:
+        if parent_label not in trace._layer_dict_all_keys:
             raise ReplayPreconditionError(
                 f"{pass_log.layer_label} references missing parent {component.parent_label!r}"
             )
@@ -994,7 +996,7 @@ def _resolve_arg_component(
                 f"{len(parent_keys)} passes of that layer "
                 f"({', '.join(repr(key) for key in parent_keys)}); refusing to guess a pass."
             )
-        parent = trace.layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
+        parent = trace._layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
         parent_key = _replay_site_key(parent)
         _warn_if_unexpected_parent(pass_log, parent, label_keys, strict=strict)
         if parent_key in overlay:
@@ -1298,7 +1300,7 @@ def _commit_replay_updates(
     new_digests: dict[str, str] = {}
     try:
         for label, tensor in pending_updates.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
             snapshots[label] = {
                 "out": site.out,
@@ -1342,7 +1344,7 @@ def _commit_replay_updates(
                 )
     except Exception:
         for label, state in snapshots.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             for field_name, value in state.items():
                 site._internal_set(field_name, value)
         raise
@@ -1526,10 +1528,10 @@ def _origin_sites_for_hooks(
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
             for site in log.resolve_sites(
-                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
             ):
                 target_keys.add(_replay_site_key(site))
-    return [site for site in log.layer_list if _replay_site_key(site) in target_keys]
+    return [site for site in log._layer_list if _replay_site_key(site) in target_keys]
 
 
 def _hook_targets_by_label(
@@ -1560,7 +1562,7 @@ def _hook_targets_by_label(
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
             for site in log.resolve_sites(
-                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
             ):
                 targets.setdefault(_replay_site_key(site), []).append(entry)
     return {label: tuple(entries) for label, entries in targets.items()}
@@ -1609,7 +1611,7 @@ def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
     """
 
     groups: dict[int | None, list[Op]] = {}
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         groups.setdefault(layer.func_call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
@@ -1894,7 +1896,7 @@ def _threaded_buffer_value(
         # captured value is the honest replay value.
         return None
     producer_key = parents[0] if len(parents) == 1 else None
-    producer = trace.layer_dict_all_keys.get(producer_key) if producer_key is not None else None
+    producer = trace._layer_dict_all_keys.get(producer_key) if producer_key is not None else None
     # The overlay is keyed by the pass-qualified replay key while a
     # SINGLE-pass producer spells its parent label bare (``copy_1_4`` vs
     # ``copy_1_4:1``); resolve the producer first and look up ITS replay key,

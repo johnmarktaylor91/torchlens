@@ -82,7 +82,7 @@ def manifest_overview(manifest: dict[str, Any] | None) -> dict[str, Any]:
 def _coverage_block(log: Any) -> dict[str, Any]:
     """Payload/gradient coverage counts an agent needs before value work."""
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     from ..report._agent_json import _payload_state
 
     states = [_payload_state(op) for op in ops]
@@ -341,7 +341,7 @@ def dump_view(
         return folded_overview(log), 0, 0
     if view == "full":
         return _paged_full_dump(build_agent_json(log), max_rows=max_rows, offset=offset)
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     if class_id is not None:
         fold = fold_trace(log)
         by_id = {cls.class_id: set(cls.members) for cls in fold.classes}

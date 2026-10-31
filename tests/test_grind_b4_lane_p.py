@@ -477,14 +477,14 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
     ops_before = trace.ops
     # Rows 1 and 2 are the two counted ops (linear, relu); row 0 is the input
     # row, which the counted ``trace.ops`` view leaves out (sumfam F1).
-    first_two = list(trace.layer_list[1:3])
+    first_two = list(trace._layer_list[1:3])
 
     # Unchanged containers re-serve the memo (identity-stable, O(1) key).
     assert trace.ops is ops_before
 
     # Equal-length in-place swap + the explicit invalidator (the supported
     # spelling for direct in-place edits of trace build products).
-    trace.layer_list[1], trace.layer_list[2] = trace.layer_list[2], trace.layer_list[1]
+    trace._layer_list[1], trace._layer_list[2] = trace._layer_list[2], trace._layer_list[1]
     _invalidate_trace_op_layer_accessor_caches(trace)
     swapped = trace.ops
     assert swapped is not ops_before
@@ -492,18 +492,18 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
 
     # Equal-length reassignment auto-invalidates via container identity.
     layers_before = trace.layers
-    items = list(trace.layer_logs.items())
-    trace.layer_logs = dict(reversed(items))
+    items = list(trace._layer_logs.items())
+    trace._layer_logs = dict(reversed(items))
     layers_after = trace.layers
     assert layers_after is not layers_before
 
     # A size change auto-invalidates via the length axis.
     ops_full = trace.ops
-    removed = trace.layer_list.pop()
+    removed = trace._layer_list.pop()
     try:
         assert trace.ops is not ops_full
     finally:
-        trace.layer_list.append(removed)
+        trace._layer_list.append(removed)
 
     # Unchanged content still re-serves the memo (no per-access rebuilds).
     assert trace.layers is layers_after

@@ -63,7 +63,7 @@ class _StubEscapeTrace:
     def __init__(self) -> None:
         self.capture_verified: Any = None
         self.capture_verification_reason: Any = None
-        self.rescue_rerun: Any = None
+        self._rescue_rerun: Any = None
         self.escape_diagnostics = [{"kind": "provenance_warning", "op": "relu"}]
         self.layer_labels = ["relu_1_1"]
 

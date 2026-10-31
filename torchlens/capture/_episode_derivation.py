@@ -573,7 +573,7 @@ def _derive_step_column(
 def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
     """The D4-clause recomputable identity facts of one episode product."""
 
-    labels = [str(getattr(op, "label", op)) for op in (getattr(trace, "layer_list", None) or ())]
+    labels = [str(getattr(op, "label", op)) for op in (getattr(trace, "_layer_list", None) or ())]
     return {
         "entry_seed": getattr(trace, "random_seed", None),
         "stepped_module": address,

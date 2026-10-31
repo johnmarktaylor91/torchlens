@@ -112,8 +112,8 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
-    old_labels = tuple(layer._layer_label_raw for layer in old_trace.layer_list)
-    new_labels = tuple(layer._layer_label_raw for layer in new_trace.layer_list)
+    old_labels = tuple(layer._layer_label_raw for layer in old_trace._layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_trace._layer_list)
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
@@ -200,7 +200,7 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
         "new_graph_shape_hash": new_hash,
         "chunk_paths": chunk.chunk_paths,
     }
-    trace.append_history.append(dict(trace.last_run))
+    trace._append_history.append(dict(trace.last_run))
     trace._record_operation(
         "append",
         engine="append",

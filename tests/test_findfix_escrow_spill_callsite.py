@@ -57,7 +57,7 @@ def _model_input_and_first_label() -> tuple[nn.Module, torch.Tensor, str]:
     model = _Mlp()
     x = torch.randn(3, 4)
     first_linear = next(
-        op.layer_label for op in tl.trace(model, x).layer_list if op.func_name == "linear"
+        op.layer_label for op in tl.trace(model, x)._layer_list if op.func_name == "linear"
     )
     return model, x, first_linear
 

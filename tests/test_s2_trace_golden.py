@@ -126,7 +126,7 @@ def _projection(trace: tl.Trace) -> tuple[dict[str, Any], ...]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         rows.append(
             {
                 "label": op.layer_label,

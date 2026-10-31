@@ -530,10 +530,10 @@ class CaptureSession:
             for output_label, output_tensor in zip(
                 trace.output_layers, output_tensors, strict=True
             ):
-                output_op = trace.layer_dict_all_keys[output_label]
+                output_op = trace._layer_dict_all_keys[output_label]
                 live_output_by_raw_index[output_op.raw_index] = output_tensor
                 for parent_label in output_op.parents:
-                    parent = trace.layer_dict_all_keys[parent_label]
+                    parent = trace._layer_dict_all_keys[parent_label]
                     live_output_by_raw_index[parent.raw_index] = output_tensor
             from .._ir.selector_eval import selector_contains_kind
             from ..intervention.selectors import BaseSelector
@@ -546,7 +546,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "layer_list", ())),
+                            tuple(getattr(trace, "_layer_list", ())),
                             activation_selector,
                             strict=False,
                         )
@@ -564,16 +564,16 @@ class CaptureSession:
             if not exact_selector:
                 selected_nums.update(
                     op.raw_index
-                    for op in trace.layer_list
+                    for op in trace._layer_list
                     if getattr(op, "layer_type", None) == "output"
                 )
-                for op in trace.layer_list:
+                for op in trace._layer_list:
                     if (
                         op.raw_index in selected_nums
                         and getattr(op, "layer_type", None) == "output"
                     ):
                         selected_nums.update(
-                            trace.layer_dict_all_keys[parent_label].raw_index
+                            trace._layer_dict_all_keys[parent_label].raw_index
                             for parent_label in op.parents
                         )
             else:
@@ -584,16 +584,16 @@ class CaptureSession:
                 # alias rides its producer's payload.
                 selected_nums.update(
                     op.raw_index
-                    for op in trace.layer_list
+                    for op in trace._layer_list
                     if getattr(op, "layer_type", None) == "output"
                     and any(
-                        trace.layer_dict_all_keys[parent_label].raw_index in requested_nums
+                        trace._layer_dict_all_keys[parent_label].raw_index in requested_nums
                         for parent_label in op.parents
                     )
                 )
             attached_escrow = self.plan.retention_profile.activation_attached
             detached_spills = 0
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op.raw_index not in selected_nums:
                     continue
                 payload = live_output_by_raw_index.get(op.raw_index)
@@ -609,7 +609,7 @@ class CaptureSession:
                     payload = self.gradient_reference_escrow.get(op.raw_index, payload)
                 if payload is None and getattr(op, "layer_type", None) == "output":
                     for parent_label in op.parents:
-                        parent = trace.layer_dict_all_keys[parent_label]
+                        parent = trace._layer_dict_all_keys[parent_label]
                         payload = live_output_by_raw_index.get(parent.raw_index)
                         parent_payload_entry = self.activation_escrow.get(parent.raw_index)
                         if payload is None and parent_payload_entry is not None:
@@ -685,7 +685,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "layer_list", ())),
+                            tuple(getattr(trace, "_layer_list", ())),
                             gradient_selector,
                             strict=False,
                         )
@@ -696,18 +696,19 @@ class CaptureSession:
             selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
         trace._grad_op_nums_to_save = selected_grads
         hook_nums = (
-            {op.raw_index for op in trace.layer_list}
+            {op.raw_index for op in trace._layer_list}
             if selected_grads == "all"
             else set(selected_grads)
         )
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
                 hook_nums.update(
-                    trace.layer_dict_all_keys[parent_label].raw_index for parent_label in op.parents
+                    trace._layer_dict_all_keys[parent_label].raw_index
+                    for parent_label in op.parents
                 )
         trace._installing_deferred_gradient_hooks = True
         try:
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 tensor = self.gradient_reference_escrow.get(op.raw_index)
                 if tensor is not None and op.raw_index in hook_nums:
                     _add_tensor_backward_hook(trace, tensor, op._label_raw)

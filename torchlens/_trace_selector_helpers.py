@@ -787,7 +787,7 @@ def canonical_module_site_key(trace: Any, name: object) -> str | None:
     if not isinstance(name, str) or not name or name.startswith("."):
         return None
     try:
-        keys = trace.layer_dict_all_keys or {}
+        keys = trace._layer_dict_all_keys or {}
         ambiguous = trace._ambiguous_lookup_keys or {}
     except AttributeError:
         return None

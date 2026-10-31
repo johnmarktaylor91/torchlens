@@ -388,7 +388,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
 
         result = original(self, *args, **kwargs)
         target = next(
-            (o for o in self.layer_list if o.func_name == "__mul__" and len(o.parents) >= 2),
+            (o for o in self._layer_list if o.func_name == "__mul__" and len(o.parents) >= 2),
             None,
         )
         if target is None:
@@ -402,7 +402,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
             positions = target.parent_arg_positions.get(domain, {})
             for key in [k for k, v in positions.items() if v == victim]:
                 del positions[key]
-        producer = next((o for o in self.layer_list if o.layer_label == victim), None)
+        producer = next((o for o in self._layer_list if o.layer_label == victim), None)
         if producer is not None:
             producer.children = [c for c in producer.children if c != target.layer_label]
         state["dropped"] += 1

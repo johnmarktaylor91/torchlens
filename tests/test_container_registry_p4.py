@@ -49,7 +49,7 @@ def _semantic_digest(trace: tl.Trace) -> str:
                 "container_path": repr(tuple(getattr(op, "container_path", ()) or ())),
                 "container_spec": repr(getattr(op, "container_spec", None)),
             }
-            for op in trace.layer_list
+            for op in trace._layer_list
         ],
     }
     encoded = json.dumps(projection, sort_keys=True, separators=(",", ":")).encode("utf-8")

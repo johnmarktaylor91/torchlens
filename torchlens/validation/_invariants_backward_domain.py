@@ -62,7 +62,7 @@ def _check_backward_pass_domain_invariants(
     valid_statuses = {"error", "ok"}
     global_root_ids = set(trace.backward_root_grad_fn_object_ids)
     roots_seen_by_pass: set[int] = set()
-    backward_pass_logs = getattr(trace, "backward_pass_logs", {})
+    backward_pass_logs = getattr(trace, "_backward_pass_logs", {})
 
     for pass_index, backward_pass in backward_pass_logs.items():
         if backward_pass.trigger not in valid_triggers:
@@ -111,7 +111,7 @@ def _check_backward_pass_domain_invariants(
         missing_root_ids = [
             root_id
             for root_id in backward_pass.root_grad_fn_ids
-            if root_id not in trace.grad_fn_logs
+            if root_id not in trace._grad_fn_logs
         ]
         if missing_root_ids:
             raise MetadataInvariantError(
@@ -203,7 +203,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
     # side — the fail-closed direction.
     ops_by_label: dict[str, list[Any]] = {}
     visited_labels: set[str] = set()
-    for trace_layer in getattr(trace, "layer_list", ()) or ():
+    for trace_layer in getattr(trace, "_layer_list", ()) or ():
         for op in getattr(trace_layer, "ops", ()) or ():
             spellings = [
                 spelling
@@ -308,7 +308,7 @@ def _backward_pass_root_forward_position(trace: Trace, pass_index: int) -> int |
         Highest root-paired forward ``step_index`` for the pass, when available.
     """
 
-    backward_pass = getattr(trace, "backward_pass_logs", {}).get(pass_index)
+    backward_pass = getattr(trace, "_backward_pass_logs", {}).get(pass_index)
     if backward_pass is None:
         return None
     root_steps = [
@@ -317,7 +317,7 @@ def _backward_pass_root_forward_position(trace: Trace, pass_index: int) -> int |
         if isinstance(
             (
                 step_index := getattr(
-                    getattr(getattr(trace, "grad_fn_logs", {}).get(root_id), "op", None),
+                    getattr(getattr(trace, "_grad_fn_logs", {}).get(root_id), "op", None),
                     "step_index",
                     None,
                 )
@@ -346,7 +346,7 @@ def _backward_pass_observed_forward_position(trace: Trace, pass_index: int) -> i
 
     from .._ir.events import OpGradObserved
 
-    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
+    layer_lookup = getattr(trace, "_layer_dict_all_keys", {})
     observed_steps = []
     for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ()):
         if not isinstance(event, OpGradObserved) or event.pass_index != pass_index:

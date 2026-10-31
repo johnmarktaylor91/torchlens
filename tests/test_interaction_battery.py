@@ -59,7 +59,7 @@ def _output_of(relu: torch.Tensor) -> torch.Tensor:
 def _relu_op(log: Any) -> Any:
     """Return the relu op of a trace."""
 
-    return next(op for op in log.layer_list if op.layer_type == "relu")
+    return next(op for op in log._layer_list if op.layer_type == "relu")
 
 
 ZERO_RELU = tl.when(tl.func("relu"), tl.zero_ablate())

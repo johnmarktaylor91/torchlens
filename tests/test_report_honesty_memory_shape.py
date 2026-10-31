@@ -51,7 +51,7 @@ def test_memory_shaped_scoped_reader_rss_stays_flat(tmp_path: Path) -> None:
 
     loaded = tl.load(destination, lazy=True)
     assert loaded.payload_load_status == "loaded_lazy"
-    saved_ops = [op for op in loaded.layer_list if getattr(op, "has_saved_activation", False)]
+    saved_ops = [op for op in loaded._layer_list if getattr(op, "has_saved_activation", False)]
     assert len(saved_ops) >= 8
     total_payload_bytes = 8 * 4 * 512 * 1024 * 4
 

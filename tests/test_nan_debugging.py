@@ -227,12 +227,12 @@ def test_first_nonfinite_rescans_after_saved_activation_changes() -> None:
     assert trace.first_nonfinite().startswith("No non-finite")
 
     with torch.no_grad():
-        trace.layer_list[-1].out.mul_(float("nan"))
+        trace._layer_list[-1].out.mul_(float("nan"))
     in_place_answer = trace.first_nonfinite()
     assert "First non-finite" in in_place_answer
     assert "No NaN or Inf" not in trace.explain()
 
-    replaced = trace.layer_list[0]
+    replaced = trace._layer_list[0]
     replaced.out = torch.full_like(replaced.out, float("inf"))
     replaced_answer = trace.first_nonfinite()
     assert "First non-finite" in replaced_answer

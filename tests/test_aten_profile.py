@@ -439,7 +439,7 @@ def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     ref = row.parent_op_refs[0]
     if tamper_kind == "dangling":
         replacement = OpRef(
-            op_row_index=len(trace.layer_list) + 10,
+            op_row_index=len(trace._layer_list) + 10,
             op_label=ref.op_label,
             func_call_id=ref.func_call_id,
         )
@@ -471,7 +471,7 @@ def test_live_fk_tamper_names_primitive_invariant() -> None:
     ref = row.parent_op_refs[0]
     row.parent_op_refs = (
         OpRef(
-            op_row_index=len(trace.layer_list) + 1,
+            op_row_index=len(trace._layer_list) + 1,
             op_label=ref.op_label,
             func_call_id=ref.func_call_id,
         ),

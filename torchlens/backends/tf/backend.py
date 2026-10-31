@@ -685,18 +685,18 @@ class TFBackend:
         """
 
         if module_tree is None:
-            trace.param_logs = ParamAccessor({})
+            trace._param_logs = ParamAccessor({})
             trace.num_param_tensors = 0
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
             trace.param_source = "none"
             return
-        trace.param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
+        trace.num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.param_source = "native-module"

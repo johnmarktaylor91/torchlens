@@ -444,7 +444,7 @@ def payload_stats_rows(  # noqa: PLR0913 - the registry-declared request record,
 def _select_ops(log: Any, *, labels: list[str] | None, query: dict[str, Any] | None) -> list[Any]:
     """Resolve the site population for a stats call (execution-ordered)."""
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(getattr(log, "_layer_list", []) or [])
     if labels is not None:
         wanted = {str(item) for item in labels}
         return [

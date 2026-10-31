@@ -27,7 +27,7 @@ def built_in_rule_pack() -> Iterator[None]:
 def _op(trace: object, name: str) -> object:
     """Return the first captured operation with the requested raw function name."""
 
-    return next(item for item in trace.layer_list if item.func_name == name)  # type: ignore[union-attr]
+    return next(item for item in trace._layer_list if item.func_name == name)  # type: ignore[union-attr]
 
 
 def _descriptor(op: object) -> object:
@@ -104,7 +104,7 @@ def test_training_batch_norm_projective_maps_channel_vector_parents() -> None:
     solution = solve_projective(trace, trace.output_ops)
 
     for parent_reference in batch_norm.parents:
-        parent = trace.layer_dict_all_keys[parent_reference]
+        parent = trace._layer_dict_all_keys[parent_reference]
         state = solution.states[(parent.label, trace.output_ops[0].io_role)]
         descriptor = solution.descriptors[(parent.label, trace.output_ops[0].io_role)]
         assert state.axes is not None
@@ -122,7 +122,7 @@ def test_training_instance_norm_projective_maps_running_stat_parents() -> None:
     solution = solve_projective(trace, trace.output_ops)
 
     for parent_reference in instance_norm.parents:
-        parent = trace.layer_dict_all_keys[parent_reference]
+        parent = trace._layer_dict_all_keys[parent_reference]
         state = solution.states[(parent.label, trace.output_ops[0].io_role)]
         assert state.axes is not None
 
@@ -251,7 +251,7 @@ def test_pointwise_activations_pass_receptive_field_through_exactly() -> None:
         nn.Conv2d(8, 8, 3, padding=1),
     )
     trace = tl.trace(model, torch.randn(1, 3, 16, 16))
-    deep_conv = [op for op in trace.layer_list if "conv" in str(op.func_name).lower()][-1]
+    deep_conv = [op for op in trace._layer_list if "conv" in str(op.func_name).lower()][-1]
     descriptor = deep_conv.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT

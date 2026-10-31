@@ -142,7 +142,9 @@ def test_fast_live_run_handles_batchnorm_without_refresh_projection(training: bo
     assert result.output.shape == (4, 3)
     assert result.report.path_faithfulness.value == "verified"
     selected = [
-        op for op in captured.layer_list if op.func_name == "batch_norm" and op.has_saved_activation
+        op
+        for op in captured._layer_list
+        if op.func_name == "batch_norm" and op.has_saved_activation
     ]
     assert selected
     assert torch.allclose(selected[-1].out, result.output)

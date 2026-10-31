@@ -306,12 +306,12 @@ def test_python_loop_moe_pass_counts_show_ragged_routing() -> None:
     trace = tl.trace(model, torch.randn(4, 4))
     try:
         linear_passes = {
-            _address(op): op.num_passes for op in trace.layer_list if op.func_name == "linear"
+            _address(op): op.num_passes for op in trace._layer_list if op.func_name == "linear"
         }
         assert linear_passes == {"moe.experts.0.lin": 3, "moe.experts.1.lin": 2}
-        assert not any(_address(op).startswith("moe.experts.2") for op in trace.layer_list)
+        assert not any(_address(op).startswith("moe.experts.2") for op in trace._layer_list)
 
-        moe_ops = [op for op in trace.layer_list if _address(op) == "moe"]
+        moe_ops = [op for op in trace._layer_list if _address(op) == "moe"]
         scale_layers = {
             op.layer_label: op.num_passes for op in moe_ops if op.func_name in {"mul", "__mul__"}
         }

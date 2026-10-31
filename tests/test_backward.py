@@ -320,11 +320,11 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
             list(grad_fn.next_grad_fn_ids),
             sorted(grad_fn.calls),
         )
-        for object_id, grad_fn in trace.grad_fn_logs.items()
+        for object_id, grad_fn in trace._grad_fn_logs.items()
     }
     calls = {
         (object_id, ordinal): (call.label, call.backward_pass_index)
-        for object_id, grad_fn in trace.grad_fn_logs.items()
+        for object_id, grad_fn in trace._grad_fn_logs.items()
         for ordinal, call in grad_fn.calls.items()
     }
     passes = {
@@ -335,7 +335,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
             len(record.grad_fn_calls),
             record.order_attribution_coverage,
         )
-        for pass_index, record in trace.backward_pass_logs.items()
+        for pass_index, record in trace._backward_pass_logs.items()
     }
     op_grads = {
         op.layer_label: (
@@ -345,7 +345,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
             ],
             int(op.gradient_memory),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "has_grad", False)
     }
     param_grads = {
@@ -353,7 +353,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
             (record.ordinal, record.backward_pass_index, record.shape, record.memory)
             for record in param_log._grad_records
         ]
-        for address, param_log in trace.param_logs.items()
+        for address, param_log in trace._param_logs.items()
         if param_log._grad_records
     }
     return {
@@ -515,7 +515,7 @@ def test_param_gradients_enter_the_backward_event_stream() -> None:
     event_records = {(event.param_address, event.pass_index) for event in param_events}
     projected_records = {
         (address, record.backward_pass_index)
-        for address, param_log in trace.param_logs.items()
+        for address, param_log in trace._param_logs.items()
         for record in param_log._grad_records
     }
     assert projected_records
@@ -539,7 +539,9 @@ def test_param_gradient_payloads_honor_per_call_retention_policy() -> None:
     ]
     assert param_events
     assert all(event.payload_ref is None for event in param_events)
-    assert all(record.grad is None for param in trace.param_logs.values() for record in param.grads)
+    assert all(
+        record.grad is None for param in trace._param_logs.values() for record in param.grads
+    )
 
 
 def test_param_gradient_payloads_use_trace_save_mode() -> None:
@@ -548,7 +550,7 @@ def test_param_gradient_payloads_use_trace_save_mode() -> None:
     trace.save_mode = "reference"
     trace.log_backward(_output_loss(trace))
 
-    payloads = [record.grad for param in trace.param_logs.values() for record in param.grads]
+    payloads = [record.grad for param in trace._param_logs.values() for record in param.grads]
     assert payloads
     assert all(payload is not None for payload in payloads)
     assert all(payload.grad_fn is None for payload in payloads)
@@ -699,7 +701,7 @@ def test_rewalk_failure_removes_hooks_and_clears_refs(
         trace.log_backward(_output_loss(trace))
 
     assert handle.removed is True
-    assert all(layer.grad_fn_handle is None for layer in trace.layer_list)
+    assert all(layer.grad_fn_handle is None for layer in trace._layer_list)
 
 
 def test_ordinary_tail_pending_clear_failure_still_removes_hooks(
@@ -752,7 +754,7 @@ def test_ordinary_tail_pending_clear_failure_still_removes_hooks(
         trace.log_backward(_output_loss(trace))
 
     assert handle.removed is True, "pending-clear failure stranded grad-fn hooks"
-    assert all(layer.grad_fn_handle is None for layer in trace.layer_list), (
+    assert all(layer.grad_fn_handle is None for layer in trace._layer_list), (
         "pending-clear failure stranded strong forward grad-fn refs"
     )
 
@@ -829,7 +831,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     trace.log_backward(_output_loss(trace))
     assert trace.has_gradients
     assert trace._saved_grad_labels
-    assert any(param_log._grad_records for param_log in trace.param_logs.values())
+    assert any(param_log._grad_records for param_log in trace._param_logs.values())
 
     def _identity_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         return out
@@ -842,13 +844,13 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
 
     assert fork.has_gradients is False
     assert fork._saved_grad_labels == set()
-    assert not any(param_log._grad_records for param_log in fork.param_logs.values())
+    assert not any(param_log._grad_records for param_log in fork._param_logs.values())
     assert int(fork.total_param_gradient_memory) == 0
     assert fork.num_backward_passes == 0
 
     assert trace.has_gradients
     assert trace._saved_grad_labels
-    assert any(param_log._grad_records for param_log in trace.param_logs.values())
+    assert any(param_log._grad_records for param_log in trace._param_logs.values())
 
 
 def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
@@ -867,7 +869,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
         x,
         capture=CaptureOptions(layers_to_save="all", replayable=True, backward_ready=True),
     )
-    address, param_log = next(iter(trace.param_logs.items()))
+    address, param_log = next(iter(trace._param_logs.items()))
     param_log._derived_grad_payload = torch.ones(1)
     assert param_log.has_grad is True  # positive control: the seed arms the channel
 
@@ -880,7 +882,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
         )
     )
 
-    fork_param = fork.param_logs[address]
+    fork_param = fork._param_logs[address]
     assert fork_param._derived_grad_payload is None
     assert fork_param.has_grad is False
     # The source keeps its own (seeded) state untouched.
@@ -896,7 +898,7 @@ def test_backward_reprojection_guard_survives_count_preserving_mutation() -> Non
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert trace.backward_pass_logs[1].status == "ok"
+    assert trace._backward_pass_logs[1].status == "ok"
 
     stream = _ensure_backward_event_stream(trace)
     old_end = stream.backward_events[-1]
@@ -906,7 +908,7 @@ def test_backward_reprojection_guard_survives_count_preserving_mutation() -> Non
     stream.append_backward(dataclass_replace(old_end, status="error"))
 
     trace._sync_backward_projection_if_needed()
-    assert trace.backward_pass_logs[1].status == "error"
+    assert trace._backward_pass_logs[1].status == "error"
 
 
 def test_recording_backward_delegates_foreign_graphs() -> None:
@@ -924,8 +926,8 @@ def test_recording_backward_delegates_foreign_graphs() -> None:
     control_loss = _output_loss(control_trace)
     with control_trace.capture_backward():
         control_loss.backward()
-    trace_labels = sorted(grad_fn.label for grad_fn in trace.grad_fn_logs.values())
-    control_labels = sorted(grad_fn.label for grad_fn in control_trace.grad_fn_logs.values())
+    trace_labels = sorted(grad_fn.label for grad_fn in trace._grad_fn_logs.values())
+    control_labels = sorted(grad_fn.label for grad_fn in control_trace._grad_fn_logs.values())
     assert trace_labels == control_labels
 
 
@@ -947,7 +949,7 @@ def test_recording_backward_foreign_only_block_stays_empty() -> None:
     assert len(unmatched_warnings) == 1, "unmatched-backward warning must fire exactly once"
     assert foreign.grad is not None
     assert trace.num_backward_passes == 0
-    assert len(trace.grad_fn_logs) == 0
+    assert len(trace._grad_fn_logs) == 0
 
 
 def test_recording_backward_exit_preserves_interleaved_patch() -> None:
@@ -972,7 +974,7 @@ def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
     """The backward DAG includes grad_fns without forward Layer matches."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert any(not grad_fn_handle.has_op for grad_fn_handle in trace.grad_fn_logs.values())
+    assert any(not grad_fn_handle.has_op for grad_fn_handle in trace._grad_fn_logs.values())
 
 
 def test_has_op_storage_field() -> None:
@@ -997,7 +999,7 @@ def test_grad_fn_log_back_pointer() -> None:
     """Forward LayerLogs link to corresponding GradFnLogs by identity."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert any(layer.grad_fn is not None for layer in trace.layer_list)
+    assert any(layer.grad_fn is not None for layer in trace._layer_list)
     assert any(
         grad_fn_handle.op is not None and grad_fn_handle.op.grad_fn is grad_fn_handle
         for grad_fn_handle in trace.autograd.grad_fns
@@ -1122,7 +1124,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     trace.log_backward(_output_loss(trace))
-    assert any(grad_fn_handle.is_custom for grad_fn_handle in trace.grad_fn_logs.values())
+    assert any(grad_fn_handle.is_custom for grad_fn_handle in trace._grad_fn_logs.values())
 
 
 def test_implicit_hook_firing_preserved() -> None:
@@ -1156,7 +1158,7 @@ def test_validate_backward_default_detects_corrupted_captured_op_grad(
         """Corrupt one captured module-output grad after backward logging."""
 
         result = original_log_backward(trace, *args, **kwargs)
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
                 continue
@@ -1313,7 +1315,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     trace1.log_backward(_output_loss(trace1))
     labels1 = {
         grad_fn_handle.label
-        for grad_fn_handle in trace1.grad_fn_logs.values()
+        for grad_fn_handle in trace1._grad_fn_logs.values()
         if grad_fn_handle.type == "accumulategrad"
     }
     trace1.cleanup()
@@ -1322,7 +1324,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     trace2.log_backward(_output_loss(trace2))
     labels2 = {
         grad_fn_handle.label
-        for grad_fn_handle in trace2.grad_fn_logs.values()
+        for grad_fn_handle in trace2._grad_fn_logs.values()
         if grad_fn_handle.type == "accumulategrad"
     }
     trace2.cleanup()
@@ -1380,16 +1382,16 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
             (record.ordinal, record.backward_pass_index, record.shape, record.memory)
             for record in param_log._grad_records
         ]
-        for address, param_log in trace.param_logs.items()
+        for address, param_log in trace._param_logs.items()
     }
     payloads_before = {
         address: [record.grad for record in param_log._grad_records]
-        for address, param_log in trace.param_logs.items()
+        for address, param_log in trace._param_logs.items()
     }
     assert any(before.values()), "expected captured param gradient records"
     assert all(len(records) == 2 for records in before.values() if records)
 
-    for param_log in trace.param_logs.values():
+    for param_log in trace._param_logs.values():
         param_log._grad_records = []
     trace.__dict__.pop("_backward_projection_fold_state", None)
     trace.__dict__.pop("_backward_projection_revision", None)
@@ -1401,10 +1403,10 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
             (record.ordinal, record.backward_pass_index, record.shape, record.memory)
             for record in param_log._grad_records
         ]
-        for address, param_log in trace.param_logs.items()
+        for address, param_log in trace._param_logs.items()
     }
     assert after == before
-    for address, param_log in trace.param_logs.items():
+    for address, param_log in trace._param_logs.items():
         for record, payload in zip(param_log._grad_records, payloads_before[address]):
             assert record.grad is payload, "rebuild must reuse the event-held payload"
 
@@ -1427,7 +1429,7 @@ def test_param_grad_incremental_fold_matches_scratch_rebuild() -> None:
     # re-deriving the records from the ParamGradObserved event spine. Under
     # direct-write param capture (no event folding) the cleared records never
     # come back and this comparison fails.
-    for param_log in trace.param_logs.values():
+    for param_log in trace._param_logs.values():
         param_log._grad_records = []
     trace.__dict__.pop("_backward_projection_fold_state", None)
     trace.__dict__.pop("_backward_projection_revision", None)
@@ -1445,7 +1447,7 @@ def test_param_grad_reconciliation_counts_multiplicity() -> None:
     _invariant_check(trace)  # positive control
 
     param_log = next(
-        param_log for param_log in trace.param_logs.values() if param_log._grad_records
+        param_log for param_log in trace._param_logs.values() if param_log._grad_records
     )
     duplicated = param_log._grad_records[0]
     param_log._grad_records.append(duplicated)
@@ -1463,7 +1465,7 @@ def test_op_grad_reconciliation_counts_multiplicity() -> None:
     trace.log_backward(_output_loss(trace))
     _invariant_check(trace)  # positive control
 
-    victim = next(op for op in trace.layer_list if op._slot("_grad_records"))
+    victim = next(op for op in trace._layer_list if op._slot("_grad_records"))
     records = victim._slot("_grad_records")
     records.append(records[0])
     with pytest.raises(MetadataInvariantError, match="by multiplicity"):
@@ -1597,8 +1599,8 @@ def test_restored_trace_supports_backward_capture() -> None:
 
     restored.log_backward(loss)
     assert restored.num_backward_passes == 1
-    assert restored.grad_fn_logs
-    assert restored.backward_pass_logs[1].status == "ok"
+    assert restored._grad_fn_logs
+    assert restored._backward_pass_logs[1].status == "ok"
     _invariant_check(restored)
 
 
@@ -1633,7 +1635,7 @@ def _assert_pass_one_calls_survive_rebase(trace, pass_one_call_snapshot) -> None
     pass's call tuples.
     """
     for object_id, snapshot in pass_one_call_snapshot.items():
-        record = trace.grad_fn_logs[object_id]
+        record = trace._grad_fn_logs[object_id]
         merged_calls = dict(record.calls._dict)
         for call_ordinal, pass_one_call in snapshot.items():
             assert merged_calls.get(call_ordinal) is pass_one_call
@@ -1653,7 +1655,7 @@ def _assert_pass_record_calls_owned(trace, pass_record) -> None:
     record still owns — the two projections must never diverge.
     """
     owned_call_ids = {
-        id(call) for record in trace.grad_fn_logs.values() for call in record.calls._dict.values()
+        id(call) for record in trace._grad_fn_logs.values() for call in record.calls._dict.values()
     }
     assert pass_record.grad_fn_calls
     for call in pass_record.grad_fn_calls:
@@ -1678,35 +1680,35 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
 
     restored = pickle.loads(pickle.dumps(trace))
     assert restored._capture_events.pass_index_base == 1
-    pass_one_record = restored.backward_pass_logs[1]
-    preserved_grad_fn_ids = set(restored.grad_fn_logs)
+    pass_one_record = restored._backward_pass_logs[1]
+    preserved_grad_fn_ids = set(restored._grad_fn_logs)
     assert preserved_grad_fn_ids
     # Full pass-1 projection content, not just ID presence: the exact
     # GradFnCall objects each grad-fn record holds before the rebase.
     pass_one_call_snapshot = {
-        object_id: dict(record.calls._dict) for object_id, record in restored.grad_fn_logs.items()
+        object_id: dict(record.calls._dict) for object_id, record in restored._grad_fn_logs.items()
     }
     assert any(pass_one_call_snapshot.values())
     pass_one_param_counts = {
-        address: len(param_log._grad_records) for address, param_log in restored.param_logs.items()
+        address: len(param_log._grad_records) for address, param_log in restored._param_logs.items()
     }
     assert any(pass_one_param_counts.values())
 
     restored.log_backward(loss, retain_graph=True)
 
     assert restored.num_backward_passes == 2
-    assert set(restored.backward_pass_logs) == {1, 2}
+    assert set(restored._backward_pass_logs) == {1, 2}
     # The earlier pass's projection is intact — the SAME preserved record,
     # not a lookalike rebuilt from a stream that never saw pass 1.
-    assert restored.backward_pass_logs[1] is pass_one_record
-    assert preserved_grad_fn_ids <= set(restored.grad_fn_logs)
+    assert restored._backward_pass_logs[1] is pass_one_record
+    assert preserved_grad_fn_ids <= set(restored._grad_fn_logs)
     _assert_pass_one_calls_survive_rebase(restored, pass_one_call_snapshot)
     # And the retained pass record agrees with the grad-fn records: every
     # call it lists is one the merged grad-fn projection still owns.
     _assert_pass_record_calls_owned(restored, pass_one_record)
-    all_labels = [record.label for record in restored.grad_fn_logs.values()]
+    all_labels = [record.label for record in restored._grad_fn_logs.values()]
     assert len(all_labels) == len(set(all_labels)), "merged grad-fn labels must stay unique"
-    for address, param_log in restored.param_logs.items():
+    for address, param_log in restored._param_logs.items():
         pass_indices = sorted(record.backward_pass_index for record in param_log._grad_records)
         preserved = [index for index in pass_indices if index == 1]
         assert len(preserved) == pass_one_param_counts[address]
@@ -1722,14 +1724,14 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     assert restored_again._capture_events.pass_index_base == 2
     two_pass_call_snapshot = {
         object_id: dict(record.calls._dict)
-        for object_id, record in restored_again.grad_fn_logs.items()
+        for object_id, record in restored_again._grad_fn_logs.items()
     }
     assert any(two_pass_call_snapshot.values())
     restored_again.log_backward(loss)
     assert restored_again.num_backward_passes == 3
-    assert set(restored_again.backward_pass_logs) == {1, 2, 3}
+    assert set(restored_again._backward_pass_logs) == {1, 2, 3}
     for object_id, snapshot in two_pass_call_snapshot.items():
-        record = restored_again.grad_fn_logs[object_id]
+        record = restored_again._grad_fn_logs[object_id]
         merged_calls = dict(record.calls._dict)
         for call_ordinal, prior_call in snapshot.items():
             assert merged_calls.get(call_ordinal) is prior_call
@@ -1767,9 +1769,9 @@ def test_fork_after_backward_gets_detached_event_stream() -> None:
 
     parent_event_count = len(trace._capture_events.backward_events)
     parent_revision = trace._capture_events.backward_revision
-    fork_pass_one_record = fork.backward_pass_logs[1]
+    fork_pass_one_record = fork._backward_pass_logs[1]
     fork_pass_one_call_snapshot = {
-        object_id: dict(record.calls._dict) for object_id, record in fork.grad_fn_logs.items()
+        object_id: dict(record.calls._dict) for object_id, record in fork._grad_fn_logs.items()
     }
     assert any(fork_pass_one_call_snapshot.values())
     with warnings.catch_warnings():
@@ -1781,9 +1783,9 @@ def test_fork_after_backward_gets_detached_event_stream() -> None:
     assert len(trace._capture_events.backward_events) == parent_event_count
     assert trace._capture_events.backward_revision == parent_revision
     assert trace.num_backward_passes == 1
-    assert set(trace.backward_pass_logs) == {1}
+    assert set(trace._backward_pass_logs) == {1}
     assert fork.num_backward_passes == 2
-    assert set(fork.backward_pass_logs) == {1, 2}
+    assert set(fork._backward_pass_logs) == {1, 2}
     # The parent's persistent tensor hooks redirect their observations to the
     # bracket-holding fork (shared label space), so the fork's pass records
     # op gradients instead of silently losing them.
@@ -1795,7 +1797,7 @@ def test_fork_after_backward_gets_detached_event_stream() -> None:
     assert fork_op_grad_passes == {2}
     # The detached-fork rebuild preserves the inherited pass's projection
     # content the same way the pickle-restore path does.
-    assert fork.backward_pass_logs[1] is fork_pass_one_record
+    assert fork._backward_pass_logs[1] is fork_pass_one_record
     _assert_pass_one_calls_survive_rebase(fork, fork_pass_one_call_snapshot)
     _assert_pass_record_calls_owned(fork, fork_pass_one_record)
     _invariant_check(trace)
@@ -2286,7 +2288,7 @@ def test_foreach_inplace_live_member_owns_its_gradient() -> None:
         x,
         capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=4),
     )
-    layer = next(op for op in trace.layer_list if "_foreach_add_" in str(op.func_name))
+    layer = next(op for op in trace._layer_list if "_foreach_add_" in str(op.func_name))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     observed = [

@@ -314,7 +314,7 @@ def test_edge_counters_match_unmemoized_reference() -> None:
     for name, model, trace in _traces():
         try:
             ops = trace.ops
-            rows = trace.layer_list  # every row: edges touch input/output/buffer rows too
+            rows = trace._layer_list  # every row: edges touch input/output/buffer rows too
             direct_edges = {
                 (op.label, ops[child_label].label) for op in rows for child_label in op.children
             }
@@ -376,7 +376,7 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
             return original.fget(op)
 
         monkeypatch.setattr(Op, "raw_label", property(raising_raw_label))
-        accessor = TraceOpAccessor(ops, trace.layer_num_calls)
+        accessor = TraceOpAccessor(ops, trace._layer_num_calls)
         assert accessor._resolve_substring(probe_key) is first
         assert accessor._alias_index_unavailable is True
         assert accessor._alias_indexes is None

@@ -492,7 +492,7 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
 
         facts = _trace_fact_lines(obj)
         children: list[Any] = [rp.text(line) for line in facts]
-        keys = [str(k) for k in (getattr(obj, "layer_logs", None) or ())][:64]
+        keys = [str(k) for k in (getattr(obj, "_layer_logs", None) or ())][:64]
         if keys:
             shown = keys[:_KEY_INDEX_BUDGET]
             index_children = [rp.text(f"['{key}']") for key in shown]

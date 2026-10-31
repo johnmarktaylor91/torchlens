@@ -324,7 +324,7 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
         SparseProducerModel(),
         {"features": torch.ones(1, 3, requires_grad=True)},
     )
-    trace.layer_list[-2].out.sum().backward()
+    trace._layer_list[-2].out.sum().backward()
     path = tmp_path / "no_payload.tlspec"
 
     trace.save(path, level="runnable")
@@ -336,8 +336,8 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
     assert_sparse_core_has_no_tensor_payload(manifest["run"])
     assert_sparse_core_has_no_tensor_payload(metadata)
     assert metadata["_buffer_initial_values"] == {}
-    assert all(op.func is None for op in metadata["layer_list"])
-    for op in metadata["layer_list"]:
+    assert all(op.func is None for op in metadata["_layer_list"])
+    for op in metadata["_layer_list"]:
         assert op.out is None
         assert op.transformed_out is None
         assert op.saved_args is None
@@ -460,7 +460,7 @@ def test_runnable_preflight_recurses_nested_mixed_mapping_tensor_container() -> 
     """Emit tensor leaves and a literal skeleton for nested mixed containers."""
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
-    target = next(op for op in trace.layer_list if op.func_name == "cat")
+    target = next(op for op in trace._layer_list if op.func_name == "cat")
     original = target.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]
@@ -491,7 +491,7 @@ def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_me
     """Reject opaque members instead of treating tensor containers as literals."""
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
-    target = next(op for op in trace.layer_list if op.func_name == "cat")
+    target = next(op for op in trace._layer_list if op.func_name == "cat")
     original = target.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]

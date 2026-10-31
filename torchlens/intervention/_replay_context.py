@@ -72,9 +72,9 @@ def _final_label_for_ref(log: Trace, label: str) -> str:
     if raw_label not in op_labels:
         raw_label = (log._final_to_raw_layer_labels or {}).get(label, "")
     exact_label = op_labels.get(raw_label)
-    if isinstance(exact_label, str) and exact_label in log.layer_dict_all_keys:
+    if isinstance(exact_label, str) and exact_label in log._layer_dict_all_keys:
         return exact_label
-    if label in log.layer_dict_all_keys:
+    if label in log._layer_dict_all_keys:
         return label
     return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
@@ -222,7 +222,7 @@ def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]]
 
     ops = [
         (op, {name: _journal_copy(getattr(op, name, None)) for name in _JOURNAL_OP_FIELDS})
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
     fields = {
         name: _journal_copy(getattr(trace, name))

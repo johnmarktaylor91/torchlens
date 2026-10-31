@@ -85,8 +85,8 @@ def test_four_clause_declaration_invariant():
     undeclared, undeclared_rng = _seeded_capture(declare_episode=False)
 
     # Clause 1: identical ordered recorded op labels.
-    declared_labels = [op.label for op in declared.layer_list]
-    undeclared_labels = [op.label for op in undeclared.layer_list]
+    declared_labels = [op.label for op in declared._layer_list]
+    undeclared_labels = [op.label for op in undeclared._layer_list]
     assert declared_labels == undeclared_labels
 
     # Clause 2: bit-identical root output.

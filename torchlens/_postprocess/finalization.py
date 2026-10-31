@@ -66,7 +66,7 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     user are clean.
     """
     tensors_to_undecorate = []
-    for layer_entry in [*self.layer_list, *self.graph.orphans.values()]:
+    for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
         if getattr(layer_entry, "transformed_out", None) is not None:
@@ -119,7 +119,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     membership_by_param: dict[int, tuple[set[str], set[str], set[str]]] = {}
 
     # Build used_by_ops, used_by_layers, and co_parent_params from Op entries
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if not layer_entry._param_logs:
             continue
         addresses_in_op = [pl.address for pl in layer_entry._param_logs]
@@ -147,7 +147,7 @@ def _finalize_param_logs(self: "Trace") -> None:
                     co_parent_params.add(other_addr)
 
     # Populate num_calls: how many times this parameter was used in the forward pass
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         pl.num_calls = len(pl.used_by_ops)
         pl.trace = self
 
@@ -158,7 +158,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     if _core is not None:
         from .._trace_core.record_rows import adopt_records
 
-        adopt_records(_core, "param", self.param_logs)
+        adopt_records(_core, "param", self._param_logs)
 
     # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Param._param_ref is intentionally released later, after module finalization has
@@ -166,7 +166,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     # _param_logs (GC-9) and func (GC-10) are still needed by validation.
 
     # Clear actual Parameter tensor references from Op entries to save memory.
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         layer_entry.parent_params = []
 
 
@@ -183,14 +183,14 @@ def _build_root_module_log(
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_capture_ws.module_metadata)
     root_meta = module_metadata.get("self", {})
-    root_layers = list(self.layer_logs.keys())
+    root_layers = list(self._layer_logs.keys())
 
-    root_param_dict = {pl.address: pl for pl in self.param_logs}
+    root_param_dict = {pl.address: pl for pl in self._param_logs}
     root_params = ParamAccessor(root_param_dict)
-    root_num_params = sum(pl.num_params for pl in self.param_logs)
-    root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.is_trainable)
-    root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.is_trainable)
-    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
+    root_num_params = sum(pl.num_params for pl in self._param_logs)
+    root_num_trainable = sum(pl.num_params for pl in self._param_logs if pl.is_trainable)
+    root_num_frozen = sum(pl.num_params for pl in self._param_logs if not pl.is_trainable)
+    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self._param_logs))
     root_meta_children = root_meta.get("address_children")
     if root_meta_children is None:
         address_children = [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
@@ -255,7 +255,7 @@ def _build_root_module_log(
         address="self",
         call_index=1,
         call_label="self:1",
-        ops=[op.label for op in self.layer_list],  # Op space, as on every other call
+        ops=[op.label for op in self._layer_list],  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
         output_ops=op_space_labels(self, self.output_layers),
@@ -454,7 +454,7 @@ def _layer_space_labels(self: "Trace", labels: list[str]) -> list[str]:
 
     layer_labels: list[str] = []
     for label in labels:
-        op = self.layer_dict_all_keys.get(label)
+        op = self._layer_dict_all_keys.get(label)
         resolved = getattr(op, "layer_label", None) if op is not None else None
         layer_labels.append(resolved if isinstance(resolved, str) else label)
     return layer_labels
@@ -477,7 +477,7 @@ def _first_output_structure(self: "Trace", output_layers: list[str]) -> Any | No
     """
 
     for layer_label in output_layers:
-        entry = self.layer_dict_all_keys.get(layer_label)
+        entry = self._layer_dict_all_keys.get(layer_label)
         if entry is not None and entry.container_spec is not None:
             return entry.container_spec
     return None
@@ -502,7 +502,7 @@ def _assign_output_roles(
         return
     for index, output in enumerate(output_entries):
         if output.multi_output_name is not None:
-            parent_layer = output.source_trace.layer_logs.get(output.layer_label)
+            parent_layer = output.source_trace._layer_logs.get(output.layer_label)
             if parent_layer is not None:
                 parent_layer.multi_output_name = output.multi_output_name
             continue
@@ -511,7 +511,7 @@ def _assign_output_roles(
             output.multi_output_index if output.multi_output_index is not None else index,
             hints=hints,
         )
-        parent_layer = output.source_trace.layer_logs.get(output.layer_label)
+        parent_layer = output.source_trace._layer_logs.get(output.layer_label)
         if parent_layer is not None:
             parent_layer.multi_output_name = output.multi_output_name
 
@@ -842,10 +842,10 @@ def _build_module_param_info(
         module_buffer_layers = [
             bl
             for bl in self.buffer_layers
-            if bl in self.layer_dict_all_keys
-            and hasattr(self.layer_dict_all_keys[bl], "address")
-            and self.layer_dict_all_keys[bl].address is not None
-            and self.layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
+            if bl in self._layer_dict_all_keys
+            and hasattr(self._layer_dict_all_keys[bl], "address")
+            and self._layer_dict_all_keys[bl].address is not None
+            and self._layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
         ]
 
     return ModuleParamInfo(
@@ -879,7 +879,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     # Pre-compute param_logs grouped by module address
     self._param_logs_by_module = defaultdict(list)
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         for module_address in pl.all_module_addresses:
             self._param_logs_by_module[module_address].append(pl)
 
@@ -902,8 +902,8 @@ def _build_module_logs(self: "Trace") -> None:
     # Pre-compute buffer layers grouped by parent module address (O6).
     _buffer_layers_by_module = defaultdict(list)
     for bl in self.buffer_layers:
-        if bl in self.layer_dict_all_keys:
-            bl_entry = self.layer_dict_all_keys[bl]
+        if bl in self._layer_dict_all_keys:
+            bl_entry = self._layer_dict_all_keys[bl]
             if hasattr(bl_entry, "address") and bl_entry.address is not None:
                 module_addr = bl_entry.address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
@@ -912,7 +912,7 @@ def _build_module_logs(self: "Trace") -> None:
     # tens of thousands of ModuleCalls; scanning every Op once per call is
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in self.layer_list:
+    for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
         for call_label in te.input_to_module_calls:
@@ -932,7 +932,7 @@ def _build_module_logs(self: "Trace") -> None:
         seen = set()
         layers = []
         for label in layers_raw:
-            entry = self.layer_dict_all_keys.get(label)
+            entry = self._layer_dict_all_keys.get(label)
             if entry is not None:
                 no_pass = entry.layer_label
                 if no_pass not in seen:
@@ -1220,7 +1220,7 @@ def _build_layer_logs(self: "Trace") -> None:
 
     layer_logs = OrderedDict()
 
-    for pass_log in self.layer_list:
+    for pass_log in self._layer_list:
         no_call_label = pass_log.layer_label
 
         if no_call_label not in layer_logs:
@@ -1297,7 +1297,7 @@ def _build_layer_logs(self: "Trace") -> None:
         _rebuild_layer_log_conditional_views(layer_log)
 
     self.total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
-    self.layer_logs = layer_logs
+    self._layer_logs = layer_logs
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
 
@@ -1463,7 +1463,7 @@ def _build_conditional_records(self: "Trace") -> None:
                     roles_by_label.setdefault(label, []).append(
                         ConditionalRoleRef(conditional.id, arm_index, arm.kind, role)
                     )
-    for layer in self.layer_list:
+    for layer in self._layer_list:
         layer.in_conditionals = roles_by_label.get(layer.layer_label, [])
         if (
             layer.terminal_conditional_id is not None
@@ -1549,10 +1549,10 @@ def _resolve_conditional_bool_op(
         and len(witnessed_indices) == 1
         and 0 <= witnessed_indices[0] < len(bool_layers_raw)
     ):
-        raw_op = self.layer_dict_all_keys.get(bool_layers_raw[witnessed_indices[0]])
+        raw_op = self._layer_dict_all_keys.get(bool_layers_raw[witnessed_indices[0]])
         if raw_op is not None:
             return raw_op
-    return self.layer_dict_all_keys.get(terminal_bool)
+    return self._layer_dict_all_keys.get(terminal_bool)
 
 
 def _merge_conditional_role_labels(
@@ -1600,20 +1600,20 @@ def _find_conditional_evaluation_entry_edge(
         return None
 
     first_bool_label = bool_layers[0]
-    if first_bool_label not in self.layer_dict_all_keys:
+    if first_bool_label not in self._layer_dict_all_keys:
         return None
 
     visited_labels: set[str] = set()
-    parent_queue: deque[str] = deque(self.layer_dict_all_keys[first_bool_label].parents)
+    parent_queue: deque[str] = deque(self._layer_dict_all_keys[first_bool_label].parents)
     while parent_queue:
         parent_label = parent_queue.popleft()
         if parent_label in visited_labels:
             continue
         visited_labels.add(parent_label)
-        if parent_label not in self.layer_dict_all_keys:
+        if parent_label not in self._layer_dict_all_keys:
             continue
 
-        parent_layer = self.layer_dict_all_keys[parent_label]
+        parent_layer = self._layer_dict_all_keys[parent_label]
         if parent_label != first_bool_label and parent_layer.has_output_descendant:
             return (parent_label, first_bool_label)
         parent_queue.extend(parent_layer.parents)
@@ -1633,8 +1633,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     This is intentional — it enables fast-path postprocessing to use
     fully-populated lookup dicts from the exhaustive pass.
     """
-    for layer_label in self.layer_dict_main_keys:
-        tensor = self.layer_dict_main_keys[layer_label]
+    for layer_label in self._layer_dict_main_keys:
+        tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
     self._tracing_finished = True
 
@@ -1744,11 +1744,11 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     each pass.
     """
 
-    for op in getattr(self, "layer_list", ()):
+    for op in getattr(self, "_layer_list", ()):
         for record in getattr(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:
                 return True
-    for param in getattr(self, "param_logs", {}).values():
+    for param in getattr(self, "_param_logs", {}).values():
         if any(record.grad is not None for record in getattr(param, "grads", ())):
             return True
     return False
@@ -1763,7 +1763,7 @@ def _evict_streamed_outs(self: "Trace") -> None:
         Model log whose streamed outs should be evicted.
     """
 
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if getattr(layer_entry, "out_ref", None) is not None:
             layer_entry._internal_set("out", None)
         if getattr(layer_entry, "_pending_transformed_out_blob_id", None) is not None:
@@ -1779,7 +1779,7 @@ def _evict_streamed_grads(self: "Trace") -> None:
         Model log whose streamed grads should be evicted.
     """
 
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if getattr(layer_entry, "grad_ref", None) is not None:
             layer_entry._internal_set("grad", None)
         if getattr(layer_entry, "_pending_transformed_grad_blob_id", None) is not None:
@@ -1812,23 +1812,23 @@ def _reuse_streamed_blob_ids(
         Patched scrubbed state and the filtered blob spec list.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         raise ArtifactError(
-            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+            "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
     # diverge, pairing them positionally would silently finalize only the
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
-    if len(scrubbed_layers) != len(trace.layer_list):
+    if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
-            f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
+            f"{len(scrubbed_layers)} scrubbed vs {len(trace._layer_list)} live."
         )
 
     skipped_blob_ids: set[str] = set()
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         # One lazy full-schema snapshot per layer (r8 R29): the old loop
         # rebuilt the ~200-300-field portable state dict on EVERY field
         # iteration and BEFORE the pending short-circuit, so every layer of
@@ -1935,22 +1935,22 @@ def _attach_streamed_tensor_refs(
         Final bundle directory path after the temp-dir rename.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         raise ArtifactError(
-            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+            "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
     # diverge, pairing them positionally would silently finalize only the
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
-    if len(scrubbed_layers) != len(trace.layer_list):
+    if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
-            f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
+            f"{len(scrubbed_layers)} scrubbed vs {len(trace._layer_list)} live."
         )
 
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         for tensor_field, ref_field, kind in (
             ("out", "out_ref", "out"),
             ("grad", "grad_ref", "grad"),

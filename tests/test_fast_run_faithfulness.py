@@ -183,7 +183,7 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
 
     model = BufferGainModel().eval()
     captured = tl.trace(model, torch.ones(2, 3), save=lambda op: True)
-    saved_before = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_before = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert "buffer_1:1" in saved_before
     del model.second
 
@@ -191,9 +191,9 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
         captured.run(inputs=torch.ones(2, 3), fast=True)
     assert excinfo.value.fields["detection_stage"] == "fast_live_module_plan"
 
-    saved_after = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_after = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert saved_after == saved_before
-    assert captured.layer_dict_all_keys["buffer_1:1"].out is not None
+    assert captured._layer_dict_all_keys["buffer_1:1"].out is not None
 
 
 @pytest.mark.smoke

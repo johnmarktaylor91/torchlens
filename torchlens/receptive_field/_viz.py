@@ -514,10 +514,10 @@ def _ancestor_cone(op: Op, io_role: str) -> frozenset[str]:
     trace = op.source_trace
     by_reference = {
         reference: item
-        for item in trace.layer_list
+        for item in trace._layer_list
         for reference in (item.label, item.layer_label, item._layer_label_raw)
     }
-    input_op = next((item for item in trace.layer_list if item.io_role == io_role), None)
+    input_op = next((item for item in trace._layer_list if item.io_role == io_role), None)
     if input_op is None:
         return frozenset()
     labels: set[str] = set()

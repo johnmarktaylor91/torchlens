@@ -214,7 +214,7 @@ def _get_only_terminal_bool(trace: Trace) -> Op:
     """
 
     bool_layers = [
-        layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool
+        layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool
     ]
     assert len(bool_layers) == 1
     return bool_layers[0]
@@ -236,7 +236,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> Layer:
 
     matching_layers = [
         layer_log
-        for layer_log in trace.layer_logs.values()
+        for layer_log in trace._layer_logs.values()
         if layer_log.func_name == "linear" and layer_log.num_passes > 1
     ]
     assert len(matching_layers) == 1
@@ -311,7 +311,7 @@ def test_invariant_1_arm_edges_bidirectional_consistency() -> None:
     try:
         event = _get_only_event(trace)
         parent_label, child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
-        parent_layer = trace.layer_logs[parent_label]
+        parent_layer = trace._layer_logs[parent_label]
         parent_layer.conditional_arm_children[event.id]["then"] = [
             label
             for label in parent_layer.conditional_arm_children[event.id]["then"]
@@ -382,7 +382,7 @@ def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
     trace = _log_model(NestedIfModel(), torch.ones(2, 3))
     try:
         violating_child: Op | None = None
-        for layer in trace.layer_list:
+        for layer in trace._layer_list:
             if len(layer.conditional_branch_stack) != 2:
                 continue
             for parent_label in layer.parents:
@@ -421,7 +421,7 @@ def test_invariant_8_event_bool_layers_point_back_to_the_event() -> None:
     try:
         event = _get_only_event(trace)
         non_bool_label = next(
-            layer.layer_label for layer in trace.layer_list if not layer.is_terminal_bool
+            layer.layer_label for layer in trace._layer_list if not layer.is_terminal_bool
         )
         event.bool_layers.append(non_bool_label)
         _assert_invariant_error(trace, ("Invariant 8", non_bool_label))
@@ -493,7 +493,7 @@ def test_invariant_13_legacy_if_view_is_bidirectionally_consistent() -> None:
         bool_label = _get_only_event(trace).bool_layers[0]
         parent_label = next(
             layer.layer_label
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if bool_label not in layer.conditional_entry_children
         )
         trace.conditional_branch_edges.append((parent_label, bool_label))
@@ -516,7 +516,7 @@ def test_invariant_14_arm_entry_edges_must_be_real_graph_edges() -> None:
         event = _get_only_event(trace)
         parent_label, _child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
         bogus_child_label = trace.input_layers[0]
-        assert bogus_child_label not in trace.layer_logs[parent_label].children
+        assert bogus_child_label not in trace._layer_logs[parent_label].children
 
         trace.conditional_arm_entry_edges[(event.id, "then")].append(
             (parent_label, bogus_child_label)
@@ -525,7 +525,7 @@ def test_invariant_14_arm_entry_edges_must_be_real_graph_edges() -> None:
             1
         ]
 
-        parent_layer_log = trace.layer_logs[parent_label]
+        parent_layer_log = trace._layer_logs[parent_label]
         parent_layer_log.conditional_arm_children[event.id]["then"].append(bogus_child_label)
         _sync_layer_log_child_views(parent_layer_log)
         for parent_op in parent_layer_log.ops.values():
@@ -547,7 +547,7 @@ def test_invariant_15_branch_depth_must_match_stack() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         arm_op = next(
-            layer for layer in trace.layer_list if len(layer.conditional_branch_stack) > 0
+            layer for layer in trace._layer_list if len(layer.conditional_branch_stack) > 0
         )
         arm_op.conditional_branch_depth = len(arm_op.conditional_branch_stack) + 1
         _assert_invariant_error(trace, ("Invariant 15", "conditional_branch_depth"))
@@ -564,7 +564,7 @@ def test_invariant_15_body_role_requires_branch_stack() -> None:
     try:
         stackless_op = next(
             layer
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if len(layer.conditional_branch_stack) == 0 and not (layer.in_conditionals or [])
         )
         stackless_op.in_conditionals = [
@@ -589,7 +589,7 @@ def test_invariant_15_body_role_must_match_branch_stack_entry() -> None:
     try:
         body_op = next(
             layer
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if any(role.role == "body" for role in (layer.in_conditionals or []))
         )
         body_role = next(role for role in body_op.in_conditionals if role.role == "body")

@@ -52,7 +52,7 @@ def main() -> None:
     hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate())
     hook_log.push()
 
-    assert torch.allclose(set_log.layer_list[-1].out, hook_log.layer_list[-1].out)
+    assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
     assert set_log.state_history[-2]["op"] == "set"
     assert hook_log.state_history[-2]["op"] == "attach_hooks"
 

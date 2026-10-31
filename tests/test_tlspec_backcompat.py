@@ -206,10 +206,10 @@ def _assert_modellog_matches(live_log: tl.Trace, loaded_log: tl.Trace) -> None:
     """
 
     assert loaded_log.model_class_name == live_log.model_class_name
-    assert [layer.layer_label for layer in loaded_log.layer_list] == [
-        layer.layer_label for layer in live_log.layer_list
+    assert [layer.layer_label for layer in loaded_log._layer_list] == [
+        layer.layer_label for layer in live_log._layer_list
     ]
-    for live_layer, loaded_layer in zip(live_log.layer_list, loaded_log.layer_list):
+    for live_layer, loaded_layer in zip(live_log._layer_list, loaded_log._layer_list):
         if isinstance(live_layer.out, torch.Tensor):
             assert isinstance(loaded_layer.out, torch.Tensor)
             assert loaded_layer.out.dtype == live_layer.out.dtype

@@ -140,7 +140,7 @@ def _build_sparse_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     first_saved_layer.out = first_saved_layer.out.to_sparse()
     return trace
@@ -156,7 +156,7 @@ def _build_non_tensor_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
     trace.activation_transform = lambda tensor: float(tensor.mean().item())
     return trace
@@ -177,7 +177,7 @@ def _build_complex_out_log(*, dtype: torch.dtype) -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     real = first_saved_layer.out
     first_saved_layer.out = torch.complex(real, real).to(dtype)
@@ -392,12 +392,12 @@ def test_bundle_roundtrip_preserves_saved_outs_bit_exactly(tmp_path: Path) -> No
 
     live_by_label = {
         layer.layer_label: layer.out
-        for layer in live_log.layer_list
+        for layer in live_log._layer_list
         if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
     restored_by_label = {
         layer.layer_label: layer.out
-        for layer in restored.layer_list
+        for layer in restored._layer_list
         if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
 
@@ -417,7 +417,7 @@ def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
     assert trace.transform_repr is None
     assert trace.output_id2label is None
     assert trace.output_num_classes is None
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
 
     bundle_path = tmp_path / "semantic_defaults.tlspec"
     trace.save(bundle_path)
@@ -427,7 +427,7 @@ def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
     assert restored.transform_repr is None
     assert restored.output_id2label is None
     assert restored.output_num_classes is None
-    assert restored.decoded_output is None
+    assert restored._decoded_output is None
 
 
 def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> None:
@@ -448,14 +448,14 @@ def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> No
         top_n_captured=5,
         ambiguous=False,
     )
-    trace.decoded_output = [{"batch_item": 0, "rank": 1, "label": "cat", "prob": 0.8}]
+    trace._decoded_output = [{"batch_item": 0, "rank": 1, "label": "cat", "prob": 0.8}]
 
     bundle_path = tmp_path / "postprocessor.tlspec"
     trace.save(bundle_path)
     restored = load(bundle_path)
 
     assert restored.output_postprocessor == trace.output_postprocessor
-    assert restored.decoded_output == trace.decoded_output
+    assert restored._decoded_output == trace._decoded_output
 
 
 def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) -> None:
@@ -574,14 +574,14 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
 
     trace = _build_complex_out_log(dtype=torch.complex64)
     bundle_path = tmp_path / "complex64_bundle.tl"
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     original_out = first_saved_layer.out
     assert isinstance(original_out, torch.Tensor)
     assert original_out.dtype == torch.complex64
 
     trace.save(bundle_path)
     restored = load(bundle_path)
-    restored_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+    restored_layer = next(layer for layer in restored._layer_list if layer.has_saved_activation)
 
     assert isinstance(restored_layer.out, torch.Tensor)
     assert restored_layer.out.dtype == torch.complex64
@@ -834,9 +834,9 @@ def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> 
     second_log.save(bundle_path, overwrite=True)
     restored = load(bundle_path)
 
-    first_output = first_log.layer_list[-1].out
-    second_output = second_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    second_output = second_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
 
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(second_output, torch.Tensor)
@@ -883,8 +883,8 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     # The original (pre-overwrite) bundle must survive the failed overwrite.
     assert bundle_path.exists()
     restored = load(bundle_path)
-    first_output = first_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(restored_output, torch.Tensor)
     assert torch.equal(first_output, restored_output)
@@ -960,8 +960,8 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     # regardless of which exception type the write raised.
     assert bundle_path.exists()
     restored = load(bundle_path)
-    first_output = first_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(restored_output, torch.Tensor)
     assert torch.equal(first_output, restored_output)

@@ -152,9 +152,9 @@ def build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
         if address == "self":
             continue
         resolved = tuple(
-            trace.layer_dict_all_keys[label]
+            trace._layer_dict_all_keys[label]
             for label in module_call.output_ops
-            if label in trace.layer_dict_all_keys
+            if label in trace._layer_dict_all_keys
         )
         if not resolved or not any(
             bool(getattr(item, "has_saved_activation", False)) for item in resolved
@@ -215,14 +215,14 @@ def build_function_plans(
     explicit = getattr(trace, "_predicate_save_options", None) is not None
     target_names = {
         str(op.func_name)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "has_saved_activation", False))
         and not bool(getattr(op, "is_atomic_module", False))
         and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
         and (explicit or op.label not in module_saved_labels)
     }
     plans: list[_FastOutputPlan] = []
-    ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) in target_names]
+    ops = [op for op in trace._layer_list if str(getattr(op, "func_name", "")) in target_names]
     index = 0
     while index < len(ops):
         first = ops[index]

@@ -19,7 +19,7 @@ def count_saved_module_calls_from_output_ops(
         Trace whose module calls should be counted.
     saved_op_labels:
         Optional saved Op labels. When omitted, labels are derived from saved
-        activations on ``trace.layer_list``.
+        activations on ``trace._layer_list``.
 
     Returns
     -------
@@ -31,7 +31,7 @@ def count_saved_module_calls_from_output_ops(
     if saved_op_labels is None:
         saved_labels = {
             op.label
-            for op in getattr(trace, "layer_list", ())
+            for op in getattr(trace, "_layer_list", ())
             if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
         }
     else:
@@ -68,7 +68,7 @@ def op_label_aliases(trace: "Trace") -> dict[str, str]:
     """
 
     by_layer: dict[str, list[str]] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         by_layer.setdefault(op.layer_label, []).append(op.label)
     return {layer: labels[0] for layer, labels in by_layer.items() if len(labels) == 1}
 

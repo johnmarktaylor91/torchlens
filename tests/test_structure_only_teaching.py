@@ -203,7 +203,7 @@ def test_internal_frame_reads_do_not_trip_the_belt() -> None:
 
     log = _structure_trace(Clean(), torch.randn(2, 4))
     assert log.structure_only is True
-    assert len(log.layer_list) >= 3
+    assert len(log._layer_list) >= 3
 
 
 # ---------------------------------------------------------------------------

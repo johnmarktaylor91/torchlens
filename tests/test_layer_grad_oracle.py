@@ -185,7 +185,7 @@ class SyntheticTrace:
 
         self.modules = SimpleNamespace(_pass_dict={call.call_label: call for call in call_logs})
         self._layers = layers
-        self.layer_list = list(layers.values())
+        self._layer_list = list(layers.values())
         self._capture_events = SimpleNamespace(
             module_exit_events=[
                 SimpleNamespace(

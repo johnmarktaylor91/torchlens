@@ -53,7 +53,7 @@ def test_label_site_layer_gradcam_matches_direct(resnet) -> None:
     """LayerGradCam on layer(log, label) equals LayerGradCam on model.layer4 exactly."""
 
     model, x, log = resnet
-    label = [layer.layer_label for layer in log.layer_list if _outermost(layer) == "layer4"][-1]
+    label = [layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4"][-1]
     resolved = tl.bridge.captum.layer(log, label)
     assert resolved is model.layer4
     direct = captum_attr.LayerGradCam(model, model.layer4).attribute(x, target=3)
@@ -67,9 +67,9 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     """A label whose module runs twice refuses typed instead of hooking both calls."""
 
     _model, _x, log = resnet
-    label = [layer.layer_label for layer in log.layer_list if _outermost(layer) == "layer4.1.relu"][
-        0
-    ]
+    label = [
+        layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4.1.relu"
+    ][0]
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.captum.layer(log, label)
     assert info.value.fields["code"] == "bridge_module_site_multi_call"

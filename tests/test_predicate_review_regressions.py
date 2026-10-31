@@ -176,7 +176,7 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
     def _saved(log: Any) -> list[str]:
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 
@@ -551,7 +551,7 @@ def test_followed_by_conjunction_is_association_insensitive() -> None:
             )
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 

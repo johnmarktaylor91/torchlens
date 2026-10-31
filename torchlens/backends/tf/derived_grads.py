@@ -446,7 +446,7 @@ def _tf_trace_intermediate_signatures(
     # ``op.parents`` never uses it anyway). Without this every grouped
     # intermediate would silently fail to match its replay candidate.
     final_to_raw: dict[str, str] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         raw_label = getattr(op, "_label_raw", None)
         if not isinstance(raw_label, str):
             continue
@@ -456,7 +456,7 @@ def _tf_trace_intermediate_signatures(
         layer_label = getattr(op, "layer_label", None)
         if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
             final_to_raw[layer_label] = raw_label
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)
         ):

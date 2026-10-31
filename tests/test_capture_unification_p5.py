@@ -100,13 +100,13 @@ def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
-    return next(op for op in log.layer_list if op.layer_type == "linear")
+    return next(op for op in log._layer_list if op.layer_type == "linear")
 
 
 def _relu_op(log: tl.Trace) -> tl.Op:
     """Return the first relu op in a trace."""
 
-    return next(op for op in log.layer_list if op.layer_type == "relu")
+    return next(op for op in log._layer_list if op.layer_type == "relu")
 
 
 def _save_only_mul(ctx: RecordContext) -> bool:
@@ -164,7 +164,7 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
                 hooks={tl.func("relu"): _zero_hook},
             ),
         )
-        relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
+        relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
         assert log.state is TraceState.LIVE_CAPTURED
         assert stashed(log, "latest") is not None
         assert relu_layer.out is not None
@@ -253,7 +253,7 @@ def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:
     trace = recording.to_trace()
 
     assert not trace._replay_arg_version_data_complete
-    assert all(not op.out_versions_by_child for op in trace.layer_list)
+    assert all(not op.out_versions_by_child for op in trace._layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
 
@@ -311,6 +311,6 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     )
 
     assert not log._replay_arg_version_data_complete
-    assert all(not op.out_versions_by_child for op in log.layer_list)
+    assert all(not op.out_versions_by_child for op in log._layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         log.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)

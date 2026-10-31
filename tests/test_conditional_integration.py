@@ -969,7 +969,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     list[Op]
         Terminal scalar bool layers in execution order.
     """
-    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_only_layer(
@@ -993,7 +993,7 @@ def _find_only_layer(
     Op
         Matching layer.
     """
-    matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matching_layers = [layer for layer in trace._layer_list if layer.func_name == func_name]
     if branch_stack is not None:
         matching_layers = [
             layer
@@ -1024,7 +1024,7 @@ def _find_only_layer_any_name(
     Op
         Matching layer.
     """
-    matching_layers = [layer for layer in trace.layer_list if layer.func_name in set(func_names)]
+    matching_layers = [layer for layer in trace._layer_list if layer.func_name in set(func_names)]
     assert len(matching_layers) == 1
     return matching_layers[0]
 
@@ -1052,7 +1052,7 @@ def _find_only_layer_log(
     """
     matching_layers = [
         layer_log
-        for layer_log in trace.layer_logs.values()
+        for layer_log in trace._layer_logs.values()
         if layer_log.func_name == func_name and predicate(layer_log)
     ]
     assert len(matching_layers) == 1
@@ -1604,7 +1604,7 @@ def test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution() -> No
     """Pre-3.11 same-line ternaries fail closed when no column offsets are available."""
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
 
-    linear_layers = [layer for layer in trace.layer_list if layer.func_name == "linear"]
+    linear_layers = [layer for layer in trace._layer_list if layer.func_name == "linear"]
 
     assert len(trace.conditional_records) == 1
     assert trace.conditional_arm_entry_edges == {}
@@ -1659,7 +1659,7 @@ def test_documented_false_negative_scalar_predicates_do_not_materialise_events(
     trace = _log_model(model, input_tensor)
     branch_layer = next(
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if layer.func_name in {"relu", "sigmoid"} and not layer.is_output
     )
 
@@ -1726,7 +1726,7 @@ def test_selective_save_preserves_all_conditional_surfaces() -> None:
     assert set(log.saved_ops.keys()) == {"add_1_6:1", "output_1:1"}
     assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
     assert all(
-        parent_label in log.layer_logs and child_label in log.layer_logs
+        parent_label in log._layer_logs and child_label in log._layer_logs
         for parent_label, child_label, _, _ in log.conditional_edge_call_indices
     )
 

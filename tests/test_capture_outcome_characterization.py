@@ -293,8 +293,8 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
     trace_halt = tl.trace(model_halt, x, halt=_halt_on_linear)
 
     assert list(trace_full.buffer_layers) == list(trace_halt.buffer_layers)
-    full_labels = [entry.layer_label for entry in trace_full.layer_list]
-    halt_labels = [entry.layer_label for entry in trace_halt.layer_list]
+    full_labels = [entry.layer_label for entry in trace_full._layer_list]
+    halt_labels = [entry.layer_label for entry in trace_halt._layer_list]
     # The halted graph is the complete graph's prefix plus its own output node.
     assert halt_labels[:-1] == [
         label for label in full_labels if label not in ("relu_1_4", "output_1")

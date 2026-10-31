@@ -71,7 +71,7 @@ def test_int_plus_slice_box_matches_gradient_truth(padding: int) -> None:
     truth = _gradient_truth(model, x, unit)
 
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     box = op.receptive_field.at(unit)
     assert box.exact is True
     by_axis = {axis.input_axis: axis for axis in box.axes}
@@ -92,7 +92,7 @@ def test_int_plus_slice_check_and_verify_pass(padding: int) -> None:
     model = _IntSliceConv(padding).eval()
     x = torch.randn(2, 1, 8, 8)
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     rf = op.receptive_field
     unit = rf.center_unit(batch_index=0)
     result = rf.check(unit)
@@ -125,7 +125,7 @@ def test_strided_int_plus_slice_box_matches_gradient_truth() -> None:
     unit = (1, 2)
     truth = _gradient_truth(model, x, unit)
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     box = op.receptive_field.at(unit)
     by_axis = {axis.input_axis: axis for axis in box.axes}
     assert (by_axis[0].index_start, by_axis[0].index_stop) == (0, 1)
@@ -164,7 +164,7 @@ def test_strided_slice_discloses_sparse_support() -> None:
     assert set(h_rows_list) != set(span), "oracle support unexpectedly dense"
 
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     axes = {axis.input_axis: axis for axis in op.receptive_field.axes}
     # The strided H axis discloses holes; the step-1 W axis stays dense.
     assert axes[2].sparse_possible is True
@@ -190,7 +190,7 @@ def test_int_only_batch_axis_narrows_and_stays_honest() -> None:
     assert truth[0] == (1, 2)
 
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     rf = op.receptive_field
     box = rf.at(unit)
     by_axis = {axis.input_axis: axis for axis in box.axes}
@@ -217,7 +217,7 @@ def test_slice_only_same_rank_path_unchanged() -> None:
     unit = (1, 2)
     truth = _gradient_truth(model, x, unit)
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     box = op.receptive_field.at(unit)
     by_axis = {axis.input_axis: axis for axis in box.axes}
     assert (by_axis[2].index_start, by_axis[2].index_stop) == truth[2] == (4, 7)
@@ -232,7 +232,7 @@ def test_projective_field_respects_selected_index() -> None:
     x = torch.randn(2, 1, 8, 8)
     trace = _armed_trace(model, x)
     input_op = trace.input_ops[0]
-    conv = next(o for o in trace.layer_list if "conv" in o.label)
+    conv = next(o for o in trace._layer_list if "conv" in o.label)
 
     # A source H coordinate ON the kept slice reaches the conv grid.
     on_path = input_op.projective_field.at((4, 3), target=conv)

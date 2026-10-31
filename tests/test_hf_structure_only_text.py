@@ -57,7 +57,7 @@ def test_eager_text_twin_discharges_corroborated() -> None:
     discharge = structure.discharge_against(real_trace)
     assert discharge.verdict.value == "corroborated"
     assert len(discharge.claims) > 0
-    assert len(structure.layer_list) == len(real_trace.layer_list)
+    assert len(structure._layer_list) == len(real_trace._layer_list)
 
 
 def test_sdpa_text_capture_refuses_typed_with_the_attention_remedy() -> None:

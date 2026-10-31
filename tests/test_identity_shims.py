@@ -521,7 +521,7 @@ class TestAsSubclassOpIdentity:
         tanh_op = log["tanh"]
         assert tanh_op.parents, "tanh must be connected to the graph"
         assert "assubclass" in tanh_op.parents[0]
-        assert log.rescue_rerun is None, "a clean capture must not need a rescue"
+        assert log._rescue_rerun is None, "a clean capture must not need a rescue"
         expected = torch.tanh(torch.sigmoid(x))
         assert torch.allclose(log["tanh"].out, expected, atol=1e-6)
 

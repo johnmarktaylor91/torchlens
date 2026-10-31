@@ -126,8 +126,8 @@ def test_paddle_derived_grads_do_not_create_backward_logs() -> None:
     )
 
     assert trace.has_backward_pass is False
-    assert not trace.backward_pass_logs
-    assert not trace.grad_fn_logs
+    assert not trace._backward_pass_logs
+    assert not trace._grad_fn_logs
 
 
 def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None:
@@ -152,9 +152,9 @@ def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None
     )
 
     records = trace.autograd.intermediate_derived_grads
-    unused_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.__mul__")
-    relu_label = next(op.label for op in trace.layer_list if op.func_name == "functional.relu")
-    sum_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.sum")
+    unused_label = next(op.label for op in trace._layer_list if op.func_name == "tensor.__mul__")
+    relu_label = next(op.label for op in trace._layer_list if op.func_name == "functional.relu")
+    sum_label = next(op.label for op in trace._layer_list if op.func_name == "tensor.sum")
 
     assert unused_label not in records
     _assert_close(records[relu_label].grad, paddle.ones([2, 2], dtype="float32"))
@@ -180,7 +180,7 @@ def test_paddle_same_shape_relus_are_disambiguated_by_ordinal() -> None:
         grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16),
     )
 
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
     assert len(relu_ops) == 2
     _assert_close(
         trace.autograd.intermediate_derived_grads[relu_ops[0].label].grad, paddle.full([2, 2], 2.0)
@@ -201,7 +201,7 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
         return paddle.nn.functional.relu(x) + paddle.nn.functional.relu(x)
 
     trace = tl.trace(model, paddle.ones([2, 2], dtype="float32"), backend="paddle")
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
     relu_ops[1].func_call_id = relu_ops[0].func_call_id
     groups = _paddle_trace_intermediate_signatures(trace)
     # N5: ``op.parents`` holds FINAL pass-qualified labels (every op's edges
@@ -210,7 +210,7 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
     # label space and resolves parents back to raw via a label->raw map
     # first. The expected signature here must go through the same
     # resolution, or it never matches the production grouping.
-    label_to_raw = {op.label: op._label_raw for op in trace.layer_list}
+    label_to_raw = {op.label: op._label_raw for op in trace._layer_list}
     signature = PaddleIntermediateSignature(
         func_call_id=relu_ops[0].func_call_id,
         op_name=relu_ops[0].func_name,

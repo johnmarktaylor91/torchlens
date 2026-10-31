@@ -33,7 +33,9 @@ from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutio
 
 def _saved(trace: tl.Trace) -> set[str]:
     return {
-        str(op.layer_label) for op in trace.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label)
+        for op in trace._layer_list
+        if getattr(op, "has_saved_activation", False)
     }
 
 
@@ -74,7 +76,7 @@ def test_a_head_save_keeps_the_attention_interior_and_reads_the_slice(attn) -> N
     torch.testing.assert_close(trace[selector].value, full[selector].value, **TOL)
     interior = {
         str(op.layer_label)
-        for op in full.layer_list
+        for op in full._layer_list
         if any(str(m).split(":")[0].startswith("attn") for m in (op.modules or ()))
     }
     assert interior and interior <= _saved(trace)

@@ -107,7 +107,7 @@ def _jax_capture_graph_signature(trace: Any) -> tuple[Any, ...]:
                 str(op.dtype),
                 tuple(op.annotations.get("jax_outvars", ())),
             )
-            for op in trace.layer_list
+            for op in trace._layer_list
         ),
         dict(trace.jax_outvar_key_to_capture_index),
         dict(trace.jax_capture_index_to_final_op_label),
@@ -191,7 +191,7 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
             max_intermediate_grads=16,
         ),
     )
-    tanh_op = next(op for op in trace.layer_list if op.func_name == "tanh")
+    tanh_op = next(op for op in trace._layer_list if op.func_name == "tanh")
     expected_tanh_grad = 2.0 * tanh_op.out
 
     assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
@@ -285,7 +285,7 @@ def test_jax_intermediate_derived_grads_follow_selective_save() -> None:
     assert set(trace.autograd.intermediate_derived_grads.keys()) == {
         op.label for op in trace.saved_ops if op.func_name == "dot_general"
     }
-    assert all(op.derived_grad is None for op in trace.layer_list if not op.has_saved_activation)
+    assert all(op.derived_grad is None for op in trace._layer_list if not op.has_saved_activation)
 
 
 def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
@@ -311,7 +311,7 @@ def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
             max_intermediate_grads=8,
         ),
     )
-    bool_ops = [op for op in trace.layer_list if str(op.dtype) == "bool"]
+    bool_ops = [op for op in trace._layer_list if str(op.dtype) == "bool"]
 
     assert bool_ops
     assert all(op.label not in trace.autograd.intermediate_derived_grads for op in bool_ops)
@@ -357,7 +357,7 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
     params = _params()
     x = jnp.ones((2, 3), dtype=jnp.float32)
     trace = tl.trace(cast(Any, _model), (params, x), backend="jax")
-    op = next(op for op in trace.layer_list if op.func_name == "tanh")
+    op = next(op for op in trace._layer_list if op.func_name == "tanh")
     record = IntermediateDerivedGradRecord(
         op_label=op.label,
         layer_label=op.layer_label,

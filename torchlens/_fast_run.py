@@ -367,11 +367,11 @@ def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) ->
         getattr(trace, "output_layers", ())
     )
     supported_labels = {label for plan in plans for label in plan.save_labels} | {
-        op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels
+        op.label for op in trace._layer_list if op.layer_label in boundary_layer_labels
     }
     unsupported_function_labels = tuple(
         op.label
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "has_saved_activation", False))
         and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
         and op.label not in supported_labels
@@ -399,7 +399,7 @@ def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
         model's boundary ops.
     """
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if bool(getattr(op, "has_saved_activation", False)) and op.label not in supported_labels:
             op._internal_set("out", None)
             op._internal_set("transformed_out", None)
@@ -468,7 +468,7 @@ class _FastSparseSession:
         # iteration returned iteration-1 payloads on a verified trace.
         self.saved_labels = frozenset(
             key
-            for key, entry in source.layer_dict_all_keys.items()
+            for key, entry in source._layer_dict_all_keys.items()
             if bool(getattr(entry, "has_saved_activation", False))
         )
         aliases: dict[str, list[str]] = {}
@@ -719,7 +719,7 @@ class _FastSparseSession:
                     affected_op_labels=call.op_labels,
                 )
             if op_label in self.saved_labels:
-                op = self.target.layer_dict_all_keys.get(op_label)
+                op = self.target._layer_dict_all_keys.get(op_label)
                 if op is not None:
                     op.save_activation(
                         value,
@@ -757,10 +757,10 @@ class _FastSparseSession:
             slot_values[slot.slot_id] = value
             op = next(
                 (
-                    self.target.layer_dict_all_keys.get(label)
+                    self.target._layer_dict_all_keys.get(label)
                     for label in self.target.output_layers
-                    if self.target.layer_dict_all_keys.get(label) is not None
-                    and getattr(self.target.layer_dict_all_keys[label], "container_path", ())
+                    if self.target._layer_dict_all_keys.get(label) is not None
+                    and getattr(self.target._layer_dict_all_keys[label], "container_path", ())
                     == (slot.output_path or ())
                 ),
                 None,
@@ -782,10 +782,10 @@ class _FastSparseSession:
             values.append((slot.output_path or (), value))
         spec = next(
             (
-                getattr(self.target.layer_dict_all_keys[label], "container_spec", None)
+                getattr(self.target._layer_dict_all_keys[label], "container_spec", None)
                 for label in self.target.output_layers
                 if isinstance(
-                    getattr(self.target.layer_dict_all_keys[label], "container_spec", None),
+                    getattr(self.target._layer_dict_all_keys[label], "container_spec", None),
                     ContainerSpec,
                 )
             ),
@@ -1139,7 +1139,7 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                op = self.trace.layer_dict_all_keys[label]
+                op = self.trace._layer_dict_all_keys[label]
                 op.save_activation(
                     value,
                     (),
@@ -1540,7 +1540,7 @@ class _FastLiveSession:
         """
 
         captured_paths = [
-            tuple(getattr(self.trace.layer_dict_all_keys[label], "container_path", None) or ())
+            tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
@@ -1594,7 +1594,7 @@ class _FastLiveSession:
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
-            op = self.trace.layer_dict_all_keys[label]
+            op = self.trace._layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
             if not isinstance(value, torch.Tensor):

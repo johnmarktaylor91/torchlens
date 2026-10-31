@@ -44,7 +44,7 @@ class _FakeLog:
     """Minimal ``Trace``-shaped object exposing ``layer_list``."""
 
     def __init__(self, layers: list[Any]) -> None:
-        self.layer_list = layers
+        self._layer_list = layers
 
 
 # --------------------------------------------------------------------------- #

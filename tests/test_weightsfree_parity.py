@@ -75,7 +75,7 @@ def test_factory_op_parity() -> None:
     assert_gate(tr_real, tr_meta, "factory")
     # The factory ops must be RECORDED on the meta side (not lost to a CPU
     # placement death or a decomposition fold).
-    meta_funcs = [layer.func_name for layer in tr_meta.layer_list]
+    meta_funcs = [layer.func_name for layer in tr_meta._layer_list]
     assert "ones" in meta_funcs
     assert "zeros" in meta_funcs
 
@@ -117,5 +117,5 @@ def test_meta_capture_is_complete_and_value_free() -> None:
     tr = weightsfree_trace(meta, torch.empty(2, 8, device="meta"))
     assert tr.outcome.status.value == "complete"
     assert tr.structure_only is True
-    for layer in tr.layer_list:
+    for layer in tr._layer_list:
         assert getattr(layer, "out", None) is None, f"{layer.label} retained a payload"

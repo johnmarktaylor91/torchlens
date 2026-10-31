@@ -337,12 +337,12 @@ def _add_combined_backward_edges(
         for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
             if next_grad_fn_id not in visible_ids:
                 continue
-            head_name = _backward_dot_node_name(trace.grad_fn_logs[next_grad_fn_id])
+            head_name = _backward_dot_node_name(trace._grad_fn_logs[next_grad_fn_id])
             graphviz_graph.edge(
                 tail_name,
                 head_name,
                 **_backward_edge_attrs(
-                    grad_fn_handle, trace.grad_fn_logs[next_grad_fn_id], trace=trace
+                    grad_fn_handle, trace._grad_fn_logs[next_grad_fn_id], trace=trace
                 ),
             )
 
@@ -650,10 +650,10 @@ def _infer_intervening_module_bfs(
         reverse_edges = {}
     while queue:
         grad_fn_object_id = queue.popleft()
-        if grad_fn_object_id in seen or grad_fn_object_id not in trace.grad_fn_logs:
+        if grad_fn_object_id in seen or grad_fn_object_id not in trace._grad_fn_logs:
             continue
         seen.add(grad_fn_object_id)
-        candidate = trace.grad_fn_logs[grad_fn_object_id]
+        candidate = trace._grad_fn_logs[grad_fn_object_id]
         candidate_op = candidate.op
         if candidate_op is not None:
             module_key = _module_key_for_forward_op(candidate_op)
@@ -1202,7 +1202,7 @@ def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
     """
 
     try:
-        return cast(GraphNode, trace.layer_dict_all_keys[label])
+        return cast(GraphNode, trace._layer_dict_all_keys[label])
     except KeyError:
         try:
             return cast(GraphNode, trace.ops[label])
@@ -1557,7 +1557,7 @@ def _collapsed_module_rolling_suffix_map(trace: "Trace") -> dict[str, str]:
     """
 
     best_groups: dict[str, tuple[tuple[int, ...], ...]] = {}
-    for layer_log in trace.layer_logs.values():
+    for layer_log in trace._layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
             continue
         groups = _call_groups_for_layer(layer_log)

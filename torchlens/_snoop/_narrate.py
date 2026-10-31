@@ -125,7 +125,7 @@ def narrate_trace(
 
     rows = [
         _op_row(op, ordinal, _module_depth(op))
-        for ordinal, op in enumerate(getattr(trace, "layer_list", ()) or (), start=1)
+        for ordinal, op in enumerate(getattr(trace, "_layer_list", ()) or (), start=1)
     ]
     footer: list[str] = []
     nonfinite = getattr(trace, "nonfinite_ops", None)

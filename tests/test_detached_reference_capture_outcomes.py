@@ -126,7 +126,7 @@ def _trace_with_provenance_warning(model: nn.Module) -> tl.Trace:
 
 
 def _op_names(trace: tl.Trace) -> list[str]:
-    return [op.func_name for op in trace.layer_list]
+    return [op.func_name for op in trace._layer_list]
 
 
 def _escape_count(trace: tl.Trace) -> int:
@@ -152,7 +152,7 @@ def _assert_rescued(trace: tl.Trace, *expected: str) -> None:
     _assert_captured(trace, *expected)
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "mode_rescue_rerun"
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None and info["recovered"] is True
     if info["primary_error"] is not None:
         return  # primary raised before producing ops; no multiset diff to name
@@ -168,7 +168,7 @@ def _assert_unrecovered_disclosed(trace: tl.Trace, missing: str) -> None:
     assert missing not in _op_names(trace)
     assert trace.capture_verified is False
     assert trace.capture_verification_reason == "escape_rescue_unrecovered"
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None and info["recovered"] is False
 
 
@@ -251,7 +251,7 @@ def test_model_instance_holders_are_captured(corpus_env: _CorpusEnv) -> None:
     wrap_torch()
     trace = tl.trace(model, torch.tensor([0.25, 0.5]))
     _assert_captured(trace, "relu", "sigmoid", "tanh", "cos")
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert trace.capture_verification_reason != "mode_rescue_rerun"
     names = _op_names(trace)
     assert names.count("relu") == 1
@@ -297,7 +297,7 @@ def test_closure_cell_ref_is_rebound_for_the_capture(corpus_env: _CorpusEnv) -> 
         warnings.simplefilter("error", UserWarning)
         trace = _trace(Model())
     assert _op_names(trace) == ["none", "sigmoid", "cos", "relu", "none"]
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert closure.__closure__ is not None
     assert closure.__closure__[0].cell_contents is raw_cos
 
@@ -408,7 +408,7 @@ def test_torch_free_source_output_position_is_rescued(
     wrap_torch()
     trace = tl.trace(Model(), torch.tensor([0.25, 0.5]))
     _assert_rescued(trace, "cos")
-    assert trace.rescue_rerun["trigger"] == "output_attribution_failed"
+    assert trace._rescue_rerun["trigger"] == "output_attribution_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +428,7 @@ def test_protocol_invisible_from_numpy_is_captured(corpus_env: _CorpusEnv) -> No
 
     trace = _trace(Model())
     _assert_captured(trace, "from_numpy", "__add__")
-    assert trace.rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
+    assert trace._rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
 
 
 def test_protocol_invisible_frombuffer_is_captured(corpus_env: _CorpusEnv) -> None:
@@ -443,7 +443,7 @@ def test_protocol_invisible_frombuffer_is_captured(corpus_env: _CorpusEnv) -> No
 
     trace = _trace(Model())
     _assert_captured(trace, "frombuffer", "__add__")
-    assert trace.rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
+    assert trace._rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
 
 
 def test_protocol_invisible_as_subclass_is_captured(corpus_env: _CorpusEnv) -> None:
@@ -460,7 +460,7 @@ def test_protocol_invisible_as_subclass_is_captured(corpus_env: _CorpusEnv) -> N
 
     trace = _trace(Model())
     _assert_captured(trace, "as_subclass")
-    assert trace.rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
+    assert trace._rescue_rerun is None  # belt coverage is PRIMARY, never a rescue
 
 
 # ---------------------------------------------------------------------------
@@ -603,6 +603,6 @@ def test_midgraph_escape_is_rescued_full_signature(corpus_env: _CorpusEnv) -> No
     assert relu_op.parents != ()
     assert not relu_op.is_internal_source
     _assert_rescued(trace, "cos")
-    assert trace.rescue_rerun["trigger"] == "unattributed_tensor_args"
-    assert trace.rescue_rerun["residual_signal"] is None
+    assert trace._rescue_rerun["trigger"] == "unattributed_tensor_args"
+    assert trace._rescue_rerun["residual_signal"] is None
     assert _escape_count(trace) == 0

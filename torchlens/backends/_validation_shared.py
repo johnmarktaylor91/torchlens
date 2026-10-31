@@ -48,15 +48,15 @@ def ops_by_label(trace: Any) -> dict[str, Any]:
     """
 
     result: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         layer_label = getattr(op, "layer_label", None)
         if isinstance(layer_label, str) and layer_label not in result:
             result[layer_label] = op
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         label = getattr(op, "label", None)
         if isinstance(label, str):
             result[label] = op
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         label_raw = getattr(op, "_label_raw", None)
         if isinstance(label_raw, str):
             result[label_raw] = op

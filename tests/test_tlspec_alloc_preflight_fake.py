@@ -572,7 +572,7 @@ def test_genuinely_huge_view_model_runs_verified(
     bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
-    ops = {op.label.split("_")[0]: op for op in result.trace.layer_list}
+    ops = {op.label.split("_")[0]: op for op in result.trace._layer_list}
     try:
         expand_out = ops["expand"].out
     except PayloadUnavailableError:

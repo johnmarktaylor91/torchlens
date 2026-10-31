@@ -214,11 +214,11 @@ def test_row_shapes_are_what_the_replaced_invariants_refused() -> None:
 
     torch.manual_seed(0)
     scalar = tl.trace(_ScalarLoop(), _x())
-    muls = [op for op in scalar.layer_list if op.layer_type == "mul"]
+    muls = [op for op in scalar._layer_list if op.layer_type == "mul"]
     assert len({op.layer_label for op in muls}) == 1
     assert len({op.equivalence_class for op in muls}) == 3  # row 49: argument hash
     shared = tl.trace(_SharedWeightTwoLines(), _x())
-    matmuls = [op for op in shared.layer_list if op.layer_type == "matmul"]
+    matmuls = [op for op in shared._layer_list if op.layer_type == "matmul"]
     assert len({op.layer_label for op in matmuls}) == 2  # row 25: shared W, two layers
     assert len({op.equivalence_class for op in matmuls}) == 1
 
@@ -229,7 +229,7 @@ def test_post_hoc_recheck_fires_on_a_corrupted_side_table() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_TwoReluLines(), _x())
     classes = dict(contract.call_site_classes_for(trace) or {})
-    relu_raw = [op._label_raw for op in trace.layer_list if op.func_name == "relu"]
+    relu_raw = [op._label_raw for op in trace._layer_list if op.func_name == "relu"]
     assert len(relu_raw) == 2
     for raw in relu_raw:
         classes[raw] = "relu@cs-planted"
@@ -243,7 +243,7 @@ def test_equivalence_clause_still_fires_on_a_layer_type_mismatch() -> None:
 
     torch.manual_seed(0)
     trace = tl.trace(_TanhLoop(), _x())
-    passes = [op for op in trace.layer_list if op.func_name == "tanh"]
+    passes = [op for op in trace._layer_list if op.func_name == "tanh"]
     assert len(passes) == 3
     passes[1]._internal_set("equivalence_class", "sigmoid_no_args")
     with pytest.raises(MetadataInvariantError, match="type mismatch"):

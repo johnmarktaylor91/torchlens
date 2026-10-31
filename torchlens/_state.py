@@ -301,7 +301,7 @@ def list_logs() -> tuple["Trace", ...]:
     """
 
     snapshot = list(_log_registry)
-    return tuple(log for log in snapshot if log is not None and hasattr(log, "layer_list"))
+    return tuple(log for log in snapshot if log is not None and hasattr(log, "_layer_list"))
 
 
 def _strip_hf_suffix(class_name: str) -> str:

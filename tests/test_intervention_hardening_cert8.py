@@ -115,7 +115,7 @@ def test_diff_pair_node_multi_element_uses_vector_metric() -> None:
     log_b = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))
+    linear_site = next(s.layer_label for s in log_a._layer_list if "linear" in str(s.layer_label))
     matrix = bundle.node(linear_site).compare()
     # A 2x2 distance matrix with finite, non-truncated off-diagonal entries.
     assert matrix.shape == (2, 2)

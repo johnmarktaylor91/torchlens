@@ -59,7 +59,7 @@ def main() -> None:
     scores = edited.last_run["probe_scores"]
     assert len(scores) == 1
     assert scores[0].shape == (2, 1)
-    assert torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
+    assert torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)
 
 
 if __name__ == "__main__":

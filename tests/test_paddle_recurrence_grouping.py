@@ -86,8 +86,8 @@ def test_paddle_repeated_block_groups_into_passes() -> None:
     """A repeated functional block becomes multi-pass layers that validate."""
 
     trace = _repeated_trace()
-    linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "functional.linear"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
 
     assert trace.recurrence_detection is True
     assert [op.pass_index for op in linear_ops] == [1, 2]
@@ -96,7 +96,7 @@ def test_paddle_repeated_block_groups_into_passes() -> None:
     assert {op.layer_label for op in relu_ops} == {relu_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*linear_ops, *relu_ops))
     assert list(linear_ops[0].recurrent_ops) == [op.label for op in linear_ops]
-    assert trace.layer_num_calls[linear_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[linear_ops[0].layer_label] == 2
     assert PaddleBackend().validate_trace(trace) is True
 
 
@@ -104,8 +104,8 @@ def test_paddle_grouping_relabel_keeps_lookups_and_edges_coherent() -> None:
     """Raw labels stay resolvable and edges follow grouped ops to final labels."""
 
     trace = _repeated_trace()
-    linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "functional.linear"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
     pass2_linear = linear_ops[1]
 
     # The pre-grouping raw label still resolves to the exact op.
@@ -124,7 +124,7 @@ def test_paddle_module_reuse_groups_module_anchored_passes() -> None:
     """A reused sublayer groups as one multi-pass layer per op site."""
 
     trace = tl.trace(_ReusedCell(), paddle.ones([2, 4], dtype="float32"), backend="paddle")
-    linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "functional.linear"]
 
     assert [op.pass_index for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
@@ -135,7 +135,7 @@ def test_paddle_distinct_module_sites_do_not_group() -> None:
     """Two distinct sublayers with identical shapes stay separate layers."""
 
     trace = tl.trace(_TwoCells(), paddle.ones([2, 4], dtype="float32"), backend="paddle")
-    linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "functional.linear"]
 
     assert len(linear_ops) == 2
     assert all(op.num_passes == 1 for op in linear_ops)
@@ -154,7 +154,7 @@ def test_paddle_recurrence_detection_off_preserves_single_pass_layout() -> None:
     )
 
     assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert all(op.num_passes == 1 for op in trace._layer_list)
     assert PaddleBackend().validate_trace(trace) is True
 
 
@@ -236,7 +236,7 @@ def test_paddle_intermediate_derived_grads_survive_grouping() -> None:
             max_intermediate_grads=16,
         ),
     )
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
 
     assert {op.num_passes for op in relu_ops} == {2}
     records = trace.autograd.intermediate_derived_grads

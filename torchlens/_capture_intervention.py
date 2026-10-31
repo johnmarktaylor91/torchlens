@@ -319,7 +319,7 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str
         return False
     from .intervention.errors import MultiMatchWarning, SiteResolutionError
 
-    fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
+    fanout = len(getattr(trace, "_layer_list", ()) or ()) + 1
     try:
         with warnings.catch_warnings():
             # Only the zero-match fact is asked; fan-out is the user's design.

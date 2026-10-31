@@ -499,7 +499,7 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
     return {
         "is_appended": bool(getattr(log, "is_appended", False)),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
-        "append_history": list(getattr(log, "append_history", [])),
+        "append_history": list(getattr(log, "_append_history", [])),
         "state_history": append_records,
     }
 
@@ -699,11 +699,11 @@ def _trace_fire_records(log: Any) -> list[FireRecord]:
     """
 
     records: list[FireRecord] = []
-    for layer in getattr(log, "layer_list", []) or []:
+    for layer in getattr(log, "_layer_list", []) or []:
         records.extend(
             record for record in getattr(layer, "edits", []) or [] if isinstance(record, FireRecord)
         )
-    for grad_fn in getattr(log, "grad_fn_logs", {}).values():
+    for grad_fn in getattr(log, "_grad_fn_logs", {}).values():
         for call in getattr(getattr(grad_fn, "calls", None), "_list", []):
             records.extend(_flatten_fire_ref(getattr(call, "fire_record", None)))
     return records
@@ -1781,7 +1781,7 @@ def _serialize_function_registry_keys(log: Any) -> list[dict[str, Any]]:
     """
 
     entries: list[dict[str, Any]] = []
-    for layer in getattr(log, "layer_list", []):
+    for layer in getattr(log, "_layer_list", []):
         key = _function_key_for_layer(layer)
         if key is None:
             continue

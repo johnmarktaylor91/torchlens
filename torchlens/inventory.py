@@ -340,7 +340,7 @@ def sites_of_trace(trace: Any) -> SiteInventory:
     address_counts: Counter[str] = Counter()
     layers = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if getattr(layer, "layer_type", None) not in {"input", "output", "buffer"}
     ]
     for layer in layers:

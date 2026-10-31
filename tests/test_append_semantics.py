@@ -54,7 +54,7 @@ def _first_batch_out(trace: tl.Trace) -> torch.Tensor:
         First batched saved output.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if isinstance(layer.out, torch.Tensor) and layer.out.ndim > 0:
             return layer.out
     raise AssertionError("no batched output found")
@@ -79,7 +79,7 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
 
     assert trace.is_appended is False
     assert trace._append_sequence_id == 0
-    assert trace.append_history == []
+    assert trace._append_history == []
     assert _first_batch_out(trace).shape[0] == 4
 
 
@@ -98,8 +98,8 @@ def test_repeated_appends_increment_sequence_id_and_history() -> None:
 
     assert trace.is_appended is True
     assert trace._append_sequence_id == 2
-    assert [record["append_sequence_id"] for record in trace.append_history] == [1, 2]
-    assert [record["chunk_size"] for record in trace.append_history] == [1, 3]
+    assert [record["append_sequence_id"] for record in trace._append_history] == [1, 2]
+    assert [record["chunk_size"] for record in trace._append_history] == [1, 3]
     assert _first_batch_out(trace).shape[0] == 6
 
 
@@ -121,7 +121,7 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
 
     assert append_state["is_appended"] is True
     assert append_state["append_sequence_id"] == 1
-    assert append_state["append_history"][0]["chunk_size"] == 1
+    assert append_state["_append_history"][0]["chunk_size"] == 1
     assert append_state["state_history"][-1]["op"] == "append"
 
 

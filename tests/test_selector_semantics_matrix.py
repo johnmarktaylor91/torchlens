@@ -243,7 +243,7 @@ def _probe_capture(model_key: str, make_selector: Callable[[], Any]) -> Any:
     except Exception as exc:  # noqa: BLE001 - characterization records error shape
         return _error_cell(exc)
     return sorted(
-        str(op.layer_label) for op in log.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label) for op in log._layer_list if getattr(op, "has_saved_activation", False)
     )
 
 

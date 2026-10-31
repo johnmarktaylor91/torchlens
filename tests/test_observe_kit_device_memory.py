@@ -62,7 +62,7 @@ def test_default_off_and_swept_fields_are_none_not_zero() -> None:
     assert tl.options.CaptureOptions().track_device_memory is False
     captured = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     try:
-        for op in captured.layer_list:
+        for op in captured._layer_list:
             assert op.bytes_delta_at_call is None, op.layer_label
             assert op.bytes_peak_at_call is None, op.layer_label
         assert device_memory_samples(captured) == {}
@@ -155,7 +155,7 @@ def test_unsupported_devices_produce_typed_absence(monkeypatch) -> None:
     )
     try:
         assert device_memory_samples(captured) == {}
-        for op in captured.layer_list:
+        for op in captured._layer_list:
             assert op.bytes_delta_at_call is None
     finally:
         captured.cleanup()

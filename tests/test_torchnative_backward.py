@@ -43,11 +43,11 @@ def test_every_fire_markered() -> None:
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4))
     log, extraction = _backward_session(model, torch.randn(2, 8, requires_grad=True))
     markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
-    assert len(markers) == len(log.grad_fn_logs)
+    assert len(markers) == len(log._grad_fn_logs)
     assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
     for event in markers:
         object_id, pass_index, call_index = event.name.rsplit("::", 1)[-1].split(":")
-        assert int(object_id) in log.grad_fn_logs
+        assert int(object_id) in log._grad_fn_logs
         assert int(pass_index) == 1
         assert int(call_index) == 1
     log.cleanup()

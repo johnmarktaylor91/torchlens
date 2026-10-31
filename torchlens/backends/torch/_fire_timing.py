@@ -96,7 +96,7 @@ def _make_timing_grad_fn_prehook(
         live_trace = trace_ref()
         if live_trace is None:
             return None
-        grad_fn_record = getattr(live_trace, "grad_fn_logs", {}).get(grad_fn_object_id)
+        grad_fn_record = getattr(live_trace, "_grad_fn_logs", {}).get(grad_fn_object_id)
         if grad_fn_record is None:
             return None
         call_index = len(grad_fn_record.calls) + 1

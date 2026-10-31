@@ -94,7 +94,7 @@ def pristine_touch_evidence(trace: Any) -> tuple[str, ...]:
         found.append("state")
     if trace._has_direct_writes:
         found.append("direct_writes")
-    if _any_op_marked(trace.layer_list or ()):
+    if _any_op_marked(trace._layer_list or ()):
         found.append("op_marks")
     # Read the staged spec without creating one (the accessor creates it lazily).
     if _spec_has_entries(trace.__dict__.get("_intervention_spec")):

@@ -58,7 +58,7 @@ def test_string_input_hf_model_matches_trace_text() -> None:
     )
 
     assert auto_log.num_ops == direct_log.num_ops
-    assert len(auto_log.layer_logs) == len(direct_log.layer_logs)
+    assert len(auto_log._layer_logs) == len(direct_log._layer_logs)
     assert auto_log.num_modules == direct_log.num_modules
 
 

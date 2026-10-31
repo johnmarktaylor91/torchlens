@@ -55,7 +55,7 @@ def _ops(trace: object, name: str, *, field: str = "func_name") -> list[object]:
     only on ``layer_type`` instead. Pass ``field="layer_type"`` for those.
     """
 
-    return [op for op in trace.layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
+    return [op for op in trace._layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
 
 
 def _window_bounds(box: object) -> tuple[tuple[int, int], ...]:

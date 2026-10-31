@@ -250,7 +250,7 @@ def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
 def _node_name(trace: tl.Trace, func_name: str, occurrence: int = 0) -> str:
     """Return the DOT name of the ``occurrence``-th op calling ``func_name``."""
 
-    ops = [op for op in trace.layer_list if op.func_name == func_name]
+    ops = [op for op in trace._layer_list if op.func_name == func_name]
     return str(ops[occurrence].label).replace(":", "pass")
 
 
@@ -401,7 +401,7 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
     trace = _trace(_MixHicToy())
     try:
         dot = _dot(trace, tmp_path, "rolled", vis_mode="rolled")
-        clamp_layer = next(op.layer_label for op in trace.layer_list if op.func_name == "clamp_")
+        clamp_layer = next(op.layer_label for op in trace._layer_list if op.func_name == "clamp_")
     finally:
         trace.cleanup()
 
@@ -458,7 +458,7 @@ def _cluster_names(dot: str) -> list[str]:
 def _render_names(trace: tl.Trace, func_name: str) -> set[str]:
     """Return the DOT names the first ``func_name`` op may render under (plain or focus)."""
 
-    op = next(op for op in trace.layer_list if op.func_name == func_name)
+    op = next(op for op in trace._layer_list if op.func_name == func_name)
     return {str(op.layer_label), str(op.label).replace(":", "pass")}
 
 
@@ -512,11 +512,11 @@ def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None
         dot = _dot(trace, tmp_path, "collision")
         clamps = [
             str(op.label).replace(":", "pass")
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.func_name == "clamp_"
         ]
         receivers = [
-            op._param_logs[0].address for op in trace.layer_list if op.func_name == "clamp_"
+            op._param_logs[0].address for op in trace._layer_list if op.func_name == "clamp_"
         ]
     finally:
         trace.cleanup()
@@ -576,7 +576,7 @@ def test_shared_parameter_mutated_outside_owner_sits_in_owner_cluster(tmp_path: 
         mul_ = _node_name(trace, "mul_")
         reads = [
             str(op.label).replace(":", "pass")
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.func_name == "__mul__"
         ]
     finally:

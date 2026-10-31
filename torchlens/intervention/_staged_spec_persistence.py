@@ -39,7 +39,7 @@ def _carries_intervened_values(trace: Any) -> bool:
         a fired edit (attempts that failed or fired nowhere changed nothing).
     """
 
-    for layer in getattr(trace, "layer_list", None) or ():
+    for layer in getattr(trace, "_layer_list", None) or ():
         if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
             return True
     return any(

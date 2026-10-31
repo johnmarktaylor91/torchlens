@@ -88,7 +88,7 @@ def test_fork_retention_measured_with_calibration_guards() -> None:
     base = _live_count()
     trace = tl.trace(model, x, save=tl.func("relu"))
     capture_delta = _live_count() - base
-    n_ops = len(trace.layer_list)
+    n_ops = len(trace._layer_list)
     assert n_ops > 50
 
     base = _live_count()

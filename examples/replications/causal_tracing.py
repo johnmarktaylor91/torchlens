@@ -262,7 +262,7 @@ _LOGITS_AND_MLPS = tl.options.CaptureOptions(
 def _probability(trace: Any, target: int) -> torch.Tensor:
     """Per-row probability of ``target`` at the last position."""
 
-    return trace.layer_list[-1].out.detach()[:, -1].softmax(dim=-1)[:, target]
+    return trace.output_ops[-1].out.detach()[:, -1].softmax(dim=-1)[:, target]
 
 
 def _average(pooled: dict[str, list[float]]) -> dict[str, float]:

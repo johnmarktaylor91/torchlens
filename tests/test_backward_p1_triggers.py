@@ -137,8 +137,8 @@ def test_plain_tensor_backward_triggers_capture() -> None:
     assert trace.num_backward_passes == 1
     assert starts[-1].trigger == "autograd_backward"
     assert starts[-1].implicit is False
-    assert trace.grad_fn_logs
-    assert any(call for grad_fn in trace.grad_fn_logs.values() for call in grad_fn.calls)
+    assert trace._grad_fn_logs
+    assert any(call for grad_fn in trace._grad_fn_logs.values() for call in grad_fn.calls)
     trace.cleanup()
 
 
@@ -242,7 +242,7 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
 
     assert register_hook_calls == []
     assert trace.has_backward_pass
-    assert trace.grad_fn_logs
+    assert trace._grad_fn_logs
     assert _op_grad_events(trace) == []
     trace.cleanup()
 

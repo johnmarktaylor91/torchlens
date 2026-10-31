@@ -1692,14 +1692,14 @@ class Module:
         module_addresses = [module.address for module in self._recursive_modules_depth_first()]
         recursive_param_dict: dict[str, Any] = {}
         for module_address in module_addresses:
-            for param in trace.param_logs:
+            for param in trace._param_logs:
                 if (
                     param.module_address == module_address
                     and param.address not in recursive_param_dict
                 ):
                     recursive_param_dict[param.address] = param
         # A never-called descendant has no Module record; its params are still in the subtree.
-        for param in trace.param_logs:
+        for param in trace._param_logs:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)

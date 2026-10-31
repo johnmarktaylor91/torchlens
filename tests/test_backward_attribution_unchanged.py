@@ -20,7 +20,7 @@ def test_backward_pass_module_attribution() -> None:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
-    forward_ops_with_modules = [op for op in trace.layer_list if getattr(op, "modules", [])]
+    forward_ops_with_modules = [op for op in trace._layer_list if getattr(op, "modules", [])]
     backward_ops_with_forward_modules = [
         grad_fn_handle
         for grad_fn_handle in trace.autograd.grad_fns

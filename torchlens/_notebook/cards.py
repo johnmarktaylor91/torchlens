@@ -371,7 +371,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """Assemble the Trace overview card (replaces the 525-byte box)."""
 
     resolved_root = resolve_copy_root(trace, explicit_root=root)
-    layers = list(getattr(trace, "layer_logs", {}) or {})
+    layers = list(getattr(trace, "_layer_logs", {}) or {})
     total, saved = _save_counts(trace)
     facts: list[CardNode] = [
         CardText(

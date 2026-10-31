@@ -75,7 +75,7 @@ def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
 
 def _varying_layer(log: tl.Trace) -> Any:
-    return next(layer for layer in log.layer_logs.values() if len(layer.ops) > 1)
+    return next(layer for layer in log._layer_logs.values() if len(layer.ops) > 1)
 
 
 def test_rolled_varying_layer_gets_summary_row(varying_log: tl.Trace) -> None:
@@ -128,7 +128,7 @@ def test_shape_summary_selector_token(varying_log: tl.Trace, tmp_path: Path) -> 
     )
     assert lines == [layer.layer_label, summary]
     # Skip-when-absent: a single-pass layer contributes no row for the token.
-    single = next(lay for lay in varying_log.layer_logs.values() if len(lay.ops) == 1)
+    single = next(lay for lay in varying_log._layer_logs.values() if len(lay.ops) == 1)
     single_lines = compute_default_node_lines(
         single, vis_mode="rolled", node_label_fields=["name", "shape_summary"]
     )

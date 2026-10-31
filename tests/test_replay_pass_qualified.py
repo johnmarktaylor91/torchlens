@@ -114,13 +114,13 @@ def test_zero_ablate_pass1_per_pass_ground_truth(recurrent):
     fork.do(tl.units("relu_1_2:1", _ALL_UNITS).resolve(fork), tl.zero_ablate())
 
     for pass_index in (1, 2, 3):
-        got = fork.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
-        captured = trace.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
+        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
+        captured = trace._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
         assert torch.allclose(got, expected[pass_index - 1]), f"pass {pass_index} wrong"
         # bias=True makes every recomputed pass differ from the captured one.
         assert not torch.allclose(got, captured), f"pass {pass_index} stale"
-    assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    output = fork.layer_dict_all_keys["output_1"].out
+    assert bool((fork._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
+    output = fork._layer_dict_all_keys["output_1"].out
     assert torch.allclose(output, expected[-1])
     assert not bool((output == 0).all())
 
@@ -133,14 +133,14 @@ def test_zero_ablate_middle_pass_leaves_pass1_untouched(recurrent):
     fork = trace.fork()
     fork.do(tl.units("relu_1_2:2", _ALL_UNITS).resolve(fork), tl.zero_ablate())
 
-    pass1 = fork.layer_dict_all_keys["relu_1_2:1"].out
-    assert torch.equal(pass1, trace.layer_dict_all_keys["relu_1_2:1"].out)
+    pass1 = fork._layer_dict_all_keys["relu_1_2:1"].out
+    assert torch.equal(pass1, trace._layer_dict_all_keys["relu_1_2:1"].out)
     assert torch.allclose(pass1, expected[0])
-    assert bool((fork.layer_dict_all_keys["relu_1_2:2"].out == 0).all())
-    pass3 = fork.layer_dict_all_keys["relu_1_2:3"].out
+    assert bool((fork._layer_dict_all_keys["relu_1_2:2"].out == 0).all())
+    pass3 = fork._layer_dict_all_keys["relu_1_2:3"].out
     assert torch.allclose(pass3, expected[2])
-    assert not torch.allclose(pass3, trace.layer_dict_all_keys["relu_1_2:3"].out)
-    assert torch.allclose(fork.layer_dict_all_keys["output_1"].out, expected[-1])
+    assert not torch.allclose(pass3, trace._layer_dict_all_keys["relu_1_2:3"].out)
+    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])
 
 
 def test_whole_layer_selection_edits_every_pass(recurrent):
@@ -154,17 +154,17 @@ def test_whole_layer_selection_edits_every_pass(recurrent):
     with torch.no_grad():
         linear_from_zero = model.cell(zero_input)
     for pass_index in (1, 2, 3):
-        assert bool((fork.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out == 0).all())
+        assert bool((fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out == 0).all())
     for pass_index in (2, 3):
-        got = fork.layer_dict_all_keys[f"linear_1_1:{pass_index}"].out
+        got = fork._layer_dict_all_keys[f"linear_1_1:{pass_index}"].out
         assert torch.allclose(got, linear_from_zero)
     # FIX-A (A05): the boundary output node mirrors its parent's resolved
     # slot, so the whole-layer edit at relu:3 now REACHES the returned
     # output (zeros). The historical same-call re-slice dropped the member
     # edit and returned relu(cell(0)) -- the exact silent-wrongness class
     # the output-contract fix closes.
-    output = fork.layer_dict_all_keys["output_1"].out
-    assert torch.equal(output, fork.layer_dict_all_keys["relu_1_2:3"].out)
+    output = fork._layer_dict_all_keys["output_1"].out
+    assert torch.equal(output, fork._layer_dict_all_keys["relu_1_2:3"].out)
     assert bool((output == 0).all())
 
 
@@ -182,18 +182,18 @@ def test_hook_fires_only_at_targeted_pass(recurrent):
     fork.do("relu_1_2:1", spy_hook)
 
     assert fired == ["relu_1_2:1"]
-    assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    assert not bool((fork.layer_dict_all_keys["relu_1_2:2"].out == 0).all())
-    assert fork.layer_dict_all_keys["relu_1_2:1"].edits
-    assert not fork.layer_dict_all_keys["relu_1_2:2"].edits
-    assert not fork.layer_dict_all_keys["relu_1_2:3"].edits
+    assert bool((fork._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
+    assert not bool((fork._layer_dict_all_keys["relu_1_2:2"].out == 0).all())
+    assert fork._layer_dict_all_keys["relu_1_2:1"].edits
+    assert not fork._layer_dict_all_keys["relu_1_2:2"].edits
+    assert not fork._layer_dict_all_keys["relu_1_2:3"].edits
 
 
 def test_cone_of_effect_crosses_pass_boundaries(recurrent):
     """The cone from pass 1 includes every downstream pass and the output."""
 
     _model, _x, trace = recurrent
-    origin = trace.layer_dict_all_keys["relu_1_2:1"]
+    origin = trace._layer_dict_all_keys["relu_1_2:1"]
     cone_keys = {
         f"{site.layer_label}:{site.pass_index}" for site in cone_of_effect(trace, [origin])
     }
@@ -238,9 +238,9 @@ def test_strict_multipass_replay_works(recurrent):
         intervention=tl.options.InterventionOptions(strict=True),
     )
     for pass_index in (1, 2, 3):
-        got = fork.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
+        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
         assert torch.allclose(got, expected[pass_index - 1])
-    assert torch.allclose(fork.layer_dict_all_keys["output_1"].out, expected[-1])
+    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])
 
 
 def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
@@ -255,7 +255,7 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
         ),
     )
     assert replayed is not fork
-    assert bool((replayed.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
+    assert bool((replayed._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
     for key in replayed._replay_frontier:
         base = key.split("->")[0]
         if base.startswith(("relu_1_2", "linear_1_1")):
@@ -328,7 +328,7 @@ def test_single_pass_bare_label_still_accepted(single_pass):
         expected = torch.zeros_like(torch.relu(model.cell(x)))
     fork = trace.fork()
     fork.do("relu_1_2", lambda out, *, hook: torch.zeros_like(out))
-    assert torch.equal(fork.layer_dict_all_keys["relu_1_2:1"].out, expected)
+    assert torch.equal(fork._layer_dict_all_keys["relu_1_2:1"].out, expected)
 
 
 def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
@@ -338,19 +338,19 @@ def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
     fork = trace.fork()
     fork.do(tl.units("relu_1_2", _ALL_UNITS).resolve(fork), tl.zero_ablate())
 
-    assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
+    assert bool((fork._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
     # FIX-A (A05): the boundary output node mirrors its parent's resolved
     # slot, so the edit at the output-producing relu now reaches the
     # returned output. The historical same-call re-slice kept the fork's
     # output bit-identical to the CAPTURE, silently dropping the edit.
     assert torch.equal(
-        fork.layer_dict_all_keys["output_1"].out,
-        fork.layer_dict_all_keys["relu_1_2:1"].out,
+        fork._layer_dict_all_keys["output_1"].out,
+        fork._layer_dict_all_keys["relu_1_2:1"].out,
     )
-    assert bool((fork.layer_dict_all_keys["output_1"].out == 0).all())
+    assert bool((fork._layer_dict_all_keys["output_1"].out == 0).all())
     assert torch.equal(
-        fork.layer_dict_all_keys["linear_1_1:1"].out,
-        trace.layer_dict_all_keys["linear_1_1:1"].out,
+        fork._layer_dict_all_keys["linear_1_1:1"].out,
+        trace._layer_dict_all_keys["linear_1_1:1"].out,
     )
     last_run = fork.last_run
     assert "relu_1_2" in last_run["cone"]
@@ -375,11 +375,11 @@ def test_push_from_pass_qualified_op_recomputes_downstream_passes(recurrent):
     model, x, trace = recurrent
     expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
     fork = trace.fork()
-    origin = fork.layer_dict_all_keys["relu_1_2:1"]
+    origin = fork._layer_dict_all_keys["relu_1_2:1"]
     origin._internal_set("out", torch.zeros_like(origin.out))
     fork.push_from(origin)
 
     for pass_index in (1, 2, 3):
-        got = fork.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
+        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
         assert torch.allclose(got, expected[pass_index - 1]), f"pass {pass_index} wrong"
-    assert torch.allclose(fork.layer_dict_all_keys["output_1"].out, expected[-1])
+    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])

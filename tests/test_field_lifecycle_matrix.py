@@ -146,6 +146,6 @@ def test_run_state_transitions() -> None:
     assert appended.state is TraceState.APPENDED
 
     dirty = _capture_log()
-    layer = next(layer for layer in dirty.layer_list if layer.func_name == "relu")
+    layer = next(layer for layer in dirty._layer_list if layer.func_name == "relu")
     layer.out = layer.out
     assert dirty.state is TraceState.DIRECT_WRITE_DIRTY

@@ -38,7 +38,7 @@ def test_linear_trace_facts_hold_from_first_principles():
         assert len(log.input_layers) == 1
         assert len(log.output_layers) == 1
         # Output shape (1, 2) follows from Linear(3, 2) on a (1, 3) input.
-        out_layer = log.layer_dict_all_keys[log.output_layers[0]]
+        out_layer = log._layer_dict_all_keys[log.output_layers[0]]
         assert tuple(out_layer.out.shape) == (1, 2)
         # y = W @ x + b with x = ones: y == W.sum(dim=1) + b, computed OUTSIDE
         # capture from the model's own parameters.

@@ -78,7 +78,7 @@ def _op_rows(trace: Any) -> list[Any]:
     """Return per-pass op records in execution order (multi-pass safe)."""
 
     ops: list[Any] = []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         num_passes = int(getattr(layer, "num_passes", 1) or 1)
         if num_passes > 1:
             inner = getattr(layer, "ops", None)

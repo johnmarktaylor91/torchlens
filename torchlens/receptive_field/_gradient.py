@@ -349,7 +349,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
 
     return {
         str(op.io_role or op.label): op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "is_input", False))
     }
 

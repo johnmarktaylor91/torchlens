@@ -67,7 +67,7 @@ def main() -> None:
 
     assert any(site.func_name == "relu" for site in block_sites)
     assert edited.last_run_records()[-1].helper_name == "zero_ablate"
-    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
+    assert not torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)
 
 
 if __name__ == "__main__":

@@ -63,8 +63,8 @@ def test_capture_memory_fields_and_forward_source_line() -> None:
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
     assert isinstance(log.forward_source_line, int)
-    assert all(hasattr(layer, "bytes_delta_at_call") for layer in log.layer_list)
-    assert all(hasattr(layer, "bytes_peak_at_call") for layer in log.layer_list)
+    assert all(hasattr(layer, "bytes_delta_at_call") for layer in log._layer_list)
+    assert all(hasattr(layer, "bytes_peak_at_call") for layer in log._layer_list)
 
 
 def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
@@ -261,7 +261,7 @@ def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
     trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()), torch.ones(1, 2))
     trace._out_identity_cache.clear()
     source = torch.randn(1, 2)
-    first_op, second_op = trace.layer_list[:2]
+    first_op, second_op = trace._layer_list[:2]
 
     first_op.save_activation(source, (), {}, save_args=False)
     second_op.save_activation(source, (), {}, save_args=False)
@@ -278,7 +278,7 @@ def test_trace_reference_save_mode_raises_if_saved_out_mutates(
     monkeypatch.setattr(op_module, "_WARNED_REFERENCE_SAVE_MODE", False)
     with pytest.warns(UserWarning, match="save_mode='reference'"):
         log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
-    op = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    op = next(layer for layer in log._layer_list if layer.func_name == "relu")
     saved_out = op._slot("out")
 
     saved_out.add_(1)
@@ -299,7 +299,7 @@ def test_trace_reference_save_mode_copies_known_inplace_ops() -> None:
             return x.clone().relu_()
 
     log = tl.trace(InplaceRelu(), torch.ones(1, 2), save_mode="reference")
-    op = next(layer for layer in log.layer_list if layer.func_name == "relu_")
+    op = next(layer for layer in log._layer_list if layer.func_name == "relu_")
     saved_out = op._slot("out")
 
     saved_out.add_(1)
@@ -313,7 +313,7 @@ def test_trace_view_save_mode_keeps_saved_out_grad_connected() -> None:
 
     model = torch.nn.Linear(2, 2)
     log = tl.trace(model, torch.ones(1, 2, requires_grad=True), save_mode="view")
-    op = next(layer for layer in log.layer_list if layer.func_name == "linear")
+    op = next(layer for layer in log._layer_list if layer.func_name == "linear")
 
     assert op.out.requires_grad is True
     assert op.out.grad_fn is not None
@@ -341,7 +341,7 @@ def test_tied_parameter_notation_smoke() -> None:
     log = tl.trace(Tied(), torch.ones(1, 2))
     tied = [
         layer.annotations.get("tied_parameter_notation")
-        for layer in log.layer_list
+        for layer in log._layer_list
         if layer.annotations.get("tied_parameter_notation")
     ]
     assert tied

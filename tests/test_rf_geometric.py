@@ -77,7 +77,7 @@ def _register_standard_rules() -> None:
 def _last_op(trace: object, func_name: str) -> object:
     """Return the last captured operation with a requested function name."""
 
-    operations = [op for op in trace.layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
+    operations = [op for op in trace._layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
     assert operations
     return operations[-1]
 
@@ -239,7 +239,7 @@ def test_layout_is_derived_from_window_rule_semantics(
 
     _register_standard_rules()
     trace = tl.trace(module, torch.randn(*shape))
-    target = next(op for op in trace.layer_list if op.func_name.startswith("conv"))
+    target = next(op for op in trace._layer_list if op.func_name.startswith("conv"))
     descriptor = next(iter(_engine.lookup(trace, target).values()))
 
     assert descriptor.layout.axis_kinds == expected_kinds
@@ -252,7 +252,7 @@ def test_unconsumed_input_layout_remains_unknown() -> None:
     """Refuse to invent axis roles before registered consumption supplies evidence."""
 
     trace = tl.trace(nn.Identity(), torch.randn(2, 3, 8, 8))
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     descriptor = next(iter(_engine.lookup(trace, input_op).values()))
 
     assert descriptor.layout.axis_kinds == ("unknown",) * 4
@@ -313,7 +313,7 @@ def test_solution_cache_uses_epoch_and_graph_revision(monkeypatch: pytest.Monkey
     assert calls == 2
     assert type(trace)._PORTABLE_STATE_SPEC["_receptive_field_solution"] is FieldPolicy.DROP
 
-    trace._batch_remove_log_entries([trace.layer_list[-1]])
+    trace._batch_remove_log_entries([trace._layer_list[-1]])
     fourth = _engine.solve(trace)
     assert fourth is not third
     assert calls == 3

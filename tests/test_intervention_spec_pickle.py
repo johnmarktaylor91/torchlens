@@ -94,7 +94,7 @@ def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_
 
     blob = pickle.dumps(intervened_trace)
     restored = pickle.loads(blob)
-    assert len(restored.layer_list) == len(intervened_trace.layer_list)
+    assert len(restored._layer_list) == len(intervened_trace._layer_list)
     # The saved (intervened) activation payload survives the round-trip.
     assert torch.equal(restored["relu_1_2"].ops[0].out, intervened_trace["relu_1_2"].ops[0].out)
     # Trace.save of the very same object keeps working (the parity claim).
@@ -109,7 +109,7 @@ def test_intervened_fork_pickles(intervened_trace: tl.Trace) -> None:
 
     fork = intervened_trace.fork()
     restored = pickle.loads(pickle.dumps(fork))
-    assert len(restored.layer_list) == len(fork.layer_list)
+    assert len(restored._layer_list) == len(fork._layer_list)
 
 
 def test_pickled_trace_matches_loaded_predicate_carrier_form(

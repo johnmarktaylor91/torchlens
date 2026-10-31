@@ -201,7 +201,7 @@ class _StubPatchedLog:
 
     def __init__(self, records: list[_StubRecord], hooks_fired: int) -> None:
         self.last_run = {"started_at": 100.0, "timestamp": 101.0, "hooks_fired": hooks_fired}
-        self.layer_list = [_StubLayer(records)]
+        self._layer_list = [_StubLayer(records)]
 
 
 def test_fire_ledger_refuses_never_fired() -> None:

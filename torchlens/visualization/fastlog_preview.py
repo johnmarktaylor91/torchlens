@@ -176,7 +176,7 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
     history: list[RecordContext] = []
     op_counts: dict[str, int] = {}
     preview_nodes: dict[str, PreviewNode] = {}
-    for event_index, op_log in enumerate(trace.layer_list, start=1):
+    for event_index, op_log in enumerate(trace._layer_list, start=1):
         ctx = _context_from_layer(
             op_log,
             history=tuple(history),

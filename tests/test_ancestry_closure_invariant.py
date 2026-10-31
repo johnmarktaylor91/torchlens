@@ -121,7 +121,7 @@ class _StaticRead(nn.Module):
 def _entry(trace: Any, layer_label: str) -> Any:
     """Return the ``layer_list`` record the invariants actually read."""
 
-    for record in trace.layer_list:
+    for record in trace._layer_list:
         if record.layer_label == layer_label:
             return record
     raise AssertionError(f"{layer_label!r} not in layer_list")
@@ -205,7 +205,7 @@ def test_cross_pass_child_repoint_is_caught_inside_a_recurrence_group() -> None:
     trace = tl.trace(_Recurrent(), torch.randn(1, 4))
     check_metadata_invariants(trace)
     record = None
-    for candidate in trace.layer_list:
+    for candidate in trace._layer_list:
         if candidate.layer_label == "linear_1_1" and candidate.pass_index == 2:
             record = candidate
             break
@@ -223,7 +223,7 @@ def test_non_recurrent_control_is_still_caught() -> None:
     """The same corruption shape on a non-recurrent graph keeps failing."""
 
     trace = tl.trace(_NonRecurrent(), torch.randn(1, 4))
-    labels = [op.label for op in trace.layer_list]
+    labels = [op.label for op in trace._layer_list]
     _entry(trace, labels[1].rsplit(":", 1)[0]).children = [labels[5]]
     with pytest.raises(MetadataInvariantError) as excinfo:
         check_metadata_invariants(trace)
@@ -263,7 +263,7 @@ def test_buffer_source_is_a_resolvable_final_label() -> None:
     """``Buffer.buffer_source`` must be a live lookup key, not a dead raw label."""
 
     trace = tl.trace(_WriteThenRead(), torch.ones(2))
-    sources = [op.buffer_source for op in trace.layer_list if op.is_buffer and op.buffer_source]
+    sources = [op.buffer_source for op in trace._layer_list if op.is_buffer and op.buffer_source]
     assert sources, "the write-then-read fixture must produce a sourced buffer version"
     for source in sources:
         assert not source.endswith("_raw")
@@ -330,7 +330,7 @@ def test_seeded_generative_ancestry_corruptions_are_caught() -> None:
     unledgered: list[str] = []
     for _ in range(20):
         trace = _fresh_two_io()
-        record = rng.choice(list(trace.layer_list))
+        record = rng.choice(list(trace._layer_list))
         kind = rng.choice(["add", "remove", "clear", "bool", "dist"])
         if kind in ("add", "remove", "clear"):
             field = rng.choice(_ANCESTRY_SET_FIELDS)

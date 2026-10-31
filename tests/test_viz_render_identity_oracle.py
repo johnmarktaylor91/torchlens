@@ -838,7 +838,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         # Timing is intentionally not part of a byte-identity rendering oracle.
         # Normalize the captured measurement before any timing-aware node mode or
         # overlay can format it, while retaining deterministic render behavior.
-        for layer in trace.layer_list:
+        for layer in trace._layer_list:
             layer.func_duration = 0.0
         kwargs = dict(case.draw_kwargs)
         kwargs.update(
@@ -950,7 +950,7 @@ def _stabilize_backward_identifiers(trace: tl.Trace) -> None:
         old_identifier = item.grad_fn_object_id
         item.grad_fn_object_id = identifiers[old_identifier]
         item.next_grad_fn_ids = [identifiers[next_id] for next_id in item.next_grad_fn_ids]
-    trace.grad_fn_logs = {item.grad_fn_object_id: item for item in grad_fns}
+    trace._grad_fn_logs = {item.grad_fn_object_id: item for item in grad_fns}
     trace.grad_fn_order = [identifiers[item] for item in trace.grad_fn_order]
 
 

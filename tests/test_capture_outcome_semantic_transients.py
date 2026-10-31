@@ -162,7 +162,7 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     )
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.style == "hf_text"
-    assert trace.decoded_output is not None
+    assert trace._decoded_output is not None
     assert _leaked(trace) == []
 
 

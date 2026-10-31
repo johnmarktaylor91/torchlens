@@ -559,7 +559,7 @@ def count_importer_region_annotations(trace: Any) -> int:
 
     trace_annotations = getattr(trace, "annotations", None)
     region_count = 0
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         op_annotations = getattr(op, "annotations", None)
         if not is_region_replay_annotation(op_annotations):
             continue

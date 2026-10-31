@@ -569,7 +569,7 @@ def _coverage_failure_count(trace: Any, captures: tuple[MLXOpCapture, ...]) -> i
     inventoried_labels = {
         label for _name, labels, _args, _kwargs, _fires in expected for label in labels
     }
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         if getattr(op, "is_input", False):
             continue
         label = getattr(op, "_label_raw", None)

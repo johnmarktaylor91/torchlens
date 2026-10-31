@@ -461,12 +461,12 @@ def _iter_parent_ops(parent: Trace) -> Iterator[Op]:
     """Yield every distinct Op reachable from the parent's lookup containers."""
 
     seen: set[int] = set()
-    containers: list[Any] = [parent.__dict__.get("layer_list") or ()]
-    for name in ("layer_dict_main_keys", "layer_dict_all_keys"):
+    containers: list[Any] = [parent.__dict__.get("_layer_list") or ()]
+    for name in ("_layer_dict_main_keys", "_layer_dict_all_keys"):
         mapping = parent.__dict__.get(name)
         if mapping:
             containers.append(mapping.values())
-    for layer in (parent.__dict__.get("layer_logs") or {}).values():
+    for layer in (parent.__dict__.get("_layer_logs") or {}).values():
         ops = layer.__dict__.get("ops")
         if ops is not None:
             containers.append(ops.values())
@@ -492,7 +492,7 @@ def _iter_parent_records(parent: Trace) -> Iterator[Any]:
             calls = getattr(module, "calls", None)
             if calls:
                 yield from calls.values()
-    param_accessor = parent.__dict__.get("param_logs")
+    param_accessor = parent.__dict__.get("_param_logs")
     if param_accessor is not None:
         yield from param_accessor.values()
     buffer_accessor = parent.__dict__.get("_buffer_accessor")
@@ -627,7 +627,7 @@ def _fill_layer_shells(
     # stack). Equal views are documented as shareable across records.
     equivalent_view_memo: dict[Any, Any] = {}
     remap = translator.map
-    for label, parent_layer in (parent.__dict__.get("layer_logs") or {}).items():
+    for label, parent_layer in (parent.__dict__.get("_layer_logs") or {}).items():
         parent_layer_id = id(parent_layer)
         if parent_layer_id in consumed_shells:
             # A parent Layer registered under two labels must become two fork
@@ -663,7 +663,7 @@ def _fill_layer_shells(
             else:
                 shell.equivalent_ops = view
         fork_layer_logs[label] = shell
-    fork.layer_logs = fork_layer_logs
+    fork._layer_logs = fork_layer_logs
 
 
 def build_fork(parent: Trace, *, name: str | None) -> Trace:
@@ -737,7 +737,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         translator.add(parent_op, shell)
 
     layer_shells: dict[int, Any] = {}
-    for parent_layer in (parent.__dict__.get("layer_logs") or {}).values():
+    for parent_layer in (parent.__dict__.get("_layer_logs") or {}).values():
         if id(parent_layer) not in layer_shells:
             layer_shells[id(parent_layer)] = state_new(type(parent_layer))
 
@@ -788,7 +788,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     fork.__dict__["_capture_events"] = CaptureEvents.detached_from(parent)
     if fork_core is not None:
         fork.__dict__["_trace_core"] = fork_core
-    fork.parent_run = weakref.ref(parent)
+    fork._parent_run = weakref.ref(parent)
     fork.name = name or parent._next_fork_name()
     # Read the parent's spec, never create one: fork() must not mutate its parent.
     # A spec-less parent gives a spec-less fork; staging on it creates one lazily.

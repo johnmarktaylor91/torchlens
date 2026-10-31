@@ -48,8 +48,8 @@ def _trace_model(
         capture_tensor_grad_hooks=save_grads,
     )
     trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
-    source = next(op for op in trace.layer_list if op.is_input)
-    target = next(op for op in trace.layer_list if op.is_output)
+    source = next(op for op in trace._layer_list if op.is_input)
+    target = next(op for op in trace._layer_list if op.is_output)
     return trace, source, target
 
 
@@ -101,7 +101,7 @@ def _probe_snapshot(trace: object, model: nn.Module) -> tuple[object, ...]:
         trace.num_backward_passes,  # type: ignore[attr-defined]
         trace.has_gradients,  # type: ignore[attr-defined]
         tuple(trace.event_stream.backward_events),  # type: ignore[attr-defined]
-        tuple(tuple(op.grads) for op in trace.layer_list),  # type: ignore[attr-defined]
+        tuple(tuple(op.grads) for op in trace._layer_list),  # type: ignore[attr-defined]
         (
             "_active_backward_pass_index" in trace.__dict__,
             trace.__dict__.get("_active_backward_pass_index"),
@@ -177,13 +177,13 @@ def test_torch_func_jvp_wrapping_analysis() -> None:
 
     trace = tl.trace(nn.Identity(), torch.randn(2, 3))
     before = (
-        len(trace.layer_list),
+        len(trace._layer_list),
         trace.num_backward_passes,
         len(trace.event_stream.backward_events),
     )
     torch.func.jvp(lambda value: value.square(), (torch.ones(3),), (torch.ones(3),))
     after = (
-        len(trace.layer_list),
+        len(trace._layer_list),
         trace.num_backward_passes,
         len(trace.event_stream.backward_events),
     )

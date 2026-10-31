@@ -245,7 +245,7 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     self.num_params_frozen = 0
     self.num_param_tensors = 0
     self.total_param_memory = Bytes(0)
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         count, memory = _effective_param_geometry(pl)
         self.num_params += count
         if pl.is_trainable:
@@ -774,11 +774,11 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
         1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
     )
 
-    self.layer_list = []
-    self.layer_dict_main_keys = {}
+    self._layer_list = []
+    self._layer_dict_main_keys = {}
     self.layer_labels = []
     self.op_labels = []
-    self.layer_num_calls = {}
+    self._layer_num_calls = {}
     layer_labels_seen: set[str] = set()
 
     i = 0
@@ -790,13 +790,13 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
         _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
 
         # Log all information:
-        self.layer_list.append(layer_entry)
-        self.layer_dict_main_keys[layer_entry.label] = layer_entry
+        self._layer_list.append(layer_entry)
+        self._layer_dict_main_keys[layer_entry.label] = layer_entry
         if layer_entry.layer_label not in layer_labels_seen:
             layer_labels_seen.add(layer_entry.layer_label)
             self.layer_labels.append(layer_entry.layer_label)
         self.op_labels.append(layer_entry.label)
-        self.layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
+        self._layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
         # F20 (brainpipe D-17): no per-layer byte increment here -- the
         # saved-summary refresh later in this same step writes the aggregate
         # from the ONE alias-aware byte model (retained_activation_bytes),
@@ -806,7 +806,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
 
     self._layers_logged = True
 
-    if self.num_saved_ops == len(self.layer_list):
+    if self.num_saved_ops == len(self._layer_list):
         self._layers_saved = True
     else:
         self._layers_saved = False
@@ -926,13 +926,13 @@ def _add_lookup_keys_for_layer_entry(
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:
             module_keys.append(module_name)
         for module_key in module_keys:
-            if is_output_alias and module_key in self.layer_dict_all_keys:
+            if is_output_alias and module_key in self._layer_dict_all_keys:
                 continue
             lookup_keys_for_tensor.append(module_key)
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.is_buffer:
-        if self.buffer_num_calls.get(layer_entry.address, 1) == 1:
+        if self._buffer_num_calls.get(layer_entry.address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.address)
         lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
@@ -948,10 +948,10 @@ def _add_lookup_keys_for_layer_entry(
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
             self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
-            self.layer_dict_all_keys[lookup_key] = layer_entry
+            self._layer_dict_all_keys[lookup_key] = layer_entry
         elif self._lookup_keys_to_layer_num_dict[lookup_key] != layer_entry.raw_index:
             if lookup_key in exact_op_keys:
-                existing = self.layer_dict_all_keys[lookup_key]
+                existing = self._layer_dict_all_keys[lookup_key]
                 raise AmbiguousOpLookupError(
                     f"Exact Op lookup key {lookup_key!r} collides between "
                     f"{existing.label!r} and {layer_entry.label!r}."
@@ -964,7 +964,7 @@ def _add_lookup_keys_for_layer_entry(
                 raw_indices.append(layer_entry.raw_index)
             if lookup_key in primary_label_keys:
                 self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
-                self.layer_dict_all_keys[lookup_key] = layer_entry
+                self._layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
 
 

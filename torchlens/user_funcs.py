@@ -2222,7 +2222,7 @@ def _render_layer_visualizers(
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"
     visualizer_dir.mkdir(parents=True, exist_ok=True)
-    max_fanout = max(1, len(trace.layer_list))
+    max_fanout = max(1, len(trace._layer_list))
 
     for selector, visualizer in layer_visualizers.items():
         try:
@@ -3897,7 +3897,7 @@ def _trace_torch_model(
                     chunk_paths=normalize_chunk_paths(chunk_paths_value),
                 ),
             )
-        trace.append_history = [initial_record, *trace.append_history]
+        trace._append_history = [initial_record, *trace._append_history]
         trace.chunked_forward = True
         trace.last_run = dict(trace.last_run or {})
         trace.last_run["chunk_size"] = normalized_chunk_size
@@ -3906,7 +3906,7 @@ def _trace_torch_model(
         if uses_selective_layers_to_save:
             trace._layer_nums_to_save = [
                 op.raw_index
-                for op in trace.layer_list
+                for op in trace._layer_list
                 if op.has_saved_activation and op.layer_type not in {"input", "output"}
             ]
             if not save_args:
@@ -4152,7 +4152,7 @@ def _trace_torch_model(
     if uses_selective_layers_to_save:
         trace._layer_nums_to_save = [
             op.raw_index
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and op.layer_type not in {"input", "output"}
         ]
         if not save_args:
@@ -4161,7 +4161,7 @@ def _trace_torch_model(
     # Print final summary.
     _vprint(
         trace,
-        f"Done: {len(trace.layer_logs)} layers, "
+        f"Done: {len(trace._layer_logs)} layers, "
         f"{trace.num_saved_ops} saved, "
         f"{trace.total_activation_memory}",
     )

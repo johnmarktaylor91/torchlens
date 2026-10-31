@@ -621,7 +621,7 @@
   an escape signal (provenance warning / detector diagnostic / output-attribution failure) is
   re-run ONCE with a `TorchFunctionMode` net that redirects stale calls to their exact wrappers
   (`backends/torch/rescue.py`); the result is disclosed (`capture_verified=False`, reason
-  `"mode_rescue_rerun"`, session-time `trace.rescue_rerun`). Primary captures are NEVER mode-armed
+  `"mode_rescue_rerun"`, the session-time capture-honesty `rescue_rerun` fact). Primary captures are NEVER mode-armed
   (fused-path observer effect). Protocol-invisible constructors that no mode can see (derived
   per build: `from_numpy`, `from_dlpack`, `frombuffer`, `Tensor.as_subclass`, `Tensor._make_subclass`) keep targeted module-attr patching
   (`backends/torch/belt.py`). Residuals declared, typed, never silent: worker-thread stale refs

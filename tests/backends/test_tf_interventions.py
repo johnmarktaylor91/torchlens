@@ -84,8 +84,8 @@ def test_tf_op_level_zero_ablation_changes_downstream_and_marks_site() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
 
-    relu_op = next(op for op in trace.layer_list if op.func_name == "Relu")
-    add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
+    relu_op = next(op for op in trace._layer_list if op.func_name == "Relu")
+    add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
     assert relu_op.is_edited is True
     assert relu_op.edits and relu_op.edits[0]["backend"] == "tf"
     assert np.allclose(np.asarray(relu_op.out), [1.0, 0.0, 2.0])
@@ -103,8 +103,8 @@ def test_tf_intervention_graph_stays_honest_by_construction() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
 
-    add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
-    zeros_op = next(op for op in trace.layer_list if op.func_name == "ZerosLike")
+    add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
+    zeros_op = next(op for op in trace._layer_list if op.func_name == "ZerosLike")
     # Torch parity: parents resolves through the CONDITIONAL label map -- a
     # single-pass referenced op (zeros_op, here) by its bare layer_label, a
     # multi-pass one by its pass-qualified label.
@@ -144,8 +144,8 @@ def test_tf_module_boundary_intervention_substitutes_module_output() -> None:
         intervene=tl.when(tl.module("dense"), tl.scale(0.5)),
     )
 
-    baseline_out = np.asarray(list(baseline.layer_list)[-1].out)
-    intervened_out = np.asarray(list(trace.layer_list)[-1].out)
+    baseline_out = np.asarray(list(baseline._layer_list)[-1].out)
+    intervened_out = np.asarray(list(trace._layer_list)[-1].out)
     assert np.allclose(baseline_out, [[4.0, 4.0]])
     assert np.allclose(intervened_out, [[2.5, 2.5]])
 
@@ -163,7 +163,7 @@ def test_tf_in_module_boundary_intervention_fires_on_containment() -> None:
         intervene=tl.when(tl.in_module("dense"), tl.zero_ablate()),
     )
 
-    final_out = np.asarray(list(trace.layer_list)[-1].out)
+    final_out = np.asarray(list(trace._layer_list)[-1].out)
     assert np.allclose(final_out, [[1.0, 1.0]])
 
 
@@ -194,7 +194,7 @@ def test_tf_unmatched_site_is_a_no_op() -> None:
             intervene=tl.when(tl.func("nonexistent_op"), tl.zero_ablate()),
         )
 
-    add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
+    add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
     assert np.allclose(np.asarray(add_op.out), [11.0, 10.0, 12.0])
 
 
@@ -209,7 +209,7 @@ def test_tf_callable_action_substitutes() -> None:
         intervene=tl.when(tl.func("relu"), lambda out: out + tf.ones_like(out)),
     )
 
-    add_ops = [op for op in trace.layer_list if op.func_name == "AddV2"]
+    add_ops = [op for op in trace._layer_list if op.func_name == "AddV2"]
     assert np.allclose(np.asarray(add_ops[0].out), [2.0, 1.0, 3.0])
     assert np.allclose(np.asarray(add_ops[-1].out), [12.0, 11.0, 13.0])
 

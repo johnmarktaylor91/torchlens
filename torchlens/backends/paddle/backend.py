@@ -576,16 +576,16 @@ class PaddleBackend:
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace._param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
+                trace.num_param_tensors = len(trace._param_logs)
+                trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
+                    param.num_params for param in trace._param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
                 trace.param_source = "native-module"
             else:
-                trace.param_logs = ParamAccessor({})
+                trace._param_logs = ParamAccessor({})
                 trace.num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
@@ -2540,7 +2540,7 @@ def _paddle_trace_intermediate_signatures(
     # would collide across passes and ``op.parents`` never uses it anyway).
     # An unresolvable parent keeps its literal label and simply never matches.
     final_to_raw: dict[str, str] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         raw_label = getattr(op, "_label_raw", None)
         if not isinstance(raw_label, str):
             continue
@@ -2550,7 +2550,7 @@ def _paddle_trace_intermediate_signatures(
         layer_label = getattr(op, "layer_label", None)
         if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
             final_to_raw[layer_label] = raw_label
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)
         ):

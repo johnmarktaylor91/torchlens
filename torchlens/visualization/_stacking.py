@@ -145,7 +145,7 @@ def _multipass_ops_in_raw_order(trace: Trace) -> list[Any]:
     """Return all ops of multi-pass layers, ordered by raw execution index."""
 
     ops = [
-        op for op in getattr(trace, "layer_list", ()) if int(getattr(op, "num_passes", 1) or 1) > 1
+        op for op in getattr(trace, "_layer_list", ()) if int(getattr(op, "num_passes", 1) or 1) > 1
     ]
     ops.sort(key=lambda op: int(getattr(op, "raw_index", 0) or 0))
     return ops

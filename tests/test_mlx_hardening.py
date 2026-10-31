@@ -142,8 +142,8 @@ def _assert_captured(trace: tl.Trace, expected_fragment: str) -> None:
 def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) -> None:
     """Assert that MLX static save filtering preserves metadata and refreshes counters."""
 
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
-    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation]
+    unsaved_ops = [op for op in trace._layer_list if not op.has_saved_activation]
 
     assert saved_ops
     assert {op.func_name for op in saved_ops} == expected_func_names
@@ -305,7 +305,7 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
     )
     hidden_op = next(
-        op for op in trace.layer_list if op.func_name == "multiply" and op.shape == (2,)
+        op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
     )
 
     def suffix(boundary: mx.array) -> mx.array:
@@ -348,12 +348,12 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
             loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
         ),
     )
-    by_name = {op.func_name: op for op in trace.layer_list if not op.is_input}
+    by_name = {op.func_name: op for op in trace._layer_list if not op.is_input}
     relu_op = by_name["relu"]
     assert relu_op.modules, "fixture must be module-shaped (ops carry module frames)"
     saved = {
         op.label
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.has_saved_activation and not op.is_input and not op.is_output
     }
     assert saved
@@ -395,7 +395,7 @@ def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
     )
     hidden_op = next(
-        op for op in trace.layer_list if op.func_name == "multiply" and op.shape == (2,)
+        op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
     )
 
     np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(base_grad))
@@ -429,7 +429,7 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
     )
 
-    first_multiply = next(op for op in trace.layer_list if op.func_name == "multiply")
+    first_multiply = next(op for op in trace._layer_list if op.func_name == "multiply")
 
     assert first_multiply.label not in trace.autograd.intermediate_derived_grads
     assert first_multiply.derived_grad is None
@@ -493,7 +493,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
-    assert all(op.derived_grad is None for op in trace.layer_list)
+    assert all(op.derived_grad is None for op in trace._layer_list)
 
 
 @pytest.mark.optional
@@ -595,9 +595,9 @@ def test_mlx_parents_resolve() -> None:
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for parent in op.parents:
-            assert parent in trace.layer_dict_all_keys
+            assert parent in trace._layer_dict_all_keys
 
 
 @pytest.mark.optional
@@ -618,7 +618,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     expected_outs = {
         op.layer_label: (np.asarray(op.out), tuple(op.out.shape), str(op.out.dtype))
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.has_saved_activation and op.out is not None
     }
     bundle_path = tmp_path / "mlx-materialized.tlspec"
@@ -630,7 +630,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     assert loaded.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     _assert_mlx_materialized_manifest(manifest, {"out"})
-    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    loaded_saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
     assert loaded_saved_ops
     assert all(isinstance(op.out, mx.array) for op in loaded_saved_ops)
     for op in loaded_saved_ops:
@@ -653,7 +653,7 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     expected_outs = {
         op.layer_label: (np.asarray(op.out), tuple(op.out.shape), str(op.out.dtype))
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.has_saved_activation and op.out is not None
     }
     bundle_path = tmp_path / "mlx-lazy-materialized.tlspec"
@@ -665,7 +665,7 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     assert loaded.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     _assert_mlx_materialized_manifest(manifest, {"out"})
-    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    loaded_saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
     assert loaded_saved_ops
     for op in loaded_saved_ops:
         assert op.out is None
@@ -695,7 +695,7 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     monkeypatch.setattr("torchlens._io.payload_codec._import_mlx_core", _missing_mlx_runtime)
 
     loaded = tl.load(bundle_path)
-    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    loaded_saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
 
     assert loaded.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "audit_only_missing_runtime"
@@ -724,8 +724,8 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
     trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
-    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
-    loaded_unsaved_ops = [op for op in loaded.layer_list if not op.has_saved_activation]
+    loaded_saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
+    loaded_unsaved_ops = [op for op in loaded._layer_list if not op.has_saved_activation]
 
     _assert_mlx_materialized_manifest(manifest, {"out"})
     assert len(manifest["body_index"]) == trace.num_saved_ops

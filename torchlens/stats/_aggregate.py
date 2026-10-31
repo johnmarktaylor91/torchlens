@@ -169,7 +169,7 @@ def _matching_layers(log: Any, metric_name: str, *, require_grad: bool) -> list[
     attribute = "has_grad" if require_grad else "has_saved_activation"
     return [
         layer
-        for layer in log.layer_list
+        for layer in log._layer_list
         if metric_name in str(layer.layer_label) and bool(getattr(layer, attribute, False))
     ]
 
@@ -249,7 +249,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
         ops = []
         input_labels: set[str] = set()
         buffer_labels: set[str] = set()
-        for layer in log.layer_list:
+        for layer in log._layer_list:
             if layer.is_input:
                 input_labels.add(layer.layer_label)
             elif layer.is_buffer:

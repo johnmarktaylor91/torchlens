@@ -109,7 +109,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
         save=tl.func("relu"),
         storage=tl.to_disk(str(tmp_path / "run.tlspec")),
     )
-    assert any(getattr(op, "out_ref", None) is not None for op in trace.layer_list)
+    assert any(getattr(op, "out_ref", None) is not None for op in trace._layer_list)
 
     def fail_materialization(
         self: LazyActivationRef,
@@ -259,7 +259,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     # accounting, or a returning redundant copy, trips it.
     output_rows = [
         layer
-        for layer in full.layer_list
+        for layer in full._layer_list
         if layer.layer_type == "output" and layer.has_saved_activation
     ]
     assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)

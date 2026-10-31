@@ -51,7 +51,7 @@ def test_mlx_validation_fails_corrupted_saved_output() -> None:
     """Fail validation when a saved MLX op output payload is corrupted."""
 
     trace = _healthy_trace()
-    victim = next(op for op in trace.layer_list if op.out is not None and op.has_params)
+    victim = next(op for op in trace._layer_list if op.out is not None and op.has_params)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
 
@@ -120,7 +120,7 @@ def test_mlx_validation_fails_incoherent_wrong_parent_attribution() -> None:
 
     trace, add_index, relu_label, sigmoid_label = _branch_trace_and_add_tamper_material()
     add_label = trace._mlx_op_captures[add_index].labels_raw[0]
-    add_op = next(op for op in trace.layer_list if op._label_raw == add_label)
+    add_op = next(op for op in trace._layer_list if op._label_raw == add_label)
     # add_op.parents holds FINAL labels (bare layer_label for these
     # single-pass ops, torch parity); relu_label/sigmoid_label are RAW
     # capture labels, so resolve them to final form before rewiring.
@@ -151,7 +151,7 @@ def test_mlx_validation_fails_coherent_wrong_parent_attribution() -> None:
             for slot in capture.arg_leaf_labels
         ),
     )
-    add_op = next(op for op in trace.layer_list if op._label_raw == capture.labels_raw[0])
+    add_op = next(op for op in trace._layer_list if op._label_raw == capture.labels_raw[0])
     add_op.parents = [sigmoid_label if p == relu_label else p for p in add_op.parents]
 
     assert MLXBackend().validate_trace(trace) is False
@@ -216,9 +216,9 @@ def test_mlx_split_container_outputs_wire_into_graph() -> None:
     """
 
     trace = tl.trace(_SplitMergeNet(), mx.ones((1, 4)), backend="mlx")
-    split_ops = [op for op in trace.layer_list if op._label_raw.startswith("split")]
+    split_ops = [op for op in trace._layer_list if op._label_raw.startswith("split")]
     assert len(split_ops) == 2, "both split output arrays must materialize as ops"
-    add_op = next(op for op in trace.layer_list if op._label_raw.startswith("add"))
+    add_op = next(op for op in trace._layer_list if op._label_raw.startswith("add"))
     # add_op.parents holds FINAL labels (bare layer_label for these
     # single-pass split ops, torch parity), not the raw capture labels.
     assert set(add_op.parents) == {op.layer_label for op in split_ops}
@@ -244,7 +244,7 @@ def test_mlx_validation_fails_stripped_leaf_label_provenance() -> None:
         capture,
         arg_leaf_labels=tuple(tuple(None for _ in slot) for slot in capture.arg_leaf_labels),
     )
-    relu_op = next(op for op in trace.layer_list if op._label_raw == capture.labels_raw[0])
+    relu_op = next(op for op in trace._layer_list if op._label_raw == capture.labels_raw[0])
     relu_op.parents = []
 
     assert MLXBackend().validate_trace(trace, validate_metadata=False) is False

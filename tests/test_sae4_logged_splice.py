@@ -27,7 +27,7 @@ def _splice(model: nn.Module, x: torch.Tensor, sae: nn.Module, **kwargs):
 
 
 def _labels(trace: tl.Trace) -> list[str]:
-    return [op.label for op in trace.layer_list]
+    return [op.label for op in trace._layer_list]
 
 
 @pytest.fixture()

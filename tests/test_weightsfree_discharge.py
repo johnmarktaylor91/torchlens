@@ -61,7 +61,7 @@ def test_rescue_asymmetry_refuses() -> None:
     """A rescue re-run on exactly one side breaks comparability (D10)."""
 
     structure, real = _twins()
-    real.rescue_rerun = {"trigger": "test"}
+    real._rescue_rerun = {"trigger": "test"}
     _expect_incomparable(structure, real, "rescue_asymmetry")
 
 

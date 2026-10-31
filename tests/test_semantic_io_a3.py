@@ -101,9 +101,9 @@ def test_decoded_output_uses_typed_batch_topk_representation() -> None:
 
     trace = _trace_batch_classifier()
 
-    assert trace.decoded_output["kind"] == "batch_topk"
+    assert trace._decoded_output["kind"] == "batch_topk"
     assert trace.decode_output(k=1)["rows"] == [
-        row for row in trace.decoded_output["rows"] if row["rank"] == 1
+        row for row in trace._decoded_output["rows"] if row["rank"] == 1
     ]
 
 
@@ -137,7 +137,7 @@ def test_render_raw_output_single_value_paths_are_byte_identical() -> None:
 def test_render_raw_output_batch_topk_branch() -> None:
     """Typed batch top-k decoded output renders as an output table."""
 
-    attrs = _render_raw_output(_trace_batch_classifier().decoded_output)
+    attrs = _render_raw_output(_trace_batch_classifier()._decoded_output)
 
     assert attrs is not None
     assert "item 0" in attrs["label"]
@@ -177,7 +177,7 @@ def test_summary_surfaces_undetected_output_style_hint() -> None:
 
     trace = tl.trace(_Classifier(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
     assert "undetected; pass output_style= to decode." in trace.provenance()
 
 
@@ -207,7 +207,7 @@ def test_false_positive_output_detection_cases_fail_closed() -> None:
 
     for model, inputs in cases:
         trace = tl.trace(model, inputs)
-        assert trace.decoded_output is None
+        assert trace._decoded_output is None
 
 
 def test_output_table_recomputes_when_logits_are_retained() -> None:

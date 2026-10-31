@@ -36,7 +36,7 @@ class _SliceWrite(nn.Module):
 
 
 def _setitem_op(trace: tl.Trace):
-    ops = [op for op in trace.layer_list if getattr(op, "func_name", None) == "__setitem__"]
+    ops = [op for op in trace._layer_list if getattr(op, "func_name", None) == "__setitem__"]
     assert len(ops) == 1
     return ops[0]
 

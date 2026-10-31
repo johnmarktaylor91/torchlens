@@ -51,7 +51,7 @@ _TRACE_STATE_TOKENS: frozenset[str] = frozenset(
         "label_maps",
         "lookup_containers",
         "conditional_records",
-        "layer_logs",
+        "_layer_logs",
         "module_logs",
         "module_build",
         "param_logs_kind",

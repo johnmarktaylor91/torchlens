@@ -35,8 +35,8 @@ class _StubTrace:
         layer_logs:
             Aggregate no-pass layer entries.
         """
-        self.layer_list = layer_list or []
-        self.layer_logs = layer_logs or {}
+        self._layer_list = layer_list or []
+        self._layer_logs = layer_logs or {}
         self._tracing_finished = True
 
         self.input_layers: list[str] = []
@@ -74,7 +74,7 @@ class _StubTrace:
 
     def __iter__(self) -> Iterator[SimpleNamespace]:
         """Iterate over surviving pass-level entries."""
-        return iter(self.layer_list)
+        return iter(self._layer_list)
 
 
 class _TinyModel(nn.Module):
@@ -338,7 +338,7 @@ def test_to_pandas_exports_conditional_columns() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     target_layer = next(
-        layer for layer in trace.layer_list if layer.layer_type not in {"input", "output"}
+        layer for layer in trace._layer_list if layer.layer_type not in {"input", "output"}
     )
     target_layer.func_config = {"alpha": 1}
     target_layer.is_terminal_conditional_bool = True

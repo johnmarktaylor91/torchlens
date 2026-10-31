@@ -178,7 +178,7 @@ def _forward_family_flops(trace: Any) -> int | None:
     """2 x true MACs over the matmul and convolution family ops (None if any is unknown)."""
 
     total = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if getattr(op, "func_name", None) not in MAC_FAMILY_NAMES:
             continue
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):

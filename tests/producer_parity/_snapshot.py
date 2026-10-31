@@ -418,7 +418,7 @@ ARTIFACT_TOKEN_KEYS: dict[str, str] = {"op_kind": "tl_barcode_derived"}
 # Metadata keys whose dict KEYS are volatile tokens.
 ARTIFACT_TOKEN_KEYED_DICTS: dict[str, str] = {
     "op_equivalence_classes": "tl_barcode_derived",
-    "grad_fn_logs": "grad_fn_object_id",
+    "_grad_fn_logs": "grad_fn_object_id",
 }
 
 # Field/key segments that hold a single token value wherever they appear.

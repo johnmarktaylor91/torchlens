@@ -82,7 +82,7 @@ def test_none_predicate_does_not_warn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         apply_static_label_save_policy(trace, None, backend_name="mlx")
-    assert all(op.has_saved_activation for op in trace.layer_list)
+    assert all(op.has_saved_activation for op in trace._layer_list)
 
 
 # ---------------------------------------------------------------------------

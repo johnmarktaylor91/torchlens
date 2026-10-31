@@ -1852,7 +1852,7 @@ def test_trace_getitem_by_index(default_input1):
     mh = trace(model, default_input1)
     first = mh[0]
     last = mh[-1]
-    layer_labels = [layer.layer_label for layer in mh.layer_list]
+    layer_labels = [layer.layer_label for layer in mh._layer_list]
     assert first.layer_label == layer_labels[0]
     assert last.layer_label == layer_labels[-1]
 
@@ -1870,7 +1870,7 @@ def test_trace_len(default_input1):
     """Test len(Trace) matches layer count."""
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
-    assert len(mh) == len(mh.layer_list)
+    assert len(mh) == len(mh._layer_list)
 
 
 def test_trace_iter(default_input1):
@@ -1878,7 +1878,7 @@ def test_trace_iter(default_input1):
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
     items = list(mh)
-    assert len(items) == len(mh.layer_list)
+    assert len(items) == len(mh._layer_list)
 
 
 def test_trace_layer_labels(default_input1):

@@ -93,8 +93,8 @@ def cleanup(self: "Trace") -> None:
     # fails toward the historical flush).
     touched_cuda = capture_touched_cuda(self)
     # GC-1: Release parameter references to allow model GC.
-    if hasattr(self, "param_logs"):
-        for pl in self.param_logs:
+    if hasattr(self, "_param_logs"):
+        for pl in self._param_logs:
             pl._release_param_ref()
     # Materialize the M8 Layer mirror fields BEFORE husking the ops that back
     # them: a user-held Layer keeps exactly the readable metadata the dict-era
@@ -102,7 +102,7 @@ def cleanup(self: "Trace") -> None:
     # the dict era, so post-cleanup memory is unchanged).
     from .layer import materialize_layer_mirrors
 
-    for layer_log in (self.__dict__.get("layer_logs") or {}).values():
+    for layer_log in (self.__dict__.get("_layer_logs") or {}).values():
         materialize_layer_mirrors(layer_log)
     # First, clear all attributes from each Op entry.
     # This breaks the Op -> Trace circular reference
@@ -126,9 +126,9 @@ def cleanup(self: "Trace") -> None:
         "_module_logs",
         "_buffer_accessor",
         "_param_logs_by_module",
-        "layer_logs",
-        "layer_dict_all_keys",
-        "layer_dict_main_keys",
+        "_layer_logs",
+        "_layer_dict_all_keys",
+        "_layer_dict_main_keys",
         "_orphan_labels",
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
@@ -534,7 +534,7 @@ def _scrub_layer_log_conditional_fields(
         replacements_no_pass: Optional pass-stripped removed-label -> survivor
             substitutions.
     """
-    for layer_log in getattr(self, "layer_logs", {}).values():
+    for layer_log in getattr(self, "_layer_logs", {}).values():
         if "conditional_entry_children" not in getattr(layer_log, "__dict__", {}):
             continue
         # Layer is dict-backed (no normalizing descriptors until M8), so the

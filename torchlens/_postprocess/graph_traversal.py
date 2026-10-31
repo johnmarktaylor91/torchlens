@@ -624,7 +624,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     self._orphan_logs = tuple(
         self._raw_graph_ws.raw_layer_dict[label] for label in self._orphan_labels
     )
-    self.orphan_records = [
+    self._orphan_records = [
         {
             "raw_label": orphan._label_raw,
             "label": orphan.label,

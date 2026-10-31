@@ -309,7 +309,7 @@ def _check_param_xrefs(ml: Trace) -> None:
     # and those pay nothing.
     param_address_index: dict[object, object] | None = None
 
-    for param in ml.param_logs:
+    for param in ml._param_logs:
         for lbl in param.used_by_ops:
             if lbl not in op_label_set:
                 raise MetadataInvariantError(
@@ -356,7 +356,7 @@ def _check_param_xrefs(ml: Trace) -> None:
             _check_param_co_parent_links(param_address_index, param, name)
 
     # has_params forward check
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         if lpl.has_params:
             if not lpl._param_logs:
                 raise MetadataInvariantError(
@@ -405,7 +405,7 @@ def _check_param_usage_reciprocal_links(ml: Trace, param: object, name: str) -> 
                 "not list the Param in _param_logs",
             )
     for layer_label in getattr(param, "used_by_layers", ()):
-        layer = ml.layer_logs[layer_label]
+        layer = ml._layer_logs[layer_label]
         if not _param_log_list_contains_param(getattr(layer, "_param_logs", ()), param):
             raise MetadataInvariantError(
                 name,
@@ -467,7 +467,7 @@ def _check_layers_with_params_matches_param_usage(ml: Trace, name: str) -> None:
     """
 
     expected_layer_union: set[str] = set()
-    for param in ml.param_logs:
+    for param in ml._param_logs:
         if len(getattr(param, "used_by_ops", ()) or ()) == 0 and not getattr(
             param, "used_by_layers", ()
         ):
@@ -477,7 +477,7 @@ def _check_layers_with_params_matches_param_usage(ml: Trace, name: str) -> None:
     for group_key, layer_labels in getattr(ml, "layers_with_params", {}).items():
         for layer_label in layer_labels:
             actual_layer_union.add(layer_label)
-            layer = ml.layer_logs[layer_label]
+            layer = ml._layer_logs[layer_label]
             if not getattr(layer, "_param_logs", ()):
                 raise MetadataInvariantError(
                     name,
@@ -503,7 +503,7 @@ def _deduped_layers_with_params(ml: Trace) -> int:
 
     seen_layer_labels: set[str] = set()
     layers_with_params = 0
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         if layer.layer_label in seen_layer_labels:
             continue
         seen_layer_labels.add(layer.layer_label)
@@ -536,7 +536,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
     # identity sums independently from param_logs.
     layers_with_params = _deduped_layers_with_params(ml)
 
-    param_logs = list(getattr(ml, "param_logs", []) or [])
+    param_logs = list(getattr(ml, "_param_logs", []) or [])
     total_params = sum(int(pl.num_params) for pl in param_logs)
     trainable_params = sum(int(pl.num_params) for pl in param_logs if pl.is_trainable)
     frozen_params = sum(int(pl.num_params) for pl in param_logs if not pl.is_trainable)
@@ -545,7 +545,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
     # layers must sum to no more than the declared identity inventory (layers
     # can never consume a parameter the inventory does not declare).
     consumed_by_identity: dict[int, int] = {}
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         for pl in getattr(layer, "_param_logs", ()) or ():
             consumed_by_identity[id(pl)] = int(pl.num_params)
     consumed_total = sum(consumed_by_identity.values())

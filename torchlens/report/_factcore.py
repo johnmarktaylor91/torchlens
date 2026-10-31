@@ -253,7 +253,7 @@ def capture_fingerprint(trace: Any) -> str:
     payloads -- a cheap identity fingerprint.
     """
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list(getattr(trace, "_layer_list", ()) or ())
     label_digest = hashlib.sha256()
     for op in ops:
         label_digest.update(str(getattr(op, "layer_label", "?")).encode())
@@ -271,7 +271,7 @@ def capture_fingerprint(trace: Any) -> str:
 def _counts(trace: Any) -> CountsRecord:
     """Derive the counts record from the identity partition."""
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list(getattr(trace, "_layer_list", ()) or ())
     alias_rows = sum(
         1
         for op in ops
@@ -295,7 +295,7 @@ def _counts(trace: Any) -> CountsRecord:
 def _identity(trace: Any) -> IdentityIndex:
     """Derive the identity spine."""
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list(getattr(trace, "_layer_list", ()) or ())
     op_labels = tuple(str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in ops)
     op_layers = tuple(str(getattr(op, "layer_label", "?")) for op in ops)
     op_sites = tuple(getattr(op, "site_key", None) for op in ops)
@@ -408,7 +408,7 @@ def _memory(trace: Any) -> MemoryFacts:
     retained_bytes = 0
     present = 0
     lazy = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if not getattr(op, "has_saved_activation", False):
             continue
         memory = getattr(op, "activation_memory", None)

@@ -988,7 +988,7 @@ def test_row_clone_scope_free_when_unarmed() -> None:
 
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
-        op = trace.layer_list[0]
+        op = trace._layer_list[0]
         copied = op._copy_with_shallow_fields(frozenset())
         assert copied is not op
         from torchlens._trace_core.op_store import (
@@ -1211,7 +1211,7 @@ def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None
         storage=tl.to_disk(tmp_path / "step19.tlspec"),
     )
     try:
-        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
         assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
         assert all(op.out is None for op in streamed), (
             "a streamed op's out survived step 19's eviction"

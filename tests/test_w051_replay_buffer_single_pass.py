@@ -49,7 +49,7 @@ def buffered():
 def _written_buffer_op(trace: tl.Trace):
     return next(
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_buffer", False) and getattr(op, "parents", ())
     )
 
@@ -155,7 +155,9 @@ def test_unproven_fused_buffer_write_in_cone_still_discloses(value_changed) -> N
         written = _written_buffer_op(trace)
         assert written.buffer_write_kind == "fused"
         fork = trace.fork()
-        fork.layer_dict_all_keys[written.label]._internal_set("buffer_value_changed", value_changed)
+        fork._layer_dict_all_keys[written.label]._internal_set(
+            "buffer_value_changed", value_changed
+        )
         with pytest.warns(BufferThreadGapWarning, match="does not prove"):
             fork.do(tl.label("conv2d_1_1"), tl.zero_ablate())
     finally:

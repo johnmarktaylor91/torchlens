@@ -161,12 +161,12 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     """Forked logs have independent specs and per-pass intervention logs."""
 
     parent, _ = _capture()
-    relu_pass = next(layer for layer in parent.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in parent._layer_list if layer.func_name == "relu")
     parent_initial_log = list(relu_pass.edits)
 
     fork = parent.fork("test")
-    fork_relu_pass = next(layer for layer in fork.layer_list if layer.func_name == "relu")
-    assert fork.parent_run() is parent
+    fork_relu_pass = next(layer for layer in fork._layer_list if layer.func_name == "relu")
+    assert fork._parent_run() is parent
     assert fork.name == "test"
     assert fork_relu_pass.out is relu_pass.out
     assert fork_relu_pass.edits is not relu_pass.edits
@@ -188,7 +188,7 @@ def test_direct_out_write_warns_once_and_marks_dirty() -> None:
     """Direct out writes emit a warning and mark the owning log dirty."""
 
     log, _ = _capture()
-    relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
@@ -284,7 +284,7 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     """Replay warns once when propagation overlays direct writes."""
 
     log, _ = _capture()
-    relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in log._layer_list if layer.func_name == "relu")
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
 

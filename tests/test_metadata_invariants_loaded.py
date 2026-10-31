@@ -35,7 +35,7 @@ def _loaded_round_trip(tmp_path: Path) -> tl.Trace:
 def _functionful_layer(trace: tl.Trace):
     """Return a layer the func block actually validates (linear/relu)."""
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if layer.func_name in {"linear", "relu"}:
             return layer
     raise AssertionError("fixture trace lost its linear/relu layers")

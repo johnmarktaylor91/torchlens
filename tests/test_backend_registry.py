@@ -125,10 +125,10 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
     trace.model_name = "_FakeModel"
     trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
     trace.name = "fake-backend-trace"
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
     return trace
@@ -901,7 +901,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         save=tl.label_contains("relu"),
     )
 
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation]
     assert len(saved_ops) == 1
     assert saved_ops[0].func_name == "functional.relu"
 
@@ -1090,7 +1090,7 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
             "is not supported by backend",
         ),
         (lambda trace: setattr(trace, "has_backward_pass", True), "has_backward_pass"),
-        (lambda trace: trace.grad_fn_logs.__setitem__(1, object()), "grad_fn_logs"),
+        (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
         (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
         (lambda trace: trace.output_layers.clear(), "output layer"),
     ],

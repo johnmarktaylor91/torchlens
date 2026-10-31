@@ -200,8 +200,8 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
         x, model.cell.weight.detach() + 0.25, model.cell.bias.detach()
     )
     for k, (lin, relu) in enumerate(expected, start=1):
-        lin_op = fork.layer_dict_all_keys[f"linear_1_1:{k}"]
-        relu_op = fork.layer_dict_all_keys[f"relu_1_2:{k}"]
+        lin_op = fork._layer_dict_all_keys[f"linear_1_1:{k}"]
+        relu_op = fork._layer_dict_all_keys[f"relu_1_2:{k}"]
         assert torch.allclose(lin_op.out, lin, atol=1e-6), f"pass {k} linear out is stale/wrong"
         assert torch.allclose(relu_op.out, relu, atol=1e-6), f"pass {k} relu out is stale/wrong"
         fires = [r for r in lin_op.edits if r.edge_address is not None]
@@ -222,8 +222,8 @@ def test_recurrent_bias_param_substitutes_every_pass(recurrent_capture):
     fork.do(tl.param("cell.bias"), replacement)
     expected = _recurrent_ground_truth(x, model.cell.weight.detach(), replacement)
     for k, (lin, relu) in enumerate(expected, start=1):
-        assert torch.allclose(fork.layer_dict_all_keys[f"linear_1_1:{k}"].out, lin, atol=1e-6)
-        assert torch.allclose(fork.layer_dict_all_keys[f"relu_1_2:{k}"].out, relu, atol=1e-6)
+        assert torch.allclose(fork._layer_dict_all_keys[f"linear_1_1:{k}"].out, lin, atol=1e-6)
+        assert torch.allclose(fork._layer_dict_all_keys[f"relu_1_2:{k}"].out, relu, atol=1e-6)
 
 
 def test_tied_multipass_matmul_substitutes_every_pass():
@@ -259,8 +259,8 @@ def test_tied_multipass_matmul_substitutes_every_pass():
         with torch.no_grad():
             pass1 = x @ w2
             pass2 = torch.relu(pass1) @ w2
-        assert torch.allclose(fork.layer_dict_all_keys["matmul_1_1:1"].out, pass1, atol=1e-6)
-        assert torch.allclose(fork.layer_dict_all_keys["matmul_1_1:2"].out, pass2, atol=1e-6)
+        assert torch.allclose(fork._layer_dict_all_keys["matmul_1_1:1"].out, pass1, atol=1e-6)
+        assert torch.allclose(fork._layer_dict_all_keys["matmul_1_1:2"].out, pass2, atol=1e-6)
         assert torch.allclose(fork.output_ops[0].out, pass2, atol=1e-6)
     finally:
         trace.cleanup()
@@ -324,7 +324,7 @@ def test_multipass_validation_corroborates_every_pass(recurrent_capture):
     fork.do(tl.param("cell.weight"), tl.add(0.25))
     for k in (1, 2, 3):
         verdict = _check_edge_intervention_boundary(
-            fork, fork.layer_dict_all_keys[f"linear_1_1:{k}"]
+            fork, fork._layer_dict_all_keys[f"linear_1_1:{k}"]
         )
         assert verdict is not None
         assert verdict.decision == "edge_intervention_boundary", f"pass {k} not corroborated"
@@ -338,7 +338,7 @@ def test_multipass_validation_tamper_strip_fire_record_fails(recurrent_capture):
     model, x, trace = recurrent_capture
     fork = trace.fork()
     fork.do(tl.param("cell.weight"), tl.scale(0.5))
-    tampered = fork.layer_dict_all_keys["linear_1_1:1"]
+    tampered = fork._layer_dict_all_keys["linear_1_1:1"]
     tampered._internal_set("edits", [r for r in tampered.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, tampered)
     assert verdict is not None and verdict.failed

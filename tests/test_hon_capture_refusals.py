@@ -56,7 +56,7 @@ def test_emit_nvtx_refuses_without_cuda_and_the_remedy_runs(
     assert "drop emit_nvtx=True" in info.value.fields["remedy"]
 
     trace = tl.trace(_Tiny(), x)
-    assert trace.emit_nvtx is False and len(trace.layer_list) > 0
+    assert trace.emit_nvtx is False and len(trace._layer_list) > 0
 
 
 def test_emit_nvtx_refusal_tracks_the_real_host() -> None:
@@ -87,7 +87,7 @@ def test_raise_on_nan_remedy_runs() -> None:
     clean = tl.trace(
         _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(raise_on_nan=False)
     )
-    assert len(clean.layer_list) > 0
+    assert len(clean._layer_list) > 0
 
 
 def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
@@ -107,7 +107,7 @@ def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
     assert recorder.model is model
     with pytest.warns(UserWarning, match="compiled model detected"):
         trace = tl.trace(compiled, torch.randn(2, 4))
-    assert len(trace.layer_list) > 0
+    assert len(trace._layer_list) > 0
 
 
 def test_compiled_callable_refusal_names_depyf_and_the_remedy_runs() -> None:
@@ -121,7 +121,7 @@ def test_compiled_callable_refusal_names_depyf_and_the_remedy_runs() -> None:
     assert "tl.bridge.depyf.dump" in info.value.fields["remedy"]
     assert callable(tl.bridge.depyf.dump)
 
-    assert len(tl.trace(model, torch.randn(2, 4)).layer_list) > 0
+    assert len(tl.trace(model, torch.randn(2, 4))._layer_list) > 0
 
 
 def test_two_positional_inputs_refuse_before_dispatch_and_the_remedy_runs() -> None:
@@ -152,7 +152,7 @@ def test_jax_two_positional_remedy_runs() -> None:
         tl.trace(lambda p, q: p + q, x, x, backend="jax")  # type: ignore[arg-type]
     assert info.value.fields["code"] == "input_kwargs_type_invalid"
     trace = tl.trace(lambda p, q: p + q, (x, x), backend="jax")
-    assert len(trace.layer_list) > 0
+    assert len(trace._layer_list) > 0
 
 
 def test_exported_program_refusal_names_the_source_module_and_the_remedy_runs() -> None:
@@ -165,7 +165,7 @@ def test_exported_program_refusal_names_the_source_module_and_the_remedy_runs() 
     assert info.value.fields["code"] == "model_type_unsupported"
     assert "trace the source nn.Module before export" in info.value.fields["remedy"]
 
-    assert len(tl.trace(model, x).layer_list) > 0
+    assert len(tl.trace(model, x)._layer_list) > 0
 
 
 def test_graphmodule_attribution_remedy_names_the_source_module() -> None:

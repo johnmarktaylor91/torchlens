@@ -148,7 +148,7 @@ def test_sf63_orphan_label_display_never_leaks_the_placeholder() -> None:
 
     trace = _orphan_trace()
     # Pre-fix record truth: the persisted field still ships the placeholder.
-    assert all(record.get("label") is None for record in trace.orphan_records)
+    assert all(record.get("label") is None for record in trace._orphan_records)
     # Display truth: real labels render inside the island cluster...
     dot = trace.draw(show_orphans=True, vis_save_only=True, return_graph=True)
     source = dot.source if hasattr(dot, "source") else str(dot)

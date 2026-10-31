@@ -468,7 +468,7 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
     # THIS store (detached copies, foreign records) never resolve.
     label_rows: dict[str, int] = {}
     seen_ids: set[int] = set()
-    for entry in getattr(trace, "layer_dict_all_keys", {}).values():
+    for entry in getattr(trace, "_layer_dict_all_keys", {}).values():
         if id(entry) in seen_ids:
             continue
         seen_ids.add(id(entry))
@@ -499,7 +499,7 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
 
     convert_fact_cells(store, pool)
 
-    for layer_log in (getattr(trace, "layer_logs", None) or {}).values():
+    for layer_log in (getattr(trace, "_layer_logs", None) or {}).values():
         record_dict = getattr(layer_log, "__dict__", None)
         if record_dict is None:
             continue

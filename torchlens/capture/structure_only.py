@@ -865,8 +865,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             f"({structure_generation} vs {real_generation}); construct both "
             "twins before the first capture, or both after (W1-ORD).",
         )
-    structure_rescued = bool(getattr(structure_trace, "rescue_rerun", None))
-    real_rescued = bool(getattr(real_trace, "rescue_rerun", None))
+    structure_rescued = bool(getattr(structure_trace, "_rescue_rerun", None))
+    real_rescued = bool(getattr(real_trace, "_rescue_rerun", None))
     if structure_rescued != real_rescued:
         _refuse_incomparable(
             "rescue_asymmetry",
@@ -897,9 +897,9 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
     """
 
     structure_funcs = [
-        str(getattr(layer, "func_name", "?")) for layer in structure_trace.layer_list
+        str(getattr(layer, "func_name", "?")) for layer in structure_trace._layer_list
     ]
-    real_funcs = [str(getattr(layer, "func_name", "?")) for layer in real_trace.layer_list]
+    real_funcs = [str(getattr(layer, "func_name", "?")) for layer in real_trace._layer_list]
     for index, (structure_func, real_func) in enumerate(
         zip(structure_funcs, real_funcs, strict=False)
     ):
@@ -931,7 +931,7 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
     # Same func stream and count: the digest difference lies in per-record
     # facts (shapes/dtypes) or topology — name the first such divergence.
     for index, (structure_layer, real_layer) in enumerate(
-        zip(structure_trace.layer_list, real_trace.layer_list, strict=False)
+        zip(structure_trace._layer_list, real_trace._layer_list, strict=False)
     ):
         for fact in ("shape", "dtype"):
             structure_fact = getattr(structure_layer, fact, None)
@@ -1037,7 +1037,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     claims: list[ClaimComparison] = []
     first_contradiction: str | None = None
     for index, (hyp_layer, real_layer) in enumerate(
-        zip(structure_trace.layer_list, real_trace.layer_list, strict=False)
+        zip(structure_trace._layer_list, real_trace._layer_list, strict=False)
     ):
         site = (
             getattr(hyp_layer, "label", None)

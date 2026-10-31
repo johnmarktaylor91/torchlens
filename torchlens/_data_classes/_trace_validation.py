@@ -76,7 +76,7 @@ def _materialize_layer_mirrors_for_removed(
     mirroring — their reads are unaffected by the removal.
     """
 
-    layer_logs = trace.__dict__.get("layer_logs")
+    layer_logs = trace.__dict__.get("_layer_logs")
     if not layer_logs:
         return
     from .layer import _layer_rep_op, materialize_layer_mirrors
@@ -108,7 +108,7 @@ def _apply_run_save_selection(result: Any, selected: Any) -> Any:
         return result
     from ..capture.projectors import RefreshProjector
 
-    for layer in result.trace.layer_list:
+    for layer in result.trace._layer_list:
         if layer.layer_type in ("input", "output"):
             continue
         if layer.layer_label in selected:
@@ -860,7 +860,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     executed_raw = frozenset(until_preview.executed_raw_labels)
                     executed_final = {
                         layer.layer_label
-                        for layer in self.layer_list
+                        for layer in self._layer_list
                         if layer._layer_label_raw in executed_raw
                     }
                     outside = sorted(run_save_labels - executed_final)
@@ -1199,12 +1199,12 @@ class TraceValidationMixin(_TraceMixinBase):
         None
             This method mutates ParamLogs in place.
         """
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = False
-        for param_log in self.param_logs.values():
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = False
+        for param_log in self._param_logs.values():
             param_log._release_param_ref()
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = allow_iter_rehydrate
 
     def _postprocess(
         self: "Trace",

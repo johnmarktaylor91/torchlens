@@ -662,9 +662,9 @@ def save_new_outs(
     if layer_nums_to_save != "all":
         expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
         for output_label in self.output_layers:
-            output = self.layer_dict_all_keys[output_label]
+            output = self._layer_dict_all_keys[output_label]
             expanded_layer_nums.update(
-                self.layer_dict_all_keys[parent].raw_index for parent in output.parents
+                self._layer_dict_all_keys[parent].raw_index for parent in output.parents
             )
         resolved_layer_nums = tuple(sorted(expanded_layer_nums))
     refreshed = _run_model_and_save_specified_outs(
@@ -799,7 +799,7 @@ def _select_raw_indexes_by_retention_predicate(
     from ..fastlog.exceptions import PredicateError
 
     selected_raw_indexes: set[int] = set()
-    for layer_entry in getattr(self, "layer_list", []):
+    for layer_entry in getattr(self, "_layer_list", []):
         decision = predicate(layer_entry)
         if not isinstance(decision, bool):
             raise PredicateError(
@@ -837,7 +837,7 @@ def _get_op_nums_from_user_labels(
                 for site in self.resolve_sites(
                     which_layers,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                    max_fanout=max(1, len(getattr(self, "_layer_list", []))),
                 )
             }
         )
@@ -855,14 +855,14 @@ def _get_op_nums_from_user_labels(
                 for site in self.resolve_sites(
                     layer_key,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                    max_fanout=max(1, len(getattr(self, "_layer_list", []))),
                 )
             )
             continue
         if isinstance(layer_key, str) and ":" not in layer_key:
             matching_layer_passes = [
                 layer_entry
-                for layer_entry in getattr(self, "layer_list", [])
+                for layer_entry in getattr(self, "_layer_list", [])
                 if layer_key in {layer_entry.layer_label, layer_entry.layer_label_short}
             ]
             if matching_layer_passes:
@@ -874,10 +874,10 @@ def _get_op_nums_from_user_labels(
             raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])
             continue
 
-        keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
+        keys_with_substr = [key for key in self._layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].raw_index)
+                raw_layer_nums_to_save.add(self._layer_dict_all_keys[key].raw_index)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -1615,9 +1615,9 @@ def run_and_log_inputs_through_model(
     if layer_nums_to_save != "all" and self._tracing_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
-            output_entry = self.layer_dict_all_keys[output_label]
+            output_entry = self._layer_dict_all_keys[output_label]
             for parent_label in output_entry.parents:
-                parent_entry = self.layer_dict_all_keys[parent_label]
+                parent_entry = self._layer_dict_all_keys[parent_label]
                 output_parent_nums.add(parent_entry.raw_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums

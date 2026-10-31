@@ -46,7 +46,7 @@ def _register_conv_rule() -> None:
 def _op(trace: object, func_name: str) -> object:
     """Return the last captured operation with the requested function name."""
 
-    matches = [op for op in trace.layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
+    matches = [op for op in trace._layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
     assert matches
     return matches[-1]
 
@@ -62,7 +62,7 @@ def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
     capture = tl.options.CaptureOptions(backward_ready=True)
     trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "conv2d")
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
 
     result = gradient_for_unit(target, (0, 0, 3, 3), input_op=input_op)
 
@@ -135,7 +135,7 @@ def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
     capture = tl.options.CaptureOptions(backward_ready=True)
     trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "conv2d")
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     result = gradient_for_unit(target, (0, 0, 1, 1), input_op=input_op)
 
     effective = result.effective(0.5)
@@ -173,7 +173,7 @@ def test_training_batchnorm_reports_cross_batch_influence() -> None:
     capture = tl.options.CaptureOptions(backward_ready=True)
     trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "batch_norm")
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
 
     result = gradient_for_unit(target, (0, 0, 0, 0), input_op=input_op)
 
@@ -204,8 +204,8 @@ def test_reachable_but_none_gradient_raises_typed_error() -> None:
     inputs = torch.randn(1, 3, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
     trace = tl.trace(_DetachedPath(), inputs, capture=capture, save_mode="reference")
-    target = next(op for op in reversed(trace.layer_list) if not op.is_output)
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    target = next(op for op in reversed(trace._layer_list) if not op.is_output)
+    input_op = next(op for op in trace._layer_list if op.is_input)
 
     with pytest.raises(ReceptiveFieldUnavailableError, match="reachable.*autograd returned no"):
         gradient_for_unit(target, (0, 0), input_op=input_op)

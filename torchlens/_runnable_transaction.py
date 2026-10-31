@@ -550,7 +550,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
     if token == "saved":
         saved_layers = [
             layer
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if bool(getattr(layer, "has_saved_activation", False))
             and layer.layer_type not in ("input", "output")
         ]
@@ -564,7 +564,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
             )
         labels = [layer.layer_label for layer in saved_layers]
         return saved_layers, labels, list(labels)
-    keys = trace.layer_dict_all_keys
+    keys = trace._layer_dict_all_keys
     if token in keys:
         layer = keys[token]
         return [layer], [layer.layer_label], [layer.layer_label]
@@ -618,7 +618,7 @@ def _until_execution_partition(
     executed: list[str] = []
     skipped: list[str] = []
     stopped_at: str | None = None
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         raw_index = getattr(layer, "raw_index", None)
         raw_label = layer._layer_label_raw
         if layer.layer_type == "output" or raw_index is None or int(raw_index) > stop_raw_index:

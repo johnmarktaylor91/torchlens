@@ -223,9 +223,9 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
     # pre-detach stream by design, so the stream is authoritative (and this
     # comparison exact) only for passes strictly above the base. With base 0
     # every record is in scope — the historical full comparison.
-    layer_labels = set(getattr(trace, "layer_dict_all_keys", {}))
+    layer_labels = set(getattr(trace, "_layer_dict_all_keys", {}))
     projected_grad_records: Counter[tuple[str, int]] = Counter()
-    for layer in getattr(trace, "layer_list", []):
+    for layer in getattr(trace, "_layer_list", []):
         for record in getattr(layer, "_grad_records", ()):
             if record.backward_pass_index <= pass_index_base:
                 continue
@@ -247,9 +247,9 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             "projected op gradient records do not match OpGradObserved events by multiplicity",
         )
 
-    param_addresses = set(getattr(trace, "param_logs", {}).keys())
+    param_addresses = set(getattr(trace, "_param_logs", {}).keys())
     projected_param_records: Counter[tuple[str, int]] = Counter()
-    for param_address, param_log in getattr(trace, "param_logs", {}).items():
+    for param_address, param_log in getattr(trace, "_param_logs", {}).items():
         for record in getattr(param_log, "_grad_records", ()):
             if record.backward_pass_index <= pass_index_base:
                 continue
@@ -271,13 +271,13 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
         )
 
     projected_calls: dict[tuple[int, int], int] = defaultdict(int)
-    for grad_fn_handle in getattr(trace, "grad_fn_logs", {}).values():
+    for grad_fn_handle in getattr(trace, "_grad_fn_logs", {}).values():
         for call in grad_fn_handle.calls.values():
             if call.backward_pass_index <= pass_index_base:
                 continue
             projected_calls[(grad_fn_handle.grad_fn_object_id, call.backward_pass_index)] += 1
     event_calls: dict[tuple[int, int], int] = defaultdict(int)
-    grad_fn_ids = set(getattr(trace, "grad_fn_logs", {}))
+    grad_fn_ids = set(getattr(trace, "_grad_fn_logs", {}))
     for fired_event in fired_events:
         if fired_event.object_id not in grad_fn_ids:
             raise MetadataInvariantError(

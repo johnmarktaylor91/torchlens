@@ -884,7 +884,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     trace.capture_thread_activity_detected = False
     trace.escape_detector_backward_coverage = "not_armed"
     trace.__dict__.setdefault("escape_diagnostics", [])
-    trace.__dict__.setdefault("rescue_rerun", None)
+    trace.__dict__.setdefault("_rescue_rerun", None)
     trace.capture_verified = False if mode == "shadow" else None
     trace.capture_verification_reason = "shadow_diagnostic_mode" if mode == "shadow" else None
     _THREAD_STATE.guard = guard

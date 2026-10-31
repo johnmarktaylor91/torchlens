@@ -296,7 +296,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
 
     scrubbed_ops = [
         op
-        for op in (state.get("layer_list") or ())
+        for op in (state.get("_layer_list") or ())
         if getattr(op, "func_name", None) == "intervention_replacement"
         or getattr(op, "is_edited", False)
     ]
@@ -305,7 +305,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
     from ..validation._invariants_backward_flow import op_has_genuine_replacement_evidence
 
     live_ops_by_label = {
-        getattr(op, "label", None): op for op in (getattr(trace, "layer_list", None) or ())
+        getattr(op, "label", None): op for op in (getattr(trace, "_layer_list", None) or ())
     }
     for scrubbed_op in scrubbed_ops:
         live_op = live_ops_by_label.get(getattr(scrubbed_op, "label", None))
@@ -336,10 +336,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     logical identifiers.
     """
 
-    ops = list(state.get("layer_list") or ())
-    layers = list((state.get("layer_logs") or {}).values())
+    ops = list(state.get("_layer_list") or ())
+    layers = list((state.get("_layer_logs") or {}).values())
     params = sorted(
-        (state.get("param_logs") or {}).values(),
+        (state.get("_param_logs") or {}).values(),
         key=lambda param: (
             str(getattr(param, "address", "")),
             str(getattr(param, "name", "")),
@@ -479,7 +479,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         state["op_equivalence_classes"] = remapped_groups
 
     grad_fn_order = list(state.get("grad_fn_order") or ())
-    grad_fn_logs = state.get("grad_fn_logs") or {}
+    grad_fn_logs = state.get("_grad_fn_logs") or {}
     grad_id_map: dict[int, int] = {}
 
     def register_grad_id(value: Any) -> None:
@@ -504,7 +504,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     # reached them, so a raw grad_fn memory address persisted verbatim into
     # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a
     # portable file). Register + remap them through the same trace-local map.
-    backward_pass_logs = state.get("backward_pass_logs")
+    backward_pass_logs = state.get("_backward_pass_logs")
     pass_records = (
         tuple(backward_pass_logs.values()) if isinstance(backward_pass_logs, dict) else ()
     )
@@ -526,7 +526,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
             ]
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["grad_fn_logs"] = remapped_logs
+        state["_grad_fn_logs"] = remapped_logs
     state["grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
     state["backward_root_grad_fn_object_ids"] = [
         remap_grad_id(grad_id) for grad_id in (state.get("backward_root_grad_fn_object_ids") or ())
@@ -1430,7 +1430,7 @@ def _effective_policy(
         "grad_inputs",
         "grad_outputs",
         "input_activations",
-        "orphan_records",
+        "_orphan_records",
         "out",
         "out_versions_by_child",
         "parent_params",
@@ -2078,7 +2078,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "buffer_initial_value"
     if field_name == "_annotation_blobs":
         return "annotation_blob"
-    if field_name == "orphan_records":
+    if field_name == "_orphan_records":
         return "orphan_payload"
     if field_name == "edge_substitutions":
         # L6 stage 3: tier-(ii) occurrence-granular substituted-value payloads

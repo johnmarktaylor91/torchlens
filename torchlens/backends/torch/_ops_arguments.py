@@ -316,7 +316,7 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
     if param_meta is None or not param_meta.param_address:
         return False
     addr = param_meta.param_address
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = getattr(trace, "_param_logs", None)
     if param_logs is None or addr not in param_logs:
         return False
     if getattr(param_logs[addr], "_param_ref", None) is value:
@@ -371,7 +371,7 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 
     r79 session-leak defense in depth: a non-empty prep address counts ONLY when
     it resolves in THIS capture's session -- the address maps in
-    ``trace.param_logs`` AND the recorded log's live object IS this value (exact
+    ``trace._param_logs`` AND the recorded log's live object IS this value (exact
     identity). A stamp that leaked from a PRIOR session (r78: a param popped
     from ``_parameters`` mid-forward escaped the old re-traversal cleanup) can
     therefore never be accepted, even if some future path escapes the

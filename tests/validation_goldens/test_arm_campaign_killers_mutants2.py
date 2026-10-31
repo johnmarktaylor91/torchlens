@@ -55,7 +55,7 @@ class _FakeTrace(SimpleNamespace):
     """
 
     def __getitem__(self, label: str) -> Any:
-        for candidate in getattr(self, "layer_list", ()):
+        for candidate in getattr(self, "_layer_list", ()):
             if getattr(candidate, "layer_label", None) == label:
                 return candidate
             if getattr(candidate, "label", None) == label:
@@ -515,7 +515,7 @@ def test_module_hierarchy_fires_on_pass_count_mismatch() -> None:
 
 
 def test_module_layer_containment_fires_on_layer_label_missing_from_layer_logs() -> None:
-    """Arm 0: a module's layer_labels must exist in trace.layer_logs."""
+    """Arm 0: a module's layer_labels must exist in trace._layer_logs."""
 
     mod_log = SimpleNamespace(
         address="self.block",
@@ -531,7 +531,7 @@ def test_module_layer_containment_fires_on_layer_label_missing_from_layer_logs()
         layer_list=[],
     )
 
-    with pytest.raises(MetadataInvariantError, match="not in trace.layer_logs"):
+    with pytest.raises(MetadataInvariantError, match="not in trace._layer_logs"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
 
 

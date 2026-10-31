@@ -258,7 +258,7 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
         assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
         assert max(resolved_orders) == num_grad_passes + 1
         assert all(
-            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            grad_fn.order == trace._grad_fn_logs[grad_fn.creator_object_id].order + 1
             for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )

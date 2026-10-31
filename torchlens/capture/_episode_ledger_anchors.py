@@ -43,7 +43,7 @@ def _recorded_module_passes(trace: Any, address: str) -> frozenset[int]:
 
     passes: set[int] = set()
     prefix = f"{address}:"
-    for op in getattr(trace, "layer_list", None) or ():
+    for op in getattr(trace, "_layer_list", None) or ():
         for entry in getattr(op, "modules", None) or ():
             text = str(entry)
             if text.startswith(prefix) and text[len(prefix) :].isdigit():

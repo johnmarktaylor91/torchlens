@@ -765,7 +765,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
 
     from .._data_classes._nonfinite import nonfinite_coverage
 
-    if hasattr(subject, "layer_dict_main_keys") or hasattr(subject, "ops"):
+    if hasattr(subject, "_layer_dict_main_keys") or hasattr(subject, "ops"):
         trace = subject
         finding = find_nan_in_trace(trace)
         cost_tier = "free (post-hoc on the capture you already ran)"
@@ -791,7 +791,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     amp_disclosure: str | None = None
     if trace is not None:
         low_precision = {
-            str(getattr(op, "dtype", "")) for op in getattr(trace, "layer_list", ())
+            str(getattr(op, "dtype", "")) for op in getattr(trace, "_layer_list", ())
         } & {
             "torch.float16",
             "torch.bfloat16",

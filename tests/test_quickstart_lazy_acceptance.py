@@ -75,7 +75,7 @@ class TestFourClauseAcceptance:
         model = _lazy_head_model()
         log = tl.trace(model, torch.randn(1, 3, 16, 16))
         head_rows = [
-            pl for pl in log.param_logs if getattr(pl, "shape", None) not in (None, (0,), ())
+            pl for pl in log._param_logs if getattr(pl, "shape", None) not in (None, (0,), ())
         ]
         ground_truth = {tuple(p.shape) for p in model.parameters()}
         recorded = {tuple(pl.shape) for pl in head_rows}

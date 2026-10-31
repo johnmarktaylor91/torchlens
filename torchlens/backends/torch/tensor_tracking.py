@@ -205,7 +205,7 @@ def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
     for start, target in ((trace, other), (other, trace)):
         current: Any = start
         for _ in range(64):
-            parent_ref = getattr(current, "parent_run", None)
+            parent_ref = getattr(current, "_parent_run", None)
             parent = parent_ref() if callable(parent_ref) else None
             if parent is None:
                 break
@@ -444,7 +444,7 @@ def _forward_op_count_at_backward_trigger(trace: "Trace") -> int | None:
 
     step_indices = [
         int(step_index)
-        for layer in getattr(trace, "layer_list", ())
+        for layer in getattr(trace, "_layer_list", ())
         if isinstance((step_index := getattr(layer, "step_index", None)), int) and step_index > 0
     ]
     if step_indices:
@@ -622,10 +622,10 @@ def _build_grad_payloads(
 
     if not _should_save_grad_payload(trace, layer_label):
         return None, None, False
-    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+    if layer_label not in getattr(trace, "_layer_dict_all_keys", {}):
         raw_payload, transformed_payload = _build_fastlog_grad_payloads(trace, grad)
         return raw_payload, transformed_payload, True
-    op = trace.layer_dict_all_keys[layer_label]
+    op = trace._layer_dict_all_keys[layer_label]
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
     save_mode = _trace_grad_save_mode(trace)
@@ -668,7 +668,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
         return False
     if policy is True or policy == "all":
         return True
-    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+    if layer_label not in getattr(trace, "_layer_dict_all_keys", {}):
         param_log = _param_log_for_exact_address(trace, layer_label)
         if param_log is not None:
             # Parameter gradients honor selector/callable policies through a
@@ -692,7 +692,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
             )
             return _grad_payload_decision_saves_out(decision)
         return False
-    op = trace.layer_dict_all_keys[layer_label]
+    op = trace._layer_dict_all_keys[layer_label]
     if isinstance(policy, BaseSelector):
         decision = policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace)))
         return _grad_payload_decision_saves_out(decision)
@@ -865,7 +865,7 @@ def _param_log_for_exact_address(trace: "Trace", address: str) -> Any | None:
     never accidentally resolve to a parameter.
     """
 
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = getattr(trace, "_param_logs", None)
     if param_logs is None:
         return None
     exact = getattr(param_logs, "_dict", None)
@@ -991,7 +991,7 @@ def _log_tensor_grad(
     self.has_gradients = True
     if _label_raw not in self._raw_to_final_layer_labels:
         return
-    if not self.layer_dict_all_keys:
+    if not self._layer_dict_all_keys:
         # A fastlog/raw runtime trace never builds the legacy layer surface
         # (postprocess is skipped), so the layer-slot write is structurally
         # inapplicable there -- its gradients ride the backward event stream.
@@ -1001,16 +1001,16 @@ def _log_tensor_grad(
         # still raises below (mapping/dict divergence stays a tripwire).
         return
     tensor_label = self._raw_to_final_layer_labels[_label_raw]
-    layer_log_entry = self.layer_dict_all_keys[tensor_label]
+    layer_log_entry = self._layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
     if layer_log_entry.is_output_parent:
         for child_layer in layer_log_entry.children:
-            if self.layer_dict_all_keys[child_layer].is_output:
+            if self._layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
 
     for layer_label in layers_to_update:
-        layer = self.layer_dict_all_keys[layer_label]
+        layer = self._layer_dict_all_keys[layer_label]
         selection = getattr(self, "_grad_op_nums_to_save", "all")
         if selection != "all":
             if selection in [None, "none", []] or layer.raw_index not in selection:

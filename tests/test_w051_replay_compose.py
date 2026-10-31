@@ -55,7 +55,7 @@ def _parts(model, x):
 
 
 def _add(trace):
-    return next(op for op in trace.layer_list if op.func_name == "add")
+    return next(op for op in trace._layer_list if op.func_name == "add")
 
 
 def _edge(trace, position):

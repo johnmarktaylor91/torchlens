@@ -50,9 +50,9 @@ def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
     assert trace.stop_reason is not None
     assert "relu" in trace.stop_reason
     assert any(
-        layer.func_name == "relu" and layer.has_saved_activation for layer in trace.layer_list
+        layer.func_name == "relu" and layer.has_saved_activation for layer in trace._layer_list
     )
-    assert not any(layer.func_name == "sigmoid" for layer in trace.layer_list)
+    assert not any(layer.func_name == "sigmoid" for layer in trace._layer_list)
 
 
 def test_trace_halt_module_exit_stops_after_module_output() -> None:
@@ -66,8 +66,8 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
 
     assert trace.is_stopped is True
     assert trace.stop_reason == "linear:exit:1"
-    assert any(layer.func_name == "linear" for layer in trace.layer_list)
-    assert not any(layer.func_name == "relu" for layer in trace.layer_list)
+    assert any(layer.func_name == "linear" for layer in trace._layer_list)
+    assert not any(layer.func_name == "relu" for layer in trace._layer_list)
 
 
 def test_trace_halt_supports_selective_layers_to_save() -> None:
@@ -82,10 +82,10 @@ def test_trace_halt_supports_selective_layers_to_save() -> None:
 
     assert trace.is_stopped is True
     assert any(
-        layer.func_name == "linear" and layer.has_saved_activation for layer in trace.layer_list
+        layer.func_name == "linear" and layer.has_saved_activation for layer in trace._layer_list
     )
-    assert any(layer.func_name == "relu" for layer in trace.layer_list)
-    assert not any(layer.func_name == "sigmoid" for layer in trace.layer_list)
+    assert any(layer.func_name == "relu" for layer in trace._layer_list)
+    assert not any(layer.func_name == "sigmoid" for layer in trace._layer_list)
 
 
 def test_halted_trace_validation_skips_full_model_output_only() -> None:

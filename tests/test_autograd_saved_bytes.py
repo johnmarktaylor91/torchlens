@@ -65,20 +65,22 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
 def _non_source_ops(trace: Trace) -> list[Op]:
     """Return operation logs, excluding synthetic source and output nodes."""
     return [
-        layer for layer in trace.layer_list if layer.layer_type not in {"input", "buffer", "output"}
+        layer
+        for layer in trace._layer_list
+        if layer.layer_type not in {"input", "buffer", "output"}
     ]
 
 
 def _single_layer_log_for_pass(trace: Trace, pass_log: Op) -> Layer:
     """Return the aggregate Layer for a pass log."""
-    return trace.layer_logs[pass_log.layer_label]
+    return trace._layer_logs[pass_log.layer_label]
 
 
 def _sum_layer_autograd_bytes(trace: Trace) -> int | None:
     """Sum non-None layer-level autograd byte values."""
     values = [
         layer.autograd_memory
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if layer.autograd_memory is not None
     ]
     if not values:
@@ -90,8 +92,8 @@ def test_autograd_memory_basic_shape_model() -> None:
     """Linear and ReLU ops should report autograd saved tensor memory."""
     trace = _log_sequential(requires_grad=True)
 
-    linear_ops = [layer for layer in trace.layer_list if layer.layer_type == "linear"]
-    relu_ops = [layer for layer in trace.layer_list if layer.layer_type == "relu"]
+    linear_ops = [layer for layer in trace._layer_list if layer.layer_type == "linear"]
+    relu_ops = [layer for layer in trace._layer_list if layer.layer_type == "relu"]
 
     assert linear_ops
     assert relu_ops
@@ -111,12 +113,12 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     x = torch.ones(2, 3, requires_grad=True)
     y = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(model, (x, y), capture=tl.options.CaptureOptions(layers_to_save="all"))
-    add_pass = next(layer for layer in trace.layer_list if layer.layer_type == "add")
+    add_pass = next(layer for layer in trace._layer_list if layer.layer_type == "add")
 
     assert add_pass.grad_fn_object_id is not None
     assert add_pass.autograd_memory == 0
     assert add_pass.num_autograd_tensors == 0
-    assert trace.layer_logs[add_pass.layer_label].autograd_memory == 0
+    assert trace._layer_logs[add_pass.layer_label].autograd_memory == 0
     assert trace.total_autograd_memory == 0
 
 
@@ -129,10 +131,10 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
 
-    assert all(layer.autograd_memory is None for layer in trace.layer_list)
-    assert all(layer.num_autograd_tensors is None for layer in trace.layer_list)
-    assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
-    assert all(layer.num_autograd_tensors is None for layer in trace.layer_logs.values())
+    assert all(layer.autograd_memory is None for layer in trace._layer_list)
+    assert all(layer.num_autograd_tensors is None for layer in trace._layer_list)
+    assert all(layer.autograd_memory is None for layer in trace._layer_logs.values())
+    assert all(layer.num_autograd_tensors is None for layer in trace._layer_logs.values())
     assert trace.total_autograd_memory is None
 
 
@@ -151,7 +153,7 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
 
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
     assert all(layer.num_autograd_tensors is None for layer in _non_source_ops(trace))
-    assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
+    assert all(layer.autograd_memory is None for layer in trace._layer_logs.values())
     assert trace.total_autograd_memory is None
 
 
@@ -193,10 +195,10 @@ def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path
     loaded = tl.load(bundle_path)
 
     assert loaded.total_autograd_memory == trace.total_autograd_memory
-    for original_layer, loaded_layer in zip(trace.layer_list, loaded.layer_list):
+    for original_layer, loaded_layer in zip(trace._layer_list, loaded._layer_list):
         assert loaded_layer.autograd_memory == original_layer.autograd_memory
         assert loaded_layer.num_autograd_tensors == original_layer.num_autograd_tensors
-    for label, original_layer in trace.layer_logs.items():
-        loaded_layer = loaded.layer_logs[label]
+    for label, original_layer in trace._layer_logs.items():
+        loaded_layer = loaded._layer_logs[label]
         assert loaded_layer.autograd_memory == original_layer.autograd_memory
         assert loaded_layer.num_autograd_tensors == original_layer.num_autograd_tensors

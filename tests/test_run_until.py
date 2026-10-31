@@ -54,7 +54,7 @@ class _EvalBnChain(nn.Module):
 
 
 def _type_label(log, layer_type):
-    return next(layer.layer_label for layer in log.layer_list if layer.layer_type == layer_type)
+    return next(layer.layer_label for layer in log._layer_list if layer.layer_type == layer_type)
 
 
 def _live_until_relu(model_cls=_Chain):
@@ -299,7 +299,7 @@ def test_until_x_eval_bn_prefix_tamper_refuses_typed():
     model.eval()
     log = tl.trace(model, torch.randn(2, 4))
     for label in log.internal_sink_ops:
-        layer = log.layer_dict_all_keys[label]
+        layer = log._layer_dict_all_keys[label]
         if layer.layer_type == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError):

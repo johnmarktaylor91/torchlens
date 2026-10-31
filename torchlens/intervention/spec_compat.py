@@ -105,8 +105,10 @@ def _resolution_fanout_bound(log: Any, *, min_required: int = 1) -> int:
         Explicit resolver fanout bound.
     """
 
-    layer_list = getattr(log, "layer_list", None)
-    layer_count = len(layer_list) if layer_list is not None else len(getattr(log, "layer_logs", {}))
+    layer_list = getattr(log, "_layer_list", None)
+    layer_count = (
+        len(layer_list) if layer_list is not None else len(getattr(log, "_layer_logs", {}))
+    )
     return max(1, int(min_required), int(layer_count))
 
 

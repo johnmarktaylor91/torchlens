@@ -177,7 +177,7 @@ def _stand_in(value: Any) -> str:
         name = getattr(value, "name", None)
         if isinstance(name, str) and name and len(name) <= _MAX_LITERAL_CHARS:
             literal = name
-        elif hasattr(value, "layer_list"):
+        elif hasattr(value, "_layer_list"):
             literal = "trace"
         elif isinstance(value, Mapping) and isinstance(value.get("label"), str):
             literal = _literal(value["label"])
@@ -335,7 +335,7 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}
-    fanout = max(1, len(getattr(trace, "layer_list", ()) or ()))
+    fanout = max(1, len(getattr(trace, "_layer_list", ()) or ()))
     for target, build in _staged_entries(spec):
         try:
             table = resolve_sites(trace, target, max_fanout=fanout)

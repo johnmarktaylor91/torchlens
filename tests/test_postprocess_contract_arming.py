@@ -246,7 +246,7 @@ def test_step_20_releases_every_live_param_ref() -> None:
 
     trace = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(2, 3))
     try:
-        param_logs = list(trace.param_logs.values())
+        param_logs = list(trace._param_logs.values())
         assert param_logs, "expected captured parameters"
         offenders = [
             log.param_address

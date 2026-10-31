@@ -498,7 +498,7 @@ def roofline(
     memory_bound = 0
     compute_bound = 0
     excluded = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         row_class = classify_row(op)
         if row_class == "not_applicable":
             continue
@@ -703,7 +703,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
     rows: list[InstrumentedRateRow] = []
     any_applicable = False
     any_timed = False
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if classify_row(op) not in ("known", "zero_by_rule"):
             continue
         label = str(getattr(op, "layer_label", "?"))

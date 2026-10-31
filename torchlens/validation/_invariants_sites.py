@@ -35,7 +35,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
     """
 
     name = "site_key_invariants"
-    ops = list(ml.layer_list)
+    ops = list(ml._layer_list)
     if not any(getattr(op, "site_key", None) is not None for op in ops):
         return  # legacy artifact: out of the invariant's declared domain
     _check_site_key_totality(ops, name)
@@ -148,7 +148,7 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     from .invariants import MetadataInvariantError
 
     for layer_label in getattr(ml, "layer_labels", ()) or ():
-        layer = ml.layer_logs.get(layer_label)
+        layer = ml._layer_logs.get(layer_label)
         if layer is None:
             continue
         member_keys = {op.site_key for _, op in layer.ops.items()}

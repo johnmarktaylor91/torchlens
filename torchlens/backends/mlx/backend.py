@@ -247,7 +247,7 @@ class _MLXIntermediateTapObserver:
             Finalized trace containing input operations.
         """
 
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if not op.is_input or op.out is None:
                 continue
             self.labels_by_id[id(op.out)] = str(op._label_raw)
@@ -1309,16 +1309,16 @@ class MLXBackend:
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace._param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+                trace.num_param_tensors = len(trace._param_logs)
+                trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
+                    param.num_params for param in trace._param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
                 trace.param_source = "native-module"
             else:
-                trace.param_logs = ParamAccessor({})
+                trace._param_logs = ParamAccessor({})
                 trace.num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
@@ -1368,13 +1368,13 @@ class MLXBackend:
 
         attached = {
             barcode
-            for op in trace.layer_list
+            for op in trace._layer_list
             for barcode in (getattr(op, "_param_barcodes", None) or ())
         }
         kept = {
             address: param for address, param in trace.params.items() if param.barcode in attached
         }
-        trace.param_logs = ParamAccessor(kept)
+        trace._param_logs = ParamAccessor(kept)
         trace.num_param_tensors = len(kept)
         trace.num_params = sum(param.num_params for param in kept.values())
         trace.num_params_trainable = sum(
@@ -1579,7 +1579,7 @@ class MLXBackend:
 
         selected_ops = tuple(
             op
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and not op.is_input and _is_float_mlx_array(op.out)
         )
         if len(selected_ops) > grad_options.max_intermediate_grads:
@@ -2827,7 +2827,7 @@ def _mlx_trace_intermediate_signatures(
         source_trace = op._source_trace_or_none()
         if source_trace is None:
             continue
-        for trace_op in getattr(source_trace, "layer_list", ()):
+        for trace_op in getattr(source_trace, "_layer_list", ()):
             label_raw = getattr(trace_op, "_label_raw", None)
             if not isinstance(label_raw, str):
                 continue
@@ -3120,7 +3120,7 @@ def _max_mlx_input_raw_index(trace: Trace) -> int:
 
     indexes = [
         int(getattr(op, "step_index", 0) or 0)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_input", False)
     ]
     return max(indexes, default=0)

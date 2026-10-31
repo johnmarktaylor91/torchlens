@@ -619,8 +619,8 @@ def test_graph_shape_hash_distinguishes_identical_ops_under_different_module_pac
     direct_trace = _trace_model(DirectPackingModel(), example_input)
     nested_trace = _trace_model(NestedPackingModel(), example_input)
 
-    direct_ops = [layer.func_name for layer in direct_trace.layer_list]
-    nested_ops = [layer.func_name for layer in nested_trace.layer_list]
+    direct_ops = [layer.func_name for layer in direct_trace._layer_list]
+    nested_ops = [layer.func_name for layer in nested_trace._layer_list]
 
     assert direct_ops == nested_ops
     assert compute_graph_shape_hash(direct_trace) != compute_graph_shape_hash(nested_trace)

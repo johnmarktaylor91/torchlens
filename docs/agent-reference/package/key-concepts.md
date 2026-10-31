@@ -7,7 +7,7 @@
 - `active_logging(trace)` enables logging during the forward; `pause_logging()` protects
   internal TorchLens tensor ops from recursive capture.
 - Stale `from torch import cos` style references are recovered by the rescue re-run
-  (`backends/torch/rescue.py`, disclosed via `trace.rescue_rerun`); the protocol-invisible
+  (`backends/torch/rescue.py`, disclosed in the capture-honesty `rescue_rerun` fact); the protocol-invisible
   constructors keep targeted module-attr patching via the mechanical belt (`backends/torch/belt.py`).
 
 ### Module Containment

@@ -55,7 +55,7 @@ def _layer_shape(trace: Any) -> Counter[tuple[str, int]]:
     """Counter of (func_name, num_passes) over layers, inputs/outputs/buffers excluded."""
 
     seen: dict[str, tuple[str, int]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.is_input or op.is_output or op.is_buffer:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
@@ -83,7 +83,7 @@ def _layers(trace: Any, func_name: str) -> list[list[Any]]:
     """Ops of each layer computing ``func_name``, passes in capture order."""
 
     by_layer: dict[str, list[Any]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if str(op.func_name) == func_name and not (op.is_input or op.is_output):
             by_layer.setdefault(op.layer_label, []).append(op)
     return [sorted(ops, key=lambda op: op.pass_index) for ops in by_layer.values()]
@@ -92,7 +92,7 @@ def _layers(trace: Any, func_name: str) -> list[list[Any]]:
 def _module_calls(trace: Any, func_name: str) -> list[str]:
     """Innermost module call (``address:k``) of every ``func_name`` op, in capture order."""
 
-    return [str(op.modules[-1]) for op in trace.layer_list if str(op.func_name) == func_name]
+    return [str(op.modules[-1]) for op in trace._layer_list if str(op.func_name) == func_name]
 
 
 FORK = pytest.mark.parametrize("module_call_is_pass", [True, False], ids=["module", "caller"])
@@ -1258,7 +1258,7 @@ def test_row71_multi_head_attention_internal_call_sites() -> None:
     """
     trace = _capture(lambda: AttentionLoop(attn=nn.MultiheadAttention(4, 2)), _x(3, 2, 4))
     inner: dict[str, list[Any]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.modules and str(op.modules[-1]).startswith("attn:"):
             inner.setdefault(op.layer_label, []).append(op)
     assert inner
@@ -1298,7 +1298,7 @@ def test_row73_layer_over_varying_weights_lists_every_weight() -> None:
     torch.manual_seed(0)
     model = ParamListLoop(ws=nn.ParameterList([_w() for _ in range(3)]))
     trace = tl.trace(model, _x())
-    (matmul,) = [layer for layer in trace.layer_logs.values() if layer.func_name == "__matmul__"]
+    (matmul,) = [layer for layer in trace._layer_logs.values() if layer.func_name == "__matmul__"]
     assert [pl.address for pl in matmul._param_logs] == ["ws.0", "ws.1", "ws.2"]
     assert [[pl.address for pl in op._param_logs] for op in matmul.ops.values()] == [
         ["ws.0"],
@@ -1314,7 +1314,7 @@ def _buffer_passes(build: Callable[[], nn.Module]) -> list[int]:
     """Sorted pass counts of the buffer layers of one trace."""
 
     trace = _capture(build, _x())
-    seen = {op.layer_label: int(op.num_passes or 1) for op in trace.layer_list if op.is_buffer}
+    seen = {op.layer_label: int(op.num_passes or 1) for op in trace._layer_list if op.is_buffer}
     return sorted(seen.values())
 
 
@@ -1347,6 +1347,6 @@ def test_row74_buffer_versions_group_by_writing_line() -> None:
 def test_row74_batchnorm_running_stats_stay_separate_layers() -> None:
     """Row 74: BatchNorm writes each running stat once, so each version is its own layer."""
     trace = _capture(lambda: nn.BatchNorm1d(4).train(), _x())
-    buffers = {op.layer_label: op for op in trace.layer_list if op.is_buffer}
+    buffers = {op.layer_label: op for op in trace._layer_list if op.is_buffer}
     assert buffers, "BatchNorm in train mode logs its running stats"
     assert {int(op.num_passes or 1) for op in buffers.values()} == {1}

@@ -46,7 +46,7 @@ def is_unregistered_parameter(trace: Any, value: Any) -> bool:
     address = None if meta is None else meta.param_address
     if not address:
         return True
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = getattr(trace, "_param_logs", None)
     if param_logs is None or address not in param_logs:
         return True
     return getattr(param_logs[address], "_param_ref", None) is not value
@@ -79,7 +79,7 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     meta = get_param_meta(value)
     if meta is None:
         return False
-    return not getattr(trace.param_logs[meta.param_address], "_lazy_at_prep", False)
+    return not getattr(trace._param_logs[meta.param_address], "_lazy_at_prep", False)
 
 
 def _iter_operand_tensors(value: Any) -> Iterator[torch.Tensor]:

@@ -84,7 +84,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries in log order.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activation]
+    return [layer for layer in trace._layer_list if layer.has_saved_activation]
 
 
 def _first_saved_layer(trace: Trace) -> Any:
@@ -101,7 +101,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    return next(layer for layer in trace._layer_list if layer.has_saved_activation)
 
 
 def _contains_blob_ref(value: Any) -> bool:
@@ -164,7 +164,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     parquet_df = pd.read_parquet(parquet_path)
     exported_df = lazy_log.to_pandas()
 
-    assert len(streamed_log.layer_list) == len(lazy_log.layer_list)
+    assert len(streamed_log._layer_list) == len(lazy_log._layer_list)
     assert len(parquet_df) == len(exported_df)
     assert parquet_df["layer_label"].tolist() == exported_df["layer_label"].tolist()
     assert parquet_df["layer_type"].tolist() == exported_df["layer_type"].tolist()
@@ -188,7 +188,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
 
     nested_blob_layer = next(
         layer
-        for layer in lazy_log.layer_list
+        for layer in lazy_log._layer_list
         if layer.saved_args is not None and _contains_blob_ref(layer.saved_args)
     )
     assert nested_blob_layer.out_ref is not None
@@ -206,11 +206,11 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     assert isinstance(restored_layer.out, torch.Tensor)
     assert torch.equal(restored_layer.out, live_layer.out)
     assert restored.model_class_name == live_log.model_class_name
-    assert len(restored.layer_list) == len(live_log.layer_list)
+    assert len(restored._layer_list) == len(live_log._layer_list)
     assert any(
         layer.saved_args is not None
         and any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
-        for layer in restored.layer_list
+        for layer in restored._layer_list
     )
 
 

@@ -1741,7 +1741,7 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
         if not raw_label.endswith("_raw"):
             continue
         final_label = raw_to_final.get(raw_label)
-        donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
+        donor = None if final_label is None else source._layer_dict_all_keys.get(final_label)
         if donor is None:
             return None, None
         if tuple(getattr(donor, "shape", None) or ()) != tuple(context.get("shape") or ()):
@@ -1776,7 +1776,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
 
     source_site = None
     if site_label is not None:
-        source_site = source.layer_dict_all_keys.get(site_label)
+        source_site = source._layer_dict_all_keys.get(site_label)
     if source_site is None:
         live_label, source_site = _live_capture_donor(source, context)
         if source_site is not None:

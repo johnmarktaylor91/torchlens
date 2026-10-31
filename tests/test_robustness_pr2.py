@@ -355,7 +355,7 @@ def test_standard_model_still_logs_cleanly() -> None:
     model = _Tiny()
     x = torch.randn(2, 4)
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 def test_check_model_and_input_variants_clean_model_is_noop() -> None:
@@ -505,7 +505,7 @@ def test_cuda_forward_pass_still_logs() -> None:
     model = _Tiny().cuda()
     x = torch.randn(2, 4, device="cuda")
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 def test_offense_path_names_the_input_tree_location() -> None:

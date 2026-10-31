@@ -107,16 +107,16 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["bn"]._source_trace is restored
     assert restored.buffers["bn.running_mean"].address == "bn.running_mean"
 
-    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in restored._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
-        restored.layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_index - 1]
+        restored._layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_index - 1]
         is first_saved_layer
     )
 
     first_arg_layer = next(
         layer
-        for layer in restored.layer_list
+        for layer in restored._layer_list
         if layer.saved_args is not None and len(layer.saved_args) > 0
     )
     assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
@@ -209,8 +209,8 @@ def test_plain_pickle_roundtrip_still_works() -> None:
 
     assert isinstance(restored, Trace)
     assert restored.model_class_name == live_log.model_class_name
-    assert len(restored.layer_list) == len(live_log.layer_list)
-    assert restored.layer_list[0].source_trace is restored
+    assert len(restored._layer_list) == len(live_log._layer_list)
+    assert restored._layer_list[0].source_trace is restored
 
 
 def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:

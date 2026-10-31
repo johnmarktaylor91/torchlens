@@ -343,7 +343,7 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
         save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor),
         capture=CaptureOptions(save_budget=40, layers_to_save=tl.func("relu")),
     )
-    relu = next(op for op in trace.layer_list if getattr(op, "func_name", None) == "relu")
+    relu = next(op for op in trace._layer_list if getattr(op, "func_name", None) == "relu")
     assert relu.out is relu.transformed_out
     assert int(trace._save_budget_accountant.ledgers["cpu"].committed_bytes) == 32
 

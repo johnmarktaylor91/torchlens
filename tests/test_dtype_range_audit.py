@@ -61,7 +61,7 @@ def test_dtype_range_audit_partial_save_reports_incomplete_coverage() -> None:
     trace = tl.trace(model, torch.ones(2, 3), save=tl.func("relu"))
     unsaved_labels = {
         op.label
-        for op in trace.layer_list
+        for op in trace._layer_list
         if int(op.step_index or 0) > 0 and not op.has_saved_activation
     }
 

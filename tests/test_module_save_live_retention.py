@@ -108,7 +108,7 @@ def _counting(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
 
 
 def _saved(log: Any) -> dict[str, Any]:
-    return {op.layer_label: op for op in log.layer_list if op.has_saved_activation}
+    return {op.layer_label: op for op in log._layer_list if op.has_saved_activation}
 
 
 def _snapshot(log: Any) -> list[tuple[Any, ...]]:
@@ -124,7 +124,7 @@ def _snapshot(log: Any) -> list[tuple[Any, ...]]:
             tuple(op.parents),
             tuple(op.children),
         )
-        for op in log.layer_list
+        for op in log._layer_list
     ]
 
 
@@ -171,7 +171,7 @@ def test_module_save_copies_only_ops_inside_matching_passes(
     # producer's payload, so it adds no escrow copy.
     expected |= {
         op.layer_label
-        for op in full_log.layer_list
+        for op in full_log._layer_list
         if op.layer_type == "output" and any(parent in expected for parent in op.parents)
     }
 
@@ -180,7 +180,7 @@ def test_module_save_copies_only_ops_inside_matching_passes(
 
     assert set(_saved(log)) == expected
     assert counts["copies"] == EXPECTED_COPIES[name], (
-        f"{name}: {counts['copies']} escrow copies ({len(log.layer_list)} ops in the trace)"
+        f"{name}: {counts['copies']} escrow copies ({len(log._layer_list)} ops in the trace)"
     )
     assert counts["spills"] == 0
 
@@ -239,7 +239,7 @@ def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
         assert saved[label].is_edited
     assert counts["spills"] == 0
     # The per-op escrow copies about every op; this copies the ops inside block and head.
-    assert counts["copies"] < len(log.layer_list) - 2
+    assert counts["copies"] < len(log._layer_list) - 2
 
 
 @pytest.mark.parametrize(("address", "spills"), [("shared", 2), ("block", 4)])
@@ -304,7 +304,7 @@ def test_mixed_module_selectors_keep_per_op_escrow(selector_factory, monkeypatch
         log = tl.trace(model, x, save=selector)
     saved = _saved(log)
     assert set(saved) == expected
-    assert counts["copies"] >= len(log.layer_list) - 2
+    assert counts["copies"] >= len(log._layer_list) - 2
     full = _saved(full_log)
     for label, op in saved.items():
         assert torch.equal(op.out, full[label].out)

@@ -228,7 +228,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
         Retained ops in the order used by the site-key minter.
     """
 
-    return tuple(getattr(trace, "layer_list", ()) or ())
+    return tuple(getattr(trace, "_layer_list", ()) or ())
 
 
 def _validate_site_keys(trace: Trace) -> None:

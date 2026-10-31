@@ -1098,10 +1098,10 @@ def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     tl.trace(_OneOperandVmapModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
 
     log = tl.trace(_TwoOperandVmapModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
-    arange_ops = [op for op in log.layer_list if getattr(op, "func_name", None) == "arange"]
+    arange_ops = [op for op in log._layer_list if getattr(op, "func_name", None) == "arange"]
     # BOTH arange operands must be captured -- neither dropped by a stale spec.
     assert len(arange_ops) == 2
-    vmap_ops = [op for op in log.layer_list if getattr(op, "transform_kind", None) == "vmap"]
+    vmap_ops = [op for op in log._layer_list if getattr(op, "transform_kind", None) == "vmap"]
     assert len(vmap_ops) == 1
     # The outer vmap boundary node must list BOTH arange outputs as parents.
     vmap_parents = set(vmap_ops[0].parents)
@@ -1127,8 +1127,8 @@ def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: st
             x,
             capture=CaptureOptions(layers_to_save="all"),
         )
-        builtin = next(op for op in trace.layer_list if op.func_name == func_name)
-        add_ops = [op for op in trace.layer_list if op.func_name in {"__add__", "add"}]
+        builtin = next(op for op in trace._layer_list if op.func_name == func_name)
+        add_ops = [op for op in trace._layer_list if op.func_name in {"__add__", "add"}]
 
         assert len(add_ops) == arity
         # grouping rule row 32: the operand comprehension is one ``add`` layer

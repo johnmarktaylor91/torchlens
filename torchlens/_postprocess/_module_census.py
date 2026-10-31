@@ -36,7 +36,7 @@ def op_space_labels(trace: Trace, labels: Sequence[str]) -> list[str]:
 
     op_labels: list[str] = []
     for label in labels:
-        op = trace.layer_dict_all_keys.get(label)
+        op = trace._layer_dict_all_keys.get(label)
         resolved = getattr(op, "label", None) if op is not None else None
         op_labels.append(resolved if isinstance(resolved, str) else label)
     return op_labels
@@ -83,5 +83,5 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
         Conditional role refs keyed by Layer label.
     """
 
-    for layer_label, layer in (getattr(trace, "layer_logs", None) or {}).items():
+    for layer_label, layer in (getattr(trace, "_layer_logs", None) or {}).items():
         layer.in_conditionals = list(roles_by_label.get(layer_label, []))

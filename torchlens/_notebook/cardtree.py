@@ -379,7 +379,7 @@ def trace_overview_card(trace: Any) -> Card:
     logs too.
     """
 
-    layers = len(getattr(trace, "layer_logs", {}) or {})
+    layers = len(getattr(trace, "_layer_logs", {}) or {})
     ops = getattr(trace, "num_ops", 0)
     try:
         layers_saved = trace._layers_saved
@@ -394,7 +394,7 @@ def trace_overview_card(trace: Any) -> Card:
     title = str(getattr(trace, "name", None) or trace.model_name)
     state = str(getattr(getattr(trace, "state", None), "name", "UNKNOWN"))
     key_index = CardCollection(
-        children=tuple(CardKey(f"log[{label!r}]") for label in list(trace.layer_logs or {})[:64]),
+        children=tuple(CardKey(f"log[{label!r}]") for label in list(trace._layer_logs or {})[:64]),
         budget=20,
     )
     return Card(

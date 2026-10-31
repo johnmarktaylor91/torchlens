@@ -131,8 +131,8 @@ def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
         eager_twin, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
     )
 
-    assert [op.layer_label for op in compiled_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in compiled_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(compiled_trace.modules) == len(eager_trace.modules)
 
@@ -212,8 +212,8 @@ def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
     assert parent.child is child
     assert isinstance(parent.child, optimized_module_type)
     assert parent(input_tensor).shape == (2, 4)
-    assert [op.layer_label for op in nested_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in nested_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(nested_trace.modules) == len(eager_trace.modules)
 
@@ -400,7 +400,7 @@ def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     log = tl.trace(
         model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 # ---------------------------------------------------------------------------

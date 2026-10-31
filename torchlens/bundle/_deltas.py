@@ -287,8 +287,8 @@ def _output_layer_pairs(
             except (KeyError, IndexError):
                 continue
         return pairs
-    target_layers = list(getattr(target_log, "layer_list", []))
-    candidate_layers = list(getattr(candidate_log, "layer_list", []))
+    target_layers = list(getattr(target_log, "_layer_list", []))
+    candidate_layers = list(getattr(candidate_log, "_layer_list", []))
     return [(target_layers[-1], candidate_layers[-1])] if target_layers and candidate_layers else []
 
 
@@ -363,7 +363,7 @@ def _bundle_motif_occurrences(self: Bundle) -> dict[str, list[tuple[str, str]]]:
 
     motifs: dict[str, list[tuple[str, str]]] = {}
     for member_name, member in self.members.items():
-        for layer in getattr(member, "layer_list", []):
+        for layer in getattr(member, "_layer_list", []):
             key = getattr(layer, "equivalence_class", None)
             if not key:
                 continue
@@ -474,8 +474,8 @@ def _bundle_aligned_pairs(
         raise ValueError("aligned_pairs requires at least two bundle members.")
     left_name = _resolve_member_name(self, left if left is not None else names[0])
     right_name = _resolve_member_name(self, right if right is not None else names[1])
-    left_layers = list(getattr(self[left_name], "layer_list", []))
-    right_layers = list(getattr(self[right_name], "layer_list", []))
+    left_layers = list(getattr(self[left_name], "_layer_list", []))
+    right_layers = list(getattr(self[right_name], "_layer_list", []))
     available_right = set(range(len(right_layers)))
     pairs: list[tuple[Any, Any]] = []
     for left_index, left_layer in enumerate(left_layers):

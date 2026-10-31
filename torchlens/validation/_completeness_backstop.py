@@ -129,7 +129,7 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
         ``(dispatch_census_count, captured_census_count)``.
     """
 
-    layer_list = getattr(trace, "layer_list", ())
+    layer_list = getattr(trace, "_layer_list", ())
     decompositions = getattr(trace, "completeness_decompositions", ())
     diagnostics = getattr(trace, "completeness_diagnostics", ())
 

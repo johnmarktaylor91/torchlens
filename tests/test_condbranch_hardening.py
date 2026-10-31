@@ -75,7 +75,7 @@ def _find_only_layer(trace: Trace, func_name: str) -> Op:
     """
 
     matches = [
-        layer for layer in trace.layer_list if layer.func_name == func_name and not layer.is_output
+        layer for layer in trace._layer_list if layer.func_name == func_name and not layer.is_output
     ]
     assert len(matches) == 1, f"expected one {func_name!r} layer, found {len(matches)}"
     return matches[0]
@@ -95,7 +95,7 @@ def _layer_names(trace: Trace) -> set[str]:
         Captured ``func_name`` values.
     """
 
-    return {layer.func_name for layer in trace.layer_list if not layer.is_output}
+    return {layer.func_name for layer in trace._layer_list if not layer.is_output}
 
 
 def _assert_no_false_fired(trace: Trace, executed: set[str], not_executed: set[str]) -> None:
@@ -123,9 +123,9 @@ def _assert_no_false_fired(trace: Trace, executed: set[str], not_executed: set[s
             fired_ops = set(arm.execution_ops)
             assert fired_ops, "fired arm carries no execution ops"
             fired_funcs = {
-                trace.layer_dict_all_keys[label].func_name
+                trace._layer_dict_all_keys[label].func_name
                 for label in fired_ops
-                if label in trace.layer_dict_all_keys
+                if label in trace._layer_dict_all_keys
             }
             assert fired_funcs <= (executed | {"none"}), (
                 f"fired arm references non-executed ops: {fired_funcs - executed}"
@@ -334,7 +334,7 @@ def test_same_line_nested_ternary_does_not_cross_wire_bools() -> None:
         assert all(len(bool_list) == 1 for bool_list in bool_lists)
         assert bool_lists[0] != bool_lists[1]
     else:
-        for layer in trace.layer_list:
+        for layer in trace._layer_list:
             assert layer.conditional_branch_stack == ()
             assert getattr(layer, "is_terminal_conditional_bool", False) is False
 
@@ -352,7 +352,7 @@ def test_multi_line_nested_ternary_does_not_cross_wire_bools() -> None:
 
     bool_layers = [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if getattr(layer, "is_scalar_bool", False) and not layer.is_output
     ]
     assert len(bool_layers) == 2
@@ -640,7 +640,7 @@ def test_float_truthiness_stays_documented_false_negative(
     assert list(trace.conditionals) == []
     sum_layer = _find_only_layer(trace, "sum")
     assert sum_layer.is_terminal_conditional_bool is not True
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         assert layer.conditional_branch_stack == ()
 
     _assert_no_false_fired(trace, executed, not_executed)
@@ -702,7 +702,7 @@ def _assert_fired_arms_exclude_test_ops(trace: Trace, test_funcs: set[str]) -> N
     """
 
     test_op_labels = {
-        layer.layer_label for layer in trace.layer_list if layer.func_name in test_funcs
+        layer.layer_label for layer in trace._layer_list if layer.func_name in test_funcs
     }
     for conditional in trace.conditionals:
         for arm in conditional.arms:
@@ -820,7 +820,7 @@ def test_single_line_if_true_arm_never_backed_by_test_ops(
         assert conditional.fired_arm_kind == "then"
         assert then_arm.fired is True
         fired_funcs = {
-            trace.layer_dict_all_keys[label].func_name for label in then_arm.execution_ops
+            trace._layer_dict_all_keys[label].func_name for label in then_arm.execution_ops
         }
         assert fired_funcs == {"relu"}
     else:
@@ -848,7 +848,7 @@ def test_single_line_elif_false_never_fires_elif() -> None:
     assert elif_arm.fired is False
     assert elif_arm.execution_ops == []
     assert else_arm.fired is True
-    else_funcs = {trace.layer_dict_all_keys[label].func_name for label in else_arm.execution_ops}
+    else_funcs = {trace._layer_dict_all_keys[label].func_name for label in else_arm.execution_ops}
     assert else_funcs == {"sigmoid"}
 
     _assert_fired_arms_exclude_test_ops(trace, {"all", "__gt__", "sum"})
@@ -866,7 +866,7 @@ def test_single_line_item_scalar_if_never_false_fires() -> None:
     trace = _log_model(SingleLineItemBoolModel(), -torch.ones(2, 2))
 
     assert list(trace.conditionals) == []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         assert layer.conditional_branch_stack == ()
 
     _assert_no_false_fired(trace, {"sum", "item", "mul"}, {"relu"})
@@ -899,7 +899,7 @@ def test_single_line_arm_body_bool_never_becomes_the_test() -> None:
 
     trace = _log_model(SingleLineArmBodyBoolCastModel(), torch.ones(2, 2))
 
-    all_ops = [layer for layer in trace.layer_list if layer.func_name == "all"]
+    all_ops = [layer for layer in trace._layer_list if layer.func_name == "all"]
     assert len(all_ops) == 2
     for op in all_ops:
         assert op.is_terminal_conditional_bool is False
@@ -1018,12 +1018,12 @@ def test_rolled_loop_multi_evaluation_refuses_arbitrary_pass_value() -> None:
     # represent them. Mirror the compound-test refusal.
     assert then_arm.bool_value_at_run is None
 
-    fired_funcs = {trace.layer_dict_all_keys[label].func_name for label in then_arm.execution_ops}
+    fired_funcs = {trace._layer_dict_all_keys[label].func_name for label in then_arm.execution_ops}
     assert fired_funcs == {"relu"}
 
     # Rolled: both passes share ONE layer label; per-pass ground truth stays
     # queryable on the ops themselves.
-    bool_ops = [layer for layer in trace.layer_list if layer.func_name == "__lt__"]
+    bool_ops = [layer for layer in trace._layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1
     assert {op.pass_index: op.bool_value for op in bool_ops} == {1: True, 2: False}
 
@@ -1047,7 +1047,7 @@ def test_single_witness_rolled_bool_resolves_exact_pass_value() -> None:
     assert then_arm.fired is True
     assert then_arm.bool_value_at_run is True
 
-    bool_ops = [layer for layer in trace.layer_list if layer.func_name == "__lt__"]
+    bool_ops = [layer for layer in trace._layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1, "loop no longer rolls; fix the model"
     assert {op.pass_index: op.bool_value for op in bool_ops} == {1: True, 2: False}
 
@@ -1072,9 +1072,9 @@ def test_unrolled_both_arms_loop_reports_honest_multi_fire() -> None:
     # Two witnessed evaluations (False then True): the scalar refuses.
     assert then_arm.bool_value_at_run is None
 
-    fired_funcs = {trace.layer_dict_all_keys[label].func_name for label in then_arm.execution_ops}
+    fired_funcs = {trace._layer_dict_all_keys[label].func_name for label in then_arm.execution_ops}
     assert fired_funcs == {"relu"}
-    else_funcs = {trace.layer_dict_all_keys[label].func_name for label in else_arm.execution_ops}
+    else_funcs = {trace._layer_dict_all_keys[label].func_name for label in else_arm.execution_ops}
     assert else_funcs == {"sigmoid"}
 
     _assert_no_false_fired(trace, {"relu", "sigmoid", "mul", "sum", "__gt__", "add"}, set())

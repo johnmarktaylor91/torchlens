@@ -328,7 +328,7 @@ class _TreeBuilder:
         op_owner: dict[str, str | None] = {}
         pass_by_label: dict[str, int] = {}
         self.owner_by_any_label: dict[str, str | None] = {}
-        for op in self.trace.layer_list:
+        for op in self.trace._layer_list:
             label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             stack = tuple(getattr(op, "module_call_stack", ()) or ())
             op_owner[label] = str(stack[-1]) if stack else None

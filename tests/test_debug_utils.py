@@ -232,7 +232,7 @@ def test_hot_path_reports_missing_metric_exclusions() -> None:
     """hot_path reports how many ops lacked the requested metric."""
 
     trace = tl.trace(nn.Sequential(nn.ReLU()).eval(), torch.randn(1, 2))
-    first_compute = next(op for op in trace.layer_list if int(op.step_index or 0) > 0)
+    first_compute = next(op for op in trace._layer_list if int(op.step_index or 0) > 0)
     first_compute.flops_forward = None
 
     frame = tl.debug.hot_path(trace, by="flops").to_pandas()

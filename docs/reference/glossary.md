@@ -908,7 +908,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
-  pre-wrap torch references to their wrappers. The trace records `trace.rescue_rerun` and reason
+  pre-wrap torch references to their wrappers. The capture-honesty facts record `rescue_rerun` and reason
   `mode_rescue_rerun`.
 
 **Collapse**
@@ -2853,7 +2853,7 @@ deprecation shim owed*
   row: `trace.ops["input_1"]` returns the input row and `"input_1" in
   trace.ops` is true although the label is not in `trace.ops.keys()`. The
   every-row sequence (inputs, outputs and buffers included) is
-  `trace.layer_list`; `len(trace)`, `trace[int]` and `trace[plane]` index it.
+  `trace.ops`; `len(trace)`, `trace[int]` and `trace[plane]` index it.
   Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
   `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
   exactly their rows, boundary rows included.

@@ -63,7 +63,7 @@ def test_bound_forward_capture_matches_module_capture() -> None:
     plain = tl.trace(model, x)
     assert torch.equal(bound[bound.output_layers[0]].out, plain[plain.output_layers[0]].out)
     # Same interior ops captured (labels match one-to-one).
-    assert [op.label for op in bound.layer_list] == [op.label for op in plain.layer_list]
+    assert [op.label for op in bound._layer_list] == [op.label for op in plain._layer_list]
 
 
 def test_synthetic_root_reads_owner_identity_never_method() -> None:
@@ -80,7 +80,7 @@ def test_root_fact_stays_module_call_on_module_roots() -> None:
     model = _mlp()
     log = tl.trace(model, torch.randn(2, 4))
     assert log.root_entry_point == ("module_call:torch.nn.modules.container.Sequential.forward")
-    for op in log.layer_list:
+    for op in log._layer_list:
         assert op.tl_authored_root is None
 
 
@@ -91,7 +91,7 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
         for op in log[output_label].ops:
             assert op.tl_authored_root is True
     # The marker discloses the ROOT record only, never interior ops.
-    interior = [op for op in log.layer_list if op.label.split(":")[0] not in log.output_layers]
+    interior = [op for op in log._layer_list if op.label.split(":")[0] not in log.output_layers]
     assert all(op.tl_authored_root is None for op in interior)
 
 
@@ -220,7 +220,7 @@ def test_replay_engine_still_works_on_bound_captures() -> None:
         capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = log.fork()
-    relu_label = next(op.label for op in log.layer_list if op.label.startswith("relu"))
+    relu_label = next(op.label for op in log._layer_list if op.label.startswith("relu"))
     fork.do(tl.units(relu_label, [(0, 0)]).resolve(fork), tl.zero_ablate())
     assert len(fork.intervention_audit) == 1
 

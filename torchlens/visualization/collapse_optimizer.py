@@ -412,7 +412,7 @@ def select_collapse_plan(
     # 100k-op artifact, so far-out-of-envelope traces decline outright --
     # the ONE remaining uncollapsed decline. Everything below it degrades to
     # the deterministic fallback planner, never to an uncollapsed wall.
-    op_count = len(trace.layer_list)
+    op_count = len(trace._layer_list)
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER:
         if source_graph is None:
             from .source_graph import build_source_graph
@@ -1376,7 +1376,7 @@ def _concrete_plan_op_labels(
         the raw mapping and left pass-free in the segment mapping.
     """
 
-    valid = {str(op.label) for op in trace.layer_list}
+    valid = {str(op.label) for op in trace._layer_list}
     counts: dict[str, int] = {}
     raw: dict[int, str] = {}
     segment_ops: dict[int, tuple[str, ...]] = {}
@@ -1461,7 +1461,7 @@ def _legal_plan_op_segment_run(
     """
 
     labels: list[str] = []
-    op_order = {str(op.label): index for index, op in enumerate(trace.layer_list)}
+    op_order = {str(op.label): index for index, op in enumerate(trace._layer_list)}
     previous_index: int | None = None
     previous_stack: tuple[str, ...] | None = None
     seen_stacks: dict[tuple[str, ...], tuple[str, ...]] = {}
@@ -2488,7 +2488,7 @@ def _expanded_structure(
             } | _bundle.bundle_member_labels(state.trace, state.context)
             own_ops = tuple(
                 op.label
-                for op in state.trace.layer_list
+                for op in state.trace._layer_list
                 if op.label not in child_ops and not getattr(op, "is_buffer", False)
             )
     result = (graph, child_addresses, tuple(own_ops))
@@ -2535,7 +2535,7 @@ def _cross_owner_edges(
     """
 
     edges: set[tuple[str, str]] = set()
-    for op in state.trace.layer_list:
+    for op in state.trace._layer_list:
         source = owner_by_label.get(op.label)
         for child_label in getattr(op, "children", ()) or ():
             target_label = str(child_label)
@@ -2559,7 +2559,7 @@ def _cheap_synthetic_child_condensed_flow_graph(
 ) -> ChildCondensedFlowGraph:
     """Build a lightweight child graph without trace substring lookups."""
 
-    op_order = {op.label: index for index, op in enumerate(state.trace.layer_list)}
+    op_order = {op.label: index for index, op in enumerate(state.trace._layer_list)}
     child_sets = {
         child: set(state.analysis.signals[child].subtree_ops)
         for child in child_addresses
@@ -2685,7 +2685,7 @@ def _own_ops_segment_is_legal(state: _OptimizerState, own_ops: tuple[str, ...]) 
         return False
     if state.total_ops > 0 and len(own_ops) / state.total_ops > 0.75:
         return False
-    op_by_label = {str(op.label): op for op in state.trace.layer_list}
+    op_by_label = {str(op.label): op for op in state.trace._layer_list}
     previous_stack: tuple[str, ...] | None = None
     seen_stacks: dict[tuple[str, ...], tuple[str, ...]] = {}
     for label in own_ops:
@@ -3678,7 +3678,7 @@ def _optimizer_total_units(trace: Trace, context: RenderContext) -> int:
     """Return the raw rendered universe size used for optimizer normalization."""
 
     if context.vis_mode != "rolled":
-        return max(len(trace.layer_list), 1)
+        return max(len(trace._layer_list), 1)
     return max(count(collapse_plan_for_trace(trace, None, None, context)), 1)
 
 
@@ -3706,7 +3706,7 @@ def _root_own_unit_count(
     } | _bundle.bundle_member_labels(trace, context)
     return sum(
         1
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.label not in child_ops and not getattr(op, "is_buffer", False)
     )
 

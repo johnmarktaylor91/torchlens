@@ -65,7 +65,7 @@ def test_traced_return_keeps_disclosure_stamp_and_validates() -> None:
     """The honest capture keeps the intervened disclosure and still validates."""
 
     trace = _traced_return_capture()
-    producing = next(op for op in trace.layer_list if op.func_name == "linear")
+    producing = next(op for op in trace._layer_list if op.func_name == "linear")
 
     # The capture IS intervened: the durable per-op disclosure must survive
     # (the runnable-save user_intervention_not_replayable refusal keys on it).
@@ -85,7 +85,7 @@ def test_traced_return_does_not_bless_functionless_op() -> None:
     """
 
     trace = _traced_return_capture()
-    producing = next(op for op in trace.layer_list if op.func_name == "linear")
+    producing = next(op for op in trace._layer_list if op.func_name == "linear")
     assert producing.is_edited is True
 
     producing.func = None

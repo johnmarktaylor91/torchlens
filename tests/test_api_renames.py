@@ -68,7 +68,7 @@ class _DummyLog:
         """Initialize captured state for a fake log object."""
 
         self.verbose = False
-        self.layer_logs: dict[str, Any] = {}
+        self._layer_logs: dict[str, Any] = {}
         self.num_saved_ops = 0
         self.total_activation_memory = "0 B"
         self.render_calls: list[dict[str, Any]] = []

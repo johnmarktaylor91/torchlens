@@ -211,15 +211,15 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     live_log = _build_live_log()
     instances = {
         Trace: live_log,
-        Op: next(layer for layer in live_log.layer_list if type(layer) is Op),
-        Layer: next(iter(live_log.layer_logs.values())),
+        Op: next(layer for layer in live_log._layer_list if type(layer) is Op),
+        Layer: next(iter(live_log._layer_logs.values())),
         Module: next(iter(live_log.modules)),
         ModuleCall: next(iter(live_log.modules._pass_dict.values())),
-        Param: next(iter(live_log.param_logs)),
+        Param: next(iter(live_log._param_logs)),
         Buffer: next(iter(live_log.buffers)),
         FuncCallLocation: next(
             frame
-            for layer in live_log.layer_list
+            for layer in live_log._layer_list
             for frame in layer.code_context
             if layer.code_context
         ),
@@ -241,11 +241,11 @@ def _all_record_instances(live_log: Trace) -> list[Any]:
 
     return [
         live_log,
-        *live_log.layer_list,
-        *live_log.layer_logs.values(),
+        *live_log._layer_list,
+        *live_log._layer_logs.values(),
         *live_log.modules,
         *live_log.modules._pass_dict.values(),
-        *live_log.param_logs,
+        *live_log._param_logs,
         *live_log.buffers,
     ]
 
@@ -435,7 +435,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "modules_with_facet": lambda t: list(t.modules_with_facet("query")),
         "activations_by_pass": lambda t: t.activations_by_pass(1),
         "activations_by_address": lambda t: t.activations_by_address("linear"),
-        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t.layer_list[0].raw_label),
+        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t._layer_list[0].raw_label),
         # Post-tour sprint additions. All five are pure reads, so they are SWEPT
         # rather than excluded: "analysis populated a cache with no persistence
         # policy" is precisely the draw()-then-save() poison this sweep exists to
@@ -465,7 +465,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
         "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
         "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),
+        "animate_ops": lambda t: t.animate_ops(t._layer_list[0].layer_label),
     }
 
 
@@ -540,13 +540,13 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         Op,
         _op_method_sweep,
         _OP_METHOD_EXCLUSIONS,
-        lambda log: [layer for layer in log.layer_list if type(layer) is Op],
+        lambda log: [layer for layer in log._layer_list if type(layer) is Op],
     ),
     (
         Layer,
         _layer_method_sweep,
         _LAYER_METHOD_EXCLUSIONS,
-        lambda log: list(log.layer_logs.values()),
+        lambda log: list(log._layer_logs.values()),
     ),
     (Module, _module_method_sweep, _MODULE_METHOD_EXCLUSIONS, lambda log: list(log.modules)),
     (
@@ -555,7 +555,7 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         _MODULE_CALL_METHOD_EXCLUSIONS,
         lambda log: list(log.modules._pass_dict.values()),
     ),
-    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log.param_logs)),
+    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log._param_logs)),
     (Buffer, _buffer_method_sweep, _BUFFER_METHOD_EXCLUSIONS, lambda log: list(log.buffers)),
 ]
 

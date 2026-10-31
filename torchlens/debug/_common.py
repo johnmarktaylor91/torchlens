@@ -27,7 +27,7 @@ def _ordered_ops(trace: Trace) -> list[Op]:
     """
 
     return sorted(
-        trace.layer_list,
+        trace._layer_list,
         key=lambda op: (
             int(getattr(op, "step_index", 0) or 0),
             bool(getattr(op, "is_input", False)),

@@ -133,7 +133,7 @@ def build_graph_ir(trace: Any, *, include_timing: bool = True) -> GraphIR:
     never guessed.
     """
 
-    layers = list(getattr(trace, "layer_list", ()) or ())
+    layers = list(getattr(trace, "_layer_list", ()) or ())
     names: dict[str, str] = {}
     for layer in layers:
         names[str(layer.layer_label)] = node_name_for(layer)

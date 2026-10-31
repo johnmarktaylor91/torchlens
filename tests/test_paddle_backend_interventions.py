@@ -69,13 +69,13 @@ def _mlp(x: Any, w1: Any, b1: Any, w2: Any, b2: Any) -> Any:
 def _output_op(trace: Any) -> Any:
     """Return the output-parent op of a trace."""
 
-    return next(op for op in trace.layer_list if op.is_output_parent)
+    return next(op for op in trace._layer_list if op.is_output_parent)
 
 
 def _relu_op(trace: Any) -> Any:
     """Return the relu op of a trace."""
 
-    return next(op for op in trace.layer_list if "relu" in op.label)
+    return next(op for op in trace._layer_list if "relu" in op.label)
 
 
 def _ablated_trace() -> Any:
@@ -398,7 +398,7 @@ def test_paddle_intervene_and_save_predicates_compose() -> None:
     relu = _relu_op(trace)
     assert relu.has_saved_activation is True
     assert float(relu.out.abs().max()) == 0.0
-    linear_ops = [op for op in trace.layer_list if "linear" in op.label]
+    linear_ops = [op for op in trace._layer_list if "linear" in op.label]
     assert all(not op.has_saved_activation for op in linear_ops)
 
 

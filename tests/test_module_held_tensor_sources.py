@@ -97,11 +97,11 @@ def _eager(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
 
 
 def _structure(trace: Any) -> list[tuple[str, str, list[str]]]:
-    return [(op.layer_label, op.type, list(op.parents)) for op in trace.layer_list]
+    return [(op.layer_label, op.type, list(op.parents)) for op in trace._layer_list]
 
 
 def _buffer_addresses(trace: Any) -> list[str]:
-    return [trace.layer_dict_all_keys[label].address for label in trace.buffer_layers]
+    return [trace._layer_dict_all_keys[label].address for label in trace.buffer_layers]
 
 
 def test_warm_dict_cached_tensor_roots_at_a_buffer_source() -> None:
@@ -113,7 +113,7 @@ def test_warm_dict_cached_tensor_roots_at_a_buffer_source() -> None:
     trace = tl.trace(copy.deepcopy(model), x)
     assert _buffer_addresses(trace) == ["cache['cpu']"]
     cache_label = trace.buffer_layers[0]
-    getitems = [op for op in trace.layer_list if op.type == "getitem"]
+    getitems = [op for op in trace._layer_list if op.type == "getitem"]
     assert len(getitems) == 3
     for op in getitems:
         assert list(op.parents) == [cache_label]
@@ -129,7 +129,7 @@ def test_cold_dict_cache_filled_inside_forward_is_not_module_state() -> None:
     model = _DictCachedBias().eval()
     trace = tl.trace(copy.deepcopy(model), x)
     assert _buffer_addresses(trace) == ["idxs"]
-    assert [op.type for op in trace.layer_list] == [
+    assert [op.type for op in trace._layer_list] == [
         "input",
         "buffer",
         "getitem",
@@ -190,8 +190,8 @@ def test_dict_held_tensor_mutated_in_place_matches_eager_and_validates() -> None
     traced_model = copy.deepcopy(model)
     trace = tl.trace(traced_model, x)
     assert "state['count']" in _buffer_addresses(trace)
-    add_ = next(op for op in trace.layer_list if op.type == "add" and op.parents)
-    assert trace.layer_dict_all_keys[add_.parents[0]].type == "buffer"
+    add_ = next(op for op in trace._layer_list if op.type == "add" and op.parents)
+    assert trace._layer_dict_all_keys[add_.parents[0]].type == "buffer"
     assert torch.equal(trace[trace.output_layers[0]].out, eager_out)
     # A default capture is a pure observer: the held tensor is restored in place
     # (same object), and the forward's one write, equal to one eager forward's, is
@@ -521,7 +521,7 @@ def test_tensor_free_holders_capture_without_a_scan_warning() -> None:
     for _ in range(2):  # the false positive repeated on every capture
         trace, fired = _held_scan_warnings(_TensorFreeHolders(), x)
         assert fired == []
-        assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+        assert [op.type for op in trace._layer_list] == ["input", "relu", "output"]
 
 
 def test_object_bound_cut_is_disclosed_at_capture() -> None:
@@ -530,7 +530,7 @@ def test_object_bound_cut_is_disclosed_at_capture() -> None:
     trace, fired = _held_scan_warnings(_TooWide(_HELD_SCAN_MAX_OBJECTS + 1), torch.randn(5))
     assert len(fired) == 1
     assert f"cache[{_HELD_SCAN_MAX_OBJECTS}] (object bound {_HELD_SCAN_MAX_OBJECTS})" in fired[0]
-    assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+    assert [op.type for op in trace._layer_list] == ["input", "relu", "output"]
     # Exactly at the bound nothing lies past the cut, so nothing is disclosed.
     _, fired = _held_scan_warnings(_TooWide(_HELD_SCAN_MAX_OBJECTS), torch.randn(5))
     assert fired == []
@@ -564,10 +564,10 @@ def test_colliding_key_renderings_each_get_a_buffer_source(
     model = _CollidingKeys(first, second)
     trace = tl.trace(model, x)
     assert sorted(_buffer_addresses(trace)) == sorted(expected)
-    getitems = [op for op in trace.layer_list if op.type == "getitem"]
+    getitems = [op for op in trace._layer_list if op.type == "getitem"]
     assert len(getitems) == 2
     assert all(len(op.parents) == 1 for op in getitems)
-    assert {trace.layer_dict_all_keys[op.parents[0]].type for op in getitems} == {"buffer"}
+    assert {trace._layer_dict_all_keys[op.parents[0]].type for op in getitems} == {"buffer"}
     assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
     assert tl.validate(model, x, scope="forward") is True
 
@@ -595,7 +595,7 @@ def test_nested_held_tensors_root_at_buffer_sources_and_validate() -> None:
     assert sorted(_buffer_addresses(trace)) == sorted(
         ["cache['outer']['cpu']", "cache['lists'][0]", "cache['lists'][1][0]"]
     )
-    assert all(op.parents for op in trace.layer_list if op.type not in {"input", "buffer"})
+    assert all(op.parents for op in trace._layer_list if op.type not in {"input", "buffer"})
     assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
     assert tl.validate(model, x, scope="forward") is True
 
@@ -619,7 +619,7 @@ def test_depth_bound_cut_is_disclosed_at_capture() -> None:
     assert {getattr(m, "fields", {}).get("code") for m in fired} == {"held_tensor_scan_truncated"}
     assert "deep['a']['b']['c']['d'] (depth bound 4)" in str(fired[0])
     assert list(trace.buffer_layers) == []
-    assert [op.type for op in trace.layer_list] == ["input", "relu", "output"]
+    assert [op.type for op in trace._layer_list] == ["input", "relu", "output"]
 
 
 class _VocabThenCache(nn.Module):
@@ -677,7 +677,7 @@ def test_missed_held_tensor_is_disclosed_and_fails_forward_validation(
     assert cut_note in str(scan[0])
     assert any("no graph/source provenance" in str(w.message) for w in record)
     assert list(trace.buffer_layers) == []
-    assert [op.type for op in trace.layer_list] == ["input", "add", "relu", "output"]
+    assert [op.type for op in trace._layer_list] == ["input", "add", "relu", "output"]
     assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

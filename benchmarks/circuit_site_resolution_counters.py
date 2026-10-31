@@ -138,7 +138,7 @@ def output_digest(trace: tl.Trace) -> dict[str, Any]:
 
     digest = hashlib.sha256()
     tensors = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         out = op.out
         digest.update(str(op.label).encode())
         if isinstance(out, torch.Tensor):
@@ -148,7 +148,7 @@ def output_digest(trace: tl.Trace) -> dict[str, Any]:
             digest.update(value.reshape(-1).view(torch.uint8).numpy().tobytes())
         else:
             digest.update(repr(type(out)).encode())
-    return {"sha256": digest.hexdigest(), "ops": len(trace.layer_list), "tensors": tensors}
+    return {"sha256": digest.hexdigest(), "ops": len(trace._layer_list), "tensors": tensors}
 
 
 def reference_gap(
@@ -267,7 +267,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
             "case": case_name,
             "edges": len(edges),
             "receivers": len({edge.receiver.name for edge in edges}),
-            "baseline_ops": len(clean.layer_list),
+            "baseline_ops": len(clean._layer_list),
             "counters": _counts(pstats.Stats(profiler)),
             "profile_cumulative_s": _profile_seconds(pstats.Stats(profiler)),
             "output_digest": output_digest(patched),

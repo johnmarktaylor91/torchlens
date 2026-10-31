@@ -41,7 +41,7 @@ def test_fold_membership_reassembles_exactly() -> None:
     fold = fold_trace(log)
     assert fold.key_version == FOLD_KEY_VERSION
     membership = fold.membership()
-    labels = [str(op.label) for op in log.layer_list]
+    labels = [str(op.label) for op in log._layer_list]
     assert sorted(membership) == sorted(labels)
     assert sum(cls.n_instances for cls in fold.classes) == len(labels)
 
@@ -51,7 +51,7 @@ def test_fold_classes_are_field_uniform() -> None:
 
     log = _clean_trace()
     fold = fold_trace(log)
-    by_label = {str(op.label): op for op in log.layer_list}
+    by_label = {str(op.label): op for op in log._layer_list}
     for cls in fold.classes:
         shapes = {tuple(by_label[m].shape) if by_label[m].shape else None for m in cls.members}
         dtypes = {str(by_label[m].dtype) for m in cls.members}
@@ -110,7 +110,7 @@ def test_fold_never_declines_on_multipass() -> None:
 
     log = tl.trace(Loop().eval(), deterministic_input())
     fold = fold_trace(log)
-    assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
+    assert fold.membership().keys() == {str(op.label) for op in log._layer_list}
     multipass = [cls for cls in fold.classes if cls.pass_index is not None]
     if multipass:  # pass boundaries never merge silently
         assert all(cls.pass_index >= 1 for cls in multipass)
@@ -178,7 +178,7 @@ def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
         log = tl.trace(model, (), input_kwargs={"input_ids": input_ids}, save=None)
         fold = fold_trace(log)
         counts[name] = len(fold.classes)
-        assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
+        assert fold.membership().keys() == {str(op.label) for op in log._layer_list}
         if name == "gpt2-medium":
             artifact = tmp_path / "gpt2_medium.tlspec"
             log.save(artifact)
@@ -220,7 +220,7 @@ def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
         and ".h." in str(getattr(node, "module", getattr(node, "address", "")))
     ]
     fold = fold_trace(log)
-    assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
+    assert fold.membership().keys() == {str(op.label) for op in log._layer_list}
     assert not block_level_boxes, (
         "the collapse plan now produces block-level boxes on gpt2 "
         f"({box_names[:10]}...): the review's D1 flip condition fired -- revisit "

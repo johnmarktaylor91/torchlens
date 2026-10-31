@@ -53,7 +53,9 @@ def _require_hf_snapshot(repo_dirname: str) -> None:
 
 
 def _output_nodes(trace) -> list:
-    return [op for op in trace.layer_list if getattr(op, "is_output", False) and op.out is not None]
+    return [
+        op for op in trace._layer_list if getattr(op, "is_output", False) and op.out is not None
+    ]
 
 
 def _parent_slot_out(trace, node) -> torch.Tensor:
@@ -63,7 +65,7 @@ def _parent_slot_out(trace, node) -> torch.Tensor:
     parent_label = node.parents[0]
     same_call = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.layer_label == parent_label and op.func_call_id == node.func_call_id
     ]
     assert len(same_call) == 1, (
@@ -86,7 +88,7 @@ def _assert_boundary_slots_consistent(fork, source) -> None:
 
 
 def _first_module_op(trace, func_names: tuple[str, ...]):
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if (
             op.func_name in func_names
             and op.output_of_modules

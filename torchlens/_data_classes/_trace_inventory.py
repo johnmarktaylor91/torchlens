@@ -66,7 +66,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
     from ._site_key import parse_site_key
 
     pd = _require_pandas()
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     keyed = [(key, op) for op in ops if (key := getattr(op, "site_key", None)) is not None]
     if ops and not keyed:
         raise InvalidArgumentError(
@@ -219,8 +219,8 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "total_activation_memory": getattr(trace, "total_activation_memory", None),
         },
         "backward": {
-            "num_grad_fn_records": len(getattr(trace, "grad_fn_logs", {}) or {}),
-            "num_backward_passes": len(getattr(trace, "backward_pass_logs", {}) or {}),
+            "num_grad_fn_records": len(getattr(trace, "_grad_fn_logs", {}) or {}),
+            "num_backward_passes": len(getattr(trace, "_backward_pass_logs", {}) or {}),
         },
         "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
         # log_value read-back (sumfam D20): logged values are inventory, not

@@ -63,7 +63,7 @@ def _parts(model: _Two, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def _add_op(trace: tl.Trace):
-    return next(op for op in trace.layer_list if op.func_name == "add")
+    return next(op for op in trace._layer_list if op.func_name == "add")
 
 
 def _edge(trace: tl.Trace, position: int):

@@ -85,7 +85,7 @@ def test_paddle_param_logs_from_named_parameters() -> None:
 
     trace = tl.trace(PaddleNested(), _input(), backend="paddle")
 
-    addresses = {param.address for param in trace.param_logs}
+    addresses = {param.address for param in trace._param_logs}
     assert {"seq.0.weight", "seq.0.bias", "head.weight", "head.bias"} <= addresses
     assert trace.num_param_tensors == 4
     assert trace.modules["seq.0"].params

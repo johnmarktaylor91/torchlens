@@ -72,7 +72,7 @@ def grad_enabled_at_capture(trace: Any) -> bool:
     never a new field.
     """
 
-    return any(_has_grad_fn(op) for op in getattr(trace, "layer_list", ()) or ())
+    return any(_has_grad_fn(op) for op in getattr(trace, "_layer_list", ()) or ())
 
 
 def _has_grad_fn(op: Any) -> bool:
@@ -282,7 +282,7 @@ def _executed_backward_count(trace: Any) -> _ExecutedCount:
     unresolved: list[int] = []
     unreadable: list[int] = []
     other_trace = 0
-    for pass_index, record in sorted((getattr(trace, "backward_pass_logs", {}) or {}).items()):
+    for pass_index, record in sorted((getattr(trace, "_backward_pass_logs", {}) or {}).items()):
         attribution = getattr(record, "flops_attribution", None)
         if attribution is None:
             missing.append(pass_index)
@@ -368,8 +368,8 @@ def _sum_known(values: Any) -> int | None:
 def backward_status(trace: Trace) -> BackwardStatus:
     """Derive the three-state backward status for one finished trace."""
 
-    grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
-    backward_passes = getattr(trace, "backward_pass_logs", {}) or {}
+    grad_fn_logs = getattr(trace, "_grad_fn_logs", {}) or {}
+    backward_passes = getattr(trace, "_backward_pass_logs", {}) or {}
     per_pass: tuple[tuple[int, int | None], ...] = ()
     uncounted: tuple[tuple[str, int], ...] = ()
     attributions: tuple[Any, ...] = ()
@@ -498,7 +498,7 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
     multiplied = 0
     frozen = 0
     excluded: list[str] = []
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in getattr(trace, "_layer_list", ()) or ():
         if classify_row(op) != "known":
             continue
         record = getattr(op, "compute_record", None)

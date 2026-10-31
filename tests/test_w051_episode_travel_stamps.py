@@ -54,7 +54,7 @@ class _Greedy(nn.Module):
 
 
 def _stamped(trace: tl.Trace) -> list[str]:
-    return [str(op.label) for op in trace.layer_list if op.episode_step is not None]
+    return [str(op.label) for op in trace._layer_list if op.episode_step is not None]
 
 
 def _episode(model: _Greedy, **extra) -> tl.Trace:
@@ -140,7 +140,7 @@ def test_load_gate_still_refuses_stamps_without_declaration(tmp_path) -> None:
     """Tripwire law: the fix scrubs stamps; it never relaxes the load gate."""
 
     plain = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
-    plain.layer_list[0].episode_step = 0
+    plain._layer_list[0].episode_step = 0
     path = tmp_path / "forged.tlspec"
     plain.save(path)
     with pytest.raises(TorchLensError) as info:

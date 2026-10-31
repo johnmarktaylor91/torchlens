@@ -638,7 +638,7 @@ def _op_level_rows(trace: Trace) -> list[dict[str, Any]]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         is_boundary = bool(getattr(op, "is_input", False)) or bool(getattr(op, "is_output", False))
         row = _row(
             str(getattr(op, "label", None) or getattr(op, "layer_label", "")),
@@ -710,7 +710,7 @@ def _flops_values_by_label(aggregation: Any) -> dict[str, int | None]:
 def _innermost_call_by_label(trace: Trace) -> dict[str, str | None]:
     """Map each op label to its innermost recorded module call (or None)."""
 
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     bare_counts: dict[str, int] = {}
     for op in ops:
         layer_label = str(getattr(op, "layer_label", ""))
@@ -827,7 +827,7 @@ def _assemble_level_rows(
     row_evidence: list[str | None] = []
     if level == "op":
         rows.extend(_op_level_rows(trace))
-        for row, op in zip(rows, trace.layer_list, strict=True):
+        for row, op in zip(rows, trace._layer_list, strict=True):
             row["role"] = "OWNER" if row["kind"] == "op" else None
             row["flops_pct"] = (
                 100.0 * row["flops"] / partition_total
@@ -947,7 +947,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         from ._profile_source_line import group_rows_by_source_line
 
         rows, row_evidence = group_rows_by_source_line(
-            rows, list(trace.layer_list), row_evidence, _weakest_evidence
+            rows, list(trace._layer_list), row_evidence, _weakest_evidence
         )
 
     columns = [
@@ -996,7 +996,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     capture_status = str(status_value) if status_value is not None else "unknown"
     capture_verified = getattr(trace, "capture_verified", None)
     capture_verification_reason = getattr(trace, "capture_verification_reason", None)
-    rescue_rerun = bool(getattr(trace, "rescue_rerun", None) or False)
+    rescue_rerun = bool(getattr(trace, "_rescue_rerun", None) or False)
     verification = {
         "capture_status": capture_status,
         "capture_verified": capture_verified,

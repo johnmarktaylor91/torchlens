@@ -28,7 +28,7 @@ def _first_var_names(trace: Trace, func_name: str) -> list[str]:
         The matched op's ``var_names``.
     """
 
-    return next(op.var_names for op in trace.layer_list if op.func_name == func_name)
+    return next(op.var_names for op in trace._layer_list if op.func_name == func_name)
 
 
 def _all_var_names(trace: Trace, func_name: str) -> list[list[str]]:
@@ -47,7 +47,7 @@ def _all_var_names(trace: Trace, func_name: str) -> list[list[str]]:
         ``var_names`` for every matched op, in trace order.
     """
 
-    return [op.var_names for op in trace.layer_list if op.func_name == func_name]
+    return [op.var_names for op in trace._layer_list if op.func_name == func_name]
 
 
 def _trace(model: torch.nn.Module) -> Trace:

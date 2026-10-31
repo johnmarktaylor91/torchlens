@@ -235,7 +235,7 @@ class _ModelIndex:
         entry_meta: dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int, Any]] = {}
         label_seen: dict[str, int] = {}
         self.shapes = label_shapes(trace)
-        for index, op in enumerate(getattr(trace, "layer_list", ()) or ()):
+        for index, op in enumerate(getattr(trace, "_layer_list", ()) or ()):
             label = str(getattr(op, "layer_label", "?"))
             occurrence = label_seen.get(label, 0)
             label_seen[label] = occurrence + 1

@@ -211,7 +211,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> Layer:
     """
     matching_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if layer.func_name == "linear" and layer.num_passes > 1
     ]
     assert len(matching_layers) == 1
@@ -252,7 +252,7 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
 
     parent_layer = next(
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if conditional_id in layer.conditional_arm_children
         and "then" in layer.conditional_arm_children[conditional_id]
         and "else" in layer.conditional_arm_children[conditional_id]
@@ -372,7 +372,7 @@ def test_then_children_from_second_pass_survive_layer_merge() -> None:
 
     branch_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if layer.func_name == "linear" and layer.num_passes == 1
     ]
     assert len(branch_layers) == 1

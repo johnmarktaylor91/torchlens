@@ -393,7 +393,7 @@ def join_events(
 
         label_by_call_id: dict[str, str] = {}
         if trace is not None:
-            for op in getattr(trace, "layer_list", ()):  # pragma: no branch
+            for op in getattr(trace, "_layer_list", ()):  # pragma: no branch
                 call_id = getattr(op, "func_call_id", None)
                 label = getattr(op, "label", None)
                 if call_id is not None and label is not None:

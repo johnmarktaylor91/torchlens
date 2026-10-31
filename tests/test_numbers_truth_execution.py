@@ -141,11 +141,11 @@ def test_lazy_linear_traces_and_finalizes_inventory() -> None:
     model = nn.Sequential(nn.LazyLinear(16), nn.ReLU())
     log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
-        shapes = {pl.address: tuple(pl.shape) for pl in log.param_logs}
+        shapes = {pl.address: tuple(pl.shape) for pl in log._param_logs}
         assert shapes == {"0.weight": (16, 8), "0.bias": (16,)}
-        counts = {pl.address: pl.num_params for pl in log.param_logs}
+        counts = {pl.address: pl.num_params for pl in log._param_logs}
         assert counts == {"0.weight": 128, "0.bias": 16}
-        assert all(int(pl.param_memory) > 0 for pl in log.param_logs)
+        assert all(int(pl.param_memory) > 0 for pl in log._param_logs)
     finally:
         log.cleanup()
 
@@ -168,7 +168,7 @@ def test_lazy_linear_graph_stays_clean() -> None:
     )
     try:
         assert log.num_ops == 2
-        labels = [lay.layer_type for lay in log.layer_list]
+        labels = [lay.layer_type for lay in log._layer_list]
         assert labels == ["input", "linear", "relu", "output"]
     finally:
         log.cleanup()
@@ -180,7 +180,7 @@ def test_never_materialized_lazy_param_tolerated() -> None:
     model = _LazyUnused()
     log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
-        by_address = {pl.address: pl for pl in log.param_logs}
+        by_address = {pl.address: pl for pl in log._param_logs}
         assert by_address["used.weight"].num_params == 64
         never = by_address["never.weight"]
         assert never.num_params == 0

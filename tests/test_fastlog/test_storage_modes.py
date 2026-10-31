@@ -92,7 +92,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
             default_op=CaptureSpec(save_mode="reference"),
         )
     trace = recording.to_trace()
-    op = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    op = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     saved_out = op._slot("out")
 
     saved_out.add_(1)

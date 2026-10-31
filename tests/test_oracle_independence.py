@@ -81,8 +81,8 @@ def _drop_edge_symmetrically(log, child_label: str, parent_label: str) -> None:
         Label of the edge's producer.
     """
 
-    child = log.layer_dict_all_keys[child_label]
-    parent = log.layer_dict_all_keys[parent_label]
+    child = log._layer_dict_all_keys[child_label]
+    parent = log._layer_dict_all_keys[parent_label]
     base_parent = parent_label.split(":", 1)[0]
     base_child = child_label.split(":", 1)[0]
     child.parents = [p for p in child.parents if p.split(":", 1)[0] != base_parent]
@@ -151,9 +151,9 @@ def _planted_edge_drop_trace():
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     log._tl_test_model_keepalive = model
-    outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
+    outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     relu_label = next(op.label for op in log.compute_ops if op.func_name == "relu")
-    consumer = next(iter(log.layer_dict_all_keys[relu_label].children))
+    consumer = next(iter(log._layer_dict_all_keys[relu_label].children))
     _drop_edge_symmetrically(log, consumer, relu_label)
     return log, outputs
 
@@ -234,7 +234,7 @@ def test_duplicated_edge_occurrence_is_caught_on_a_live_trace():
     try:
         check_metadata_invariants(log)  # pristine trace is green
         relu_label = next(op.label for op in log.compute_ops if op.func_name == "relu")
-        consumer = next(iter(log.layer_dict_all_keys[relu_label].children)).split(":", 1)[0]
+        consumer = next(iter(log._layer_dict_all_keys[relu_label].children)).split(":", 1)[0]
         _duplicate_edge_occurrence(log, consumer)
         with pytest.raises(Exception, match="multiplicity") as excinfo:
             check_metadata_invariants(log)
@@ -357,13 +357,13 @@ def _loaded_edge_drop_trace(tmp_path):
         torch.randn(2, 6),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
+    outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     path = tmp_path / "edge_drop_plant.tlspec"
     log.save(path)
     log.cleanup()
     loaded = tl.load(path)
     relu_label = next(op.label for op in loaded.compute_ops if op.func_name == "relu")
-    consumer = next(iter(loaded.layer_dict_all_keys[relu_label].children))
+    consumer = next(iter(loaded._layer_dict_all_keys[relu_label].children))
     _drop_edge_symmetrically(loaded, consumer, relu_label)
     return loaded, outputs
 
@@ -425,7 +425,7 @@ def test_duplicated_child_entry_is_caught_on_a_live_trace():
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
     trace = trace_fn(model, torch.randn(2, 4))
     check_metadata_invariants(trace)
-    record = next(r for r in trace.layer_list if r.layer_label == "linear_1_1")
+    record = next(r for r in trace._layer_list if r.layer_label == "linear_1_1")
     record.children = list(record.children) + [record.children[0]]
     with pytest.raises(MetadataInvariantError, match="deduped by construction"):
         check_metadata_invariants(trace)
@@ -446,8 +446,8 @@ def test_genuine_double_consumption_keeps_children_deduped_and_green():
             return h + h
 
     trace = trace_fn(DoubleUse(), torch.randn(2, 4))
-    producer = next(r for r in trace.layer_list if r.layer_label.startswith("linear"))
-    consumer = next(r for r in trace.layer_list if "add" in r.layer_label)
+    producer = next(r for r in trace._layer_list if r.layer_label.startswith("linear"))
+    consumer = next(r for r in trace._layer_list if "add" in r.layer_label)
     assert len(producer.children) == len(set(producer.children))
     assert list(consumer.parents).count("linear_1_1") == 2
     check_metadata_invariants(trace)

@@ -196,7 +196,7 @@ def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
         torch.randn(4, 2),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    setitem_op = next(op for op in trace.layer_list if op.func_name == "__setitem__")
+    setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
     destination_label = setitem_op.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
@@ -221,7 +221,7 @@ def test_setitem_duplicate_advanced_index_destination_is_not_exempt() -> None:
         torch.tensor([3.0, 4.0]),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    setitem_op = next(op for op in trace.layer_list if op.func_name == "__setitem__")
+    setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
     destination_label = setitem_op.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
@@ -823,7 +823,7 @@ def _first_op_with_func(trace: Any, func_name: str) -> Any:
         Matching op.
     """
 
-    return next(layer for layer in trace.layer_list if layer.func_name == func_name)
+    return next(layer for layer in trace._layer_list if layer.func_name == func_name)
 
 
 def _first_output(trace: Any) -> torch.Tensor:
@@ -859,7 +859,7 @@ def _install_constant_replay(trace: Any, func_name: str) -> None:
         ``trace`` is mutated in place.
     """
 
-    op = [layer for layer in trace.layer_list if layer.func_name == func_name][-1]
+    op = [layer for layer in trace._layer_list if layer.func_name == func_name][-1]
     saved_output = op.out.detach().clone()
 
     def constant_replay(*_args: Any, **_kwargs: Any) -> torch.Tensor:
@@ -1090,7 +1090,7 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     trace = tl.trace(model, torch.randn(2, 4))
     check_metadata_invariants(trace)
 
-    linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
+    linear_ops = [op for op in trace._layer_list if op.func_name == "linear"]
     assert len(linear_ops) == 2
     # The vacuousness precondition: the suffixed per-op key misses the
     # pre-suffix trace-dict keys, while membership still resolves the group.
@@ -1103,7 +1103,7 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     wrong_group = {linear_ops[0].label}
     for op in linear_ops:
         op.equivalent_ops = set(wrong_group)
-    layer = trace.layer_logs[linear_ops[0].layer_label]
+    layer = trace._layer_logs[linear_ops[0].layer_label]
     layer.equivalent_ops = set(wrong_group)
 
     with pytest.raises(MetadataInvariantError, match="equivalent_ops"):
@@ -1134,9 +1134,9 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
-    assert trace.backward_pass_logs, "backward evidence precondition"
+    assert trace._backward_pass_logs, "backward evidence precondition"
     assert trace.num_backward_passes >= 1
-    assert trace.grad_fn_logs, "registry precondition"
+    assert trace._grad_fn_logs, "registry precondition"
 
     # The journal is a run-scoped live-capture fact: pickle restore, fork, and
     # bundle load all produce journal-less traces, which is where the
@@ -1144,7 +1144,7 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
     trace._capture_events = None
     check_metadata_invariants(trace)
 
-    trace.grad_fn_logs = {}
+    trace._grad_fn_logs = {}
     with pytest.raises(MetadataInvariantError, match="grad_fn"):
         check_metadata_invariants(trace)
 
@@ -1160,7 +1160,7 @@ def test_forward_only_trace_keeps_empty_backward_registry_valid() -> None:
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     trace = tl.trace(model, torch.randn(2, 4))
-    assert not trace.grad_fn_logs
+    assert not trace._grad_fn_logs
     check_metadata_invariants(trace)
     trace._capture_events = None
     check_metadata_invariants(trace)
@@ -1190,7 +1190,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)
@@ -1225,7 +1225,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    replaced_ops = [op for op in trace.layer_list if getattr(op, "is_edited", False)]
+    replaced_ops = [op for op in trace._layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
     check_func_call_id_invariant(trace)
 
@@ -1234,7 +1234,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
     loaded = tl.load(path)
     assert getattr(loaded, "_loaded_from_bundle", False) is True
     check_func_call_id_invariant(loaded)
-    loaded_replaced = [op for op in loaded.layer_list if getattr(op, "is_edited", False)]
+    loaded_replaced = [op for op in loaded._layer_list if getattr(op, "is_edited", False)]
     assert loaded_replaced
     for op in loaded_replaced:
         stamp = (getattr(op, "annotations", None) or {}).get("replacement_evidence_v1")
@@ -1315,7 +1315,7 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     )
     check_metadata_invariants(trace)
 
-    relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
     object.__setattr__(relu_op, "func_call_id", None)
     object.__setattr__(relu_op, "func_name", "none")
     assert callable(relu_op.func)
@@ -1390,7 +1390,7 @@ def test_bernoulli_parent_replay_exemption_requires_snapshot_proof() -> None:
         torch.randn(4, 4),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    mul_op = next(op for op in trace.layer_list if op.func_name == "__mul__")
+    mul_op = next(op for op in trace._layer_list if op.func_name == "__mul__")
     bernoulli_parents = [
         parent for parent in mul_op.parents if trace[parent].func_name == "bernoulli_"
     ]
@@ -1941,7 +1941,7 @@ def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     assert result is True
-    cross_entropy_op = next(op for op in trace.layer_list if op.func_name == "cross_entropy")
+    cross_entropy_op = next(op for op in trace._layer_list if op.func_name == "cross_entropy")
     assert cross_entropy_op.parent_arg_positions["kwargs"]["target"]
     perturbation_decisions = [
         decision
@@ -2044,7 +2044,7 @@ def test_selective_save_interior_gap_is_unverified() -> None:
     status = trace.validation_replay_status
     assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
     assert "not_saved_by_user" not in status.exempted_reason_counts
-    computational_ops = [op for op in trace.layer_list if op.func is not None]
+    computational_ops = [op for op in trace._layer_list if op.func is not None]
     assert computational_ops
     assert all(op.has_saved_args and op.saved_args is not None for op in computational_ops)
 
@@ -2107,7 +2107,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     add_op = _first_op_with_func(trace, "__add__")
-    trace.layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+    trace._layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -2125,7 +2125,7 @@ def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     add_op = _first_op_with_func(trace, "__add__")
-    trace.layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+    trace._layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
     def wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch.Tensor:
         """Return an intentionally wrong add result for replay testing.
@@ -2319,7 +2319,7 @@ def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> No
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    buffer_op = next(layer for layer in trace.layer_list if layer.is_buffer)
+    buffer_op = next(layer for layer in trace._layer_list if layer.is_buffer)
     buffer_op._internal_set("modules", ["self:1"])  # noqa: SLF001
     buffer_op._internal_set("module", "self:1")  # noqa: SLF001
 
@@ -2421,8 +2421,8 @@ def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
 
     (M1 raise-arm campaign: ``pass_count_consistency#a00`` survivor. The
     real-capture killer bumping ``layer.num_passes`` on an Op pulled from
-    ``trace.layer_list`` does NOT reach the ``Layer`` record this checker
-    actually reads from ``trace.layer_logs`` -- empirically proven: it kept
+    ``trace._layer_list`` does NOT reach the ``Layer`` record this checker
+    actually reads from ``trace._layer_logs`` -- empirically proven: it kept
     this arm a SURVIVOR. A duck-typed fake of the exact object the checker
     consumes avoids that real-capture aliasing gap.
     """

@@ -60,10 +60,10 @@ def test_second_backward_does_not_rewrite_recorded_grads(save_mode: str) -> None
     loss = _loss(trace)
     trace.log_backward(loss, retain_graph=True)
 
-    param_payloads = [record.grad for param in trace.param_logs.values() for record in param.grads]
+    param_payloads = [record.grad for param in trace._param_logs.values() for record in param.grads]
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         for record in layer.grads
     ]
     payloads = [p for p in param_payloads + op_payloads if isinstance(p, torch.Tensor)]
@@ -130,7 +130,7 @@ def test_op_grad_payloads_charge_the_save_budget() -> None:
 
     grad_bytes = sum(
         int(record.grad.nelement() * record.grad.element_size())
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         for record in layer.grads
         if isinstance(record.grad, torch.Tensor)
     )
@@ -164,7 +164,7 @@ def test_selective_save_grads_consults_predicate_for_params() -> None:
     trace = _armed_trace()
     trace.log_backward(_loss(trace), save_grads=keep_param_grads)
 
-    param_payloads = [record.grad for param in trace.param_logs.values() for record in param.grads]
+    param_payloads = [record.grad for param in trace._param_logs.values() for record in param.grads]
     assert param_payloads, "expected parameter gradient records"
     assert "param_grad" in seen_kinds, "predicate never saw a parameter context"
     assert all(isinstance(p, torch.Tensor) for p in param_payloads), (
@@ -173,7 +173,7 @@ def test_selective_save_grads_consults_predicate_for_params() -> None:
     # The same predicate rejected op gradients, so none retain payloads.
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         for record in layer.grads
     ]
     assert all(not isinstance(p, torch.Tensor) for p in op_payloads)
@@ -343,7 +343,7 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
     events_by_label = {e.op_label: e for e in fired}
     reused = 0
     for label, event in events_by_label.items():
-        layer = trace.layer_dict_all_keys.get(label)
+        layer = trace._layer_dict_all_keys.get(label)
         if layer is None or not getattr(layer, "has_grad", False):
             continue
         transformed_slot = getattr(layer, "transformed_grad", None)

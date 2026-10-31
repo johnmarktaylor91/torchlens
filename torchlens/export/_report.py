@@ -120,7 +120,7 @@ class _ArrayPlan:
 def _is_partial(log: Any) -> bool:
     """Whether the subject is a failed-capture PartialTrace."""
 
-    return getattr(log, "layer_logs", None) is None and hasattr(log, "raw_layers")
+    return getattr(log, "_layer_logs", None) is None and hasattr(log, "raw_layers")
 
 
 def _intervention_sites(log: Any) -> list[tuple[str, str]]:

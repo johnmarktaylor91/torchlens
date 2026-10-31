@@ -50,7 +50,7 @@ def main() -> None:
     log.run(model, first)
     log.run(model, second, replay=tl.options.ReplayOptions(append=True))
 
-    output = log.layer_list[-1].out
+    output = log.output_ops[-1].out
     assert output.shape[0] == first.shape[0] + second.shape[0]
     assert log.state_history[-1]["op"] == "append"
     assert log.last_run["engine"] == "append"

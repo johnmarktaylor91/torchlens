@@ -78,7 +78,7 @@ def _check_recurrence_invariants(ml: Trace) -> None:
     """
     name = "recurrence_invariants"
 
-    any_recurrent = any(v > 1 for v in ml.layer_num_calls.values())
+    any_recurrent = any(v > 1 for v in ml._layer_num_calls.values())
     if ml.graph.is_recurrent != any_recurrent:
         raise MetadataInvariantError(
             name,
@@ -86,7 +86,7 @@ def _check_recurrence_invariants(ml: Trace) -> None:
         )
 
     if ml.graph.is_recurrent:
-        expected_max = max(ml.layer_num_calls.values())
+        expected_max = max(ml._layer_num_calls.values())
         if ml.graph.max_ops_per_layer != expected_max:
             raise MetadataInvariantError(
                 name,
@@ -98,14 +98,14 @@ def _check_recurrence_invariants(ml: Trace) -> None:
     # Validate that each key exists in layer_labels, and that the
     # recorded count matches the actual Layer.num_passes.
     no_call_labels = set(ml.layer_labels)
-    for label_key, num_calls in ml.layer_num_calls.items():
+    for label_key, num_calls in ml._layer_num_calls.items():
         if label_key not in no_call_labels:
             raise MetadataInvariantError(
                 name,
                 f"layer_num_calls key '{label_key}' not in layer_labels",
             )
-        if label_key in ml.layer_logs:
-            actual = ml.layer_logs[label_key].num_passes
+        if label_key in ml._layer_logs:
+            actual = ml._layer_logs[label_key].num_passes
             if num_calls != actual:
                 raise MetadataInvariantError(
                     name,
@@ -113,7 +113,7 @@ def _check_recurrence_invariants(ml: Trace) -> None:
                 )
 
     # For top-level (no-pass) layer_logs, verify pass dict consistency
-    for no_call_label, ll in ml.layer_logs.items():
+    for no_call_label, ll in ml._layer_logs.items():
         expected_keys = set(range(1, ll.num_passes + 1))
         actual_keys = set(ll.ops.keys())
         if actual_keys != expected_keys:
@@ -126,7 +126,7 @@ def _check_recurrence_invariants(ml: Trace) -> None:
 def _check_branching_invariants(ml: Trace) -> None:
     """Check F: is_branching matches whether any layer has >1 child."""
     name = "branching_invariants"
-    any_branching = any(len(lpl.children) > 1 for lpl in ml.layer_list)
+    any_branching = any(len(lpl.children) > 1 for lpl in ml._layer_list)
     if ml.graph.is_branching != any_branching:
         raise MetadataInvariantError(
             name,
@@ -326,7 +326,7 @@ def _valid_conditional_child_labels(ml: Trace) -> set[str]:
         Union of pass-level labels and aggregate ``Layer`` keys.
     """
 
-    return set(ml.layer_labels) | set(ml.layer_logs)
+    return set(ml.layer_labels) | set(ml._layer_logs)
 
 
 def _check_conditional_invariants(ml: Trace) -> None:
@@ -393,7 +393,7 @@ def _check_conditional_arm_entry_child_symmetry(
                     f"conditional_arm_entry_edges[{(conditional_id, branch_kind)}] references "
                     f"missing parent layer {parent_label!r}",
                 )
-            parent_layer = ml.layer_logs[parent_label]
+            parent_layer = ml._layer_logs[parent_label]
             branch_children = parent_layer.conditional_arm_children.get(conditional_id, {}).get(
                 branch_kind, []
             )
@@ -407,7 +407,7 @@ def _check_conditional_arm_entry_child_symmetry(
                     f"{branch_children}",
                 )
 
-    for parent_layer in ml.layer_logs.values():
+    for parent_layer in ml._layer_logs.values():
         for conditional_id, branch_map in parent_layer.conditional_arm_children.items():
             for branch_kind, child_labels in branch_map.items():
                 model_edges = ml.conditional_arm_entry_edges.get((conditional_id, branch_kind), [])
@@ -437,7 +437,7 @@ def _check_conditional_derived_child_views(
     """
 
     # Invariant 2: per-layer derived views are exact projections of the primary structures.
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         expected_then_children, expected_elif_children, expected_else_children = (
             _expected_layer_pass_child_views(layer.conditional_arm_children)
         )
@@ -463,7 +463,7 @@ def _check_conditional_derived_child_views(
                 f"expected projection {expected_else_children}",
             )
 
-    for layer_log in ml.layer_logs.values():
+    for layer_log in ml._layer_logs.values():
         expected_then_children, expected_elif_children, expected_else_children = (
             _expected_layer_log_child_views(layer_log.conditional_arm_children)
         )

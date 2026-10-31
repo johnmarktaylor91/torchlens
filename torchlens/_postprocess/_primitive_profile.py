@@ -32,7 +32,7 @@ def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
     """
 
     grouped: dict[int, list[OpRef]] = defaultdict(list)
-    for row_index, op in enumerate(trace.layer_list):
+    for row_index, op in enumerate(trace._layer_list):
         func_call_id = getattr(op, "func_call_id", None)
         label = getattr(op, "layer_label", None)
         if isinstance(func_call_id, int) and isinstance(label, str):
@@ -210,7 +210,7 @@ def _resolve_grad_fn_call_ref(
     if event_ref is None:
         return None
     object_id, call_index, pass_index = event_ref
-    grad_fn = getattr(trace, "grad_fn_logs", {}).get(object_id)
+    grad_fn = getattr(trace, "_grad_fn_logs", {}).get(object_id)
     if grad_fn is None:
         return None
     try:
@@ -260,10 +260,10 @@ def _link_forward_grad_fn_rows(trace: Any, profile: _PrimitiveOpProfile) -> None
     ``heuristic`` and never presented as ``exact_via_aten`` evidence.
     """
 
-    grad_fns = getattr(trace, "grad_fn_logs", {}) or {}
+    grad_fns = getattr(trace, "_grad_fn_logs", {}) or {}
     if not grad_fns:
         return
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     partitions: dict[int, list[AtenOp]] = defaultdict(list)
     for row in profile.primitive_ops:
         if (

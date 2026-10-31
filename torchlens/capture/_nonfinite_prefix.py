@@ -159,7 +159,7 @@ def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
         orphan_labels = trace.__dict__.get("_orphan_labels") if hasattr(trace, "__dict__") else None
         if isinstance(orphan_labels, list) and raw_label in orphan_labels:
             return None, LABEL_STATUS_PRUNED
-        for record in getattr(trace, "orphan_records", ()) or ():
+        for record in getattr(trace, "_orphan_records", ()) or ():
             if isinstance(record, dict) and record.get("raw_label") == raw_label:
                 return None, LABEL_STATUS_PRUNED
     return None, LABEL_STATUS_UNAVAILABLE

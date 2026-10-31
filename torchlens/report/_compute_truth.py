@@ -95,7 +95,7 @@ def aggregate_forward_compute(trace: Trace) -> ComputeTotals:
     macs_unknown: list[str] = []
     counts = {"known": 0, "zero_by_rule": 0, "not_applicable": 0, "unknown": 0}
     unknown_ops: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         row_class = classify_row(op)
         counts[row_class] += 1
         if row_class == "unknown":
@@ -154,7 +154,7 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
     """
 
     groups: dict[str, list[Any]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if classify_row(op) != "unknown":
             continue
         groups.setdefault(str(getattr(op, "func_name", "?")), []).append(op)
@@ -313,7 +313,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     # D22 device slots as COLUMNS, never schemas. Absent join -> all None
     # (missing is None, never zero); the name-substring bridge stays banned.
     _join = _joined_result_or_none(trace)
-    for index, op in enumerate(trace.layer_list):
+    for index, op in enumerate(trace._layer_list):
         row_class = classify_row(op)
         if getattr(op, "is_buffer", False):
             kind = "buffer"
@@ -468,7 +468,7 @@ def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
         )
     total = 0
     unconvertible: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if classify_row(op) in ("not_applicable", "unknown"):
             continue
         record = op.compute_record

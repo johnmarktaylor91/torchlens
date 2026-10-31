@@ -232,7 +232,7 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
         return grad
 
     try:
-        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         trace.attach_hooks(
             tl.grad_fn(name="AddmmBackward0"), tl.hook_grad(_probe), confirm_mutation=True

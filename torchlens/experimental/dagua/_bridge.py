@@ -35,9 +35,9 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "max_layer_op_count": "Reference-gallery and recurrent summaries.",
     "modules": "Module hierarchy, cluster labels, collapsed summaries.",
     "has_gradients": "Whether to add backward edges in unrolled mode.",
-    "layer_dict_main_keys": "Unrolled node inventory.",
-    "layer_logs": "Rolled node inventory.",
-    "layer_list": "Fallback node inventory and audit coverage.",
+    "_layer_dict_main_keys": "Unrolled node inventory.",
+    "_layer_logs": "Rolled node inventory.",
+    "_layer_list": "Fallback node inventory and audit coverage.",
     "_intervention_spec": "Intervention site and fire-record metadata overlay.",
     "_has_direct_writes": "Direct-write dirty flag surfaced in graph metadata when present.",
 }
@@ -179,7 +179,7 @@ def _unused_justification(name: str) -> str:
 def build_render_audit(trace: Any) -> TorchLensRenderAudit:
     """Return an explicit used/unused field audit for the bridge."""
     model_fields = _list_public_fields(trace)
-    entry_sample = trace.layer_list[0] if getattr(trace, "layer_list", None) else None
+    entry_sample = trace._layer_list[0] if getattr(trace, "_layer_list", None) else None
     entry_fields = _list_public_fields(entry_sample) if entry_sample is not None else []
     module_values = list(trace.modules) if hasattr(trace, "modules") else []
     module_fields = _list_public_fields(module_values[0]) if module_values else []
@@ -302,9 +302,9 @@ def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
     """
 
     if vis_mode == "unrolled":
-        return list(trace.layer_dict_main_keys.values())
+        return list(trace._layer_dict_main_keys.values())
     if vis_mode == "rolled":
-        return list(trace.layer_logs.values())
+        return list(trace._layer_logs.values())
     raise ValueError("vis_mode must be 'unrolled' or 'rolled'")
 
 

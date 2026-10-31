@@ -46,7 +46,7 @@ class Looped(torch.nn.Module):
 x = torch.ones(2, 4)
 for model in (Unrolled(), Looped()):
     trace = tl.trace(model, x)
-    layers = [layer for layer in trace.layer_logs.values() if layer.func_name == "tanh"]
+    layers = [layer for layer in trace.layers if layer.func_name == "tanh"]
     print(type(model).__name__, [(layer.layer_label, layer.num_passes) for layer in layers])
 ```
 

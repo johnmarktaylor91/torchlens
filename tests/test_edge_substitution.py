@@ -435,7 +435,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 
     # Trace func callables are DROP at this schema level. Reattach only the
     # source callables so the forced artifact reaches the divergence oracle.
-    for loaded_op in loaded.layer_list:
+    for loaded_op in loaded._layer_list:
         source_op = fork[loaded_op.layer_label].ops[0]
         loaded_op._internal_set("func", source_op.func)
     with warnings.catch_warnings():

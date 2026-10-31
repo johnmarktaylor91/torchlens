@@ -46,7 +46,7 @@ def test_meta_buffer_trace_roundtrips_value_free(tmp_path) -> None:
     assert loaded.structure_only is True
     assert loaded.structure_evidence is not None
     assert loaded.structure_evidence["substrate"] == "meta"
-    for layer in loaded.layer_list:
+    for layer in loaded._layer_list:
         assert getattr(layer, "out", None) is None
 
 
@@ -61,7 +61,7 @@ def test_real_buffer_trace_roundtrips_value_free(tmp_path) -> None:
     assert loaded.structure_only is True
     assert loaded.structure_evidence is not None
     assert loaded.structure_evidence["substrate"] == "real"
-    for layer in loaded.layer_list:
+    for layer in loaded._layer_list:
         assert getattr(layer, "out", None) is None
 
 

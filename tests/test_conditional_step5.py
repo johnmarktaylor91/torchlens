@@ -202,7 +202,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
         Terminal scalar bool layers in execution order.
     """
 
-    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_single_layer(trace: Trace, func_name: str) -> Op:
@@ -221,7 +221,7 @@ def _find_single_layer(trace: Trace, func_name: str) -> Op:
         Matching layer.
     """
 
-    matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matching_layers = [layer for layer in trace._layer_list if layer.func_name == func_name]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer, found {len(matching_layers)}"
     )
@@ -265,7 +265,7 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
     for call_indexs in trace.conditional_edge_call_indices.values():
         assert call_indexs == sorted(call_indexs)
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         expected_then_children = sorted(
             set(
                 chain.from_iterable(
@@ -588,7 +588,7 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         f"{traced.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
-        op.layer_label for op in traced.layer_list if getattr(op, "is_buffer", False)
+        op.layer_label for op in traced._layer_list if getattr(op, "is_buffer", False)
     }
     for parent, _child in buffer_branch_edges:
         assert parent in surviving_buffer_labels

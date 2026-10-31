@@ -411,11 +411,11 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
             with pytest.raises(ValueError):
                 _ = trace.saved_grad_ops
             with pytest.raises(ValueError):
-                _ = trace.layer_list[0].grads
+                _ = trace._layer_list[0].grads
         trace.backend = "torch"
         _ = trace.autograd.backward_passes
         _ = trace.saved_grad_ops
-        _ = trace.layer_list[0].grads
+        _ = trace._layer_list[0].grads
     finally:
         trace.backend = "torch"
         tl.release_model(model)

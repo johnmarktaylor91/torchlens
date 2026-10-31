@@ -740,7 +740,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     _add_shared_module_aliases(model, param_logs, param_id_to_address)
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
-    trace.param_logs = ParamAccessor(param_logs)
+    trace._param_logs = ParamAccessor(param_logs)
 
 
 def _add_shared_module_aliases(

@@ -45,10 +45,10 @@ def test_buffer_source_and_sink_accessor_counts() -> None:
         capture=tl.options.CaptureOptions(save_args=True),
     )
     buffer_sources = [
-        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None
+        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is None
     ]
     buffer_sinks = [
-        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is not None
+        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is not None
     ]
 
     assert len(trace.buffer_read_ops) == len(buffer_sources)

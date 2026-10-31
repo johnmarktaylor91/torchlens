@@ -175,7 +175,7 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
     trace = Trace(model_class_name="MinimalModel")
     raw_ops = OrderedDict()
     for label in seed_trace.layer_labels:
-        op_log = seed_trace.layer_dict_main_keys[label]
+        op_log = seed_trace._layer_dict_main_keys[label]
         op_log._tracing_finished = False
         # Simulate the pre-fix backend hook state: a plain int, not Bytes.
         op_log.param_memory = int(op_log.param_memory)
@@ -195,7 +195,7 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
     )
 
     assert trace._tracing_finished is True
-    assert len(trace.layer_dict_main_keys) == len(raw_ops)
-    for label, op_log in trace.layer_dict_main_keys.items():
+    assert len(trace._layer_dict_main_keys) == len(raw_ops)
+    for label, op_log in trace._layer_dict_main_keys.items():
         assert op_log._tracing_finished is True, label
         assert type(op_log.param_memory) is Bytes, (label, type(op_log.param_memory))

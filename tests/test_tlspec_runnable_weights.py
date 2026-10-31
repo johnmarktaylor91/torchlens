@@ -117,7 +117,7 @@ def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     """Reject tensor payloads hidden in any persisted slotted Op field."""
 
     trace = _capture(WeightPayloadModel().eval())
-    op = next(op for op in trace.layer_list if not op.is_input)
+    op = next(op for op in trace._layer_list if not op.is_input)
     object.__setattr__(op, field_name, {"hidden_tensor": torch.tensor([1.0])})
 
     with pytest.raises((AssertionError, ArtifactError)) as caught:
@@ -278,7 +278,7 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     assert_sparse_core_has_no_tensor_payload(weighted_manifest["run"])
     assert_sparse_core_has_no_tensor_payload(metadata)
     assert metadata["_buffer_initial_values"] == {}
-    assert all(op.func is None for op in metadata["layer_list"])
+    assert all(op.func is None for op in metadata["_layer_list"])
     tl.validation.validate_tlspec(weighted_path)
 
 

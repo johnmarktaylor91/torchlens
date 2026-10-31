@@ -83,8 +83,8 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
         loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert [layer.layer_label for layer in loaded.layer_list] == [
-        layer.layer_label for layer in trace.layer_list
+    assert [layer.layer_label for layer in loaded._layer_list] == [
+        layer.layer_label for layer in trace._layer_list
     ]
 
 
@@ -97,7 +97,7 @@ def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int |
     source = {
         "trace": trace,
         "op": trace.ops[0],
-        "layer": trace.layer_list[0],
+        "layer": trace._layer_list[0],
     }[cls_and_state]
     state = source.__getstate__()
     if version is None:

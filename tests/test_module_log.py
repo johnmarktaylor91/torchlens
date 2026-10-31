@@ -454,7 +454,7 @@ class TestModuleAccessorSummary:
         # Root aggregates sum over ALL ops (every recurrent pass), with no
         # double-count and no miss versus a manual sum over log.ops.
         root = log.root_module
-        all_ops = list(log.layer_list)
+        all_ops = list(log._layer_list)
         manual_func = sum(getattr(op, "func_duration", 0.0) or 0.0 for op in all_ops)
         manual_autograd = sum(int(getattr(op, "autograd_memory", 0) or 0) for op in all_ops)
         out_label_set = set(root.calls[0].output_ops)
@@ -538,7 +538,7 @@ class TestModuleLogIntegration:
     def test_root_layers_equals_model_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.layer_labels == [layer.layer_label for layer in log.layer_list]
+        assert root.layer_labels == [layer.layer_label for layer in log._layer_list]
 
     def test_root_params_count(self):
         log = trace_fn(_make_simple_model(), _simple_input())

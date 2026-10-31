@@ -166,7 +166,7 @@ def _assert_settlement_refusal_keeps_product(excinfo: pytest.ExceptionInfo) -> N
     partial = getattr(excinfo.value, "partial_log", None)
     assert isinstance(partial, PartialTrace)
     assert partial.trace is not None
-    assert len(partial.trace.layer_list) > 0
+    assert len(partial.trace._layer_list) > 0
     recovered = from_failed_capture(excinfo.value)
     assert recovered is partial
 

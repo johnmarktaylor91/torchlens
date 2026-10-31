@@ -261,7 +261,7 @@ def _run_step_15(ctx: StepContext) -> None:
 def _run_step_15_5(ctx: StepContext) -> None:
     """Step 15.5: build aggregate ``Layer`` records and the pass-index index.
 
-    ``Trace.by_pass`` maps each pass index to the ``layer_list`` positions of
+    ``Trace._by_pass`` maps each pass index to the ``layer_list`` positions of
     the layers recorded at that pass; layers with no ``pass_index`` are absent
     rather than bucketed.
     """
@@ -269,11 +269,11 @@ def _run_step_15_5(ctx: StepContext) -> None:
     trace = ctx.trace
     with _vtimed(trace, "  Step 15.5: Build layer logs"):
         _pp()._build_layer_logs(trace)
-        trace.by_pass = {}
-        for index, op in enumerate(trace.layer_list):
+        trace._by_pass = {}
+        for index, op in enumerate(trace._layer_list):
             pass_index = getattr(op, "pass_index", None)
             if pass_index is not None:
-                trace.by_pass.setdefault(pass_index, []).append(index)
+                trace._by_pass.setdefault(pass_index, []).append(index)
 
 
 def _run_step_16(ctx: StepContext) -> None:

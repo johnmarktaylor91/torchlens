@@ -89,7 +89,7 @@ def _config_built_entries(entries: list[tuple[str, str]]) -> None:
 
     log = tl.trace(_Recurrent(), torch.randn(2, 8))
     _write("trace_card.html", log._repr_html_(), entries)
-    _write("layer_card_multipass.html", log.layer_logs["relu_1_2"]._repr_html_(), entries)
+    _write("layer_card_multipass.html", log.layers["relu_1_2"]._repr_html_(), entries)
     _write("op_card.html", log["relu_1_2:2"]._repr_html_(), entries)
     tl.export.html(log, OUT_DIR / "report_clean.html", options=_DETERMINISTIC)
     entries.append(("report_clean.html", "report_clean.html"))

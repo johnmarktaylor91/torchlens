@@ -46,12 +46,12 @@ def _check_backend_neutral_graph_topology(ml: Trace) -> None:
     name = "backend_neutral_graph_topology"
     labels = {
         getattr(layer, "label", getattr(layer, "layer_label", ""))
-        for layer in getattr(ml, "layer_list", ())
+        for layer in getattr(ml, "_layer_list", ())
     } | {
         getattr(layer, "layer_label", getattr(layer, "label", ""))
-        for layer in getattr(ml, "layer_list", ())
+        for layer in getattr(ml, "_layer_list", ())
     }
-    for layer in getattr(ml, "layer_list", ()):
+    for layer in getattr(ml, "_layer_list", ()):
         label = getattr(layer, "layer_label", getattr(layer, "label", type(layer).__name__))
         parents = list(getattr(layer, "parents", ()) or ())
         children = list(getattr(layer, "children", ()) or ())
@@ -135,7 +135,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     name = "edge_use_parent_arg_consistency"
     valid_edge_uses = {"arg", "kwarg", "container", "module", "buffer", "output", "control"}
     valid_arg_kinds = {"positional", "keyword"}
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         layer_label = getattr(layer, "layer_label", type(layer).__name__)
         for record in getattr(layer, "_edge_uses", ()) or ():
             edge_use = getattr(record, "edge_use", None)
@@ -211,7 +211,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     # traces (caught by the validation-decision golden's TinyRecurrent).
     # Each op record carries its own row and its own pass-exact
     # parents/parent_arg_positions staging.
-    for layer in getattr(ml, "layer_list", ()) or ():
+    for layer in getattr(ml, "_layer_list", ()) or ():
         for op in getattr(layer, "ops", ()) or ():
             row = getattr(op, "_row", None)
             if row is None:
@@ -290,7 +290,7 @@ def _check_op_log_fields(ml: Trace) -> None:
     """
     name = "op_log_fields"
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # Tensor shape/dtype consistency when outs are saved
@@ -474,7 +474,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
     """
 
     name = "payload_metadata_invariants"
-    for op in ml.layer_list:
+    for op in ml._layer_list:
         label = getattr(op, "label", getattr(op, "layer_label", type(op).__name__))
         _check_live_payload_metadata(
             name,

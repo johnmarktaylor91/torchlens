@@ -78,7 +78,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activation]
+    return [layer for layer in trace._layer_list if layer.has_saved_activation]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:

@@ -296,7 +296,7 @@ class _SAEFamily:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", MultiMatchWarning)
-                    matched = trace.resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
+                    matched = trace.resolve_sites(self.site, max_fanout=len(trace._layer_list) or 1)
             except (SiteResolutionError, InvalidArgumentError, KeyError, ValueError) as exc:
                 return InvalidArgumentError(
                     f"the SAE registered as {self.name!r} sits at {self.site!r}, which matches "
@@ -323,7 +323,7 @@ class _SAEFamily:
             )
         passes = sum(
             1
-            for record in trace.layer_list
+            for record in trace._layer_list
             if getattr(record, "layer_label", None) == getattr(op, "layer_label", None)
         )
         if passes > 1:
