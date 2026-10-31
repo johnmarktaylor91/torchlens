@@ -321,3 +321,281 @@ def test_plain_eager_capture_is_unaffected() -> None:
     for op in trace.layer_list:
         for parent in op.parents:
             assert script_metadata_only_proof(op, [parent]) is None
+
+
+# Adversarial attacks on the graph proof (review of AGT-2470). Each scripted helper below
+# lets the argument's values reach the output, or reaches a node the proof must not trust,
+# so the proof must name no argument; the end-to-end attacks check the call-slot mapping.
+
+
+@torch.jit.script
+def view_alias_read(x: torch.Tensor) -> torch.Tensor:
+    """``aten::view`` aliases the argument before an element read."""
+
+    return x.view(-1)[0] * 0.0 + float(x.size(-1))
+
+
+@torch.jit.script
+def list_packed_read(x: torch.Tensor) -> torch.Tensor:
+    """``prim::ListConstruct`` packs the argument; the list's value is summed."""
+
+    return torch.stack([x, x]).sum() * 0.0 + float(x.size(-1))
+
+
+@torch.jit.script
+def tuple_packed_read(x: torch.Tensor) -> torch.Tensor:
+    """``prim::TupleConstruct`` packs the argument; the unpacked member is read for values."""
+
+    packed = (x, x.size(-1))
+    return packed[0].sum() * 0.0 + float(packed[1])
+
+
+@torch.jit.script
+def size_fed_back_into_value_op(x: torch.Tensor) -> torch.Tensor:
+    """The size read flows into a value op on the same argument."""
+
+    return x.reshape(x.size(0), -1)[0, 0] * 0.0 + float(x.size(-1))
+
+
+@torch.jit.script
+def in_place_then_size(x: torch.Tensor) -> torch.Tensor:
+    """An in-place op on the argument, then only a size read."""
+
+    x.add_(0.0)
+    return torch.tensor(float(x.size(-1)))
+
+
+@torch.jit.script
+def returned_from_if_block(x: torch.Tensor, flag: bool) -> torch.Tensor:
+    """The argument is a ``prim::If`` block output on one branch."""
+
+    if flag:
+        return x
+    return torch.zeros(x.size())
+
+
+@torch.jit.script
+def loop_carried(x: torch.Tensor) -> torch.Tensor:
+    """The argument enters a ``prim::Loop`` as a carried value."""
+
+    y = x
+    for _ in range(2):
+        y = y * 1.0
+    return y
+
+
+@torch.jit.script
+def passthrough(x: torch.Tensor) -> torch.Tensor:
+    """The argument is returned as-is (a graph return use)."""
+
+    return x
+
+
+@torch.jit.ignore
+def _python_peek(x: torch.Tensor) -> float:
+    return float(x.sum())
+
+
+@torch.jit.script
+def ignored_python_read(x: torch.Tensor) -> torch.Tensor:
+    """A ``@torch.jit.ignore`` call (``prim::PythonOp``) receives the argument."""
+
+    return torch.tensor(_python_peek(x) * 0.0 + float(x.size(-1)))
+
+
+@torch.jit.script
+def forked_element_read(x: torch.Tensor) -> torch.Tensor:
+    """``prim::fork`` hands the argument to an element-reading helper."""
+
+    future = torch.jit.fork(one_element_read, x)
+    return torch.jit.wait(future)
+
+
+@torch.jit.script
+def new_zeros_template(x: torch.Tensor) -> torch.Tensor:
+    """``new_zeros`` reads dtype and device only, but it is not an enumerated read."""
+
+    return x.new_zeros(x.size())
+
+
+def _traced_double(x: torch.Tensor) -> torch.Tensor:
+    return x * 2.0
+
+
+traced_double = torch.jit.trace(_traced_double, torch.randn(2, 4))
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        view_alias_read,
+        list_packed_read,
+        tuple_packed_read,
+        size_fed_back_into_value_op,
+        in_place_then_size,
+        returned_from_if_block,
+        loop_carried,
+        passthrough,
+        ignored_python_read,
+        forked_element_read,
+        new_zeros_template,
+        traced_double,
+    ],
+)
+def test_attack_value_or_untrusted_use_gives_no_proof(function) -> None:
+    """Aliasing, packing, in-place, block, loop, return, Python, fork and trace uses."""
+
+    assert metadata_only_arguments(function) == {}
+
+
+def test_attack_proof_is_stable_across_executor_warmup() -> None:
+    """The proof reads the inlined program, not the executor's profiled graph."""
+
+    before = metadata_only_arguments(scale_by_last_dim)
+    graph_before = str(scale_by_last_dim.inlined_graph)
+    for _ in range(4):
+        scale_by_last_dim(torch.randn(3, 4), torch.randn(3, 4))
+    assert metadata_only_arguments(scale_by_last_dim) == before
+    assert str(scale_by_last_dim.inlined_graph) == graph_before
+
+
+@torch.jit.script
+def size_then_dict_value(x: torch.Tensor, d: dict[str, torch.Tensor]) -> torch.Tensor:
+    """``x`` is read for its size; the dict member is read for values."""
+
+    return d["a"] * x.size(-1)
+
+
+@torch.jit.script
+def size_then_list_value(x: torch.Tensor, xs: list[torch.Tensor]) -> torch.Tensor:
+    """``x`` is read for its size; the list member is read for values."""
+
+    return xs[0] * x.size(-1)
+
+
+@torch.jit.script
+def size_then_tuple_value(x: torch.Tensor, pair: tuple[torch.Tensor, int]) -> torch.Tensor:
+    """``x`` is read for its size; the tuple member is read for values."""
+
+    return pair[0] * x.size(-1)
+
+
+@torch.jit.script
+def size_then_optional_value(x: torch.Tensor, y: torch.Tensor | None) -> torch.Tensor:
+    """``x`` is read for its size; the optional argument is read for values."""
+
+    if y is None:
+        return torch.zeros(x.size())
+    return y * x.size(-1)
+
+
+@torch.jit.script
+def value_then_size(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Positions reversed: argument 0 is read for values, argument 1 for its size."""
+
+    return y * x.size(-1)
+
+
+class _CallModel(nn.Module):
+    """Linear, then one scripted call built by ``call(h, g)``; ``g = tanh(h)``."""
+
+    def __init__(self, call) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.call = call
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.fc(x)
+        g = torch.tanh(h)
+        return self.call(h, g)
+
+
+def _parent_label(trace: tl.Trace, op, func_name: str) -> str:
+    """Return the label of ``op``'s parent produced by ``func_name``."""
+
+    by_label = {layer.label: layer for layer in trace.layer_list}
+    (label,) = [p for p in op.parents if by_label[p].func_name == func_name]
+    return label
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda h, g: size_then_dict_value(h, {"a": h}),
+        lambda h, g: size_then_list_value(h, [h]),
+        lambda h, g: size_then_tuple_value(h, (h, 1)),
+        lambda h, g: size_then_optional_value(h, h),
+    ],
+    ids=["dict", "list", "tuple", "optional"],
+)
+def test_attack_parent_also_inside_a_container_slot_gets_no_proof(call) -> None:
+    """A parent in a size slot AND inside a value-bearing container slot is never proven."""
+
+    trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
+    op = _boundary_op(trace)
+    h_label = _parent_label(trace, op, "linear")
+    assert script_metadata_only_proof(op, [h_label]) is None
+    assert _metadata_decisions(trace) == []
+    assert result is True
+
+
+@pytest.mark.parametrize(
+    ("call", "size_func"),
+    [
+        (lambda h, g: value_then_size(g, h), "linear"),
+        (lambda h, g: value_then_size(h, g), "tanh"),
+        (lambda h, g: scale_by_last_dim(y=g, x=h), "linear"),
+        (lambda h, g: scale_by_last_dim(h, y=g), "linear"),
+        (lambda h, g: value_then_size(x=g, y=h), "tanh"),
+    ],
+    ids=["positional-1", "positional-1-swapped", "keywords", "mixed", "keywords-swapped"],
+)
+def test_attack_slot_mapping_follows_the_schema(call, size_func: str) -> None:
+    """Only the parent bound to the size-read argument is proven, by position or keyword."""
+
+    trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
+    op = _boundary_op(trace)
+    value_func = "tanh" if size_func == "linear" else "linear"
+    assert script_metadata_only_proof(op, [_parent_label(trace, op, size_func)]) is not None
+    assert script_metadata_only_proof(op, [_parent_label(trace, op, value_func)]) is None
+    assert len(_metadata_decisions(trace)) == 1
+    assert result is True
+
+
+def test_attack_two_perturbed_parents_get_no_proof() -> None:
+    """The proof applies to one perturbed parent at a time only."""
+
+    trace, _ = _trace_and_validate(_TwoArgModel(same=False), torch.randn(3, 4))
+    op = _boundary_op(trace)
+    assert script_metadata_only_proof(op, list(op.parents)) is None
+
+
+def test_attack_in_place_call_is_not_collapsed_into_a_boundary_op() -> None:
+    """A scripted call that writes its argument in place never becomes a ``jitscript`` op."""
+
+    trace, _ = _trace_and_validate(_HelperModel(in_place_then_size), torch.randn(3, 4))
+    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace.layer_list)
+    assert _metadata_decisions(trace) == []
+
+
+@torch.jit.script
+def value_times_size(x: torch.Tensor) -> torch.Tensor:
+    """The argument is read for its values and its size."""
+
+    return x * x.size(-1)
+
+
+def test_attack_value_dependent_call_validates_without_the_exemption() -> None:
+    """A boundary call whose output depends on the argument's values is perturbation-tested."""
+
+    trace, result = _trace_and_validate(_HelperModel(value_times_size), torch.randn(3, 4))
+    assert result is True
+    assert any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace.layer_list)
+    assert _metadata_decisions(trace) == []
+
+
+def test_attack_aliased_element_read_still_fails_perturbation() -> None:
+    """Armed negative: an element read through a view alias keeps the check, which fails."""
+
+    trace, result = _trace_and_validate(_HelperModel(view_alias_read), torch.randn(3, 4))
+    _assert_boundary_perturbation_failure(trace, result)
