@@ -16,6 +16,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+from torchlens._io.bundle import save as _save_bundle
 from torchlens.capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
@@ -151,7 +152,7 @@ def test_n1_raw_partial_trace_object_refuses_save_not_attributeerror(tmp_path) -
         raise AssertionError("capture unexpectedly succeeded")
     assert not hasattr(partial, "_runnable")
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        partial.save(tmp_path / "raw_partial.tlspec", overwrite=True)
+        _save_bundle(partial, tmp_path / "raw_partial.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -167,7 +168,7 @@ def test_n1_failed_recording_refuses_save_not_attributeerror(tmp_path) -> None:
     assert recording.failed is True
     assert not hasattr(recording, "_runnable")
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        recording.save(tmp_path / "failed_recording.tlspec", overwrite=True)
+        _save_bundle(recording, tmp_path / "failed_recording.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -446,7 +447,7 @@ def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_
     assert complete.outcome.status is CaptureStatus.COMPLETE
     wrapper = PartialTrace(trace=complete, original_exception=RuntimeError("hand-built"))
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        wrapper.save(tmp_path / "wrapper.tlspec", overwrite=True)
+        _save_bundle(wrapper, tmp_path / "wrapper.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 

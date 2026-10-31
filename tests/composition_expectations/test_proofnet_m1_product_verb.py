@@ -22,6 +22,8 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._io.bundle import save as _save_bundle
+
 pytestmark = [pytest.mark.heavy, pytest.mark.compo]
 
 
@@ -282,7 +284,7 @@ def _run_verb(verb: str, product: Any, tmp_path: Any) -> Any:
         return product.to_agent_json()
     if verb == "save_analysis":
         target = tmp_path / "cell.tlspec"
-        product.save(str(target))
+        _save_bundle(product, str(target))
         assert target.exists(), "save reported success but wrote no artifact"
         return "saved"
     if verb == "fork":
