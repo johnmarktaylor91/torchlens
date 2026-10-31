@@ -315,6 +315,49 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.equal(regex_rerun[regex_rerun.output_layers[0]].out, torch.ones(1, 3))
 
 
+def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: Path) -> None:
+    """A saved builtin helper carrying a keyword its constructor does not take refuses typed.
+
+    This is the refusal a spec saved under different helper keywords meets (the 2.16
+    fixtures used to reach it through ``force_shape_change`` before the format stamp
+    refused them first); it must stay typed, never a raw ``TypeError``.
+    """
+
+    from torchlens._errors import InvalidArgumentError
+
+    log = tl.trace(
+        _ReluModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): tl.zero_ablate()},
+        ),
+    )
+    path = tmp_path / "foreign_keyword.tlspec"
+    log.save_intervention(path, level="portable")
+    spec_path = path / "spec.json"
+    spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
+
+    def _plant(value: Any) -> int:
+        planted = 0
+        if isinstance(value, dict):
+            if value.get("name") == "zero_ablate" and isinstance(value.get("kwargs"), dict):
+                value["kwargs"]["force_shape_change"] = False
+                planted += 1
+            planted += sum(_plant(item) for item in value.values())
+        elif isinstance(value, list):
+            planted += sum(_plant(item) for item in value)
+        return planted
+
+    assert _plant(spec_json) >= 1
+    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"
+    assert "force_shape_change" in str(excinfo.value)
+
+
 def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Path) -> None:
     """Executable import refs import lazily after load and only when executed."""
 

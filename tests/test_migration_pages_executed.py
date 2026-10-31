@@ -168,18 +168,23 @@ def test_gaussian_rdm_migration_note_matches_the_formula() -> None:
     assert [round(float(old[i, j]), 3) for i, j in pairs] == [0.148, 0.765, 0.474]
 
 
-def test_v216_erratum_names_the_live_floor_refusal() -> None:
-    """The 2.16 erratum retracts 'permanently readable' and names the real refusal."""
-
-    from torchlens._io import format_contract
+def test_v216_formats_and_extraction_v1_refuse_in_the_migration_policy() -> None:
+    """MIGRATIONS.md says every 2.x saved format refuses with the one 2.x error, nothing loads."""
 
     text = (DOCS.parent / "MIGRATIONS.md").read_text("utf-8")
     compat = text.split("## Visualization Collapse Engine", 1)[0]
-    assert compat.count("permanently readable") == 1  # only inside the quoted retraction
-    assert '"are permanently readable". That sentence is retracted.' in compat
-    assert f"`tlspec_version`\n{format_contract.MIN_TLSPEC_VERSION}" in compat
-    assert "artifact_version_below_floor" in compat
+    assert "permanently readable" not in compat
+    assert "TorchLens 3 reads neither, and does not migrate them" in compat
+    assert "`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`)" in compat
     assert "torchlens==2.17.0" in compat
+    assert "compat_window" not in text
+    extraction = text.split("## Extraction manifest v2", 1)[1].split("\n## ", 1)[0]
+    assert "`tl_extract_manifest_v1`" in extraction
+    assert (
+        "refuse them\nwith `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`)"
+        in extraction
+    )
+    assert "nothing migrates them in place" in extraction
 
 
 def test_lovely_sd_divergence_note_is_true() -> None:
