@@ -64,7 +64,7 @@
   }
 }
 * { box-sizing: border-box; }
-html { height: 100%; }
+html { height: 100%; scroll-padding-top: 120px; }
 body {
   margin: 0;
   background: var(--surface);
@@ -77,6 +77,7 @@ code, pre, .sig, .mono { font-family: var(--font-mono); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
 button { font: inherit; color: inherit; }
 mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+.visually-hidden { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
 /* Header and controls */
 header.top {
@@ -92,7 +93,7 @@ h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .controls { display: flex; flex-wrap: wrap; gap: var(--sp-sm); align-items: center; margin-top: var(--sp-sm); }
 .search { flex: 1 1 260px; display: flex; align-items: center; gap: var(--sp-sm); position: relative; }
 .search input {
-  width: 100%; min-height: 36px; padding: 6px 76px 6px 12px;
+  width: 100%; min-height: 36px; padding: 6px 110px 6px 12px;
   border: 1px solid var(--grid); border-radius: var(--r-md);
   background: var(--surface-2); color: var(--ink); font: 14px var(--font-sans);
 }
@@ -124,9 +125,13 @@ section.tree > h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 
 ul.kids { list-style: none; margin: 0; padding: 0 0 0 var(--sp-lg); border-left: 1px solid var(--grid); }
 ul.kids.root { padding-left: 0; border-left: 0; }
 li.node { margin: 0; }
+li.group {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  padding: var(--sp-sm) 0 2px 30px; font-weight: 600;
+}
 .row {
   display: grid; grid-template-columns: 24px auto minmax(0, 1fr); column-gap: 6px; align-items: start;
-  min-height: 28px; padding: 3px 4px 3px 0; border-radius: var(--r-sm);
+  min-height: 28px; padding: 3px 4px 3px 0; border-radius: var(--r-sm); cursor: pointer;
 }
 .row:hover { background: var(--surface-2); }
 li.node.current > .row { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
@@ -167,8 +172,10 @@ li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
 .details .src { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: var(--sp-xs) var(--sp-md); }
 .details .src code { font-size: 12px; }
 .details .note { color: var(--muted); font-size: 12px; margin-top: var(--sp-xs); }
-.details .fullsig { font-size: 12.5px; margin: 0 0 var(--sp-sm); white-space: pre-wrap; word-break: break-word; }
+.details .fullsig { font-size: 12.5px; margin: 0 0 var(--sp-sm); white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+.details .fullsig .pn { color: var(--ink); }
 .details .fullsig .kw { color: var(--k-class); }
+.details .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 2px; }
 
 .empty { color: var(--muted); padding: var(--sp-lg) 0; }
 .empty b { color: var(--ink); }
@@ -176,7 +183,7 @@ li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
 /* Help panel */
 .help {
   position: fixed; inset: auto var(--sp-lg) calc(var(--sp-lg) + env(safe-area-inset-bottom, 0px)) auto;
-  max-width: 380px; width: calc(100% - 2 * var(--sp-lg)); background: var(--surface); color: var(--ink);
+  max-width: 400px; width: calc(100% - 2 * var(--sp-lg)); background: var(--surface); color: var(--ink);
   border: 1px solid var(--grid); border-radius: var(--r-md); padding: var(--sp-md) var(--sp-lg);
   box-shadow: 0 8px 28px rgba(0,0,0,0.18); z-index: 10; font-size: 13px;
 }
@@ -195,6 +202,7 @@ footer code { font-size: 12px; }
 @media (max-width: 640px) {
   header.top, main, footer { padding-left: var(--sp-md); padding-right: var(--sp-md); }
   ul.kids { padding-left: var(--sp-md); }
+  li.group { padding-left: 24px; }
   .row { grid-template-columns: 24px minmax(0, 1fr); }
   .badge { grid-column: 2; min-width: 0; margin-top: 2px; }
   .main { grid-column: 2; }
@@ -213,7 +221,7 @@ footer code { font-size: 12px; }
   </div>
   <div class="controls">
     <div class="search">
-      <label for="q" class="visually-hidden" style="position:absolute;left:-9999px">Search names, arguments and summaries</label>
+      <label for="q" class="visually-hidden">Search names, argument names and summaries</label>
       <input id="q" type="search" placeholder="Search names, argument names, summaries   ( / to focus )" autocomplete="off" spellcheck="false">
       <span class="count" id="count" aria-live="polite"></span>
       <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>&#x2715;</button>
@@ -251,13 +259,15 @@ footer code { font-size: 12px; }
 
 <aside class="help" id="help" hidden role="dialog" aria-label="Keys and legend">
   <button class="close" type="button" id="helpclose" aria-label="Close">&#x2715;</button>
-  <h3>Keys</h3>
+  <h3>Keys and clicks</h3>
   <table>
-    <tr><td><kbd>/</kbd></td><td>focus the search box</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td>clear the search, close this panel</td></tr>
-    <tr><td><kbd>i</kbd></td><td>show or hide internals</td></tr>
+    <tr><td><kbd>/</kbd></td><td>focus the search box; <kbd>Esc</kbd> clears it</td></tr>
+    <tr><td><kbd>i</kbd></td><td>show or hide internals (private modules, underscore names)</td></tr>
     <tr><td><kbd>t</kbd></td><td>cycle the theme (auto, light, dark)</td></tr>
     <tr><td><kbd>?</kbd></td><td>this panel</td></tr>
+    <tr><td>caret</td><td>open or close the children of a row</td></tr>
+    <tr><td>row</td><td>show the full signature with types, the docstring and the defining file</td></tr>
+    <tr><td>name</td><td>puts the row's path in the address bar: a link you can share or bookmark</td></tr>
   </table>
   <h3 style="margin-top:12px">Legend</h3>
   <div class="legend">
@@ -267,7 +277,7 @@ footer code { font-size: 12px; }
     <span class="badge k-property">property</span><span>read like an attribute; "settable" when it has a setter</span>
     <span class="badge k-field">field</span><span>dataclass field; attribute: other class-level name; constant: UPPER_CASE module value</span>
   </div>
-  <p class="meta">Click a name to put its path in the address bar (a deep link). Expanding a row shows the full docstring and where it is defined. Tags on root rows name the implementation layer (L0 core to L9 recipe) and whether the name is in <code>__all__</code>.</p>
+  <p class="meta">Row signatures show argument names and short defaults; the full typed signature is in the row's details. Tags on root rows name the implementation layer (L0 core to L9 recipe) and whether the name is in <code>__all__</code>. Searching with <code>?q=word</code> in the address bar opens the page on that search.</p>
 </aside>
 
 <script id="api-map-data" type="application/json">/*__DATA__*/</script>
@@ -275,11 +285,27 @@ footer code { font-size: 12px; }
 (function () {
   "use strict";
   var DATA = JSON.parse(document.getElementById("api-map-data").textContent);
-  var N = DATA.nodes, FILES = DATA.files, ROOTS = DATA.roots, IDS = DATA.ids;
+  var N = DATA.nodes, FILES = DATA.files, ROOTS = DATA.roots;
   var KIND_ORDER = {root: 0, package: 20, module: 21, "class": 10, "function": 11, method: 31, property: 30,
                     field: 28, attribute: 29, member: 27, constant: 40, variable: 41, external: 50, dynamic: 51};
   var CLASS_ORDER = {field: 0, attribute: 1, member: 2, property: 3, method: 4, "class": 5};
-  var state = {internals: false, theme: "auto", query: "", open: {}};
+  var GROUPS = {
+    root: [["Entry points", function (n) { return n.r !== undefined; }],
+           ["Classes", function (n) { return target(n).k === "class"; }],
+           ["Functions", function (n) { return target(n).k === "function"; }],
+           ["Namespaces", function (n) { var k = target(n).k; return k === "package" || k === "module"; }],
+           ["Other", function () { return true; }]],
+    module: [["Classes", function (n) { return target(n).k === "class"; }],
+             ["Functions", function (n) { return target(n).k === "function"; }],
+             ["Submodules", function (n) { var k = target(n).k; return k === "package" || k === "module"; }],
+             ["Data", function (n) { var k = target(n).k; return k === "constant" || k === "variable"; }],
+             ["Other", function () { return true; }]],
+    "class": [["Fields", function (n) { var k = n.k; return k === "field" || k === "attribute" || k === "member"; }],
+              ["Properties", function (n) { return n.k === "property"; }],
+              ["Methods", function (n) { return n.k === "method"; }],
+              ["Nested", function () { return true; }]]
+  };
+  var state = {internals: false, theme: "auto", query: "", open: {}, details: {}};
   var paths = {};   // node id -> [display paths]
   var byPath = {};  // display path -> node id
   var hits = null;  // Set of display paths to show while searching
@@ -348,23 +374,29 @@ footer code { font-size: 12px; }
     });
   }
 
+  function groupsFor(parentId) {
+    var k = target(node(parentId)).k;
+    if (k === "root") return GROUPS.root;
+    if (k === "class") return GROUPS["class"];
+    if (k === "package" || k === "module") return GROUPS.module;
+    return null;
+  }
+
   function highlight(text) {
     if (!tokens.length) return esc(text);
-    var out = esc(text), lower = text.toLowerCase();
-    // mark the first token that occurs; keep it simple and safe
+    var lower = text.toLowerCase();
     for (var i = 0; i < tokens.length; i++) {
       var t = tokens[i], at = lower.indexOf(t);
       if (at >= 0) {
         return esc(text.slice(0, at)) + "<mark>" + esc(text.slice(at, at + t.length)) + "</mark>" + esc(text.slice(at + t.length));
       }
     }
-    return out;
+    return esc(text);
   }
 
   function renderSig(sig, params) {
     if (!sig) return "";
     var out = esc(sig);
-    // emphasise parameter names: they start a parameter after "(" or ", "
     (params || []).forEach(function (p) {
       var re = new RegExp("(\\(|, )(\\*{0,2})(" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?=[,:=)\\s])");
       out = out.replace(re, function (m, pre, stars, name) {
@@ -380,14 +412,17 @@ footer code { font-size: 12px; }
     var cs = kids(n), shown = cs.filter(function (c) { return visible(node(c)); });
     var hidden = cs.length - shown.length;
     var kind = n.k === "root" ? "root" : t.k;
-    var html = '<div class="row">';
-    html += '<button class="tog' + (shown.length ? "" : " leaf") + '" type="button" aria-label="Toggle ' + esc(n.n) + '" aria-expanded="false">'
+    var html = '<div class="row" title="Click for the full signature, docstring and source location">';
+    html += '<button class="tog' + (shown.length ? "" : " leaf") + '" type="button" aria-label="Open the children of ' + esc(n.n) + '" aria-expanded="false">'
           + '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
     html += '<span class="badge k-' + esc(kind) + '">' + esc(kind) + '</span>';
     html += '<div class="main">';
     html += '<a class="name" href="#' + esc(path) + '">' + highlight(n.n) + '</a>';
-    if (t.s) html += '<code class="sig">' + renderSig(t.s, t.a) + '</code>';
-    var tags = (n.t || []).concat(n.A !== undefined ? (t.t || []) : []);
+    var brief = t.q || t.s;
+    if (brief) html += '<code class="sig">' + renderSig(brief, t.a) + '</code>';
+    // A root alias carries its own layer tag from the surface table; the target's layer tag would repeat it.
+    var own = n.t || [];
+    var tags = own.concat(n.A !== undefined ? (t.t || []).filter(function (g) { return own.indexOf(g) < 0 && !/^(L\d|FACADE)$/.test(g); }) : []);
     if (tags.length) {
       html += '<span class="tags">' + tags.map(function (g) { return '<span class="tag' + (g === "__all__" ? " all" : "") + '">' + esc(g) + '</span>'; }).join("") + '</span>';
     }
@@ -400,7 +435,7 @@ footer code { font-size: 12px; }
   function detailsHTML(id) {
     var n = node(id), t = target(n);
     var html = '<div class="details">';
-    if (t.s && t.s.length > 60) html += '<div class="fullsig mono">' + esc(t.n) + renderSig(t.s, t.a) + '</div>';
+    if (t.s) html += '<p class="label">Signature</p><div class="fullsig mono">' + esc(t.n) + renderSig(t.s, t.a) + '</div>';
     var doc = t.D || t.d;
     if (doc) html += '<pre>' + esc(doc) + '</pre>';
     else html += '<p class="note">No docstring.</p>';
@@ -415,20 +450,21 @@ footer code { font-size: 12px; }
     html += '</div>';
     if (n.o) html += '<div class="note">' + esc(n.o) + '</div>';
     if (t.o && t.o !== n.o) html += '<div class="note">' + esc(t.o) + '</div>';
+    if (t.x && t.d && !t.D) html += '<div class="note">Internal row: the summary line only; the full docstring is in the file.</div>';
     html += '</div>';
     return html;
   }
 
-  function li(id, path, depth) {
+  function li(id, path) {
     var n = node(id);
     var el = document.createElement("li");
     el.className = "node k-" + target(n).k + (isInternal(n) ? " internal" : "");
     el.dataset.path = path;
     el.dataset.id = id;
     el.innerHTML = rowHTML(id, path);
-    var shouldOpen = hits ? hits.has(path) && !hitNodes.has(path) : !!state.open[path];
-    if (hits && hitNodes.has(path) && hits.has(path) && hasHitDescendant(path)) shouldOpen = true;
-    if (shouldOpen) open(el, true);
+    var shouldOpen = hits ? hasHitDescendant(path) : !!state.open[path];
+    if (shouldOpen) openKids(el, true);
+    if (!hits && state.details[path]) showDetails(el, true);
     return el;
   }
 
@@ -440,38 +476,67 @@ footer code { font-size: 12px; }
   }
 
   function renderKids(el) {
-    var id = el.dataset.id, path = el.dataset.path, n = node(id);
+    var id = el.dataset.id, path = el.dataset.path;
     var ul = document.createElement("ul");
     ul.className = "kids";
-    var cs = sortKids(id, kids(n));
-    cs.forEach(function (c) {
-      var cn = node(c);
-      if (!visible(cn)) return;
-      var cpath = path + "." + cn.n;
-      if (hits && !hits.has(cpath)) return;
-      ul.appendChild(li(c, cpath, 0));
-    });
+    fillList(ul, id, path);
     return ul;
   }
 
-  function open(el, yes) {
+  function fillList(ul, parentId, parentPath) {
+    var cs = sortKids(parentId, kids(node(parentId)));
+    var groups = groupsFor(parentId);
+    var shown = [];
+    cs.forEach(function (c) {
+      var cn = node(c);
+      if (!visible(cn)) return;
+      var cpath = parentPath + "." + cn.n;
+      if (hits && !hits.has(cpath)) return;
+      shown.push([c, cpath]);
+    });
+    if (!groups || shown.length < 8) {
+      shown.forEach(function (pair) { ul.appendChild(li(pair[0], pair[1])); });
+      return;
+    }
+    var used = {};
+    groups.forEach(function (g) {
+      var members = shown.filter(function (pair) { return !used[pair[1]] && g[1](node(pair[0])); });
+      if (!members.length) return;
+      var head = document.createElement("li");
+      head.className = "group"; head.setAttribute("role", "presentation"); head.textContent = g[0];
+      ul.appendChild(head);
+      members.forEach(function (pair) { used[pair[1]] = true; ul.appendChild(li(pair[0], pair[1])); });
+    });
+  }
+
+  function openKids(el, yes) {
     var path = el.dataset.path;
     var btn = el.querySelector(":scope > .row .tog");
     if (yes) {
       if (el.classList.contains("open")) return;
       el.classList.add("open");
       btn.setAttribute("aria-expanded", "true");
-      var frag = document.createDocumentFragment();
-      var d = document.createElement("div"); d.innerHTML = detailsHTML(el.dataset.id);
-      frag.appendChild(d.firstChild);
-      frag.appendChild(renderKids(el));
-      el.appendChild(frag);
+      el.appendChild(renderKids(el));
       if (!hits) state.open[path] = true;
     } else {
       el.classList.remove("open");
       btn.setAttribute("aria-expanded", "false");
-      el.querySelectorAll(":scope > .details, :scope > ul.kids").forEach(function (x) { x.remove(); });
+      el.querySelectorAll(":scope > ul.kids").forEach(function (x) { x.remove(); });
       if (!hits) delete state.open[path];
+    }
+  }
+
+  function showDetails(el, yes) {
+    var path = el.dataset.path;
+    var existing = el.querySelector(":scope > .details");
+    if (yes) {
+      if (existing) return;
+      var d = document.createElement("div"); d.innerHTML = detailsHTML(el.dataset.id);
+      el.insertBefore(d.firstChild, el.querySelector(":scope > ul.kids"));
+      state.details[path] = true;
+    } else {
+      if (existing) existing.remove();
+      delete state.details[path];
     }
   }
 
@@ -479,14 +544,7 @@ footer code { font-size: 12px; }
     document.querySelectorAll("ul.kids.root").forEach(function (ul) {
       var rootName = ul.dataset.root, rootId = ROOTS[rootName];
       ul.innerHTML = "";
-      var cs = sortKids(rootId, kids(node(rootId)));
-      cs.forEach(function (c) {
-        var cn = node(c);
-        if (!visible(cn)) return;
-        var cpath = rootName + "." + cn.n;
-        if (hits && !hits.has(cpath)) return;
-        ul.appendChild(li(c, cpath, 1));
-      });
+      fillList(ul, rootId, rootName);
     });
     var empty = document.getElementById("empty");
     if (hits && hitNodes.size === 0) {
@@ -517,20 +575,20 @@ footer code { font-size: 12px; }
     var nodeHits = 0;
     Object.keys(paths).forEach(function (id) {
       var n = node(id);
-      if (!visible(n) || n.k === "root" || n.k === "package" && paths[id][0] === "torchlens") return;
+      if (!visible(n) || n.k === "root") return;
       var text = textOf(id);
       var ok = tokens.every(function (t) { return text.indexOf(t) >= 0; });
       if (!ok) return;
-      nodeHits++;
+      var counted = false;
       paths[id].forEach(function (p) {
-        // all ancestors of a hit must be visible
-        var allPublic = true, parts = p.split("."), acc = parts[0];
+        var parts = p.split("."), acc = parts[0];
+        if (parts.length < 2) return;
         for (var i = 1; i < parts.length - 1; i++) {
           acc += "." + parts[i];
           var aid = byPath[acc];
-          if (aid !== undefined && !visible(node(aid))) allPublic = false;
+          if (aid !== undefined && !visible(node(aid))) return;
         }
-        if (!allPublic) return;
+        if (!counted) { nodeHits++; counted = true; }
         hitNodes.add(p);
         var acc2 = parts[0];
         hits.add(acc2);
@@ -551,9 +609,10 @@ footer code { font-size: 12px; }
   // Tree interaction ----------------------------------------------------
   document.querySelector("main").addEventListener("click", function (ev) {
     var tog = ev.target.closest(".tog");
-    if (tog) { var el = tog.closest("li.node"); open(el, !el.classList.contains("open")); return; }
+    if (tog) { var el = tog.closest("li.node"); openKids(el, !el.classList.contains("open")); return; }
+    if (ev.target.closest("a")) return;
     var row = ev.target.closest(".row");
-    if (row && !ev.target.closest("a")) { var el2 = row.closest("li.node"); open(el2, !el2.classList.contains("open")); }
+    if (row) { var el2 = row.closest("li.node"); showDetails(el2, !el2.querySelector(":scope > .details")); }
   });
 
   function expandTo(depth) {
@@ -562,8 +621,8 @@ footer code { font-size: 12px; }
   function expandUl(ul, depth, level) {
     if (level > depth) return;
     Array.prototype.forEach.call(ul.children, function (el) {
-      if (el.querySelector(":scope > .row .tog.leaf")) return;
-      open(el, true);
+      if (!el.classList.contains("node") || el.querySelector(":scope > .row .tog.leaf")) return;
+      openKids(el, true);
       var sub = el.querySelector(":scope > ul.kids");
       if (sub) expandUl(sub, depth, level + 1);
     });
@@ -571,17 +630,13 @@ footer code { font-size: 12px; }
   document.querySelectorAll("[data-depth]").forEach(function (b) {
     b.addEventListener("click", function () {
       var d = parseInt(b.dataset.depth, 10);
-      if (d > 3 && !hits && !confirmLarge()) return;
       collapseAll(); expandTo(d);
     });
   });
-  function confirmLarge() {
-    // Expanding every public row renders thousands of elements; fine on a laptop, slow on a phone.
-    return window.innerWidth > 700 || state.internals === false;
-  }
   function collapseAll() {
-    state.open = {};
-    document.querySelectorAll("li.node.open").forEach(function (el) { open(el, false); });
+    state.open = {}; state.details = {};
+    document.querySelectorAll("li.node.open").forEach(function (el) { openKids(el, false); });
+    document.querySelectorAll("li.node > .details").forEach(function (d) { d.remove(); });
   }
   document.getElementById("collapse").addEventListener("click", collapseAll);
 
@@ -642,13 +697,17 @@ footer code { font-size: 12px; }
       acc += "." + parts[i];
       el = ul.querySelector(':scope > li.node[data-path="' + acc.replace(/"/g, '\\"') + '"]');
       if (!el) return false;
-      if (i < parts.length - 1) { open(el, true); ul = el.querySelector(":scope > ul.kids"); if (!ul) return false; }
+      if (i < parts.length - 1) { openKids(el, true); ul = el.querySelector(":scope > ul.kids"); if (!ul) return false; }
     }
     if (el) {
-      open(el, true);
+      showDetails(el, true);
+      openKids(el, true);
       document.querySelectorAll("li.node.current").forEach(function (x) { x.classList.remove("current"); });
       el.classList.add("current");
-      el.scrollIntoView({block: "center", behavior: "auto"});
+      var row = el.querySelector(":scope > .row");
+      var header = document.querySelector("header.top");
+      var top = row.getBoundingClientRect().top + window.scrollY - (header ? header.offsetHeight : 0) - 12;
+      window.scrollTo(0, Math.max(0, top));
       var name = el.querySelector(":scope > .row .name"); if (name) name.focus({preventScroll: true});
     }
     return true;
@@ -682,11 +741,9 @@ footer code { font-size: 12px; }
 
   applyTheme();
   applyInternals();
-  if (!location.hash) {
-    // First screen: the root surface open one level, the package tree closed.
-    state.open["tl"] = true;
-  }
-  renderAll();
+  var initialQuery = "";
+  try { initialQuery = new URLSearchParams(location.search).get("q") || ""; } catch (e) {}
+  if (initialQuery) { q.value = initialQuery; runSearch(initialQuery.trim()); }
   onHash();
 })();
 </script>

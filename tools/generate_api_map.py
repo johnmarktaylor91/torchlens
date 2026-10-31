@@ -11,7 +11,8 @@ member is public when its module's ``__all__`` lists it (or, without an
 "internal" the page can reveal on demand.
 
 Signatures and docstrings come from ``ast`` (no import of the package, no
-torch, no model run), so the generator runs in a couple of seconds anywhere.
+torch, no model run), so the generator runs in a couple of seconds on any
+Python 3.10+ (the package's own floor); nothing outside the stdlib.
 A root surface name the parser cannot resolve to a definition is a hard
 failure (``ApiMapError``), the tripwire ``tests/test_generate_api_map.py``
 relies on.
@@ -54,6 +55,7 @@ class Node:
     kind: str
     public: bool
     sig: str = ""
+    brief: str = ""
     params: list[str] = field(default_factory=list)
     doc1: str = ""
     doc: str = ""
@@ -146,7 +148,10 @@ def _string_list(node: ast.AST) -> list[str] | None:
 
 def _lazy_rows(module: Module, node: ast.Dict) -> dict[str, tuple[str, str | None]]:
     rows: dict[str, tuple[str, str | None]] = {}
-    for key, value in zip(node.keys, node.values, strict=True):
+    for key, value in zip(
+        node.keys,
+        node.values,
+    ):
         if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
             continue
         if isinstance(value, ast.Tuple) and value.elts:
@@ -341,7 +346,7 @@ def discover_modules(repo: Path) -> dict[str, Module]:
 # Resolution
 # --------------------------------------------------------------------------
 
-Resolved = tuple[Module, ast.AST | None]  # (module, definition) or (module, None) = the module
+Resolved = tuple[Module, ast.AST | None]  # (module, definition); (module, None) = the module
 
 
 def resolve(
@@ -418,6 +423,39 @@ def _param(arg: ast.arg, default: ast.expr | None, prefix: str = "") -> str:
     return text
 
 
+def _brief_param(arg: ast.arg, default: ast.expr | None, prefix: str = "") -> str:
+    text = f"{prefix}{arg.arg}"
+    if default is not None:
+        short = _default(default)
+        text += f"={short}" if len(short) <= 12 else "=..."
+    return text
+
+
+def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool) -> str:
+    """The row form: argument names, kinds and short defaults, no annotations."""
+
+    args = fn.args
+    positional = list(args.posonlyargs) + list(args.args)
+    defaults: list[ast.expr | None] = [None] * (len(positional) - len(args.defaults))
+    defaults += list(args.defaults)
+    pieces: list[str] = []
+    for i, (arg, default) in enumerate(zip(positional, defaults)):
+        if i == 0 and drop_first:
+            continue
+        pieces.append(_brief_param(arg, default))
+        if args.posonlyargs and i == len(args.posonlyargs) - 1:
+            pieces.append("/")
+    if args.vararg is not None:
+        pieces.append(f"*{args.vararg.arg}")
+    elif args.kwonlyargs:
+        pieces.append("*")
+    for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+        pieces.append(_brief_param(arg, default))
+    if args.kwarg is not None:
+        pieces.append(f"**{args.kwarg.arg}")
+    return "(" + ", ".join(pieces) + ")"
+
+
 def signature(
     fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool
 ) -> tuple[str, list[str]]:
@@ -429,7 +467,12 @@ def signature(
     defaults += list(args.defaults)
     pieces: list[str] = []
     names: list[str] = []
-    for i, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
+    for i, (arg, default) in enumerate(
+        zip(
+            positional,
+            defaults,
+        )
+    ):
         if i == 0 and drop_first:
             continue
         pieces.append(_param(arg, default))
@@ -441,7 +484,10 @@ def signature(
         names.append(args.vararg.arg)
     elif args.kwonlyargs:
         pieces.append("*")
-    for arg, default in zip(args.kwonlyargs, args.kw_defaults, strict=True):
+    for arg, default in zip(
+        args.kwonlyargs,
+        args.kw_defaults,
+    ):
         pieces.append(_param(arg, default))
         names.append(arg.arg)
     if args.kwarg is not None:
@@ -629,8 +675,10 @@ class Builder:
         )
         if init is not None:
             out.sig, out.params = signature(init, drop_first=True)
+            out.brief = brief_signature(init, drop_first=True)
         elif fields:
             out.sig = "(" + ", ".join(fields) + ")"
+            out.brief = "(" + ", ".join(f.split(":")[0] for f in fields) + ")"
         return out
 
     def _class_member(
@@ -712,9 +760,11 @@ class Builder:
         if isinstance(fn, ast.AsyncFunctionDef):
             tags.append("async")
         sig, params = signature(fn, drop_first)
+        brief = brief_signature(fn, drop_first)
         if kind == "property":
             ret = _annotation(fn.returns)
             sig = f": {ret}" if ret else ""
+            brief = sig
             params = []
         return Node(
             id=node_id,
@@ -722,6 +772,7 @@ class Builder:
             kind=kind,
             public=public,
             sig=sig,
+            brief=brief,
             params=params,
             doc1=doc1,
             doc=doc,
@@ -789,7 +840,10 @@ def _package_layers(modules: dict[str, Module]) -> dict[str, str]:
     if not isinstance(value, ast.Dict):
         return {}
     out: dict[str, str] = {}
-    for key, val in zip(value.keys, value.values, strict=True):
+    for key, val in zip(
+        value.keys,
+        value.values,
+    ):
         if isinstance(key, ast.Constant) and isinstance(val, ast.Constant):
             out[str(key.value)] = str(val.value)
     return out
@@ -818,7 +872,15 @@ def read_surface_rows(repo: Path) -> list[dict[str, str]]:
     text = (repo / SURFACE_TABLE).read_text(encoding="utf-8")
     lines = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
     header = lines[0].split("\t")
-    return [dict(zip(header, ln.split("\t"), strict=True)) for ln in lines[1:]]
+    return [
+        dict(
+            zip(
+                header,
+                ln.split("\t"),
+            )
+        )
+        for ln in lines[1:]
+    ]
 
 
 def _entry_ranks(repo: Path) -> dict[str, int]:
@@ -830,6 +892,11 @@ def _entry_ranks(repo: Path) -> dict[str, int]:
         for match in re.finditer(r"\btl\.([A-Za-z_]\w*)", path.read_text(encoding="utf-8")):
             ranks.setdefault(match.group(1), len(ranks))
     return ranks
+
+
+def _layer_tag(row: dict[str, str]) -> str:
+    layer, role = row["implementation_layer"], row["product_role"]
+    return role if layer == "FACADE" else f"{layer} {role}"
 
 
 def build_root(builder: Builder, rows: list[dict[str, str]], repo: Path) -> Node:
@@ -857,7 +924,7 @@ def build_root(builder: Builder, rows: list[dict[str, str]], repo: Path) -> Node
             kind=target.kind,
             public=True,
             alias_of=target.id,
-            tags=[row["implementation_layer"], row["product_role"]],
+            tags=[_layer_tag(row)],
             rank=ranks.get(name, 10**6),
         )
         if row.get("in_all") == "1":
@@ -926,6 +993,8 @@ def _compact(node: Node, files: dict[str, int], index: dict[str, int]) -> dict[s
         out["x"] = 1
     if node.sig:
         out["s"] = node.sig
+    if node.brief and node.brief != node.sig:
+        out["q"] = node.brief
     if node.params:
         out["a"] = node.params
     if node.doc1:
