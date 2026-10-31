@@ -24,7 +24,7 @@ from typing import Any
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-_OUT_PATH = _REPO_ROOT / "torchlens" / "data_classes" / "_schema_bindings.py"
+_OUT_PATH = _REPO_ROOT / "torchlens" / "_data_classes" / "_schema_bindings.py"
 
 _HEADER = '''"""GENERATED storage bindings for the declared record schema. DO NOT EDIT.
 

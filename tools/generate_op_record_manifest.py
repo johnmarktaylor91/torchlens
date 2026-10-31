@@ -49,7 +49,7 @@ def generate() -> str:
 def main() -> int:
     """Generate (or with --check, verify) the manifest module."""
 
-    target = _REPO_ROOT / "torchlens" / "ir" / "op_record_manifest.py"
+    target = _REPO_ROOT / "torchlens" / "_ir" / "op_record_manifest.py"
     rendered = generate()
     if "--check" in sys.argv:
         current = target.read_text() if target.exists() else ""
