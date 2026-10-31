@@ -3011,3 +3011,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c28998a909cb3f9f6c8a7706be7b16b35e3f46f5 (dirty)
 recorded: 2026-10-31T14:58:50.222369+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch B1 (round-2 renames, format cut, debug restore, inventory, pkg paths, lockstep precision, glossary step 8): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d4e7370cf28a53c20cdfbf8133dd61e38273c7d (dirty)
+recorded: 2026-10-31T20:09:46.055004+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch B1 (round-2 renames, format cut, debug restore, inventory, pkg paths, lockstep precision, glossary step 8): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d4e7370cf28a53c20cdfbf8133dd61e38273c7d (dirty)
+recorded: 2026-10-31T20:09:52.929157+00:00
