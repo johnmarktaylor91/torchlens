@@ -15,7 +15,7 @@
     "notebooks",
     "templates"
   ],
-  "excludeFiles": ["AGENTS.md", "CLAUDE.md", "TODO.md", "ROADMAP.md", "RESULTS.md"],
+  "excludeFiles": ["AGENTS.md", "CLAUDE.md", "ROADMAP.md", "RESULTS.md"],
   "rules": [
     "Trace the eager nn.Module with tl.trace(model, x); do not trace torch.compile, TorchScript or torch.export artifacts.",
     "Choose what to keep with save= (tl.func, tl.module, tl.label predicates, or the list form); activations that were not saved cannot be read later.",

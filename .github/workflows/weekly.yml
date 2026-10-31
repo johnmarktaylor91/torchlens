@@ -1,21 +1,40 @@
 name: Weekly
 
+# The expensive tiers, weekly: slow and rare, the mutation margins and the
+# rotating per-arm mutation campaign, the optimized-verdict identity check,
+# the hook-pin staleness and netron drift canaries. The 100k+ node large-graph
+# suite runs from the monthly cron (and on manual dispatch with large_graphs).
 on:
   schedule:
     - cron: "23 5 * * 6"
+    - cron: "37 6 3 * *"
   workflow_dispatch:
+    inputs:
+      family:
+        description: "mutation campaign family (registry|checks|blocks|exempt|arms|corechecks|executor|bounded=all-bounded)"
+        required: false
+        default: ""
+      arm_shard:
+        description: "arm shard I/N (only with family=arms)"
+        required: false
+        default: ""
+      large_graphs:
+        description: "run only the large-graph suite"
+        type: boolean
+        required: false
+        default: false
 
-# Default-deny token scope (grind r3, R61/b2:D1): every job in this
-# workflow only reads the repo, so the GITHUB_TOKEN gets exactly that.
+# Default-deny token scope: every job in this workflow only reads the repo.
 permissions:
   contents: read
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: "${{ github.workflow }}-${{ github.ref }}-${{ github.event.schedule }}"
   cancel-in-progress: false
 
 jobs:
   extended-tests:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     name: Slow and rare tests
     # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
     # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
@@ -101,11 +120,11 @@ jobs:
         # with every named family skipped (r7 R79).
         run: |
           pytest tests/test_bridges_launch.py \
-            --junitxml="${{ runner.temp }}/bridge.junit.xml" --tb=short -q
+            --junitxml="${{ runner.temp }}/junit/bridge.junit.xml" --tb=short -q
           pytest tests/test_label_geometry.py \
-            --junitxml="${{ runner.temp }}/labelgeom.junit.xml" --tb=short -q
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/bridge.junit.xml" 11
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/labelgeom.junit.xml" 4
+            --junitxml="${{ runner.temp }}/junit/labelgeom.junit.xml" --tb=short -q
+          echo "bridge.junit.xml 11" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "labelgeom.junit.xml 4" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Run slow tests
         # `not rare`: a command-line -m replaces pyproject's `-m 'not rare'`, so a
@@ -146,7 +165,7 @@ jobs:
           python scripts/run_pytest_per_file_sharded.py tests/ \
             --marker "slow and not rare and not big_memory" \
             --junit-dir "${{ runner.temp }}/weekly-slow-per-file" \
-            --combined-junit "${{ runner.temp }}/weekly-slow.junit.xml" \
+            --combined-junit "${{ runner.temp }}/junit/weekly-slow.junit.xml" \
             --max-batch-size 20 \
             --file-batch-size tests/test_real_world_models.py=1
 
@@ -160,9 +179,9 @@ jobs:
         run: |
           pytest tests/ -m "rare and not big_memory" --tb=short \
             --deselect tests/test_perf_capture_ab.py::test_small_capture_overhead_within_gate \
-            --junitxml="${{ runner.temp }}/weekly-rare.junit.xml"
+            --junitxml="${{ runner.temp }}/junit/weekly-rare.junit.xml"
 
-      - name: Fail on an under-executed slow or rare tier
+      - name: Declare the executed-test floor (slow or rare tier)
         # Executed-floor attestation for the ONLY leg that ever runs these
         # tiers (grind r3, R82): a marker drift or importorskip cascade that
         # hollows them out must go red, not green. Floors are roughly half
@@ -174,10 +193,20 @@ jobs:
         # test_small_capture_overhead_within_gate was deselected above; every
         # other selected rare test skips here (opt-in sizes, CUDA, DDP).
         run: |
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-slow.junit.xml" 145
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/weekly-rare.junit.xml" 7
+          echo "weekly-slow.junit.xml 145" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "weekly-rare.junit.xml 7" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
 
   mutation-margin:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     # The mutation driver's zero-survivor criterion is R74's grind-level
     # convergence condition, but the driver was "wired into no CI leg — the
     # margin is measured only when invoked" (b9 round 5, S HIGH + F MED):
@@ -247,6 +276,7 @@ jobs:
           path: ${{ runner.temp }}/mutation-${{ matrix.family }}.log
 
   hook-pin-staleness:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     # r7 R61 (opus LM + sol MED, converged): the pre-commit hook SHAs are
     # correctly frozen but had NO refresh signal -- Dependabot has no
     # pre-commit ecosystem, so gitleaks/detect-secrets could sit on an old
@@ -294,6 +324,7 @@ jobs:
           git checkout -- .pre-commit-config.yaml
 
   optimized-verdict-identity:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     # r7 R24 (sol MED, 4th pass): 97 shipped asserts remain behind the
     # shrink-only S101 ceiling, validation strips assertion checks under
     # python -O (validation/backward.py), and NO leg proved the verdict
@@ -347,6 +378,7 @@ jobs:
             -q --tb=short -p no:randomly
 
   netron-latest-drift:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     # F14 (netron memo D-08; packaging_requests 2026-08-28, landed by D05):
     # the vendor-parser suite against UNPINNED-latest netron. Drift here
     # NEVER moves the floor -- the nightly leg pins 9.2.2 exact; this job is
@@ -393,5 +425,221 @@ jobs:
           version="$(python -c 'import netron; print(netron.__version__)')"
           echo "## Netron drift canary: installed netron $version (nightly pin 9.2.2)" >> "$GITHUB_STEP_SUMMARY"
           pytest tests/test_netron_export_vendor.py tests/test_netron_export_serve.py \
-            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/netron-latest.junit.xml"
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/netron-latest.junit.xml" 0 --min-passed 6
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/junit/netron-latest.junit.xml"
+
+
+  mutation:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
+    name: Mutation shard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install canonical CPU test environment
+        # r7 R82 (opus MED): this leg formerly installed BARE `torch` (newest
+        # resolvable) while its own header names weekly.yml's pinned job "the
+        # canonical pinned CPU env". A zero-survivor gate is only meaningful
+        # against a fixed interpreter: a new torch release could flip a
+        # survivor either way on an unrelated upstream event. Same pins as
+        # weekly.yml's mutation-margin job; pydot AND graphviz pinned
+        # together (r7 R83: the DOT emitters were pinned asymmetrically here).
+        # r7 R83-1: this was the repo's ONLY bare .[test] leg -- pytest
+        # resolved outside the dev extra's deliberate >=8,<10 band, so a
+        # pytest major could silently change what this verdict-emitting gate
+        # enforces. Same extras as the weekly mutation-margin job now.
+        run: |
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.8.0+cpu" \
+            "torchvision==0.23.0+cpu" \
+            "pydot==4.0.1" \
+            "graphviz==0.21"
+
+      - name: Select rotation slot
+        id: slot
+        env:
+          INPUT_FAMILY: ${{ inputs.family }}
+          INPUT_ARM_SHARD: ${{ inputs.arm_shard }}
+        run: |
+          # r7 R82 (opus LM): validate dispatch inputs BEFORE they reach
+          # $GITHUB_OUTPUT -- a newline or shell metacharacter in a raw input
+          # could forge additional step outputs through the append below.
+          case "$INPUT_FAMILY" in
+            ""|registry|checks|blocks|exempt|arms|corechecks|executor|bounded) ;;
+            *) echo "invalid family input: $INPUT_FAMILY"; exit 1 ;;
+          esac
+          # Whole-string validation via case patterns ONLY (r7 R82, proven
+          # bypass): grep matches PER LINE, so "1/1<newline>forged=x" passed
+          # the old `grep -qE '^[0-9]+/[0-9]+$'` on its first line and the
+          # embedded newline reached $GITHUB_OUTPUT as a forged output row.
+          # A case pattern matches the ENTIRE string, newlines included.
+          case "$INPUT_ARM_SHARD" in
+            "") ;;
+            *[!0-9/]*|*/*/*|/*|*/)
+              echo "invalid arm_shard input: $INPUT_ARM_SHARD"; exit 1 ;;
+            */*) ;;
+            *) echo "invalid arm_shard input: $INPUT_ARM_SHARD"; exit 1 ;;
+          esac
+          if [ -n "$INPUT_FAMILY" ]; then
+            family="$INPUT_FAMILY"
+            shard="$INPUT_ARM_SHARD"
+          else
+            # 4-week rotation keyed to the ISO week: one arm shard per week
+            # (the bounded families run every week in weekly.yml's
+            # mutation-margin job -- single coverage authority per family).
+            slot=$(( $(date -u +%V | sed 's/^0//') % 4 + 1 ))
+            family="arms"
+            shard="${slot}/4"
+          fi
+          echo "family=$family" >> "$GITHUB_OUTPUT"
+          echo "shard=$shard" >> "$GITHUB_OUTPUT"
+          echo "selected family=$family shard=$shard"
+
+      - name: Run mutation campaign
+        # r7 R82 (opus LM, zizmor): step outputs route through env, never
+        # inline ${{ }} interpolation into the shell -- the same pattern the
+        # slot step already uses for the raw dispatch inputs.
+        env:
+          SLOT_FAMILY: ${{ steps.slot.outputs.family }}
+          SLOT_SHARD: ${{ steps.slot.outputs.shard }}
+        run: |
+          set -o pipefail
+          mkdir -p mutation-results
+          run_family () {
+            local fam="$1" shard="$2" tag="$3"
+            local args=(--make-sandbox "$RUNNER_TEMP/tl-mut-$tag" --family "$fam")
+            if [ -n "$shard" ]; then
+              args+=(--arm-shard "$shard")
+            fi
+            python tests/support/mutation_driver.py "${args[@]}" \
+              2>&1 | tee "mutation-results/$tag.log"
+          }
+          status=0
+          if [ "$SLOT_FAMILY" = "bounded" ]; then
+            for fam in registry checks corechecks blocks exempt executor; do
+              run_family "$fam" "" "$fam" || status=1
+            done
+          else
+            run_family "$SLOT_FAMILY" "$SLOT_SHARD" "$SLOT_FAMILY" || status=1
+          fi
+          exit "$status"
+
+      - name: Archive verdicts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-verdicts-${{ github.run_id }}
+          path: mutation-results/
+          retention-days: 90
+
+
+  large-graphs:
+    if: github.event.schedule == '37 6 3 * *' || inputs.large_graphs
+    name: 100k+ node graphs (opt-in)
+    # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
+    # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
+    # and writes different SVG bytes than the Graphviz 2.42 that the committed
+    # galleries and render goldens are checked against.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    env:
+      TORCHLENS_RUN_LARGE_GRAPHS: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch and TorchLens
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+
+      - name: Run the large-graph ladder
+        # Serial on purpose: each case already needs most of the runner's
+        # memory, so parallel workers would only trade a slow pass for an OOM.
+        run: |
+          pytest tests/test_large_graphs.py -m rare -p no:randomly --tb=short \
+            --junitxml="${{ runner.temp }}/junit/large-graphs.junit.xml"
+
+      - name: Declare the executed-test floor (large-graph ladder)
+        # Eight opt-in cases (100k/250k/1M capture, 100k/250k validation,
+        # 100k/250k/1M rank layout) plus the ungated rare ladder below them;
+        # the floor catches the opt-in silently not taking effect.
+        run: echo "large-graphs.junit.xml 8" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
+
+  attest:
+    name: Executed-test floors (every leg)
+    # One check for the whole workflow: every test job above declares its
+    # legs' floors in a legs.floor file beside its junit; this job checks all
+    # of them, so a leg whose suite silently skipped or hollowed out is red.
+    needs: [extended-tests, large-graphs]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: junit-*
+          path: ${{ runner.temp }}/junit
+
+      - name: Check every leg's executed-test floor
+        run: python3 scripts/check_ci_executed_tests.py --legs "${{ runner.temp }}/junit"
