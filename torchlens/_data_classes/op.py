@@ -549,7 +549,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "is_module_output",
         "is_output",
         "is_transform",
-        "layer_type",
+        "type",
         "module",
         "module_call_stack",
         "modules",
@@ -2138,18 +2138,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         row = store.adopt_row(cells)
         set_(self, "_core", store)
         set_(self, "_row", row)
-
-    @property
-    def layer_type(self) -> str:
-        """Return the operation type token used by existing internal callers."""
-
-        return cast(str, self.type)
-
-    @layer_type.setter
-    def layer_type(self, value: str) -> None:
-        """Set the operation type token through the legacy internal name."""
-
-        self.type = value
 
     @property
     def compute_record(self) -> Any | None:

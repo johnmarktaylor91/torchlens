@@ -27,6 +27,7 @@ from packaging.requirements import Requirement
 from torch import nn
 
 from .. import _state
+from .._record_type import record_type
 
 if TYPE_CHECKING:
     from .arg_handling import (
@@ -689,7 +690,7 @@ def _ops_from_log(trace: Any) -> list[tuple[str, int]]:
 
     counts: Counter[str] = Counter()
     for layer in trace.layer_list:
-        op_name = getattr(layer, "func_name", None) or getattr(layer, "layer_type", "unknown")
+        op_name = getattr(layer, "func_name", None) or record_type(layer, "unknown")
         counts[str(op_name)] += 1
     return sorted(counts.items())
 

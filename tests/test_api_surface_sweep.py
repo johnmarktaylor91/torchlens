@@ -42,7 +42,7 @@ def _relu_op(trace: tl.Trace) -> tl.Op:
         Captured ReLU operation.
     """
 
-    return next(op for op in trace.layer_list if op.layer_type == "relu")
+    return next(op for op in trace.layer_list if op.type == "relu")
 
 
 def test_sweep_returns_bundle_with_one_trace_per_value() -> None:

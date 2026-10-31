@@ -13,6 +13,7 @@ from weakref import ref
 
 from .. import _state
 from .._ir.events import OpEvent
+from .._record_type import record_type
 from .._utils.tensor_utils import safe_copy
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
@@ -563,15 +564,10 @@ class CaptureSession:
             )
             if not exact_selector:
                 selected_nums.update(
-                    op.raw_index
-                    for op in trace.layer_list
-                    if getattr(op, "layer_type", None) == "output"
+                    op.raw_index for op in trace.layer_list if record_type(op, None) == "output"
                 )
                 for op in trace.layer_list:
-                    if (
-                        op.raw_index in selected_nums
-                        and getattr(op, "layer_type", None) == "output"
-                    ):
+                    if op.raw_index in selected_nums and record_type(op, None) == "output":
                         selected_nums.update(
                             trace.layer_dict_all_keys[parent_label].raw_index
                             for parent_label in op.parents
@@ -585,7 +581,7 @@ class CaptureSession:
                 selected_nums.update(
                     op.raw_index
                     for op in trace.layer_list
-                    if getattr(op, "layer_type", None) == "output"
+                    if record_type(op, None) == "output"
                     and any(
                         trace.layer_dict_all_keys[parent_label].raw_index in requested_nums
                         for parent_label in op.parents
@@ -607,7 +603,7 @@ class CaptureSession:
                     payload = payload_entry.materialize()
                 if trace.backward_ready:
                     payload = self.gradient_reference_escrow.get(op.raw_index, payload)
-                if payload is None and getattr(op, "layer_type", None) == "output":
+                if payload is None and record_type(op, None) == "output":
                     for parent_label in op.parents:
                         parent = trace.layer_dict_all_keys[parent_label]
                         payload = live_output_by_raw_index.get(parent.raw_index)
@@ -701,7 +697,7 @@ class CaptureSession:
             else set(selected_grads)
         )
         for op in trace.layer_list:
-            if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
+            if op.raw_index in hook_nums and record_type(op, None) == "output":
                 hook_nums.update(
                     trace.layer_dict_all_keys[parent_label].raw_index for parent_label in op.parents
                 )

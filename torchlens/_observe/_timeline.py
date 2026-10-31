@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import record_type
+
 __all__ = ["SCHEMA_ID", "memory_timeline_v2", "module_rollup"]
 
 SCHEMA_ID = "torchlens.memory_timeline.v2"
@@ -354,7 +356,7 @@ def _forward_events(
     events: list[dict[str, Any]] = []
     max_forward_ordinal = 0
     for op in ops:
-        layer_type = str(getattr(op, "layer_type", "") or "")
+        layer_type = str(record_type(op, "") or "")
         if layer_type in ("output", "buffer"):
             continue
         ordinal = int(getattr(op, "step_index", 0) or 0)

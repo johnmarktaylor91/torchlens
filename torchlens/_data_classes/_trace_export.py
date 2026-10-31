@@ -365,6 +365,9 @@ class TraceExportMixin(_TraceMixinBase):
                     layer_dict[field_name] = _format_conditional_branch_stack(
                         layer_entry.conditional_branch_stack
                     )
+                elif field_name == "layer_type":
+                    # The table keeps its layer_type column; an Op names it type.
+                    layer_dict[field_name] = layer_entry.type
                 elif field_name == "grad":
                     layer_dict[field_name] = getattr(layer_entry, "grad")
                 elif field_name == "num_saved_grads":

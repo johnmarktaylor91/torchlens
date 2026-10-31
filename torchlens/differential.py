@@ -34,6 +34,7 @@ from typing import Any
 import torch
 
 from ._errors import InvalidArgumentError
+from ._record_type import record_type
 
 __all__ = ["DiffRow", "DiffReport", "diff"]
 
@@ -190,7 +191,7 @@ def _joined_rows(
     subject = ctx.subject
     rows: list[DiffRow] = []
     for subject_label in subject_labels:
-        if getattr(subject.ops[subject_label], "layer_type", None) in _MACHINERY_LAYER_TYPES:
+        if record_type(subject.ops[subject_label], None) in _MACHINERY_LAYER_TYPES:
             rows.append(
                 DiffRow(
                     site_key=key,
@@ -284,9 +285,7 @@ def diff(subject: Any, reference: Any) -> DiffReport:
         reference_labels = reference_by_key.get(key, [])
         if not reference_labels:
             for label in subject_labels:
-                machinery = (
-                    getattr(subject.ops[label], "layer_type", None) in _MACHINERY_LAYER_TYPES
-                )
+                machinery = record_type(subject.ops[label], None) in _MACHINERY_LAYER_TYPES
                 rows.append(
                     DiffRow(
                         site_key=key,

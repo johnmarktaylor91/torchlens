@@ -16,6 +16,7 @@ from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
+from torchlens._record_type import record_type
 from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
@@ -452,7 +453,7 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
     )
 
     saved = _saved_layers(trace)
-    saved_types = {layer.layer_type for layer in saved}
+    saved_types = {record_type(layer) for layer in saved}
     assert bundle_path.exists()
     assert "linear" in saved_types
     assert saved_types <= {"linear", "output"}

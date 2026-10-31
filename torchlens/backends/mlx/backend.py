@@ -40,6 +40,7 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
+from ..._record_type import record_type
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import (
     BackendName,
@@ -2839,7 +2840,7 @@ def _mlx_trace_intermediate_signatures(
     grouped: dict[_MLXIntermediateSignature, list[Any]] = defaultdict(list)
     for op in ops:
         signature = _MLXIntermediateSignature(
-            op_name=str(op.func_name or op.layer_type),
+            op_name=str(op.func_name or record_type(op)),
             call_ordinal=int(op.func_call_id or 0),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())

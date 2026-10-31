@@ -19,6 +19,7 @@ from .._ir.selector_eval import (
     looks_like_finalized_label,
     normalize_selector_like,
 )
+from .._record_type import record_type
 from .._state import pause_logging
 from .errors import (
     HelperMountError,
@@ -1840,6 +1841,8 @@ def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
     for field_name in _LAYER_LOG_CONTEXT_FIELDS:
         if isinstance(layer_log, Mapping):
             value = layer_log.get(field_name)
+        elif field_name == "layer_type":
+            value = record_type(layer_log, None)
         else:
             value = getattr(layer_log, field_name, None)
         snapshot[field_name] = value

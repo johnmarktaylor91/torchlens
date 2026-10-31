@@ -427,7 +427,7 @@ def test_region_effect_closure_refuses_train_mode_bn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    bn_label = next(op.layer_label for op in fork.layer_list if op.layer_type == "batchnorm")
+    bn_label = next(op.layer_label for op in fork.layer_list if op.type == "batchnorm")
     target = fork.between(fork["linear_1_1"], fork[bn_label]).as_region()
     with pytest.raises(RegionError) as excinfo:
         fork.do(target, tl.zero_ablate())
@@ -442,7 +442,7 @@ def test_region_effect_closure_allows_eval_mode_bn() -> None:
     model = _BN().eval()
     x = torch.randn(3, 4)
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    bn_label = next(op.layer_label for op in fork.layer_list if op.layer_type == "batchnorm")
+    bn_label = next(op.layer_label for op in fork.layer_list if op.type == "batchnorm")
     target = fork.between(fork["linear_1_1"], fork[bn_label]).as_region()
     assert [(e.parent, e.child) for e in target.boundary.exits] == [
         (f"{bn_label}:1", "linear_2_3:1")

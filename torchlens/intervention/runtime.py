@@ -15,6 +15,7 @@ import torch
 from .. import _state
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._ir.intervention import FireResult
+from .._record_type import record_type
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
@@ -1528,7 +1529,7 @@ class _LiveSiteMinter:
         for record in journal[self._consumed :]:
             cohort = self._cohort(
                 getattr(record, "modules", None) or (),
-                getattr(record, "layer_type", ""),
+                record_type(record, ""),
                 self._journal_output_slot(record),
             )
             self._seen[cohort] = self._seen.get(cohort, 0) + 1
@@ -1588,7 +1589,7 @@ def _stamp_live_site_identity(site: Any) -> None:
         from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
         modules = _snapshot_exhaustive_module_stack(trace)
-    layer_type = getattr(site, "layer_type", "") or ""
+    layer_type = record_type(site, "") or ""
     site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
     if getattr(site, "pass_index", None) is None:
         innermost = modules[-1] if modules else None

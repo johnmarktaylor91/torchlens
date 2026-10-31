@@ -276,7 +276,7 @@ def _add_output_layers(
         # Internal output-node synthesis is a builder row append on the
         # trace's own store (detached only for legacy/preview traces).
         new_output_node = cast(Op, output_node._copy_for_output(_store=_op_store))
-        new_output_node.layer_type = "output"
+        new_output_node.type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
         new_output_node.is_buffer = False

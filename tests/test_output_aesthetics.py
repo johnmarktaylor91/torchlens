@@ -370,7 +370,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if len(log.layer_labels) > 2:
         # Find a layer type that matches exactly one key in the lookup dict
         for entry in log.layer_list:
-            candidate = entry.layer_type
+            candidate = entry.type
             if candidate in ("input",):
                 continue  # too generic
             all_key_matches = [k for k in log.layer_dict_all_keys if candidate in str(k)]

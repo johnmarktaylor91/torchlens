@@ -406,7 +406,7 @@ def test_boolean_dispatch_pooling_family_does_not_convict(
         trace = tl.trace(Model(), torch.randn(input_shape))
     assert trace.escape_diagnostics == []
     assert _gap_warnings(caught) == []
-    compute_ops = [op for op in trace.layer_list if op.layer_type not in {"input", "output"}]
+    compute_ops = [op for op in trace.layer_list if op.type not in {"input", "output"}]
     assert len(compute_ops) >= 2, "both dispatcher branches must be captured"
 
 

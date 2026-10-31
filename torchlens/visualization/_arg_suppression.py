@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._record_type import record_type
 from ..backends.registry import TORCH_BACKEND_NAME
 
 if TYPE_CHECKING:  # typing only
@@ -162,7 +163,7 @@ def suppressed_arg_keys_for_record(
     config = getattr(node, "func_config", None)
     if not config:
         return frozenset()
-    normalized_type = str(getattr(node, "layer_type", "")).lower().replace("_", "")
+    normalized_type = str(record_type(node, "")).lower().replace("_", "")
     rows = SUPPRESSION_CANDIDATE_TABLE.get(normalized_type)
     if not rows:
         return frozenset()

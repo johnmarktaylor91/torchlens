@@ -463,7 +463,7 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     x = Tensor([1.0, -2.0, 3.0])
     trace = tl.trace(_tiny_block, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
+    layer_types = {op.type for op in trace.layer_list}
     assert trace.backend == "tinygrad"
     assert trace.module_identity_mode == "function_root"
     assert trace.param_source == "none"
@@ -511,7 +511,7 @@ def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     x = Tensor([1.0, -2.0, 3.0, 4.0, -5.0, 6.0, 7.0, -8.0, 9.0])
     trace = tl.trace(_wide_corpus, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
+    layer_types = {op.type for op in trace.layer_list}
     assert {"mul", "reduce", "where"} <= layer_types
     assert {"permute", "shrink"} & layer_types
     assert len(trace.output_layers) == 2
@@ -772,8 +772,8 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     oracle_loss = oracle_scaled.sum()
     oracle_loss.backward()
 
-    hidden_op = next(op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,))
-    scaled_op = [op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
+    hidden_op = next(op for op in trace.layer_list if op.type == "mul" and op.shape == (3,))
+    scaled_op = [op for op in trace.layer_list if op.type == "mul" and op.shape == (3,)][-1]
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None

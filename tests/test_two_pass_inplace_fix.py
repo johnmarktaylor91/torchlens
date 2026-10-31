@@ -88,7 +88,7 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
 
     exhaustive_log = tl.trace(model, x)
     identity_labels = [
-        layer.layer_label for layer in exhaustive_log.layer_list if layer.layer_type == "identity"
+        layer.layer_label for layer in exhaustive_log.layer_list if layer.type == "identity"
     ]
     assert identity_labels
     identity_label = identity_labels[0]

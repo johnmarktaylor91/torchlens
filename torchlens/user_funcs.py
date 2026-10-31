@@ -3905,7 +3905,7 @@ def _trace_torch_model(
             trace._layer_nums_to_save = [
                 op.raw_index
                 for op in trace.layer_list
-                if op.has_saved_activation and op.layer_type not in {"input", "output"}
+                if op.has_saved_activation and op.type not in {"input", "output"}
             ]
             if not save_args:
                 trace._replay_arg_version_data_complete = False
@@ -4151,7 +4151,7 @@ def _trace_torch_model(
         trace._layer_nums_to_save = [
             op.raw_index
             for op in trace.layer_list
-            if op.has_saved_activation and op.layer_type not in {"input", "output"}
+            if op.has_saved_activation and op.type not in {"input", "output"}
         ]
         if not save_args:
             trace._replay_arg_version_data_complete = False

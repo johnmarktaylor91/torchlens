@@ -97,9 +97,7 @@ def test_changed_machinery_op_excluded_with_disclosure():
     edited = tl.trace(model, x, **_SAVE_ALL)
     handle.remove()
     machinery = [
-        label
-        for label in edited.op_labels
-        if edited.ops[label].layer_type == "interventionreplacement"
+        label for label in edited.op_labels if edited.ops[label].type == "interventionreplacement"
     ]
     assert len(machinery) == 1
     resolved = tl.changed(baseline).resolve(edited)

@@ -47,6 +47,7 @@ import re
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
+from .._record_type import record_type
 from ..backends import TORCH_BACKEND_NAME
 from ..intervention.errors import (
     LiveModeLabelError,
@@ -1175,7 +1176,7 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
             return True
         if lifecycle == "live" and bool(getattr(subject, "_tl_module_boundary", False)):
             return False
-        layer_type = getattr(subject, "layer_type", None)
+        layer_type = record_type(subject, None)
         return layer_type is not None and str(name) == str(layer_type)
     if kind == "func_transform":
         if not bool(getattr(subject, "is_transform", False)):

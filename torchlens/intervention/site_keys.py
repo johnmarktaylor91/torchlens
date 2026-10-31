@@ -144,7 +144,7 @@ def mint_keys_in_execution_order(trace: Any) -> dict[str, str]:
         op = trace.ops[label]
         keys[label] = minter.mint(
             getattr(op, "modules", None) or (),
-            op.layer_type,
+            op.type,
             getattr(op, "multi_output_index", None),
         )
     return keys

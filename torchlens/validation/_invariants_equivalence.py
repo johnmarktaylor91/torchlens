@@ -6,6 +6,8 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
+from .._record_type import record_type
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -635,7 +637,7 @@ def _equivalence_class_components(op: Op, equivalence_class: object) -> tuple[ob
     the grouping rule says is not evidence (rows 30, 31, 49, 50, 51).
     """
 
-    layer_type = str(getattr(op, "layer_type", ""))
+    layer_type = str(record_type(op, ""))
     text = str(equivalence_class)
     return (
         layer_type,

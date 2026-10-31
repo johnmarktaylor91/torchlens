@@ -86,7 +86,7 @@ def test_phase1_event_materializer_small_cnn() -> None:
     _assert_trace_structure(trace)
     assert "conv" in trace.modules
     assert "norm" in trace.modules
-    assert any(op.layer_type == "conv2d" for op in trace.ops)
+    assert any(op.type == "conv2d" for op in trace.ops)
     assert validate_forward_pass(model, x)
 
 

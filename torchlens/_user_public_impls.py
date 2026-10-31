@@ -40,6 +40,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -1041,14 +1042,14 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
 
     for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
         left_sig = (
-            getattr(left_layer, "layer_type", None),
+            record_type(left_layer, None),
             getattr(left_layer, "func_name", None),
             len(getattr(left_layer, "parents", ()) or ()),
             bool(getattr(left_layer, "is_output", False)),
             bool(getattr(left_layer, "is_buffer", False)),
         )
         right_sig = (
-            getattr(right_layer, "layer_type", None),
+            record_type(right_layer, None),
             getattr(right_layer, "func_name", None),
             len(getattr(right_layer, "parents", ()) or ()),
             bool(getattr(right_layer, "is_output", False)),

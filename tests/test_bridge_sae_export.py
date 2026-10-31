@@ -107,7 +107,7 @@ def _hand_topk(latents: torch.Tensor, unit: int, k: int) -> list[tuple[int, int,
 
 def _relu_label(model: _TinyLM, tokens: torch.Tensor) -> str:
     trace = tl.trace(model, tokens[:1])
-    return next(op.layer_label for op in trace.layer_list if op.layer_type == "relu")
+    return next(op.layer_label for op in trace.layer_list if op.type == "relu")
 
 
 def _dataset_topk(model, sae, tokens, k):

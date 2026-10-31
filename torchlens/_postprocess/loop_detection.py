@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._site_key import SiteKeyMinter
+from .._record_type import record_type
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,
@@ -283,7 +284,7 @@ def _mint_site_keys(self: "Trace") -> None:
             continue
         node.site_key = minter.mint(
             getattr(node, "modules", None) or (),
-            node.layer_type,
+            record_type(node),
             getattr(node, "multi_output_index", None),
         )
 

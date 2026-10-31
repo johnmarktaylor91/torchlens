@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import record_type
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, render_line
 
@@ -37,7 +38,7 @@ def _op_row(op: Any, ordinal: int, depth: int) -> NarrationEvent:
         ordinal=ordinal,
         label=str(label),
         pass_index=int(getattr(op, "pass_index", 1) or 1),
-        layer_type=getattr(op, "layer_type", None),
+        layer_type=record_type(op, None),
         func_name=getattr(op, "func_name", None),
         address=getattr(op, "address", None) or None,
         module_depth=depth,

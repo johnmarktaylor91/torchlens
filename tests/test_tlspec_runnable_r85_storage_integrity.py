@@ -59,6 +59,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -588,7 +589,7 @@ def test_backend_address_op_node_and_output_layer_agree() -> None:
     model.eval()
     log = tl.trace(model, torch.randn(2, 3, 8, 8), capture=_CAPTURE)
 
-    by_type = {layer.layer_type: layer for layer in log}
+    by_type = {record_type(layer): layer for layer in log}
     conv = by_type["conv2d"]
     bn = by_type["batchnorm"]
     out = by_type["output"]

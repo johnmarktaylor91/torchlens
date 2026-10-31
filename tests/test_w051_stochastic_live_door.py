@@ -105,8 +105,8 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
         intervene=tl.when(tl.func("relu"), tl.patch_from(plan)),
     )
     assert _coordinates(live_plain) == _coordinates(live_prologue)
-    labels_plain = [op.label for op in live_plain.ops if op.layer_type == "relu"]
-    labels_prologue = [op.label for op in live_prologue.ops if op.layer_type == "relu"]
+    labels_plain = [op.label for op in live_plain.ops if op.type == "relu"]
+    labels_prologue = [op.label for op in live_prologue.ops if op.type == "relu"]
     assert labels_plain != labels_prologue, "the ordinal labels DID shift; the coordinate did not"
 
 

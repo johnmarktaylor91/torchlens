@@ -187,9 +187,9 @@ def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: typ
     x = torch.randn(3)
     post_trace = tl.trace(_bag_stacking_model(post_wrap_bag), x)
     pre_trace = tl.trace(_bag_stacking_model(pre_wrap_bag), x)
-    post_types = [op.layer_type for op in post_trace.layer_list]
+    post_types = [op.type for op in post_trace.layer_list]
     assert "stack" in post_types
-    assert post_types == [op.layer_type for op in pre_trace.layer_list]
+    assert post_types == [op.type for op in pre_trace.layer_list]
     expected = (torch.stack([x, x + 1]) * 2).sum()
     assert torch.allclose(post_trace.layer_list[-1].out, expected)
     assert tl.validate(_bag_stacking_model(pre_wrap_bag), x, scope="forward")

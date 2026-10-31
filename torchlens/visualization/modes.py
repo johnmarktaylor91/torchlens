@@ -11,6 +11,7 @@ import torch
 
 from .._literals import VisNodeModeLiteral
 from .._quantities import Duration
+from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils.display import human_readable_size
 from ._label_format import format_shape
@@ -396,7 +397,7 @@ def _first_call_location(layer_log: Op | Layer) -> Any | None:
 def _normalized_layer_type(layer_log: Op | Layer) -> str:
     """Return a lower-case layer type with underscores removed."""
 
-    return str(layer_log.layer_type).lower().replace("_", "")
+    return str(record_type(layer_log)).lower().replace("_", "")
 
 
 def _first_input_shape(layer_log: Op | Layer) -> tuple[int, ...] | None:

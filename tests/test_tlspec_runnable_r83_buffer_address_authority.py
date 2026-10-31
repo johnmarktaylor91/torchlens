@@ -53,6 +53,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens._runnable import PathFaithfulness
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -63,9 +64,7 @@ _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cac
 def _buffer_addresses(trace: Any) -> list[tuple[str, str | None]]:
     """Return ``(layer_label, address)`` for every materialized buffer op."""
 
-    return [
-        (op.layer_label, op.address) for op in trace if getattr(op, "layer_type", None) == "buffer"
-    ]
+    return [(op.layer_label, op.address) for op in trace if record_type(op, None) == "buffer"]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:

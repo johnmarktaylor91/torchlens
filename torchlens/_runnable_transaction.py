@@ -552,7 +552,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
             layer
             for layer in trace.layer_list
             if bool(getattr(layer, "has_saved_activation", False))
-            and layer.layer_type not in ("input", "output")
+            and layer.type not in ("input", "output")
         ]
         if not saved_layers:
             raise InvalidArgumentError(
@@ -621,7 +621,7 @@ def _until_execution_partition(
     for layer in trace.layer_list:
         raw_index = getattr(layer, "raw_index", None)
         raw_label = layer._layer_label_raw
-        if layer.layer_type == "output" or raw_index is None or int(raw_index) > stop_raw_index:
+        if layer.type == "output" or raw_index is None or int(raw_index) > stop_raw_index:
             skipped.append(raw_label)
             continue
         executed.append(raw_label)

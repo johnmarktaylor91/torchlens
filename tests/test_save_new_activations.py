@@ -14,6 +14,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._record_type import record_type
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -239,7 +240,8 @@ def test_save_new_outs_resnet_rejects_buffer_sink_refresh() -> None:
     log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
     try:
         assert any(
-            log.layer_dict_all_keys[label].layer_type == "buffer" for label in log.internal_sink_ops
+            record_type(log.layer_dict_all_keys[label]) == "buffer"
+            for label in log.internal_sink_ops
         )
         x2 = torch.randn(1, 3, 224, 224)
         log.save_new_outs(model, x2, seed=42)
@@ -248,7 +250,7 @@ def test_save_new_outs_resnet_rejects_buffer_sink_refresh() -> None:
             fresh_by_label = {layer.layer_label: layer for layer in fresh.layer_list}
             compared = 0
             for layer in log.layer_list:
-                if layer.layer_type != "batchnorm" or layer.out is None:
+                if layer.type != "batchnorm" or layer.out is None:
                     continue
                 fresh_out = fresh_by_label[layer.layer_label].out
                 assert torch.allclose(layer.out, fresh_out, rtol=1e-4, atol=1e-5)
@@ -569,8 +571,8 @@ class TestGraphConsistencyValidation:
         try:
             log.save_new_outs(model, x2)
             fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(save_args=True))
-            refreshed_sub = next(op for op in log.layer_list if op.layer_type == "sub")
-            fresh_sub = next(op for op in fresh_log.layer_list if op.layer_type == "sub")
+            refreshed_sub = next(op for op in log.layer_list if op.type == "sub")
+            fresh_sub = next(op for op in fresh_log.layer_list if op.type == "sub")
             assert refreshed_sub.parents == fresh_sub.parents
             assert refreshed_sub.parent_arg_positions == fresh_sub.parent_arg_positions
             assert refreshed_sub.out is not None
@@ -628,7 +630,7 @@ def _buffer_sinks(log):
     return [
         log.layer_dict_all_keys[label]
         for label in log.internal_sink_ops
-        if log.layer_dict_all_keys[label].layer_type == "buffer"
+        if record_type(log.layer_dict_all_keys[label]) == "buffer"
     ]
 
 
@@ -665,8 +667,8 @@ def test_eval_mode_batchnorm_refresh_allowed_default_path():
         log.save_new_outs(model, x2, seed=1)
         fresh = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=1))
         try:
-            refreshed_bn = next(op for op in log.layer_list if op.layer_type == "batchnorm")
-            fresh_bn = next(op for op in fresh.layer_list if op.layer_type == "batchnorm")
+            refreshed_bn = next(op for op in log.layer_list if op.type == "batchnorm")
+            fresh_bn = next(op for op in fresh.layer_list if op.type == "batchnorm")
             assert torch.allclose(refreshed_bn.out, fresh_bn.out)
         finally:
             fresh.cleanup()

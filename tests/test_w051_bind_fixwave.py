@@ -357,7 +357,7 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     trace = tl.trace(model, x)
     capture_keys: dict[str, list[str]] = {}
     for op in trace.ops:
-        capture_keys.setdefault(op.layer_type, []).append(op.site_key)
+        capture_keys.setdefault(op.type, []).append(op.site_key)
     for func_name in ("linear", "relu"):
         bound = tl.when(tl.func(func_name), tl.scale(1.0)).bind(model, on_zero_fire="disclose")
         bound(x)

@@ -155,7 +155,7 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
         streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log.layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
     assert bundle_path.exists()
 
@@ -168,7 +168,7 @@ def test_layers_to_save_absorbed_path_honors_substrings() -> None:
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save=["lin"]),
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log.layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
 
 
@@ -198,12 +198,12 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
             backward_ready=True,
         ),
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log.layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
     assert saved[0].out.requires_grad
 
     saved[0].out.sum().backward()
-    saved_grad_types = {op.layer_type for op in log.layer_list if op.has_grad}
+    saved_grad_types = {op.type for op in log.layer_list if op.has_grad}
     assert saved_grad_types == {"linear"}
     hooked_raw_labels = {raw_label for raw_label, _tensor_id in log._tl_backward_hooked_tensor_keys}
     assert hooked_raw_labels == {saved[0]._label_raw}
@@ -448,7 +448,7 @@ def test_selective_save_with_intervention_features(feature: str) -> None:
             ),
         )
         assert trace.is_replayable is True
-        assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
+        assert any(op.type == "relu" and op.has_saved_activation for op in trace.layer_list)
         linear_trace = tl.trace(
             TinyLinear(),
             x,
@@ -458,7 +458,7 @@ def test_selective_save_with_intervention_features(feature: str) -> None:
             ),
         )
         assert any(
-            op.has_saved_activation and op.layer_type == "linear" for op in linear_trace.layer_list
+            op.has_saved_activation and op.type == "linear" for op in linear_trace.layer_list
         )
     else:
         observer = tl.observers.tap(tl.func("relu"))
@@ -467,7 +467,7 @@ def test_selective_save_with_intervention_features(feature: str) -> None:
             x,
             capture=tl.options.CaptureOptions(layers_to_save=["linear"], hooks=observer),
         )
-        assert any(op.has_saved_activation and op.layer_type == "linear" for op in trace.layer_list)
+        assert any(op.has_saved_activation and op.type == "linear" for op in trace.layer_list)
         assert observer.records
         assert all(record.site_label is not None for record in observer.records)
 
@@ -495,10 +495,8 @@ def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
         halt=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
     )
 
-    assert any(
-        op.has_saved_activation and op.layer_type == "linear" for op in intervened.layer_list
-    )
-    saved_types = {op.layer_type for op in union_saved.layer_list if op.has_saved_activation}
+    assert any(op.has_saved_activation and op.type == "linear" for op in intervened.layer_list)
+    saved_types = {op.type for op in union_saved.layer_list if op.has_saved_activation}
     assert {"linear", "relu"}.issubset(saved_types)
     assert getattr(halted, "halted", False) is True
 
@@ -540,7 +538,7 @@ def test_followed_by_trace_supported_record_rejected_and_bad_shapes_error() -> N
         lookback=4,
         lookback_payload_policy="detached_raw",
     )
-    assert any(op.layer_type == "linear" and op.has_saved_activation for op in traced.layer_list)
+    assert any(op.type == "linear" and op.has_saved_activation for op in traced.layer_list)
 
     with pytest.raises(PredicateError, match="record\\(save=.*followed_by"):
         tl.record(TinyLinear(), x, save=selector)

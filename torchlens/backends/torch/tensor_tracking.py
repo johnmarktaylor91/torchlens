@@ -842,8 +842,8 @@ class _GradPayloadContext:
         self.op_label = op.label
         self.raw_label = getattr(op, "raw_tensor_label", None)
         self.func_name = op.func_name
-        self.layer_type = op.layer_type
-        self.type = op.layer_type
+        self.layer_type = op.type
+        self.type = op.type
         self.module_stack = tuple(getattr(op, "module_stack", ()) or ())
         self.modules = tuple(getattr(op, "modules", ()) or ())
         self.output_of_module_calls = tuple(getattr(op, "output_of_module_calls", ()) or ())

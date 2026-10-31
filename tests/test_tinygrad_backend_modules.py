@@ -250,7 +250,7 @@ def test_tinygrad_reused_uop_keeps_first_construction_attribution() -> None:
     root_only = [
         op.label
         for op in trace.layer_list
-        if op.module == "self:1" and op.layer_type == "add" and not op.is_input
+        if op.module == "self:1" and op.type == "add" and not op.is_input
     ]
     assert root_only
     assert check_metadata_invariants(trace) is True

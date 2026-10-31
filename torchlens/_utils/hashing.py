@@ -44,6 +44,8 @@ import re
 import string
 from typing import Any
 
+from .._record_type import record_type
+
 _BARCODE_ALPHABET = string.ascii_letters + string.digits
 
 # Dedicated, process-private RNG for internal tensor barcodes. Drawing from a
@@ -301,7 +303,7 @@ def compute_graph_shape_hash(
         records.append(
             {
                 "index": index,
-                "layer_type": getattr(layer, "layer_type", None),
+                "layer_type": record_type(layer, None),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
                 "_address_normalized": hash_address,
@@ -336,7 +338,7 @@ def _replacement_layer_fold_target(
     parent's shape and dtype folds.
     """
 
-    if getattr(layer, "layer_type", None) != "interventionreplacement":
+    if record_type(layer, None) != "interventionreplacement":
         return None
     parents = list(getattr(layer, "parents", ()) or ())
     if len(parents) != 1 or parents[0] not in order_by_label:

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..._record_type import record_type
 from ..._utils.display import format_flops, human_readable_size
 
 __tl_layer__ = "L8"
@@ -63,7 +64,7 @@ def node_label(entry: Any) -> str:
     func_name = _real_func_name(entry)
     if func_name:
         return func_name
-    layer_type = str(getattr(entry, "layer_type", "") or "")
+    layer_type = str(record_type(entry, "") or "")
     if layer_type and layer_type.lower() != "none":
         return layer_type
     return node_kind(entry)

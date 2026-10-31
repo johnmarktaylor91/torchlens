@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._quantities import Flops, Macs
+from .._record_type import record_type
 from ..capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
 
 if TYPE_CHECKING:
@@ -362,7 +363,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
                 kind=kind,
                 phase="forward",
                 func_name=getattr(op, "func_name", None),
-                layer_type=getattr(op, "layer_type", None),
+                layer_type=record_type(op, None),
                 dtype=dtype_token,
                 flops_fma2=None if kind != "op" or flops is None else int(flops),
                 fma_macs=None if fma_macs is None else int(fma_macs),

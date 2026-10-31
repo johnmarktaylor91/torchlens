@@ -12,6 +12,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._record_type import record_type
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..intervention.selectors import facet
 from ..options import CaptureOptions
@@ -1084,7 +1085,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
     except (AttributeError, KeyError, RuntimeError, ValueError):
         return None
     home = getattr(spec, "home", None)
-    if home is None or getattr(home, "layer_type", None) != "input":
+    if home is None or record_type(home, None) != "input":
         return None
     home_label = str(getattr(home, "label", ""))
     home_op = next(

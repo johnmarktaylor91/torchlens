@@ -154,7 +154,7 @@ class VersionSnapshotTraceStub:
 def _conv_ops(log: tl.Trace) -> list[tl.Op]:
     """Return conv ops in execution order."""
 
-    return [op for op in log.layer_list if op.layer_type == "conv2d"]
+    return [op for op in log.layer_list if op.type == "conv2d"]
 
 
 def _saved_conv_ops(log: tl.Trace) -> list[tl.Op]:
@@ -221,7 +221,7 @@ def test_copy_policies_pause_logging_for_internal_tensor_ops() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True, seed=123),
     )
 
-    layer_types = [op.layer_type for op in log.layer_list]
+    layer_types = [op.type for op in log.layer_list]
     assert layer_types == ["input", "add", "mul", "output"]
 
 

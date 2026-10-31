@@ -380,7 +380,7 @@ class TraceStatsMixin(_TraceMixinBase):
         result: dict[str, dict[str, int | Flops]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self.layer_list:
-            lt = entry.layer_type
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Flops(0), "backward": Flops(0), "count": 0}
             result[lt]["count"] += 1
@@ -550,7 +550,7 @@ class TraceStatsMixin(_TraceMixinBase):
         result: dict[str, dict[str, int | Macs | None]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self.layer_list:
-            lt = entry.layer_type
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Macs(0), "backward": None, "count": 0}
             bucket = result[lt]

@@ -214,11 +214,11 @@ def test_row_shapes_are_what_the_replaced_invariants_refused() -> None:
 
     torch.manual_seed(0)
     scalar = tl.trace(_ScalarLoop(), _x())
-    muls = [op for op in scalar.layer_list if op.layer_type == "mul"]
+    muls = [op for op in scalar.layer_list if op.type == "mul"]
     assert len({op.layer_label for op in muls}) == 1
     assert len({op.equivalence_class for op in muls}) == 3  # row 49: argument hash
     shared = tl.trace(_SharedWeightTwoLines(), _x())
-    matmuls = [op for op in shared.layer_list if op.layer_type == "matmul"]
+    matmuls = [op for op in shared.layer_list if op.type == "matmul"]
     assert len({op.layer_label for op in matmuls}) == 2  # row 25: shared W, two layers
     assert len({op.equivalence_class for op in matmuls}) == 1
 

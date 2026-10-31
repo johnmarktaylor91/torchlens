@@ -293,7 +293,7 @@ def _shape_hash_sorted(trace: SimpleNamespace) -> str:
         records.append(
             {
                 "index": index,
-                "layer_type": layer.layer_type,
+                "layer_type": layer.type,
                 "func_name": str(layer.func_name),
                 "parent_indices": parent_indices,
                 "_address_normalized": None,

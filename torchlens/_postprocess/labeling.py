@@ -28,6 +28,7 @@ from .._data_classes.cleanup import _project_conditional_child_views
 from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
+from .._record_type import record_type
 from ..intervention.types import ParentRef
 
 if TYPE_CHECKING:
@@ -62,7 +63,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
-        layer_type = tensor_log_entry.layer_type
+        layer_type = record_type(tensor_log_entry)
         pass_index = tensor_log_entry.pass_index
         if pass_index == 1:
             # First pass: assign new type_num and total_num.
@@ -80,7 +81,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             # Raw slot read: the public read is copy-on-read, and copying a
             # 512-element group list just to index its head is pure waste.
             first_pass_tensor = self[tensor_log_entry._slot("recurrent_ops")[0]]
-            layer_type = first_pass_tensor.layer_type
+            layer_type = record_type(first_pass_tensor)
             type_index = first_pass_tensor.type_index
             if layer_type in ["input", "buffer"]:
                 step_index = 0
@@ -157,9 +158,9 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
     for _t, layer_entry in enumerate(self):
         _normalize_io_role_flags(layer_entry)
-        if layer_entry.layer_type in ["input", "buffer"]:
+        if record_type(layer_entry) in ["input", "buffer"]:
             layer_entry.step_index = 0
-        elif layer_entry.layer_type == "output":
+        elif record_type(layer_entry) == "output":
             layer_entry.step_index = None  # fix later
         else:
             layer_entry.step_index = step_index
@@ -181,7 +182,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         # tensor (identity partition, A1): the producer owns those bytes, so
         # the alias row contributes nothing to the tracked total. Input rows
         # own exactly the external inputs' bytes and stay counted.
-        if layer_entry.layer_type != "output":
+        if record_type(layer_entry) != "output":
             self.total_activation_memory += layer_entry.activation_memory
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
@@ -279,7 +280,7 @@ def _normalize_io_role_flags(layer_entry: Op) -> None:
         layer_entry: Op whose role flags should be normalized.
     """
 
-    layer_type = layer_entry.layer_type
+    layer_type = layer_entry.type
     layer_entry.is_input = layer_type == "input"
     layer_entry.is_output = layer_type == "output"
     layer_entry.is_buffer = layer_type == "buffer"
@@ -322,7 +323,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
     fx_call_counts: dict[str, int] = {}
     for layer_entry in self:
         module_calls = getattr(layer_entry, "modules", None) or []
-        op_type_segment = str(layer_entry.func_name or layer_entry.layer_type or "").lower()
+        op_type_segment = str(layer_entry.func_name or record_type(layer_entry) or "").lower()
         if not module_calls or not op_type_segment:
             layer_entry.fx_qualpath = None
             layer_entry.fx_call_index = 0

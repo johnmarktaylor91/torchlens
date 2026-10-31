@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from ..._record_type import record_type
 from ..._utils._multipass_access import get_multipass_attr
 from ..._utils.display import human_readable_size
 from ...visualization.node_spec import (
@@ -556,9 +557,7 @@ def _argument_edge_label(child: Any, parent_label: str) -> str | None:
     """
 
     arg_locs = getattr(child, "parent_arg_positions", None) or {}
-    func_name = (
-        getattr(child, "func_name", None) or getattr(child, "layer_type", "") or ""
-    ).lower()
+    func_name = (getattr(child, "func_name", None) or record_type(child, "") or "").lower()
     if len(getattr(child, "parents", None) or []) <= 1:
         return None
     if func_name in COMMUTATIVE_FUNCS:

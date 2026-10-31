@@ -16,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens._record_type import record_type
 from torchlens.visualization import _render_utils
 from torchlens.visualization._rank_layout_internal import layout as rank_layout
 from torchlens.visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
@@ -299,7 +300,7 @@ def test_render_ir_honors_skip_fn_without_repeat_folds() -> None:
     def skip_relu(layer: Any) -> bool:
         """Skip relu layers."""
 
-        return getattr(layer, "layer_type", None) == "relu"
+        return record_type(layer, None) == "relu"
 
     render_ir = build_render_ir(
         trace,

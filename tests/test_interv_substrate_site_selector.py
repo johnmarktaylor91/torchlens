@@ -187,7 +187,7 @@ def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
     (root instance) count 1..3, and each key resolves exactly one op."""
 
     log = _ready(_Recurrent())
-    relu_labels = [label for label in log.op_labels if log.ops[label].layer_type == "relu"]
+    relu_labels = [label for label in log.op_labels if log.ops[label].type == "relu"]
     keys = [log.ops[label].site_key for label in relu_labels]
     assert len(set(keys)) == len(keys) == 3
 
