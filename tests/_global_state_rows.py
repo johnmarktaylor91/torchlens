@@ -1193,7 +1193,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/debug/_grad_fn_walk.py", "__all__"),
         ("torchlens/debug/_graph_breaks.py", "__all__"),
         ("torchlens/debug/_nan_backward.py", "__all__"),
-        ("torchlens/debug/_params_audit.py", "__all__"),
         ("torchlens/debug/_rerun.py", "__all__"),
         ("torchlens/differential.py", "__all__"),
         ("torchlens/distributed/__init__.py", "__all__"),

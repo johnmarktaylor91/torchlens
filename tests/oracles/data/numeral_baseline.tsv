@@ -3343,8 +3343,6 @@ package-docstrings	torchlens/debug/_infer_failure_classify.py	43
 package-docstrings	torchlens/debug/_nan.py	3.1
 package-docstrings	torchlens/debug/_nan.py	6.5
 package-docstrings	torchlens/debug/_nan_backward.py	10
-package-docstrings	torchlens/debug/_params_audit.py	15
-package-docstrings	torchlens/debug/_params_audit.py	4.4
 package-docstrings	torchlens/debug/_precision.py	10
 package-docstrings	torchlens/debug/_precision.py	16
 package-docstrings	torchlens/debug/_precision.py	3.1
