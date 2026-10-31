@@ -157,14 +157,14 @@ def test_floor_lock_is_red_capable() -> None:
 #: single runtime authority; this mirror refuses a silent floor cut there.
 PACKAGE_FLOOR_BASELINES: dict[str, float] = {
     "torchlens/capture": 74.0,
-    "torchlens/postprocess": 80.0,
+    "torchlens/_postprocess": 80.0,
     "torchlens/validation": 54.0,
     "torchlens/backends": 48.0,
-    "torchlens/data_classes": 65.0,
+    "torchlens/_data_classes": 65.0,
     "torchlens/_io": 63.0,
     "torchlens/intervention": 59.0,
-    "torchlens/utils": 59.0,
-    "torchlens/merged": 80.0,
+    "torchlens/_utils": 59.0,
+    "torchlens/_merged": 80.0,
     "torchlens/_trace_core": 80.0,
     "torchlens/visualization": 57.0,
 }
@@ -214,6 +214,30 @@ def test_per_package_floors_are_enforced_and_never_lowered() -> None:
     assert not lowered, (
         f"per-package floors lowered below their committed baselines: {lowered} "
         "— the floor is a tripwire, never lower it to pass"
+    )
+
+
+def test_every_package_floor_key_names_an_existing_package() -> None:
+    """A floor keyed by a moved package's old path measures nothing.
+
+    Round-1 package moves (``postprocess`` to ``_postprocess`` and three more)
+    left the floors keyed by the old paths: the script then finds no measured
+    file for the key, so the floor no longer guards the package it names.
+    Every key in the script and in the baseline mirror must be a real package
+    directory holding Python source.
+    """
+
+    script = _load_floor_script()
+    keys = sorted(set(script.PACKAGE_FLOORS) | set(PACKAGE_FLOOR_BASELINES))
+    missing = [
+        key
+        for key in keys
+        if not (_PROJECT_ROOT / key).is_dir() or not any((_PROJECT_ROOT / key).rglob("*.py"))
+    ]
+    assert not missing, (
+        f"per-package coverage floor key(s) name no package directory: {missing}. "
+        "Re-key them to the package's current path with the SAME floor value "
+        "(script and the PACKAGE_FLOOR_BASELINES mirror together); never drop or lower one."
     )
 
 

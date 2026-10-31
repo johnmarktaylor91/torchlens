@@ -27,16 +27,18 @@ from collections import defaultdict
 #: Measured 2026-08-16: capture 81.2, postprocess 86.9, validation 60.1,
 #: backends 55.0, data_classes 72.1, _io 69.8, intervention 66.1,
 #: utils 66.0, merged 87.5, _trace_core 87.7, visualization 64.1.
+#: Keys are package paths: a moved package is re-keyed with the same floor
+#: (tests/test_coverage_floor_governance.py checks every key exists).
 PACKAGE_FLOORS: dict[str, float] = {
     "torchlens/capture": 74.0,
-    "torchlens/postprocess": 80.0,
+    "torchlens/_postprocess": 80.0,
     "torchlens/validation": 54.0,
     "torchlens/backends": 48.0,
-    "torchlens/data_classes": 65.0,
+    "torchlens/_data_classes": 65.0,
     "torchlens/_io": 63.0,
     "torchlens/intervention": 59.0,
-    "torchlens/utils": 59.0,
-    "torchlens/merged": 80.0,
+    "torchlens/_utils": 59.0,
+    "torchlens/_merged": 80.0,
     "torchlens/_trace_core": 80.0,
     "torchlens/visualization": 57.0,
 }
