@@ -123,7 +123,7 @@ def test_do_empty_site_table_refuses():
 
     _, _, trace = _traced_toy()
     fork = trace.fork()
-    nothing = trace.find_sites(tl.func("conv2d"))
+    nothing = trace.find_sites(tl.func("tanh"))  # the toy has no tanh
     assert len(nothing) == 0
     with pytest.raises(SiteResolutionError) as excinfo:
         fork.do(nothing, tl.zero_ablate())
