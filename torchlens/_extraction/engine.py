@@ -127,8 +127,6 @@ class _RunPlan:
     pipeline_id:
         Caller-asserted pipeline identity for callable-identity resume
         overrides (extract D8).
-    acknowledge_v1_prefix:
-        The explicit in-progress-v1 resume acknowledgment (extract D16).
     transform_raw:
         The caller's original ``output_transform=`` value (classified for the
         callable-identity block when chains hold opaque steps).
@@ -171,7 +169,6 @@ class _RunPlan:
     shard_format: str | None
     checksums: str
     pipeline_id: str | None
-    acknowledge_v1_prefix: bool
     transform_raw: Any
     selector_pipeline: TransformPipeline | None = None
     input_transform: Any = None

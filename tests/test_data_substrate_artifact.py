@@ -8,23 +8,19 @@ sidecar, field-by-field signature compare, and the completed-v1 migration.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-import torch
 
 from torchlens._data_substrate import (
     LEDGER_FILENAME,
-    MANIFEST_SCHEMA_V1,
     MANIFEST_SCHEMA_V2,
     SIGNATURE_SEMANTIC_FIELDS,
     UNRECORDED_V1,
     ArtifactWriter,
     ExtractionArtifactError,
     compare_signatures,
-    migrate_v1_artifact,
     read_trusted_rows,
     repair_ledger_tail,
     stimulus_ids_digest,
@@ -215,81 +211,3 @@ def test_compare_signatures_skips_unrecorded_v1_fields() -> None:
     )
     current = _signature(padding_side="right")
     assert compare_signatures(migrated, current) == []
-
-
-def _v1_artifact(tmp_path: Path, status: str) -> dict[str, Any]:
-    """Write a minimal completed/in-progress v1 artifact.
-
-    Parameters
-    ----------
-    tmp_path:
-        Artifact directory.
-    status:
-        v1 status value.
-
-    Returns
-    -------
-    dict[str, Any]
-        The v1 manifest document (also written to disk).
-    """
-
-    torch.save({"relu": torch.zeros(2, 3)}, tmp_path / "batch_00000.pt")
-    torch.save({"relu": torch.ones(1, 3)}, tmp_path / "batch_00001.pt")
-    manifest = {
-        "schema": MANIFEST_SCHEMA_V1,
-        "torchlens_version": "2.99",
-        "status": status,
-        "signature": {
-            "layer_plan": {"relu": "relu"},
-            "layers_kind": "mapping",
-            "batch_size": 2,
-            "transform": None,
-            "stimuli": {"kind": "tensor", "shape": [3, 3], "dtype": "torch.float32"},
-        },
-        "stimulus_provenance": {
-            "order": "iteration order",
-            "n_stimuli": 3,
-            "stimulus_ids": ["s0", "s1", "s2"],
-        },
-        "storage": {},
-        "layers": {"relu": {"layer_label": "relu_1_1"}},
-        "batches": [
-            {"index": 0, "file": "batch_00000.pt", "n_stimuli": 2},
-            {"index": 1, "file": "batch_00001.pt", "n_stimuli": 1},
-        ],
-    }
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    return manifest
-
-
-@pytest.mark.smoke
-def test_migrate_completed_v1_builds_ledger_sidecar_and_v2_manifest(tmp_path: Path) -> None:
-    """Completed v1 migrates without a forward: ledger, sidecar, honest fields."""
-
-    manifest_v1 = _v1_artifact(tmp_path, "complete")
-    manifest_v2, rows = migrate_v1_artifact(tmp_path, manifest_v1)
-    assert manifest_v2["schema"] == MANIFEST_SCHEMA_V2
-    assert manifest_v2["status"] == "complete"
-    assert manifest_v2["totals"] == {"n_shards": 2, "n_stimuli": 3}
-    assert [row["row_start"] for row in rows] == [0, 2]
-    signature = manifest_v2["signature"]
-    assert signature["model_identity"] == {"level": UNRECORDED_V1}
-    assert signature["padding_side"] == UNRECORDED_V1
-    assert signature["integrity"] == UNRECORDED_V1
-    assert "model_identity" in manifest_v2["migration"]["unprovable_fields"]
-    sidecar = json.loads((tmp_path / "stimulus_ids.json").read_text(encoding="utf-8"))
-    assert sidecar["ids"] == ["s0", "s1", "s2"]
-    assert [row["index"] for row in read_trusted_rows(tmp_path)] == [0, 1]
-    # Idempotent enough to re-run: the ledger is not duplicated.
-    migrate_v1_artifact(tmp_path, manifest_v1)
-    assert len(read_trusted_rows(tmp_path)) == 2
-
-
-def test_migrate_refuses_in_progress_v1_typed(tmp_path: Path) -> None:
-    """In-progress v1 recorded no identity/mode/pad facts: resume unprovable."""
-
-    manifest_v1 = _v1_artifact(tmp_path, "in_progress")
-    with pytest.raises(ExtractionArtifactError) as excinfo:
-        migrate_v1_artifact(tmp_path, manifest_v1)
-    assert excinfo.value.fields["code"] == "extraction_resume_v1_in_progress"
-    assert "model_identity" in excinfo.value.fields["unprovable_fields"]

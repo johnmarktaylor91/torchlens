@@ -2,7 +2,7 @@
 
 The KNOWN-FIELDS signature builder, the manifest loader/creator, the D8
 callable-identity resume rules, the field-by-field mismatch refusals, and
-the disk-run preparation (trusted-prefix resolution, v1 migration entry,
+the disk-run preparation (trusted-prefix resolution, v1 refusal,
 completed-compatible no-op resume). The store pipeline itself lives in
 :mod:`torchlens._extraction.engine`; this module never runs a forward.
 
@@ -31,8 +31,8 @@ from .._data_substrate import (
     ArtifactWriter,
     compare_signatures,
     compute_model_identity,
-    migrate_v1_artifact,
     read_trusted_rows,
+    refuse_v1_manifest,
     repair_ledger_tail,
     stimulus_ids_digest,
 )
@@ -574,6 +574,7 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
             remedy="delete the output directory and re-run the extraction from scratch",
             manifest_path=str(manifest_path),
         )
+    refuse_v1_manifest(manifest, container=manifest_path.parent)
     return manifest
 
 
@@ -911,33 +912,6 @@ def _rehydrate_ragged_state(
     return {"pooled_shapes": pooled_shapes, "trimmed_keys": trimmed_keys}
 
 
-def _completed_prefix(manifest: dict[str, Any], container_path: Path) -> list[dict[str, Any]]:
-    """Return the v1 ledgered shard prefix whose files are all present.
-
-    Parameters
-    ----------
-    manifest:
-        Parsed v1 manifest document.
-    container_path:
-        Extraction directory containing the shards.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Contiguous v1 batch rows verified present on disk.
-    """
-
-    from .._data_substrate import shard_filename
-
-    prefix: list[dict[str, Any]] = []
-    for row in manifest.get("batches") or []:
-        expected_name = shard_filename(int(row["index"]))
-        if row.get("file") != expected_name or not (container_path / expected_name).exists():
-            break
-        prefix.append(row)
-    return prefix
-
-
 def _stale_shard_files(container_path: Path) -> list[Path]:
     """List a directory's shard files of either native format.
 
@@ -1000,8 +974,9 @@ def _prepare_disk_run(
         On unmanifested shard directories, signature/model-identity/
         callable-identity mismatches, or replay input mismatches.
     torchlens._data_substrate.ExtractionArtifactError
-        On a broken ledger prefix or an unacknowledged in-progress v1
-        artifact.
+        On a broken ledger prefix.
+    torchlens.errors.ArtifactTooOldError
+        On a v1 artifact, which torchlens 2.x wrote.
     """
 
     container_path.mkdir(parents=True, exist_ok=True)
@@ -1010,10 +985,6 @@ def _prepare_disk_run(
 
     if resume and manifest_path.exists():
         existing = load_manifest(manifest_path)
-        if existing.get("schema") == MANIFEST_SCHEMA_V1:
-            existing, _migrated_rows = migrate_v1_artifact(
-                container_path, existing, acknowledge_in_progress=plan.acknowledge_v1_prefix
-            )
         recorded_format = str((existing.get("storage") or {}).get("shard_format", "pt"))
         effective_format = plan.shard_format or recorded_format
         plan = dataclasses.replace(plan, shard_format=effective_format)
@@ -1022,16 +993,6 @@ def _prepare_disk_run(
         rows = read_trusted_rows(container_path)
         totals = existing.get("totals") or {}
         is_complete = existing.get("status") == "complete" and len(rows) == totals.get("n_shards")
-        migrated_v1 = bool((existing.get("migration") or {}).get("migrated_from"))
-        if migrated_v1:
-            # A migrated prefix's semantic fields are UNRECORDED_V1 and the
-            # compare skips them; the fields the migration DID carry still
-            # compare field-by-field.
-            prep_state["resume_audit"].extend(
-                []
-                if existing.get("status") == "complete"
-                else [{"kind": "v1_in_progress_acknowledged", "semantics": "asserted_not_measured"}]
-            )
         audits = _refuse_signature_mismatch(
             existing.get("signature") or {},
             signature,

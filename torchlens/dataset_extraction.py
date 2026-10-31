@@ -41,8 +41,6 @@ import torch
 from torch import nn
 
 from ._data_substrate import (
-    MANIFEST_SCHEMA_V1,
-    migrate_v1_artifact,
     shard_filename as _shard_filename,  # noqa: F401 - engine-internal alias
     stimulus_ids_digest,
 )
@@ -73,8 +71,6 @@ from ._extraction.intervened import (
 )
 from ._extraction.resume import (
     MANIFEST_FILENAME,
-    DatasetExtractionResumeError,
-    _stimuli_signature,  # noqa: F401 - engine-internal alias kept for the v1 test harness
     load_manifest as _load_manifest,
     validate_checksums_level,
     validate_stimulus_ids,
@@ -91,9 +87,6 @@ from ._extraction_provenance import (
 from .transforms import TransformPipeline
 from .transforms._coerce import coerce_transform, coerce_transform_mapping
 from .transforms._pipeline import pipeline_record as _pipeline_record
-
-#: Legacy v1 manifest schema id (still readable forever; superseded on write).
-MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1
 
 
 def _coerce_transform_slot(
@@ -195,7 +188,6 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
     shard_format: str | None,
     checksums: str,
     pipeline_id: str | None,
-    acknowledge_v1_prefix: bool,
 ) -> tuple[str, str]:
     """Validate the run's option surface before any work happens.
 
@@ -219,8 +211,6 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
         Checksum level token from its closed vocabulary.
     pipeline_id:
         Caller-supplied run signature component, or ``None``.
-    acknowledge_v1_prefix:
-        Opt-in acknowledgement for the legacy v1 layout prefix.
 
     Returns
     -------
@@ -271,7 +261,6 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
             "shard_format": shard_format if shard_format is not None else None,
             "checksums": checksums_level if checksums_level != "fast" else None,
             "pipeline_id": pipeline_id,
-            "acknowledge_v1_prefix": acknowledge_v1_prefix or None,
             "ragged": ragged_mode if ragged_mode != "refuse" else None,
         }
         _refuse_disk_only_options(
@@ -302,7 +291,6 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     shard_format: str | None = None,
     checksums: str = "fast",
     pipeline_id: str | None = None,
-    acknowledge_v1_prefix: bool = False,
     intervene: Any = None,
     store_input_ids: bool = False,
 ) -> dict[str, torch.Tensor] | list[Path]:
@@ -418,10 +406,6 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         past a PARTIAL callable classification or a deliberate
         complete-class refactor, with strict continuity — the id must
         already be recorded in the artifact's prefix.
-    acknowledge_v1_prefix:
-        Explicit acknowledgment for resuming an IN-PROGRESS v1 artifact:
-        the prefix's semantics are recorded asserted-not-measured and the
-        artifact carries ``unknown_v1_prefix_semantics: true`` permanently.
     intervene:
         Optional :class:`torchlens.intervention.spec.InterventionSpec`
         (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE): every
@@ -474,7 +458,6 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         shard_format=shard_format,
         checksums=checksums,
         pipeline_id=pipeline_id,
-        acknowledge_v1_prefix=acknowledge_v1_prefix,
     )
     if input_provenance is not None and path is None:
         raise InvalidArgumentError(
@@ -569,7 +552,6 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         shard_format=shard_format,
         checksums=checksums_level,
         pipeline_id=pipeline_id,
-        acknowledge_v1_prefix=acknowledge_v1_prefix,
         transform_raw=output_transform,
         selector_pipeline=selector_pipeline,
         input_transform=input_callable,
@@ -657,9 +639,6 @@ def load_extraction(
     """
 
     container_path = Path(path)
-    manifest = _load_manifest(container_path / MANIFEST_FILENAME)
-    if manifest.get("schema") == MANIFEST_SCHEMA_V1:
-        return _load_v1_extraction(container_path, manifest, layers)
     reader = open_extraction(container_path)
     selected = list(layers) if layers is not None else None
     activations = reader.materialize(selected, max_bytes=max_bytes)
@@ -669,81 +648,6 @@ def load_extraction(
     return LoadedExtraction(
         manifest=reader.manifest, activations=activations, batch_paths=batch_paths
     )
-
-
-def _load_v1_extraction(
-    container_path: Path, manifest: dict[str, Any], layers: Iterable[str] | None
-) -> LoadedExtraction:
-    """Read a legacy v1 artifact WITHOUT mutating it (read-only media safe).
-
-    Parameters
-    ----------
-    container_path:
-        Artifact directory.
-    manifest:
-        Parsed v1 manifest.
-    layers:
-        Optional output-key subset.
-
-    Returns
-    -------
-    LoadedExtraction
-        Manifest, concatenated activations, and shard paths.
-
-    Raises
-    ------
-    DatasetExtractionResumeError
-        If the artifact is incomplete or missing ledgered shards.
-    """
-
-    from ._extraction.resume import _completed_prefix
-
-    if manifest.get("status") != "complete":
-        raise DatasetExtractionResumeError(
-            f"Extraction artifact at {str(container_path)!r} has status "
-            f"{manifest.get('status')!r}, not 'complete'.",
-            code="extraction_manifest_invalid",
-            remedy="finish the run first: extract_dataset(..., resume=True)",
-            status=manifest.get("status"),
-        )
-    rows = _completed_prefix(manifest, container_path)
-    if len(rows) != len(manifest.get("batches") or []):
-        raise DatasetExtractionResumeError(
-            f"Extraction artifact at {str(container_path)!r} is missing ledgered "
-            f"shard files ({len(rows)} of {len(manifest.get('batches') or [])} present).",
-            code="extraction_manifest_invalid",
-            remedy="re-run extract_dataset(..., resume=True) to restore the missing shards",
-            n_present=len(rows),
-            n_ledgered=len(manifest.get("batches") or []),
-        )
-    available = set((manifest.get("layers") or {}).keys())
-    selected = list(layers) if layers is not None else None
-    if selected is not None:
-        missing = sorted(set(selected) - available)
-        if missing:
-            raise DatasetExtractionResumeError(
-                f"Output keys {missing} are not in the artifact at "
-                f"{str(container_path)!r} (available: {sorted(available)}).",
-                code="extraction_manifest_invalid",
-                remedy="request only output keys recorded in the manifest's layers block",
-                missing_keys=missing,
-                available_keys=sorted(available),
-            )
-    per_key: dict[str, list[torch.Tensor]] = {}
-    batch_paths = [container_path / str(row["file"]) for row in rows]
-    for batch_path in batch_paths:
-        # mmap=True is a measured 13.4x on selective reads and retroactive on
-        # every existing artifact. torch<2.3's mmap path requires a literal
-        # str filename (``ValueError: f must be a string filename``), so pass
-        # one explicitly -- a plain str is accepted on every supported torch
-        # version, so this is not a version branch.
-        payload = torch.load(str(batch_path), weights_only=True, mmap=True)
-        for key, tensor in payload.items():
-            if selected is not None and key not in selected:
-                continue
-            per_key.setdefault(key, []).append(tensor)
-    activations = {key: torch.cat(tensors, dim=0) for key, tensors in per_key.items()}
-    return LoadedExtraction(manifest=manifest, activations=activations, batch_paths=batch_paths)
 
 
 def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
@@ -778,8 +682,6 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
 
     container_path = Path(path)
     manifest = _load_manifest(container_path / MANIFEST_FILENAME)
-    if manifest.get("schema") == MANIFEST_SCHEMA_V1:
-        manifest, _rows = migrate_v1_artifact(container_path, manifest)
     ids = [str(item) for item in new_ids]
     validate_stimulus_ids(ids)
     totals = manifest.get("totals") or {}
