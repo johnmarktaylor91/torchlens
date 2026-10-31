@@ -176,7 +176,7 @@ class _LedgerReader:
 
 
 def read_ledger(path: str | Path) -> _LedgerReader:
-    """Open a saved experiment ledger for reading, without arming it.
+    """Read a saved experiment ledger from disk and return a read-only reader.
 
     ``read_ledger(path).overview`` is the one-line-per-entry summary,
     ``.entry(entry_id, page=0, page_size=50)`` the paginated trajectory of one

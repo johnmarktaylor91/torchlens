@@ -44,13 +44,13 @@ class SrpSizing:
     Attributes
     ----------
     num_components:
-        The sized output width.
+        Number of output components: the sized projection width.
     formula:
         Formula id (``"dense_jl_l2_heuristic"``).
     version:
         Formula version.
     num_samples:
-        Row count the bound was sized for.
+        Number of samples (rows) the bound was sized for.
     eps:
         Requested maximum pairwise-L2 distortion.
     note:

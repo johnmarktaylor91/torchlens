@@ -3381,7 +3381,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
-| `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA`, `tl.transforms.srp` and `tl.transforms.srp_fidelity_probe`: number of output components |
+| `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA`, `tl.transforms.srp` and `tl.transforms.srp_fidelity_probe`: the number of components (output dimensions) to return |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_heads=` | keyword of `FacetSpec.heads`: number of attention heads to split into |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
@@ -3458,7 +3458,7 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
-| `tl.experiment.read_ledger` | Open a saved experiment ledger for reading without arming it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
+| `tl.experiment.read_ledger` | Read a saved experiment ledger from disk and return a read-only reader that never arms it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
@@ -3741,6 +3741,7 @@ The sections above describe each surface in depth.
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
 | `SrpSizing.num_components` | Recommended number of projection components |
+| `SrpSizing.num_samples` | Number of samples (rows) the projection width was sized for |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
