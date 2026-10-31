@@ -505,8 +505,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # split base measured 2464 and the F10 lovely bundle card (outcome
     # distribution repr + bounded __str__) adds +44; the union measures
     # 2508. Next 50-line step, conscious raise with both contributions
-    # named, not silent regrowth.
-    "torchlens/bundle/__init__.py": 2550,
+    # named, not silent regrowth. Re-keyed 2550 -> 2450 at the 3.0 rename
+    # (measured 2435 after the selection and bundle spellings moved out).
+    "torchlens/bundle/__init__.py": 2450,
     # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
     # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
     # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
