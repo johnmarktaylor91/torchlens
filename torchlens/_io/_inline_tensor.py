@@ -61,20 +61,39 @@ def _dtypes_by_name() -> dict[str, tuple[torch.dtype, int]]:
     table: dict[str, tuple[torch.dtype, int]] = {}
     for name in dir(torch):
         value = torch_attr(name)
-        if not isinstance(value, torch.dtype):
-            continue
-        try:
-            # torch warns when some dtypes are allocated (complex32, the quantized dtypes);
-            # this probe is ours, so its warnings must not surface in the user's session.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                probe = torch.empty((), dtype=value)
-        except Exception:  # noqa: BLE001 -- not a plainly allocatable dtype
-            continue
-        if probe.is_quantized:
-            continue
-        table[str(value)] = (value, int(probe.element_size()))
+        if isinstance(value, torch.dtype):
+            itemsize = _plain_itemsize(value)
+            if itemsize is not None:
+                table[str(value)] = (value, itemsize)
     return table
+
+
+def _plain_itemsize(dtype: torch.dtype) -> int | None:
+    """Return the element size of ``dtype`` if torch allocates it as a plain dense dtype.
+
+    Parameters
+    ----------
+    dtype:
+        A ``torch.dtype`` exposed by the running torch.
+
+    Returns
+    -------
+    int | None
+        The element size in bytes, or ``None`` for a quantized dtype or one torch
+        cannot allocate plainly.
+    """
+
+    try:
+        # torch warns when some dtypes are allocated (complex32, the quantized dtypes);
+        # this probe is ours, so its warnings must not surface in the user's session.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            probe = torch.empty((), dtype=dtype)
+    except Exception:  # noqa: BLE001 -- not a plainly allocatable dtype
+        return None
+    if probe.is_quantized:
+        return None
+    return int(probe.element_size())
 
 
 _DEVICE_PATTERN = re.compile(r"^[a-z_]+(:\d{1,3})?$")
@@ -160,30 +179,30 @@ def rebuild_inline_tensor(
         device is unavailable on this machine.
     """
 
-    def _refuse(detail: str) -> pickle.UnpicklingError:
+    def _malformed(detail: str) -> pickle.UnpicklingError:
         """Return the typed refusal for a malformed inline tensor, naming ``detail``."""
         return pickle.UnpicklingError(
             "Blocked malformed inline tensor during bundle metadata unpickle: " + detail
         )
 
     if type(data) is not bytes:
-        raise _refuse(f"payload must be bytes, got {type(data).__name__}.")
+        raise _malformed(f"payload must be bytes, got {type(data).__name__}.")
     if type(dtype_name) is not str or dtype_name not in _dtypes_by_name():
-        raise _refuse(f"unknown dtype {dtype_name!r}.")
+        raise _malformed(f"unknown dtype {dtype_name!r}.")
     if (
         type(shape) is not tuple
         or len(shape) > _MAX_DIMS
         or not all(type(dim) is int and dim >= 0 for dim in shape)
     ):
-        raise _refuse("shape must be a tuple of non-negative ints.")
+        raise _malformed("shape must be a tuple of non-negative ints.")
     if type(requires_grad) is not bool:
-        raise _refuse("requires_grad must be a bool.")
+        raise _malformed("requires_grad must be a bool.")
     if type(device) is not str or len(device) > 32 or not _DEVICE_PATTERN.match(device):
-        raise _refuse(f"device must be a short device string, got {device!r}.")
+        raise _malformed(f"device must be a short device string, got {device!r}.")
     dtype, itemsize = _dtypes_by_name()[dtype_name]
     numel = math.prod(shape)
     if numel * itemsize != len(data):
-        raise _refuse(
+        raise _malformed(
             f"byte length {len(data)} does not match shape {shape} of dtype {dtype_name} "
             f"({numel} x {itemsize} bytes)."
         )
@@ -197,7 +216,7 @@ def rebuild_inline_tensor(
         try:
             tensor = tensor.to(torch.device(device))
         except Exception as exc:  # noqa: BLE001 -- unavailable or unknown device
-            raise _refuse(
+            raise _malformed(
                 f"the tensor was saved on device {device!r}, which is unavailable here; "
                 "re-save the trace with the tensor moved to the CPU."
             ) from exc
@@ -205,5 +224,5 @@ def rebuild_inline_tensor(
         try:
             tensor.requires_grad_(True)
         except RuntimeError as exc:
-            raise _refuse(f"dtype {dtype_name} cannot require grad.") from exc
+            raise _malformed(f"dtype {dtype_name} cannot require grad.") from exc
     return tensor
