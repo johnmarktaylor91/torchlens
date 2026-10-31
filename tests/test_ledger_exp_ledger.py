@@ -23,9 +23,7 @@ from torchlens.errors.episode import BundleExperimentError
 from torchlens.experiment import (
     active_ledger,
     ledger,
-    ledger_entry,
-    ledger_evidence,
-    ledger_overview,
+    read_ledger,
 )
 from torchlens.experiment._ledger import EvidenceRef, read_ledger_artifact
 
@@ -256,24 +254,24 @@ def test_serving_tools_read_live_artifact(tmp_path: Path) -> None:
     led.verdict("supports", basis=[step])
 
     # The artifact is FRESH while the ledger is still armed (per-event fsync).
-    overview = ledger_overview(str(path))
+    overview = read_ledger(str(path)).overview
     assert overview["n_events"] >= 6
     assert len(overview["entries"]) == 1
     assert "verdict=supports (basis=1)" in overview["entries"][0]
 
-    served = ledger_entry(str(path), "e1")
+    served = read_ledger(str(path)).entry("e1")
     assert served["hypothesis"] == "h"
     assert served["metric_declared_at_seq"] is not None
     assert served["n_events"] >= 6
     assert served["evidence_refs"][0]["availability"] == "missing"
 
-    evidence = ledger_evidence(str(path), "e1", 0)
+    evidence = read_ledger(str(path)).evidence("e1", 0)
     assert evidence["served"] is None
     assert "missing" in (evidence["disclosure"] or "")
     led.close()
 
     with pytest.raises(BundleExperimentError) as excinfo:
-        ledger_entry(str(path), "e9")
+        read_ledger(str(path)).entry("e9")
     assert excinfo.value.fields["code"] == "ledger_entry_unknown"
 
 
@@ -412,5 +410,5 @@ def test_evidence_ref_index_out_of_range_refuses_typed(tmp_path: Path) -> None:
     led.verdict("not_assessed")
     led.close()
     with pytest.raises(BundleExperimentError) as excinfo:
-        ledger_evidence(str(path), "e1", 0)
+        read_ledger(str(path)).evidence("e1", 0)
     assert excinfo.value.fields["code"] == "ledger_evidence_unavailable"

@@ -10,7 +10,7 @@ test, never a runtime surprise.
 One bridge-local EXTENSION rides beside the registry: the experiment-ledger
 trio (F03 item 11; ``torchlens_ledger_overview`` / ``torchlens_ledger_entry``
 / ``torchlens_ledger_evidence``) serves ``.tlledger`` artifacts through
-``torchlens.experiment._mcp`` and returns that module's raw payloads
+``torchlens.experiment.read_ledger`` and returns its raw payloads
 (``torchlens.ledger_*_v1`` schemas), never agent envelopes. The parity gate
 covers the registry portion of ``TOOL_SPECS``; the ledger rows are declared
 in ``LEDGER_TOOL_SPECS`` and pinned by the experiment-ledger suite.
@@ -51,7 +51,7 @@ SERVER_INSTRUCTIONS = (
 
 # --------------------------------------------------------------------------
 # Experiment-ledger extension (F03 item 11): bridge-local declarations and
-# handlers over ``torchlens.experiment._mcp``. Raw payloads by contract --
+# handlers over ``torchlens.experiment.read_ledger``. Raw payloads by contract --
 # the ledger payloads carry their own ``torchlens.ledger_*_v1`` schema ids.
 
 
@@ -164,9 +164,9 @@ def _required_str(args: dict[str, Any], key: str) -> str:
 def _tool_ledger_overview(path: str) -> dict[str, Any]:
     """Serve the experiment-ledger overview (F03 item 11; read-only)."""
 
-    from ..experiment._mcp import ledger_overview
+    from ..experiment import read_ledger
 
-    return ledger_overview(path)
+    return read_ledger(path).overview
 
 
 def _tool_ledger_entry(
@@ -177,10 +177,9 @@ def _tool_ledger_entry(
 ) -> dict[str, Any]:
     """Serve one entry's paginated trajectory + evidence handles."""
 
-    from ..experiment._mcp import ledger_entry
+    from ..experiment import read_ledger
 
-    return ledger_entry(
-        path,
+    return read_ledger(path).entry(
         entry_id,
         page=0 if page is None else int(page),
         page_size=50 if page_size is None else int(page_size),
@@ -194,9 +193,9 @@ def _tool_ledger_evidence(
 ) -> dict[str, Any]:
     """Digest-verify one evidence ref and serve the public queries over it."""
 
-    from ..experiment._mcp import ledger_evidence
+    from ..experiment import read_ledger
 
-    return ledger_evidence(path, entry_id, 0 if ref_index is None else int(ref_index))
+    return read_ledger(path).evidence(entry_id, 0 if ref_index is None else int(ref_index))
 
 
 #: Per-tool argument adapters for the ledger extension: extract/validate the
@@ -223,7 +222,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
     Kept as this module's public seam for hosts/tests driving the pure layer
     directly; typed failures raise (the wired server converts them to error
     envelopes at the transport edge). Ledger-extension tools dispatch to
-    their raw ``torchlens.experiment._mcp`` handlers; everything else goes
+    their raw ``torchlens.experiment.read_ledger`` payloads; everything else goes
     through the registry.
 
     Parameters

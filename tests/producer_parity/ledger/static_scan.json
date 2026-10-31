@@ -6514,7 +6514,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/experiment/_mcp.py",
+  "file": "torchlens/experiment/_reader.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6522,7 +6522,7 @@
  {
   "ambiguous": true,
   "field": "seq",
-  "file": "torchlens/experiment/_mcp.py",
+  "file": "torchlens/experiment/_reader.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

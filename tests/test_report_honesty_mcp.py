@@ -159,7 +159,7 @@ def test_served_schema_field_parity() -> None:
     specs = {spec.name: spec for spec in tool_specs()}
     assert set(served) == set(specs)
     # The handler map carries the registry plus the bridge-local
-    # experiment-ledger extension (raw torchlens.experiment._mcp handlers).
+    # experiment-ledger extension (raw torchlens.experiment.read_ledger payloads).
     ledger_names = {spec["name"] for spec in mcp.LEDGER_TOOL_SPECS}
     assert set(mcp.TOOL_HANDLERS) == set(specs) | ledger_names
     for name, spec in specs.items():
