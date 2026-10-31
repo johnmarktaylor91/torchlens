@@ -148,7 +148,7 @@ def test_tf_tlspec_round_trip_keeps_scalar_shape(tmp_path: Path) -> None:
 
     restored = loaded[loaded.output_layers[0]].out
     assert tuple(restored.shape) == ()
-    np.testing.assert_allclose(restored.numpy(), saved.numpy())
+    np.testing.assert_allclose(np.asarray(restored), np.asarray(saved))
 
 
 def test_tf_bfloat16_tlspec_round_trip_preserves_logical_dtype_and_bits(
