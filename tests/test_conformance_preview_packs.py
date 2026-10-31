@@ -227,6 +227,7 @@ def test_jax_pack_full_ladder(tmp_path: Path) -> None:
 
 
 @pytest.mark.heavy
+@pytest.mark.tf_backend
 def test_tf_pack_full_ladder(tmp_path: Path) -> None:
     """The tf pack passes C0-C2 on its config-built roster."""
 

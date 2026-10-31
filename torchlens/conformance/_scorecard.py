@@ -47,14 +47,15 @@ _TIERS: tuple[str, ...] = ("C0", "C1", "C2")
 _CLAIM_WORD = re.compile("conformant", flags=re.IGNORECASE)
 
 #: Installed distribution that versions each backend's framework.
-_FRAMEWORK_DISTRIBUTIONS: dict[str, str] = {
-    "torch": "torch",
-    "fake": "torch",
-    "jax": "jax",
-    "tf": "tensorflow",
-    "mlx": "mlx",
-    "tinygrad": "tinygrad",
-    "paddle": "paddlepaddle",
+_FRAMEWORK_DISTRIBUTIONS: dict[str, tuple[str, ...]] = {
+    "torch": ("torch",),
+    "fake": ("torch",),
+    "jax": ("jax",),
+    # tensorflow-cpu (what the nightly tf leg installs) is its own distribution.
+    "tf": ("tensorflow", "tensorflow-cpu"),
+    "mlx": ("mlx",),
+    "tinygrad": ("tinygrad",),
+    "paddle": ("paddlepaddle",),
 }
 
 
@@ -239,13 +240,12 @@ def scorecard_from_report(
 def _framework_version(backend: str) -> str:
     """Installed version of the backend's framework distribution, else ``""``."""
 
-    distribution = _FRAMEWORK_DISTRIBUTIONS.get(backend)
-    if distribution is None:
-        return ""
-    try:
-        return metadata.version(distribution)
-    except metadata.PackageNotFoundError:
-        return ""
+    for distribution in _FRAMEWORK_DISTRIBUTIONS.get(backend, ()):
+        try:
+            return metadata.version(distribution)
+        except metadata.PackageNotFoundError:
+            continue
+    return ""
 
 
 def preview_scorecard(backend: str, *, workdir: str | Path | None = None) -> PreviewScorecard:
