@@ -1155,9 +1155,8 @@ def _check_backend_parity_update_run_never_reports_green(
 def check_backend_parity_update_run_never_reports_green() -> None:
     """Run the check body in a scratch directory with a scoped monkeypatch."""
 
-    with tempfile.TemporaryDirectory() as tmp:
-        with pytest.MonkeyPatch.context() as monkeypatch:
-            _check_backend_parity_update_run_never_reports_green(Path(tmp), monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp, pytest.MonkeyPatch.context() as monkeypatch:
+        _check_backend_parity_update_run_never_reports_green(Path(tmp), monkeypatch)
 
 
 def _check_backend_parity_update_flag_arms_on_exact_one_only(
@@ -1181,9 +1180,8 @@ def _check_backend_parity_update_flag_arms_on_exact_one_only(
 def check_backend_parity_update_flag_arms_on_exact_one_only() -> None:
     """Run the check body in a scratch directory with a scoped monkeypatch."""
 
-    with tempfile.TemporaryDirectory() as tmp:
-        with pytest.MonkeyPatch.context() as monkeypatch:
-            _check_backend_parity_update_flag_arms_on_exact_one_only(Path(tmp), monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp, pytest.MonkeyPatch.context() as monkeypatch:
+        _check_backend_parity_update_flag_arms_on_exact_one_only(Path(tmp), monkeypatch)
 
 
 def check_session_warmup_carveout_matches_every_golden_flag_prefix() -> None:
