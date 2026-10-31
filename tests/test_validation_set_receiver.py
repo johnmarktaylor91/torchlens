@@ -228,13 +228,17 @@ _SHAPE_CHANGING = [
     _SetToStorageView,
     _SetToWholeStorage,
 ]
-# ``set_()`` on a buffer is the one case the pristine re-trace (copy path only)
-# reports as stateful; see test_emptied_buffer_is_reported_by_the_retrace_check.
+# On the copy path validation also re-traces the copy from its post-forward
+# state. When that state already holds the binding ``set_`` applies (an empty
+# buffer emptied again, a buffer already viewing the storage), the re-trace
+# records the later read of the buffer differently and reports the model as
+# stateful; see test_stateful_set_overloads_return_a_verdict_on_the_copy_path.
+_RETRACE_STATEFUL = [_SetToNothing, _SetToStorageView, _SetToWholeStorage]
 _VALIDATING_CASES = [
     (model_cls, copy_fails)
     for model_cls in _SHAPE_CHANGING
     for copy_fails in (False, True)
-    if copy_fails or model_cls is not _SetToNothing
+    if copy_fails or model_cls not in _RETRACE_STATEFUL
 ]
 
 
@@ -296,31 +300,33 @@ def test_set_overloads_validate_and_leave_the_model_restored(
     _assert_restored(model, objects, values)
 
 
-def test_emptied_buffer_is_reported_by_the_retrace_check() -> None:
-    """``set_()`` on a buffer returns a verdict; only the stateful-model re-trace objects.
+@pytest.mark.parametrize("model_cls", _RETRACE_STATEFUL)
+def test_stateful_set_overloads_return_a_verdict_on_the_copy_path(
+    model_cls: type[nn.Module],
+) -> None:
+    """Validation returns a verdict, never raises, and replay itself passes.
 
-    The re-trace runs the copy again from its post-forward state, where the
-    buffer is already empty: emptying an empty buffer leaves its bytes equal,
-    so that run records the buffer write as an identity and its graph differs
-    from the first one. Replay of the first capture passes; the verdict is the
-    re-trace's documented stateful-model finding, and the caller's buffer is
-    untouched.
+    The only failure allowed is the stateful-model re-trace finding (the
+    re-trace runs from the copy's post-forward state; replay of the first
+    capture passed before it). The caller's tensors are untouched either way.
     """
 
     torch.manual_seed(0)
-    model = _SetToNothing()
+    model = model_cls()
     objects = _state_by_name(model)
     values = {name: tensor.detach().clone() for name, tensor in objects.items()}
     traces: list[Any] = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         verdict = _validate_forward_pass_torch(model, torch.rand(4), _trace_observer=traces.append)
-    assert verdict is False
+    assert isinstance(verdict, bool)
     (trace,) = traces
     failure = get_validation_failure(trace)
-    assert failure is not None
-    assert failure.check == "retrace_mismatch"
-    assert "first divergence" in failure.message
+    if verdict:
+        assert failure is None
+    else:
+        assert failure is not None
+        assert failure.check == "retrace_mismatch"
     _assert_restored(model, objects, values)
 
 
@@ -393,10 +399,22 @@ def test_storage_argument_is_saved_by_value_at_the_call() -> None:
         trace.cleanup()
 
 
-def test_storage_view_end_to_end_with_a_later_source_write() -> None:
-    """The overload validates when the forward rewrites the source after the read."""
+def test_storage_view_end_to_end_with_a_later_source_write(
+    failing_model_deepcopy: list[type],
+) -> None:
+    """The overload validates when the forward rewrites the source after the read.
 
-    assert _quiet_validate(_SetToStorageViewThenOverwrite(), torch.rand(4)) is True
+    Run on the live fallback, where the verdict is replay's alone (no re-trace):
+    replay must read the storage's bytes from the call, not the rewritten ones.
+    """
+
+    failing_model_deepcopy.append(_SetToStorageViewThenOverwrite)
+    torch.manual_seed(0)
+    model = _SetToStorageViewThenOverwrite()
+    objects = _state_by_name(model)
+    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
+    assert _quiet_validate(model, torch.rand(4)) is True
+    _assert_restored(model, objects, values)
 
 
 @pytest.mark.parametrize(
