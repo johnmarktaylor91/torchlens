@@ -71,6 +71,7 @@ class _ConditionalBuildTrace:
                 has_output_descendant=True,
             )
         }
+        self._layer_logs: dict[str, object] = {}
 
 
 def _make_conditional_event(event_id: int, bool_label: str, source_line: int) -> ConditionalEvent:

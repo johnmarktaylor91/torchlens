@@ -20,6 +20,7 @@ class _DummyLog:
         """Initialize a capture object with the attributes the wrappers expect."""
         self.cleanup_calls = 0
         self._layer_logs: dict[str, Any] = {}
+        self._layer_list: list[Any] = []
         self._num_saved_ops = 0
         self.saved_ops: list[Any] = []
         self.render_calls: list[dict[str, Any]] = []

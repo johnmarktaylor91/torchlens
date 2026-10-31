@@ -355,7 +355,7 @@ def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
         tl.export.xarray(mismatched)
 
     with pytest.raises(ValueError, match="No saved tensor outs"):
-        tl.export.xarray(SimpleNamespace(_layer_list=[]))
+        tl.export.xarray(SimpleNamespace(_layer_list=[], _layer_dict_main_keys={}))
 
 
 def test_xarray_missing_dependency_raises_import_error(

@@ -83,16 +83,34 @@ def test_capture_touched_cuda_predicate_gates_on_trace_fact() -> None:
 
     from torchlens._utils.tensor_utils import capture_touched_cuda
 
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="mps")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cuda")) is True
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", _layer_list=None))
+        is False
+    )
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="mps", _layer_list=None))
+        is False
+    )
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cuda", _layer_list=None))
+        is True
+    )
     # Unknown/missing fails toward the historical flush, never toward skipping.
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="unknown")) is True
-    assert capture_touched_cuda(SimpleNamespace()) is True
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="unknown", _layer_list=None))
+        is True
+    )
+    assert capture_touched_cuda(SimpleNamespace(_layer_list=None)) is True
     # Other KNOWN accelerator homes must not flush the CUDA allocator (the
     # old blanket `not in ("cpu", "mps")` over-broadly flushed for them).
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="xpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="hpu")) is False
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="xpu", _layer_list=None))
+        is False
+    )
+    assert (
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="hpu", _layer_list=None))
+        is False
+    )
 
 
 def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
@@ -229,6 +247,7 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
 
         class _FakeTrace:
             forward_memory_backend = backend
+            _layer_list = None
 
             def __iter__(self):
                 return iter(ops)

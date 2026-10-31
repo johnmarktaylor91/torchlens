@@ -82,6 +82,7 @@ def test_rescue_restores_rng_to_capture_entry() -> None:
             escape_diagnostics=[],
             _had_unattributed_tensor_args=len(draws) == 1,
             ops=[],
+            _layer_list=[],
         )
 
     capture_with_rescue(run_capture)
