@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 import torch
 from torch import nn
+from torch.distributions import Normal
 from torch.nn import functional as F
 
 import torchlens as tl
@@ -214,3 +215,28 @@ def test_fast_run_names_a_direct_forward_call_as_a_capability_refusal() -> None:
     assert info.value.code == "run_capability_unavailable"
     assert "forward()" in str(info.value)
     assert "parent.inner" in str(info.value)
+
+
+class DistributionOutput(nn.Module):
+    """Returns a ``torch.distributions.Normal``, an opaque output container."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mu = nn.Linear(3, 2)
+        self.log_std = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> Normal:
+        """Build the distribution from two heads."""
+
+        return Normal(self.mu(x), self.log_std(x).clamp(-5, 2).exp())
+
+
+def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> None:
+    """A collapsed opaque boundary is refused as unpairable, not as a changed structure."""
+
+    model = DistributionOutput()
+    trace = tl.trace(model, torch.arange(6.0).view(2, 3))
+    with pytest.raises(RunCapabilityUnavailableError) as info:
+        trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
+    assert info.value.code == "run_capability_unavailable"
+    assert "Normal" in str(info.value)

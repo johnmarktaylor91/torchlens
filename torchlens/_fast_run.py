@@ -979,6 +979,18 @@ def _live_modules_by_address(model: nn.Module) -> dict[str, nn.Module]:
     return modules
 
 
+def _is_opaque_output_root(output: Any) -> bool:
+    """Return whether a model output is a container capture walks only by attribute search."""
+
+    from .backends.torch._ops_containers import _try_build_container_spec
+
+    return (
+        output is not None
+        and not isinstance(output, torch.Tensor)
+        and _try_build_container_spec(output) is None
+    )
+
+
 def _output_tensor_leaves(output: Any) -> tuple[Any, ...]:
     """Return the tensor leaves of one live call output (one container level)."""
 
@@ -1646,6 +1658,25 @@ class _FastLiveSession:
             for label in output_labels
         ]
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
+        if values is None and _is_opaque_output_root(output):
+            # Capture walks an unsupported output container (a
+            # ``torch.distributions`` object, a plain class) by attribute
+            # search and records its tensors under one empty address, so the
+            # boundary keeps a single output op however many tensors the object
+            # holds. The live object has not changed; the fast run cannot pair
+            # its leaves with a collapsed boundary.
+            failed = _contract_check(
+                "fast_live_model_output_opaque",
+                False,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"The model returns a {type(output).__qualname__}, an output container "
+                "capture does not walk with stable paths; the captured boundary kept "
+                f"{len(output_labels)} output op(s) for it while the live object holds "
+                f"{reason.split(' tensor leaves')[0]} tensor leaves. The fast run cannot "
+                "pair them; the full run records this output as the capture did.",
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
         if values is None:
             failed = _contract_check(
                 "fast_live_model_output_structure",
