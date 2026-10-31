@@ -588,6 +588,43 @@ class OpRowStore:
             column.clear(row)
         return True
 
+    def release_row(self, row: int) -> None:
+        """Delete every set cell of one row (op removal husking).
+
+        Exactly ``cell_del`` for every field id in layout order, without the
+        facade: no descriptor dispatch and no read of the cell values, so a
+        ``PooledCell`` (or a shared-fact / CSR sentinel) is dropped as stored
+        instead of being hydrated first only to be deleted. The audited twins
+        inherit this method unchanged: their ``cell_del`` never records a
+        delete on a row already marked released, which is every caller's
+        precondition (``mark_op_row_released`` runs first).
+        """
+
+        rows = self._rows
+        if rows is not None:
+            row_cells = rows[row]
+            row_cells[:] = [_MISSING] * len(row_cells)
+            return
+        overlay = self._overlay
+        columns = self._columns
+        assert columns is not None
+        cow_shared = self._cow_shared
+        key = row * self.layout.n_fields
+        for column in columns:
+            value = overlay.get(key, _NO_OVERLAY) if overlay else _NO_OVERLAY
+            if value is _NO_OVERLAY:
+                present = column.present
+                is_set = present is None or bool(present[row])
+            else:
+                is_set = value is not _MISSING
+            if is_set:
+                if column.packed or cow_shared:
+                    overlay[key] = _MISSING
+                else:
+                    overlay.pop(key, None)
+                    column.clear(row)
+            key += 1
+
     def register_compacted_singleton(self, row: int, fid: int, element: str) -> None:
         """Record one singleton-label compaction (freeze-seam pass only)."""
 
@@ -1046,6 +1083,25 @@ class _SealedRowMajorOpRowStore(OpRowStore):
                 if fid_rows is not None and row in fid_rows:
                     self._sweep_plan = None
         return result
+
+    def release_row(self, row: int) -> None:
+        """Clear one row in place, dropping the cached sweep plan if it changed.
+
+        The per-cell ``cell_del`` drops the plan only for a deleted cell the
+        fork-isolation index lists; the facade husk it replaces also hydrated
+        pooled containers through ``cell_set`` first, which drops the plan for
+        any container. Dropping the plan whenever a set cell is cleared covers
+        both (the plan is a cache rebuilt from the maintained index on the
+        next fork).
+        """
+
+        rows = self._rows
+        assert rows is not None
+        row_cells = rows[row]
+        had_cells = any(value is not _MISSING for value in row_cells)
+        row_cells[:] = [_MISSING] * len(row_cells)
+        if had_cells:
+            self._sweep_plan = None
 
 
 #: Live write-audit collectors keyed by audited store id (M10 step
@@ -1520,6 +1576,12 @@ class DetachedOpStore:
         cells[fid] = _MISSING
         return True
 
+    def release_row(self, row: int) -> None:
+        """Delete every set cell of the single row (op removal husking)."""
+
+        cells = self._cells
+        cells[:] = [_MISSING] * len(cells)
+
     def items(self, row: int) -> Iterator[tuple[str, Any]]:
         """Yield ``(field_name, value)`` for every set cell in layout order."""
 
@@ -1866,6 +1928,18 @@ class OpStoreView:
             return False
         self._overlay[row * self.base.layout.n_fields + fid] = _MISSING
         return True
+
+    def release_row(self, row: int) -> None:
+        """Tombstone every set cell of one row through ``cell_del``.
+
+        Fork views keep the per-cell path (its presence probe runs the
+        fork-side isolation, whose group and record translation caches the
+        facade husk always populated); only the facade dispatch is skipped.
+        """
+
+        cell_del = self.cell_del
+        for fid in range(self.base.layout.n_fields):
+            cell_del(row, fid)
 
     def compacted_singleton(self, row: int, fid: int, value: Any) -> bool:
         """Delegate to the base registry (identity keeps view writes exact).

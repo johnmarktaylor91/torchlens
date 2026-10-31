@@ -3316,6 +3316,74 @@ def _ensure_detached_store(op: "Op") -> None:
         _object_setattr(op, "_row", 0)
 
 
+#: Class-level ``Op`` properties declared plain stored-cell facades (see
+#: :func:`register_row_release_property`); populated by compat overlays.
+_ROW_RELEASE_PROPERTIES: set[Any] = set()
+
+
+def register_row_release_property(name: str) -> None:
+    """Declare the class property ``Op.<name>`` a plain facade over its stored cell.
+
+    Contract: its getter raises ``AttributeError`` exactly when the backing
+    cell is unset, and its deleter only deletes that cell. Op removal may then
+    release the op's row directly instead of reading and deleting every field
+    through the facade (:func:`release_op_row`).
+
+    Parameters
+    ----------
+    name:
+        Stored field name whose ``Op`` class attribute is the property.
+    """
+
+    _ROW_RELEASE_PROPERTIES.add(vars(Op)[name])
+
+
+def release_op_row(op: "Op", store: Any, row: int) -> bool:
+    """Delete every set cell of ``op``'s row directly, when that equals the facade husk.
+
+    The facade husk reads every stored field (skipping the unset ones) and
+    deletes each one it read. For an exact ``Op`` whose every stored-field
+    class attribute is a generated field descriptor (all share
+    ``_OpField.__delete__``, and each read raises ``AttributeError`` exactly
+    on an unset cell) or a registered plain-facade property, that deletes
+    exactly the row's set cells, which ``store.release_row`` does without the
+    per-field dispatch and without hydrating pooled or shared-fact cells it
+    is about to drop. Anything else (a subclass, a patched attribute, a store
+    without ``release_row``) returns ``False`` and the caller keeps the facade
+    path.
+
+    Parameters
+    ----------
+    op:
+        Op being husked.
+    store:
+        The op's bound row store.
+    row:
+        The op's row id in ``store``.
+
+    Returns
+    -------
+    bool
+        Whether the row was released here.
+    """
+
+    if op.__class__ is not Op:
+        return False
+    release_row = getattr(store.__class__, "release_row", None)
+    if release_row is None:
+        return False
+    namespace = _OP_CLASS_NAMESPACE
+    field_classes = _ROW_RELEASE_FIELD_CLASSES
+    properties = _ROW_RELEASE_PROPERTIES
+    for name in _OP_SLOT_NAMES:
+        attr = namespace.get(name)
+        if attr.__class__ in field_classes or attr in properties:
+            continue
+        return False
+    release_row(store, row)
+    return True
+
+
 def _detach_op_husk(op: "Op") -> None:
     """Rebind a cleared op to an empty detached row.
 
@@ -3585,6 +3653,14 @@ def _install_op_field_descriptors() -> None:
 
 
 _install_op_field_descriptors()
+
+#: Live view of the ``Op`` class namespace and the generated field descriptor
+#: classes, for :func:`release_op_row`'s facade check. No descriptor class
+#: overrides ``_OpField.__delete__``.
+_OP_CLASS_NAMESPACE = vars(Op)
+_ROW_RELEASE_FIELD_CLASSES = frozenset(
+    {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
+)
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:

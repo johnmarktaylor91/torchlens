@@ -64,6 +64,7 @@ from ..._data_classes.op import (
     _stamp_reference_out,
     apply_transform,
     register_relation_cell_encoding,
+    register_row_release_property,
     train_mode_tripwire_armed,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
@@ -333,6 +334,12 @@ setattr(
     "output_descendants",
     property(_get_output_descendants, _set_output_descendants, _delete_output_descendants),
 )
+# Each overlay reads through its preserved slot descriptor (raising on an
+# unset cell) and deletes only that cell, so op removal may release rows
+# directly.
+for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
+    register_row_release_property(_ancestor_field_name)
+del _ancestor_field_name
 
 
 _SETTER_MUTATION_FUNC_NAMES = frozenset({"__setitem__", "__delitem__"})
