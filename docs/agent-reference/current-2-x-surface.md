@@ -1632,7 +1632,11 @@
   streaming saves in `tl.options.StorageOptions` (also `tl.user_funcs.StorageOptions`). The
   recorder vocabulary is `tl.fastlog.GradRecord`, `tl.fastlog.DryRun`, `tl.fastlog.stop()` and
   `tl.fastlog.StopSignal`; a stopped capture settles `CaptureStatus.STOPPED` (value `"stopped"`).
-  `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The backend registry
+  `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The seven read-only
+  group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceOptions`,
+  `tl.types.TraceCost`, `tl.types.TraceSource`, `tl.types.TraceHealth`, `tl.types.TraceGraph` and
+  `tl.types.TraceAutograd` (`trace.provenance`, `trace.options`, `trace.cost`, `trace.source`,
+  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`tl.user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
