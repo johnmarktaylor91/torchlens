@@ -23,6 +23,7 @@ from torchlens.semantic.logit_lens import (
     LogitLensPrediction,
     LogitLensPredictions,
 )
+from torchlens.tviz._strip import token_strip_svg as _token_strip_svg
 
 
 def _scores() -> tviz.TokenScores:
@@ -61,7 +62,7 @@ class TestZeroDependencyEmitters:
     def test_svg_has_no_image_and_no_network(self) -> None:
         """The SVG emitter is self-contained vector output."""
 
-        svg = tviz.token_strip_svg(_scores())
+        svg = _token_strip_svg(_scores())
         assert "<image" not in svg
         assert "http" not in svg.replace("http://www.w3.org/2000/svg", "")
         assert "factor 0" in svg
@@ -69,7 +70,7 @@ class TestZeroDependencyEmitters:
     def test_multi_row_shares_one_token_axis(self) -> None:
         """The NMF multi-row form: every row over the same tokens."""
 
-        svg = tviz.token_strip_svg(_scores())
+        svg = _token_strip_svg(_scores())
         assert svg.count("cat") == 2  # one per row
 
 

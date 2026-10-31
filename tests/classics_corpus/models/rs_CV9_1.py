@@ -343,9 +343,9 @@ class EncoderNet(nn.Module):
     def __init__(self, m: int, n: int, b: int, alpha: int = 1) -> None:
         """Initialize the KoopmanAE encoder."""
         super().__init__()
-        self.num_features = m * n
+        self.n_features = m * n
         self.tanh = nn.Tanh()
-        self.fc1 = nn.Linear(self.num_features, 16 * alpha)
+        self.fc1 = nn.Linear(self.n_features, 16 * alpha)
         self.fc2 = nn.Linear(16 * alpha, 16 * alpha)
         self.fc3 = nn.Linear(16 * alpha, b)
         self._init_linear()
@@ -360,7 +360,7 @@ class EncoderNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Encode a spatial state into Koopman latent space."""
-        x = x.view(-1, 1, self.num_features)
+        x = x.view(-1, 1, self.n_features)
         x = self.tanh(self.fc1(x))
         x = self.tanh(self.fc2(x))
         return self.fc3(x)

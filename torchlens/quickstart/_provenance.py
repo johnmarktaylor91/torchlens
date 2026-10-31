@@ -70,7 +70,7 @@ class InputProvenance:
         (rung 3).
     rung:
         The ladder rung, 1-3 (rung 4 / meta is reserved behind D8).
-    values_semantic:
+    has_semantic_values:
         True only when the values are caller-supplied real data. Gates
         derived-semantics claims (memo D7).
     call_structure:

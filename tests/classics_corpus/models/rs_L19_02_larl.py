@@ -214,7 +214,7 @@ class RnnUttEncoder(nn.Module):
         bidirectional,
         variable_lengths,
         use_attn,
-        embedding_module=None,
+        embedding=None,
     ):
         super(RnnUttEncoder, self).__init__()
         if embedding is None:
@@ -415,7 +415,7 @@ class DecoderRNN(BaseRNN):
         eos_id,
         use_gpu,
         max_dec_len,
-        embedding_module=None,
+        embedding=None,
     ):
         super(DecoderRNN, self).__init__(
             input_dropout_p=input_dropout_p,
@@ -639,7 +639,7 @@ class SysPerfectBD2Cat(BaseModel):
             bidirectional=config.bi_utt_cell,
             variable_lengths=False,
             use_attn=config.enc_use_attn,
-            embedding_module=self.embedding,
+            embedding=self.embedding,
         )
 
         self.c2z = Hidden2Discrete(
@@ -679,7 +679,7 @@ class SysPerfectBD2Cat(BaseModel):
             eos_id=self.eos_id,
             use_gpu=config.use_gpu,
             max_dec_len=config.max_dec_len,
-            embedding_module=self.embedding,
+            embedding=self.embedding,
         )
 
         self.nll = NLLEntropy(self.pad_id, config.avg_type)

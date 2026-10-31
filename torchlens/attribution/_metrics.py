@@ -473,7 +473,7 @@ def infidelity(
     settings = {
         "perturb": perturb_policy,
         "noise_std": noise_std if perturb == "gaussian" else None,
-        "n_samples": num_samples,
+        "num_samples": num_samples,
         "seed": seed,
         "target": _target_repr(target),
         "normalization_primary": "unnormalized",

@@ -305,7 +305,7 @@ def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
     from torchlens.visualization.source_graph import build_source_graph
 
     log = _bn_trace()
-    request = ResolvedRenderRequest(show_buffers="meaningful")
+    request = ResolvedRenderRequest(show_buffer_layers="meaningful")
     universe = build_node_universe(build_source_graph(log, request), None, None)
     unit_names = {unit.unit_id for unit in universe.units}
     for occurrence in universe.projected_edges:

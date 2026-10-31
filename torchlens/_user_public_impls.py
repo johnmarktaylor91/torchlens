@@ -324,7 +324,7 @@ def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
     """
 
     provenance = resolved.provenance
-    if provenance.values_semantic:
+    if provenance.has_semantic_values:
         return None
     recipes = provenance.recipes or ()
     recipe_names = sorted({str(row["recipe"]) for row in recipes if row.get("recipe")})

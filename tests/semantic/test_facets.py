@@ -829,7 +829,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])
     assert not isinstance(k_head.grad, MissingGrad)
-    assert torch.equal(k_head.grad, k_head.spec.apply(k_head.spec.home.grad))
+    assert torch.equal(k_head.grad, k_head.spec.apply_transforms(k_head.spec.home.grad))
 
     edited = log.fork("gqa_refuse")
     with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):

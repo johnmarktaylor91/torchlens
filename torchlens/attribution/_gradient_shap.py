@@ -542,7 +542,7 @@ def gradient_shap(
     mean_sum = sum(sample_sums) / len(sample_sums)
     mean_delta = sum(sample_deltas) / len(sample_deltas)
     extra: dict[str, Any] = {
-        "n_samples": num_samples,
+        "num_samples": num_samples,
         "stdevs": float(stdevs),
         "seed": seed,
         "pool_size": pool_size,
