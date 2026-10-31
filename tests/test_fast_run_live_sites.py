@@ -155,3 +155,23 @@ def test_fast_run_module_plans_follow_module_exit_order() -> None:
     """A parent returning a child's early leaf still exits after that child."""
 
     _fast_matches_full(EarlyLeafModel(), torch.arange(4.0))
+
+
+class AliasedEmbedding(nn.Module):
+    """``self.B`` is the same module object as ``self.A[0]``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.A = nn.ModuleList([nn.Linear(3, 3)])
+        self.B = self.A[0]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the shared module through its alias."""
+
+        return self.B(x) * 2
+
+
+def test_fast_run_resolves_alias_module_addresses() -> None:
+    """A module capture labels by an alias address is found on the live model."""
+
+    _fast_matches_full(AliasedEmbedding(), torch.arange(6.0).view(2, 3))

@@ -957,6 +957,28 @@ class _FastSparseSession:
         )
 
 
+def _live_modules_by_address(model: nn.Module) -> dict[str, nn.Module]:
+    """Map every registered address of the live model, alias spellings included.
+
+    Capture labels a module registered under several addresses (``self.B =
+    self.A[0]``) with the address its own traversal reaches first, which is
+    not always the one ``named_modules()`` keeps; the plan lookup accepts every
+    registration so such a module is found, not refused as absent.
+    """
+
+    from .backends.torch.model_prep import shared_module_addresses
+
+    modules = dict(model.named_modules())
+    by_id = {id(module): module for module in modules.values()}
+    for module_id, addresses in shared_module_addresses(model).items():
+        module = by_id.get(module_id)
+        if module is None:
+            continue
+        for address in addresses:
+            modules.setdefault(address, module)
+    return modules
+
+
 def _output_tensor_leaves(output: Any) -> tuple[Any, ...]:
     """Return the tensor leaves of one live call output (one container level)."""
 
@@ -998,14 +1020,24 @@ class _FastLiveSession:
         supported_labels = _admitted_collection_labels(
             trace, (*self.module_plans, *self.function_plans)
         )
-        modules = dict(model.named_modules())
+        modules = _live_modules_by_address(model)
         plan_addresses = tuple(dict.fromkeys(plan.address_or_name for plan in self.module_plans))
         # Every typed refusal must fire BEFORE the unsupported-activation wipe
         # below: a refused session must never destroy the user's saved payloads.
+        planned_objects: dict[int, str] = {}
         for address in plan_addresses:
-            if modules.get("" if address == "self" else address) is None:
+            module = modules.get("" if address == "self" else address)
+            if module is None:
                 raise RunCapabilityUnavailableError(
                     f"Captured module address {address!r} is absent from the live model.",
+                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                    detection_stage="fast_live_module_plan",
+                )
+            other = planned_objects.setdefault(id(module), address)
+            if other != address:
+                raise RunCapabilityUnavailableError(
+                    f"Captured module addresses {other!r} and {address!r} name one live module "
+                    "object; the fast run collects a shared module under one address only.",
                     code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
                     detection_stage="fast_live_module_plan",
                 )
