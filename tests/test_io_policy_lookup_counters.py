@@ -1,4 +1,4 @@
-"""Deterministic call counters for the persistence policy lookups on the save/load hot path.
+"""Deterministic call counters for import-free hot paths (persistence policy lookups, Trace misses).
 
 ``effective_policy`` runs once per persisted field on every save and load
 (about 650 calls per op), and the nested ``BlobRef`` resave guard visits every
@@ -96,4 +96,21 @@ def test_nested_blob_ref_walk_imports_nothing_per_object(
     counter = _ImportCounter()
     monkeypatch.setattr(builtins, "__import__", counter)
     assert _contains_nested_blob_refs(chain, set(), set()) is False
+    assert counter.calls == 0
+
+
+def test_missing_trace_attribute_path_imports_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A defaulted ``getattr`` miss on a Trace (tens of thousands per validate) imports nothing."""
+
+    from torchlens._data_classes._trace_missing_attrs import _raise_missing_trace_attribute
+
+    class _TraceLike:
+        pass
+
+    probe = _TraceLike()
+    counter = _ImportCounter()
+    monkeypatch.setattr(builtins, "__import__", counter)
+    for _ in range(1000):
+        with pytest.raises(AttributeError):
+            _raise_missing_trace_attribute(probe, "not_a_field")  # type: ignore[arg-type]
     assert counter.calls == 0
