@@ -99,7 +99,7 @@
   checkpointing are labeled `recompute_flops` on their row (unknown under `create_graph`).
   `tl.report.cost_tree(trace)` rows gain `self_forward_mac_flops`, `self_backward_flops`
   and `self_forward_backward_flops` (one convention). The count is saved with the pass
-  (`BackwardPass._executed_flops_record`), so a loaded trace reads it; a pass that raised has
+  (a private persisted record on `BackwardPass`), so a loaded trace reads it; a pass that raised has
   no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl._partial.from_failed_capture(exc)`.

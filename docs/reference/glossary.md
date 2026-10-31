@@ -1380,6 +1380,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Module and call counts**
 : `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
   runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
+  `len(Module.layer_labels)` counts a Module's distinct Layers and `len(Module.params)` the
+  parameter tensors it owns.
   `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
   the number of Ops that consumed the parameter (0 for a never-called module's parameters).
   `Trace.num_uncalled_modules` is recorded when the capture finishes, so it survives the source
@@ -2494,15 +2496,15 @@ shim owed*
   `flops_by_op()` sums rows per forward op. `None` when the pass has no
   census on this object; a pass that raised has `executed_flops` `None`.
 
-**BackwardPass._executed_flops_record** — *unstable — no deprecation shim owed*
+**Persisted backward FLOPs record (`BackwardPass`)** — *unstable — no deprecation shim owed*
 : The pass's counted executed backward and its attribution as a closed
   record (`convention`, `executed_flops`, `uncounted_ops`, `rows`,
   `unattributed`; ints, `None` and short strings only), written when the
-  trace is saved (tlspec v10) so a loaded trace reads the counted answer
-  through `flops_attribution` and `tl.report.backward_status`. `None` on a
-  live pass and on artifacts saved before the field, which read unknown
-  (record keyword `executed_flops_record=`). A
-  malformed record refuses at load with
+  trace is saved so a loaded trace reads the counted answer through
+  `flops_attribution` and `tl.report.backward_status`. The record is the
+  private persisted field `_executed_flops_record` (stored key
+  `_executed_flops_record` as of tlspec v11), not a public read; it is `None`
+  on a live pass. A malformed record refuses at load with
   `artifact_executed_flops_record_invalid`.
 
 **BackwardStatus.flops_attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
@@ -3503,10 +3505,14 @@ The sections above describe each surface in depth.
 | `MergedFinding.from_dict` | Rebuild a finding from `to_payload` output |
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
+| `ModuleCall.has_pre_hook_input_change` | Whether a user forward pre-hook changed the call's effective inputs (`None` when evidence is incomplete) |
+| `ModuleInputSnapshot.is_capture_complete` | Whether all supported mutation evidence was available for the snapshot |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
+| `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
+| `PreHookEffect.has_changes` | `True`/`False` when the pre-hook's mutation evidence is complete, otherwise `None` |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
 | `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
 | `PreprocessingComparison.mismatched_fields` | Names of every mismatched field, in field order |
@@ -3552,6 +3558,8 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
+| `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
 | `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
