@@ -64,6 +64,10 @@ _RECORD_FLAT_DEFAULTS: dict[str, Any] = {
     "save_raw_activations": True,
     "save_raw_grads": True,
     "postprocess": "none",
+    "seed": None,
+    "activation_transform": None,
+    "grad_transform": None,
+    "save_grads": None,
 }
 
 
