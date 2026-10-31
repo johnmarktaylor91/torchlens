@@ -53,6 +53,8 @@ class PackagingSet:
     expect: str
     group: str
     refuses: tuple[str, ...] = ()
+    import_fails: tuple[str, ...] = ()
+    present_gates: tuple[str, ...] = ()
 
 
 def load_matrix(path: Path = MATRIX_PATH) -> dict[str, Any]:
@@ -84,6 +86,8 @@ def resolve_sets(matrix: dict[str, Any], extras: set[str]) -> list[PackagingSet]
             expect=raw.get("expect", "install"),
             group=raw["group"],
             refuses=tuple(sorted(raw.get("refuses", ()))),
+            import_fails=tuple(sorted(raw.get("import_fails", ()))),
+            present_gates=tuple(sorted(raw.get("present_gates", ()))),
         )
         _validate_set(entry, extras, matrix.get("gates", {}))
         sets.append(entry)
@@ -99,10 +103,13 @@ def _validate_set(entry: PackagingSet, extras: set[str], gates: dict[str, Any]) 
         raise MatrixError(f"set {entry.name!r} has unknown expect {entry.expect!r}")
     if entry.group not in GROUPS:
         raise MatrixError(f"set {entry.name!r} has unknown group {entry.group!r}")
-    if set(entry.refuses) - set(gates):
-        raise MatrixError(f"set {entry.name!r} refuses unknown gates {list(entry.refuses)}")
-    if (entry.expect == "install_or_refuse") != bool(entry.refuses):
-        raise MatrixError(f"set {entry.name!r}: `refuses` goes with expect install_or_refuse")
+    if set(entry.refuses + entry.present_gates) - set(gates):
+        raise MatrixError(f"set {entry.name!r} names unknown gates")
+    refusing = bool(entry.refuses or entry.import_fails)
+    if (entry.expect == "install_or_refuse") != refusing:
+        raise MatrixError(
+            f"set {entry.name!r}: `refuses`/`import_fails` go with expect install_or_refuse"
+        )
 
 
 def _validate_coverage(matrix: dict[str, Any], sets: list[PackagingSet], extras: set[str]) -> None:

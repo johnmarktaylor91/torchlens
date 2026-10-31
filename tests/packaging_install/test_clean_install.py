@@ -133,7 +133,9 @@ def _install(python: str, requirement: str, constraints: Path) -> subprocess.Com
     )
 
 
-def _gate_present(gate: dict[str, Any], entry: Any, version: str) -> bool:
+def _gate_present(name: str, gate: dict[str, Any], entry: Any, version: str) -> bool:
+    if name in entry.present_gates:
+        return True
     if gate["extra"] not in _expanded_extras(entry.extras):
         return False
     minimum = gate.get("python_min")
@@ -152,13 +154,13 @@ def _version_tuple(version: str) -> tuple[int, ...]:
 def _probe_spec(entry: Any, version: str, save_path: Path) -> dict[str, Any]:
     gates: dict[str, Any] = {}
     for name, gate in MATRIX["gates"].items():
-        present = _gate_present(gate, entry, version)
+        present = _gate_present(name, gate, entry, version)
         spec = dict(gate)
         if present and gate.get("present") == "import":
             spec["check"] = "import"
         spec["expected"] = "resolved" if present else "refused"
         gates[name] = spec
-    return {"save_path": str(save_path), "gates": gates}
+    return {"save_path": str(save_path), "gates": gates, "import_fails": list(entry.import_fails)}
 
 
 def _run_probe(python: str, spec: dict[str, Any], cwd: Path) -> dict[str, Any]:
@@ -238,6 +240,11 @@ def test_clean_install(
     assert traced > 0 and traced == loaded, result
     for name, gate in spec["gates"].items():
         _assert_gate(name, gate, result["gates"][name])
+    for module_name in entry.import_fails:
+        outcome = result["import_fails"][module_name]
+        assert outcome["outcome"] == "import_error", (
+            f"{module_name} should fail to import: {outcome}"
+        )
 
 
 def test_generated_constraints_are_current() -> None:

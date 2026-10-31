@@ -41,6 +41,14 @@ def _gate_outcome(gate: dict[str, Any], missing_error: type[BaseException]) -> d
     return {"outcome": "resolved"}
 
 
+def _import_outcome(module_name: str) -> dict[str, Any]:
+    try:
+        importlib.import_module(module_name)
+    except ImportError as exc:
+        return {"outcome": "import_error", "class": type(exc).__name__}
+    return {"outcome": "imported"}
+
+
 def main() -> None:
     spec = json.loads(sys.argv[1])
     import torch
@@ -64,6 +72,7 @@ def main() -> None:
     result["gates"] = {
         name: _gate_outcome(gate, missing_error) for name, gate in spec["gates"].items()
     }
+    result["import_fails"] = {name: _import_outcome(name) for name in spec.get("import_fails", [])}
     print("PROBE-RESULT " + json.dumps(result, sort_keys=True))
 
 
