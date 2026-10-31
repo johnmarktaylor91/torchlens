@@ -1124,6 +1124,20 @@ class _FastLiveSession:
 
         if self.poison_on_divergence:
             mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+        diagnostic = failed.diagnostic
+        if (
+            diagnostic is not None
+            and diagnostic.code is RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+        ):
+            # A site this run cannot observe (a module entered by a direct
+            # forward() call) is a capability refusal, not a path change; the
+            # half-refreshed Trace is poisoned above all the same.
+            raise RunCapabilityUnavailableError(
+                diagnostic.message,
+                code=diagnostic.code.value,
+                provider=RunProvider.LIVE,
+                detection_stage=failed.name,
+            )
         _raise_failed_contract_as_divergence(failed, fork=None)
 
     def wants_function(self, func_name: str) -> bool:
@@ -1224,6 +1238,25 @@ class _FastLiveSession:
             return
         plan = self.module_plans[self.module_index]
         if plan.address_or_name != address or int(plan.call_index or 1) != call_index:
+            if plan.address_or_name.startswith(f"{address}."):
+                # The pending plan is a module nested in the one that just
+                # returned, so it exited inside this call without firing its
+                # forward hook: torch hooks observe ``module(x)`` only, never
+                # a direct ``module.forward(x)`` call, which capture's forward
+                # decoration does record. Not a path change: a site this run
+                # cannot observe.
+                self.failure = _contract_check(
+                    "fast_live_module_hook_unobserved",
+                    False,
+                    RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                    f"Captured module call {plan.address_or_name!r} call "
+                    f"{plan.call_index or 1} exited inside {address!r} without firing a "
+                    "forward hook; the model reaches it by a direct forward() call that "
+                    "torch module hooks cannot observe, so the fast run cannot collect "
+                    "that site. The full run captures it.",
+                    affected_op_labels=plan.op_labels,
+                )
+                return
             self.failure = _contract_check(
                 "fast_live_module_path",
                 False,

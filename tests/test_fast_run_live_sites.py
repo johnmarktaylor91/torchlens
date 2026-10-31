@@ -13,6 +13,7 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from torchlens._fast_run import _FastLiveSession
+from torchlens.errors import RunCapabilityUnavailableError
 
 
 def _fast_matches_full(model: nn.Module, inputs: torch.Tensor) -> None:
@@ -175,3 +176,41 @@ def test_fast_run_resolves_alias_module_addresses() -> None:
     """A module capture labels by an alias address is found on the live model."""
 
     _fast_matches_full(AliasedEmbedding(), torch.arange(6.0).view(2, 3))
+
+
+class DirectForwardParent(nn.Module):
+    """Calls its child's ``forward`` directly, bypassing torch module hooks."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Reach the child without ``__call__``."""
+
+        return self.inner.forward(x)
+
+
+class DirectForwardModel(nn.Module):
+    """Root holding the parent whose child is reached by a direct forward() call."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parent = DirectForwardParent()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the parent then one op."""
+
+        return self.parent(x) + 1
+
+
+def test_fast_run_names_a_direct_forward_call_as_a_capability_refusal() -> None:
+    """A hook-invisible module call is refused as unobservable, not as a path change."""
+
+    model = DirectForwardModel()
+    trace = tl.trace(model, torch.arange(6.0).view(2, 3))
+    with pytest.raises(RunCapabilityUnavailableError) as info:
+        trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
+    assert info.value.code == "run_capability_unavailable"
+    assert "forward()" in str(info.value)
+    assert "parent.inner" in str(info.value)
