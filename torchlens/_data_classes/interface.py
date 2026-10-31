@@ -267,8 +267,12 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
             else "; capture with CaptureOptions(track_nonfinite=True) to check every op"
         )
         lines.append(f"\tHealth: NOT-CHECKED (payloads unexamined{hint})")
-    if getattr(self, "_provenance_verified", True) is False:
-        reason = getattr(self, "_provenance_verification_reason", None)
+    if (True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified) is False:
+        reason = (
+            None
+            if self.__dict__.get("_tl_cleaned_up", False)
+            else self._provenance_verification_reason
+        )
         lines.append(f"\tCapture verified: NO ({reason})")
     return lines
 
@@ -310,7 +314,9 @@ def _str_after_pass(self: "Trace") -> str:
     # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
     # feedforward" and its op and parameter counts read as lower bounds.
-    unverified = getattr(self, "_provenance_verified", True) is False
+    unverified = (
+        True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified
+    ) is False
     bound = "at least " if unverified else ""
 
     s += _structure_section(self, unverified)

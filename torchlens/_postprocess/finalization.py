@@ -273,7 +273,7 @@ def _build_root_module_log(
         class_qualname=root_meta.get("class_qualname", ""),
         ordinal_index=0,
         forward_duration=float(self._cost_forward_duration or 0.0),
-        code_context=list(getattr(self, "_source_frames", [])),
+        code_context=list(self._source_frames),
         module_call_stack=[],
         _source_trace=self,
     )
@@ -614,7 +614,7 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     self:
         Model log being finalized.
     """
-    if getattr(self, "_graph_conditional_edge_call_indices", None):
+    if self._graph_conditional_edge_call_indices:
         self._graph_conditional_edge_call_indices = {
             edge_key: sorted(dict.fromkeys(call_indexs))
             for edge_key, call_indexs in self._graph_conditional_edge_call_indices.items()
@@ -1049,7 +1049,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
-    keep_forward_args = getattr(self, "_options_module_identity_mode", None) in {
+    keep_forward_args = self._options_module_identity_mode in {
         "pytree_module",
         "object_module",
     }
@@ -1261,7 +1261,7 @@ def _build_layer_logs(self: "Trace") -> None:
     for layer_log in layer_logs.values():
         for pass_log in layer_log.ops.values():
             linked_labels = []
-            for param_log in getattr(pass_log, "_param_logs", []):
+            for param_log in pass_log._param_logs:
                 # Tied/shared parameters expose every aliasing address through
                 # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
                 # Emit ``primary -> alias`` for each additional address that shares the
@@ -1746,11 +1746,11 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     each pass.
     """
 
-    for op in getattr(self, "_layer_list", ()):
+    for op in self._layer_list:
         for record in getattr(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:
                 return True
-    for param in getattr(self, "_param_logs", {}).values():
+    for param in self._param_logs.values():
         if any(record.grad is not None for record in getattr(param, "grads", ())):
             return True
     return False

@@ -2031,11 +2031,11 @@ class MLXBackend:
                     )
                 )
 
-    def _capture_policy(self, session: object) -> CapturePolicy:
+    def _capture_policy(self, session: Any) -> CapturePolicy:
         """Return the MLX capture policy for one event."""
 
         return CapturePolicy(
-            save_payload=bool(getattr(session, "_options_save_raw_activations", True)),
+            save_payload=bool(session._options_save_raw_activations),
             save_grad=False,
         )
 
@@ -2086,7 +2086,7 @@ class MLXBackend:
     def _build_event(
         self,
         *,
-        session: object,
+        session: Any,
         kind: str,
         reserved: ReservedLabel,
         func_event_input: FunctionEventInput,
@@ -2155,10 +2155,8 @@ class MLXBackend:
                 transformed_tensor=None,
                 has_saved_activation=policy.save_payload,
                 output_device="same",
-                activation_transform=getattr(session, "_options_activation_transform", None),
-                detach_saved_activations=bool(
-                    getattr(session, "_options_detach_saved_activations", False)
-                ),
+                activation_transform=session._options_activation_transform,
+                detach_saved_activations=bool(session._options_detach_saved_activations),
                 visualizer_path=None,
                 multi_output_index=None,
                 in_multi_output=False,

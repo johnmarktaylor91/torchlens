@@ -391,11 +391,12 @@ def _source_kind(source: Any) -> str:
         ``neuro_source_invalid`` for unsupported source types.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
     from ..dataset_extraction import LoadedExtraction
 
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
-    if hasattr(source, "layers") and hasattr(source, "_layer_logs"):
+    if hasattr(source, "layers") and is_live_trace(source):
         return "trace"
     raise NeuroHandoffError(
         f"unsupported source type {type(source).__name__}: expected a "

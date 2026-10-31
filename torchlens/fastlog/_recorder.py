@@ -402,6 +402,8 @@ class Recorder:
     ) -> None:
         """Finalize or abort the recorder resource scope."""
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         _ = exc_type, traceback
         if not self._entered or self._exited or self._state is None:
             raise RecorderStateError("Recorder is not active")
@@ -430,7 +432,9 @@ class Recorder:
             if getattr(self._recording, "_outcome", None) is None:
                 recording = self._recording
                 inference_only = bool(
-                    getattr(self._state.runtime_trace, "_options_inference_only", False)
+                    self._state.runtime_trace._options_inference_only
+                    if is_live_trace(self._state.runtime_trace)
+                    else False
                 )
                 if recording.is_stopped:
                     stamped = CaptureOutcome(

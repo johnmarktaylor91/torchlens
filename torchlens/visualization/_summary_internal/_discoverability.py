@@ -466,13 +466,15 @@ def _parent_run_summary(trace: Trace) -> str:
         Parent summary.
     """
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     parent_ref = trace._parent_run
     if parent_ref is None:
         return "none"
     parent = parent_ref()
     if parent is None:
         return "collected"
-    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, '_source_class_name', None)})"
+    return f"{getattr(parent, 'name', None)!r} ({(parent._source_class_name if is_live_trace(parent) else None)})"
 
 
 def _fork_chain_summary(trace: Trace) -> str:
@@ -489,11 +491,13 @@ def _fork_chain_summary(trace: Trace) -> str:
         Fork chain from root to current log.
     """
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     names = [str(getattr(trace, "name", None))]
     seen = {id(trace)}
     current = trace
     while True:
-        parent_ref = getattr(current, "_parent_run", None)
+        parent_ref = current._parent_run if is_live_trace(current) else None
         if parent_ref is None:
             break
         parent = parent_ref()

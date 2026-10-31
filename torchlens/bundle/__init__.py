@@ -579,9 +579,7 @@ class Bundle:
             Whether every member has an equal ``graph_shape_hash`` value.
         """
 
-        hashes = {
-            getattr(member, "_provenance_fingerprint", None) for member in self._members.values()
-        }
+        hashes = {member._provenance_fingerprint for member in self._members.values()}
         return len(hashes) == 1
 
     def _kind_names(self, kind: str, *, shared: bool) -> list[str]:
@@ -1704,7 +1702,7 @@ class Bundle:
         baseline_log = self._members[baseline_name]
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
-        baseline_sites = list(getattr(baseline_log, "_layer_list", []))
+        baseline_sites = list(baseline_log._layer_list)
         if baseline_sites:  # node()'s model-floor gate, once instead of per site
             names = list(self._members)
             pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
@@ -1842,7 +1840,7 @@ class Bundle:
         metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
-        for left_site in getattr(left_log, "_layer_list", []):
+        for left_site in left_log._layer_list:
             label = str(left_site.layer_label)
             right_label = aligned.get(label, {}).get(right_name, label)
             try:
@@ -2365,8 +2363,8 @@ class Bundle:
         if left is right:
             return Relationship.SAME_OBJECT
 
-        left_class = getattr(left, "_source_class_qualname", None)
-        right_class = getattr(right, "_source_class_qualname", None)
+        left_class = left._source_class_qualname
+        right_class = right._source_class_qualname
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
 
@@ -2382,10 +2380,10 @@ class Bundle:
                 return Relationship.SAME_OBJECT
             return Relationship.SAME_MODEL_OBJECT_AT_CAPTURE
 
-        left_graph = getattr(left, "_provenance_fingerprint", None)
-        right_graph = getattr(right, "_provenance_fingerprint", None)
-        left_input = getattr(left, "_provenance_input_signature_hash", None)
-        right_input = getattr(right, "_provenance_input_signature_hash", None)
+        left_graph = left._provenance_fingerprint
+        right_graph = right._provenance_fingerprint
+        left_input = left._provenance_input_signature_hash
+        right_input = right._provenance_input_signature_hash
         if left_graph is not None and left_graph == right_graph:
             if left_input is not None and left_input == right_input:
                 return Relationship.SHARED_GRAPH_SAME_INPUT

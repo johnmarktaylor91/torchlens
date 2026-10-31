@@ -93,7 +93,7 @@ def cleanup(self: "Trace") -> None:
     # fails toward the historical flush).
     touched_cuda = capture_touched_cuda(self)
     # GC-1: Release parameter references to allow model GC.
-    if hasattr(self, "_param_logs"):
+    if "_param_logs" in self.__dict__:
         for pl in self._param_logs:
             pl._release_param_ref()
     # Materialize the M8 Layer mirror fields BEFORE husking the ops that back
@@ -534,7 +534,7 @@ def _scrub_layer_log_conditional_fields(
         replacements_no_pass: Optional pass-stripped removed-label -> survivor
             substitutions.
     """
-    for layer_log in getattr(self, "_layer_logs", {}).values():
+    for layer_log in self._layer_logs.values():
         if "conditional_entry_children" not in getattr(layer_log, "__dict__", {}):
             continue
         # Layer is dict-backed (no normalizing descriptors until M8), so the

@@ -401,11 +401,15 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens.visualization._render_common import GraphNode
+
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:
         return []
 
-    param_logs = getattr(params, "_param_logs", None)
+    param_logs = params._param_logs if isinstance(params, (Op, Layer, GraphNode)) else None
     if param_logs:
         return list(param_logs)
 

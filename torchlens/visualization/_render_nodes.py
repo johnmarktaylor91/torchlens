@@ -674,7 +674,7 @@ def _build_layer_node(
         if show_input_transform_summary:
             node_args.update(_input_transform_summary_attrs(self, node_args))
     elif node.is_output:
-        raw_output_attrs = _render_raw_output(getattr(self, "_decoded_output", None))
+        raw_output_attrs = _render_raw_output(self._decoded_output)
         if raw_output_attrs is None:
             raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
         if raw_output_attrs is not None:
@@ -1875,7 +1875,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
-        param_logs = getattr(node, "_param_logs", [])
+        param_logs = node._param_logs
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]
             all_trainable = all(trainable_flags)

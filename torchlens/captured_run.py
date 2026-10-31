@@ -229,6 +229,8 @@ class TraceLike:
     def _iter_activation_records(self) -> Iterable[Any]:
         """Iterate projection-specific retained activation records."""
 
+        from ._data_classes._trace_missing_attrs import is_live_trace
+
         if hasattr(self, "records"):
             ensure_records = getattr(self, "_ensure_records", None)
             if ensure_records is not None:
@@ -236,7 +238,7 @@ class TraceLike:
             return tuple(getattr(self, "records", ()))
         return tuple(
             op
-            for op in getattr(self, "_layer_list", ())
+            for op in (self._layer_list if is_live_trace(self) else ())
             if getattr(op, "has_saved_activation", False)
         )
 

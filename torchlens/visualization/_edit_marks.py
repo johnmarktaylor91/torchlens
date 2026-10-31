@@ -170,6 +170,8 @@ def _stand_in(value: Any) -> str:
     shows its label; a callable shows its name (else ``fn``); anything else ``…``.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     literal = _literal(value)
     if literal is None and isinstance(value, torch.Tensor):
         literal = "v"
@@ -177,7 +179,7 @@ def _stand_in(value: Any) -> str:
         name = getattr(value, "name", None)
         if isinstance(name, str) and name and len(name) <= _MAX_LITERAL_CHARS:
             literal = name
-        elif hasattr(value, "_layer_list"):
+        elif is_live_trace(value):
             literal = "trace"
         elif isinstance(value, Mapping) and isinstance(value.get("label"), str):
             literal = _literal(value["label"])

@@ -514,7 +514,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         append_capture_advisory,
     )
 
-    offenders = _unattributed_op_offenders(getattr(self, "_layer_list", ()) or ())
+    offenders = _unattributed_op_offenders(self._layer_list or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
     # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
     # control-flow predicate on a global) would lose its witness with the op;
@@ -576,9 +576,9 @@ def _populate_var_names(self: "Trace") -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "_options_save_source_context", False):
+    if not self._options_save_source_context:
         return
-    for op in getattr(self, "_layer_list", ()):
+    for op in self._layer_list:
         if getattr(op, "type", None) == "output":
             op.var_names = []
             continue
@@ -793,7 +793,7 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "_options_verbose", False) else 0
+    _post_t0 = time.time() if self._options_verbose else 0
 
     # Steps 1-20 run through the derived-order executor (_executor.py): the
     # registry mirrors the historical hand order (R2 pins them equal), each

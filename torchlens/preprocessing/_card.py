@@ -138,15 +138,21 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
     from torchlens._data_classes.trace import ResolvedPreprocessing
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record
-    return getattr(trace_or_record, "_provenance_input_preprocessor", None)
+    return (
+        trace_or_record._provenance_input_preprocessor if is_live_trace(trace_or_record) else None
+    )
 
 
 def _live_model(trace_or_record: Any) -> Any:
     """Return the trace's live source model, or ``None``."""
 
-    ref = getattr(trace_or_record, "_source_model_ref", None)
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    ref = trace_or_record._source_model_ref if is_live_trace(trace_or_record) else None
     return ref() if callable(ref) else None
 
 
