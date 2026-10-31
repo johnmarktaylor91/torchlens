@@ -27,7 +27,6 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
         for name in (
             "layer_label",
             "layer_label_short",
-            "layer_type",
             "type_index",
             "step_index",
             "ordinal_index",
@@ -106,6 +105,8 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
             "is_atomic_module",
         )
     },
+    # The Layer's spelling of its ops' operation type (``Op.type``).
+    "layer_type": ("type", None),
     "activation_memory": ("activation_memory", as_bytes),
     "transformed_activation_memory": ("transformed_activation_memory", as_bytes),
     "autograd_memory": ("autograd_memory", as_bytes),
