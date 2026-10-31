@@ -341,7 +341,7 @@ def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) 
     dot = _draw(chained_log, tmp_path, stack_by="pass_number")
     state = _state(chained_log)
     assert state.stack_groups
-    assert "stacked by: pass_index" in dot
+    assert "stacked by: pass_number" in dot
 
 
 def test_callable_bypasses_license_with_disclosure(chained_log: tl.Trace, tmp_path: Path) -> None:
