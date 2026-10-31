@@ -255,6 +255,20 @@ class BundleStreamWriter:
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
 
+    def issued_blob_count(self) -> int:
+        """Return how many blob ids this writer has issued so far.
+
+        Save-time scrubbing numbers its own blobs from this count so a scrub id
+        can never equal an id the stream already wrote.
+
+        Returns
+        -------
+        int
+            Number of ids issued by :meth:`next_blob_id`.
+        """
+
+        return self._blob_counter
+
     def write_blob(
         self,
         blob_id: str,
@@ -487,7 +501,15 @@ class BundleStreamWriter:
         try:
             for blob_id, tensor, kind, label in blob_specs:
                 if blob_id in self._entries_by_blob_id:
-                    continue
+                    # Every streamed blob a scrubbed ref reuses was filtered out of
+                    # ``blob_specs``, and scrub ids start past the stream's ids, so a
+                    # remaining spec with an already-written id is a collision: the
+                    # scrubbed ref would silently resolve to ANOTHER op's payload.
+                    existing = self._entries_by_blob_id[blob_id]
+                    raise ArtifactError(
+                        f"Streaming bundle blob id {blob_id} for {label!r} collides with "
+                        f"the blob already streamed for {existing.label!r}."
+                    )
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
             legacy_manifest = self._build_manifest(
