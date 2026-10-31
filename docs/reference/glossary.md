@@ -2860,12 +2860,16 @@ deprecation shim owed*
 : `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
   `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`).
+  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sink` receives the
+  narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
+  narrates only when the forward raises, and `NarrationOptions.tail_on_error` is how many of the
+  last selected events the sink receives on a forward exception.
 
 **StorageOptions**
 : `tl.options.StorageOptions` (also reachable as `tl.user_funcs.StorageOptions`) groups the
-  streaming-save knobs: `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (its flat
-  keyword `on_save=`; the trace door's flat `out_callback=` maps onto it),
+  streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
+  `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
+  `on_save=`),
   `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,
   `StorageOptions.as_dict()`, `StorageOptions.from_values()` and
   `StorageOptions.is_field_explicit()`.
@@ -2888,12 +2892,16 @@ deprecation shim owed*
 
 **Recording types**
 : `tl.fastlog.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
-  `GradRecord.transformed_ram_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
-  `DryRun.contexts`, `DryRun.decisions`, `DryRun.print_tree()`, `DryRun.timeline_html()`,
-  `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
+  `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
+  `GradRecord.transformed_disk_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
+  `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.repredicate(...)`,
+  `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
   names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
   `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
-  (`TraceLike.op_events`, `TraceLike.backward_events`).
+  (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
+  `TraceLike.sibling_events`, `TraceLike.activation_by_raw_label(raw_label)`,
+  `TraceLike.activations_by_pass(pass_index)`, `TraceLike.activations_by_address(address)` and
+  `TraceLike.activation_payloads_by_raw_label`).
 
 **Backend registry**
 : `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
