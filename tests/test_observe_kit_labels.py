@@ -213,8 +213,8 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     """
 
     allowlist = {
-        TORCHLENS_DIR / "constants.py",
-        TORCHLENS_DIR / "data_classes" / "op.py",
+        TORCHLENS_DIR / "_constants.py",
+        TORCHLENS_DIR / "_data_classes" / "op.py",
         TORCHLENS_DIR / "capture" / "_nonfinite_prefix.py",
     }
     offenders: list[str] = []

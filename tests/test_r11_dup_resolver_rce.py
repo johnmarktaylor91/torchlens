@@ -72,7 +72,7 @@ def test_op_py_has_no_second_import_module_resolver() -> None:
     against regression by asserting the vulnerable primitive is absent from the module.
     """
 
-    op_src = Path(_ir_container.__file__).parent.parent / "data_classes" / "op.py"
+    op_src = Path(_ir_container.__file__).parent.parent / "_data_classes" / "op.py"
     text = op_src.read_text()
     assert "import_module" not in text, (
         "op.py must route container-type resolution through the single hardened "

@@ -189,7 +189,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     consumer of the capability table.
     """
 
-    validation_source = (TORCHLENS_DIR / "data_classes" / "_trace_validation.py").read_text(
+    validation_source = (TORCHLENS_DIR / "_data_classes" / "_trace_validation.py").read_text(
         encoding="utf-8"
     )
     gate_calls = re.findall(r'require_capture_capability\(self, "([a-z_]+)"\)', validation_source)

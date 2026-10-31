@@ -67,7 +67,7 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     refactor that drops a structure-only gate call from a value-bearing
     surface fails here."""
 
-    validation_source = (TORCHLENS_DIR / "data_classes" / "_trace_validation.py").read_text(
+    validation_source = (TORCHLENS_DIR / "_data_classes" / "_trace_validation.py").read_text(
         encoding="utf-8"
     )
     gate_calls = re.findall(

@@ -301,7 +301,7 @@ def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
     from pathlib import Path
 
     package_root = Path(__file__).resolve().parent.parent / "torchlens"
-    door_source = (package_root / "data_classes" / "_trace_validation.py").read_text(
+    door_source = (package_root / "_data_classes" / "_trace_validation.py").read_text(
         encoding="utf-8"
     )
     enum_values = {member.value for member in RunnableErrorCode}
