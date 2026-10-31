@@ -7,7 +7,7 @@ module exports its list and is joined here.
 from __future__ import annotations
 
 from ..generator import Axes, DeviceSpec, OptionsSpec
-from . import backward, checkpointing, concurrency, control_flow, dtypes_cpu, hooks, inputs
+from . import backward, checkpointing, concurrency, control_flow, dtypes_cpu, hooks, inputs, models
 
 DEVICES: tuple[DeviceSpec, ...] = (DeviceSpec("cpu", "cpu", "the CPU leg every cell runs on"),)
 
@@ -32,6 +32,7 @@ def default_axes() -> Axes:
             *hooks.MODELS,
             *checkpointing.MODELS,
             *concurrency.MODELS,
+            *models.MODELS,
         ),
         inputs=inputs.INPUTS,
         dtypes=dtypes_cpu.DTYPES,
