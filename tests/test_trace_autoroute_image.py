@@ -273,7 +273,7 @@ def test_list_of_pil_images_batches() -> None:
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "imagenet_default"
     assert tuple(log[log.input_layers[0]].out.shape) == (2, 3, 224, 224)
-    assert log.num_ops > 0
+    assert log._num_ops > 0
     assert isinstance(log.input, list)
 
 

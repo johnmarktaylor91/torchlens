@@ -192,7 +192,7 @@ def _profile_model(name, model, input_tensor, description):
     return {
         "name": name,
         "description": description,
-        "num_layers": log.num_ops,
+        "num_layers": log._num_ops,
         "raw_time": raw_time,
         "lfp_time": lfp_time,
         "sna_time": sna_time,

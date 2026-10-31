@@ -229,7 +229,7 @@ def test_unset_init_false_dataclass_field_no_longer_kills_the_capture():
     assert snapshot["nodes"][0]["unset_fields"] == ["cache"]
     # The whole point: an intervention-ready capture completes instead of raising.
     trace = tl.trace(_Model(), box, capture=tl.options.CaptureOptions(replayable=True))
-    assert trace.num_ops >= 1
+    assert trace._num_ops >= 1
 
 
 def test_registered_aux_is_type_strict():

@@ -154,7 +154,7 @@ def _proof_section(trace_like: Any) -> CardSection:
 def _save_counts(trace_like: Any) -> tuple[int | None, int | None]:
     """(total op records, saved op records) on ONE consistent basis.
 
-    ``num_ops`` counts only real computation ops while ``num_saved_ops``
+    ``len(trace.ops)`` counts only real computation ops while ``len(trace.saved_ops)``
     counts every saved record including input/output boundaries -- mixing
     them printed ``saved 4/2``. The record count is the honest denominator.
     """
@@ -376,7 +376,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
     total, saved = _save_counts(trace)
     facts: list[CardNode] = [
         CardText(
-            f"Layers: {len(layers)} | Ops: {getattr(trace, 'num_ops', '?')} | "
+            f"Layers: {len(layers)} | Ops: {getattr(trace, '_num_ops', '?')} | "
             f"backend: {getattr(trace, 'backend', '?')} | "
             f"modules: {len(trace.modules) if hasattr(trace, 'modules') else '?'}"
         ),

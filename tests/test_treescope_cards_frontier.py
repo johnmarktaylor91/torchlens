@@ -62,10 +62,10 @@ def test_frontier_query_is_side_effect_free() -> None:
     """A pure graph query: no payload reads, no trace mutation."""
 
     log = tl.trace(_Poisoned(), torch.randn(2, 4))
-    before = (log.num_ops, tuple(log.op_labels))
+    before = (log._num_ops, tuple(log.op_labels))
     nonfinite_frontier(log)
     nonfinite_frontier(log)
-    assert (log.num_ops, tuple(log.op_labels)) == before
+    assert (log._num_ops, tuple(log.op_labels)) == before
 
 
 def test_distribution_sketch_slot_is_the_c02_histogram() -> None:

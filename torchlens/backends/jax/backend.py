@@ -1538,7 +1538,7 @@ class JAXBackend:
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
-        trace.num_layers_with_params = 0
+        trace._num_layers_with_params = 0
         trace.param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_pytree_params(
@@ -1571,7 +1571,7 @@ class JAXBackend:
             param.num_params for param in param_logs.values() if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = 0
+        trace._num_layers_with_params = 0
         trace.param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_derived_grads(
@@ -2071,7 +2071,7 @@ class JAXBackend:
 
         trace.op_equivalence_classes.clear()
         trace.op_equivalence_classes.update(equivalent_labels_by_key)
-        trace.num_ops = sum(
+        trace._num_ops = sum(
             1
             for op_log in trace._layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
@@ -2084,7 +2084,7 @@ class JAXBackend:
             # takes the param as an operand). Matching on it directly (as
             # the old code did) attaches params to the input-echo op
             # instead of the op that genuinely uses them, so
-            # ``has_params``/``used_by_ops``/``num_layers_with_params``
+            # ``has_params``/``used_by_ops``/``_num_layers_with_params``
             # never reflect real param usage. Mirror
             # ``_attach_pytree_op_params`` above (and the equivalent
             # ``torch``/``mlx``/``paddle`` param attribution): resolve each
@@ -2151,7 +2151,7 @@ class JAXBackend:
             # unused params and fails ``check_metadata_invariants``'
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
-            trace.num_layers_with_params = len(
+            trace._num_layers_with_params = len(
                 {op.layer_label for op in trace._layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
@@ -2278,7 +2278,7 @@ class JAXBackend:
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
-        trace.num_layers_with_params = len(
+        trace._num_layers_with_params = len(
             {op.layer_label for op in trace._layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in

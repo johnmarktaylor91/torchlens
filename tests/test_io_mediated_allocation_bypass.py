@@ -774,7 +774,7 @@ def test_honest_artifact_round_trip_unaffected(
 
     loaded = tl.load(path)
 
-    assert loaded.num_ops == trace.num_ops
+    assert loaded._num_ops == trace._num_ops
     assert [str(op.label) for op in loaded._layer_list] == [
         str(op.label) for op in trace._layer_list
     ]

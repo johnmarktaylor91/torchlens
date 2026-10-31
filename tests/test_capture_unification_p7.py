@@ -549,7 +549,7 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     assert [op.layer_label for op in trace1._layer_list] == [
         op.layer_label for op in trace2._layer_list
     ]
-    assert trace1.num_ops == trace2.num_ops
+    assert trace1._num_ops == trace2._num_ops
     check_metadata_invariants(trace1)
     check_metadata_invariants(trace2)
 

@@ -167,7 +167,7 @@ def test_lazy_linear_graph_stays_clean() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=None),
     )
     try:
-        assert log.num_ops == 2
+        assert log._num_ops == 2
         labels = [lay.type for lay in log._layer_list]
         assert labels == ["input", "linear", "relu", "output"]
     finally:

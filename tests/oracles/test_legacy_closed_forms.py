@@ -423,7 +423,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
         "output_1:1": 24,
     }
     for label, nbytes in expected.items():
-        assert int(ops[label].gradient_memory) == nbytes, label
+        assert int(ops[label].grad_memory) == nbytes, label
     # save_grads keeps one gradient record per Op per backward pass
     # (``Op.grads``), so the trace holds every pass's gradients.
     assert int(trace.saved_gradient_memory) == passes * (96 + 96 + 24)
@@ -432,7 +432,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
     params = {param.address: param for param in trace.params}
     for address, nbytes in raw.items():
-        assert int(params[address].gradient_memory) == nbytes, address
+        assert int(params[address].grad_memory) == nbytes, address
     assert int(trace.total_param_gradient_memory) == sum(raw.values())
     for label, pair in (("a:1", (96, 0)), ("b:1", (24, 0)), ("self:1", (24, 96 + 96 + 24))):
         call = calls[label]
@@ -480,8 +480,8 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     try:
         buffered.backward(buffered[buffered.output_layers[0]].out.sum())
         by_address = {buffer.address: buffer for buffer in buffered.buffers}
-        assert int(by_address["w"].gradient_memory) == 4 * FP32  # d/dw of x * w: (4,)
-        assert int(by_address["c"].gradient_memory) == 0  # c needs no gradient
+        assert int(by_address["w"].grad_memory) == 4 * FP32  # d/dw of x * w: (4,)
+        assert int(by_address["c"].grad_memory) == 0  # c needs no gradient
     finally:
         buffered.cleanup()
 

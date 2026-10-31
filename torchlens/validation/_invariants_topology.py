@@ -58,10 +58,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         1 for lpl in ml._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
     )
     expected_ops += _retained_orphan_computational_count(ml, name)
-    if ml.num_ops != expected_ops:
+    if ml._num_ops != expected_ops:
         raise MetadataInvariantError(
             name,
-            f"num_ops={ml.num_ops} != expected computational layers={expected_ops}",
+            f"num_ops={ml._num_ops} != expected computational layers={expected_ops}",
         )
 
     # Param counts follow PARAMETER OBJECT IDENTITY (A07 numbers truth,

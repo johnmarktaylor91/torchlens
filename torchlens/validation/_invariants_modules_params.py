@@ -573,9 +573,9 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
             f"identity frozen param total {frozen_params} != "
             f"trace.num_params_frozen={ml.num_params_frozen}",
         )
-    if layers_with_params != getattr(ml, "num_layers_with_params", 0):
+    if layers_with_params != getattr(ml, "_num_layers_with_params", 0):
         raise MetadataInvariantError(
             name,
             f"deduped layers_with_params count {layers_with_params} != "
-            f"trace.num_layers_with_params={ml.num_layers_with_params}",
+            f"trace.num_layers_with_params={ml._num_layers_with_params}",
         )

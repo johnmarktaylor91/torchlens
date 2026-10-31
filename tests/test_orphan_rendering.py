@@ -125,7 +125,7 @@ def test_orphans_do_not_mask_num_ops_self_consistency_failure(show_orphans: bool
     trace.draw(show_orphans=show_orphans, return_graph=True, vis_save_only=True)
     assert check_metadata_invariants(trace) is True
 
-    trace.num_ops += 1
+    trace._num_ops += 1
 
     with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(trace)

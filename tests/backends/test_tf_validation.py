@@ -276,7 +276,7 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
 
 
 def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
-    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+    """``_finish_trace`` must populate ``trace._num_layers_with_params``.
 
     Sibling-gap regression test for the Paddle backend's identical bug: TF's
     ``TFBackend._finish_trace`` (``torchlens/backends/tf/backend.py``) calls
@@ -285,7 +285,7 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
     ``_param_logs`` are attached correctly) but -- before this fix -- without
     ``count_layers_with_attached_params=True`` and without
     ``update_param_totals_from_layers=True``, so the trace-level summary
-    counter ``trace.num_layers_with_params`` stayed at its dataclass default
+    counter ``trace._num_layers_with_params`` stayed at its dataclass default
     of ``0`` for every parameterized Keras model. That trips the
     ``[param_xrefs]`` metadata invariant
     (``_check_layer_param_aggregate_dedup``) for any object-module-mode
@@ -297,7 +297,7 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
     trace = tl.trace(SmallCnn(), tf.ones((1, 8, 8, 1), dtype=tf.float32), backend="tf")
 
     assert trace.module_identity_mode == "object_module"
-    assert trace.num_layers_with_params > 0
+    assert trace._num_layers_with_params > 0
     assert check_metadata_invariants(trace) is True
 
 

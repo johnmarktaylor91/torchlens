@@ -915,4 +915,4 @@ def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:
     trace = _trace(capture=tl.options.CaptureOptions(keep_orphans=True))
 
     assert trace.backend == "tinygrad"
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0

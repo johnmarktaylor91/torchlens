@@ -294,7 +294,7 @@ def test_manifest_provenance_roundtrip_and_hash_determinism(tmp_path: Path) -> N
     first = Manifest.read(first_path / "manifest.json")
     second = Manifest.read(second_path / "manifest.json")
 
-    assert restored.num_ops == captured.num_ops
+    assert restored._num_ops == captured._num_ops
     assert first.provenance is not None
     assert second.provenance is not None
     assert first.provenance.provenance_version == 1
@@ -329,7 +329,7 @@ def test_manifest_provenance_sentinel_round_trips_and_tamper_refuses(tmp_path: P
     assert recorded.startswith("unavailable:")
     assert recorded.partition(":")[2].isidentifier()
     restored = load(bundle_path)
-    assert restored.num_ops == captured.num_ops
+    assert restored._num_ops == captured._num_ops
 
     for forged in ("deadbeef", "unavailable:", "unavailable:not an identifier", "x" * 64):
         manifest["provenance"]["input_hash"] = forged
@@ -350,7 +350,7 @@ def test_manifest_without_optional_provenance_still_loads(tmp_path: Path) -> Non
     restored = load(bundle_path)
 
     assert parsed.provenance is None
-    assert restored.num_ops > 0
+    assert restored._num_ops > 0
 
 
 def test_manifest_git_commit_is_absent_outside_repository(

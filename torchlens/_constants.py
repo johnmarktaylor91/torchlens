@@ -261,7 +261,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_layer_num_calls",
     "_by_pass",
     "_layer_nums_to_save",
-    "num_ops",
+    "_num_ops",
     # Mapping from raw to final layer labels:
     "_raw_to_final_layer_labels",
     "_raw_to_final_parent_layer_labels",
@@ -302,7 +302,7 @@ MODEL_LOG_FIELD_ORDER = [
     "saved_gradient_memory",
     # Param info
     "_param_logs",
-    "num_layers_with_params",
+    "_num_layers_with_params",
     "num_params",
     "num_params_trainable",
     "num_params_frozen",

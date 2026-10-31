@@ -96,7 +96,7 @@ def test_compiled_attribute_ceilings_capture_verified() -> None:
     assert log.capture_verified is False
     assert log.capture_verification_reason == "mlx_compiled_attribute_not_logged"
     # The eager forward is still honestly captured.
-    assert log.num_ops > 0
+    assert log._num_ops > 0
 
 
 @pytest.mark.optional

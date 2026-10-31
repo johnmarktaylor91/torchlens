@@ -424,7 +424,7 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
         "backend": trace.backend,
         "module_identity_mode": trace.module_identity_mode,
         "param_source": trace.param_source,
-        "num_ops": trace.num_ops,
+        "num_ops": trace._num_ops,
         "num_saved_ops": len(trace.saved_ops),
         "has_backward_pass": trace.has_backward_pass,
         "num_backward_passes": len(trace.autograd.backward_passes),

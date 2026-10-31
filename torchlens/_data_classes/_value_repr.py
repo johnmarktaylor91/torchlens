@@ -140,7 +140,7 @@ def _trace_token(record: Any) -> str | None:
 def _op_position(op: Any) -> str | None:
     """Graph position token ``step/total`` for one op, or None."""
 
-    total = fail_open(lambda: op.source_trace.num_ops, lambda _error: None)
+    total = fail_open(lambda: op.source_trace._num_ops, lambda _error: None)
     step = getattr(op, "step_index", None)
     if step is None or total is None:
         return None

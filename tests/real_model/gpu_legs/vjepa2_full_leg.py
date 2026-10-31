@@ -161,7 +161,7 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
             "status": trace.outcome.status.name,
             "traced_equals_direct": equal,
             "max_abs_diff_vs_direct": max_abs,
-            "num_ops": int(trace.num_ops),
+            "num_ops": int(trace._num_ops),
             "num_layers": int(len(trace.layers)),
             "num_modules": int(len(trace.modules)),
             "saved_activation_memory_bytes": int(trace.saved_activation_memory),

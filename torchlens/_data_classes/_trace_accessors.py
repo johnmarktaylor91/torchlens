@@ -230,7 +230,7 @@ def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
 
 
 def _is_counted_op(op: Op) -> bool:
-    """Whether an op row counts toward ``Trace.num_ops``.
+    """Whether an op row counts toward the counted op total.
 
     The count excludes the input, output and buffer rows, the definition in
     ``backends/_finalize.py``; those rows are aliases of a tensor, not ops.
@@ -247,10 +247,10 @@ class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups.
 
     The trace's own accessor (``Trace.ops``, built with ``counted_view=True``)
-    counts and iterates the ops ``Trace.num_ops`` counts: ``len``,
+    counts and iterates the ops the counted op total counts: ``len``,
     iteration, integer indexing, ``keys``/``values``/``items`` and
     ``to_pandas`` skip the input, output and buffer rows, so
-    ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY
+    ``len(trace.ops)`` is that total. Label lookup still resolves EVERY
     row: ``trace.ops["input_1"]`` returns the input row and ``"input_1" in
     trace.ops`` is true although the label is not in ``keys()``. The
     alias-inclusive row sequence is ``trace._layer_list``. A derived accessor
@@ -274,7 +274,7 @@ class TraceOpAccessor(Accessor[Op]):
         layer_num_calls:
             Mapping from parent Layer label to number of Op passes.
         counted_view:
-            Count and iterate only the ops ``Trace.num_ops`` counts (the
+            Count and iterate only the ops the counted op total counts (the
             ``Trace.ops`` view); ``False`` lists every row given.
         """
 
@@ -337,7 +337,7 @@ class TraceOpAccessor(Accessor[Op]):
         return iter(self._counted_ops())
 
     def __len__(self) -> int:
-        """Return the counted op total (equals ``Trace.num_ops``)."""
+        """Return the counted op total (equals the counted op total)."""
 
         return len(self._counted_ops())
 

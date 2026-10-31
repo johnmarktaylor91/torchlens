@@ -84,7 +84,7 @@ def test_echo_mounts_and_stays_pure() -> None:
 
     x = torch.arange(16, dtype=torch.float32).reshape(2, 8)
     control = tl.trace(_EchoModel().eval(), x.clone())
-    control_ops = control.num_ops
+    control_ops = control._num_ops
     control.cleanup()
 
     sink_lines: list[str] = []
@@ -97,7 +97,7 @@ def test_echo_mounts_and_stays_pure() -> None:
     assert observer.lines and sink_lines == observer.lines
     assert " -> " in observer.lines[0] and "mean=" in observer.lines[0]
     # Purity: the echo's own stats math never enters the captured graph.
-    assert echoed.num_ops == control_ops
+    assert echoed._num_ops == control_ops
     line = repr(observer)
     assert "EchoObserver(" in line and "lines echoed" in line
     assert "\n" not in line

@@ -598,11 +598,11 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
 
     dispatch_count = getattr(self, "_validation_dispatch_op_count", None)
     if dispatch_count is None:
-        if int(getattr(self, "num_ops", 0)) > 0:
+        if int(getattr(self, "_num_ops", 0)) > 0:
             return ValidationCheckResult.unverified("dispatch_op_count_not_collected")
         return ValidationCheckResult.validated("no_dispatchable_ops")
     captured_count = int(
-        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
+        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "_num_ops", 0))
     )
     # Dispatchable ops captured then intentionally orphan-pruned (dead computation) AND
     # ``.data``-accessor buffer-write view dispatches are accounted for on the captured side:
@@ -626,7 +626,7 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     # requires the witness to record every observed wrapped call, not only the
     # ones that owned a dispatch. ``unverified`` is the honest verdict the check
     # vocabulary already provides, and it never reads as a pass.
-    if dispatch_count == 0 and captured_count == 0 and int(getattr(self, "num_ops", 0)) > 0:
+    if dispatch_count == 0 and captured_count == 0 and int(getattr(self, "_num_ops", 0)) > 0:
         return ValidationCheckResult.unverified("dispatch_op_count_witness_empty")
     if dispatch_count == captured_count + pruned_count + buffer_write_count:
         return ValidationCheckResult.validated("dispatch_op_count_matched")
@@ -880,7 +880,9 @@ def validate_saved_outs(
     if dispatch_count_result.failed:
         dispatch_count = getattr(self, "_validation_dispatch_op_count")
         captured_count = int(
-            getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
+            getattr(
+                self, "_validation_captured_dispatchable_op_count", getattr(self, "_num_ops", 0)
+            )
         )
         pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
         buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))

@@ -64,7 +64,7 @@ def test_trace_tolerates_lazy_buffer_model() -> None:
 
     model = _lazy_bn()
     log = tl.trace(model, torch.randn(3, 4))
-    assert log.num_ops >= 2
+    assert log._num_ops >= 2
     assert not _pending(model), "the captured forward materializes the buffers"
     labels = " ".join(op.label for op in log._layer_list)
     assert "batchnorm" in labels
@@ -94,7 +94,7 @@ def test_self_prime_remedy_unlocks_capture() -> None:
         model(x)
     assert not _pending(model)
     log = tl.trace(model, x)
-    assert log.num_ops >= 2
+    assert log._num_ops >= 2
     log.cleanup()
 
 

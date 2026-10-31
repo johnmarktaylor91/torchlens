@@ -691,7 +691,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.num_ops == log.num_ops
+    assert loaded._num_ops == log._num_ops
     assert [layer.label for layer in loaded._layer_list] == [
         layer.label for layer in log._layer_list
     ]

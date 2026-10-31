@@ -2839,9 +2839,9 @@ deprecation shim owed*
   `to_canonical_json()` renders the attested bytes (sorted keys, compact,
   ASCII).
 
-**trace.ops counting (`len(trace.ops) == trace.num_ops`)** — *unstable — no deprecation shim owed*
+**trace.ops counting (`len(trace.ops)`)** — *unstable — no deprecation shim owed*
 : `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
-  `to_pandas()` of `trace.ops` cover the ops `trace.num_ops` counts (no
+  `to_pandas()` of `trace.ops` cover the counted ops (no
   input, output or buffer rows; sumfam F1). Label lookup still resolves every
   row: `trace.ops["input_1"]` returns the input row and `"input_1" in
   trace.ops` is true although the label is not in `trace.ops.keys()`. The

@@ -720,7 +720,7 @@ def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
     )
 
-    assert second_trace.num_ops > 0
+    assert second_trace._num_ops > 0
 
 
 def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
@@ -798,7 +798,7 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
                 capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
             )
 
-        assert second_trace.num_ops > 0
+        assert second_trace._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_TENSOR = None
 
@@ -849,7 +849,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
                 capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
             )
 
-        assert second_trace.num_ops > 0
+        assert second_trace._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_PAYLOAD = None
 
@@ -2387,7 +2387,7 @@ def test_completeness_backstop_empty_census_does_not_fail_dispatchless_capture()
     inputs = torch.randn(2, 3)
     probe = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
     try:
-        assert probe.num_ops > 0
+        assert probe._num_ops > 0
     finally:
         probe.cleanup()
     assert tl.validate(model, inputs, scope="forward")
@@ -6468,7 +6468,7 @@ def test_corruption_parent_child_link():
 def test_corruption_num_ops():
     """Mismatched num_ops raises MetadataInvariantError."""
     log = _make_clean_log()
-    log.num_ops = 9999
+    log._num_ops = 9999
     with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()

@@ -19,16 +19,44 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 #: for every field added over v10. The v11 renames enter under their new
 #: spellings (the old spellings leave with no alias).
 V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
+    "backward_pass": {"_executed_flops_record": "keep"},
+    "buffer": {"grad_memory": "keep", "overwrite_index": "keep", "writer_label": "keep"},
     "grad_fn_call": {"fire_record": "keep"},
     "layer": {"is_edited": "keep"},
-    "op": {"is_edited": "keep"},
+    "module_call": {"has_pre_hook_input_change": "keep"},
+    "op": {"edits": "keep", "is_edited": "keep"},
+    "param": {"grad_memory": "keep"},
     "trace": {
+        # Private storage behind the removed public Trace names: the capture
+        # pipeline, the accessors and save/load still read these stores.
+        "_append_history": "keep",
+        "_backward_pass_logs": "keep",
+        "_buffer_num_calls": "keep",
+        "_by_pass": "keep",
+        "_decoded_output": "keep",
+        "_grad_fn_logs": "keep",
+        "_layer_dict_all_keys": "keep",
+        "_layer_dict_main_keys": "keep",
+        "_layer_list": "keep",
+        "_layer_logs": "keep",
+        "_layer_num_calls": "keep",
+        "_module_filter": "drop",
+        "_num_backward_passes": "keep",
+        "_num_layers_with_params": "keep",
+        "_num_ops": "keep",
+        "_orphan_records": "blob_recursive",
+        "_param_logs": "keep",
+        "_parent_run": "drop",
         "_replay_frontier": "drop",
+        "_rescue_rerun": "drop",
         "facet_functions": "drop",
+        "input": "keep",
         "is_replayable": "keep",
+        "is_stopped": "keep",
         "model_name": "keep",
         "name": "keep",
         "stop_reason": "keep",
+        "transformed_output": "keep",
     },
 }
 

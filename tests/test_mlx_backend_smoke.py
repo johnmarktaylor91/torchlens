@@ -39,10 +39,10 @@ def test_mlx_linear_mlp_smoke() -> None:
     x = mx.random.normal((2, 4))
     log = tl.trace(model, x)
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
     assert log.has_backward_pass is False
     assert any("linear" in label.lower() for label in log.layer_labels)
-    assert log.num_ops in (3, 4, 5)
+    assert log._num_ops in (3, 4, 5)
     for op_label in log.op_labels:
         op = log[op_label]
         assert op.shape is not None
@@ -78,7 +78,7 @@ def test_mlx_save_raw_activations_false_drops_payloads_keeps_metadata() -> None:
     x = mx.random.normal((2, 4))
     log = tl.trace(model, x, backend="mlx", save=tl.options.SaveOptions(save_raw_activations=False))
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
     for op_label in log.op_labels:
         op = log[op_label]
         assert op.out is None
@@ -110,4 +110,4 @@ def test_mlx_capture_options_does_not_keyerror() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0

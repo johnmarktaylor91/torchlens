@@ -544,7 +544,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     loaded = tl.load(bundle_path)
     assert isinstance(loaded, Trace)
-    assert loaded.num_ops == trace.num_ops
+    assert loaded._num_ops == trace._num_ops
 
 
 class _AttrStreamingModel(nn.Module):

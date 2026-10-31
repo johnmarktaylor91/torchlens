@@ -607,8 +607,8 @@ def test_mlx_repeated_trace_no_wrapper_leak() -> None:
     first = tl.trace(TinyMLP(), _tiny_mlp_input())
     second = tl.trace(TinyMLP(), _tiny_mlp_input())
 
-    assert first.num_ops > 0
-    assert second.num_ops > 0
+    assert first._num_ops > 0
+    assert second._num_ops > 0
 
 
 @pytest.mark.optional

@@ -697,7 +697,7 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),
         "counts": {
-            "ops": getattr(log, "num_ops", None),
+            "ops": getattr(log, "_num_ops", None),
             "saved_ops": len(log.saved_ops) if hasattr(log, "saved_ops") else None,
             "modules": len(log.modules) if hasattr(log, "modules") else None,
         },

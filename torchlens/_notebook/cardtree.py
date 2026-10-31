@@ -380,7 +380,7 @@ def trace_overview_card(trace: Any) -> Card:
     """
 
     layers = len(getattr(trace, "_layer_logs", {}) or {})
-    ops = getattr(trace, "num_ops", 0)
+    ops = getattr(trace, "_num_ops", 0)
     try:
         layers_saved = trace._layers_saved
     except AttributeError:

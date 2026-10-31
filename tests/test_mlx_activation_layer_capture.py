@@ -79,7 +79,7 @@ def test_every_activation_layer_records_an_op(name: str) -> None:
     layer = layer_cls(**_LAYER_ARGS.get(name, {}))
     x = mx.array([[-1.5, -0.25, 0.5, 2.0]])
     trace = tl.trace(layer, x, backend="mlx")
-    assert trace.num_ops >= 1, f"nn.{name} recorded no op: {list(trace.layer_labels)}"
+    assert trace._num_ops >= 1, f"nn.{name} recorded no op: {list(trace.layer_labels)}"
 
 
 def test_sequential_relu_layer_is_captured() -> None:

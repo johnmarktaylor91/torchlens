@@ -535,7 +535,7 @@ class TinygradBackend:
             trace.param_source = "none"
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
-        trace.num_layers_with_params = 0
+        trace._num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
         trace.tinygrad_payload_policy = "dev_python_realized_copy"

@@ -173,7 +173,7 @@ def test_tf_capture_trace_routes_to_eager_capture() -> None:
     trace = tl.trace(_TFModule(), tf.constant([1.0]), backend="tf")
 
     assert trace.backend == "tf"
-    assert trace.num_ops == 1
+    assert trace._num_ops == 1
 
 
 @pytest.mark.tf_backend

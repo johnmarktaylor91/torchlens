@@ -234,7 +234,7 @@ def test_audited_capture_still_runs_clean_end_to_end(monkeypatch) -> None:
         torch.ones(1, 3),
         capture=tl.options.CaptureOptions(save_source_context=True),
     )
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0
     assert _audit_registry_sizes() == before
     assert _hot_tier_files() == []
 

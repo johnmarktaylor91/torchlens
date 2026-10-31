@@ -182,7 +182,7 @@ def test_plain_capture_graph_unchanged_without_mutation() -> None:
     assert [layer.type for layer in trace.layers] == ["input", "linear", "truediv", "output"]
     truediv = _ops_by_type(trace, "truediv")[0]
     assert [p.address for p in truediv.params] == ["temp"]
-    assert trace.num_ops == 2
+    assert trace._num_ops == 2
 
 
 def _drop_prepared_parameter_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -538,7 +538,7 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
         "output",
         "truediv",
     ]
-    assert trace.num_ops == 3
+    assert trace._num_ops == 3
     clamp = _ops_by_type(trace, "clamp")[0]
     assert [p.address for p in clamp.params] == ["temp"]
     assert clamp.label in _parent_labels(trace, _ops_by_type(trace, "truediv")[0])

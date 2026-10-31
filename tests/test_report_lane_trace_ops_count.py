@@ -1,4 +1,4 @@
-"""sumfam F1: ``len(trace.ops)`` equals ``trace.num_ops``; iterators agree.
+"""sumfam F1: ``len(trace.ops)`` equals ``trace._num_ops``; iterators agree.
 
 Branch A of the sumfam memo (accepted with the defaults.2 batch, JMT
 2026-10-12): the accessor's length agrees with the same-named count, and the
@@ -29,7 +29,7 @@ def _sequential_trace() -> Any:
 
 def _assert_counts_agree(trace: Any) -> None:
     counted = [op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)]
-    assert len(trace.ops) == trace.num_ops == len(counted)
+    assert len(trace.ops) == trace._num_ops == len(counted)
     assert list(trace.ops) == counted
     assert trace.ops.values() == counted
     assert trace.ops.keys() == [op.label for op in counted]
@@ -40,7 +40,7 @@ def _assert_counts_agree(trace: Any) -> None:
 def test_sequential_linear_relu_linear_counts_three() -> None:
     trace = _sequential_trace()
 
-    assert trace.num_ops == 3
+    assert trace._num_ops == 3
     assert len(trace.ops) == 3
     assert len(trace._layer_list) == 5
     _assert_counts_agree(trace)
@@ -92,7 +92,7 @@ def test_counts_agree_on_a_real_model() -> None:
     model = transformers.GPT2Model(config).eval()
     trace = tl.trace(model, torch.randint(0, 32, (1, 6)))
 
-    assert len(trace._layer_list) > trace.num_ops
+    assert len(trace._layer_list) > trace._num_ops
     _assert_counts_agree(trace)
 
 

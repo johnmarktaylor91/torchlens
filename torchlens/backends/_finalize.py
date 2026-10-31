@@ -79,7 +79,7 @@ def finalize_single_pass_trace(
     update_param_totals_from_layers:
         Whether trace parameter counters should be recomputed from finalized layers.
     count_layers_with_attached_params:
-        Whether to compute ``trace.num_layers_with_params`` from attached params.
+        Whether to compute ``trace._num_layers_with_params`` from attached params.
     finish_before_module_logs:
         Whether to set ``_tracing_finished`` before module logs are attached.
     compute_input_output_distances:
@@ -141,7 +141,7 @@ def finalize_single_pass_trace(
                 enrich_layer(layer_log, op_log)
             trace._layer_logs[op_log.layer_label] = layer_log
 
-    trace.num_ops = sum(
+    trace._num_ops = sum(
         1
         for op_log in trace._layer_list
         if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
@@ -171,7 +171,7 @@ def finalize_single_pass_trace(
     if update_param_totals_from_layers:
         _update_param_totals_from_layers(trace)
     if count_layers_with_attached_params:
-        trace.num_layers_with_params = len(layers_with_params_seen)
+        trace._num_layers_with_params = len(layers_with_params_seen)
     trace._layers_logged = True
     trace._layers_saved = True
     trace.has_backward_pass = False
@@ -835,7 +835,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
             param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = len(
+        trace._num_layers_with_params = len(
             {op.layer_label for op in trace._layer_list if op.has_params}
         )
 

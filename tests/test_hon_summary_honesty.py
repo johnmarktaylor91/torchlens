@@ -46,7 +46,7 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     assert "purely feedforward" not in text
     assert "structure unverified" in text
     assert f"at least {len(trace)} total tensors" in text
-    assert f"at least {trace.num_layers_with_params} parameter operations" in text
+    assert f"at least {trace._num_layers_with_params} parameter operations" in text
     assert f"at least {trace.num_params} params total" in text
     assert "lower bound" in text
     assert "Capture verified: NO (escape_rescue_unrecovered)" in text
@@ -60,7 +60,7 @@ def test_verified_and_unrecorded_captures_print_unchanged() -> None:
     assert "purely feedforward, no recurrence" in baseline
     assert "at least" not in baseline and "lower bound" not in baseline
     assert (
-        f"Parameters: {trace.num_layers_with_params} parameter operations "
+        f"Parameters: {trace._num_layers_with_params} parameter operations "
         f"({trace.num_params} params total;"
     ) in baseline
     trace.capture_verified = True

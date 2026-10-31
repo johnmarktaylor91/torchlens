@@ -648,7 +648,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
     that annotation, so ``uses_params``/``used_by_ops``/``used_by_layers``
     all pointed at the input-echo ``input`` op instead of the real
     ``dot_general``/``broadcast_in_dim`` consumer, and
-    ``trace.num_layers_with_params`` stayed 0 (confirmed by reverting the
+    ``trace._num_layers_with_params`` stayed 0 (confirmed by reverting the
     fix and re-running this exact scenario). Now params are attached to the
     op whose graph ``parents`` include the param's source label -- i.e. the
     op that actually took the param value as a computational operand.
@@ -662,7 +662,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
     assert trace.module_identity_mode == "function_root"
     # 3 distinct layers genuinely use a param: the two matmuls (w1, w2) and
     # the bias broadcast (b1).
-    assert trace.num_layers_with_params == 3
+    assert trace._num_layers_with_params == 3
 
     param_using_ops = {op.label: op for op in trace._layer_list if op.has_params}
     assert param_using_ops
@@ -1844,4 +1844,4 @@ def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
     )
 
     assert trace.backend == "jax"
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0

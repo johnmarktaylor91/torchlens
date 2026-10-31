@@ -39,7 +39,7 @@ def test_paddle_relu_single_op_smoke() -> None:
     assert trace.backend == "paddle"
     assert trace.has_backward_pass is False
     assert trace.module_identity_mode == "function_root"
-    assert trace.num_ops == 1
+    assert trace._num_ops == 1
     assert any("relu" in label for label in trace.layer_labels)
     # Torch parity: output_layers resolves through the conditional label map
     # -- the bare layer_label for this single-pass op, not the internal raw
@@ -147,7 +147,7 @@ def test_paddle_capture_options_does_not_reject_the_whole_object() -> None:
     )
 
     assert trace.backend == "paddle"
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0
 
 
 def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,7 +198,7 @@ def test_paddle_std_internal_escape_is_depth_exempt() -> None:
         lambda x: paddle.std(x), paddle.ones([2, 2], dtype="float32"), backend="paddle"
     )
 
-    assert trace.num_ops == 1
+    assert trace._num_ops == 1
     assert any("std" in label for label in trace.layer_labels)
 
 

@@ -251,7 +251,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 -- foreign/partial logs keep the raw fallback
         return {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
-            "operations": int(getattr(log, "num_ops", 0) or 0),
+            "operations": int(getattr(log, "_num_ops", 0) or 0),
             "tensors_total": len(log) if hasattr(log, "__len__") else 0,
             "tensors_saved": len(getattr(log, "saved_ops", ())),
             "parameters": int(getattr(log, "num_params", 0) or 0),

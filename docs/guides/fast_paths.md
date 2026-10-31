@@ -190,7 +190,7 @@ Cost and caveats:
 A trace costs about 3.2 ms of host Python per recorded op with default settings, linear in the
 op count with no meaningful fixed cost. The device does not change it: a GPU trace costs the
 same as a CPU trace of the same model. So the levers are fewer ops and less work per op.
-`trace.num_ops` tells you how many ops a forward recorded.
+`len(trace.ops)` tells you how many ops a forward recorded.
 
 ```python
 import torch
@@ -209,7 +209,7 @@ trace = tl.trace(
     capture=CaptureOptions(inference_only=True),
 )
 
-print(trace.num_ops)
+print(len(trace.ops))
 relu = trace.find_sites(tl.func("relu")).first()
 assert relu.out.shape == (2, 8)
 ```
@@ -252,7 +252,7 @@ pip install flash-linear-attention
 ```
 
 It provides GPU (Triton) kernels, so it helps on CUDA hosts; CPU-only runs keep the reference
-loops. If a trace of such a model records far more ops than you expect, check `trace.num_ops`
+loops. If a trace of such a model records far more ops than you expect, check `len(trace.ops)`
 and whether the package imports in your environment. With the KV cache on, each decoding step
 processes one token, so the package matters much less for `bind` with `generate()`.
 

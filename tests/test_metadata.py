@@ -56,8 +56,8 @@ def test_general_info_fields(small_input):
     assert isinstance(mh.model_class_name, str)
     assert len(mh.model_class_name) > 0
     assert mh._tracing_finished is True
-    assert isinstance(mh.num_ops, int)
-    assert mh.num_ops > 0
+    assert isinstance(mh._num_ops, int)
+    assert mh._num_ops > 0
 
 
 def test_model_structure_non_recurrent(small_input: torch.Tensor) -> None:

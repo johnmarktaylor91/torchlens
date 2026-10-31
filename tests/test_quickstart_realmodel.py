@@ -58,7 +58,7 @@ class TestResnet18Rungs:
         tl.summary(resnet18_eval, input_size=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True
-        assert result.num_ops == 151  # the eval-mode regression fixture count
+        assert result._num_ops == 151  # the eval-mode regression fixture count
 
     def test_train_mode_gold_capture_warns_and_differs(self) -> None:
         """The 211-vs-151 measurement is a regression fixture, not a bug.

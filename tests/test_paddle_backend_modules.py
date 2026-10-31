@@ -145,14 +145,14 @@ class PaddleSingleLinear(paddle.nn.Layer):
 
 
 def test_paddle_num_layers_with_params_populated_in_object_module_mode() -> None:
-    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+    """``_finish_trace`` must populate ``trace._num_layers_with_params``.
 
     Regression test: ``PaddleBackend._finish_trace``
     (``torchlens/backends/paddle/backend.py``) calls the shared
     ``finalize_single_pass_trace`` helper without
     ``count_layers_with_attached_params=True``, so ``op_log._param_logs`` was
     attached correctly per-op but the trace-level summary counter
-    ``trace.num_layers_with_params`` stayed at its dataclass default of ``0``
+    ``trace._num_layers_with_params`` stayed at its dataclass default of ``0``
     on every parameterized Paddle model -- silently wrong, and it trips the
     ``[param_xrefs]`` metadata invariant (``_check_layer_param_aggregate_dedup``)
     for any object-module-mode trace with attached params. The sibling MLX
@@ -163,5 +163,5 @@ def test_paddle_num_layers_with_params_populated_in_object_module_mode() -> None
     trace = tl.trace(PaddleSingleLinear(), _input(), backend="paddle")
 
     assert trace.module_identity_mode == "object_module"
-    assert trace.num_layers_with_params == 1
+    assert trace._num_layers_with_params == 1
     assert check_metadata_invariants(trace) is True

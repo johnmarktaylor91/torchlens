@@ -240,7 +240,7 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
     layers = {layer.layer_label: layer for layer in trace.layers}
     by_type: dict[str, list] = {}
     for op in trace._layer_list:
-        by_type.setdefault(op.layer_type, []).append(op)
+        by_type.setdefault(op.type, []).append(op)
     (mul,) = by_type["mul"]
     (relu,) = by_type["relu"]
     first, second = by_type["linear"]
@@ -269,7 +269,7 @@ def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
     fc = modules["fc"]
     # fc holds both linear passes: one Layer; internal edge pass1 -> pass2,
     # input edge x -> pass1, output edge pass2 -> mul.
-    assert int(fc.num_layers) == 1
+    assert len(fc.layer_labels) == 1
     assert (int(fc.num_internal_edges), int(fc.num_input_edges), int(fc.num_output_edges)) == (
         1,
         1,
@@ -301,13 +301,13 @@ def test_module_call_and_param_use_counts(graph_trace, mixed_trace) -> None:
     assert int(trace.num_uncalled_modules) == 1
     # The two linear passes use parameters; one Layer holds both.
     assert int(len(trace.ops_with_params)) == 2
-    assert int(trace.num_layers_with_params) == 1
+    assert int(trace._num_layers_with_params) == 1
     # Mixed: root, wide, tied twice (tied2 is the same module).
     trace = mixed_trace
     assert int(len(trace.module_calls)) == 4
     assert int(trace.num_uncalled_modules) == 0
     assert int(len(trace.ops_with_params)) == 3  # wide, tied pass 1, tied pass 2
-    assert int(trace.num_layers_with_params) == 2
+    assert int(trace._num_layers_with_params) == 2
 
 
 def test_saved_activation_scope_counts(graph_trace, mixed_trace) -> None:

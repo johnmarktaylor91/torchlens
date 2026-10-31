@@ -258,7 +258,7 @@ def test_unpicklable_capture_degrades_to_uncached(tmp_path):
         trace = tl.trace(
             model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir)
         )
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0
     degrade = [w for w in caught if "Not caching this capture" in str(w.message)]
     assert degrade, "expected the not-cached degrade warning"
     assert "unaffected" in str(degrade[0].message)
@@ -269,4 +269,4 @@ def test_unpicklable_capture_degrades_to_uncached(tmp_path):
         second = tl.trace(
             model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir)
         )
-    assert second.num_ops == trace.num_ops
+    assert second._num_ops == trace._num_ops

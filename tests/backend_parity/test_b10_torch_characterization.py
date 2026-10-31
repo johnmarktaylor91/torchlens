@@ -229,7 +229,7 @@ def test_forward_exception_restores_capture_state() -> None:
         torch.ones(2, 2),
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
-    assert followup.num_ops == 4
+    assert followup._num_ops == 4
 
 
 def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:

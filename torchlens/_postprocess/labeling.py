@@ -164,7 +164,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
             layer_entry.step_index = None  # fix later
         else:
             layer_entry.step_index = step_index
-            self.num_ops += 1
+            self._num_ops += 1
             step_index += 1
 
         # Replace any layer names with their final names:
@@ -187,7 +187,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
         if layer_entry.layer_label not in unique_layers_seen and layer_entry.has_params:
-            self.num_layers_with_params += 1
+            self._num_layers_with_params += 1
 
         unique_layers_seen.add(layer_entry.layer_label)
 
@@ -337,7 +337,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
 def _finalize_output_compute_indexs(self: "Trace") -> None:
     """Assign step_index to output layers (deferred until total is known)."""
     for layer in self.output_layers:
-        self[layer].step_index = self.num_ops
+        self[layer].step_index = self._num_ops
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:

@@ -610,7 +610,7 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     assert any(layer.num_passes > 1 for layer in trace.layers.values())
     path = tmp_path / "recurrent.tlspec"
     trace.save(path)
-    assert tl.load(path).num_ops == trace.num_ops
+    assert tl.load(path)._num_ops == trace._num_ops
 
 
 def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:

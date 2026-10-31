@@ -253,7 +253,7 @@ def test_bare_chain_sweep_is_linear_in_group_size() -> None:
 
     # Grouping oracle: a bare chain mints NO recurrent layers (layers == ops).
     assert all(op.num_passes == 1 for op in traced.ops)
-    assert traced.num_ops == num_steps
+    assert traced._num_ops == num_steps
     # Pre-fix this is >= 2*C(400,2) = 159,600; the bucketed sweep needs O(N).
     assert find_calls < 12_000
 

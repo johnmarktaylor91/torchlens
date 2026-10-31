@@ -1324,7 +1324,7 @@ class Trace(
         "_layer_num_calls": FieldPolicy.KEEP,
         "_by_pass": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
-        "num_ops": FieldPolicy.KEEP,
+        "_num_ops": FieldPolicy.KEEP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_parent_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_op_labels": FieldPolicy.KEEP,
@@ -1367,7 +1367,7 @@ class Trace(
         "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
         "_param_logs": FieldPolicy.KEEP,
-        "num_layers_with_params": FieldPolicy.KEEP,
+        "_num_layers_with_params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
@@ -1846,7 +1846,7 @@ class Trace(
         self._by_pass: dict[int, list[int]] = {}
         self._layer_nums_to_save: list[int] = []  # ordinal positions of layers to save
         self._grad_op_nums_to_save: list[int] | str = []
-        self.num_ops: int = 0  # total operations after postprocessing
+        self._num_ops: int = 0  # total operations after postprocessing
 
         # Mapping between raw barcodes and final human-readable labels
         # (populated during postprocessing's label-assignment step):
@@ -1895,7 +1895,7 @@ class Trace(
 
         # Param info:
         self._param_logs: ParamAccessor = ParamAccessor({})
-        self.num_layers_with_params: int = 0
+        self._num_layers_with_params: int = 0
         self.num_params: int = 0
         self.num_params_trainable: int = 0
         self.num_params_frozen: int = 0

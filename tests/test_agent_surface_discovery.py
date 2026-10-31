@@ -108,7 +108,7 @@ def test_hf_remedy_spelling_actually_works() -> None:
             return self.fc(input_ids)
 
     log = tl.trace(KeywordOnly(), (), input_kwargs={"input_ids": torch.randn(2, 4)})
-    assert log.num_ops >= 1
+    assert log._num_ops >= 1
 
 
 @pytest.mark.heavy

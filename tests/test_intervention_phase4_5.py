@@ -71,7 +71,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
 
     assert log.is_replayable is False
     assert log.state is TraceState.PRISTINE
-    assert log.num_ops == 2
+    assert log._num_ops == 2
     assert log._layer_list
     assert log._layer_dict_main_keys
     assert log._layer_dict_all_keys

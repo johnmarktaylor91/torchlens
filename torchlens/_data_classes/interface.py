@@ -330,7 +330,7 @@ def _str_after_pass(self: "Trace") -> str:
     # Model parameters:
 
     s += (
-        f"\n\tParameters: {bound}{self.num_layers_with_params} parameter operations "
+        f"\n\tParameters: {bound}{self._num_layers_with_params} parameter operations "
         f"({bound}{self.num_params} params total; {self.total_param_memory})"
     )
     if unverified:
@@ -399,7 +399,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
         if num_passes > 1:
             # One pass/op vocabulary (A10): a multi-pass row is "pass k/N",
             # never "k/N ops" -- "op" is reserved for the executed-op
-            # denominator (Trace.num_ops).
+            # denominator (the counted op total, len(trace.ops)).
             pass_str = f" (pass {pass_index}/{num_passes})"
         else:
             pass_str = ""

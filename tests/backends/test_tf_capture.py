@@ -124,7 +124,7 @@ def test_tf_capture_options_does_not_reject_the_whole_object() -> None:
     )
 
     assert trace.backend == "tf"
-    assert trace.num_ops > 0
+    assert trace._num_ops > 0
 
 
 def test_tf_capture_small_keras_cnn_modules_params_and_warm_boundary() -> None:

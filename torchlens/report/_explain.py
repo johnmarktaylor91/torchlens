@@ -643,7 +643,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
     except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
         return [
             f"- Layers logged: {_safe_len(getattr(log, '_layer_list', None))}.",
-            f"- Operations logged: {int(getattr(log, 'num_ops', 0) or 0)}.",
+            f"- Operations logged: {int(getattr(log, '_num_ops', 0) or 0)}.",
         ]
     pass_counts = [
         int(value)
