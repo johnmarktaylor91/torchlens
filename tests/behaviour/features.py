@@ -137,7 +137,9 @@ def _prepare_halt(cell: Cell) -> None:
 def _after_halt(cell: Cell) -> None:
     trace = cell.require_trace()
     cell.expect(trace.outcome.status is CaptureStatus.HALTED, f"outcome {trace.outcome.status!r}")
-    got = [op.func_name for op in trace.ops]
+    from tests.behaviour.harness import execution_order
+
+    got = [op.func_name for op in execution_order(trace)]
     plain = cell.facts.func_names
     cell.expect(
         0 < len(got) < len(plain) and plain[: len(got)] == got,
@@ -246,8 +248,12 @@ def _after_fast_run(cell: Cell) -> None:
     trace = cell.require_trace()
     before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    trace.run(inputs=cell.fresh_inputs(), fast=True)
-    cell.expect_same_leaves(before, cell.output_leaves(trace), "fast run output")
+    result = trace.run(inputs=cell.fresh_inputs(), fast=True)
+    got = [
+        leaf.detach() if isinstance(leaf, torch.Tensor) else leaf
+        for leaf in cell.leaves(result.output)
+    ]
+    cell.expect_same_leaves(before, got, "fast run output")
 
 
 def _prepare_fork_do(cell: Cell) -> None:
@@ -256,9 +262,24 @@ def _prepare_fork_do(cell: Cell) -> None:
     cell.capture_fields["intervention_ready"] = True
 
 
+def _editable_site(cell: Cell, trace: Any) -> str:
+    """Return a saved, single-pass, floating-point op label on ``trace``."""
+
+    from tests.behaviour.harness import _is_float_dtype
+
+    for op in trace.saved_ops:
+        if (
+            _is_float_dtype(op.dtype)
+            and getattr(op.layer, "num_passes", 1) == 1
+            and op.out is not None
+        ):
+            return op.label
+    raise NotApplicable("no saved single-pass floating-point op to edit on this capture")
+
+
 def _after_fork_do(cell: Cell) -> None:
     trace = cell.require_trace()
-    label = cell.facts.single_pass_float_label
+    label = _editable_site(cell, trace)
     original = trace[label].out.detach().clone()
     fork = trace.fork()
     fork.do(tl.label(label), tl.scale(0.5))
@@ -292,7 +313,9 @@ def _after_record(cell: Cell) -> None:
     torch.manual_seed(SEED)
     recording = tl.record(cell.model, cell.fresh_inputs(), default_op=True)
     cooked = recording.to_trace()
-    got = tuple(op.func_name for op in cooked.ops)
+    from tests.behaviour.harness import execution_order
+
+    got = tuple(op.func_name for op in execution_order(cooked))
     want = cell.facts.func_names
     first = next((i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b), None)
     cell.expect(
@@ -315,10 +338,11 @@ def _after_extract(cell: Cell) -> None:
     if cell.case.has("containers"):
         raise NotApplicable("extract takes one tensor input")
     address = _single_call_module(cell)
-    trace = cell.require_trace()
+    cell.require_trace()
     torch.manual_seed(SEED)
     features = tl.extract(cell.model, cell.fresh_inputs(), [address])
-    cell.expect_same_leaves([trace[address].out], [features[address]], f"extract({address!r})")
+    plain = cell.facts.plain[address].out
+    cell.expect_same_leaves([plain], [features[address]], f"extract({address!r})")
 
 
 def _after_bind(cell: Cell) -> None:
@@ -329,11 +353,15 @@ def _after_bind(cell: Cell) -> None:
     torch.manual_seed(SEED)
     with torch.no_grad():
         bound_out = bound(*cell.positional_inputs(cell.fresh_inputs()))
+    bound_leaves = list(cell.leaves(bound_out))
+    foreign = sorted(
+        {type(leaf).__name__ for leaf in bound_leaves if not isinstance(leaf, torch.Tensor)}
+    )
+    if foreign:
+        raise NotApplicable(f"the model returns non-tensor objects {foreign}")
     torch.manual_seed(SEED)
     steered = tl.trace(cell.model, cell.fresh_inputs(), intervene=spec, on_zero_fire="error")
-    cell.expect_same_leaves(
-        cell.output_leaves(steered), list(cell.leaves(bound_out)), "bound executor output"
-    )
+    cell.expect_same_leaves(cell.output_leaves(steered), bound_leaves, "bound executor output")
 
 
 def _after_bundle(cell: Cell) -> None:
@@ -389,7 +417,7 @@ FEATURES: tuple[Feature, ...] = (
         "backward",
         HEAVY,
         "Gradient capture (backward_ready, trace.backward)",
-        requires=frozenset({"float_output"}),
+        requires=frozenset({"float_output", "child_module"}),
         prepare=_prepare_backward,
         after=_after_backward,
     ),

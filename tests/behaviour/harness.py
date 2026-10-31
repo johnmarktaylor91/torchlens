@@ -270,6 +270,12 @@ def _describe(leaf: Any) -> str:
 # --- case facts ------------------------------------------------------------
 
 
+def execution_order(trace: Any) -> list[Any]:
+    """Return a trace's ops in capture order (``raw_index``), not label order."""
+
+    return sorted(trace.ops, key=lambda op: (op.raw_index is None, op.raw_index or 0))
+
+
 def _is_float_dtype(dtype: Any) -> bool:
     text = str(dtype)
     return "float" in text or "bfloat" in text
@@ -310,7 +316,7 @@ def case_facts(case: Case, model: nn.Module, inputs: Any) -> CaseFacts:
 def _compute_facts(model: nn.Module, inputs: Any) -> CaseFacts:
     torch.manual_seed(SEED)
     plain = tl.trace(model, inputs)
-    ops = list(plain.ops)
+    ops = execution_order(plain)
     labels = tuple(op.label for op in ops)
     func_names = tuple(op.func_name for op in ops)
     counts = Counter(func_names)
@@ -535,7 +541,14 @@ def _run_cell(case: Case, features: tuple[Feature, ...], tmp: Path) -> CellResul
 
 
 def _finish(cell: Cell) -> CellResult:
-    result = CellResult(cell_id(cell.case, cell.features), dict(cell.outcomes))
+    outcomes = dict(cell.outcomes)
+    gate = outcomes.get("trace")
+    if gate is not None and gate.status in {"refused", "not_applicable"}:
+        for oracle in BASE_ORACLES:
+            outcomes.setdefault(
+                oracle, Outcome(gate.status, f"capture: {gate.detail}", gate.error_class, gate.code)
+            )
+    result = CellResult(cell_id(cell.case, cell.features), outcomes)
     cell.trace = None
     cell.loaded = None
     return result
