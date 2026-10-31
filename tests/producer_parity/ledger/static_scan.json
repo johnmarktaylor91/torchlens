@@ -9009,6 +9009,14 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_destination_coverage.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/validation/_edge_boundary.py",
   "has_default": false,
@@ -9488,6 +9496,22 @@
   "via_getattr": true
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/validation/_script_metadata_proof.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_script_metadata_proof.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "unattributed_tensor_args",
   "file": "torchlens/validation/_source_provenance.py",
@@ -9556,7 +9580,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/validation/core.py",
   "has_default": true,
-  "sites": 8,
+  "sites": 7,
   "via_getattr": true
  },
  {

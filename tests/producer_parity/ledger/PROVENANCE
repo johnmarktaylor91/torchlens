@@ -2979,3 +2979,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b9c2dedbdc19ae0e4ae78b5f9a5667cb70660619 (dirty)
 recorded: 2026-10-31T11:38:57.428769+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: AGT-2470 TorchScript metadata-only perturbation proof: new parent_arg_positions and kind reads in validation/_script_metadata_proof.py; out= destination predicate moved from validation/core.py to validation/_destination_coverage.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0c047ac612e72df6f1ff960d91ac1f38e7ff9e07 (dirty)
+recorded: 2026-10-31T13:59:41.768540+00:00
