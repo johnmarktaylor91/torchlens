@@ -177,7 +177,7 @@ def test_chain_slice_selection_feeds_do_on_the_source() -> None:
         selection = chain_slice.__selection__()
         fork = trace.fork()
         try:
-            fork.do(selection.resolve(fork), tl.zero_ablate())
+            fork.do(fork[selection], tl.zero_ablate())
             assert torch.count_nonzero(fork[labels[1]].out) == 0, (
                 "the slice-derived selection edit did not land on a member op"
             )

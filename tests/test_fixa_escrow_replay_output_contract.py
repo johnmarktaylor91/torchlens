@@ -97,7 +97,7 @@ def _first_module_op(trace, func_names: tuple[str, ...]):
 
 
 def _zero_ablate_whole_site(fork, label: str) -> None:
-    fork.do(fork[label].__selection__().resolve(fork), tl.zero_ablate())
+    fork.do(fork[fork[label].__selection__()], tl.zero_ablate())
 
 
 class _LogitsOnly(nn.Module):

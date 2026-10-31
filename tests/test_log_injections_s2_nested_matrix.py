@@ -126,7 +126,7 @@ def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
     before = logged.injected_ops
     assert len(before) == 1
     fork = logged.fork()
-    fork.do(tl.units("tanh_1_4", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("tanh_1_4", [(0, 0)])], tl.zero_ablate())
     assert logged.injected_ops == before
     fork_records = getattr(fork, "injected_ops", ())
     # the fork never gains NEW records from replay-side execution

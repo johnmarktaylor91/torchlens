@@ -82,7 +82,7 @@ def test_zero_match_selection_lane_refuses_typed(parity_trace: Any) -> None:
     import torchlens as tl
 
     with pytest.raises(Exception) as excinfo:
-        tl.units(MISSING_SITE, [(0, 0)]).resolve(parity_trace)
+        parity_trace[tl.units(MISSING_SITE, [(0, 0)])]
     assert _code(excinfo.value) == "selection_unresolvable"
 
 
@@ -161,9 +161,9 @@ def test_accept_parity_string_and_selection_lanes_edit_identically(
                     tuple(idx)
                     for idx in torch.cartesian_prod(*[torch.arange(dim) for dim in shape]).tolist()
                 ]
-                fork.do(tl.units(REAL_SITE, all_indices).resolve(fork), tl.zero_ablate())
+                fork.do(fork[tl.units(REAL_SITE, all_indices)], tl.zero_ablate())
             else:
-                fork.do(fork[REAL_SITE].__selection__().resolve(fork), tl.zero_ablate())
+                fork.do(fork[fork[REAL_SITE].__selection__()], tl.zero_ablate())
             results.append((lane, fork[REAL_SITE].out.clone(), fork.output_ops[0].out.clone()))
         finally:
             fork.cleanup()

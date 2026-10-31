@@ -118,9 +118,9 @@ def test_reloaded_edit_keeps_the_complement_and_the_basis_provenance(tmp_path: P
     assert kwargs["axis"] == -1
     assert (
         kwargs["origin_sha256"]
-        == tl.subspace(_SITE, rows, origin=_ORIGIN)
-        .resolve(_ready())[0]
-        .provenance.source.split("basis_sha256=")[1][:64]
+        == _ready()[tl.subspace(_SITE, rows, origin=_ORIGIN)][0].provenance.source.split(
+            "basis_sha256="
+        )[1][:64]
     )
     assert kwargs["basis_sha256"] == _basis_digest(rows.contiguous())
     reapplied = _apply(loaded)

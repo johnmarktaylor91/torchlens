@@ -189,7 +189,7 @@ def test_selection_lane_edit_on_presenters_refuses_foreign_trace() -> None:
     first = tl.trace(model, example, capture=options)
     second = tl.trace(model, example, capture=options)
     try:
-        resolved_on_first = first["relu_1_2"].__selection__().resolve(first)
+        resolved_on_first = first[first["relu_1_2"].__selection__()]
         fork = second.fork()
         try:
             with pytest.raises(Exception) as excinfo:

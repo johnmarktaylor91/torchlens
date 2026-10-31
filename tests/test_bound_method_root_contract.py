@@ -221,7 +221,7 @@ def test_replay_engine_still_works_on_bound_captures() -> None:
     )
     fork = log.fork()
     relu_label = next(op.label for op in log.layer_list if op.label.startswith("relu"))
-    fork.do(tl.units(relu_label, [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(relu_label, [(0, 0)])], tl.zero_ablate())
     assert len(fork.intervention_audit) == 1
 
 
