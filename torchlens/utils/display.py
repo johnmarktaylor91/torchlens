@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 import torch
 
 from ..quantities import Bytes, Flops
+from ._package_frames import is_torchlens_code
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -26,11 +27,6 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 _T = TypeVar("_T")
-
-# Package directory, resolved once at import: `user_stacklevel` compares frame
-# filenames against it to find the first non-torchlens frame. Matches the
-# already-established approach in utils/introspection.py's stack filter.
-_PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
 
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -543,7 +539,7 @@ def user_stacklevel(extra: int = 0) -> int:
     frame: FrameType | None = sys._getframe(1)
     depth = 1
     while frame is not None:
-        if not frame.f_code.co_filename.startswith(_PACKAGE_ROOT):
+        if not is_torchlens_code(frame.f_code):
             return depth + extra
         frame = frame.f_back
         depth += 1

@@ -30,6 +30,7 @@ from ._plain_attr_fidelity import (
 )
 from ._trace_selector_helpers import _stable_cache_fragment
 from .data_classes.trace import Trace
+from .utils._package_frames import is_torchlens_code
 from .utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
@@ -1675,9 +1676,6 @@ def _fingerprint_model_implementation(model: nn.Module) -> str:
     return hasher.hexdigest()
 
 
-_TORCHLENS_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
 def _is_torchlens_instrumentation(func: Any) -> bool:
     """Return whether an instance ``forward`` is TorchLens' own prepared wrapper.
 
@@ -1693,11 +1691,13 @@ def _is_torchlens_instrumentation(func: Any) -> bool:
     code = getattr(target, "__code__", None)
     if not isinstance(code, types.CodeType):
         return False
-    # The separator matters: a bare prefix match also claimed sibling installs
-    # such as ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING
-    # a user-owned forward override from the implementation signature (edits
-    # then hit the stale cache).
-    return code.co_filename.startswith(_TORCHLENS_PACKAGE_DIR + os.sep)
+    # Spelling-independent, separator-checked (``_package_frames``): a bare
+    # prefix match once claimed sibling installs such as
+    # ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING a
+    # user-owned forward override from the implementation signature (edits then
+    # hit the stale cache), and a raw-filename match missed the wrapper itself
+    # when the package was imported through a ``sys.path`` entry of ``"."``.
+    return is_torchlens_code(code)
 
 
 def _capture_cache_dir(cache_dir: str | Path | None) -> Path:
