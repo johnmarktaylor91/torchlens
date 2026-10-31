@@ -58,8 +58,8 @@ def test_vary_applies_one_spec_per_member_and_returns_self() -> None:
     assert operation.kind == "vary"
     assert operation.params["outcomes"] == {"a": "identity", "b": "completed"}
     assert operation.params["spec_digests"]["b"]
-    assert bundle.member_construction["b"]["origin"] == "varied"
-    assert bundle.member_construction["a"]["origin"] == "constructed"
+    assert bundle._member_construction["b"]["origin"] == "varied"
+    assert bundle._member_construction["a"]["origin"] == "constructed"
 
 
 def test_vary_sugar_pair_normalizes_to_spec() -> None:

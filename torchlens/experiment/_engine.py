@@ -1019,7 +1019,7 @@ def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, 
     operations = bundle.history
     validate_operation_chain(operations)
     by_id = {operation.operation_id: operation for operation in operations}
-    construction = bundle.member_construction
+    construction = bundle._member_construction
     chained: list[tuple[int, int, str]] = []
     unchained: list[str] = []
     for position, name in enumerate(values):

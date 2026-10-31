@@ -413,7 +413,7 @@ clean_log = tl.trace(model, x)
 patched_log = tl.trace(model, x,
                        intervene=tl.when(tl.func('relu'), tl.zero_ablate()))
 bundle = tl.Bundle({'clean': clean_log, 'patched': patched_log}, baseline='clean')
-bundle.compare_at('relu_1_2')   # one site; a multi-site selector must resolve uniquely
+bundle.at('relu_1_2').compare()   # one site; a multi-site selector must resolve uniquely
 ```
 
 **Facets** provide named sub-views for attention heads, LSTM outputs, and

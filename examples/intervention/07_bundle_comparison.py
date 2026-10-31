@@ -50,9 +50,9 @@ def main() -> None:
     zero.push()
 
     bundle = tl.Bundle({"clean": clean, "zero": zero}, baseline="clean")
-    node = bundle.node(tl.func("relu"))
+    node = bundle.at(tl.func("relu"))
     sizes = bundle.map(lambda member: len(member.layer_list))
-    comparison = bundle.compare_at(tl.func("relu"))
+    comparison = bundle.at(tl.func("relu")).compare()
 
     assert node.traces == {"clean", "zero"}
     assert sizes["clean"] == sizes["zero"]

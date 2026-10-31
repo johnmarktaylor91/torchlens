@@ -161,7 +161,7 @@ def test_positional_relate_reads_as_the_sentence(model: _TinyLM) -> None:
 def test_fed_by_orders_members_for_the_comparison_gate(model: _TinyLM) -> None:
     bundle = _harness(model).relate("fed_by", "critique", "draft")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.compare_at(tl.func("relu"))
+        bundle.at(tl.func("relu")).compare()
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 
@@ -399,7 +399,7 @@ def test_dir_lists_the_helper_table_methods(model: _TinyLM) -> None:
         assert name in names, name
 
 
-def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
+def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
     torch.manual_seed(1)
     ids = [1, 2, 3]
     bundle = Bundle(
@@ -407,9 +407,9 @@ def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
     )
     site = tl.func("relu")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.node(site)
+        bundle.at(site)
     assert _code(excinfo) == "bundle_gate_model_axis_unmet"
-    view = bundle.node(site, members=["a", "b"])
+    view = Bundle({name: bundle[name] for name in ("a", "b")}).at(site)
     assert set(view.members) == {"a", "b"}
 
 

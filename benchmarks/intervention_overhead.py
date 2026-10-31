@@ -243,7 +243,7 @@ def run_benchmarks() -> str:
     assert bundle._supergraph is None
     bundle_label, bundle_s = _time_repeated(
         "Bundle.node() lazy supergraph build",
-        lambda: bundle.node(tl.label(first_relu_label)),
+        lambda: bundle.at(tl.label(first_relu_label)),
         repeats=1,
     )
 

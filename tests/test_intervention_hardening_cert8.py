@@ -116,7 +116,7 @@ def test_compare_node_multi_element_uses_vector_metric() -> None:
     bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
     linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))
-    matrix = bundle.node(linear_site).compare()
+    matrix = bundle.at(linear_site).compare()
     # A 2x2 distance matrix with finite, non-truncated off-diagonal entries.
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()

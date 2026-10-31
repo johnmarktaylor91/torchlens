@@ -269,7 +269,7 @@ def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
         relations=[_pair_row(src="b", dst="c")],
     )
     with pytest.raises(BundleRelationError) as excinfo:
-        bundle.set_capacity(2)
+        bundle.capacity = 2
     assert excinfo.value.fields["code"] == "bundle_member_has_relations"
     assert bundle.names == ["a", "b", "c"]
 

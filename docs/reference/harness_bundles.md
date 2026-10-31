@@ -236,8 +236,8 @@ it where you report the number and call the result a descriptive comparison.
 
 - `b.upstream(name)` / `b.downstream(name)`: transitive walks over the ordering kinds (`fed_by`,
   `selected_by`, `successor_of`, `forked_from`, `escalates`), nearest member first.
-- `b.node(site, members=["a", "b"])`: one site across a subset of members, so a foreign member such
-  as a small router model does not disable the view for the rest.
+- `tl.Bundle({name: b[name] for name in ("a", "b")}).at(site)`: one site across a subset of
+  members, so a foreign member such as a small router model does not disable the view for the rest.
 - `torchlens._visualization.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
   drawn from the earlier member to the later one and labelled with the kind, the row's `label`, on
   `fed_by` its basis and coverage, and on `selected_by` the `chosen` decision. Solid edges carry token spans TorchLens checked
@@ -245,7 +245,7 @@ it where you report the number and call the result a descriptive comparison.
   bundle's union op graph.
 - Comparisons: members joined by an ordering path (including `fed_by` and `selected_by`) are not
   comparison operands, and `delta_map`, `norm_delta`, `output_delta` and `compare` run the same
-  comparison gate as `compare_at`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
+  comparison gate as `b.at(site).compare()`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
 - `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk
   until read); `map_location` and `materialize_nested` reach the members too.
@@ -430,7 +430,7 @@ b.relate("selected_by", "answer", "route", chosen=choice, candidates=[0, 1])  # 
 assert b.upstream("answer") == ("route",)
 assert b.relations[0].params["chosen"] == choice
 # The tool's tokens in the answer prompt are covered by no span: text from outside any traced
-# call. Reads scoped with b.node(site, members=[...]) skip the foreign router model.
+# call. Reads on tl.Bundle({"answer": answer, ...}).at(site) skip the foreign router model.
 ```
 
 ### Two-agent debate, then a judge

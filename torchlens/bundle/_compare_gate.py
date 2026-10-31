@@ -78,7 +78,8 @@ class _GateRequirement:
     same_input: bool
 
 
-#: Same-input, shared-graph claim: compare_at, most_changed, diff and the
+#: Same-input, shared-graph claim: at.compare (``bundle.at(site).compare()``),
+#: most_changed, diff and the
 #: delta family (delta_map, norm_delta, output_delta, compare), which reads
 #: per-node distances from a baseline member and so gates its (baseline,
 #: member) operand pairs with the same two predicates.
@@ -89,12 +90,12 @@ _SHARED_GRAPH_SAME_INPUT = _GateRequirement(
 )
 
 _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
-    "node": _GateRequirement(
+    "at": _GateRequirement(
         model_floor_rank=_MODEL_AXIS_RANK[Relationship.SAME_PARAM_SHAPES],
         model_floor_label="same_param_shapes",
         same_input=False,
     ),
-    "compare_at": _SHARED_GRAPH_SAME_INPUT,
+    "at.compare": _SHARED_GRAPH_SAME_INPUT,
     "most_changed": _SHARED_GRAPH_SAME_INPUT,
     "diff": _SHARED_GRAPH_SAME_INPUT,
     "delta_map": _SHARED_GRAPH_SAME_INPUT,

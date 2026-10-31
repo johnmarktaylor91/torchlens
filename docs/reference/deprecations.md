@@ -163,7 +163,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `replay()` | `push()` | removed |
 | `replay_from()` | `push_from()` | removed |
 | `rerun()` | `run()` | removed |
-| `Bundle.replay()` | `Bundle.push()` | removed |
+| `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |
 | `intervening()` | `without_op()` | removed |
 | `sweep(param=...)` | `sweep(at=...)` | removed |

@@ -225,9 +225,9 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
     model = _toy_model()
     x = _toy_input()
     bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
-    matrix = bundle.compare_at("relu_1_2")
+    matrix = bundle.at("relu_1_2").compare()
     assert tuple(matrix.shape) == (2, 2)
-    view = bundle.node("relu_1_2")
+    view = bundle.at("relu_1_2")
     assert tuple(view.compare().shape) == (2, 2)
     assert view.aggregate("mean").shape == view.members["a"].out.shape
     assert bundle.compare("a", "b")

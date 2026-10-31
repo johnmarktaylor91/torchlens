@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -25,7 +26,6 @@ from ..intervention._super.super_op import (
     SuperLayerAccessor,
     SuperOp,
     SuperOpAccessor,
-    TraceAccessor,
 )
 from ..intervention._topology.topology import Supergraph, build_supergraph
 from ..intervention.errors import (
@@ -205,8 +205,18 @@ _KIND_NAME_GETTERS: dict[str, Callable[[Any], Any]] = {
 
 #: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
 _REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
-    "replay": "use bundle.push(...) -- Bundle.replay was renamed",
+    "replay": "use bundle.do(site, edit) -- do replays every member",
     "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
+    "push": "use bundle.do(site, edit) -- do applies and replays the edit on every member",
+    "attach_hooks": "use bundle.do(site, hook) -- do is the one editing verb on a bundle",
+    "node": "use bundle.at(site)",
+    "compare_at": "use bundle.at(site).compare()",
+    "joint_metric": "call fn(bundle) directly",
+    "set_capacity": "assign bundle.capacity = n",
+    "traces": "use bundle.members or bundle[name]",
+    "help": "print(bundle) shows the bundle card",
+    "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
+    "member_construction": "read bundle.history for how members entered the bundle",
 }
 
 
@@ -526,18 +536,6 @@ class Bundle:
         return dict(self._members)
 
     @property
-    def traces(self) -> TraceAccessor:
-        """Return dict-like access to member traces.
-
-        Returns
-        -------
-        TraceAccessor
-            Bundle trace accessor.
-        """
-
-        return TraceAccessor(dict(self._members))
-
-    @property
     def ops(self) -> SuperOpAccessor:
         """Return cross-member access to pass-qualified Op labels.
 
@@ -625,17 +623,6 @@ class Bundle:
         """
 
         return tuple(self._operations)
-
-    @property
-    def member_construction(self) -> dict[str, dict[str, Any]]:
-        """Per-member origin anchors (how each member entered THIS container).
-
-        Copies: mutating the returned mapping never edits the record.
-        ``origin`` is closed vocabulary; a pre-F03 artifact restores as
-        ``{"origin": "loaded"}`` (no recorded construction evidence).
-        """
-
-        return {name: dict(anchor) for name, anchor in self._member_construction.items()}
 
     def _record_bundle_operation(
         self,
@@ -863,49 +850,23 @@ class Bundle:
 
         return self._ensure_supergraph()
 
-    def node(self, site: Any, members: Sequence[str | Trace] | None = None) -> SuperOp:
-        """Return a view of one resolved site across all (or the named) members.
+    def at(self, site: Any) -> Any:
+        """Return the cross-member Super view for ``site``.
+
+        A string is a label from any Bundle accessor family. Any other
+        selector-like site (``tl.func("relu")``, ``tl.module(address)``)
+        resolves to exactly one op in every member, after the model-axis
+        floor of the comparison gate passes for every member pair (a view
+        read, so different input values are allowed). ``compare()`` on the
+        returned view is the member-by-member matrix at this site and first
+        runs the comparison gate (shared graph, same input values) over the
+        members it reads. To read a subset of members, build a bundle of
+        them: ``tl.Bundle({name: bundle[name] for name in names}).at(site)``.
 
         Parameters
         ----------
         site:
-            Selector-like site query.
-        members:
-            Optional member subset; the gate then checks only pairs inside it,
-            so one foreign member (a small router model) no longer disables
-            the view for the rest. ``None`` means every member.
-
-        Returns
-        -------
-        SuperOp
-            Dict-keyed view over matching layer pass records.
-        """
-
-        names = list(self._members) if members is None else self._coerce_member_name_list(members)
-        logs = {name: self[name] for name in names}
-        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
-        self._require_comparable("node", pairs=pairs)
-        self._ensure_supergraph()
-        layer_members: dict[str, Op] = {}
-        failures: dict[str, str] = {}
-        for name, log in logs.items():
-            try:
-                table = _resolve_sites(log, site, max_fanout=1)
-                layer_members[name] = cast("Op", table.first())
-            except Exception as exc:  # noqa: BLE001 - rewrapped with member context
-                failures[name] = str(exc)
-        if failures:
-            detail = "; ".join(f"{name}: {message}" for name, message in failures.items())
-            raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
-        return SuperOp.from_members(site, layer_members)
-
-    def at(self, site: str) -> Any:
-        """Return the matching cross-member Super view for ``site``.
-
-        Parameters
-        ----------
-        site:
-            Label from any Bundle accessor family.
+            Label from any Bundle accessor family, or a selector-like site.
 
         Returns
         -------
@@ -918,12 +879,40 @@ class Bundle:
             If an unrecognized-format label is present in multiple accessors.
         KeyError
             If the label is absent from every accessor.
-        TypeError
-            If ``site`` is not a string.
+        BundleComparisonError
+            If a selector-like site's members fail the model-axis floor.
+        BundleMemberError
+            If a selector-like site fails to resolve in some member.
         """
 
-        if not isinstance(site, str):
-            raise TypeError(f"Bundle.at labels must be strings, got {type(site).__name__}.")
+        view = self._label_view(site) if isinstance(site, str) else self._site_view(site)
+        names = list(getattr(view, "members", {}))
+        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
+        view._compare_gate = functools.partial(self._require_comparable, "at.compare", pairs)
+        return view
+
+    def _site_view(self, site: Any) -> SuperOp:
+        """Resolve a selector-like site to one op per member (the model-floor gated read)."""
+
+        names = list(self._members)
+        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
+        self._require_comparable("at", pairs=pairs)
+        self._ensure_supergraph()
+        layer_members: dict[str, Op] = {}
+        failures: dict[str, str] = {}
+        for name in names:
+            try:
+                table = _resolve_sites(self._members[name], site, max_fanout=1)
+                layer_members[name] = cast("Op", table.first())
+            except Exception as exc:  # noqa: BLE001 - rewrapped with member context
+                failures[name] = str(exc)
+        if failures:
+            detail = "; ".join(f"{name}: {message}" for name, message in failures.items())
+            raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
+        return SuperOp.from_members(site, layer_members)
+
+    def _label_view(self, site: str) -> Any:
+        """Return the Super view for a label from any Bundle accessor family."""
 
         preferred_names = self._preferred_accessor_names(site)
         for accessor_name in preferred_names:
@@ -1357,23 +1346,6 @@ class Bundle:
         self._capacity = n
         self._enforce_capacity()
 
-    def set_capacity(self, n: int | None) -> Bundle:
-        """Set member capacity and return this bundle.
-
-        Parameters
-        ----------
-        n:
-            Maximum member count, or ``None`` to remove the cap.
-
-        Returns
-        -------
-        Bundle
-            This bundle.
-        """
-
-        self.capacity = n
-        return self
-
     def clear(self, *, cascade_relations: bool = False) -> None:
         """Remove all non-baseline members.
 
@@ -1483,32 +1455,6 @@ class Bundle:
         }
         return child
 
-    def attach_hooks(self, *args: Any, **kwargs: Any) -> Bundle:
-        """Apply ``Trace.attach_hooks`` to every member.
-
-        Returns
-        -------
-        Bundle
-            This bundle.
-        """
-
-        for member in self._members.values():
-            member.attach_hooks(*args, **kwargs)
-        return self
-
-    def push(self, **kwargs: Any) -> Bundle:
-        """Push the edit downstream through all member logs.
-
-        Returns
-        -------
-        Bundle
-            This bundle.
-        """
-
-        for member in self._members.values():
-            member.push(**kwargs)
-        return self
-
     def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
@@ -1580,22 +1526,6 @@ class Bundle:
                 count += 1
         return count >= 2
 
-    def joint_metric(self, fn: Callable[[Bundle], Any]) -> Any:
-        """Apply a function to the bundle as a whole.
-
-        Parameters
-        ----------
-        fn:
-            Callable receiving this bundle.
-
-        Returns
-        -------
-        Any
-            Return value from ``fn``.
-        """
-
-        return fn(self)
-
     def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
 
@@ -1632,23 +1562,6 @@ class Bundle:
             else:
                 results[name] = member.draw(**member_kwargs)
         return results
-
-    def compare_at(self, site: Any) -> torch.Tensor:
-        """Return pairwise out differences at a site.
-
-        Parameters
-        ----------
-        site:
-            Selector-like site query.
-
-        Returns
-        -------
-        torch.Tensor
-            Pairwise distance matrix.
-        """
-
-        self._require_comparable("compare_at")
-        return self.node(site).compare()
 
     def rank_changes(
         self,
@@ -1693,7 +1606,7 @@ class Bundle:
         # Operand scoping (A-GATE item 3): most_changed compares baseline
         # against every other member, never other members against each other,
         # so only baseline pairs must pass the comparison gate. Site reads
-        # across all members still run node()'s own model-floor gate.
+        # across all members still run the at() model-floor gate.
         self._require_comparable(
             "most_changed",
             pairs=[(baseline_name, name) for name in self._members if name != baseline_name],
@@ -1702,10 +1615,10 @@ class Bundle:
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
         baseline_sites = list(getattr(baseline_log, "layer_list", []))
-        if baseline_sites:  # node()'s model-floor gate, once instead of per site
+        if baseline_sites:  # the at() model-floor gate, once instead of per site
             names = list(self._members)
             pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
-            self._require_comparable("node", pairs=pairs)
+            self._require_comparable("at", pairs=pairs)
         aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
         for site in baseline_sites:
             members = resolve_aligned_site(self._members, str(site.layer_label), aligned)
@@ -1773,40 +1686,6 @@ class Bundle:
 
         self._require_comparable("diff", pairs=[(a, b)])
         return self._diff_members(a, b, metric=metric, on=on)
-
-    def cluster(self, *args: Any, **kwargs: Any) -> None:
-        """Placeholder for future bundle clustering.
-
-        Raises
-        ------
-        NotImplementedError
-            Always raised until v1+.
-        """
-
-        raise NotImplementedError("Bundle.cluster lands in v1+.")
-
-    def help(self) -> str:
-        """Return a per-member readiness summary.
-
-        Returns
-        -------
-        str
-            Human-readable readiness report.
-        """
-
-        lines = [f"Bundle ({len(self)} members):"]
-        for name, member in self._members.items():
-            parts = []
-            if name == self._baseline_name:
-                parts.append("baseline")
-            if getattr(member, "is_pristine", None) is True:
-                parts.append("pristine")
-            parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
-            parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
-            if getattr(member, "_spec_revision", 0) != 0:
-                parts.append(f"spec_revision={getattr(member, '_spec_revision', 0)}")
-            lines.append(f"  - {name}: {', '.join(parts)}")
-        return "\n".join(lines)
 
     def comparability(self, a: str, b: str) -> Relationship:
         """Return the derived relationship for a pair of members.

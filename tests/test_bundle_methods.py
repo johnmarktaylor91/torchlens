@@ -5,10 +5,12 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterator
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import FacadeTeachingError
 
 
 class _TinyRelu(nn.Module):
@@ -139,8 +141,8 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # (effects, measure_members; item 8).
     assert len(members) <= 44
     assert "relate" in members
-    assert "joint_metric" in members
-    assert "set_capacity" in members
+    for removed in ("joint_metric", "set_capacity", "help", "cluster", "node", "compare_at"):
+        assert removed not in members, removed
     assert "save" in members
     assert "remove_except" in members
     assert "supergraph" in members
@@ -255,3 +257,28 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.stored_comparison("never_stored")
     assert excinfo.value.fields["code"] == "comparison_unknown"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "traces",
+        "member_construction",
+        "cluster",
+        "help",
+        "joint_metric",
+        "set_capacity",
+        "push",
+        "attach_hooks",
+        "node",
+        "compare_at",
+    ],
+)
+def test_removed_bundle_member_redirects_typed(name: str) -> None:
+    """Each removed Bundle member refuses with the typed redirect naming its replacement."""
+
+    bundle = tl.Bundle()
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        getattr(bundle, name)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert excinfo.value.fields["attribute"] == name
