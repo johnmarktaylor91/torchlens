@@ -46,7 +46,7 @@ def _func_names(model: nn.Module, x: torch.Tensor) -> list[str]:
 
     torch.manual_seed(0)
     trace = tl.trace(model, x)
-    return [op.func_name for op in trace.layer_list]
+    return [op.func_name for op in trace._layer_list]
 
 
 def _outcome(fn) -> tuple[object, str]:

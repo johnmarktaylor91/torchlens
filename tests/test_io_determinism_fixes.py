@@ -295,15 +295,26 @@ def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
 
 
 def test_rehydrated_trace_retains_source_tlspec_version() -> None:
-    """Trace pickle state preserves its validated source artifact version."""
+    """Trace pickle state preserves its validated source artifact version.
+
+    The only readable stamp is the current one; an older stamp is a torchlens 2.x
+    file and refuses typed instead of rehydrating.
+    """
+
+    from torchlens._io import TLSPEC_VERSION
+    from torchlens.errors import ArtifactTooOldError
 
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     state = trace.__getstate__()
-    state["tlspec_version"] = 6
+    state["tlspec_version"] = TLSPEC_VERSION
     restored = tl.Trace.__new__(tl.Trace)
     restored.__setstate__(state)
+    assert restored.tlspec_version == TLSPEC_VERSION
 
-    assert restored.tlspec_version == 6
+    older = trace.__getstate__()
+    older["tlspec_version"] = 6
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+        tl.Trace.__new__(tl.Trace).__setstate__(older)
 
 
 def test_backup_cleanup_failure_does_not_fail_completed_save(

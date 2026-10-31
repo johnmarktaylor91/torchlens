@@ -42,6 +42,7 @@ from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
     ArtifactError,
+    ArtifactTooOldError,
     UnknownPersistedFieldError,
 )
 from torchlens._io.state_contract import governed_artifact_load
@@ -97,13 +98,19 @@ def test_trace_refusal_covers_both_writer_directions(tiny_trace) -> None:
 
     from torchlens._data_classes.trace import Trace
 
-    for declared_version in (TLSPEC_VERSION, 6):
-        state = tiny_trace.__getstate__()
-        state[UNKNOWN_KEY] = 1
-        state["tlspec_version"] = declared_version
-        with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
-            Trace.__new__(Trace).__setstate__(state)
-        assert excinfo.value.fields["declared_tlspec_version"] == declared_version
+    state = tiny_trace.__getstate__()
+    state[UNKNOWN_KEY] = 1
+    state["tlspec_version"] = TLSPEC_VERSION
+    with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
+        Trace.__new__(Trace).__setstate__(state)
+    assert excinfo.value.fields["declared_tlspec_version"] == TLSPEC_VERSION
+    # An older stamp is a 2.x file and refuses before the unknown-field partition runs.
+    older = tiny_trace.__getstate__()
+    older[UNKNOWN_KEY] = 1
+    older["tlspec_version"] = 6
+    with governed_artifact_load(), pytest.raises(ArtifactTooOldError) as too_old:
+        Trace.__new__(Trace).__setstate__(older)
+    assert too_old.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_op_columnar_path_refuses_typed_never_attributeerror(tiny_trace) -> None:

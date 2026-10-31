@@ -239,7 +239,7 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
     trace = graph_trace
     layers = {layer.layer_label: layer for layer in trace.layers}
     by_type: dict[str, list] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         by_type.setdefault(op.layer_type, []).append(op)
     (mul,) = by_type["mul"]
     (relu,) = by_type["relu"]
@@ -350,9 +350,9 @@ def test_internal_source_flag_and_list_name_the_same_ops(axis: str) -> None:
     trace = tl.trace(model, model_input)
     try:
         listed = set(trace.internal_source_ops)
-        flagged = {op.label for op in trace.layer_list if op.is_internal_source}
+        flagged = {op.label for op in trace._layer_list if op.is_internal_source}
         assert listed == flagged, (listed, flagged)
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.is_internal_source:
                 assert not op.parents, op.label
     finally:

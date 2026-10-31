@@ -15,12 +15,11 @@ import tarfile
 from pathlib import Path
 
 import pytest
-from _refuses_as_2x import assert_refuses_as_2x
 
 from torchlens._ecosystem import migrate
 from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
 from torchlens._io import ArtifactError, ArtifactTooOldError
-from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
+from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
@@ -42,64 +41,6 @@ def _working_copy(corpus_dir: Path, tmp_path: Path, name: str) -> Path:
     target = tmp_path / name
     shutil.copytree(corpus_dir / name, target)
     return target
-
-
-@pytest.mark.parametrize(
-    "name", ["art_v2.31.0_portable", "art_v2.33.0_portable", "art_v2.34.1_portable"]
-)
-def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name: str) -> None:
-    """Genuine released artifacts migrate 6 -> current at the manifest, then refuse typed.
-
-    The manifest migration still runs, but the payload pickles name 2.x package paths,
-    so the migrated artifact refuses at load with the 2.x remedy (3.0 reads no 2.x file).
-    """
-
-    from torchlens.validation import validate_tlspec
-
-    path = _working_copy(corpus_dir, tmp_path, name)
-    report = migrate(path)
-    assert report.status == "migrated"
-    assert report.source_tlspec == 6
-    assert report.final_tlspec == 11
-    assert [step.step_id for step in report.steps] == [
-        "tlspec_6_to_7",
-        "tlspec_7_to_8",
-        "tlspec_8_to_9",
-        "tlspec_9_to_10",
-        "tlspec_10_to_11",
-    ]
-    assert all(step.level == "manifest" for step in report.steps)
-    assert report.backup_path is not None and report.backup_path.is_dir()
-    # The migrated manifest validates; the 2.x payload refuses typed at load.
-    assert_refuses_as_2x(path)
-    validate_tlspec(path)
-    # Provenance: witness present, origin preserved, disclosures honest.
-    witness = read_migration_witness(path)
-    assert witness is not None
-    assert witness["origin"]["tlspec_version"] == 6
-    assert witness["disclosures"]["replay_attestations"] == "unavailable"
-    assert witness["disclosures"]["facts_backfilled"] == "none"
-    families = {family for step in witness["steps"] for family in step["absent_fact_families"]}
-    assert "capture_outcome" in families and "site_key" in families
-    # Writer identity was never forged.
-    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["torchlens_version"] == name.split("_")[1].lstrip("v")
-    assert manifest["tlspec_version"] == 11
-    # The retained backup is byte-compatible with the original manifest.
-    backup_manifest = json.loads((report.backup_path / "manifest.json").read_text(encoding="utf-8"))
-    assert backup_manifest["tlspec_version"] == 6
-
-
-def test_migration_is_idempotent(corpus_dir: Path, tmp_path: Path) -> None:
-    """A second migrate() is a no-op that reports already-current."""
-
-    path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
-    first = migrate(path)
-    assert first.status == "migrated"
-    second = migrate(path)
-    assert second.status == "already-current"
-    assert second.steps == ()
-    assert second.witness_path is not None
 
 
 @pytest.mark.smoke
@@ -145,27 +86,13 @@ def test_stranded_staging_refuses_before_mutation(corpus_dir: Path, tmp_path: Pa
     assert manifest["tlspec_version"] == 6  # untouched
 
 
-def test_failure_injection_leaves_source_intact(
-    corpus_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A staging-boundary failure refuses typed and never mutates the source."""
-
-    path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
-    original = (path / "manifest.json").read_bytes()
-
-    def _boom(src: object, dst: object, **kwargs: object) -> None:
-        raise OSError("injected copy failure")
-
-    monkeypatch.setattr(shutil, "copytree", _boom)
-    with pytest.raises(ArtifactError) as excinfo:
-        migrate(path)
-    assert excinfo.value.fields["code"] == "migration_staging_failed"
-    assert (path / "manifest.json").read_bytes() == original
-    assert not path.with_name(path.name + ".tl-migrate-staging").exists()
-
-
 @pytest.mark.smoke
-def test_pre_floor_source_refuses_as_saved_by_2x(corpus_dir: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "name", ["art_v2.31.0_portable", "art_v2.33.0_portable", "art_v2.34.1_portable"]
+)
+def test_pre_floor_source_refuses_as_saved_by_2x(
+    corpus_dir: Path, tmp_path: Path, name: str
+) -> None:
     """Migration of a file saved by torchlens 2.x refuses with the one 2.x error.
 
     The reader floor is the current format, so there is no source a migration could
@@ -173,7 +100,7 @@ def test_pre_floor_source_refuses_as_saved_by_2x(corpus_dir: Path, tmp_path: Pat
     step runs, and the source is left exactly as it was.
     """
 
-    path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
+    path = _working_copy(corpus_dir, tmp_path, name)
     before = sorted(p.relative_to(path) for p in path.rglob("*"))
     with pytest.raises(ArtifactTooOldError) as excinfo:
         migrate(path)

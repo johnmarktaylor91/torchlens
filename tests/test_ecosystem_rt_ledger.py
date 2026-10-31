@@ -16,12 +16,10 @@ import warnings
 from pathlib import Path
 
 import pytest
-from _oracle_env import expect_bundle_minor_version_mismatch
 from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._ecosystem import compat_window
-from torchlens._io import ArtifactError
 from torchlens._io.compat_ledger import (
     LEDGER_ROWS,
     SupportClass,
@@ -137,10 +135,9 @@ def test_forged_pair_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["torchlens_version"] = "2.30.0"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
-        tl.load(str(forged))
-    assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
-    assert "2.30.0" in str(excinfo.value)
+    # The 2.x stamp refuses before the pair check runs: one error for every 2.x file.
+    error = assert_refuses_as_2x(forged)
+    assert error.fields["observed"] == "tlspec_version=6"
 
 
 @pytest.mark.smoke

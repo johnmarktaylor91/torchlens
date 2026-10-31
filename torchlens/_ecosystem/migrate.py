@@ -41,7 +41,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, ArtifactError, above_ceiling_error
+from .._io import (
+    MIN_TLSPEC_VERSION,
+    TLSPEC_VERSION,
+    ArtifactError,
+    above_ceiling_error,
+    below_floor_error,
+)
 from .._io._durability import fsync_file
 from .._io._json import read_bounded
 from .._io.compat_ledger import (
@@ -258,14 +264,12 @@ def _admit_stamps(path: Path, manifest: dict[str, Any]) -> int:
             code="artifact_version_above_runtime",
         )
     if source_tlspec < MIN_TLSPEC_VERSION:
-        raise ArtifactError(
-            f"Migration source {path} has tlspec_version={source_tlspec}, below "
-            f"the rehydration floor {MIN_TLSPEC_VERSION}; pre-floor migration is "
-            "out of tl.migrate v1 by design (MEMO 3.6). Remedy: "
-            f"{bridge_reader_remedy('trace')}.",
-            code="migration_source_unsupported",
-            remedy=bridge_reader_remedy("trace"),
+        # Every stamp below the floor was written by torchlens 2.x: the one refusal.
+        raise below_floor_error(
+            observed=f"tlspec_version={source_tlspec}",
+            subject="Migration source",
             path=str(path),
+            code="artifact_version_below_floor",
         )
     writer = manifest.get("torchlens_version", "")
     witness = read_migration_witness(path)

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from _refuses_as_2x import assert_refuses_as_2x
 
+import torchlens
 from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
 
 _TESTS = Path(__file__).resolve().parent
@@ -78,6 +79,7 @@ def test_restamped_2x_payload_refuses_at_the_unpickler(tmp_path: Path) -> None:
     shutil.copytree(source, work)
     manifest = _manifest(work)
     manifest["tlspec_version"] = TLSPEC_VERSION
+    manifest["torchlens_version"] = torchlens.__version__
     (work / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     error = assert_refuses_as_2x(work)

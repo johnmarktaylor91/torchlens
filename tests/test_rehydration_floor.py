@@ -214,37 +214,32 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     assert fields["path"] == str(path)
 
 
-def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> None:
-    """The between-floor artifact-age advisory is visible, not a ``DeprecationWarning``.
+def test_no_between_floor_range_every_older_stamp_refuses(tmp_path: Path) -> None:
+    """The artifact-age advisory keeps its visible category, but nothing can fire it.
 
-    R15-F1: the advisory deprecates no API -- it reports the AGE of one
-    artifact -- and Python's default filters hide ``DeprecationWarning`` from
-    end users, so the category made the advisory invisible exactly where it
-    matters. It is an ``ArtifactSchemaAgeWarning`` (``UserWarning`` subclass),
-    reachable through ``tl.errors``, and it must survive the default filters.
+    The floor is the current format, so there is no stamp between floor and runtime:
+    a coherently re-stamped older artifact refuses as a torchlens 2.x file, and no
+    ``ArtifactSchemaAgeWarning`` is emitted on the way.
     """
 
     assert issubclass(ArtifactSchemaAgeWarning, UserWarning)
     assert not issubclass(ArtifactSchemaAgeWarning, DeprecationWarning)
     assert issubclass(ArtifactSchemaAgeWarning, tl.errors.TorchLensWarning)
     assert tl.errors.ArtifactSchemaAgeWarning is ArtifactSchemaAgeWarning
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION, "a between-floor range would need an age advisory"
 
     trace = _build_trace()
-    path = tmp_path / "between_floor.tlspec"
+    path = tmp_path / "older_stamp.tlspec"
     trace.save(path)
-    assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
-    _stamp_between_floor(path, MIN_TLSPEC_VERSION)
+    _stamp_between_floor(path, TLSPEC_VERSION - 1)
 
-    # resetwarnings() drops pytest's own filters so this asserts against the
-    # DEFAULT interpreter filters -- the exact regime that hid the old category.
     with warnings.catch_warnings(record=True) as caught:
         warnings.resetwarnings()
-        loaded = tl.load(path)
-
-    assert isinstance(loaded, tl.Trace)
-    advisories = [w for w in caught if issubclass(w.category, ArtifactSchemaAgeWarning)]
-    assert advisories, [str(w.category) for w in caught]
-    assert "older than runtime tlspec_version" in str(advisories[0].message)
+        with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
+            tl.load(path)
+    assert excinfo.value.fields["observed"] == f"tlspec_version={TLSPEC_VERSION - 1}"
+    assert not [w for w in caught if issubclass(w.category, ArtifactSchemaAgeWarning)]
+    trace.cleanup()
 
 
 def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:

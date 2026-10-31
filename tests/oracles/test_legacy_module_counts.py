@@ -150,7 +150,7 @@ def test_module_call_tree_counts(nest_trace) -> None:
 
 def test_param_call_counts(nest_trace) -> None:
     _model, trace = nest_trace
-    assert {param.address: param.num_calls for param in trace.param_logs} == NEST_PARAM_CALLS
+    assert {param.address: param.num_calls for param in trace.params} == NEST_PARAM_CALLS
 
 
 def test_recursive_param_counts(nest_trace) -> None:
@@ -182,7 +182,7 @@ def test_params_by_path_recount(nest_trace) -> None:
         assert tied.summary().totals.params_per_path_total == by_path
         assert tied.num_params == 40  # unique elements: the shared tensors once
         assert int(tied.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
-        tied_param = tied.param_logs["tied.weight"]
+        tied_param = tied.params["tied.weight"]
         assert sorted(tied_param.all_addresses) == ["tied.weight", "tied2.weight"]
     finally:
         tied.cleanup()

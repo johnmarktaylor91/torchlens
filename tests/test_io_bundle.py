@@ -601,13 +601,13 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "io_format_below_floor",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION - 1),
             "raise",
-            "below the supported rehydration floor",
+            "saved by torchlens 2.x",
         ),
         (
-            "io_format_between_floor_and_current",
+            "io_format_at_floor",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION),
-            "schema_age_warning",
-            "older than runtime tlspec_version",
+            "ok",
+            None,
         ),
         (
             "io_format_equal",

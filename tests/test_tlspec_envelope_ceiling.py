@@ -55,7 +55,7 @@ def test_validation_entry_raises_typed_not_bare_valueerror() -> None:
 
 
 def _reference_manifest_dict() -> dict:
-    """A real harvested writer manifest (main_portable, tlspec 8)."""
+    """The harvested main_portable manifest, restamped as a current writer's."""
 
     import json
     from pathlib import Path
@@ -66,7 +66,17 @@ def _reference_manifest_dict() -> dict:
         / "reference_manifests"
         / "main_portable.manifest.json"
     )
-    return json.loads(path.read_text(encoding="utf-8"))
+    # The harvested manifest is a 2.x file (stamp 8, writer 2.34.1) and would refuse at
+    # the stamp; the version-policy gates under test are independent of it, so the
+    # dictionary is restamped as a current writer's manifest.
+    import torchlens
+
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        **manifest,
+        "tlspec_version": TLSPEC_VERSION,
+        "torchlens_version": torchlens.__version__,
+    }
 
 
 def test_manifest_policy_gate_raises_typed() -> None:
@@ -103,9 +113,7 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     from torchlens._io.manifest import Manifest, enforce_version_policy
     from torchlens.errors import TorchLensWarning
 
-    # The reference manifest predates the current format and would refuse as a 2.x
-    # file at the stamp; the torch minor drift under test is independent of it.
-    base = {**_reference_manifest_dict(), "tlspec_version": TLSPEC_VERSION}
+    base = _reference_manifest_dict()
     runtime = torch.__version__.split("+", 1)[0]
     major, minor, *_ = runtime.split(".")
     drifted = f"{major}.{int(minor) + 1}.0+cu130"

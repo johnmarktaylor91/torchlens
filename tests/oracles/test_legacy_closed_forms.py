@@ -193,7 +193,7 @@ def outer_case():
 
 
 def _by_label(trace):
-    ops = {op.label: op for op in trace.layer_list}
+    ops = {op.label: op for op in trace._layer_list}
     layers = {layer.layer_label: layer for layer in trace.layers}
     modules = {module.address: module for module in trace.modules}
     calls = {call.call_label: call for call in trace.module_calls}
@@ -259,7 +259,7 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     trace = graph_trace
     # The linear Layer runs twice; every other Layer once.
     assert int(trace.graph.max_ops_per_layer) == 2
-    params = {param.address: param for param in trace.param_logs}
+    params = {param.address: param for param in trace.params}
     for address in ("fc.weight", "fc.bias"):
         assert (
             int(len(params[address].used_by_ops)),
@@ -280,7 +280,7 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     loop = tl.trace(Loop().eval(), torch.randn(2, 4))
     try:
         assert int(loop.graph.max_ops_per_layer) == 3  # fc three times, one Layer
-        params = {param.address: param for param in loop.param_logs}
+        params = {param.address: param for param in loop.params}
         assert (
             int(len(params["fc.weight"].used_by_ops)),
             int(len(params["fc.weight"].used_by_layers)),
@@ -430,7 +430,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
     assert int(trace.total_gradient_memory) == passes * (96 + 96 + 24)
     raw = _param_grad_bytes(model)  # recounted from Tensor.grad
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
-    params = {param.address: param for param in trace.param_logs}
+    params = {param.address: param for param in trace.params}
     for address, nbytes in raw.items():
         assert int(params[address].gradient_memory) == nbytes, address
     assert int(trace.total_param_gradient_memory) == sum(raw.values())

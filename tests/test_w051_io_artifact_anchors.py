@@ -13,7 +13,6 @@ import json
 import pickle
 import shutil
 import tarfile
-import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,6 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-from _oracle_env import expect_bundle_minor_version_mismatch
 from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
@@ -113,33 +111,26 @@ def test_root_stamp_disagreeing_with_manifest_refuses(source_bundle: Path, tmp_p
         state["tlspec_version"] = state["tlspec_version"] - 2
 
     path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
-    _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="tlspec_version")
+    # The older root stamp is a 2.x state and refuses before the anchor compares it.
+    _assert_refuses(path, "artifact_version_below_floor")
 
 
-def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> None:
+def test_pre_floor_artifact_cannot_be_migrated_and_refuses_as_2x(tmp_path: Path) -> None:
+    """A 2.x artifact refuses at load and at migration; no witnessed lineage can start."""
+
     from torchlens._ecosystem.migrate import migrate
+    from torchlens.errors import ArtifactTooOldError
 
     with tarfile.open(CORPUS, "r:gz") as tar:
         tar.extractall(tmp_path)
     artifact = tmp_path / "art_v2.31.0_portable"
     manifest = json.loads((artifact / "manifest.json").read_text())
     assert manifest["tlspec_version"] < tl._io.TLSPEC_VERSION
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        migrate(artifact)
-    migrated = json.loads((artifact / "manifest.json").read_text())
-    assert migrated["tlspec_version"] == tl._io.TLSPEC_VERSION
-    # The migrated manifest names the current stamp, but the bytes were still
-    # written by torchlens 2.x, which this release does not read.
     assert_refuses_as_2x(artifact)
-    # Delete the witness: the same bytes now refuse (the lineage is unproven).
-    (artifact / "tl_migration_provenance.json").unlink()
-    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
-        tl.load(artifact)
-    assert excinfo.value.fields["code"] in {
-        "bundle_manifest_metadata_mismatch",
-        "artifact_producer_pair_ungoverned",
-    }
+    with pytest.raises(ArtifactTooOldError):
+        migrate(artifact)
+    assert not (artifact / "tl_migration_provenance.json").exists()
+    assert json.loads((artifact / "manifest.json").read_text()) == manifest
 
 
 # --- (b) op-graph coherence ---------------------------------------------------

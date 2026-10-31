@@ -75,7 +75,7 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     for value in (trace.num_params, layer.num_params, op.num_params, module.num_params):
         assert int(value) == A_PARAMS
     assert int(report.total_params) == int(report.totals.params_total) == A_PARAMS
-    by_name = {param.address: param for param in trace.param_logs}
+    by_name = {param.address: param for param in trace.params}
     assert int(by_name["weight"].num_params) == 8 * 16
     assert int(by_name["bias"].num_params) == 16
     for value in (trace, module, call):
@@ -113,7 +113,7 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
         trace.total_param_memory,
     ):
         assert int(value) == A_PARAMS * FP32
-    by_name = {param.address: param for param in trace.param_logs}
+    by_name = {param.address: param for param in trace.params}
     assert int(by_name["weight"].param_memory) == 8 * 16 * FP32
     assert int(by_name["bias"].param_memory) == 16 * FP32
     trace, _ = fixture_b

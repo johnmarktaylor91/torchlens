@@ -156,7 +156,7 @@ def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
         ("Op", trace.compute_ops),
         ("Module", trace.modules),
         ("ModuleCall", trace.module_calls),
-        ("Param", trace.param_logs),
+        ("Param", trace.params),
         ("Buffer", trace.buffers),
     ):
         for item in accessor:
