@@ -117,6 +117,7 @@ exclude_docs: |
   /for-ai-agents.md
   /gradient_contract.md
   /guides/fast_paths.md
+  /guides/grouping.md
   /guides/kv_cache.md
   /guides/offline_report.md
   /guides/treescope_cards.md

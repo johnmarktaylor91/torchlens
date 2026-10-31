@@ -194,6 +194,8 @@ pages:
   - path: guides/fast_paths.md
     section: field-guide
     group: Scale and speed
+  - path: guides/grouping.md
+    section: concepts
   - path: guides/kv_cache.md
     section: field-guide
     group: Intervene
