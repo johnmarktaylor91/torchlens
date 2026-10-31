@@ -273,9 +273,16 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
     projected_calls: dict[tuple[int, int], int] = defaultdict(int)
     for grad_fn_handle in trace._grad_fn_logs.values():
         for call in grad_fn_handle.calls.values():
-            if call.backward_pass_index <= pass_index_base:
+            call_pass_index = call.backward_pass_index
+            if call_pass_index is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"grad_fn {grad_fn_handle.grad_fn_object_id} carries a projected call "
+                    "with no backward_pass_index",
+                )
+            if call_pass_index <= pass_index_base:
                 continue
-            projected_calls[(grad_fn_handle.grad_fn_object_id, call.backward_pass_index)] += 1
+            projected_calls[(grad_fn_handle.grad_fn_object_id, call_pass_index)] += 1
     event_calls: dict[tuple[int, int], int] = defaultdict(int)
     grad_fn_ids = set(trace._grad_fn_logs)
     for fired_event in fired_events:
