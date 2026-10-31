@@ -331,9 +331,7 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
         def find_class(self, module: str, name: str) -> Any:
             """Return the cached surrogate type instead of importing anything."""
 
-            from ._safe_unpickle import current_module_path
-
-            return _surrogate_class(f"{current_module_path(module)}.{name}")
+            return _surrogate_class(f"{module}.{name}")
 
         def persistent_load(self, pid: Any) -> Any:
             """Stand in for persistent-id references with an inert surrogate."""

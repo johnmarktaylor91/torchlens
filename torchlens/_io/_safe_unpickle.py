@@ -1389,59 +1389,6 @@ class _DenyMissingDispatch(dict):
         raise pickle.UnpicklingError(f"invalid load key, {chr(key)!r}.")
 
 
-#: Top-level packages renamed after artifacts were written. A pickled module path under
-#: an old package resolves under its new name, and the result then passes the same
-#: allowlist and rename map as any other path (a remap never admits a new global).
-_RENAMED_PICKLE_PACKAGES: dict[str, str] = {
-    old: f"_{old}"
-    for old in (
-        "autoroute",
-        "constants",
-        "data_classes",
-        "debug",
-        "ecosystem",
-        "ir",
-        "kernel_telemetry",
-        "merged",
-        "notebook",
-        "observability",
-        "observe",
-        "partial",
-        "postprocess",
-        "quantities",
-        "quickstart",
-        "snoop",
-        "trace_slice",
-        "utils",
-    )
-}
-_RENAMED_PICKLE_PACKAGES.update({"hash": "fingerprint", "tviz": "transformer"})
-
-
-def current_module_path(module: str) -> str:
-    """Return the current spelling of a pickled torchlens module path.
-
-    Parameters
-    ----------
-    module:
-        Module path as written in the artifact.
-
-    Returns
-    -------
-    str
-        The path with a renamed top-level package respelled; other paths unchanged.
-    """
-
-    root, _, rest = module.partition(".")
-    if root != "torchlens" or not rest:
-        return module
-    head, dot, tail = rest.partition(".")
-    renamed = _RENAMED_PICKLE_PACKAGES.get(head)
-    if renamed is None:
-        return module
-    return f"torchlens.{renamed}{dot}{tail}"
-
-
 class SafeBundleUnpickler(pickle._Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
 
@@ -1588,7 +1535,6 @@ class SafeBundleUnpickler(pickle._Unpickler):
             If the (possibly renamed) global is not admitted by the allowlist.
         """
 
-        module = current_module_path(module)
         module, name = self._rename_map.get((module, name), (module, name))
 
         # Safe wrappers for the two legitimately-needed but individually-dangerous
