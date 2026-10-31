@@ -75,7 +75,8 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 
 
 TLSPEC_FORMAT_VERSION = "2"
-SUPPORTED_TLSPEC_FORMAT_VERSIONS = {"1", TLSPEC_FORMAT_VERSION}
+#: The intervention spec format torchlens 2.16 to 2.28 wrote; this release does not read it.
+_PRE_3_FORMAT_VERSION = "1"
 _SPEC_FILE = "spec.json"
 _MANIFEST_FILE = "manifest.json"
 _README_FILE = "README.md"
@@ -362,7 +363,7 @@ def load_intervention_spec(
     _reject_symlink_path(spec_path / _SPEC_FILE, context="intervention spec.json")
     _reject_symlink_path(spec_path / _MANIFEST_FILE, context="intervention manifest.json")
     data = _read_json_file(spec_path / _SPEC_FILE)
-    _validate_format_version(data.get("format_version"))
+    _validate_format_version(data.get("format_version"), path=spec_path)
     _validate_spec_json_structure(data, spec_path)
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
     manifest_entries = manifest.get("tensor_entries", [])
@@ -452,27 +453,39 @@ def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None
             )
 
 
-def _validate_format_version(format_version: Any) -> None:
+def _validate_format_version(format_version: Any, *, path: Path | None = None) -> None:
     """Validate an intervention spec format version.
 
     Parameters
     ----------
     format_version:
         Format version value read from ``spec.json``.
+    path:
+        The spec directory, when the caller has it, for the refusal's structured fields.
 
-    Returns
-    -------
-    None
-        Raises when the format is unsupported.
+    Raises
+    ------
+    ArtifactTooOldError
+        For ``format_version`` 1, the spec format torchlens 2.x wrote: this release reads
+        no file saved by torchlens 2.x.
+    InvalidArgumentError
+        For any other format version than the current one.
     """
 
-    if str(format_version) not in SUPPORTED_TLSPEC_FORMAT_VERSIONS:
-        supported = ", ".join(sorted(SUPPORTED_TLSPEC_FORMAT_VERSIONS))
+    if str(format_version) == _PRE_3_FORMAT_VERSION:
+        from .._io._pre3_module_paths import pre_3_artifact_error
+
+        raise pre_3_artifact_error(
+            f"intervention format_version={_PRE_3_FORMAT_VERSION}",
+            path=None if path is None else str(path),
+            code="artifact_version_below_floor",
+        )
+    if str(format_version) != TLSPEC_FORMAT_VERSION:
         raise InvalidArgumentError(
             f"Unsupported intervention .tlspec format_version={format_version!r}; "
-            f"expected one of {supported}",
+            f"expected {TLSPEC_FORMAT_VERSION}",
             code="spec_format_version_unsupported",
-            remedy=f"use a supported intervention format version ({supported})",
+            remedy=f"use a supported intervention format version ({TLSPEC_FORMAT_VERSION})",
             format_version=str(format_version),
         )
 

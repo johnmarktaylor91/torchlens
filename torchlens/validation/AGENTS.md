@@ -72,10 +72,12 @@ keys. Invariants are part of the postprocess regression net.
 `validate_tlspec(path)` validates unified manifests against
 `schemas/tlspec_manifest_v{schema_version}.json`, selecting the schema version declared by the
 artifact.
-Only the two legacy 2.16 INTERVENTION formats (`v2.16_intervention`,
-`v2.16_intervention_with_kind`) are accepted without schema validation. Legacy 2.16
-MODEL-LOG bundles are NOT loadable: they sit below the tlspec v6 / torchlens 2.33
-rehydration floor and refuse with `ArtifactTooOldError`.
+Only the two intervention-spec formats (`v2.16_intervention`,
+`v2.16_intervention_with_kind`; the labels keep their 2.16 spelling for current specs) are
+accepted without schema validation, after the spec's `format_version` is checked: a
+format_version-1 spec (torchlens 2.16 to 2.28) refuses with the one 2.x
+`ArtifactTooOldError`, as does the 2.16 MODEL-LOG bundle format; this release reads no
+file saved by torchlens 2.x.
 
 ## How It Connects
 

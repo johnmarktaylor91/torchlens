@@ -15,7 +15,6 @@ graph) stays. Promoting the confirmation verdict to a hard refusal is an owner d
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -192,13 +191,10 @@ def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str)
 # (identical resolved labels; only the version-unstable hash differs -- exactly what
 # the shipped v2.16 backcompat fixtures encode). check_spec_compat is a coarse PREVIEW
 # and COMPATIBLE_WITH_CONFIRMATION is its honest "graph shape differs, confirm before
-# applying" verdict. These tests lock that contract; the fixture regression below
-# proves cross-version reuse still loads-and-matches. Whether that confirmation verdict
+# applying" verdict. These tests lock that contract. Whether that confirmation verdict
 # should be promoted to a hard refusal for executable specs (a shipped-contract change)
 # is escalated to the owner in W1_F6_REPORT.md.
 # ---------------------------------------------------------------------------
-
-FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
 
 
 def _saved_relu_scale_spec(tmp_path: Any, *, level: str = "executable_with_callables") -> Any:
@@ -287,27 +283,3 @@ def test_check_spec_compat_nonexecutable_mismatch_still_confirmation(tmp_path: A
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
-
-
-@pytest.mark.parametrize(
-    "fixture_name",
-    [
-        "F1_intervention_default.tlspec",
-        "F5_intervention_executable_with_callables.tlspec",
-        "F6_intervention_portable.tlspec",
-    ],
-)
-def test_v2_16_executable_fixtures_refuse_typed_at_load(fixture_name: str) -> None:
-    """The shipped v2.16 executable fixtures refuse typed at load.
-
-    They store builtin edit keywords from before the 2.x surface rename
-    (``force_shape_change``); files saved by 2.x are not read, so the load
-    refuses with a typed error and never reaches the compat check.
-    """
-
-    from torchlens._errors import InvalidArgumentError
-
-    fixture_path = FIXTURE_ROOT / fixture_name
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.load(fixture_path, trust_custom_callables=True)
-    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"

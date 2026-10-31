@@ -85,6 +85,12 @@ def validate_tlspec(
         "v2.16_intervention_with_kind",
         "v2.16_intervention",
     }:
+        from ..intervention.save import _SPEC_FILE, _read_json_file, _validate_format_version
+
+        # The spec format torchlens 2.x wrote (format_version 1) refuses with the one 2.x
+        # error here as it does at load; the current format has no schema document.
+        spec = _read_json_file(tlspec_path / _SPEC_FILE)
+        _validate_format_version(spec.get("format_version"), path=tlspec_path)
         return
     if tlspec_format == "v2.16_modellog_portable":
         from .._io._pre3_module_paths import modellog_216_error

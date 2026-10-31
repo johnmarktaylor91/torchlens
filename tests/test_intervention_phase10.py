@@ -535,8 +535,14 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
     manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
 
-    loaded = load_intervention_spec(path)
-    assert loaded.metadata["format_version"] == "1"
+    # format_version 1 is the spec format torchlens 2.x wrote: it refuses with the one
+    # 2.x error, never loads.
+    from torchlens.errors import ArtifactTooOldError
+
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == "intervention format_version=1"
 
     spec_json["format_version"] = "3"
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
