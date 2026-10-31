@@ -1613,3 +1613,13 @@
   `intervention`, as do the `tl.attribution.CausalAuditSet` rows (without `site` and `component`). Refusals `attribution_audit_claim_unsupported`,
   `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
+- Capture door and options, current spellings: the recording knobs group in
+  `tl.options.RecordingOptions`, narration in `tl.options.NarrationOptions` (`narrate=`), and
+  streaming saves in `tl.options.StorageOptions` (also `tl.user_funcs.StorageOptions`). The
+  recorder vocabulary is `tl.fastlog.GradRecord`, `tl.fastlog.DryRun`, `tl.fastlog.stop()` and
+  `tl.fastlog.StopSignal`; a stopped capture settles `CaptureStatus.STOPPED` (value `"stopped"`).
+  `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The backend registry
+  reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
+  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
+  `tl.clear_cache()` (`tl.user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
+  and `tl.report.isolated_capture`.

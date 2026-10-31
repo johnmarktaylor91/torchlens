@@ -31,7 +31,7 @@ facets, strict protocol with legacy flat-name properties) through the ONE commit
 `capture/projections.py::commit_op`; step 0 ingests them via the generated scatter
 (`ingest_op_records`). The op lane is genuinely append-only: post-commit knowledge rides
 the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the single
-writer) and every amended-state read folds through `CaptureEvents.amended_op_records()`.
+writer) and every amended-state read folds through the capture-event journal's amended-op fold.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
 (`fastlog/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
 `copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls

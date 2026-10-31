@@ -39,7 +39,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   silently treated as complete.
 
 **Failed partial Recording**
-: A `Recording` with `status="partial_error"` and `failed=True`. Use
+: A `Recording` with `status="partial_error"` and `is_failed=True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
   `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
@@ -2844,3 +2844,74 @@ deprecation shim owed*
   `slug` and `scan` characters and the file size (`neuronpedia_upload_argument_invalid`).
   HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
   `neuronpedia_upload_response_invalid`.
+
+## Capture door and options: current spellings
+
+**Capture keywords**
+: `CaptureOptions` and the capture doors spell the capture knobs `seed=` (`CaptureOptions.seed`),
+  `save_args=` (`CaptureOptions.save_args`), `save_source_context=`
+  (`CaptureOptions.save_source_context`), `save_rng=` (`CaptureOptions.save_rng`),
+  `save_transformed_output=` (`CaptureOptions.save_transformed_output`) and `input_transform=`
+  (`CaptureOptions.input_transform`). `CaptureOptions.receipt()` returns the per-field option
+  receipt (each public field, its value and why). The saved `Trace` keeps its stored field names
+  in this release.
+
+**Recording keywords**
+: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+  `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
+  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
+  `save_raw_grads=` (`RecordingOptions.save_raw_grads`).
+
+**StorageOptions**
+: `tl.options.StorageOptions` (also reachable as `tl.user_funcs.StorageOptions`) groups the
+  streaming-save knobs: `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (its flat
+  keyword `on_save=`; the trace door's flat `out_callback=` maps onto it),
+  `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,
+  `StorageOptions.as_dict()`, `StorageOptions.from_values()` and
+  `StorageOptions.is_field_explicit()`.
+
+**CaptureOutcome flags**
+: `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
+  `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
+  `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
+  stopped by `halt=` or `tl.fastlog.stop()`.
+
+**Recording state**
+: `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
+  `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
+  `Recording.records_in_pass(pass_index)`, `Recording.num_ops` (`num_ops=`),
+  `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
+  `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
+  (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
+  `ActivationRecord.recorded_time` and `GradRecord.recorded_time` (`recorded_time=`) stamp when a
+  record was taken.
+
+**Recording types**
+: `tl.fastlog.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
+  `GradRecord.transformed_ram_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
+  `DryRun.contexts`, `DryRun.decisions`, `DryRun.print_tree()`, `DryRun.timeline_html()`,
+  `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
+  names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
+  `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
+  (`TraceLike.op_events`, `TraceLike.backward_events`).
+
+**Backend registry**
+: `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
+  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`.
+  `BackendCapabilities.has_streaming` is the streaming-save capability flag (flag name
+  `has_streaming`). `CaptureBackend.cleanup_stopped_forward_session` tears down a forward
+  stopped early.
+
+**Extraction and preprocessing names**
+: `BatchEnvelope.num_rows` and `RaggedBatch.num_rows` (`num_rows=`), `TokenRows.num_tokens`,
+  `Resolution.preprocessing` and `SiteMatrix.shaping` (`shaping=`).
+  `tl.extract_dataset(..., output_transform=...)`, `tl.brainpipe.extraction_plan(...,
+  output_transform=...)` and `tl.observability.is_summary_transform(output_transform)` take the
+  output transform;
+  `input_transform=` preprocesses inputs.
+
+**Admin and debugging names**
+: `tl.clear_cache()` (also `tl.user_funcs.clear_cache`) empties the capture cache;
+  `tl.observers.register_tensor_connection` registers a tensor connection;
+  `tl.report.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
+  (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
