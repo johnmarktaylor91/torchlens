@@ -346,11 +346,9 @@ def _container_role(op: Any) -> str | None:
     components = tuple(getattr(op, "container_path", ()) or ())
     if not components:
         return None
-    last = components[-1]
-    for attr_name in ("key", "name", "index"):
-        if hasattr(last, attr_name):
-            return str(getattr(last, attr_name))
-    return str(last)
+    from ..._utils.collections import _path_component_key
+
+    return str(_path_component_key(components[-1]))
 
 
 def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:

@@ -94,16 +94,9 @@ def _render_container_path(path: Any) -> str:
     to declare; the default source is the whole output).
     """
 
-    parts: list[str] = []
-    for segment in tuple(path or ()):
-        for attr in ("key", "name", "index"):
-            value = getattr(segment, attr, None)
-            if value is not None:
-                parts.append(str(value))
-                break
-        else:
-            parts.append(str(segment))
-    return ".".join(parts)
+    from .._utils.collections import _path_component_key
+
+    return ".".join(str(_path_component_key(segment)) for segment in tuple(path or ()))
 
 
 def _resolve_step_output_source(trace: Any, resolved: ResolvedEpisode) -> Any:
