@@ -835,7 +835,7 @@ def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, A
 
     Enforces: table bound to THIS trace and not stale (the trace's autograd
     registry token must match the read-time token), single-target only
-    (multi-target tables teach ``for_target``/``aggregate_targets``), one
+    (multi-target tables teach ``target``/``aggregate_targets``), one
     uniform grain, ACT rows only.
     """
 

@@ -272,7 +272,7 @@ class ReadTable(Mapping):
     """Immutable trace-bound mapping of read rows (D8).
 
     Keys are ``(target_id, kind, address)``; values are :class:`ReadRow`.
-    The table never mutates; every derivation (``for_target``,
+    The table never mutates; every derivation (``target``,
     ``aggregate_targets``, alias collapse) returns a new table.
     """
 
@@ -342,7 +342,7 @@ class ReadTable(Mapping):
             raise ReadError(
                 f"Label {key!r} matches {len(matches)} rows across targets. "
                 "Remedy: index with the full (target_id, kind, address) key "
-                "or narrow with for_target(target_id) first",
+                "or narrow with target(target_id) first",
                 code="read_table_key_ambiguous",
                 label=key,
                 n_matches=len(matches),
