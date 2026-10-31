@@ -11,12 +11,14 @@ from typing import Any
 import torch
 
 from ..visualization.bundle_diff import bundle_diff
+from ..visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
 from .batch_summary import montage
 from .feature_maps import feature_maps
 from .node_plots import heatmap, image_scatter, lineplot
 
 __all__ = [
+    "NodeSpec",
     "bundle_diff",
     "causal_trace_heatmap",
     "feature_maps",
@@ -31,6 +33,7 @@ __all__ = [
     "attention_atlas",  # noqa: F822 -- resolved by __getattr__
     "contact_sheet",  # noqa: F822 -- resolved by __getattr__
     "histogram_waterfall",  # noqa: F822 -- resolved by __getattr__
+    "intervention_diff",  # noqa: F822 -- resolved by __getattr__
     "logit_lens",  # noqa: F822 -- resolved by __getattr__
     "metric_strip",  # noqa: F822 -- resolved by __getattr__
     "prediction_table",  # noqa: F822 -- resolved by __getattr__
@@ -56,6 +59,7 @@ _LAZY_RENDERERS: dict[str, tuple[str, str]] = {
     "quantile_fan": ("torchlens.observability._render", "render_fan"),
     "site_detail": ("torchlens.observability._render", "render_detail"),
     "timeline": ("torchlens.observe._svg", "render_timeline_svg"),
+    "intervention_diff": ("torchlens.visualization._surgery_diff", "surgery_diff"),
 }
 
 

@@ -201,12 +201,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         graph = render_surgery(fork, **kwargs)
         return str(getattr(graph, "source", graph))
     if panel.call == "surgery_diff":
-        from torchlens.visualization import surgery_diff
-
         fork = _fork_edit(trace)
         from torchlens.visualization._surgery_diff import _build_diff_dot
+        from torchlens.viz import intervention_diff
 
-        diff = surgery_diff(fork, trace)
+        diff = intervention_diff(fork, trace)
         diff.draw(str(outpath), file_format="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)

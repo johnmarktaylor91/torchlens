@@ -6,8 +6,6 @@ The experimental Dagua renderer is available from
 
 from typing import Any
 
-from .node_spec import NodeSpec
-
 _USER_FUNC_EXPORTS = {
     "draw_backward",
     "draw_combined",
@@ -19,7 +17,6 @@ _USER_FUNC_EXPORTS = {
 #: ``import torchlens.visualization`` never pays for the audit derivation.
 _SURGERY_EXPORTS = {
     "render_surgery": "surgery_visuals",
-    "surgery_diff": "_surgery_diff",
 }
 
 
@@ -65,11 +62,9 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    "NodeSpec",
     "draw_backward",
     "draw_combined",
     "render_surgery",
     "show_bundle_graph",
     "show_model_graph",
-    "surgery_diff",
 ]
