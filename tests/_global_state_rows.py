@@ -528,10 +528,8 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
 )
 """Diagnostic side-channels: audit instrumentation and last-run readbacks.
 
-The audit rows are armed only by an environment variable and stay empty in
-production runs (``TORCHLENS_POSTPROCESS_ASSERTIONS`` /
-``TORCHLENS_POSTPROCESS_READ_AUDIT`` off); they accumulate within one armed
-window and are scoped by the executor's begin/end pass. The validation
+The op-store audit rows are armed only through ``begin_cell_write_audit`` and
+stay empty in production runs. The validation
 last-run slots are overwritten per run and never steer a verdict.
 """
 

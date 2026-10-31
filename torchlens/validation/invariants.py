@@ -90,7 +90,7 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
     degrading to a bare ``TypeError`` when ``cls(*args)`` is replayed.
     """
 
-    def __init__(self, check_name: str, message: str) -> None:
+    def __init__(self, check_name: str, message: str, *, code: str | None = None) -> None:
         """Initialize a metadata invariant failure.
 
         Parameters
@@ -99,9 +99,16 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
             Invariant check group name.
         message:
             Human-readable failure detail.
+        code:
+            Optional stable refusal code from the error-refusal contract,
+            carried on ``fields["code"]``.
         """
 
-        super().__init__(f"[{check_name}] {message}")
+        text = f"[{check_name}] {message}"
+        if code is None:
+            super().__init__(text)
+        else:
+            super().__init__(text, code=code)
         self.check_name = check_name
 
 
