@@ -18,10 +18,10 @@ recording = tl.record(model, x, echo=True)          # the one-liner replacement
 | torchsnooper construct | TorchLens equivalent |
 | --- | --- |
 | `@torchsnooper.snoop()` on a forward | `tl.record(model, x, echo=True)` -- op-granular lines, module structure included |
-| `with torchsnooper.snoop():` around a training step | `with tl.fastlog.Recorder(model, echo=tl.options.EchoOptions(...)) as r: r.log(batch)` |
-| `snoop(output='file.log')` | `EchoOptions(sink='file.log')` -- flushed per line, so bytes survive a hard death |
+| `with torchsnooper.snoop():` around a training step | `with tl.fastlog.Recorder(model, echo=tl.options.NarrationOptions(...)) as r: r.log(batch)` |
+| `snoop(output='file.log')` | `NarrationOptions(sink='file.log')` -- flushed per line, so bytes survive a hard death |
 | `snoop(depth=N)` | module-depth indentation is built in; scope with `tl.in_module(...)` |
-| `snoop(prefix=...)` per-line prefix | callable sink (`EchoOptions(sink=my_logger)`) -- the seam to loggers/trackers |
+| `snoop(prefix=...)` per-line prefix | callable sink (`NarrationOptions(sink=my_logger)`) -- the seam to loggers/trackers |
 | `normalize=True` diffable output | transcripts are byte-stable by default (no addresses/wall-clock on lines) |
 | last lines before a crash | `exc.partial_log.narrate(20)` -- works with echo OFF, plus the live tail when echo is armed |
 
@@ -72,7 +72,11 @@ class Tiny(nn.Module):
 
 sink = io.StringIO()
 torch.manual_seed(0)
-tl.record(Tiny(), torch.tensor([[2.0, 3.0]]), echo=tl.options.EchoOptions(select=True, sink=sink))
+tl.record(
+    Tiny(),
+    torch.tensor([[2.0, 3.0]]),
+    echo=tl.options.NarrationOptions(select=True, sink=sink),
+)
 # one line per captured event: input source, linear, relu
 RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startswith("#"))
 ```

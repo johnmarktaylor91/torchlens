@@ -88,7 +88,7 @@ def measure_entry(entry: Any, workdir: Path) -> dict[str, Any]:
         record[f"{label}_tokens"] = _tokens(_handler_envelope(tool, request))
         served = call_tool(tool, request)
         record[f"{label}_served_truncated"] = served.get("truncation") is not None
-    record["explain_unbudgeted_tokens"] = _budgets.estimate_tokens(str(tl.report.explain(trace)))
+    record["explain_unbudgeted_tokens"] = _budgets.estimate_tokens(str(trace.explain()))
     for label, tool, args, key in ROW_CALLS:
         envelope = _handler_envelope(tool, {"path": str(path), **args})
         rows = (envelope.get("data") or {}).get(key) or []

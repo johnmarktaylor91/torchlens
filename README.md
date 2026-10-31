@@ -214,7 +214,7 @@ act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly
 # Batch extraction across a dataset (any iterable of unbatched samples works)
 dataset = [torch.randn(3, 224, 224) for _ in range(8)]
 tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
-                   batch_size=32, output_dir='torchlens-activations/')
+                   batch_size=32, path='torchlens-activations/')
 ```
 
 **Performance note:** With `halt=` and `tl.record`, capture can run *faster

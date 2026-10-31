@@ -701,7 +701,7 @@ with torch.no_grad():
 x = torch.tensor([[1.0, 2.0, 3.0]])
 claim = tl.attribution.layer_attribution(model, x, target=0, layer="fc1")
 audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_random_draws=3)
-print([(row.index, row.claimed_effect, row.measured_effect) for row in audit.indices])
+print([(row.index, row.claimed_effect, row.measured_effect) for row in audit.units])
 print(audit.rank_agreement, [(item.kind, item.indices, item.measured_effect) for item in audit.sets[:2]])
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
@@ -799,7 +799,7 @@ model = TinyLM().eval()
 ids = torch.tensor([[1, 2, 3]])
 claim = torchlens.mechinterp.direct_logit_contributions(tl.trace(model, ids), answer=1, vs=2)
 audit = tl.attribution.causal_audit(model, ids, claim=claim, k=1, num_random_draws=2)
-for row in audit.indices:
+for row in audit.units:
     print(row.component, round(row.claimed_effect, 3), round(row.measured_effect, 3))
 print(round(audit.extra["constant_row"], 3), round(audit.rank_agreement, 3))
 ```
@@ -852,7 +852,7 @@ x = torch.randn(2, 3)
 target = tl.attribution.seed("output_1", index=(0, 1))
 table = tl.attribution.read(tl.trace(model, x), target=target, frozen=None)
 audit = tl.attribution.causal_audit(model, x, claim=table, target=target, k=1, num_random_draws=2)
-for row in audit.indices:
+for row in audit.units:
     print(row.site, round(row.claimed_effect, 4), round(row.measured_effect, 4))
 print(audit.rank_agreement)
 ```
@@ -947,7 +947,7 @@ audit = tl.attribution.causal_audit(
     k=2,
     num_random_draws=1,
 )
-for row in audit.indices:
+for row in audit.units:
     print(row.component, round(row.claimed_effect, 4), round(row.measured_effect, 4))
 for item in audit.sets:
     print(item.kind, round(item.claimed_effect, 4), round(item.measured_effect, 4))

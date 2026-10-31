@@ -83,7 +83,7 @@ forward.
 
 ```python
 # recipe-test: tool=transformers expected=True
-from torchlens.experiment import head_ablation_candidates, ledger, site_sweep
+from torchlens.experiment import head_ablation_candidates, ledger, sweep_sites
 
 led = ledger(
     "acdc_ledger.jsonl",
@@ -95,7 +95,7 @@ candidates = {}
 for layer in range(2):
     plan = head_ablation_candidates(clean, f"transformer.h.{layer}.attn", heads=2)
     candidates.update({f"a{layer}.{key}": site for key, site in plan.items()})
-knockout = site_sweep(
+knockout = sweep_sites(
     clean,
     candidates=candidates,
     edit=tl.zero_ablate(),

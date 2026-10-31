@@ -464,35 +464,29 @@ Output:
 ['source_file:line', 'op_count', 'total_cost', 'pct_total'] flops
 ```
 
-## Pandas-free row cores (`*_rows`)
+## Pandas-free row core (`hot_path_rows`)
 
-`tl.debug.compare_rows(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)`,
-`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`, and
-`tl.debug.hot_path_rows(trace, by="flops")`
-(DOCUMENTED-UNSTABLE spellings) are the pandas-free cores of
-[`compare`](#compare), [`dead_neurons`](#dead_neurons), and [`hot_path`](#hot_path).
-Each returns `(rows, attrs)` — a list of plain per-row dicts plus the same
-`attrs` mapping the report's `.to_pandas()` frame carries (aggregate counts,
-parameters, capture-honesty facts) — importable and runnable without pandas. The
-table helpers are thin views over these cores, so both spellings always
-report identical facts; agent/MCP consumers use the row cores directly.
+`tl.debug.hot_path_rows(trace, by="flops")` (DOCUMENTED-UNSTABLE spelling) is the
+pandas-free core of [`hot_path`](#hot_path). It returns `(rows, attrs)`: a list of plain
+per-row dicts plus the same `attrs` mapping the report's `.to_pandas()` frame carries
+(excluded count, metric, capture-honesty facts), importable and runnable without
+pandas. `hot_path` is a thin view over this core, so both spellings always report
+identical facts; agent/MCP consumers use the row core directly.
 
 ```python
 import torch
 from torch import nn
 import torchlens as tl
 
-model = nn.ReLU()
-left = tl.trace(model, torch.tensor([[-1.0, 2.0]]))
-right = tl.trace(model, torch.tensor([[-1.0, 3.0]]))
-rows, attrs = tl.debug.compare_rows(left, right)
-print(len(rows), attrs["value_diverged"])
+trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
+rows, attrs = tl.debug.hot_path_rows(trace, by="flops")
+print(sorted(rows[0]), attrs["metric"])
 ```
 
 Output:
 
 ```text
-2 2
+['op_count', 'pct_total', 'source_file:line', 'total_cost'] flops
 ```
 
 ## `guess_input_shape`
@@ -629,8 +623,8 @@ Deepcopy-refusing models return `inconclusive` with a `model_factory` remedy.
 
 `tl.debug.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
 EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
-It is the direct spelling of the first-diverging-op recipe over `compare_rows`, whose
-rows follow execution order -- never alphabetical.
+It is the direct spelling of the first-diverging-op recipe over [`compare`](#compare),
+whose rows follow execution order -- never alphabetical.
 
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 
