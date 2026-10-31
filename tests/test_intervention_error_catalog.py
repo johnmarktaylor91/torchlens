@@ -89,7 +89,7 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "OpaqueCallableError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
     "TraceMutationWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
     "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_out_write_warns_once_and_marks_dirty",
-    "MultiMatchWarning": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
+    "MultiMatchWarning": "tests/test_intervention_phase10.py::test_save_intervention_allows_more_than_eight_matching_sites",
     "ControlFlowDivergenceWarning": "tests/test_intervention_phase7.py::test_rerun_non_strict_divergence_warns_and_swaps",
     "BatchNormTrainModeWarning": "tests/test_intervention_phase12.py::test_append_batchnorm_train_mode_warns",
 }

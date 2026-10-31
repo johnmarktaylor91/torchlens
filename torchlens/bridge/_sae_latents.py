@@ -270,8 +270,10 @@ class _SAEFamily:
     def _home_labels(self, record: Any) -> frozenset[str] | InvalidArgumentError | None:
         """Return the op labels of this family's site on the record's trace (cached)."""
 
+        from .._data_classes.trace import Trace
+
         trace = getattr(record, "trace", None) or getattr(record, "source_trace", None)
-        if trace is None or not hasattr(trace, "_resolve_sites"):
+        if not isinstance(trace, Trace):
             return None
         cached = self._homes.get(id(trace))
         if cached is not None and cached[0]() is trace:
