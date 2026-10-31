@@ -218,7 +218,7 @@ def test_tap_record_direction_field() -> None:
     tap = tl.tap(tl.contains("linear"), direction="both")
     _trace_with_tap(tap)
 
-    assert {record.signal for record in tap.records} == {"forward", "backward"}
+    assert {record.direction for record in tap.records} == {"forward", "backward"}
 
 
 def test_tap_record_grad_kind_field() -> None:

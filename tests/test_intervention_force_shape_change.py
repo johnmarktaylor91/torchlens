@@ -82,9 +82,9 @@ def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     entries = normalize_hook_plan(helper, default_site_target=tl.func("relu"))
     assert entries, f"{helper_name} produced no hook-plan entries"
     for entry in entries:
-        assert entry.metadata.get("force_shape_change") is True, (
+        assert entry.metadata.get("allow_shape_change") is True, (
             f"{helper_name}: helper kwargs request force_shape_change=True but the "
-            f"normalized entry metadata says {entry.metadata.get('force_shape_change')!r}"
+            f"normalized entry metadata says {entry.metadata.get('allow_shape_change')!r}"
         )
 
 
@@ -94,7 +94,7 @@ def test_helper_flag_default_false_metadata() -> None:
     entries = normalize_hook_plan(tl.zero_ablate(), default_site_target=tl.func("relu"))
     assert entries
     for entry in entries:
-        assert entry.metadata.get("force_shape_change") is False
+        assert entry.metadata.get("allow_shape_change") is False
 
 
 def test_intervene_shape_change_applies() -> None:

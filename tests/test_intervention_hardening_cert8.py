@@ -182,7 +182,7 @@ def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
     loaded = _deserialize_value(serialized, {})
 
     assert isinstance(loaded, Edit)
-    assert loaded.name == "bwd_hook"
+    assert loaded.name == "hook_grad"
     (arg,) = loaded.args
     assert not isinstance(arg, dict), "callable arg decoded as a raw wrapper dict"
     assert isinstance(arg, LazyImportRef)

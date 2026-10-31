@@ -37,12 +37,12 @@ def _identity(g: torch.Tensor, *, hook: Any) -> torch.Tensor:
 
 
 _VERBS: dict[str, Callable[[], Any]] = {
-    "grad_zero": lambda: tl.zero_grad(),
-    "grad_scale": lambda: tl.scale_grad(0.5),
-    "grad_clip": lambda: tl.clip_grad(1.0),
-    "grad_noise": lambda: tl.add_grad_noise(0.1, seed=0),
-    "grad_clamp": lambda: tl.clamp_grad(-1.0, 1.0),
-    "bwd_hook": lambda: tl.hook_grad(_identity),
+    "zero_grad": lambda: tl.zero_grad(),
+    "scale_grad": lambda: tl.scale_grad(0.5),
+    "clip_grad": lambda: tl.clip_grad(1.0),
+    "add_grad_noise": lambda: tl.add_grad_noise(0.1, seed=0),
+    "clamp_grad": lambda: tl.clamp_grad(-1.0, 1.0),
+    "hook_grad": lambda: tl.hook_grad(_identity),
 }
 
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(3))

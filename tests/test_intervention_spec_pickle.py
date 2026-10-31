@@ -175,7 +175,7 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
                 if isinstance(name_kw, ast.Constant) and isinstance(name_kw.value, str):
                     minted.add(name_kw.value)
 
-    assert {"zero_ablate", "add", "replace_with", "grad_scale"} <= minted, (
+    assert {"zero_ablate", "add", "replace_with", "scale_grad"} <= minted, (
         f"AST sweep lost its anchors -- helper minting moved: {sorted(minted)}"
     )
     unknown: list[str] = []

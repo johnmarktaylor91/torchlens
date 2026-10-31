@@ -328,7 +328,7 @@ def test_mean_fill_axis_semantics_and_derived_flag() -> None:
     # 'self' warns and maps to 'all' (one migration window).
     with pytest.warns(UserWarning, match="over='all'") as aliased_warnings:
         aliased = mean_fill(dim="self")
-    assert dict(aliased.kwargs)["over"] == "all"
+    assert dict(aliased.kwargs)["dim"] == "all"
     assert any(
         getattr(record.message, "fields", {}).get("code") == "mean_over_self_alias"
         for record in aliased_warnings

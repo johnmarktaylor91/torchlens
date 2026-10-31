@@ -595,7 +595,7 @@ def test_capture_events_concat_follows_declared_merge_law() -> None:
             inputs_before_pre_hooks=None,
             inputs_after_pre_hooks=None,
             effects=(),
-            is_capture_complete=True,
+            capture_complete=True,
             incomplete_reasons=(),
         )
 
@@ -668,7 +668,7 @@ def _merge_pre_hook_event(address: str) -> PreHookProvenanceEvent:
         inputs_before_pre_hooks=None,
         inputs_after_pre_hooks=None,
         effects=(),
-        is_capture_complete=True,
+        capture_complete=True,
         incomplete_reasons=(),
     )
 
