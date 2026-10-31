@@ -444,8 +444,8 @@ def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
 
     ``tensor.numpy()`` refuses dtypes NumPy lacks (bf16, the fp8 family)
     with a raw ``TypeError`` -- the crash bf16 stimuli hit in the stimulus
-    digest, the envelope input digest, and the callable-identity fold
-    (audit 2.10d). Reinterpreting the flat buffer as ``uint8`` never routes
+    digest, the envelope input digest, and the callable-identity fold.
+    Reinterpreting the flat buffer as ``uint8`` never routes
     the element type through NumPy.
 
     Parameters
