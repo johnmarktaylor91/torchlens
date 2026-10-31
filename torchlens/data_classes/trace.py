@@ -3807,7 +3807,7 @@ class Trace(
             return type(value)(**{n: self._copy_rerun_value(getattr(value, n)) for n in names})
         return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
-    def append_state_from(self, new_log: "Trace") -> None:
+    def _append_state_from(self, new_log: "Trace") -> None:
         """Merge compatible chunk outs from ``new_log`` into this log.
 
         Parameters

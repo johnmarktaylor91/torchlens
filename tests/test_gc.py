@@ -111,11 +111,11 @@ class TestTraceGC:
         assert param_ref() is None
 
     def test_model_gc_after_release_param_refs(self):
-        """release_param_refs() then del model -> model GC'd while log alive."""
+        """_release_param_refs() then del model -> model GC'd while log alive."""
         model = _TwoLayerNet()
         model_ref = weakref.ref(model)
         trace = tl.trace(model, torch.randn(1, 5))
-        trace.release_param_refs()
+        trace._release_param_refs()
         del model
         gc.collect()
         assert model_ref() is None
@@ -189,7 +189,7 @@ class TestTraceGC:
             assert pl._param_ref is None
 
     def test_release_param_refs_preserves_grad_metadata(self):
-        """backward(), release_param_refs(), verify grad info is cached."""
+        """backward(), _release_param_refs(), verify grad info is cached."""
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
@@ -200,7 +200,7 @@ class TestTraceGC:
         for pl in trace.param_logs:
             pl._check_param_grad()
         # Now release
-        trace.release_param_refs()
+        trace._release_param_refs()
         # Grad metadata should still be accessible
         has_any_grad = False
         for pl in trace.param_logs:

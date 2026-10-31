@@ -234,7 +234,7 @@ def test_step_20_releases_every_live_param_ref() -> None:
 
     r7 R74 (opus): the ``executor#_run_step_20`` return-None mutant's only
     killer was an incidental failure-propagation test — nothing PURPOSEFULLY
-    asserted the step's contract. Step 20 runs ``release_param_refs``, so a
+    asserted the step's contract. Step 20 runs ``_release_param_refs``, so a
     finished capture must hold ``_param_ref is None`` (released) on every
     ParamLog; keeping live refs pins the model's parameters against GC.
     """

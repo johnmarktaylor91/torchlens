@@ -18,7 +18,7 @@ EXPECTED_MODELLOG_METHODS = {
     "validate_forward_pass",
     "check_metadata_invariants",
     "cleanup",
-    "release_param_refs",
+    "_release_param_refs",
     "_postprocess",
     "_run_and_log_inputs_through_model",
     "_remove_log_entry",

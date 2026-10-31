@@ -404,7 +404,7 @@ def _append_rerun(
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
-    log.append_state_from(new_log)
+    log._append_state_from(new_log)
     log.is_appended = True
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
     log.state = TraceState.APPENDED

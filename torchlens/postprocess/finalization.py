@@ -18,7 +18,7 @@ Step 17 (_set_tracing_finished): Marks Trace and all OpLogs as finished, switchi
     to user-facing mode for display and access custom_methods.
 Step 18 (_finalize_streamed_bundle): Finalizes any streamed out bundle.
 Step 19 (_evict_streamed_outs): Optionally drops in-memory outs after streaming refs attach.
-Step 20 (release_param_refs): Drops live parameter references after finalization.
+Step 20 (_release_param_refs): Drops live parameter references after finalization.
 """
 
 import time

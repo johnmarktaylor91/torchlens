@@ -1184,7 +1184,7 @@ class TraceValidationMixin(_TraceMixinBase):
         """
         return cleanup(self)
 
-    def release_param_refs(self: "Trace", *, allow_iter_rehydrate: bool = False) -> None:
+    def _release_param_refs(self: "Trace", *, allow_iter_rehydrate: bool = False) -> None:
         """Release live ``nn.Parameter`` references held by ParamLogs.
 
         Parameters
