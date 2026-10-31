@@ -138,7 +138,7 @@ class RangeProbe:
             return
         self._findings.append(
             CheckFinding(
-                check="activation_range",
+                check_name="activation_range",
                 code="activation_range_violated",
                 severity="warning",
                 action="collect",
@@ -147,7 +147,7 @@ class RangeProbe:
                     f"{n_below} element(s) below, {n_above} above, of "
                     f"{out_numel}."
                 ),
-                names=(label,),
+                param_names=(label,),
                 evidence="capture_hook",
                 values={"n_below": float(n_below), "n_above": float(n_above)},
                 remedy="Bounds are the caller's semantic declaration; inspect the named site",

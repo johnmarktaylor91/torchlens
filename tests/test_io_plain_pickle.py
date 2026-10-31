@@ -175,9 +175,9 @@ def test_old_style_pickle_without_io_format_version_refuses_typed(
     with pickle_path.open("wb") as handle:
         pickle.dump(trace, handle)
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         with pickle_path.open("rb") as handle:
             pickle.load(handle)
 
@@ -387,7 +387,7 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
     refuse instead of triggering the migration.
     """
 
-    from torchlens._io import TLSPEC_VERSION, ArtifactVersionBelowFloorError
+    from torchlens._io import TLSPEC_VERSION, ArtifactTooOldError
     from torchlens.data_classes.layer import Layer
     from torchlens.data_classes.op import Op
 
@@ -407,7 +407,7 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
 
         state["tlspec_version"] = 4
         legacy = factory()
-        with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=4"):
+        with pytest.raises(ArtifactTooOldError, match="tlspec_version=4"):
             legacy.__setstate__(dict(state))
 
 

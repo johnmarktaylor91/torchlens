@@ -112,10 +112,10 @@ class BindReport:
     spec_digest: str = ""
     rules: tuple[dict[str, Any], ...] = ()
     model_class: str = ""
-    model_training: bool = False
-    grad_enabled: bool = True
+    is_model_training: bool = False
+    is_grad_enabled: bool = True
     resolved_static_targets: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    fire_count: int = 0
+    num_fires: int = 0
     rule_fire_counts: dict[str, int] = field(default_factory=dict)
     fires: tuple[dict[str, Any], ...] = ()
     fire_records: tuple[Any, ...] = ()
@@ -140,7 +140,7 @@ class BindReport:
     duration_s: float | None = None
     trace: None = None
 
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the report as one plain envelope-shaped dictionary."""
 
         from dataclasses import asdict
@@ -1538,13 +1538,13 @@ class BoundInterventionExecutor:
             spec_digest=self._spec.spec_digest,
             rules=rules_payload(self._spec),
             model_class=type(self._base_model).__qualname__,
-            model_training=bool(getattr(self._base_model, "training", False)),
-            grad_enabled=torch.is_grad_enabled(),
+            is_model_training=bool(getattr(self._base_model, "training", False)),
+            is_grad_enabled=torch.is_grad_enabled(),
             resolved_static_targets={
                 session.rule_ids[key]: targets
                 for key, targets in self._resolved_static_targets.items()
             },
-            fire_count=fire_count,
+            num_fires=fire_count,
             rule_fire_counts=dict(session.rule_fire_counts),
             fires=tuple(session.fires),
             fire_records=tuple(session.fire_records),

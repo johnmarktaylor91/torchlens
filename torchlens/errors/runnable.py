@@ -69,7 +69,7 @@ class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError, Va
     """
 
 
-class NumericAttestationError(RunnableTLSPECError, ValidationError, RuntimeError):
+class ReplayValueMismatchError(RunnableTLSPECError, ValidationError, RuntimeError):
     """A recomputed selected activation differed from its archived bytes."""
 
 
@@ -84,7 +84,7 @@ class CollectiveBoundaryReplayError(RunnableTLSPECError, ValidationError, Runtim
 __all__ = [
     "BufferSinkRoutingError",
     "CollectiveBoundaryReplayError",
-    "NumericAttestationError",
+    "ReplayValueMismatchError",
     "PathDivergenceError",
     "PoisonedRunError",
     "ReattachError",

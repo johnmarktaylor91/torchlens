@@ -243,8 +243,8 @@ def test_merged_finding_payload_round_trip_preserves_key_and_ranks() -> None:
         ranks=(0, 1),
     )
     payload = finding.to_payload()
-    rebuilt = MergedFinding.from_payload(payload)
+    rebuilt = MergedFinding.from_dict(payload)
     assert rebuilt == finding
 
     keyless = MergedFinding(kind="presence_gap", detail="no key")
-    assert MergedFinding.from_payload(keyless.to_payload()) == keyless
+    assert MergedFinding.from_dict(keyless.to_payload()) == keyless

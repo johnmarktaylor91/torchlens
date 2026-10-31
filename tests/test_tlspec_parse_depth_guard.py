@@ -167,7 +167,7 @@ def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
     except RecursionError:  # pragma: no cover - the exact failure we forbid
         pytest.fail("uncaught RecursionError escaped tl.load() on a deep manifest")
     except Exception:
-        pass  # any typed disposition (TorchLensIOError / analysis-only) is acceptable
+        pass  # any typed disposition (ArtifactError / analysis-only) is acceptable
 
 
 def test_normal_bundle_still_loads(tmp_path: Path) -> None:

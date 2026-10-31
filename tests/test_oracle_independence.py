@@ -142,7 +142,7 @@ def _planted_edge_drop_trace():
 
     # The model rides on the trace on purpose: capture releases the direct
     # param references and rehydrates them through the source-model weakref,
-    # so validation raises PostTraceParamUnavailable whenever a gc cycle
+    # so validation raises ParamReleasedError whenever a gc cycle
     # collection happens to run before the value-rooted replay reads params.
     model = _TwoStage()
     log = trace_fn(
@@ -374,15 +374,15 @@ def test_loaded_artifact_replay_validation_refuses_typed(tmp_path) -> None:
     b9-sol R75-2 reality check: ``Op.func`` is ``FieldPolicy.DROP`` at every
     save level, so a loaded torch artifact cannot run the value-rooted replay
     sweeps at all. The honest floor pinned here is that the refusal is LOUD —
-    a ``TorchLensIOError`` naming the unresolved computational functions — so
+    a ``ArtifactError`` naming the unresolved computational functions — so
     a planted loaded corruption can never validate clean through a path that
     silently skipped the work.
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     loaded, outputs = _loaded_edge_drop_trace(tmp_path)
-    with pytest.raises(TorchLensIOError, match="unresolved computational functions"):
+    with pytest.raises(ArtifactError, match="unresolved computational functions"):
         loaded.validate_forward_pass(outputs, validate_metadata=False)
 
 

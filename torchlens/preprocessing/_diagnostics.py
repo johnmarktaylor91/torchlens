@@ -64,7 +64,7 @@ class DiagnosticFinding:
         confinement arm) both blind spots.
     """
 
-    check: str
+    check_name: str
     outcome: str
     evidence_class: str
     detail: str
@@ -118,7 +118,7 @@ def _check_nonfinite(batch: torch.Tensor) -> DiagnosticFinding:
         n_nonfinite = 0
     if n_nonfinite:
         return DiagnosticFinding(
-            check="nonfinite",
+            check_name="nonfinite",
             outcome=OUTCOME_CONTRADICTION,
             evidence_class=EVIDENCE_CONTRADICTION,
             detail=(
@@ -127,7 +127,7 @@ def _check_nonfinite(batch: torch.Tensor) -> DiagnosticFinding:
             ),
         )
     return DiagnosticFinding(
-        check="nonfinite",
+        check_name="nonfinite",
         outcome=OUTCOME_NO_CONTRADICTION,
         evidence_class=EVIDENCE_INFO,
         detail="all input values finite",
@@ -142,7 +142,7 @@ def _check_dtype_regime(
     declares_norm = declared is not None and (declared.mean is not None or declared.std is not None)
     if not batch.is_floating_point() and declares_norm:
         return DiagnosticFinding(
-            check="dtype_regime",
+            check_name="dtype_regime",
             outcome=OUTCOME_CONTRADICTION,
             evidence_class=EVIDENCE_CONTRADICTION,
             detail=(
@@ -153,13 +153,13 @@ def _check_dtype_regime(
         )
     if declared is None:
         return DiagnosticFinding(
-            check="dtype_regime",
+            check_name="dtype_regime",
             outcome=OUTCOME_NOT_APPLICABLE,
             evidence_class=EVIDENCE_INFO,
             detail="no declared configuration to check the dtype against",
         )
     return DiagnosticFinding(
-        check="dtype_regime",
+        check_name="dtype_regime",
         outcome=OUTCOME_NO_CONTRADICTION,
         evidence_class=EVIDENCE_INFO,
         detail=f"input dtype {batch.dtype} is consistent with the declaration",
@@ -179,7 +179,7 @@ def _check_layout(batch: torch.Tensor, declared: DeclaredPreprocessing | None) -
         last, second = int(batch.shape[-1]), int(batch.shape[1])
         if last in (1, 3) and second not in (1, 3):
             return DiagnosticFinding(
-                check="layout",
+                check_name="layout",
                 outcome=OUTCOME_CONTRADICTION,
                 evidence_class=EVIDENCE_PREMISED,
                 detail=(
@@ -189,7 +189,7 @@ def _check_layout(batch: torch.Tensor, declared: DeclaredPreprocessing | None) -
                 ),
             )
     return DiagnosticFinding(
-        check="layout",
+        check_name="layout",
         outcome=OUTCOME_NO_CONTRADICTION,
         evidence_class=EVIDENCE_INFO,
         detail="no channels-last signature detected",
@@ -217,7 +217,7 @@ def _check_confinement(
         or int(batch.shape[1]) != len(declared.mean)
     ):
         return DiagnosticFinding(
-            check="confinement",
+            check_name="confinement",
             outcome=OUTCOME_NOT_APPLICABLE,
             evidence_class=EVIDENCE_INFO,
             detail=(
@@ -239,7 +239,7 @@ def _check_confinement(
     above = float(restored.max().item()) > high + eps
     if below or above:
         return DiagnosticFinding(
-            check="confinement",
+            check_name="confinement",
             outcome=OUTCOME_CONTRADICTION,
             evidence_class=EVIDENCE_PREMISED,
             detail=(
@@ -250,7 +250,7 @@ def _check_confinement(
             ),
         )
     return DiagnosticFinding(
-        check="confinement",
+        check_name="confinement",
         outcome=OUTCOME_NO_CONTRADICTION,
         evidence_class=EVIDENCE_INFO,
         detail=(

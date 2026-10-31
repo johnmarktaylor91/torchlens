@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._state import pause_logging
 from ..errors._base import TorchLensWarning
-from ._errors import EchoStatsError
+from ._errors import NarrationStatsError
 from ._event import NarrationEvent, NarrationStats
 from ._format import compact_device, compact_dtype, format_shape, render_line
 from ._sink import EchoSink
@@ -328,7 +328,7 @@ class EchoSession:
             dtype=compact_dtype(ctx.dtype),
             device=device,
             output_index=ctx.output_index,
-            intervened=intervened,
+            has_intervention=intervened,
             late=None,
             stats=stats,
             tier=self.tier,
@@ -388,7 +388,7 @@ class EchoSession:
                         ctx, kind="op", ordinal=self.ordinal, intervened=intervened, stats=stats
                     )
                 )
-            except EchoStatsError:
+            except NarrationStatsError:
                 raise
             except Exception as exc:  # noqa: BLE001 - observer failure disables echo, never the capture
                 self._disable(exc)

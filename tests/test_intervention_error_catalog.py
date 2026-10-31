@@ -25,16 +25,16 @@ ERROR_NAMES: tuple[str, ...] = (
     "EngineDispatchError",
     "ModelMismatchError",
     "BundleMemberError",
-    "BundleRelationshipError",
+    "BundleComparisonError",
     "BaselineUndeterminedError",
     "ReplayPreconditionError",
     "SelectionError",
     "SiteResolutionError",
-    "SiteAmbiguityError",
+    "AmbiguousSiteError",
     "HookSignatureError",
     "HookValueError",
     "HookSiteCoverageError",
-    "AxisAmbiguityError",
+    "AmbiguousAxisError",
     "AppendMismatchError",
     "AppendBatchDependenceError",
     "ControlFlowDivergenceError",
@@ -44,14 +44,14 @@ ERROR_NAMES: tuple[str, ...] = (
     "LiveModeLabelError",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
-    "DirectWriteInExecutableSaveError",
+    "DirectWriteSaveError",
     "SpecMutationError",
-    "OpaqueCallableInExecutableSaveError",
+    "OpaqueCallableError",
 )
 """v5.2 intervention errors owned by Phase 14."""
 
 WARNING_NAMES: tuple[str, ...] = (
-    "MutateInPlaceWarning",
+    "TraceMutationWarning",
     "DirectActivationWriteWarning",
     "MultiMatchWarning",
     "ControlFlowDivergenceWarning",
@@ -66,16 +66,16 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "EngineDispatchError": "tests/test_intervention_phase8b.py::test_do_ambiguous_dispatch_and_model_mismatch_errors",
     "ModelMismatchError": "tests/test_intervention_phase8b.py::test_do_ambiguous_dispatch_and_model_mismatch_errors",
     "BundleMemberError": "tests/test_intervention_error_catalog.py::test_bundle_member_error_raised_for_missing_bundle_site",
-    "BundleRelationshipError": "tests/test_intervention_phase9.py",
+    "BundleComparisonError": "tests/test_intervention_phase9.py",
     "SelectionError": "tests/test_intervention_error_catalog.py::test_selection_error_kind_matrix_refusal",
     "BaselineUndeterminedError": "tests/test_intervention_phase9.py",
     "ReplayPreconditionError": "tests/test_intervention_phase6.py::test_replay_rejects_non_intervention_ready_logs",
     "SiteResolutionError": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
-    "SiteAmbiguityError": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
+    "AmbiguousSiteError": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
     "HookSignatureError": "tests/test_intervention_phase3.py::test_normalizer_rejects_missing_site_and_bad_signature",
     "HookValueError": "tests/test_intervention_phase3.py::test_execute_hook_rejects_none_type_shape_dtype_and_device",
     "HookSiteCoverageError": "tests/test_intervention_phase3.py::test_normalizer_rejects_missing_site_and_bad_signature",
-    "AxisAmbiguityError": "tests/test_intervention_error_catalog.py::test_helper_axis_ambiguity_uses_catalog_error",
+    "AmbiguousAxisError": "tests/test_intervention_error_catalog.py::test_helper_axis_ambiguity_uses_catalog_error",
     "AppendMismatchError": "tests/test_intervention_phase12.py::test_append_shape_mismatch_raises",
     "AppendBatchDependenceError": "tests/test_intervention_phase12.py::test_append_batch_dependent_helper_rejected_after_clean_rerun",
     "ControlFlowDivergenceError": "tests/test_intervention_phase7.py::test_rerun_strict_divergence_raises_before_swap",
@@ -85,10 +85,10 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "LiveModeLabelError": "tests/test_intervention_phase4c.py",
     "SpliceModuleDeviceError": "tests/test_intervention_error_catalog.py::test_splice_module_device_error_raised_for_device_mismatch",
     "SpliceModuleDtypeError": "tests/test_intervention_phase3.py::test_splice_module_dtype_error_is_specific",
-    "DirectWriteInExecutableSaveError": "tests/test_intervention_error_catalog.py::test_direct_write_executable_save_error_raised",
+    "DirectWriteSaveError": "tests/test_intervention_error_catalog.py::test_direct_write_executable_save_error_raised",
     "SpecMutationError": "tests/test_intervention_phase8a.py",
-    "OpaqueCallableInExecutableSaveError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
-    "MutateInPlaceWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
+    "OpaqueCallableError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
+    "TraceMutationWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
     "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_out_write_warns_once_and_marks_dirty",
     "MultiMatchWarning": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
     "ControlFlowDivergenceWarning": "tests/test_intervention_phase7.py::test_rerun_non_strict_divergence_warns_and_swaps",
@@ -269,7 +269,7 @@ def test_error_warning_partition_is_consistent() -> None:
 def test_spec_portability_alias_reconciles_executable_save_name() -> None:
     """v5.2 ``SpecPortabilityError`` remains compatible with Phase 10 naming."""
 
-    assert terrors.SpecPortabilityError is terrors.OpaqueCallableInExecutableSaveError
+    assert terrors.SpecPortabilityError is terrors.OpaqueCallableError
 
 
 def test_catalog_manifest_covers_named_entries() -> None:
@@ -298,12 +298,12 @@ def test_catalog_messages_include_required_payload_fields(name: str) -> None:
         ("GraphShapeMismatchError", "fatal"),
         ("ControlFlowDivergenceError", "fatal"),
         ("ModelMismatchError", "fatal"),
-        ("BundleRelationshipError", "fatal"),
+        ("BundleComparisonError", "fatal"),
         ("ReplayPreconditionError", "recoverable"),
         ("SiteResolutionError", "recoverable"),
         ("AppendMismatchError", "recoverable"),
         ("SpecMutationError", "recoverable"),
-        ("MutateInPlaceWarning", "informational"),
+        ("TraceMutationWarning", "informational"),
     ),
 )
 def test_catalog_severity_policy_examples(name: str, expected: str) -> None:
@@ -478,11 +478,11 @@ def test_axis_i_log_registry_uses_weakref_cleanup() -> None:
 
 
 def test_helper_axis_ambiguity_uses_catalog_error() -> None:
-    """Vector helpers fail with ``AxisAmbiguityError`` when feature_axis is omitted."""
+    """Vector helpers fail with ``AmbiguousAxisError`` when feature_axis is omitted."""
 
     hook = tl.steer(torch.ones(3))()
 
-    with pytest.raises(terrors.AxisAmbiguityError, match="feature_axis"):
+    with pytest.raises(terrors.AmbiguousAxisError, match="feature_axis"):
         hook(torch.ones(2, 3), hook=None)
 
 
@@ -552,7 +552,7 @@ def test_direct_write_executable_save_error_raised(tmp_path: Path) -> None:
     with pytest.warns(terrors.DirectActivationWriteWarning, match="direct Op out writes"):
         relu.out = relu.out
 
-    with pytest.raises(terrors.DirectWriteInExecutableSaveError, match="Direct out writes"):
+    with pytest.raises(terrors.DirectWriteSaveError, match="Direct out writes"):
         log.save_intervention(tmp_path / "direct_write.tlspec")
 
 
@@ -594,7 +594,7 @@ def _manifest_alias(name: str) -> str:
         Name or alias expected in the cited test source.
     """
 
-    aliases = {"SpecPortabilityError": "OpaqueCallableInExecutableSaveError"}
+    aliases = {"SpecPortabilityError": "OpaqueCallableError"}
     return aliases.get(name, name)
 
 

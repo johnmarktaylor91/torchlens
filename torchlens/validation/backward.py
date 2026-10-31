@@ -541,7 +541,7 @@ def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
 
 def validate_backward_pass(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -617,15 +617,15 @@ def validate_backward_pass(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    input_args = _coerce_input_args(model, input_args)
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    inputs = _coerce_input_args(model, inputs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}
     if loss_fn is None:
         loss_fn = _sum_tensors
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
-    input_args = normalize_input_args(input_args, model)
+    inputs = normalize_input_args(inputs, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
         return False
@@ -642,7 +642,7 @@ def validate_backward_pass(
     try:
         set_random_seed(random_seed)
         stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
-            input_args, input_kwargs, model_device
+            inputs, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
         # R75-1 sibling site: the "stock autograd" reference pass must run on
@@ -652,7 +652,7 @@ def validate_backward_pass(
         # distortion corrupted stock and captured gradients IDENTICALLY and
         # the comparison passed vacuously. Refuse (fail-closed) if the
         # wrappers cannot be removed because a capture is active.
-        from .._errors import CaptureContextError
+        from .._errors import CaptureNotActiveError
         from ._pristine import pristine_torch_oracle
 
         try:
@@ -671,7 +671,7 @@ def validate_backward_pass(
                 else:
                     stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
                     stock_loss.backward()
-        except CaptureContextError:
+        except CaptureNotActiveError:
             warnings.warn(
                 "validate_backward_pass could not compute pristine-torch stock "
                 "gradients (a capture is active in this process, or the unwrap "
@@ -692,7 +692,7 @@ def validate_backward_pass(
         _restore_training_mode(model, original_training)
         set_random_seed(random_seed)
         logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
-            input_args, input_kwargs, model_device
+            inputs, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
         trace = trace_fn(

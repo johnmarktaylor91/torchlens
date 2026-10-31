@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.capture.outcome import CaptureStatus
 from torchlens.data_classes.trace import Trace
 
@@ -84,7 +84,7 @@ def test_post_stage_failure_never_publishes(tmp_path):
     # The streaming failure handler wraps the propagating step-20 error.
     with (
         mock.patch.object(Trace, "release_param_refs", side_effect=RuntimeError("boom in step 20")),
-        pytest.raises(TorchLensIOError),
+        pytest.raises(ArtifactError),
     ):
         tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
     assert not path.exists()
@@ -106,7 +106,7 @@ def test_forward_failure_never_publishes(tmp_path):
     path = tmp_path / "fwd_failed.tlspec"
     # The streaming failure handler wraps the forward error (historical
     # streamed-capture behavior); the original rides the exception chain.
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.trace(Boom(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
     assert "mid-forward failure" in str(excinfo.value.__cause__)
     assert not path.exists()

@@ -33,7 +33,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.data_classes.backward_pass import BackwardPass
 from torchlens.data_classes.grad_fn import GradFn
 from torchlens.data_classes.grad_fn_call import GradFnCall
@@ -365,7 +365,7 @@ def test_coerce_container_typed_state_raises_on_incompatible_corruption() -> Non
     state["layer_dict_main_keys"] = 12345
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         restored.__setstate__(state)
 
 

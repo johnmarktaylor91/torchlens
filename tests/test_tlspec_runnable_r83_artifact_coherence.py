@@ -20,7 +20,7 @@ and listed in ``_io/rehydrate.py``, but was never registered in
 ``PORTABLE_STATE_SPEC``. Any trace that went through ``__setstate__`` -- which
 ``cache=True`` makes routine -- tripped the field-catalog tripwire, so
 ``save(level="runnable")`` failed outright on the SECOND capture with
-``TorchLensIOError: Trace._pending_live_fire_records is missing from
+``ArtifactError: Trace._pending_live_fire_records is missing from
 PORTABLE_STATE_SPEC``. A user-facing save failure on a normal flow, not merely a
 test red. The broader cross-effort field-catalog drift stays deferred.
 """
@@ -302,7 +302,7 @@ def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> Non
 def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
-    ``TorchLensIOError: Trace._pending_live_fire_records is missing from
+    ``ArtifactError: Trace._pending_live_fire_records is missing from
     PORTABLE_STATE_SPEC`` -- a user-facing save failure on a normal flow.
     """
 

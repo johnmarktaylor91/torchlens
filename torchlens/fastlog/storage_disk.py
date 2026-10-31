@@ -17,7 +17,7 @@ from typing import Any, cast
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
-from .._io import TLSPEC_VERSION, TorchLensIOError
+from .._io import TLSPEC_VERSION, ArtifactError
 from .._io._durability import fsync_dir, fsync_tree
 from .._io._torch_symbols import torch_attr
 from .._io.manifest import Manifest, TensorEntry
@@ -252,7 +252,7 @@ class DiskStorageBackend:
             manifest = _build_fastlog_manifest(self._tensor_entries)
             manifest.write(self.writer.tmp_path / "manifest.json")
             _tighten_bundle_tree(self.writer.tmp_path)
-        except (OSError, TorchLensIOError, ValueError) as exc:
+        except (OSError, ArtifactError, ValueError) as exc:
             self.abort(_scrubbed_abort_reason("Failed to finalize fastlog bundle", exc))
             raise
         except BaseException as exc:
@@ -278,7 +278,7 @@ class DiskStorageBackend:
         if self.writer.final_path.exists():
             reason = f"Bundle path already exists: {self.writer.final_path}"
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            raise ArtifactError(reason)
         try:
             self.writer.tmp_path.rename(self.writer.final_path)
         except OSError as exc:
@@ -372,7 +372,7 @@ class DiskStorageBackend:
                 handle.write("\n")
         except OSError as exc:
             self.abort(_scrubbed_abort_reason("Failed to append fastlog index", exc))
-            raise TorchLensIOError(f"Failed to append fastlog index at {self.index_path}.") from exc
+            raise ArtifactError(f"Failed to append fastlog index at {self.index_path}.") from exc
 
 
 def record_to_json(record: ActivationRecord) -> dict[str, Any]:
@@ -537,7 +537,7 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
         return None
     dtype_obj = torch_attr(str(name))  # r47 secD_1: no lazy ``torch.__getattr__``
     if not isinstance(dtype_obj, torch.dtype):
-        raise TorchLensIOError(f"Unsupported dtype name in fastlog spec: {name!r}.")
+        raise ArtifactError(f"Unsupported dtype name in fastlog spec: {name!r}.")
     return cast(torch.dtype, dtype_obj)
 
 

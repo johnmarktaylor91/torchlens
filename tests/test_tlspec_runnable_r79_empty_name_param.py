@@ -4,7 +4,7 @@ Round-78 (free) found a save/load door asymmetry: ``self._parameters[""] =
 nn.Parameter(...)`` bypasses ``register_parameter``'s empty-name validation,
 captures fine, and SAVED a runnable artifact whose weight tensor entry carried
 label ``""`` -- which ``tl.load`` categorically refuses wholesale
-(``TorchLensIOError: Runnable weight tensor entry 0 requires a canonical
+(``ArtifactError: Runnable weight tensor entry 0 requires a canonical
 label``). Fail-closed and typed at load, no verdict risk, but the save door
 accepted what the load door refuses: a stillborn artifact.
 

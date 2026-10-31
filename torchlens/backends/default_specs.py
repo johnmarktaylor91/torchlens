@@ -1108,7 +1108,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_torch_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=True,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=True,
                 interventions=True,
                 rng_replay=True,
@@ -1150,7 +1150,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_mlx_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=True,
                 rng_replay=False,
@@ -1184,7 +1184,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_jax_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
@@ -1215,7 +1215,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_tinygrad_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
@@ -1247,7 +1247,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_paddle_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=True,
                 rng_replay=False,
@@ -1283,7 +1283,7 @@ def register_default_backend_specs() -> None:
             validate_trace=_tf_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=True,
                 rng_replay=False,

@@ -145,8 +145,8 @@ def test_record_validation_failure_is_first_write_wins() -> None:
 
     trace = type("T", (), {})()
     reset_validation_failure(trace)
-    record_validation_failure(trace, ValidationFailure(check="first"))
-    record_validation_failure(trace, ValidationFailure(check="second"))
+    record_validation_failure(trace, ValidationFailure(check_name="first"))
+    record_validation_failure(trace, ValidationFailure(check_name="second"))
     failure = get_validation_failure(trace)
     assert failure is not None
     assert failure.check == "first"
@@ -156,7 +156,7 @@ def test_to_dict_roundtrips_fields() -> None:
     """``to_dict`` exposes every field for ledger/JSON serialization."""
 
     failure = ValidationFailure(
-        check=CHECK_REPLAY,
+        check_name=CHECK_REPLAY,
         op_label="conv2d_3_4",
         func_name="conv2d",
         max_abs_diff=0.1,

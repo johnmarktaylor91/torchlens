@@ -45,7 +45,7 @@ from torchlens._io import (
 )
 from torchlens._io.manifest import Manifest
 from torchlens._io.paths import resolve_bundle_blob_path
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 
 
 def _tiny() -> nn.Module:
@@ -187,7 +187,7 @@ def test_legacy_bundle_metadata_pkl_ceiling_refuses_oversize(tmp_path: Path, mon
     legacy_dir.mkdir()
     (legacy_dir / "metadata.pkl").write_bytes(pickle.dumps({"not": "a bundle"}))
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(TorchLensIOError, match="ceiling"):
+    with pytest.raises(ArtifactError, match="ceiling"):
         bundle_container._load_unified_bundle(legacy_dir)
 
 
@@ -211,7 +211,7 @@ def test_manifest_refuses_duplicate_blob_ids(tmp_path: Path) -> None:
 
     data = _saved_manifest_data(tmp_path)
     data["tensors"] = [*data["tensors"], dict(data["tensors"][0])]
-    with pytest.raises(TorchLensIOError, match="duplicate blob_id"):
+    with pytest.raises(ArtifactError, match="duplicate blob_id"):
         Manifest.from_dict(data)
 
 
@@ -222,7 +222,7 @@ def test_manifest_refuses_duplicate_relative_paths(tmp_path: Path) -> None:
     forged = dict(data["tensors"][0])
     forged["blob_id"] = "zzzz-forged"
     data["tensors"] = [*data["tensors"], forged]
-    with pytest.raises(TorchLensIOError, match="duplicate relative_path"):
+    with pytest.raises(ArtifactError, match="duplicate relative_path"):
         Manifest.from_dict(data)
 
 
@@ -232,7 +232,7 @@ def test_manifest_refuses_entry_count_above_ceiling(tmp_path: Path, monkeypatch)
     data = _saved_manifest_data(tmp_path)
     assert data["tensors"], "fixture bundle must carry at least one tensor entry"
     monkeypatch.setattr(manifest_mod, "_MAX_MANIFEST_TENSOR_ENTRIES", len(data["tensors"]) - 1)
-    with pytest.raises(TorchLensIOError, match="ceiling"):
+    with pytest.raises(ArtifactError, match="ceiling"):
         Manifest.from_dict(data)
 
 
@@ -313,7 +313,7 @@ def test_runnable_dead_model_fallback_refuses_non_tensor_state_typed() -> None:
         ),
         param_logs=(),
     )
-    with pytest.raises(TorchLensIOError, match="non-tensor persistent-buffer"):
+    with pytest.raises(ArtifactError, match="non-tensor persistent-buffer"):
         runnable_mod._add_persistent_buffer_slot_drafts(stub_trace, {})
 
 
@@ -332,7 +332,7 @@ def test_nul_byte_relative_path_refuses_typed(tmp_path: Path) -> None:
 
     bundle_root = tmp_path / "b.tlspec"
     (bundle_root / "blobs").mkdir(parents=True)
-    with pytest.raises(TorchLensIOError, match="unresolvable"):
+    with pytest.raises(ArtifactError, match="unresolvable"):
         resolve_bundle_blob_path(bundle_root, "blobs/a\x00b.safetensors")
 
 
@@ -347,7 +347,7 @@ def test_tensor_entry_refuses_invalid_shape(tmp_path: Path, shape: list) -> None
     data = _saved_manifest_data(tmp_path)
     entry = dict(data["tensors"][0])
     entry["shape"] = shape
-    with pytest.raises(TorchLensIOError, match="shape"):
+    with pytest.raises(ArtifactError, match="shape"):
         manifest_mod.TensorEntry.from_dict(entry)
 
 
@@ -357,11 +357,11 @@ def test_tensor_entry_refuses_bool_bytes_and_manifest_bool_ints(tmp_path: Path) 
     data = _saved_manifest_data(tmp_path)
     entry = dict(data["tensors"][0])
     entry["bytes"] = True
-    with pytest.raises(TorchLensIOError, match="bytes"):
+    with pytest.raises(ArtifactError, match="bytes"):
         manifest_mod.TensorEntry.from_dict(entry)
     forged = dict(data)
     forged["n_layers"] = True
-    with pytest.raises(TorchLensIOError, match="n_layers"):
+    with pytest.raises(ArtifactError, match="n_layers"):
         Manifest.from_dict(forged)
 
 
@@ -371,7 +371,7 @@ def test_tensor_entry_refuses_malformed_sha256(tmp_path: Path) -> None:
     data = _saved_manifest_data(tmp_path)
     entry = dict(data["tensors"][0])
     entry["sha256"] = "Z" * 64
-    with pytest.raises(TorchLensIOError, match="sha256|SHA-256"):
+    with pytest.raises(ArtifactError, match="sha256|SHA-256"):
         manifest_mod.TensorEntry.from_dict(entry)
 
 
@@ -402,7 +402,7 @@ def test_metadata_pkl_opcode_ceiling_refuses_object_bomb(tmp_path: Path, monkeyp
     (spec / "metadata.pkl").write_bytes(pickle.dumps([0] * 100_000))
     monkeypatch.setattr(bundle_mod, "_METADATA_PKL_PRESCAN_BYTES", 0)
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_OPCODES", 1_000)
-    with pytest.raises(TorchLensIOError, match="opcode allocation ceiling") as excinfo:
+    with pytest.raises(ArtifactError, match="opcode allocation ceiling") as excinfo:
         tl.load(str(spec))
     assert excinfo.value.fields["code"] == "metadata_object_count_exceeded"
 
@@ -417,7 +417,7 @@ def test_metadata_pkl_non_mapping_payload_refuses_typed(tmp_path: Path) -> None:
 
     spec = _save(tmp_path)
     (spec / "metadata.pkl").write_bytes(pickle.dumps([[0] * 3] * 3))
-    with pytest.raises(TorchLensIOError, match="not a metadata mapping") as excinfo:
+    with pytest.raises(ArtifactError, match="not a metadata mapping") as excinfo:
         tl.load(str(spec))
     assert excinfo.value.fields["code"] == "metadata_payload_not_a_mapping"
 
@@ -426,14 +426,14 @@ def test_bundle_save_failure_names_cause_and_code(tmp_path: Path, monkeypatch) -
     """R65: the highest-traffic save door names its cause, code, and remedy.
 
     Fail-before: every non-typed save failure became the content-free
-    ``TorchLensIOError: Failed to save bundle at <path>.`` with empty fields.
+    ``ArtifactError: Failed to save bundle at <path>.`` with empty fields.
     """
 
     def _boom(state, handle) -> None:
         raise TypeError("cannot pickle '_thread.lock' object")
 
     monkeypatch.setattr(bundle_mod, "dump_canonical_metadata", _boom)
-    with pytest.raises(TorchLensIOError, match="cannot pickle") as excinfo:
+    with pytest.raises(ArtifactError, match="cannot pickle") as excinfo:
         _save(tmp_path)
     assert excinfo.value.fields["code"] == "bundle_save_failed"
     assert excinfo.value.fields["cause_type"] == "TypeError"

@@ -1191,7 +1191,7 @@ class RunnableDiagnostic:
     current_runtime: str | None
     detection_stage: str
     resolver_provenance: str | None
-    analysis_load_available: bool
+    is_analysis_load_available: bool
     details: tuple[tuple[str, str], ...]
 
 
@@ -1511,13 +1511,13 @@ class RunReport:
     path_faithfulness: PathFaithfulness
     first_mismatch: RunnableDiagnostic | None
     numeric_attestation: NumericAttestationStatus
-    poisoned: bool
+    is_poisoned: bool
     nondeterministic_sources: tuple[str, ...]
     #: PROVISIONAL (documented-unstable, rides naming/S2): ``True`` when the
     #: live run was invoked with ``carry_state=True`` and declared-state
     #: mutations were deliberately left on the live model (the default run
     #: snapshot-restores declared state and reports ``False``).
-    state_carried: bool = False
+    has_carried_state: bool = False
     #: Truncation disclosure ([S2-PROV], L4 until=): ``None`` for a full run.
     truncation: RunTruncation | None = None
     #: Ratified flat reading surface (S2 sec 2): ``truncation is not None``.
@@ -1533,7 +1533,7 @@ class RunReport:
             f"path_faithfulness={self.path_faithfulness.value}",
             f"numeric_attestation={self.numeric_attestation.value}",
             f"state_source={self.state_source.value}",
-            f"poisoned={self.poisoned}",
+            f"poisoned={self.is_poisoned}",
             f"contract_checks={checks}/{len(self.contract_checks)} passed",
         ]
         if self.truncated:

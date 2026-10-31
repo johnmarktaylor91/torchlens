@@ -35,7 +35,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.utils as tlutils
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import _resolve_import_ref
@@ -117,7 +117,7 @@ def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path
         raised: BaseException | None = None
         try:
             tl.load(victim)
-        except (TorchLensIOError, pickle.UnpicklingError) as exc:
+        except (ArtifactError, pickle.UnpicklingError) as exc:
             raised = exc
 
         assert raised is not None, "load-time import gadget was not blocked"
@@ -305,7 +305,7 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     raised: BaseException | None = None
     try:
         tl.load(bundle)
-    except (TorchLensIOError, pickle.UnpicklingError) as exc:
+    except (ArtifactError, pickle.UnpicklingError) as exc:
         raised = exc
 
     assert raised is not None, "fs-mutation gadget was not blocked"
@@ -337,7 +337,7 @@ def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
 
     try:
         tl.load(bundle)
-    except (TorchLensIOError, pickle.UnpicklingError):
+    except (ArtifactError, pickle.UnpicklingError):
         pass
     assert getattr(tc, cap) == before, "untrusted bundle flipped a global capability flag"
 

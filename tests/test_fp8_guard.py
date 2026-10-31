@@ -464,10 +464,10 @@ def test_saving_an_fp8_activation_refuses_typed(tmp_path) -> None:
         pytest temporary directory.
     """
 
-    from torchlens.errors import TorchLensIOError
+    from torchlens.errors import ArtifactError
 
     trace = tl.trace(_Fp8CastModel(torch.float8_e4m3fn), torch.randn(2, 4))
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.save(trace, str(tmp_path / "fp8.tlspec"))
     assert "float8_e4m3fn" in str(excinfo.value)
 

@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
-from torchlens._io import TorchLensIOError  # noqa: E402
+from torchlens._io import ArtifactError  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     has_vetted_snapshot,
@@ -330,7 +330,7 @@ class TestTamperMatrix:
         # this test's NAME is only actually tested when the refusal type is pinned.
         # A foreign bundle_format never enters the merged branch, so the trace-bundle
         # loader refuses it as an unrecognized directory artifact.
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.load(art)
 
 

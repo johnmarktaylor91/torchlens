@@ -19,7 +19,7 @@ import torchlens as tl
 from torchlens.bundle import Bundle
 from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
 from torchlens.errors.episode import BundleRelationError
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 
 
 class _TinyLM(torch.nn.Module):
@@ -82,7 +82,7 @@ def test_selected_and_decider_are_ordered_for_the_comparison_gate(model: _TinyLM
     bundle = _routed(model)
     assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("selected_by", "writer", "router")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 

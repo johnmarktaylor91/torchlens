@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.capture import peak_memory, trace as capture_trace
 from torchlens.capture.peak_memory import (
     CPU_ZERO_PEAK_REASON,
@@ -189,7 +189,7 @@ def test_malformed_reason_refuses_at_load(tmp_path: Path, peak: Any, reason: Any
     path = tmp_path / f"forged_{why}.tlspec"
     tl.save(trace, path)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_forward_peak_memory_invalid"
     assert excinfo.value.fields["reason"] == why

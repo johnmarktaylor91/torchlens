@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .interface import _format_conditional_branch_stack
 
@@ -282,7 +282,7 @@ class TraceExportMixin(_TraceMixinBase):
 
         refuse_poisoned_trace(self, "tabular export")
         if not self._tracing_finished:
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "to_pandas() cannot be called before the forward pass is complete",
                 code="trace_not_finished",
                 remedy="wait until trace(...) has returned before exporting",

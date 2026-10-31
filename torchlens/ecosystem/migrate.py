@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, TorchLensIOError, above_ceiling_error
+from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, ArtifactError, above_ceiling_error
 from .._io._durability import fsync_file
 from .._io._json import read_bounded
 from .._io.compat_ledger import (
@@ -189,7 +189,7 @@ def _classify_source(path: Path) -> dict[str, Any]:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Typed refusals for every out-of-scope source: not a governed
         unified artifact (``migration_source_unsupported``), a stranded or
         concurrent migration (``migration_concurrent_writer``), an
@@ -200,7 +200,7 @@ def _classify_source(path: Path) -> dict[str, Any]:
     from ..io import detect_tlspec_format
 
     if not path.is_dir():
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration source {path} is not a .tlspec directory. Remedy: pass "
             "the artifact directory written by tl.save.",
             code="migration_source_unsupported",
@@ -209,7 +209,7 @@ def _classify_source(path: Path) -> dict[str, Any]:
         )
     staging = path.with_name(path.name + _STAGING_SUFFIX)
     if staging.exists():
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration staging directory {staging} already exists: a prior "
             "migration was interrupted or another writer is migrating this "
             "artifact now. Remedy: verify no other process is migrating, then "
@@ -225,7 +225,7 @@ def _classify_source(path: Path) -> dict[str, Any]:
             if fmt == "v2.16_modellog_portable"
             else "only governed unified .tlspec directories (tlspec_version >= 6) migrate in v1"
         )
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration source {path} has format {fmt!r}, outside tl.migrate v1 "
             f"scope (governed unified artifacts only; pre-floor migration is out "
             f"of v1 by design). Remedy: {remedy}.",
@@ -236,7 +236,7 @@ def _classify_source(path: Path) -> dict[str, Any]:
         )
     manifest = read_bounded(path / "manifest.json")
     if not isinstance(manifest, dict) or not isinstance(manifest.get("tlspec_version"), int):
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration source {path} has no integer tlspec_version in its "
             "manifest. Remedy: the artifact is corrupt; restore it from its "
             "source or backup.",
@@ -258,7 +258,7 @@ def _admit_stamps(path: Path, manifest: dict[str, Any]) -> int:
             code="artifact_version_above_runtime",
         )
     if source_tlspec < MIN_TLSPEC_VERSION:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration source {path} has tlspec_version={source_tlspec}, below "
             f"the rehydration floor {MIN_TLSPEC_VERSION}; pre-floor migration is "
             "out of tl.migrate v1 by design (MEMO 3.6). Remedy: "
@@ -374,7 +374,7 @@ def _stage_and_publish(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         With ``code="migration_staging_failed"`` on any filesystem failure;
         the source artifact is restored (or was never touched).
     """
@@ -382,7 +382,7 @@ def _stage_and_publish(
     staging = path.with_name(path.name + _STAGING_SUFFIX)
     backup = path.with_name(path.name + _BACKUP_SUFFIX)
     if backup.exists():
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration backup directory {backup} already exists from a prior "
             "run. Remedy: inspect and remove (or rename) the retained backup, "
             "then re-run tl.migrate.",
@@ -404,9 +404,9 @@ def _stage_and_publish(
         witness_path.write_text(json.dumps(witness, indent=2, sort_keys=True), encoding="utf-8")
         _fsync_file(witness_path)
         marker.unlink()
-    except (OSError, TorchLensIOError, json.JSONDecodeError) as exc:
+    except (OSError, ArtifactError, json.JSONDecodeError) as exc:
         shutil.rmtree(staging, ignore_errors=True)
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration staging for {path} failed before publish: {exc}. The "
             "source artifact was never modified. Remedy: resolve the "
             "filesystem failure and re-run tl.migrate.",
@@ -418,7 +418,7 @@ def _stage_and_publish(
         os.rename(path, backup)
     except OSError as exc:
         shutil.rmtree(staging, ignore_errors=True)
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration publish for {path} could not move the source aside: "
             f"{exc}. The source artifact is unchanged. Remedy: resolve the "
             "filesystem failure and re-run tl.migrate.",
@@ -431,7 +431,7 @@ def _stage_and_publish(
     except OSError as exc:
         os.rename(backup, path)  # restore-on-failure: the source comes back
         shutil.rmtree(staging, ignore_errors=True)
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration publish for {path} failed at the final rename: {exc}. "
             "The source artifact was restored in place. Remedy: resolve the "
             "filesystem failure and re-run tl.migrate.",
@@ -464,7 +464,7 @@ def migrate(path: str | Path) -> MigrationReport:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Typed refusals with stable codes: ``migration_source_unsupported``
         (non-unified/pre-floor/corrupt sources), ``migration_concurrent_writer``
         (stranded staging or retained backup in the way),

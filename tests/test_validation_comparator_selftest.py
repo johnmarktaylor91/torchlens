@@ -30,7 +30,7 @@ def _traced_linear() -> tuple[tl.Trace, list[torch.Tensor], nn.Module]:
         references and rehydrates them through the source-model weakref, so a
         caller validating a trace must keep its model alive (dropping it here
         made the healthy-path test hostage to gc timing -- it raised
-        PostTraceParamUnavailable whenever a collection happened to run
+        ParamReleasedError whenever a collection happened to run
         between capture and validation).
     """
 

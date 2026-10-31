@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._errors import AmbiguousOpLookupError, PostTraceParamUnavailable
+from .._errors import AmbiguousOpLookupError, ParamReleasedError
 from .._io import (
     TLSPEC_VERSION,
     FieldPolicy,
@@ -489,7 +489,7 @@ class Param:
 
         try:
             param = self._peek_live_param(cache=False)
-        except PostTraceParamUnavailable:
+        except ParamReleasedError:
             return ParamValueBasis("absent", "not_persisted")
         if param is None:
             return ParamValueBasis("absent", "not_persisted")
@@ -509,7 +509,7 @@ class Param:
 
         try:
             return self._peek_live_param(cache=False)
-        except PostTraceParamUnavailable:
+        except ParamReleasedError:
             return None
 
     @property
@@ -586,7 +586,7 @@ class Param:
             return
         try:
             param = self._resolve_live_param()
-        except PostTraceParamUnavailable:
+        except ParamReleasedError:
             return
         # A non-leaf Parameter (a frozen one written in place with a grad
         # operand) never gets ``.grad`` populated, and reading it warns.
@@ -615,7 +615,7 @@ class Param:
 
         Raises
         ------
-        PostTraceParamUnavailable
+        ParamReleasedError
             If this Param released its direct reference and the source model
             weakref is now dead, or the parameter address is no longer present.
         """
@@ -630,7 +630,7 @@ class Param:
         model = source_model_from_trace(trace)
         if model is None:
             if self._param_ref_released:
-                raise PostTraceParamUnavailable(
+                raise ParamReleasedError(
                     f"Parameter '{self.address}' is unavailable because the source model "
                     "has been garbage-collected after TorchLens released its direct "
                     "parameter reference."
@@ -640,11 +640,11 @@ class Param:
         try:
             param = model.get_parameter(self.address)
         except AttributeError as exc:
-            raise PostTraceParamUnavailable(
+            raise ParamReleasedError(
                 f"Source model for parameter '{self.address}' does not support get_parameter()."
             ) from exc
         except KeyError as exc:
-            raise PostTraceParamUnavailable(
+            raise ParamReleasedError(
                 f"Parameter '{self.address}' is no longer registered on the source model."
             ) from exc
 
@@ -663,7 +663,7 @@ class Param:
 
         Raises
         ------
-        PostTraceParamUnavailable
+        ParamReleasedError
             If this Param released its direct reference and the source model
             weakref is now dead, or the parameter address is no longer present.
         """
@@ -973,7 +973,7 @@ class ParamAccessor(Accessor["Param"]):
             if self._rehydrate_on_iter:
                 try:
                     param_log._resolve_live_param()
-                except PostTraceParamUnavailable:
+                except ParamReleasedError:
                     pass
             yield param_log
 

@@ -15,7 +15,7 @@ carry three separate epistemic claims:
   authority provenance record (persisted on ``Trace.input_preprocessor``),
   with the derived closed ``status`` (authoritative / unverified_fallback /
   unknown).
-- :class:`PreprocessingAudit` -- the field-level configuration comparison
+- :class:`PreprocessingComparison` -- the field-level configuration comparison
   (match / mismatch / unknown-with-reason per field; strict mode refuses
   mismatch AND unknown with distinct typed codes).
 - :class:`InputDiagnostics` -- opt-in tensor findings that contradict or
@@ -31,9 +31,9 @@ from __future__ import annotations
 from ._attached import attach_authority
 from ._audit import (
     AuditFinding,
-    PreprocessingAudit,
     PreprocessingAuditError,
-    audit,
+    PreprocessingComparison,
+    compare,
 )
 from ._authorities import (
     AuthorityAdapter,
@@ -72,11 +72,11 @@ __all__ = [
     "DeclaredPreprocessing",
     "DiagnosticFinding",
     "InputDiagnostics",
-    "PreprocessingAudit",
+    "PreprocessingComparison",
     "PreprocessingAuditError",
     "Resolution",
     "attach_authority",
-    "audit",
+    "compare",
     "check_card",
     "diagnose",
     "imagenet_default",

@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..options import EchoOptions
-from ._errors import EchoConfigError
+from ._errors import NarrationConfigError
 
 __tl_layer__ = "L5"
 
@@ -40,7 +40,7 @@ def _refuse_finalized_selector(selector: Any) -> None:
     blocked = kinds & _FINALIZED_SELECTOR_KINDS
     if blocked:
         blocked_names = sorted(str(kind) for kind in blocked)
-        raise EchoConfigError(
+        raise NarrationConfigError(
             f"echo= selector needs finalized graph facts ({blocked_names}) that do not "
             "exist during a live forward; TorchLens will not silently run a second pass "
             "and narrate the replay as though it were live. Remedy: narrate post-hoc via "
@@ -65,7 +65,7 @@ def normalize_echo(echo: Any) -> EchoOptions | None:
 
     Raises
     ------
-    EchoConfigError
+    NarrationConfigError
         For unsupported spellings (strings other than ``"modules"``, lists,
         ints) and for selectors that need finalized labels.
     """
@@ -78,7 +78,7 @@ def normalize_echo(echo: Any) -> EchoOptions | None:
         return None
     _validate_select(select)
     if normalized.stats not in ("off", "reuse", "sampled", "exact"):
-        raise EchoConfigError(
+        raise NarrationConfigError(
             f"EchoOptions.stats={normalized.stats!r} is not a rung. Remedy: use 'off', "
             "'reuse', 'sampled', or 'exact' (the four measured cost classes).",
             code="echo_argument_invalid",
@@ -97,7 +97,7 @@ def _coerce_echo_value(echo: Any) -> EchoOptions:
     if isinstance(echo, str):
         if echo == "modules":
             return EchoOptions(select="modules")
-        raise EchoConfigError(
+        raise NarrationConfigError(
             f"echo={echo!r} is not a live narration scope: label/substring selections "
             "resolve against FINAL labels, which do not exist during a live forward. "
             "Remedy: pass echo=True, echo='modules', a live selector such as "
@@ -107,7 +107,7 @@ def _coerce_echo_value(echo: Any) -> EchoOptions:
         )
     if callable(echo):
         return EchoOptions(select=echo)
-    raise EchoConfigError(
+    raise NarrationConfigError(
         f"echo= received unsupported type {type(echo).__name__}. Remedy: pass True, "
         "'modules', a live selector/callable, or tl.options.EchoOptions.",
         code="echo_argument_invalid",
@@ -119,7 +119,7 @@ def _validate_select(select: Any) -> None:
     """Refuse non-live ``EchoOptions.select`` spellings typed."""
 
     if isinstance(select, str) and select != "modules":
-        raise EchoConfigError(
+        raise NarrationConfigError(
             f"EchoOptions.select={select!r} is not a live narration scope. Remedy: use "
             "True, 'modules', or a live selector; post-hoc narrate() accepts substrings.",
             code="echo_argument_invalid",
@@ -130,7 +130,7 @@ def _validate_select(select: Any) -> None:
     if isinstance(select, BaseSelector):
         _refuse_finalized_selector(select)
     elif select is not True and not callable(select) and select != "modules":
-        raise EchoConfigError(
+        raise NarrationConfigError(
             f"EchoOptions.select received unsupported type {type(select).__name__}. "
             "Remedy: pass True, 'modules', or a live selector/callable.",
             code="echo_argument_invalid",
@@ -156,7 +156,7 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
 
     Raises
     ------
-    EchoConfigError
+    NarrationConfigError
         When ``value`` is (or contains) an ``EchoOptions``.
     """
 
@@ -164,7 +164,7 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
     if not any(isinstance(item, EchoOptions) for item in values):
         return
     if slot == "save":
-        raise EchoConfigError(
+        raise NarrationConfigError(
             "EchoOptions is not a save predicate: the save slot is evaluated twice per "
             "declined op (the measured 554-evaluations-for-277-events alias retry), and a "
             "narrator that saves nothing declines everything. Remedy: pass echo=EchoOptions "
@@ -172,7 +172,7 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
             code="echo_as_save_predicate",
             remedy="pass it via echo=; keep save= for retention",
         )
-    raise EchoConfigError(
+    raise NarrationConfigError(
         "EchoOptions is not a hook: narration through hooks= pays the intervention "
         "runtime's content probes and provenance records (+101% measured trace cost) and "
         "cannot render module path, depth, or pass. Remedy: pass echo=EchoOptions -- the "

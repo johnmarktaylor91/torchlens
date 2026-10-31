@@ -23,7 +23,7 @@ from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import TorchLensPostfuncError
+from ..._errors import UserTransformError
 from ..._io import BlobRef
 from ..._robustness import UnsupportedTensorVariantError
 from ..._state import pause_logging

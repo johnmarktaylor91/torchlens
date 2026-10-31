@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch import completeness_witness as cw, rescue
 from torchlens.backends.torch._completeness_types import _DispatchEvent
 from torchlens.backends.torch.completeness_witness import (
@@ -620,7 +620,7 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     nested: object = torch.tensor([5.0])
     for _ in range(depth):
         nested = _AttrWrap(nested)
-    with pytest.warns(TorchLensCaptureGapWarning, match="input_traversal_depth_exceeded"):
+    with pytest.warns(CaptureGapWarning, match="input_traversal_depth_exceeded"):
         trace = tl.trace(_DeepAttrInputModel(depth), nested)
 
     assert trace.input_layers == []
@@ -640,7 +640,7 @@ def test_direct_aten_call_trips_non_vacuous_witness(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectAtenGapModel(), torch.randn(4))
 
     assert trace.completeness_witness_verified is False
@@ -686,7 +686,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
         warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
 
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     assert trace.capture_verified is True
     assert trace.completeness_witness_verified is True
     assert trace.completeness_witness_unaccounted_count == 0
@@ -713,7 +713,7 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
         warnings.simplefilter("always")
         trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
 
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     assert trace.capture_verified is True
     assert trace.completeness_witness_verified is True
     assert trace.completeness_witness_unaccounted_count == 0
@@ -737,7 +737,7 @@ def test_direct_aten_child_intermediate_still_trips_witness(
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectAtenIntermediateSubmoduleGapModel(), torch.randn(4))
 
     assert trace.capture_verified is False
@@ -760,7 +760,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_MutatingDirectAtenOutputSubmoduleModel(), torch.randn(4))
 
     assert trace.capture_verified is False
@@ -802,14 +802,14 @@ def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     assert recording.completeness_witness_unaccounted_count == 0
     assert recording.completeness_diagnostics == []
     assert recording.capture_verified is True
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
     """A direct aten gap remains loud on the fastlog capture path."""
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         recording = tl.record(
             _DirectAtenGapModel(),
             torch.randn(4),
@@ -1196,7 +1196,7 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
         ]
     )
 
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         cw._finalize_census(state)
 
     assert trace.capture_verified is False
@@ -1314,7 +1314,7 @@ def test_observable_uncaptured_mutation_is_flagged_mutates() -> None:
     """
 
     wrap_torch(completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectMutatingAtenModel(), torch.randn(4))
 
     assert trace.completeness_witness_verified is False

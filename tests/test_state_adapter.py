@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 import torch
 
-from torchlens._io import FieldPolicy, TorchLensIOError
+from torchlens._io import ArtifactError, FieldPolicy
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
 from torchlens.data_classes._state_adapter import state_items, state_new, state_restore
@@ -145,7 +145,7 @@ def test_scrub_completeness_tripwire_uses_adapter_enumeration() -> None:
         include_rng_states=True,
     )
 
-    with pytest.raises(TorchLensIOError, match="missing from PORTABLE_STATE_SPEC"):
+    with pytest.raises(ArtifactError, match="missing from PORTABLE_STATE_SPEC"):
         _scrub_value(
             _IncompletePortableState(),
             options,

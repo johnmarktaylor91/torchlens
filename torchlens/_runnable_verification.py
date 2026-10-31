@@ -15,8 +15,8 @@ from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
 from .errors import (
-    NumericAttestationError,
     PathDivergenceError,
+    ReplayValueMismatchError,
     RunPreconditionError,
 )
 from .runnable import (
@@ -335,7 +335,7 @@ def _raise_numeric_attestation_failure(fork: Any, check: ContractCheck) -> None:
 
     _state.unregister_log(fork)
     diagnostic = check.diagnostic
-    raise NumericAttestationError(
+    raise ReplayValueMismatchError(
         diagnostic.message if diagnostic is not None else "Numeric attestation failed.",
         code=RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value,
         path_faithfulness=PathFaithfulness.DIVERGED,
@@ -367,7 +367,7 @@ def _contract_check(
             current_runtime=str(torch.__version__),
             detection_stage="run_honesty_contract",
             resolver_provenance=None,
-            analysis_load_available=True,
+            is_analysis_load_available=True,
             details=details,
         )
     return ContractCheck(name=name, passed=passed, diagnostic=diagnostic)

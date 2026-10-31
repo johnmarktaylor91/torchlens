@@ -46,7 +46,7 @@ class EditCell:
 
 EDIT_PRODUCT_MATRIX: dict[str, EditCell] = {
     "trace_live_fork": EditCell("WORKS"),
-    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # MutateInPlaceWarning
+    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # TraceMutationWarning
     "trace_loaded": EditCell(
         "REFUSES_CODELESS",
         exc="ReplayPreconditionError",
@@ -143,7 +143,7 @@ def test_edit_cell_matches_declared_state(product_name: str, edit_products: dict
                 warnings.simplefilter("always")
                 _edit(private)
             names = [type(entry.message).__name__ for entry in caught]
-            assert "MutateInPlaceWarning" in names, (
+            assert "TraceMutationWarning" in names, (
                 f"in-place do() on a live trace disclosed {names}: the mutate-"
                 "in-place disclosure is the cell's contract"
             )

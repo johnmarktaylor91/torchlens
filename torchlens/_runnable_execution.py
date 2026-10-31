@@ -56,9 +56,9 @@ from ._split_rebind import (
     rebind_lru_cache as _rebind_lru_cache,
 )
 from .errors import (
-    NumericAttestationError,
     PathDivergenceError,
     ReattachError,
+    ReplayValueMismatchError,
     RunCapabilityUnavailableError,
     RunPreconditionError,
     RuntimeSignatureDriftError,

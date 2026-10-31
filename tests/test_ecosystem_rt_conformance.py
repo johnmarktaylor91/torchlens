@@ -44,7 +44,10 @@ def _tiny_roster(realism: str = "config_built", families: int = 1) -> tuple[Rost
     evidence = "pinned-rev-deadbeef" if realism == "pretrained" else ""
     return tuple(
         RosterModel(
-            family=f"tiny{index}", realism=realism, build=_build_tiny, checkpoint_evidence=evidence
+            family=f"tiny{index}",
+            realism=realism,
+            builder=_build_tiny,
+            checkpoint_evidence=evidence,
         )
         for index in range(families)
     )

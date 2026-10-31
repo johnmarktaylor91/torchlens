@@ -25,7 +25,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import (
     GraphShapeMismatchError,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
 )
 from torchlens.intervention.hooks import normalize_hooks_from_spec
@@ -178,7 +178,7 @@ def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str)
     edited = clean.fork("facet_save_refusal")
     edited.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
 
-    with pytest.raises(OpaqueCallableInExecutableSaveError, match="facet-slice hook"):
+    with pytest.raises(OpaqueCallableError, match="facet-slice hook"):
         edited.save_intervention(tmp_path / f"facet_{level}.tlspec", level=level)
 
 

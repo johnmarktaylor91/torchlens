@@ -15,7 +15,7 @@ class _TorchLensDispatchMode(TorchDispatchMode):
     """Marker base for Python dispatch modes owned by TorchLens."""
 
 
-class SubclassConstructionUnderDispatchModeError(CompatibilityError, RuntimeError):
+class TensorSubclassUnsupportedError(CompatibilityError, RuntimeError):
     """A strict Tensor subclass could not be constructed while a mode was active here.
 
     Torch 2.1 and 2.2 CAN raise "Creating a new Tensor subclass X but the raw

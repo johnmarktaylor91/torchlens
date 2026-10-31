@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._errors import EchoStatsError
+from ._errors import NarrationStatsError
 from ._event import NarrationStats
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narrati
 
     Raises
     ------
-    EchoStatsError
+    NarrationStatsError
         When ``tensor.numel()`` exceeds :data:`EXACT_NUMEL_BUDGET` -- the
         live exact rung refuses typed instead of running for minutes; the
         remedy names ``stats="sampled"``.
@@ -118,7 +118,7 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narrati
 
     numel = tensor.numel()
     if numel > EXACT_NUMEL_BUDGET:
-        raise EchoStatsError(
+        raise NarrationStatsError(
             f"echo stats='exact' refuses a {numel}-element tensor: the live exact rung "
             f"is budgeted at {EXACT_NUMEL_BUDGET} elements per line and a larger scan "
             "would stall the forward pass. Remedy: use stats='sampled' (bounded budget, "

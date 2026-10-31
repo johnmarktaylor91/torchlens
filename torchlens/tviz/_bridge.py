@@ -99,7 +99,7 @@ def circuitsvis_attention(views: list[AttentionView], *, max_bytes: int | None =
 
     Raises
     ------
-    TvizError
+    RenderError
         ``tv_bridge_payload_too_large`` above the ceiling (typed, with the
         measured size), or ``tv_bridge_unavailable`` when circuitsvis is
         not installed. The native static path is unaffected either way.

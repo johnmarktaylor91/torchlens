@@ -69,10 +69,10 @@ from ._deprecations import MISSING, MissingType
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
-    CaptureContextError,
+    CaptureNotActiveError,
     InvalidArgumentError,
     KeywordConflictError,
-    TorchLensPostfuncError,
+    UserTransformError,
 )
 from ._input_coerce import (
     _coerce_input_args,
@@ -80,7 +80,7 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
-from ._io import TorchLensIOError
+from ._io import ArtifactError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
     OutputDeviceLiteral,
@@ -246,9 +246,9 @@ _CAPTURE_CACHE_HEADER_BYTES = len(_CAPTURE_CACHE_MAGIC) + _CAPTURE_CACHE_TAG_HEX
 def _capture_cache_io_error(message: str) -> Exception:
     """Build the typed artifact-boundary error for a refused capture cache."""
 
-    from ._io import TorchLensIOError
+    from ._io import ArtifactError
 
-    return TorchLensIOError(message)
+    return ArtifactError(message)
 
 
 def _harden_capture_cache_dir(directory: Path) -> None:
@@ -274,7 +274,7 @@ def _harden_capture_cache_dir(directory: Path) -> None:
 
     Raises
     ------
-    torchlens.errors.TorchLensIOError
+    torchlens.errors.ArtifactError
         When the directory is owned by another user, or is group/other-writable and
         cannot be tightened. Either condition means a second principal can substitute
         the pickle this process will load.
@@ -366,7 +366,7 @@ def _capture_cache_secret(cache_root: Path) -> bytes:
 
     Raises
     ------
-    torchlens.errors.TorchLensIOError
+    torchlens.errors.ArtifactError
         When an existing secret file is not a private regular file, so a tag
         computed with it would prove nothing.
     """
@@ -1248,7 +1248,7 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
 
     try:
         release_model(model)
-    except CaptureContextError as refusal:
+    except CaptureNotActiveError as refusal:
         if refusal.fields.get("code") == "release_during_active_capture":
             # A NESTED capture failed while an outer capture still owns the
             # model's instrumentation (e.g. tl.trace called from a forward
@@ -1449,7 +1449,7 @@ def record_kpi_in_graph(name: str, value: Any) -> None:
 
     trace = _state._active_trace
     if trace is None:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "record_kpi_in_graph() was called without an active trace",
             code="capture_context_required",
             remedy="call record_kpi_in_graph() from model.forward() while tl.trace() is running",
@@ -1478,7 +1478,7 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
 
     trace = _state._active_trace
     if trace is None:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "register_tensor_connection() was called without an active trace",
             code="capture_context_required",
             remedy=(
@@ -2177,9 +2177,9 @@ def _run_model_and_save_specified_outs(
                 out_writer.abort(str(exc))
             if isinstance(exc, Exception) and not isinstance(
                 exc,
-                (PredicateError, SaveBudgetExceededError, TorchLensIOError, TorchLensPostfuncError),
+                (PredicateError, SaveBudgetExceededError, ArtifactError, UserTransformError),
             ):
-                raise TorchLensIOError("Streaming out save failed during forward pass.") from exc
+                raise ArtifactError("Streaming out save failed during forward pass.") from exc
         raise
     finally:
         _state.reset_capture_runtime_context()
@@ -2538,7 +2538,7 @@ def render(*args: Any, **kwargs: Any) -> Any:
 
 def trace(
     model: nn.Module | Callable[..., Any],
-    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
@@ -2731,7 +2731,7 @@ def trace(
     Postfunc behavior:
         ``save.activation_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
-        raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
+        raise ``UserTransformError`` with layer/function/tensor context if they fail.
 
         Activation transforms run during forward capture. Their result is stored alongside the
         raw out by default, and ``capture.backward_ready=True`` requires the transformed out to
@@ -2751,7 +2751,7 @@ def trace(
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
-        if input_size is not None or input_args is None:
+        if input_size is not None or inputs is None:
             model = _reject_non_module_ladder_root(model)
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
@@ -2760,7 +2760,7 @@ def trace(
                 ladder_kwargs.pop(consumed)
             from .quickstart._ladder import _trace_via_ladder
 
-            return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
+            return _trace_via_ladder(model, inputs, input_kwargs, input_size, ladder_kwargs)
         if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
             raise InvalidArgumentError(
                 "TorchLens cannot capture a torch.compile-produced plain callable because it is "
@@ -2805,7 +2805,7 @@ def trace(
         if backend is not None:
             explicit_backend_spec = get_backend_spec(str(backend))
             _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
-            explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+            explicit_backend_spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
         if (
             backend is None
             and chunk_size in (MISSING, None)
@@ -2837,18 +2837,18 @@ def trace(
                 "on_zero_fire": on_zero_fire,
             }
             for detector in autoroute.input.iter_by_priority():
-                result = detector(model, input_args, **autoroute_kwargs)
+                result = detector(model, inputs, **autoroute_kwargs)
                 if result is not None:
                     return cast("Trace", result)
         if closed_bool_env("TORCHLENS_AUTO"):
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "TORCHLENS_AUTO requested an unsupported implicit capture mode",
                 code="auto_environment_unsupported",
                 remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
                 environment_variable="TORCHLENS_AUTO",
             )
         resolved_spec = explicit_backend_spec or resolve_backend_spec(
-            backend, model, input_args, input_kwargs
+            backend, model, inputs, input_kwargs
         )
         from .snoop._entry import refuse_echo_non_torch
 
@@ -4223,7 +4223,7 @@ def _trace_torch_model(
 
 def log_model_metadata(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
 ) -> Trace:
     """Return model metadata without saving any outs.
@@ -4245,7 +4245,7 @@ def log_model_metadata(
 
     return trace(
         model,
-        input_args,
+        inputs,
         input_kwargs,
         capture=CaptureOptions(
             layers_to_save=None,

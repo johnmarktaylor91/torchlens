@@ -517,7 +517,7 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
 )
 
 #: Post-hoc resolution at DEFAULT max_fanout (F-3: the broadened ``func`` kind
-#: must be characterized where SiteAmbiguityError can actually fire).
+#: must be characterized where AmbiguousSiteError can actually fire).
 DEFAULT_FANOUT_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("func_relu", "conv", lambda: tl.func("relu")),
     ("func_conv2d", "conv", lambda: tl.func("conv2d")),

@@ -267,7 +267,7 @@ class KeywordConflictError(_ActionableErrorMixin, ConfigurationError, TypeError)
         )
 
 
-class CaptureContextError(_ActionableErrorMixin, CaptureError, RuntimeError):
+class CaptureNotActiveError(_ActionableErrorMixin, CaptureError, RuntimeError):
     """Raised when a capture-only operation is called outside an active capture."""
 
     def __init__(
@@ -534,11 +534,11 @@ class LazyStateUnsupportedError(_ActionableErrorMixin, CaptureError, RuntimeErro
         )
 
 
-class TorchLensCaptureGapError(CaptureError, RuntimeError):
+class CaptureGapError(CaptureError, RuntimeError):
     """Reserved enforcement error for an unrepresented torch invocation."""
 
 
-class TorchLensCaptureGapWarning(TorchLensWarning):
+class CaptureGapWarning(TorchLensWarning):
     """Shadow-mode report for a possible unrepresented torch invocation."""
 
 
@@ -553,7 +553,7 @@ class OutputAttributionError(CaptureError, RuntimeError):
     """
 
 
-class TorchLensPostfuncError(CaptureError, RuntimeError):
+class UserTransformError(CaptureError, RuntimeError):
     """Raised when activation_transform or grad_transform raises."""
 
 
@@ -571,7 +571,7 @@ class MutatedReferenceError(CaptureError, RuntimeError):
     """Raised when a reference-mode saved tensor changed before it was read."""
 
 
-class PostTraceParamUnavailable(CaptureError, RuntimeError):
+class ParamReleasedError(CaptureError, RuntimeError):
     """Raised when a released Param cannot re-fetch its live model parameter."""
 
 

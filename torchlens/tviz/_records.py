@@ -699,7 +699,7 @@ class PredictionTrajectory:
     target_probs: tuple[float, ...] | None = None
     target_ranks: tuple[int, ...] | None = None
     lens_source: str = "model_head"
-    validated: bool = False
+    is_validated: bool = False
     tie_convention: str = ""
 
     def __post_init__(self) -> None:

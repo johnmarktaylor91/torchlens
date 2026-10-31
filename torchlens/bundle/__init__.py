@@ -2440,7 +2440,7 @@ class Bundle:
 
         Raises
         ------
-        BundleRelationshipError
+        BundleComparisonError
             With the stable gate code on ``fields["code"]``.
         """
 

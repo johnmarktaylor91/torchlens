@@ -17,7 +17,7 @@ from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError, streaming as streaming_module
+from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.streaming import BundleStreamWriter
 from torchlens._io.streaming_async import (
     AsyncWriteEngine,
@@ -144,7 +144,7 @@ def test_duplicate_blob_id_refuses_while_write_is_still_queued(tmp_path: Path) -
     writer = BundleStreamWriter(tmp_path / "bundle.tlspec")
     writer.arm_async_writes()
     writer.submit_blob("0000000001", torch.ones(4), kind="out", label="first")
-    with pytest.raises(TorchLensIOError, match="Duplicate streaming blob_id"):
+    with pytest.raises(ArtifactError, match="Duplicate streaming blob_id"):
         writer.submit_blob("0000000001", torch.ones(4), kind="out", label="second")
 
 
@@ -241,7 +241,7 @@ def test_injected_write_failure_is_typed_and_marks_partial(
     monkeypatch.setattr(streaming_module, "save_file", fake)
 
     bundle = tmp_path / "broken.tlspec"
-    with pytest.raises((TorchLensIOError, Exception)) as excinfo:
+    with pytest.raises((ArtifactError, Exception)) as excinfo:
         tl.trace(_model(), torch.randn(4, 8), storage=tl.to_disk(bundle))
     chain_text = ""
     err: BaseException | None = excinfo.value
@@ -249,7 +249,7 @@ def test_injected_write_failure_is_typed_and_marks_partial(
         chain_text += f"{type(err).__name__}: {err}\n"
         err = err.__cause__
     assert "injected" in chain_text
-    assert any(isinstance(e, TorchLensIOError) for e in _exception_chain(excinfo.value))
+    assert any(isinstance(e, ArtifactError) for e in _exception_chain(excinfo.value))
 
     # Never a silently incomplete artifact presented as complete:
     assert not bundle.exists()

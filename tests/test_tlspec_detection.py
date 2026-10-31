@@ -52,7 +52,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
         # legacy-format refusal (R73 fast-tier fuzz finding, 2026-10: this
         # exact shape -- a fresh manifest with `kind` deleted -- misclassified
         # as the legacy format and raised a false "pre-tlspec ModelLog
-        # format" ArtifactVersionBelowFloorError).
+        # format" ArtifactTooOldError).
         ({"tlspec_version": 2}, None, "v2.0_unified"),
         ({}, None, "unknown"),
     ],

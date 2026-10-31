@@ -21,7 +21,7 @@ states:
   recorded op outside those families is named in ``uncounted_ops``, never
   zeroed or estimated. Each pass's count is attributed to the GradFn calls
   and forward ops that did the work, with a named unattributed bucket
-  (``BackwardStatus.attributions``); a loaded trace reads the count saved
+  (``BackwardStatus.flops_attributions``); a loaded trace reads the count saved
   with the pass. A pass with neither a dispatch record nor a saved count (an
   implicit pass, an artifact saved before the count was kept) or a pass that
   raised before finishing leaves the executed answer UNKNOWN.
@@ -182,14 +182,14 @@ class BackwardStatus:
     executed_flops: int | None
     executed_evidence: str
     reason: str
-    n_backward_passes: int
-    n_grad_fn_records: int
+    num_backward_passes: int
+    num_grad_fn_records: int
     measured_seconds: float | None
     recompute: str
-    counting_convention: str = EXECUTED_BACKWARD_CONVENTION
+    convention: str = EXECUTED_BACKWARD_CONVENTION
     executed_flops_per_pass: tuple[tuple[int, int | None], ...] = ()
-    uncounted_ops: tuple[tuple[str, int], ...] = ()
-    attributions: tuple[Any, ...] = ()
+    uncounted_op_counts: tuple[tuple[str, int], ...] = ()
+    flops_attributions: tuple[Any, ...] = ()
     unattributed_flops: int | None = None
     recompute_flops: int | None = None
 
@@ -215,8 +215,8 @@ class BackwardStatus:
             else "per-fire timing unavailable on this object"
         )
         head = (
-            f"backward: {self.n_backward_passes} backward pass(es) observed "
-            f"({self.n_grad_fn_records} grad_fn records; {timing}); "
+            f"backward: {self.num_backward_passes} backward pass(es) observed "
+            f"({self.num_grad_fn_records} grad_fn records; {timing}); "
         )
         if self.executed_flops is None:
             return head + f"executed backward compute: UNKNOWN ({self.reason})."
@@ -244,9 +244,9 @@ class BackwardStatus:
     def _uncounted_clause(self) -> str:
         """Name the recorded op kinds outside the counted families (bounded)."""
 
-        if not self.uncounted_ops:
+        if not self.uncounted_op_counts:
             return ""
-        names = [name for name, _count in self.uncounted_ops]
+        names = [name for name, _count in self.uncounted_op_counts]
         shown = ", ".join(names[:_STATUS_LINE_NAME_LIMIT])
         more = len(names) - _STATUS_LINE_NAME_LIMIT
         tail = f" (+{more} more; read .uncounted_ops)" if more > 0 else ""
@@ -409,13 +409,13 @@ def backward_status(trace: Trace) -> BackwardStatus:
         executed_flops=executed,
         executed_evidence=evidence,
         reason=reason,
-        n_backward_passes=len(backward_passes),
-        n_grad_fn_records=len(grad_fn_logs),
+        num_backward_passes=len(backward_passes),
+        num_grad_fn_records=len(grad_fn_logs),
         measured_seconds=measured,
         recompute=recompute_observation(trace),
         executed_flops_per_pass=per_pass,
-        uncounted_ops=uncounted,
-        attributions=attributions,
+        uncounted_op_counts=uncounted,
+        flops_attributions=attributions,
         unattributed_flops=unattributed,
         recompute_flops=recompute_flops,
     )
@@ -435,11 +435,11 @@ class BackwardEstimate:
     label: str
     hypothetical_flops: int
     multiplier_table: dict[str, float]
-    n_ops_multiplied: int
-    n_ops_frozen_weights: int
+    num_multiplied_ops: int
+    num_frozen_weight_ops: int
     excluded_ops: tuple[str, ...]
-    freeze_pattern_from_captured_requires_grad: bool
-    grad_disabled_at_capture: bool
+    is_freeze_pattern_captured: bool
+    is_grad_disabled_at_capture: bool
 
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): the label leads, exclusions count.
@@ -450,8 +450,8 @@ class BackwardEstimate:
 
         return (
             f"BackwardEstimate({self.label}: {self.hypothetical_flops} FLOPs = "
-            f"{self.multiplier_table['mac_family']}x over {self.n_ops_multiplied} MAC ops, "
-            f"{self.n_ops_frozen_weights} frozen-weight, "
+            f"{self.multiplier_table['mac_family']}x over {self.num_multiplied_ops} MAC ops, "
+            f"{self.num_frozen_weight_ops} frozen-weight, "
             f"{len(self.excluded_ops)} excluded; read .disclosure)"
         )
 
@@ -463,12 +463,12 @@ class BackwardEstimate:
             "HYPOTHETICAL training-backward estimate (never an executed cost):",
             (
                 f"{self.multiplier_table['mac_family']}x applied to "
-                f"{self.n_ops_multiplied} MAC-family ops"
+                f"{self.num_multiplied_ops} MAC-family ops"
             ),
         ]
-        if self.n_ops_frozen_weights:
+        if self.num_frozen_weight_ops:
             lines.append(
-                f"{self.n_ops_frozen_weights} of them have fully frozen weights where the "
+                f"{self.num_frozen_weight_ops} of them have fully frozen weights where the "
                 "true multiplier is nearer 1.0x (dW is never computed)"
             )
         if self.excluded_ops:
@@ -476,7 +476,7 @@ class BackwardEstimate:
                 f"{len(self.excluded_ops)} non-MAC op(s) excluded from the estimate "
                 "(no validated multiplier; a 1.0 default is not an estimate)"
             )
-        if self.grad_disabled_at_capture:
+        if self.is_grad_disabled_at_capture:
             lines.append(
                 "grad was globally disabled at capture: the freeze pattern was read from "
                 "requires_grad as captured and may not reflect training intent"
@@ -516,9 +516,9 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
         label="hypothetical",
         hypothetical_flops=int(total),
         multiplier_table=dict(BACKWARD_MULTIPLIER_TABLE),
-        n_ops_multiplied=multiplied,
-        n_ops_frozen_weights=frozen,
+        num_multiplied_ops=multiplied,
+        num_frozen_weight_ops=frozen,
         excluded_ops=tuple(excluded),
-        freeze_pattern_from_captured_requires_grad=True,
-        grad_disabled_at_capture=not grad_enabled_at_capture(trace),
+        is_freeze_pattern_captured=True,
+        is_grad_disabled_at_capture=not grad_enabled_at_capture(trace),
     )

@@ -58,7 +58,7 @@ import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __c
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._errors import TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning
 from ..._split_rebind import (
     rebind_contextmanager as _rebind_contextmanager,
     rebind_function as _rebind_function,

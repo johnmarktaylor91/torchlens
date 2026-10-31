@@ -385,7 +385,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     input_provenance:
         Provenance-only stamp (tvscope B4, DOCUMENTED-UNSTABLE spelling) for
         stimuli preprocessed OUTSIDE this run: a
-        :class:`torchlens.preprocessing.PreprocessingAudit` (its verdict
+        :class:`torchlens.preprocessing.PreprocessingComparison` (its verdict
         rides the manifest block), a ``Resolution``, or a
         ``ResolvedPreprocessing`` record (authority-only; verdict stays
         ``unknown`` with ``applied_not_audited`` disclosed). Disk mode only:

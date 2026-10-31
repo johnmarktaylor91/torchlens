@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 import torch
 
 from ._torch_symbols import torch_attr
-from .format_contract import BlobRef, TorchLensIOError
+from .format_contract import ArtifactError, BlobRef
 from .scrub import BlobSpec
 
 if TYPE_CHECKING:
@@ -101,7 +101,7 @@ def append_injected_op_rows(
         return
     rows = scrubbed_state.get("layer_list")
     if not isinstance(rows, list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Scrubbed state has no layer_list to carry injected-op rows.",
             code="injection_persist_state_invalid",
         )
@@ -109,7 +109,7 @@ def append_injected_op_rows(
     for record in records:
         host_site_key = record.provenance.host_site_key
         if not isinstance(host_site_key, str) or not host_site_key:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"injected op {record.label!r} has no resolved host site key; the "
                 "persisted injected-op identity anchors on the host's structural "
                 "position and cannot be written without one",
@@ -277,7 +277,7 @@ def _encode_value(
         }
     # _snapshot_call_values admits nothing else; a foreign object here means
     # the record was tampered with in-session -- refuse rather than launder.
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"injected op {label!r} carries an unencodable replay arg of type {type(value).__name__}",
         code="injection_persist_arg_unencodable",
     )
@@ -317,7 +317,7 @@ def split_restored_injected_rows(trace: Any) -> None:
 def _refuse_codec(message: str, reason: str) -> NoReturn:
     """Raise one typed codec-envelope load refusal."""
 
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"{message} -- the artifact's injected-op codec envelope is forged or hand-edited",
         code="artifact_injection_codec_invalid",
         field="Op.annotations.injection_codec_v1",

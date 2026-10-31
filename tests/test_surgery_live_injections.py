@@ -288,7 +288,7 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     with NO ``PORTABLE_STATE_SPEC`` row, so any save reached while the
     counter was live (streamed ``to_disk`` finalize runs before the settle
     epilogue pops it; deferred backward selectors keep it past ``trace()``)
-    refused with ``TorchLensIOError`` and downgraded runnable honesty
+    refused with ``ArtifactError`` and downgraded runnable honesty
     verdicts through the witness-coverage path. It is now enrolled exactly
     like its sibling ``_tl_save_selector_fire_count``: a declared
     ``FieldPolicy.DROP`` session field, owned, with the dead ledger row

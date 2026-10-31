@@ -67,7 +67,7 @@ def test_receipt_names_the_query_heads_of_each_group() -> None:
 def test_query_head_grid_refuses_the_kv_grouping() -> None:
     """A grid over all eight query heads is not a kv-site grid."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         tviz.receipt_from_patch_grid(
             _grid(8),
             layer="blk.0.attn",
@@ -128,7 +128,7 @@ def test_mixed_units_refuse(tmp_path: Path) -> None:
     heads = tviz.receipt_from_patch_grid(
         _grid(2), layer="blk.1.attn", negative_control=0.0, positive_control=3.0
     )
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         tviz.render_receipt_grid([_kv_receipt(), heads], tmp_path / "m.png", joint_effect=0.0)
     assert caught.value.fields["code"] == "tv_receipt_invalid"
     assert not (tmp_path / "m.png").exists()
@@ -137,7 +137,7 @@ def test_mixed_units_refuse(tmp_path: Path) -> None:
 def test_kv_receipt_cannot_annotate_query_head_panels() -> None:
     """A group's effect never lands on a single query head's panel header."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         tviz.Annotation.from_receipt(_kv_receipt())
     assert caught.value.fields["code"] == "tv_annotation_invalid"
     assert "render_receipt_grid" in str(caught.value)

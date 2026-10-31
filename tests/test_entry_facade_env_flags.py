@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.errors import CaptureContextError
+from torchlens.errors import CaptureNotActiveError
 from torchlens.utils.env_flags import ENV_FLAG_REGISTRY, closed_bool_env
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -165,7 +165,7 @@ def test_true_never_means_off_for_torchlens_auto() -> None:
             import os
 
             os.environ["TORCHLENS_AUTO"] = spelling
-            with pytest.raises(CaptureContextError) as excinfo:
+            with pytest.raises(CaptureNotActiveError) as excinfo:
                 tl.trace(model, x)
             assert excinfo.value.fields["code"] == "auto_environment_unsupported"
         finally:

@@ -60,7 +60,7 @@ class RosterModel:
 
     family: str
     realism: str
-    build: Callable[[], tuple[Any, Any]]
+    builder: Callable[[], tuple[Any, Any]]
     checkpoint_evidence: str = ""
     expected_op_kinds: tuple[str, ...] | None = None
 
@@ -278,6 +278,6 @@ def default_roster() -> tuple[RosterModel, ...]:
         return model, torch.randn(2, 16)
 
     return (
-        RosterModel(family="resnet", realism="config_built", build=_build_resnet),
-        RosterModel(family="mlp", realism="config_built", build=_build_mlp),
+        RosterModel(family="resnet", realism="config_built", builder=_build_resnet),
+        RosterModel(family="mlp", realism="config_built", builder=_build_mlp),
     )

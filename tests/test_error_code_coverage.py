@@ -688,14 +688,14 @@ def test_prose_names_and_inert_tables_never_count_as_provocation() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# R65/F9: codeless TorchLensIOError ratchet (shrink-only)                      #
+# R65/F9: codeless ArtifactError ratchet (shrink-only)                      #
 # --------------------------------------------------------------------------- #
 
 # Historical debt (b8-opus F9: 236/243 raise sites code-less). The number may
 # only SHRINK: give a site fields["code"] (and ideally a remedy) and lower the
 # ceiling in the same change. Raising it is a conscious public decision.
 _MAX_CODELESS_IO_RAISES = 237
-_IO_FAMILY_PATTERN = re.compile(r"^(TorchLensIOError|Artifact\w*Error)$")
+_IO_FAMILY_PATTERN = re.compile(r"^(ArtifactError|Artifact\w*Error)$")
 
 
 def _codeless_io_raises() -> list[str]:
@@ -734,7 +734,7 @@ def test_codeless_io_raise_count_only_shrinks() -> None:
     assert offenders, "scanner found no IO-family raises at all (vacuous scan)"
     assert len(offenders) <= _MAX_CODELESS_IO_RAISES, (
         f"{len(offenders)} codeless IO-family raises exceed the ratchet of "
-        f"{_MAX_CODELESS_IO_RAISES}. New TorchLensIOError/Artifact*Error raises "
+        f"{_MAX_CODELESS_IO_RAISES}. New ArtifactError/Artifact*Error raises "
         "must carry fields['code'] (branch-on-fields doctrine); first offenders: "
         + ", ".join(offenders[:10])
     )

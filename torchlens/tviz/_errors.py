@@ -1,6 +1,6 @@
 """Typed refusals for the transformer-pictures package (tviz memo).
 
-Every user-reachable refusal in ``torchlens.tviz`` raises :class:`TvizError`
+Every user-reachable refusal in ``torchlens.tviz`` raises :class:`RenderError`
 carrying a stable ``fields["code"]`` and a non-empty ``fields["remedy"]``;
 callers branch on the code, never on message text (teaching-refusals law).
 The codes are contracted rows in ``docs/reference/error_refusal_contract.md``
@@ -15,10 +15,10 @@ from typing import Any, NoReturn
 
 from ..errors._base import TorchLensError
 
-__all__ = ["TvizError", "refuse"]
+__all__ = ["RenderError", "refuse"]
 
 
-class TvizError(TorchLensError, RuntimeError):
+class RenderError(TorchLensError, RuntimeError):
     """Raised when a transformer picture cannot be honestly produced.
 
     Contracted refusals carry a stable ``fields["code"]`` and a structured
@@ -28,7 +28,7 @@ class TvizError(TorchLensError, RuntimeError):
 
 
 def refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:
-    """Raise a :class:`TvizError` with the contracted code and remedy.
+    """Raise a :class:`RenderError` with the contracted code and remedy.
 
     Parameters
     ----------
@@ -44,8 +44,8 @@ def refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:
 
     Raises
     ------
-    TvizError
+    RenderError
         Always.
     """
 
-    raise TvizError(f"{message} Remedy: {remedy}", code=code, remedy=remedy, **payload)
+    raise RenderError(f"{message} Remedy: {remedy}", code=code, remedy=remedy, **payload)

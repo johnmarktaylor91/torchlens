@@ -19,7 +19,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
 pytestmark = pytest.mark.slow
@@ -101,13 +101,13 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
 
     # WITHOUT the ordering row, the refusal is the input predicate's own
     # (right reason: the turns captured different input values).
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
     # WITH the ordering row, topology takes precedence over input evidence.
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
@@ -123,7 +123,7 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     # round-trips (different lengths -> different input signature).
     assert loaded_rel is Relationship.SHARED_GRAPH_DIFFERENT_INPUT
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]

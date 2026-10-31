@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 import torch
 
-from .._io import BlobRef, TorchLensIOError
+from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
@@ -1662,7 +1662,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If portable scrubbing or bundle staging fails.
     """
 
@@ -1814,7 +1814,7 @@ def _reuse_streamed_blob_ids(
 
     scrubbed_layers = scrubbed_state.get("layer_list")
     if not isinstance(scrubbed_layers, list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
         )
     # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
@@ -1822,7 +1822,7 @@ def _reuse_streamed_blob_ids(
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
     if len(scrubbed_layers) != len(trace.layer_list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
             f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
         )
@@ -1937,7 +1937,7 @@ def _attach_streamed_tensor_refs(
 
     scrubbed_layers = scrubbed_state.get("layer_list")
     if not isinstance(scrubbed_layers, list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
         )
     # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
@@ -1945,7 +1945,7 @@ def _attach_streamed_tensor_refs(
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
     if len(scrubbed_layers) != len(trace.layer_list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
             f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
         )
@@ -1990,11 +1990,11 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the dtype name is unknown to the current runtime.
     """
 
     dtype_obj = torch_attr(dtype_name)  # r47 secD_1: no lazy ``torch.__getattr__``
     if not isinstance(dtype_obj, torch.dtype):
-        raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
+        raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

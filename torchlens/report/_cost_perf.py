@@ -328,12 +328,12 @@ class CleanStepTime:
     warmup: int
     method: str
     scope: tuple[str, ...]
-    n_forwards_run: int
+    num_forward_runs: int
 
 
 def time_clean_step(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     warmup: int = 2,
@@ -354,7 +354,7 @@ def time_clean_step(
             remedy="Pass warmup >= 0 and repeats >= 1.",
         )
     kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
+    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
     for _ in range(warmup):
         model(*args, **kwargs)
     samples: list[float] = []
@@ -369,7 +369,7 @@ def time_clean_step(
         warmup=warmup,
         method="median of uninstrumented forward wall times (perf_counter)",
         scope=("forward",),
-        n_forwards_run=warmup + repeats,
+        num_forward_runs=warmup + repeats,
     )
 
 
@@ -392,7 +392,7 @@ class RooflineRow:
     ideal_traffic_bytes: int | None
     intensity: float | None
     bound_hypothesis: str | None
-    cache_resident_hint: bool
+    is_cache_resident_hint: bool
     reason: str
     evidence: str = "estimated+ideal_read_once_write_once"
 
@@ -512,7 +512,7 @@ def roofline(
                     ideal_traffic_bytes=None,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="no_rule",
                 )
             )
@@ -528,7 +528,7 @@ def roofline(
                     ideal_traffic_bytes=None,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="missing_shape_dtype",
                 )
             )
@@ -542,7 +542,7 @@ def roofline(
                     ideal_traffic_bytes=0,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="zero_logical_traffic",
                 )
             )
@@ -572,7 +572,7 @@ def roofline(
                 ideal_traffic_bytes=traffic,
                 intensity=intensity,
                 bound_hypothesis=bound,
-                cache_resident_hint=hint,
+                is_cache_resident_hint=hint,
                 reason="covered",
             )
         )
@@ -592,8 +592,8 @@ def roofline(
 class MachineBalance:
     """A roofline ceiling pair and its ridge point (D18): basis disclosed."""
 
-    compute_peak_flops_per_s: float
-    memory_peak_bytes_per_s: float
+    peak_flops_per_s: float
+    peak_bytes_per_s: float
     ridge_intensity: float
     basis: str
     method: str
@@ -601,8 +601,8 @@ class MachineBalance:
 
 def machine_balance(
     *,
-    compute_peak_flops_per_s: float,
-    memory_peak_bytes_per_s: float,
+    peak_flops_per_s: float,
+    peak_bytes_per_s: float,
     basis: str,
     method: str = "user_supplied ceilings",
 ) -> MachineBalance:
@@ -620,16 +620,16 @@ def machine_balance(
             code="machine_balance_basis_invalid",
             remedy="Name the ceiling's basis explicitly; it is disclosed on every render.",
         )
-    if compute_peak_flops_per_s <= 0 or memory_peak_bytes_per_s <= 0:
+    if peak_flops_per_s <= 0 or peak_bytes_per_s <= 0:
         raise InvalidArgumentError(
             "machine_balance ceilings must be positive.",
             code="machine_balance_basis_invalid",
             remedy="Pass positive compute (FLOP/s) and memory (bytes/s) ceilings.",
         )
     return MachineBalance(
-        compute_peak_flops_per_s=float(compute_peak_flops_per_s),
-        memory_peak_bytes_per_s=float(memory_peak_bytes_per_s),
-        ridge_intensity=float(compute_peak_flops_per_s) / float(memory_peak_bytes_per_s),
+        peak_flops_per_s=float(peak_flops_per_s),
+        peak_bytes_per_s=float(peak_bytes_per_s),
+        ridge_intensity=float(peak_flops_per_s) / float(peak_bytes_per_s),
         basis=basis,
         method=method,
     )
@@ -761,7 +761,7 @@ class RateCalibration:
 
 def instrumented_rate_calibration(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     repeats: int = 3,
@@ -776,8 +776,8 @@ def instrumented_rate_calibration(
     from ..user_funcs import trace as _trace
 
     kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
-    clean = time_clean_step(model, input_args, input_kwargs, warmup=1, repeats=repeats)
+    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
+    clean = time_clean_step(model, inputs, input_kwargs, warmup=1, repeats=repeats)
     start = time.perf_counter()
     captured = _trace(model, list(args) if len(args) > 1 else args[0], kwargs)
     instrumented = time.perf_counter() - start
@@ -853,7 +853,7 @@ class CostReportResult:
 
 def cost_report(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     tiers: tuple[str, ...] = COST_REPORT_TIERS,
@@ -885,7 +885,7 @@ def cost_report(
             remedy="Include 'raw_forward' in tiers.",
         )
     kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
+    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
     n_forwards = 0
 
     def _measure(run: Any) -> tuple[float, float]:

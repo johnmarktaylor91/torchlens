@@ -90,12 +90,12 @@ class CheckFinding:
     (memo D3: the finding names a cone, the frontier names the culprit).
     """
 
-    check: str
+    check_name: str
     code: str
     severity: str
     action: str
     message: str
-    names: tuple[str, ...] = ()
+    param_names: tuple[str, ...] = ()
     global_step: int | None = None
     backward_id: int | None = None
     attempted_step_id: int | None = None
@@ -127,7 +127,7 @@ class CheckFinding:
         """Return the JSON-serializable payload for this finding."""
 
         payload = asdict(self)
-        payload["names"] = list(self.names)
+        payload["names"] = list(self.param_names)
         return payload
 
 

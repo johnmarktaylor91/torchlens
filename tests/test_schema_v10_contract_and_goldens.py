@@ -31,8 +31,8 @@ from torchlens._io import (
     MIN_TORCHLENS_VERSION_TEXT,
     TLSPEC_VERSION,
     ArtifactSchemaAgeWarning,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
     read_tlspec_version,
 )
 from torchlens._io.compat_ledger import floor_metadata, pair_is_governed
@@ -219,7 +219,7 @@ def test_facet_snapshot_stays_a_drop_field() -> None:
 
 def test_below_floor_refusal_names_the_corrected_floor() -> None:
     state = {"tlspec_version": MIN_TLSPEC_VERSION - 1}
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         read_tlspec_version(state, cls_name="Trace")
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
@@ -232,13 +232,13 @@ def test_below_floor_refusal_names_the_corrected_floor() -> None:
 def test_modellog_216_refusal_keeps_the_verified_reader_remedy() -> None:
     from torchlens._io.compat_ledger import raise_if_modellog_portable
 
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         raise_if_modellog_portable("v2.16_modellog_portable", "Artifact", "x.tlspec")
     assert "torchlens==2.17.0" in excinfo.value.fields["remedy"]
 
 
 def test_future_version_refuses_on_state_and_producer_windows() -> None:
-    with pytest.raises(ArtifactVersionAboveRuntimeError) as excinfo:
+    with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": TLSPEC_VERSION + 1}, cls_name="Trace")
     assert excinfo.value.fields["ceiling_tlspec_version"] == 10
     assert pair_is_governed("2.36.0", 10)

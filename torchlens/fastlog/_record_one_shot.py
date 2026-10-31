@@ -38,7 +38,7 @@ from .types import CaptureSpec, Recording
 
 def record(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     save: PredicateFn | None = None,
@@ -101,7 +101,7 @@ def record(
     activation_transform:
         Optional callable applied to each retained out copy after
         dtype/device transforms. Errors propagate as
-        :class:`torchlens.TorchLensPostfuncError`.
+        :class:`torchlens.UserTransformError`.
     save_raw_activations:
         When ``False`` and ``activation_transform`` is set, only transformed
         payloads are retained. Defaults to ``True`` to mirror the slow path.
@@ -189,16 +189,16 @@ def record(
             remedy="prefer storage=, or remove one of the two arguments",
         )
     validate_postprocess(postprocess)
-    input_args = _coerce_input_args(model, input_args)
+    inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
     if generate_kwargs is not None:
         output, generation = record_generation(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             generate_kwargs,
             {
@@ -259,7 +259,7 @@ def record(
         echo=echo,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder.log(input_args, input_kwargs)
+        output = recorder.log(inputs, input_kwargs)
     recording = recorder.recording
     if postprocess != "none":
         recording = recording.enrich(postprocess)

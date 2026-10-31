@@ -24,7 +24,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import CheckpointSeriesLiveParamsError
+from torchlens.errors import ParamEvidenceMissingError
 
 _CODE = "checkpoint_series_live_params"
 
@@ -68,7 +68,7 @@ def test_resnet18_real_checkpoint_series_refuses_typed() -> None:
         lambda: view.out,
         lambda: view.grad,
     ):
-        with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+        with pytest.raises(ParamEvidenceMissingError) as excinfo:
             read()
         exc = excinfo.value
         assert exc.fields["code"] == _CODE
@@ -123,7 +123,7 @@ def test_pythia_70m_published_revision_pair_refuses_typed() -> None:
 
     bundle = tl.bundle({"step0": trace_step0, "step64": trace_step64})
     view = bundle.params[probe_address]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.weight_norm_diff
     exc = excinfo.value
     assert exc.fields["code"] == _CODE

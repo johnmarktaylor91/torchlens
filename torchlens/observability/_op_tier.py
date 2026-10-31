@@ -229,7 +229,7 @@ class OpTierCollector:
             )
         return self._plan
 
-    def discover(self, input_args: Any, input_kwargs: dict[str, Any] | None = None) -> None:
+    def discover(self, inputs: Any, input_kwargs: dict[str, Any] | None = None) -> None:
         """Catalog the selected op sites and price the plan (metadata pass).
 
         Raises
@@ -250,7 +250,7 @@ class OpTierCollector:
             warnings.filterwarnings("ignore", message=".*matched zero sites.*")
             recording = fastlog.record(
                 self.model,
-                input_args,
+                inputs,
                 input_kwargs,
                 save=self.save,
                 default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True),
@@ -393,7 +393,7 @@ class OpTierCollector:
 
     def instrumented_forward(
         self,
-        input_args: Any,
+        inputs: Any,
         input_kwargs: dict[str, Any] | None = None,
     ) -> Any:
         """Run exactly the per-step op-tier pass, fold nothing, return the output.
@@ -408,7 +408,7 @@ class OpTierCollector:
 
         output, _recording = fastlog.record(
             self.model,
-            input_args,
+            inputs,
             input_kwargs,
             save=self.save,
             default_op=True,
@@ -420,7 +420,7 @@ class OpTierCollector:
 
     def observe_step(
         self,
-        input_args: Any,
+        inputs: Any,
         input_kwargs: dict[str, Any] | None = None,
     ) -> Any:
         """Run the wrapped forward, fold op observations, return live output.
@@ -441,7 +441,7 @@ class OpTierCollector:
 
         output, recording = fastlog.record(
             self.model,
-            input_args,
+            inputs,
             input_kwargs,
             save=self.save,
             default_op=True,

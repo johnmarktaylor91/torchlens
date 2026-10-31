@@ -66,7 +66,7 @@ def _input_preprocessing_block(
     authority:
         JSON-portable authority record, or ``None`` when none was declared.
     audit:
-        JSON-portable :class:`torchlens.preprocessing.PreprocessingAudit`
+        JSON-portable :class:`torchlens.preprocessing.PreprocessingComparison`
         report, or ``None``.
     verdict:
         ``"verified"`` / ``"mismatch"`` / ``"unknown"``.
@@ -118,7 +118,7 @@ def coerce_input_preprocessing(
         (identification-only disclosure; makes the artifact non-resumable
         across interruptions, mirroring opaque output transforms).
     input_provenance:
-        ``None`` | :class:`torchlens.preprocessing.PreprocessingAudit` |
+        ``None`` | :class:`torchlens.preprocessing.PreprocessingComparison` |
         :class:`torchlens.preprocessing.Resolution` |
         ``ResolvedPreprocessing`` -- a provenance-only stamp for stimuli the
         caller preprocessed outside this run. When both arguments carry
@@ -139,7 +139,7 @@ def coerce_input_preprocessing(
     """
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.preprocessing import PreprocessingAudit, Resolution, audit as _audit
+    from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
     transform_callable: Any = None
     identity: Any = None
@@ -194,7 +194,7 @@ def coerce_input_preprocessing(
 
     if input_provenance is not None:
         applied_by = applied_by or "caller"
-        if isinstance(input_provenance, PreprocessingAudit):
+        if isinstance(input_provenance, PreprocessingComparison):
             audit_json = input_provenance.to_json()
             authority_json = audit_json["authority"]
             verdict = input_provenance.verdict

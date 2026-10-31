@@ -25,8 +25,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.intervention.errors import (
+    AmbiguousSiteError,
     ControlFlowDivergenceWarning,
-    SiteAmbiguityError,
 )
 from torchlens.intervention.replay import cone_of_effect
 from torchlens.selection import SelectionError
@@ -285,7 +285,7 @@ def test_bare_multipass_label_refuses_in_do_and_resolve_sites(recurrent):
     """String addressing of a bare multi-pass label refuses typed, teaching."""
 
     _model, _x, trace = recurrent
-    with pytest.raises(SiteAmbiguityError) as excinfo:
+    with pytest.raises(AmbiguousSiteError) as excinfo:
         trace.resolve_sites("relu_1_2", max_fanout=100)
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
     assert excinfo.value.fields["pass_indices"] == (1, 2, 3)
@@ -295,11 +295,11 @@ def test_bare_multipass_label_refuses_in_do_and_resolve_sites(recurrent):
         assert spelling in message
 
     fork = trace.fork()
-    with pytest.raises(SiteAmbiguityError) as do_excinfo:
+    with pytest.raises(AmbiguousSiteError) as do_excinfo:
         fork.do("relu_1_2", lambda out, *, hook: torch.zeros_like(out))
     assert do_excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
-    with pytest.raises(SiteAmbiguityError) as label_excinfo:
+    with pytest.raises(AmbiguousSiteError) as label_excinfo:
         trace.resolve_sites(tl.label("relu_1_2"), max_fanout=100)
     assert label_excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
@@ -364,7 +364,7 @@ def test_push_from_bare_multipass_string_refuses(recurrent):
 
     _model, _x, trace = recurrent
     fork = trace.fork()
-    with pytest.raises(SiteAmbiguityError) as excinfo:
+    with pytest.raises(AmbiguousSiteError) as excinfo:
         fork.push_from("relu_1_2")
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 

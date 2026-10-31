@@ -1345,7 +1345,7 @@ def test_unwrap_torch_refuses_during_an_active_capture() -> None:
 
     assert len(seen) == 1, "unwrap_torch() mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "unwrap_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused unwrap still truncated the capture"
@@ -1402,7 +1402,7 @@ def test_release_model_refuses_during_an_active_capture() -> None:
 
     assert len(seen) == 1, "release_model() mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "release_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused release still truncated the capture"
@@ -1460,7 +1460,7 @@ def test_cleanup_of_active_trace_refuses_mid_capture() -> None:
 
     assert len(seen) == 1, "cleanup() of the active trace mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "cleanup_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused cleanup still truncated the capture"

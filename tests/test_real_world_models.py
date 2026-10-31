@@ -2617,7 +2617,7 @@ def test_deberta():
     # Some transformers releases implement DebertaV2's relative-position
     # bucketing with torch.jit.script; a jit.script-compiled region executes
     # outside normal eager dispatch, so TorchLens's completeness witness
-    # correctly flags the capture incomplete (TorchLensCaptureGapWarning,
+    # correctly flags the capture incomplete (CaptureGapWarning,
     # capture_verified=False) and validate_forward_pass honestly returns
     # False rather than blessing a partial capture -- expected, honest
     # behavior for that environment, not a capture bug. Other releases (no

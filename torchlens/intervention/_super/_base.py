@@ -8,7 +8,7 @@ from typing import Any, ClassVar, Generic, Literal, TypeVar, cast
 import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
-from ...errors.episode import CheckpointSeriesLiveParamsError
+from ...errors.episode import ParamEvidenceMissingError
 from .._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 
 T = TypeVar("T")
@@ -530,7 +530,7 @@ class _TensorBearing:
 
         Raises
         ------
-        CheckpointSeriesLiveParamsError
+        ParamEvidenceMissingError
             With stable code ``checkpoint_series_live_params`` when any
             member lacks immutable parameter evidence.
         """
@@ -564,7 +564,7 @@ class _TensorBearing:
             "snapshot parameters at capture, or bind each member to an immutable "
             "checkpoint -- the ordering is still valid; only the weight claim is refused"
         )
-        raise CheckpointSeriesLiveParamsError(
+        raise ParamEvidenceMissingError(
             f"Members {named} have no immutable capture-time parameter evidence "
             f"for parameter '{param_address}'. {mechanism} "
             f"To read a weight trajectory: {remedy}.",

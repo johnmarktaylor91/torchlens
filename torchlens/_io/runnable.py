@@ -93,7 +93,7 @@ from ..runnable import (
     encode_input_site_position,
 )
 from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
-from . import TorchLensIOError
+from . import ArtifactError
 
 
 @dataclass(slots=True)
@@ -191,7 +191,7 @@ def _call_execution_context(representative: Any) -> CallExecutionContext | None:
 # marking (H_B_RESOLUTION R1): a capture running one of these on a CUDA device
 # WITHOUT ``use_deterministic_algorithms(True)`` cannot promise byte-reproducible
 # activations, so its descriptor is marked ineligible at capture (``not_applicable``
-# at run, never a false ATTESTED and never a spurious NumericAttestationError).
+# at run, never a false ATTESTED and never a spurious ReplayValueMismatchError).
 _CUDA_NONDETERMINISTIC_QUALNAME_TAILS: frozenset[str] = frozenset(
     {
         "conv_transpose1d",
@@ -593,7 +593,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # re-executing, so it fails closed here. The single completeness downgrade
         # drives BOTH honesty layers together -- ``_path_faithfulness`` reports
         # UNVERIFIABLE and ``_numeric_attestation_check`` reports NOT_APPLICABLE (never
-        # a false VERIFIED, and never a contradicting NumericAttestationError). An
+        # a false VERIFIED, and never a contradicting ReplayValueMismatchError). An
         # observe-only or backward/grad intervention leaves the forward output
         # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
         _gap(WitnessGapKind.FORWARD_VALUE_OVERRIDE, "capture")
@@ -1486,7 +1486,7 @@ def _add_persistent_buffer_slot_drafts(
                 name for name in buffer_names if not isinstance(snapshot[name], torch.Tensor)
             )
             if non_tensor_names:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Runnable save found non-tensor persistent-buffer state entries "
                     f"in the capture-time snapshot: {', '.join(non_tensor_names)}. "
                     "The embedded state snapshot admits tensors only; refusing to "
@@ -1518,7 +1518,7 @@ def _add_persistent_buffer_slot_drafts(
                 # weights): the universe is UNKNOWN. Refuse loudly and typed --
                 # mirroring the include_weights=True lane -- never silently
                 # under-declare.
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Runnable save requires the persistent-buffer state universe, "
                     "but no source is available: the source model is not alive, "
                     "no capture-time state records exist, and the trace carries "
@@ -2783,7 +2783,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     original op recipe, never the value substitution. Such an artifact cannot
     faithfully re-run the intervention-captured forward, so the producer downgrades
     witness completeness to keep the run honestly UNVERIFIABLE + NOT_APPLICABLE
-    rather than falsely VERIFIED (with a contradicting NumericAttestationError when
+    rather than falsely VERIFIED (with a contradicting ReplayValueMismatchError when
     activations are archived).
 
     Only forward-direction, value-replacing interventions are flagged. An
@@ -4853,7 +4853,7 @@ def _diagnostic(
         current_runtime=str(torch.__version__),
         detection_stage=detection_stage,
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 

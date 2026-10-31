@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from ._bridge import bertviz_tuple, circuitsvis_attention, circuitsvis_payload
 from ._decomp import render_neuron_card, score_decomposition
-from ._errors import TvizError
+from ._errors import RenderError
 from ._extract import attention_view, attention_views
 from ._lens_heatmap import render_logit_lens_heatmap
 from ._metrics import metric_strip, render_metric_strip, token_metrics
@@ -74,7 +74,7 @@ __all__ = [
     "TokenMetrics",
     "TokenScoreRow",
     "TokenScores",
-    "TvizError",
+    "RenderError",
     "attention_view",
     "attention_views",
     "bertviz_tuple",

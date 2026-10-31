@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.bundle._compare_gate import _MODEL_AXIS_RANK
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
@@ -109,7 +109,7 @@ def test_leg1_refusal_survives_save_load(tmp_path: Path) -> None:
             "b": _round_trip(right, tmp_path / "b.tlspec"),
         }
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
@@ -157,7 +157,7 @@ def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
             "b": tl.load(str(tmp_path / "b.tlspec")),
         }
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
     assert excinfo.value.fields["unproven_members"] == ["a", "b"]
@@ -230,7 +230,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle = tl.bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
@@ -238,7 +238,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
@@ -266,6 +266,6 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
 
     rows = loaded.diff_pair("a", "b")
     assert isinstance(rows, list)
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.diff_pair("b", "next")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"

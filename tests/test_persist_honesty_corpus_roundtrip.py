@@ -24,7 +24,7 @@ import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
-from torchlens._io import ArtifactVersionBelowFloorError
+from torchlens._io import ArtifactTooOldError
 from torchlens.capture.outcome import CaptureStatus
 
 _CORPUS_SHA256 = (  # content digest, not a credential
@@ -76,7 +76,7 @@ def test_in_window_artifacts_load(corpus_dir, artifact):
 
 @pytest.mark.parametrize("artifact", _BELOW_FLOOR)
 def test_below_floor_artifacts_keep_their_governed_refusal(corpus_dir, artifact):
-    with pytest.raises(ArtifactVersionBelowFloorError):
+    with pytest.raises(ArtifactTooOldError):
         tl.load(corpus_dir / artifact)
 
 
@@ -84,15 +84,15 @@ def test_below_floor_artifacts_keep_their_governed_refusal(corpus_dir, artifact)
 def test_window_edge_artifacts_load_or_refuse_governed(corpus_dir, artifact):
     from torchlens._io import (
         ArtifactRuntimeIncompatibleError,
-        ArtifactVersionAboveRuntimeError,
+        ArtifactTooNewError,
     )
 
     try:
         with expect_bundle_minor_version_mismatch():
             loaded = tl.load(corpus_dir / artifact)
     except (
-        ArtifactVersionBelowFloorError,
-        ArtifactVersionAboveRuntimeError,
+        ArtifactTooOldError,
+        ArtifactTooNewError,
         ArtifactRuntimeIncompatibleError,
     ):
         return

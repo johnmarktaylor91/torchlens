@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import torch
 
-from .._errors import PostTraceParamUnavailable
+from .._errors import ParamReleasedError
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
 ReconstructionFacet = Literal["scores", "pattern", "z", "result"]
@@ -641,7 +641,7 @@ def _parameter_tensor(module: Any, name: str) -> torch.Tensor | None:
                 continue
             try:
                 value = getattr(param, "value", None)
-            except PostTraceParamUnavailable:
+            except ParamReleasedError:
                 value = getattr(param, "_param_ref", None)
             if value is None:
                 value = getattr(param, "_param_ref", None)

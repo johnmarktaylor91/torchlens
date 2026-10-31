@@ -27,7 +27,7 @@ from torchlens.bundle._fed_by import (
 )
 from torchlens.bundle._relations import MemberRelationRow
 from torchlens.errors.episode import BundleRelationError
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.io import attach_sidecar
 
 _VOCAB = 32
@@ -160,7 +160,7 @@ def test_positional_relate_reads_as_the_sentence(model: _TinyLM) -> None:
 
 def test_fed_by_orders_members_for_the_comparison_gate(model: _TinyLM) -> None:
     bundle = _harness(model).relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
@@ -351,7 +351,7 @@ def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) 
         left="clean", right="patched", vis_outpath=str(tmp_path / "d"), vis_save_only=True
     )
     assert "clean vs patched" in dot
-    with pytest.raises(BundleRelationshipError):
+    with pytest.raises(BundleComparisonError):
         bundle.delta_map("relative_l2")
 
 
@@ -408,7 +408,7 @@ def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
         {"a": _trace(model, ids), "b": _trace(model, ids), "router": _trace(_Other(), ids)}
     )
     site = tl.func("relu")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.node(site)
     assert _code(excinfo) == "bundle_gate_model_axis_unmet"
     view = bundle.node(site, members=["a", "b"])
@@ -435,7 +435,7 @@ def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
         {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7, 8])},
         baseline="draft",
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         read(bundle)
     assert _code(excinfo) == "bundle_gate_input_values_differ"
 
@@ -445,7 +445,7 @@ def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None
     bundle = Bundle({"draft": _trace(model, ids), "critique": _trace(model, ids)}, baseline="draft")
     assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 

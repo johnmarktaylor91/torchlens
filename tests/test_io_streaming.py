@@ -13,10 +13,10 @@ from torch import nn
 import torchlens as tl
 import torchlens.postprocess as postprocess_module
 from torchlens import trace as trace_fn
-from torchlens._io import TorchLensIOError, streaming as streaming_module
+from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import Trace
-from torchlens.errors import ArgumentConflictError, TorchLensPostfuncError
+from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
 
@@ -202,7 +202,7 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         raise RuntimeError("boom")
 
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensPostfuncError, match="activation_transform raised"):
+    with pytest.raises(UserTransformError, match="activation_transform raised"):
         trace_fn(
             model,
             inputs,
@@ -223,7 +223,7 @@ def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="activation_transform outputs"):
+    with pytest.raises(ArtifactError, match="activation_transform outputs"):
         trace_fn(
             model,
             inputs,
@@ -245,7 +245,7 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="sparse"):
+    with pytest.raises(ArtifactError, match="sparse"):
         trace_fn(
             model,
             inputs,
@@ -305,7 +305,7 @@ def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
         )
 
     # The KeyboardInterrupt must propagate unwrapped (not swallowed, not
-    # rewrapped into a TorchLensIOError) -- verified by pytest.raises above --
+    # rewrapped into a ArtifactError) -- verified by pytest.raises above --
     # while STILL marking the .tmp dir PARTIAL so it becomes sweepable.
     assert not bundle_path.exists()
     tmp_dirs = _tmp_dirs_for(bundle_path)
@@ -339,7 +339,7 @@ def test_streaming_finalize_rename_failure_marks_partial(
         return original_rename(source, target)
 
     monkeypatch.setattr(Path, "rename", fail_final_rename)
-    with pytest.raises(TorchLensIOError, match="atomically rename"):
+    with pytest.raises(ArtifactError, match="atomically rename"):
         tl.trace(
             model,
             inputs,
@@ -497,7 +497,7 @@ def test_cleanup_tmp_removes_partial_dirs_and_rejects_symlinks(tmp_path: Path) -
     symlink_dir = tmp_path / f"{bundle_path.name}.tmp.symlink"
     symlink_dir.symlink_to(target_dir, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="symlink temp directory"):
+    with pytest.raises(ArtifactError, match="symlink temp directory"):
         cleanup_tmp(bundle_path)
 
 

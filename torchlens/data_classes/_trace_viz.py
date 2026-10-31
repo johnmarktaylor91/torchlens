@@ -890,9 +890,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
             **unsupported,
         )
         if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
-            from .._errors import CaptureContextError
+            from .._errors import CaptureNotActiveError
 
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "trace.summary() cannot run before the forward pass is complete; "
                 "a partial capture has no summary (repr(trace) shows the live op count).",
                 code="trace_not_finished",

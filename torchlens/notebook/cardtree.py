@@ -345,7 +345,7 @@ def _render_node(node: CardNode) -> str:
     return f'<div class="tl-card-muted">{escape(repr(node))}</div>'
 
 
-def safe_card_html(build: Callable[[], CardNode], *, theme: str = "torchlens") -> str:
+def safe_card_html(builder: Callable[[], CardNode], *, theme: str = "torchlens") -> str:
     """Build and render a card behind the never-raise boundary.
 
     Any internal failure degrades to a one-line ``card unavailable``
@@ -361,7 +361,7 @@ def safe_card_html(build: Callable[[], CardNode], *, theme: str = "torchlens") -
     """
 
     try:
-        return render_card_html(build(), theme=theme)
+        return render_card_html(builder(), theme=theme)
     except Exception as error:  # noqa: BLE001 - the boundary IS the contract
         reason = f"{type(error).__name__}: {error}"
         return (

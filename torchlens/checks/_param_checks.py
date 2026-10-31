@@ -206,7 +206,7 @@ def no_gradient_finding(  # noqa: PLR0913 -- the args ARE the finding's evidence
     """
 
     return CheckFinding(
-        check="param_received_no_gradient",
+        check_name="param_received_no_gradient",
         code="param_received_no_gradient",
         severity="warning",
         action=action,
@@ -218,7 +218,7 @@ def no_gradient_finding(  # noqa: PLR0913 -- the args ARE the finding's evidence
             "causes exist (MoE routing, untaken branches, embedding rows "
             "outside the batch) -- the window is why this warns, not raises."
         ),
-        names=(name,),
+        param_names=(name,),
         accepted_step_id=accepted_step_id,
         global_step=global_step,
         step_provenance=step_provenance,
@@ -259,7 +259,7 @@ def decay_only_movement_fact(  # noqa: PLR0913 -- the args ARE the corroborating
         "beta2": beta2,
     }
     return CheckFinding(
-        check="param_movement_decay_band",
+        check_name="param_movement_decay_band",
         code="param_movement_decay_band",
         severity="info",
         action="collect",
@@ -270,7 +270,7 @@ def decay_only_movement_fact(  # noqa: PLR0913 -- the args ARE the corroborating
             "statistic lags a real death by 22 to >32 steps (measured); the "
             "gradient fact is the primary detector."
         ),
-        names=(name,),
+        param_names=(name,),
         accepted_step_id=accepted_step_id,
         evidence="clone",
         values=values,

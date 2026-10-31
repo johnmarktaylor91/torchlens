@@ -20,7 +20,7 @@ from safetensors.torch import save_file
 from .. import __version__ as TORCHLENS_VERSION
 from .._errors import InvalidArgumentError
 from ..backends import get_backend_spec
-from . import TLSPEC_VERSION, TorchLensIOError
+from . import TLSPEC_VERSION, ArtifactError
 from ._durability import fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import reject_symlink_path
@@ -456,7 +456,7 @@ class _TlSpecWriter:
 
         members = getattr(bundle, "members", {})
         if not isinstance(members, dict):
-            raise TorchLensIOError("Bundle writer expected a mapping of members.")
+            raise ArtifactError("Bundle writer expected a mapping of members.")
         members_path = tmp_path / "members"
         members_path.mkdir()
         records: list[dict[str, str]] = []

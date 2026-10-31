@@ -89,7 +89,7 @@ class NativeProfileResult:
 
 def native_profile(
     model: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     activities: Any | None = None,
@@ -133,7 +133,7 @@ def native_profile(
             activities.append(torch.profiler.ProfilerActivity.CUDA)
     trace_kwargs.setdefault("save", None)
     with session(mode="owned", activities=activities) as active:
-        trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+        trace = user_funcs.trace(model, inputs, input_kwargs, **trace_kwargs)
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             torch.cuda.synchronize()
     result = join_session(active, trace, native_chrome_path=native_chrome_path)

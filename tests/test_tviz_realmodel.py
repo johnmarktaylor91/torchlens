@@ -210,7 +210,7 @@ def test_t5_rectangular_cross_attention(tmp_path) -> None:
     artifact = tviz.render_attention(view, tmp_path / "t5-cross.pdf", heads=(0, 1))
     assert any("rows attend from" in line for line in artifact.disclosure_lines)
     # Self-attention token spelling on a rectangular view refuses.
-    with pytest.raises(tviz.TvizError):
+    with pytest.raises(tviz.RenderError):
         tviz.attention_view(
             log,
             "decoder.block.0.layer.1.EncDecAttention",

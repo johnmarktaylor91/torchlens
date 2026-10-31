@@ -1373,7 +1373,7 @@ class _DenyMissingDispatch(dict):
     instead raises a bare ``KeyError`` from its ``dispatch[key]`` lookup. Migrating the
     base class to pure-Python (r49, secA_1) must NOT change that observable failure mode
     -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
-    to translate a corrupt ``metadata.pkl`` into a clean ``TorchLensIOError``. A missing
+    to translate a corrupt ``metadata.pkl`` into a clean ``ArtifactError``. A missing
     opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
 
     This hook covers ONLY the unknown-opcode facet. The OTHER corrupt-input facets the
@@ -1452,13 +1452,13 @@ class SafeBundleUnpickler(pickle._Unpickler):
         (1) every corrupt / truncated / malformed STREAM failure surfaces as
         ``pickle.UnpicklingError`` -- which the load sites
         (``bundle.py::_load_trace_payload`` / ``_load_unified_bundle``) translate
-        into a clean :class:`~torchlens._io._errors.TorchLensIOError`; and (2) an
+        into a clean :class:`~torchlens._io._errors.ArtifactError`; and (2) an
         exception raised by APPLICATION code the stream invokes (a REDUCE
         callable, ``__setstate__``, a ``find_class`` module import) propagates RAW
         with its identity intact -- the C VM never relabeled those, and the load
         sites enumerate that family (``TypeError`` / ``ValueError`` /
         ``ImportError`` / ...) to attach the original exception as the DIRECT
-        ``__cause__`` of ``TorchLensIOError`` (the legacy-bundle live-resource
+        ``__cause__`` of ``ArtifactError`` (the legacy-bundle live-resource
         contract).
 
         The pure-Python base VM leaks half (1) as raw builtins (``IndexError`` /
@@ -1490,7 +1490,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             if _exception_arose_outside_vm(exc):
                 # Application/reconstruction failure on a well-formed stream: NOT
                 # corruption; never labeled so. Propagate raw so load sites keep
-                # the original type as the DIRECT __cause__ of TorchLensIOError.
+                # the original type as the DIRECT __cause__ of ArtifactError.
                 raise
             raise pickle.UnpicklingError(
                 f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"

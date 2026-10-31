@@ -2771,7 +2771,7 @@ def _diagnostic(
         current_runtime=str(torch.__version__),
         detection_stage=detection_stage,
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 

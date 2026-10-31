@@ -100,11 +100,11 @@ class ConformanceReport:
     funnel: dict[str, int]
     realism: dict[str, list[str]]
     earned_tier: str
-    claim_eligible: bool
+    is_claim_eligible: bool
     environment: dict[str, str]
     attestation_sha256: str
 
-    def to_canonical_json(self) -> str:
+    def to_json(self) -> str:
         """Render the attested canonical byte form (sorted keys, no cwd)."""
 
         return _canonical_report_json(self, include_attestation=True)
@@ -280,7 +280,7 @@ def run_conformance(
         funnel=funnel,
         realism=realism,
         earned_tier=earned,
-        claim_eligible=claim_eligible,
+        is_claim_eligible=claim_eligible,
         environment=_environment_receipt(),
         attestation_sha256="",
     )
@@ -295,7 +295,7 @@ def run_conformance(
         funnel=report.funnel,
         realism=report.realism,
         earned_tier=report.earned_tier,
-        claim_eligible=report.claim_eligible,
+        is_claim_eligible=report.claim_eligible,
         environment=report.environment,
         attestation_sha256=digest,
     )

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..._errors import TorchLensPostfuncError
+from ..._errors import UserTransformError
 from ..._training_validation import TrainingModeConfigError
 from ...capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ...capture.projections import (
@@ -212,7 +212,7 @@ def log_source_tensor_predicate(
         _evaluate_halt(ctx, state.options, frontier_output=t)
     except HaltSignal:
         raise
-    except (TorchLensPostfuncError, TrainingModeConfigError):
+    except (UserTransformError, TrainingModeConfigError):
         # Postfunc + train-mode validation errors are storage failures and
         # must surface directly to the caller, not be aggregated through
         # the predicate-failure pipeline. The orchestrator's outer

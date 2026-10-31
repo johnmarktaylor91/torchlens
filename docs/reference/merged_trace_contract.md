@@ -153,7 +153,7 @@ interchangeable refuse.
   seq DELTAS from each rank's first recorded key per `(group_uid, channel)`;
   absolute bases are never compared (arming histories legitimately differ).
 - **PRE-JOIN membership-lineage audit** (`torchlens.distributed.
-  audit_membership_lineages`) runs BEFORE any joining or gap derivation, at
+  verify_membership_lineages`) runs BEFORE any joining or gap derivation, at
   merge time and again at load rederivation. A conflicted membership refuses
   STRUCTURALLY: no uid of it joins and no unmatched key of it becomes a
   presence gap. The named remedy is `torchlens.distributed.arm()` at process

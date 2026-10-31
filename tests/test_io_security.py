@@ -15,7 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import load, save
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 
 
 class _SecurityIOModel(nn.Module):
@@ -134,7 +134,7 @@ def test_load_rejects_manifest_parent_traversal_even_with_valid_sha(tmp_path: Pa
     manifest["tensors"][0]["relative_path"] = "../outside.safetensors"
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="Bundle rejected"):
+    with pytest.raises(ArtifactError, match="Bundle rejected"):
         load(bundle_path)
 
 
@@ -149,7 +149,7 @@ def test_load_rejects_manifest_absolute_blob_path(tmp_path: Path) -> None:
     manifest["tensors"][0]["relative_path"] = str(outside_blob_path.resolve())
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="absolute relative_path"):
+    with pytest.raises(ArtifactError, match="absolute relative_path"):
         load(bundle_path)
 
 
@@ -162,7 +162,7 @@ def test_load_rejects_manifest_parent_segments_that_resolve_back_inside(tmp_path
     manifest["tensors"][0]["relative_path"] = f"blobs/../blobs/{original_blob_name}"
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="parent traversal"):
+    with pytest.raises(ArtifactError, match="parent traversal"):
         load(bundle_path)
 
 
@@ -176,7 +176,7 @@ def test_load_rejects_manifest_path_into_sibling_bundle(tmp_path: Path) -> None:
     manifest["tensors"][0]["relative_path"] = f"../{sibling_bundle.name}/blobs/{sibling_blob_name}"
     _write_manifest(source_bundle, manifest)
 
-    with pytest.raises(TorchLensIOError, match="Bundle rejected"):
+    with pytest.raises(ArtifactError, match="Bundle rejected"):
         load(source_bundle)
 
 
@@ -193,7 +193,7 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
     shutil.copy2(_first_blob_path(bundle_path), outside_blob_path)
     layer.out_ref = replace(ref, relative_path="../outside_materialize.safetensors")
 
-    with pytest.raises(TorchLensIOError, match="Bundle rejected"):
+    with pytest.raises(ArtifactError, match="Bundle rejected"):
         layer.materialize_out()
 
 
@@ -205,7 +205,7 @@ def test_extra_blob_with_manifest_sha_collision_raises(tmp_path: Path) -> None:
     collision_path = bundle_path / "blobs" / "collision_copy.safetensors"
     shutil.copy2(original_blob_path, collision_path)
 
-    with pytest.raises(TorchLensIOError, match="sha256 matches a manifest entry"):
+    with pytest.raises(ArtifactError, match="sha256 matches a manifest entry"):
         load(bundle_path)
 
 

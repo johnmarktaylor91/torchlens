@@ -135,7 +135,7 @@ def test_malformed_records_are_named(change: dict[str, Any], reason: str) -> Non
 def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
     """The load boundary refuses a hand-edited record with its typed code."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
     from torchlens._io.forgery_validation import validate_persisted_forgery_surfaces
 
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
@@ -144,7 +144,7 @@ def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
         (loaded_pass,) = loaded.backward_passes
         validate_persisted_forgery_surfaces(loaded)
         loaded_pass.executed_flops_record = {**_GOOD, "executed_flops": -1}
-        with pytest.raises(TorchLensIOError) as refusal:
+        with pytest.raises(ArtifactError) as refusal:
             validate_persisted_forgery_surfaces(loaded)
         assert refusal.value.fields["code"] == "artifact_executed_flops_record_invalid"
     finally:

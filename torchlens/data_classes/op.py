@@ -57,12 +57,12 @@ from .._errors import (
     MutatedReferenceError,
     PayloadUnavailableError,
     RecordBindingError,
-    TorchLensPostfuncError,
+    UserTransformError,
 )
 from .._io import (
     TLSPEC_VERSION,
+    ArtifactError,
     FieldPolicy,
-    TorchLensIOError,
     coerce_container_typed_state,
     default_fill_state,
     read_tlspec_version,
@@ -3327,7 +3327,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If no out ref is available for this layer.
 
         Examples
@@ -3343,7 +3343,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         if current_out is not None:
             return current_out
         if self.out_ref is None:
-            raise TorchLensIOError("no out_ref to materialize from")
+            raise ArtifactError("no out_ref to materialize from")
         self._internal_set(
             "out",
             self.out_ref.materialize(map_location=map_location, payload_hints=payload_hints),
@@ -3372,7 +3372,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If no grad ref is available for this layer.
 
         Examples
@@ -3388,7 +3388,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         if grad is not None:
             return grad
         if self.grad_ref is None:
-            raise TorchLensIOError("no grad_ref to materialize from")
+            raise ArtifactError("no grad_ref to materialize from")
         self._internal_set(
             "grad",
             self.grad_ref.materialize(map_location=map_location, payload_hints=payload_hints),
@@ -3919,9 +3919,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         except Exception as exc:
             if writer is not None:
                 writer.abort(f"Failed while saving out for {self._streaming_label}: {exc}")
-                if isinstance(exc, (SaveBudgetExceededError, TorchLensPostfuncError)):
+                if isinstance(exc, (SaveBudgetExceededError, UserTransformError)):
                     raise
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"Streaming out save failed for {self._streaming_label}."
                 ) from exc
             raise
@@ -4170,7 +4170,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If streaming is active and the transform returns a non-tensor or sparse tensor.
         """
 
@@ -4181,7 +4181,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 streaming_active=streaming_active,
                 label=self._streaming_label,
             )
-        except TorchLensIOError as exc:
+        except ArtifactError as exc:
             self._abort_streaming_writer(str(exc))
             raise
 
@@ -4235,7 +4235,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                     f"{tensor_field} expected a tensor for streaming, got {type(tensor).__name__}."
                 )
             writer.abort(message)
-            raise TorchLensIOError(message)
+            raise ArtifactError(message)
         blob_id = writer.next_blob_id()
         setattr(self, pending_field, blob_id)
         writer.submit_blob(

@@ -14,7 +14,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.runnable import _encode_literal
 from torchlens._runnable_execution import _decode_literal
-from torchlens.errors.runnable import NumericAttestationError, RunPreconditionError
+from torchlens.errors.runnable import ReplayValueMismatchError, RunPreconditionError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
 
@@ -134,7 +134,7 @@ def test_mha_benign_fallback_still_checks_later_corrupted_slot(tmp_path: Path) -
     record = archive[victim]
     archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
 
-    with pytest.raises(NumericAttestationError):
+    with pytest.raises(ReplayValueMismatchError):
         loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
 
 

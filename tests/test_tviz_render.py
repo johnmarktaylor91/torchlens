@@ -62,7 +62,7 @@ def test_matplotlib_gate_refuses_with_install_command(
     for name in [name for name in sys.modules if name.split(".")[0] == "matplotlib"]:
         monkeypatch.delitem(sys.modules, name)
     monkeypatch.setitem(sys.modules, "matplotlib", None)
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(tviz.RenderError) as excinfo:
         tviz.render_attention(view, tmp_path / "x.svg")
     assert excinfo.value.fields["code"] == "tv_matplotlib_missing"
     assert 'pip install "torchlens[viz]"' in excinfo.value.fields["install_command"]
@@ -180,7 +180,7 @@ def test_receipt_grid_refuses_without_joint(tmp_path: Path) -> None:
         negative_control=0.0,
         positive_control=1.0,
     )
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(tviz.RenderError) as excinfo:
         tviz.render_receipt_grid(receipt, tmp_path / "no-joint.png")
     assert excinfo.value.fields["code"] == "tv_receipt_invalid"
 
@@ -202,7 +202,7 @@ def test_annotated_attention_keeps_pattern_channel(
 def test_unknown_format_refuses(view: tviz.AttentionView, tmp_path: Path) -> None:
     """The save-format roster is closed; PDF is the paper format."""
 
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(tviz.RenderError) as excinfo:
         tviz.render_attention(view, tmp_path / "attn.webp")
     assert excinfo.value.fields["code"] == "tv_record_invalid"
 

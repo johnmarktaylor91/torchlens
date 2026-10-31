@@ -417,7 +417,7 @@ class ChecksSession:
             action=validate_action(action),
         )
 
-    def register_nonfinite_gradient_check(self, *, action: str = "raise") -> None:
+    def register_nonfinite_grad_check(self, *, action: str = "raise") -> None:
         """Register the live parameter-gradient nonfinite check (memo D6).
 
         Site-conditional by construction: at S-A nonfinite gradients are
@@ -804,7 +804,7 @@ class ChecksSession:
                 continue
             self._record(
                 CheckFinding(
-                    check="grad_magnitude",
+                    check_name="grad_magnitude",
                     code="grad_magnitude_flagged",
                     severity="warning",
                     action=self._magnitude.action,
@@ -814,7 +814,7 @@ class ChecksSession:
                         f"(thresholds: vanishing {self._magnitude.vanishing_threshold:g}, "
                         f"exploding {self._magnitude.exploding_threshold:g})."
                     ),
-                    names=(name,),
+                    param_names=(name,),
                     backward_id=self.backward_id,
                     step_provenance=self._provenance(),
                     global_step=self._global_step(),
@@ -836,7 +836,7 @@ class ChecksSession:
 
         snapshot = self._watchdog.snapshot()
         finding = CheckFinding(
-            check="scale_collapse_watchdog",
+            check_name="scale_collapse_watchdog",
             code="check_no_accepted_steps",
             severity="warning",
             action="warn",
@@ -928,7 +928,7 @@ class ChecksSession:
         attribution = "exact" if len(culprits) == 1 else "smeared"
         clip_evidence = self._clip_norm is not None
         finding = CheckFinding(
-            check="param_grad_nonfinite",
+            check_name="param_grad_nonfinite",
             code="param_grad_nonfinite",
             severity="critical",
             action=self._nonfinite_grad.action,
@@ -949,7 +949,7 @@ class ChecksSession:
                     else "Attribution is exact: one parameter carries the nonfinite."
                 )
             ),
-            names=tuple(culprits),
+            param_names=tuple(culprits),
             backward_id=self.backward_id,
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
@@ -1089,7 +1089,7 @@ class ChecksSession:
         ]
         self._record(
             CheckFinding(
-                check="params_changed_fact",
+                check_name="params_changed_fact",
                 code="params_changed_fact",
                 severity="info",
                 action="collect",
@@ -1101,7 +1101,7 @@ class ChecksSession:
                     "decay a dead parameter still changes every step, so this "
                     "fact CORROBORATES and never detects."
                 ),
-                names=tuple(unchanged[:_NAME_SAMPLE]),
+                param_names=tuple(unchanged[:_NAME_SAMPLE]),
                 accepted_step_id=self.accepted_step_id,
                 global_step=self._global_step(),
                 step_provenance=self._provenance(),
@@ -1218,7 +1218,7 @@ class ChecksSession:
         if obs.out_of_band:
             code = "update_ratio_out_of_band"
         finding = CheckFinding(
-            check="update_ratio",
+            check_name="update_ratio",
             code=code,
             severity="warning" if obs.out_of_band else "info",
             action=check.action,
@@ -1234,7 +1234,7 @@ class ChecksSession:
                 )
                 + "."
             ),
-            names=(name,),
+            param_names=(name,),
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
             step_provenance=self._provenance(),
@@ -1291,7 +1291,7 @@ class ChecksSession:
             canonical, aliases = aliases_by_name[name]
             all_names = tuple(dict.fromkeys((name, canonical, *aliases)))
             finding = CheckFinding(
-                check="frozen_param_changed",
+                check_name="frozen_param_changed",
                 code="frozen_param_changed",
                 severity="critical",
                 action=self._frozen.action,
@@ -1301,7 +1301,7 @@ class ChecksSession:
                     + (f"; max abs delta {delta_absmax:.6g}" if delta_absmax else "")
                     + f"). Every alias of the moved tensor: {list(all_names)}."
                 ),
-                names=all_names,
+                param_names=all_names,
                 accepted_step_id=self.accepted_step_id,
                 global_step=self._global_step(),
                 step_provenance=self._provenance(),
@@ -1383,7 +1383,7 @@ class ChecksSession:
             return
         names = tuple(row.name for row in corrupt)
         finding = CheckFinding(
-            check="param_nonfinite",
+            check_name="param_nonfinite",
             code="param_value_nonfinite",
             severity="critical",
             action=self._nonfinite_param.action,
@@ -1393,7 +1393,7 @@ class ChecksSession:
                 "checkpoint taken now is worthless; every later step is wasted "
                 "compute."
             ),
-            names=names,
+            param_names=names,
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
             step_provenance=self._provenance(),
@@ -1588,7 +1588,7 @@ class ChecksSession:
 
         return self._final_report
 
-    def profile(self) -> dict[str, Any]:
+    def overhead(self) -> dict[str, Any]:
         """Run the measured scan on demand (memo D20/D21).
 
         Cost numbers are DATA at named shapes on this machine state --

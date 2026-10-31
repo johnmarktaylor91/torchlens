@@ -9,7 +9,7 @@ from typing import Any
 
 import torch
 
-from .intervention.errors import BatchChunkInputAmbiguityError, ChunkedForwardConfigError
+from .intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
 
 ChunkPath = tuple[Any, ...]
 
@@ -79,7 +79,7 @@ def normalize_chunk_paths(chunk_paths: Iterable[Any] | None) -> tuple[str, ...] 
 
 
 def plan_chunks(
-    input_args: Any,
+    inputs: Any,
     *,
     chunk_size: int,
     chunk_paths: Iterable[Any] | None = None,
@@ -102,7 +102,7 @@ def plan_chunks(
 
     Raises
     ------
-    BatchChunkInputAmbiguityError
+    AmbiguousBatchInputError
         If auto mode finds multiple batched tensor leaves.
     ChunkedForwardConfigError
         If no splittable tensor is found, or explicit paths are invalid.
@@ -111,7 +111,7 @@ def plan_chunks(
     normalized_size = normalize_chunk_size(chunk_size)
     if normalized_size is None:
         raise ChunkedForwardConfigError("chunk_size must be set before planning chunks.")
-    roots = _positional_roots(input_args)
+    roots = _positional_roots(inputs)
     public_paths = normalize_chunk_paths(chunk_paths)
     if public_paths is None:
         tensor_leaves = [
@@ -125,7 +125,7 @@ def plan_chunks(
                 f"{format_chunk_path(path)} shape={tuple(tensor.shape)}"
                 for path, tensor in tensor_leaves
             )
-            raise BatchChunkInputAmbiguityError(
+            raise AmbiguousBatchInputError(
                 "chunk_size found multiple ndim>0 tensor leaves; pass chunk_paths=[...] "
                 f"to select batched inputs explicitly. Candidates: {details}."
             )
@@ -156,7 +156,7 @@ def plan_chunks(
     return ChunkPlan(normalized_size, first_size, parsed_paths)
 
 
-def iter_chunked_inputs(input_args: Any, plan: ChunkPlan) -> list[Any]:
+def iter_chunked_inputs(inputs: Any, plan: ChunkPlan) -> list[Any]:
     """Return per-chunk input trees for a validated plan.
 
     Parameters
@@ -176,7 +176,7 @@ def iter_chunked_inputs(input_args: Any, plan: ChunkPlan) -> list[Any]:
     chunks: list[Any] = []
     for start in range(0, plan.total_size, plan.chunk_size):
         end = min(start + plan.chunk_size, plan.total_size)
-        chunks.append(_replace_paths(input_args, plan.paths, start, end))
+        chunks.append(_replace_paths(inputs, plan.paths, start, end))
     return chunks
 
 

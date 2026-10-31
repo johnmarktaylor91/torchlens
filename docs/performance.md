@@ -170,7 +170,7 @@ census result.
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
 recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
-`func_call_id` emits no logged op, produce a `TorchLensCaptureGapWarning`, set
+`func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
 `trace.completeness_witness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque

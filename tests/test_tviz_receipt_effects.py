@@ -96,7 +96,7 @@ def test_known_patched_value_gives_the_known_difference() -> None:
 def test_grid_without_a_baseline_refuses_with_a_remedy() -> None:
     """Raw patched values never pass as effects."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         _receipt(_grid(torch.zeros(1, 2)))
     assert caught.value.fields["code"] == "tv_receipt_invalid"
     assert "corrupted_metric" in caught.value.fields["remedy"]
@@ -133,7 +133,7 @@ def test_rows_from_different_baselines_refuse(tmp_path: Path) -> None:
 
     first = _receipt(_grid(torch.zeros(1, 2), corrupted_metric=0.0))
     second = _receipt(_grid(torch.zeros(1, 2), corrupted_metric=1.0))
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         tviz.render_receipt_grid([first, second], tmp_path / "mixed.png", joint_effect=0.0)
     assert caught.value.fields["code"] == "tv_receipt_invalid"
 
@@ -160,7 +160,7 @@ def test_receipt_without_a_baseline_says_so() -> None:
 
 
 def test_non_finite_baseline_refuses() -> None:
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(tviz.RenderError) as caught:
         _receipt(_grid(torch.zeros(1, 2), corrupted_metric=float("nan")))
     assert caught.value.fields["code"] == "tv_receipt_invalid"
 

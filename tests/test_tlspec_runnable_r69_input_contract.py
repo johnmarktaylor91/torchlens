@@ -751,11 +751,11 @@ def test_r69_no_untyped_error_input_boundary_save_sweep(
 ) -> None:
     """Every runnable-save cell either SUCCEEDS or refuses through a typed
     ``RunnableErrorCode`` disposition -- a bare AssertionError or untyped
-    ``TorchLensIOError`` anywhere in the matrix is a failure (the belt that
+    ``ArtifactError`` anywhere in the matrix is a failure (the belt that
     catches the NEXT DROP-order-shaped bug regardless of which leaf trips it).
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     leaf = _BELT_LEAVES[leaf_name]
     x = torch.randn(3)
@@ -783,7 +783,7 @@ def test_r69_no_untyped_error_input_boundary_save_sweep(
     except RunnablePreflightError as exc:
         # Typed refusal: carries structured RunnableErrorCode diagnostics.
         assert exc.fields.get("diagnostics"), (leaf_name, position)
-    except TorchLensIOError as exc:
+    except ArtifactError as exc:
         cause_chain = []
         cause = exc.__cause__
         while cause is not None:

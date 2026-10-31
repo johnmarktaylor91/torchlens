@@ -62,11 +62,11 @@ class InterventionValidationReport:
         Human-readable axis details.
     """
 
-    invariance: bool
-    specificity: bool
-    completeness: bool
-    consistency: bool
-    locality: bool
+    is_invariant: bool
+    is_specific: bool
+    is_complete: bool
+    is_consistent: bool
+    is_local: bool
     details: dict[str, Any]
 
     @property
@@ -81,11 +81,11 @@ class InterventionValidationReport:
 
         return all(
             (
-                self.invariance,
-                self.specificity,
-                self.completeness,
-                self.consistency,
-                self.locality,
+                self.is_invariant,
+                self.is_specific,
+                self.is_complete,
+                self.is_consistent,
+                self.is_local,
             )
         )
 
@@ -294,11 +294,11 @@ def _intervention_report(
         **(save_options or {}),
     )
     return InterventionValidationReport(
-        invariance=forward_ok,
-        specificity=False,
-        completeness=False,
-        consistency=False,
-        locality=False,
+        is_invariant=forward_ok,
+        is_specific=False,
+        is_complete=False,
+        is_consistent=False,
+        is_local=False,
         details={
             "invariance": "forward validation passed"
             if forward_ok
@@ -401,7 +401,7 @@ def _validate_receptive_field_scope(
 
 def validate(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     scope: str,
@@ -520,14 +520,14 @@ def validate(
     )
     save_options = _save_option_kwargs(output_device, save_budget)
     if normalized_scope == "backward":
-        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+        spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward validation."
             )
         return validate_backward_pass(
             model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
             validate_metadata=validate_metadata,
@@ -539,14 +539,14 @@ def validate(
             layer_grad_rtol=layer_grad_rtol,
         )
     if normalized_scope == "receptive_field":
-        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+        spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support receptive-field validation."
             )
         return _validate_receptive_field_scope(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             random_seed=random_seed,
             validate_metadata=validate_metadata,
@@ -585,7 +585,7 @@ def validate(
             try:
                 passed = validate_forward_pass(
                     model,
-                    input_args,
+                    inputs,
                     input_kwargs=input_kwargs,
                     random_seed=random_seed,
                     verbose=verbose,
@@ -640,7 +640,7 @@ def validate(
         return passed
     return _intervention_report(
         model,
-        input_args,
+        inputs,
         input_kwargs,
         random_seed=random_seed,
         verbose=verbose,
@@ -664,7 +664,7 @@ def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None
     record_validation_failure(
         None,
         ValidationFailure(
-            check=CHECK_METADATA_INVARIANT,
+            check_name=CHECK_METADATA_INVARIANT,
             message=f"{type(invariant_error).__name__}: {invariant_error}",
         ),
     )

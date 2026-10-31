@@ -10,7 +10,7 @@ from torch import nn
 
 from .._errors import InvalidArgumentError
 from .errors import (
-    AxisAmbiguityError,
+    AmbiguousAxisError,
     HookValueError,
     NonExecutableSpecError,
     SpliceModuleDeviceError,
@@ -1111,7 +1111,7 @@ def _helper_spec(
         metadata=tuple(sorted((metadata or {}).items())),
         direction=direction,
         batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        is_compatible_with_append=compatible_with_append,
     )
 
 
@@ -1174,7 +1174,7 @@ def helper_from_serialized(
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
             batch_independent=bool(data.get("batch_independent", False)),
-            compatible_with_append=bool(data.get("compatible_with_append", False)),
+            is_compatible_with_append=bool(data.get("compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1436,7 +1436,7 @@ def _non_executable_builtin_placeholder(
             ("executable", False),
         ),
         batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
+        is_compatible_with_append=bool(data.get("compatible_with_append", False)),
     )
 
 
@@ -1540,7 +1540,7 @@ def _align_direction(
         return direction
     if direction.ndim == 1 and out.ndim > 1:
         if feature_axis is None:
-            raise AxisAmbiguityError(
+            raise AmbiguousAxisError(
                 "vector directions require explicit feature_axis to avoid axis ambiguity"
             )
         normalized_axis = feature_axis % out.ndim

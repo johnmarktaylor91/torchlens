@@ -196,7 +196,7 @@ def test_public_cached_property_read_does_not_poison_save(tmp_path) -> None:
     ``intervention_spec`` is a ``functools.cached_property``, so a read caches
     its value under its own name in ``Trace.__dict__``. The tlspec scrub walks
     the live ``__dict__`` fail-closed, and before B3R4-R10-1 the undeclared
-    cache key made every later ``tl.save`` raise ``TorchLensIOError`` -- a
+    cache key made every later ``tl.save`` raise ``ArtifactError`` -- a
     read-only public accessor permanently poisoning the artifact path.
 
     Parameters

@@ -1000,7 +1000,7 @@ def _model_expects_single_arg(model: nn.Module) -> bool | None:
     return len(named_args) == 1
 
 
-def normalize_input_args(input_args: Any, model: nn.Module) -> list[Any]:
+def normalize_input_args(inputs: Any, model: nn.Module) -> list[Any]:
     """Normalize ``input_args`` into a list suitable for ``model(*input_args)``.
 
     Handles the ambiguity when the user ops a tuple or list: it could be
@@ -1017,19 +1017,19 @@ def normalize_input_args(input_args: Any, model: nn.Module) -> list[Any]:
     * Otherwise, treat each element of the tuple/list as a separate
       positional argument: ``model(arg0, arg1, ...)``.
     """
-    if type(input_args) in (tuple, list):
+    if type(inputs) in (tuple, list):
         single = _model_expects_single_arg(model)
-        if single and len(input_args) > 1:
+        if single and len(inputs) > 1:
             # Model expects 1 arg but user passed a multi-element tuple/list.
             # The tuple/list itself IS the single argument.
-            input_args = [input_args]
-        elif type(input_args) is tuple:
+            inputs = [inputs]
+        elif type(inputs) is tuple:
             # Multiple args — convert tuple to mutable list for internal use.
-            input_args = list(input_args)
+            inputs = list(inputs)
         # If already a list and not wrapping, leave as-is.
-    elif input_args is not None:
+    elif inputs is not None:
         # Bare value (single tensor, etc.) — wrap in a list.
-        input_args = [input_args]
-    if not input_args:
-        input_args = []
-    return cast(list[Any], input_args)
+        inputs = [inputs]
+    if not inputs:
+        inputs = []
+    return cast(list[Any], inputs)

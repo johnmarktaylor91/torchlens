@@ -978,15 +978,15 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if confirm_mutation or self.parent_run is not None or self._warned_mutate_in_place:
             return
-        from ..intervention.errors import MutateInPlaceWarning
+        from ..intervention.errors import TraceMutationWarning
         from ..options import suppress_mutate_warnings
 
         if suppress_mutate_warnings.is_suppressed:
             return
         warnings.warn(
-            "MutateInPlaceWarning: Trace mutators modify root logs in place. "
+            "TraceMutationWarning: Trace mutators modify root logs in place. "
             "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
-            MutateInPlaceWarning,
+            TraceMutationWarning,
             stacklevel=3,
         )
         self._warned_mutate_in_place = True

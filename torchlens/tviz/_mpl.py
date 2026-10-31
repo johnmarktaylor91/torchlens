@@ -61,7 +61,7 @@ def require_matplotlib() -> Any:
 
     Raises
     ------
-    TvizError
+    RenderError
         ``tv_matplotlib_missing`` with the exact install command when
         matplotlib is not importable (FORK-T1 branch A: call-time
         resolution; the dependency-free token-strip emitters still work).

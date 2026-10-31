@@ -364,12 +364,12 @@ def _roundtrip(log, tmp_path, name: str):
 
 
 def test_root_entry_point_grammar_refuses_at_load(tmp_path) -> None:
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
     log.root_entry_point = "teleport:_Greedy.forward"
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "root_bad")
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
@@ -385,22 +385,22 @@ def test_op_entry_dark_facts_default_none() -> None:
 def test_episode_step_stamp_without_declaration_refuses(tmp_path) -> None:
     """A stamped op on a plain capture is a forged/drifted artifact."""
 
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
     log.ops[0].episode_step = 0
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "stamp_bad")
     assert excinfo.value.fields["code"] == "artifact_episode_step_invalid"
 
 
 def test_malformed_episode_step_refuses(tmp_path) -> None:
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     log = _capture_episode()
     log.ops[0].episode_step = -1
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "stamp_type_bad")
     assert excinfo.value.fields["code"] == "artifact_episode_step_invalid"
 
@@ -408,12 +408,12 @@ def test_malformed_episode_step_refuses(tmp_path) -> None:
 def test_tl_authored_root_without_bound_method_root_refuses(tmp_path) -> None:
     """The marker discloses a wrapper root the capture must also declare."""
 
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
     log.ops[0].tl_authored_root = True
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "marker_bad")
     assert excinfo.value.fields["code"] == "artifact_tl_authored_root_invalid"
 

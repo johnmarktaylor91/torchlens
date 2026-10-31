@@ -51,7 +51,7 @@ class SpecCompat:
 
     outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"]
     diff: TargetManifestDiff
-    targets_resolve_identically: bool
+    has_identical_target_resolution: bool
     #: Human-readable site-level diff (C03; empty when no keys on either side).
     site_diff: str = ""
 
@@ -254,7 +254,7 @@ def _derive_outcome(
     return outcome, targets_identical, diff
 
 
-def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
+def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
     """Check whether a loaded intervention spec targets a new model log.
 
     Parameters
@@ -270,10 +270,10 @@ def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
         Compatibility classification and target diff.
     """
 
-    graph_hash = getattr(new_log, "graph_shape_hash", None)
+    graph_hash = getattr(trace, "graph_shape_hash", None)
     res = _ManifestResolution()
     for index, entry in enumerate(spec.metadata.get("target_manifest", [])):
-        _fold_entry(res, entry, index, _resolve_entry(new_log, entry, graph_hash))
+        _fold_entry(res, entry, index, _resolve_entry(trace, entry, graph_hash))
     outcome, targets_identical, diff = _derive_outcome(res)
 
     # A graph_shape_hash mismatch alone cannot distinguish a genuinely different

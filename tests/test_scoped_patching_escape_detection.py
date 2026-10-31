@@ -20,7 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch.escape_detection import (
     AUDITED_ESCAPE_EXEMPTIONS,
     MAX_AUDITED_EXEMPTIONS,
@@ -68,7 +68,7 @@ def _isolated_wrapper_epoch(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def _gap_warnings(caught: list[warnings.WarningMessage]) -> list[warnings.WarningMessage]:
     """Return only callable/thread capture-gap warnings from a warning list."""
 
-    return [item for item in caught if isinstance(item.message, TorchLensCaptureGapWarning)]
+    return [item for item in caught if isinstance(item.message, CaptureGapWarning)]
 
 
 def _run_shadow_capture(model: nn.Module) -> tuple[BaseException | None, list[str]]:
@@ -290,7 +290,7 @@ def test_descriptor_escape_inside_wrapper_token_is_not_window_exempted() -> None
             return decorated(x, callback)
 
     try:
-        with pytest.warns(TorchLensCaptureGapWarning, match="TensorBase.add"):
+        with pytest.warns(CaptureGapWarning, match="TensorBase.add"):
             trace = tl.trace(Model(), torch.randn(3))
         assert len(trace.escape_diagnostics) == 1
         assert trace.escape_diagnostics[0]["guard_pass_index"] >= 1
@@ -459,7 +459,7 @@ def test_synchronous_dataloader_callback_is_in_owner_thread_domain() -> None:
             return torch.sigmoid(next(iter(loader)))
 
     wrap_torch(escape_detector="shadow")
-    with pytest.warns(TorchLensCaptureGapWarning, match="relu"):
+    with pytest.warns(CaptureGapWarning, match="relu"):
         trace = tl.trace(Model(), torch.randn(3))
     assert len(trace.escape_diagnostics) == 1
 
@@ -555,7 +555,7 @@ def test_rng_and_escape_profile_detectors_coarm_without_lost_detection() -> None
             return torch.sigmoid(raw_relu(x))
 
     wrap_torch(escape_detector="shadow")
-    with pytest.warns(TorchLensCaptureGapWarning, match="relu"):
+    with pytest.warns(CaptureGapWarning, match="relu"):
         trace = tl.trace(
             DualDetectionModel(),
             torch.randn(3),
@@ -630,7 +630,7 @@ def test_thread_count_tripwire_marks_trace_unverified() -> None:
     model = Model()
     wrap_torch(escape_detector="shadow")
     try:
-        with pytest.warns(TorchLensCaptureGapWarning, match="thread-count change"):
+        with pytest.warns(CaptureGapWarning, match="thread-count change"):
             trace = tl.trace(model, torch.randn(3))
         assert trace.capture_owner_thread_qualified is True
         assert trace.capture_thread_activity_detected is True

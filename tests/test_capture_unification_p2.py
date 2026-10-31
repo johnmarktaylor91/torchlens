@@ -175,7 +175,7 @@ def test_mid_forward_summary_refuses_typed() -> None:
     running over a half-built trace.
     """
 
-    from torchlens._errors import CaptureContextError
+    from torchlens._errors import CaptureNotActiveError
 
     model = _MidForwardProbe()
     log = tl.trace(
@@ -183,7 +183,7 @@ def test_mid_forward_summary_refuses_typed() -> None:
     )
 
     error = stashed(log, "observations").get("summary_error")
-    assert isinstance(error, CaptureContextError)
+    assert isinstance(error, CaptureNotActiveError)
     assert error.fields["code"] == "trace_not_finished"
     assert "repr(trace)" in str(error)
 

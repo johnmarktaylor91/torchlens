@@ -9,7 +9,7 @@ import torch
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import TorchLensPostfuncError
+from ..._errors import UserTransformError
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ...capture.arg_positions import (
@@ -221,7 +221,7 @@ def _emit_predicate_operation_events(
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except HaltSignal:
             raise
-        except (TorchLensPostfuncError, TrainingModeConfigError):
+        except (UserTransformError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through
             # the predicate-failure pipeline. The orchestrator's outer

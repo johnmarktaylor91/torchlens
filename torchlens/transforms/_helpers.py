@@ -287,7 +287,7 @@ class ProbeReport:
     corpus: str
     distance_claim: str
 
-    def to_record(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the JSON-portable probe record (scope travels with numbers).
 
         Returns
@@ -308,10 +308,10 @@ class ProbeReport:
             "distance_claim": self.distance_claim,
         }
 
-    def canonical_json(self) -> str:
+    def to_json(self) -> str:
         """Return the canonical JSON of :meth:`to_record`."""
 
-        return canonical_json(self.to_record())
+        return canonical_json(self.to_dict())
 
     def __str__(self) -> str:
         """Small aligned table with the scope line attached."""

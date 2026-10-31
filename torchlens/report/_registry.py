@@ -348,7 +348,7 @@ class CapabilityRow:
 
     key: str
     spelling: str
-    available: bool
+    is_available: bool
     reason: str
     cost_class: str
 
@@ -390,7 +390,7 @@ def _object_kind(trace_like: Any) -> str:
     return "trace"
 
 
-def capability_card(trace_like: Any) -> CapabilityCard:
+def capability_card(trace: Any) -> CapabilityCard:
     """Build the capability card for one trace-like object (D24).
 
     Metadata-only by construction: requirement tokens are evaluated
@@ -398,7 +398,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
     runs a forward.
     """
 
-    kind = _object_kind(trace_like)
+    kind = _object_kind(trace)
     rows: list[CapabilityRow] = []
     for entry in SURFACE_REGISTRY:
         available = True
@@ -416,7 +416,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
             CapabilityRow(
                 key=entry.key,
                 spelling=entry.spelling,
-                available=available,
+                is_available=available,
                 reason=reason,
                 cost_class=entry.cost_class,
             )

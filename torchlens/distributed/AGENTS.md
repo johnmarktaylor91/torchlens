@@ -49,7 +49,7 @@ op capture itself lives in `backends/torch/collectives.py`.
   fix.
 
 ## _audit.py
-- `audit_membership_lineages()` is the pure PRE-JOIN audit the C1 merge engine runs
+- `verify_membership_lineages()` is the pure PRE-JOIN audit the C1 merge engine runs
   over per-rank ledgers; returns `MembershipLineageVerdict`s. Conflicting evidence
   is `GROUP_LIFETIME_EVIDENCE_CONFLICT`, a typed finding, never a silent join.
 

@@ -225,7 +225,7 @@ def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
         current_runtime=None,
         detection_stage="hooked_run_unverified",
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=(
             ("staged_hooks", str(hooks)),
             ("staged_value_replacements", str(values)),

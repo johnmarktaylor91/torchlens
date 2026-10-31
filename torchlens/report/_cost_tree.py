@@ -144,16 +144,16 @@ class CostTreeRow:
     subtree_flops: int | None
     self_pct: float | None
     subtree_pct: float | None
-    n_ops: int
-    n_unknown_ops: int
+    num_ops: int
+    num_unknown_ops: int
     passes: int | None
     folded: int
     self_forward_mac_flops: int | None = None
     subtree_forward_mac_flops: int | None = None
     self_backward_flops: int | None = None
     subtree_backward_flops: int | None = None
-    self_total_flops: int | None = None
-    subtree_total_flops: int | None = None
+    self_forward_backward_flops: int | None = None
+    subtree_forward_backward_flops: int | None = None
 
 
 @dataclass(frozen=True)
@@ -179,8 +179,8 @@ class CostTree:
     hidden_flops: int
     column_additivity: dict[str, bool]
     backward_state: str = "grad_disabled"
-    backward_total: int | None = None
-    forward_mac_total: int = 0
+    total_backward_flops: int | None = None
+    total_forward_mac_flops: int = 0
     column_conventions: dict[str, str] = field(default_factory=dict)
 
     def __repr__(self) -> str:
@@ -472,16 +472,16 @@ class _TreeBuilder:
                 subtree_flops=flops,
                 self_pct=_pct(flops, self.partition_total),
                 subtree_pct=_pct(flops, self.partition_total),
-                n_ops=n_ops,
-                n_unknown_ops=n_unknown,
+                num_ops=n_ops,
+                num_unknown_ops=n_unknown,
                 passes=passes,
                 folded=1,
                 self_forward_mac_flops=mac,
                 subtree_forward_mac_flops=mac,
                 self_backward_flops=bwd,
                 subtree_backward_flops=bwd,
-                self_total_flops=total,
-                subtree_total_flops=total,
+                self_forward_backward_flops=total,
+                subtree_forward_backward_flops=total,
             )
         )
 
@@ -515,16 +515,16 @@ class _TreeBuilder:
                 subtree_flops=self.subtree_flops.get(label, 0) * folded,
                 self_pct=_pct(row_self, self.partition_total),
                 subtree_pct=_pct(self.subtree_flops.get(label, 0) * folded, self.partition_total),
-                n_ops=own_ops * folded,
-                n_unknown_ops=self.self_unknown.get(label, 0) * folded,
+                num_ops=own_ops * folded,
+                num_unknown_ops=self.self_unknown.get(label, 0) * folded,
                 passes=(len(self.self_passes.get(label, ())) or None),
                 folded=folded,
                 self_forward_mac_flops=self_mac,
                 subtree_forward_mac_flops=sub_mac,
                 self_backward_flops=self._bwd(self_bwd),
                 subtree_backward_flops=self._bwd(sub_bwd),
-                self_total_flops=self._total(self_mac, self_bwd),
-                subtree_total_flops=self._total(sub_mac, sub_bwd),
+                self_forward_backward_flops=self._total(self_mac, self_bwd),
+                subtree_forward_backward_flops=self._total(sub_mac, sub_bwd),
             )
         )
         if is_root and (own > 0 or own_ops > 0 or own_bwd > 0):
@@ -671,16 +671,16 @@ class _TreeBuilder:
                 subtree_flops=self.partition_total,
                 self_pct=_pct(0, self.partition_total),
                 subtree_pct=_pct(self.partition_total, self.partition_total),
-                n_ops=0,
-                n_unknown_ops=0,
+                num_ops=0,
+                num_unknown_ops=0,
                 passes=None,
                 folded=1,
                 self_forward_mac_flops=0,
                 subtree_forward_mac_flops=mac_total,
                 self_backward_flops=self._bwd(0),
                 subtree_backward_flops=self._bwd(bwd_total),
-                self_total_flops=self._total(0, 0),
-                subtree_total_flops=self._total(mac_total, bwd_total),
+                self_forward_backward_flops=self._total(0, 0),
+                subtree_forward_backward_flops=self._total(mac_total, bwd_total),
             )
         )
         if direct or self.self_ops.get(None, 0) or self.self_bwd.get(None, 0):
@@ -783,8 +783,8 @@ class _TreeBuilder:
             hidden_flops=self.hidden_flops,
             column_additivity=dict(COST_COLUMN_ADDITIVITY),
             backward_state=self.backward_state,
-            backward_total=self.backward_total,
-            forward_mac_total=sum(self.self_mac.values()),
+            total_backward_flops=self.backward_total,
+            total_forward_mac_flops=sum(self.self_mac.values()),
             column_conventions=dict(COST_COLUMN_CONVENTIONS),
         )
 

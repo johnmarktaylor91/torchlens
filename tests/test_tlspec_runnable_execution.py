@@ -13,7 +13,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens._runnable_execution import _fresh_bare_tensor_root
 from torchlens._runnable_state import prepare_runnable_state
 from torchlens.errors import (
@@ -1405,7 +1405,7 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
         )
 
     if aliased_capture:
-        with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+        with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
             trace = capture_call()
         assert trace.capture_verified is False
         assert trace.capture_verification_reason == "input_boundary_unverifiable"
@@ -1462,7 +1462,7 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
             return a + b
 
     z = torch.tensor([3.0, 4.0])
-    with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+    with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
         trace = tl.trace(
             _ReadOnly(),
             [z, z],

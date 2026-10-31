@@ -15,7 +15,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
-from . import TorchLensIOError
+from . import ArtifactError
 from ._forgery_identity_facts import _validate_identity_facts
 
 if TYPE_CHECKING:
@@ -94,7 +94,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If a persisted field violates its closed schema or structural anchor.
     """
 
@@ -150,11 +150,11 @@ def _refuse(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"{field} is invalid in the loaded artifact: {message}. Remedy: {remedy}.",
         code=code,
         field=field,
@@ -375,7 +375,7 @@ def _checkpoint_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -591,7 +591,7 @@ def _audit_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1277,7 +1277,7 @@ def _structure_only_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1353,7 +1353,7 @@ def _kernel_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1546,7 +1546,7 @@ def _sidecar_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1621,7 +1621,7 @@ def _advisories_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1702,7 +1702,7 @@ def _injection_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1790,7 +1790,7 @@ def _snapshot_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1877,7 +1877,7 @@ def _evidence_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 

@@ -313,7 +313,7 @@ class TraceValidationMixin(_TraceMixinBase):
     def save_new_outs(
         self: "Trace",
         model: torch.nn.Module,
-        input_args: torch.Tensor | list[Any],
+        inputs: torch.Tensor | list[Any],
         input_kwargs: dict[Any, Any] | None = None,
         layers_to_save: str | list[str] = "all",
         grad_layers_to_save: str | list[str] | None = "all",
@@ -345,7 +345,7 @@ class TraceValidationMixin(_TraceMixinBase):
         return _impl(
             self,
             model=model,
-            input_args=input_args,
+            input_args=inputs,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,

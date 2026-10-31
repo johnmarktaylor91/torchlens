@@ -18,7 +18,7 @@ from torchlens._capture_state_helpers import (
     _facet_recipe_cache_key,
     _snapshot_plain_attr_value,
 )
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.rehydrate import _rehydrate_object
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
 from torchlens._io.state_keys import (
@@ -191,10 +191,10 @@ def test_scrub_preserves_shared_and_cyclic_mutable_containers() -> None:
 
 
 def test_portable_walks_refuse_excessive_depth_typed() -> None:
-    """Save and load walkers turn hostile depth into TorchLensIOError."""
+    """Save and load walkers turn hostile depth into ArtifactError."""
 
     deep = _deep_list(205)
-    with pytest.raises(TorchLensIOError, match="maximum depth"):
+    with pytest.raises(ArtifactError, match="maximum depth"):
         _scrub_value(
             deep,
             _ScrubOptions(False, False, False, False),
@@ -203,7 +203,7 @@ def test_portable_walks_refuse_excessive_depth_typed() -> None:
             [0],
         )
 
-    with pytest.raises(TorchLensIOError, match="maximum depth"):
+    with pytest.raises(ArtifactError, match="maximum depth"):
         _rehydrate_object(
             deep,
             {},

@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 
 _DIGEST = hashlib.sha256(b"schema-v9-entry-dark").hexdigest()
 
@@ -103,7 +103,7 @@ def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
 
     trace = _traced()
     trace.ops[-1].injection_provenance = _injection_record()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "injection_stamped")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_injection_codec_invalid"
 
@@ -125,7 +125,7 @@ def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
 def test_malformed_injection_provenance_refuses_at_load(tmp_path, mutation):
     trace = _traced()
     trace.ops[-1].injection_provenance = _injection_record(**mutation)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "injection_bad")
     assert (
         getattr(excinfo.value, "fields", {}).get("code") == "artifact_injection_provenance_invalid"
@@ -160,7 +160,7 @@ def test_source_snapshots_round_trip_and_validate(tmp_path):
 def test_malformed_source_snapshots_refuse_at_load(tmp_path, rows):
     trace = _traced()
     trace.source_snapshots = rows
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "snapshots_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_source_snapshots_invalid"
 
@@ -168,7 +168,7 @@ def test_malformed_source_snapshots_refuse_at_load(tmp_path, rows):
 def test_structure_evidence_requires_the_structure_only_marker(tmp_path):
     trace = _traced()
     trace.structure_evidence = _evidence_envelope()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_unmarked")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"
     assert "structure_only marker is False" in str(excinfo.value)
@@ -207,7 +207,7 @@ def test_malformed_structure_evidence_refuses_at_load(tmp_path, mutation):
         capture=tl.options.CaptureOptions(structure_only=True),
     )
     trace.structure_evidence = _evidence_envelope(**mutation)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"
 
@@ -220,6 +220,6 @@ def test_malformed_evidence_claims_refuse_at_load(tmp_path):
     )
     claims = dict(_evidence_envelope()["claims"], measured_values="available")
     trace.structure_evidence = _evidence_envelope(claims=claims)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_claims_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"

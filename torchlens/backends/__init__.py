@@ -9,7 +9,7 @@ from .registry import (
     GATED_CAPABILITY_FLAGS,
     TINYGRAD_BACKEND_NAME as TINYGRAD_BACKEND_NAME,
     TORCH_BACKEND_NAME as TORCH_BACKEND_NAME,
-    BackendAmbiguityError,
+    AmbiguousBackendError,
     BackendCapabilities,
     BackendCapabilityConformanceError,
     BackendMismatchError,
@@ -31,7 +31,7 @@ from .registry import (
 
 __all__ = [
     "GATED_CAPABILITY_FLAGS",
-    "BackendAmbiguityError",
+    "AmbiguousBackendError",
     "BackendCapabilities",
     "BackendCapabilityConformanceError",
     "BackendMismatchError",

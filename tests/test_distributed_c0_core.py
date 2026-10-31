@@ -23,10 +23,10 @@ from torchlens.distributed import (  # noqa: E402
     UncapturedCollectiveOpError,
     _lifecycle as lifecycle,  # noqa: E402
     _recognizer as recognizer_mod,  # noqa: E402
-    audit_membership_lineages,
     derive_collective_recognizer,
     has_vetted_snapshot,
     membership_digest_for_ranks,
+    verify_membership_lineages,
 )
 
 # ---------------------------------------------------------------------------
@@ -229,7 +229,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         verdict = verdicts[M]
         assert verdict.is_conflict
         assert verdict.kind == "group_lifetime_evidence_conflict"
@@ -241,7 +241,7 @@ class TestPreJoinLineageAudit:
     def test_seed_discharges_against_one_generation_complete_witness(self):
         rank0 = _ledger([("create", M, 0, "wrapped", "armed_before_any_group")])
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].status == "compatible"
         assert verdicts[M].complete_witness_ranks == (0,)
 
@@ -254,7 +254,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
         assert verdicts[M].kind == "group_lifetime_evidence_conflict"
 
@@ -264,12 +264,12 @@ class TestPreJoinLineageAudit:
             ("destroy", M, 0, "wrapped", "armed_before_any_group"),
             ("create", M, 1, "wrapped", "armed_before_any_group"),
         ]
-        verdicts = audit_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
+        verdicts = verify_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
         assert verdicts[M].status == "compatible"
 
     def test_spmd_lazy_symmetric_seeding_joins(self):
         entries = [("seed", M, 0, "seeded", "seeded")]
-        verdicts = audit_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
+        verdicts = verify_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
         assert verdicts[M].status == "compatible"
 
     def test_complete_witness_disagreement_is_evidence_corruption(self):
@@ -281,7 +281,7 @@ class TestPreJoinLineageAudit:
                 ("create", M, 1, "wrapped", "armed_before_any_group"),
             ]
         )
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
         assert "corruption" in verdicts[M].detail
 
@@ -293,11 +293,11 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
 
     def test_single_rank_membership_not_audited(self):
-        verdicts = audit_membership_lineages(
+        verdicts = verify_membership_lineages(
             {0: _ledger([("create", M, 0, "wrapped", "armed_before_any_group")])}
         )
         assert M not in verdicts
@@ -311,7 +311,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
 
 

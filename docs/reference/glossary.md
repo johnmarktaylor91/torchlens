@@ -464,7 +464,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   DOCUMENTED-UNSTABLE spelling): payloads are snapshotted at submission so later in-place
   mutation never reaches the artifact, writes land in submission order, `max_pending_bytes`
   (default 256 MiB) blocks capture when the disk falls behind, a failed write raises a typed
-  `TorchLensIOError` and marks the temp bundle `PARTIAL`, and finalization waits for every
+  `ArtifactError` and marks the temp bundle `PARTIAL`, and finalization waits for every
   pending write before the bundle publishes. `tl.record` streaming stays synchronous and
   refuses an explicit `async_writes=True`.
 
@@ -1963,7 +1963,7 @@ shim owed; S2-gated*
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`); the
   string/`tl.label` addressing face is `multipass_bare_label_ambiguous` on
-  `SiteAmbiguityError` (both teaching refusals name every pass-qualified
+  `AmbiguousSiteError` (both teaching refusals name every pass-qualified
   spelling; spellings DOCUMENTED-UNSTABLE).
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
@@ -2227,7 +2227,7 @@ shim owed*
   `input_preprocessor` is read) or a `ResolvedPreprocessing` record. It compares the
   preprocessing a capture recorded (`Trace.input_preprocessor`) with the model's known card (HF image
   processor, torchvision weights, timm or open_clip config, or a named
-  `authority=`), returns the field-level `PreprocessingAudit`, and warns
+  `authority=`), returns the field-level `PreprocessingComparison`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
   automatically. An opaque record compares as unknown, never as a match.
 
@@ -2466,7 +2466,7 @@ shim owed*
   malformed record refuses at load with
   `artifact_executed_flops_record_invalid`.
 
-**BackwardStatus.attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
+**BackwardStatus.flops_attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state: one
   `BackwardFlopsAttribution` per counted pass, the counted work that ran
   under no recorded node, and the part that replayed forward kernels under
@@ -2486,7 +2486,7 @@ shim owed*
   MACs), `self_backward_flops` (executed backward, matmul and convolution
   families, fma2) and `self_total_flops` (their sum, one convention), with
   non-additive subtree twins `CostTreeRow.subtree_forward_mac_flops`,
-  `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_total_flops`
+  `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_forward_backward_flops`
   (constructor keywords `subtree_forward_mac_flops=`,
   `subtree_backward_flops=`, `subtree_total_flops=`). Backward work on nodes with no
   forward op and unattributed calls get their own remainder rows, so the self
@@ -2645,7 +2645,7 @@ deprecation shim owed*
   set only when the capture was given an optimizer; each is `None`
   otherwise.
 
-**ParamFacts.bytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
+**ParamFacts.nbytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
 : FactCore parameter facts (schema version 2): `bytes` is the unique
   parameters' storage; `pruned` is `None` unless prune reparametrizations
   exist, else a `PrunedParamFacts(paths, raw, masked)` naming the pruned

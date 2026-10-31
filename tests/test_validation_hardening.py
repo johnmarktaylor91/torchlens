@@ -545,7 +545,7 @@ def test_w34_census_unverified_outcome_is_recorded_not_discarded() -> None:
 
     # Bind the model: replay reads parameters through TorchLens' weak model
     # reference, so a temporary model can be collected mid-test and turn the
-    # replay into PostTraceParamUnavailable.
+    # replay into ParamReleasedError.
     model = _Tiny()
     trace, ground_truth = _capture(model, torch.randn(3, 4))
     status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)

@@ -59,7 +59,7 @@ def validate_tlspec(
         If a unified manifest violates the v1 schema.
     FileNotFoundError
         If a unified manifest file is missing.
-    torchlens.errors.ArtifactVersionBelowFloorError
+    torchlens.errors.ArtifactTooOldError
         If the artifact is a pre-floor (pre-2.33) model-log bundle.
     """
 
@@ -699,7 +699,7 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
 
     Raises
     ------
-    torchlens._io.ArtifactVersionAboveRuntimeError
+    torchlens._io.ArtifactTooNewError
         If the declared version is newer than this runtime supports. Typed
         through the one G3 chokepoint: the bare ``ValueError`` this used to
         raise was swallowed by the load path's generic exception laundering

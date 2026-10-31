@@ -9,7 +9,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, ArtifactVersionBelowFloorError
+from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, ArtifactTooOldError
 
 
 def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
@@ -41,7 +41,7 @@ def test_pre_floor_module_call_state_refuses_typed() -> None:
     state["tlspec_version"] = 5
 
     restored = type(call).__new__(type(call))
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         restored.__setstate__(state)
 
 
@@ -78,5 +78,5 @@ def test_legacy_thread_field_pickle_refuses_typed() -> None:
     state["module_entry_exit_threads_inputs"] = {"old_alias": []}
 
     decoded = pickle.loads(pickle.dumps(state))
-    with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=2"):
+    with pytest.raises(ArtifactTooOldError, match="tlspec_version=2"):
         type(op).__setstate__(op, decoded)

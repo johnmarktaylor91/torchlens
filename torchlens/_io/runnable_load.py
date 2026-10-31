@@ -3082,7 +3082,7 @@ def _diagnostic(
         current_runtime=current_runtime,
         detection_stage=detection_stage,
         resolver_provenance=provenance,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 
@@ -3507,7 +3507,7 @@ def _parse_diagnostic(value: Mapping[str, Any]) -> RunnableDiagnostic:
         resolver_provenance=_optional_string(
             value.get("resolver_provenance"), "resolver_provenance"
         ),
-        analysis_load_available=_boolean(value, "analysis_load_available"),
+        is_analysis_load_available=_boolean(value, "analysis_load_available"),
         details=tuple(details),
     )
 

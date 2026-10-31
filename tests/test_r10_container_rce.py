@@ -32,7 +32,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.bundle_container import _resolve_bundle_member_path
 from torchlens.errors.runnable import RunPreconditionError
 from torchlens.ir.container import (
@@ -351,7 +351,7 @@ def test_resolver_admits_torch_structseq_and_namedtuple_and_ordereddict() -> Non
 def test_member_path_rejects_traversal(evil: str, tmp_path: Path) -> None:
     """Absolute / parent-traversal member paths are rejected."""
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _resolve_bundle_member_path(tmp_path, evil)
 
 
@@ -380,7 +380,7 @@ def test_bundle_loader_rejects_escaping_member_path(evil_path: str, tmp_path: Pa
 
     # The member-path guard must reject the traversal BEFORE any member is loaded,
     # so this never reaches (or reconstructs from) a path outside the bundle root.
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _load_unified_bundle_directory(bundle_path, bundle_json)
 
 

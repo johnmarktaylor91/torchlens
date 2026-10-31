@@ -27,8 +27,8 @@ import torchlens.user_funcs as user_funcs
 from torchlens import Trace, trace as trace_fn
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
+    CaptureGapWarning,
     MetadataInvariantError,
-    TorchLensCaptureGapWarning,
     TraceNotReproducibleWarning,
 )
 from torchlens.fastlog import RecordContext
@@ -110,7 +110,7 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
@@ -127,7 +127,7 @@ def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     failure = last_validation_failure()
     assert failure is not None and failure.check == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]

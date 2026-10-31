@@ -21,20 +21,20 @@ from ._base import (
 from .episode import (
     BundleExperimentError,
     BundleRelationError,
-    CheckpointSeriesLiveParamsError,
     EpisodeCaptureError,
     EpisodeDeclarationError,
     EpisodeErrorCode as EpisodeErrorCode,
     EpisodeJoinError,
     EpisodeLedgerError,
+    ParamEvidenceMissingError,
 )
 from .runnable import (
     BufferSinkRoutingError,
     CollectiveBoundaryReplayError,
-    NumericAttestationError,
     PathDivergenceError,
     PoisonedRunError,
     ReattachError,
+    ReplayValueMismatchError,
     RunCapabilityUnavailableError,
     RunnablePreflightError,
     RunnableTLSPECError,
@@ -47,19 +47,19 @@ _LEGACY_EXCEPTION_PATHS = {
     "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
     "MutatedReferenceError": ("torchlens._errors", "MutatedReferenceError"),
     "OutputAttributionError": ("torchlens._errors", "OutputAttributionError"),
-    "TorchLensCaptureGapError": ("torchlens._errors", "TorchLensCaptureGapError"),
-    "TorchLensCaptureGapWarning": ("torchlens._errors", "TorchLensCaptureGapWarning"),
-    "PostTraceParamUnavailable": ("torchlens._errors", "PostTraceParamUnavailable"),
+    "CaptureGapError": ("torchlens._errors", "CaptureGapError"),
+    "CaptureGapWarning": ("torchlens._errors", "CaptureGapWarning"),
+    "ParamReleasedError": ("torchlens._errors", "ParamReleasedError"),
     "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
-    "TorchLensPostfuncError": ("torchlens._errors", "TorchLensPostfuncError"),
-    "TorchLensIOError": ("torchlens._io", "TorchLensIOError"),
+    "UserTransformError": ("torchlens._errors", "UserTransformError"),
+    "ArtifactError": ("torchlens._io", "ArtifactError"),
     "UnsupportedTensorVariantError": (
         "torchlens._robustness",
         "UnsupportedTensorVariantError",
     ),
-    "SubclassConstructionUnderDispatchModeError": (
+    "TensorSubclassUnsupportedError": (
         "torchlens.backends.torch._modes",
-        "SubclassConstructionUnderDispatchModeError",
+        "TensorSubclassUnsupportedError",
     ),
     "TrainingModeConfigError": ("torchlens._training_validation", "TrainingModeConfigError"),
     "RecordingConfigError": ("torchlens.fastlog.exceptions", "RecordingConfigError"),
@@ -73,9 +73,9 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "TorchLensInterventionError",
     ),
-    "TorchLensInterventionWarning": (
+    "InterventionWarning": (
         "torchlens.intervention.errors",
-        "TorchLensInterventionWarning",
+        "InterventionWarning",
     ),
     "InterventionReadyConflictError": (
         "torchlens.intervention.errors",
@@ -85,7 +85,7 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "DirectActivationWriteWarning",
     ),
-    "MutateInPlaceWarning": ("torchlens.intervention.errors", "MutateInPlaceWarning"),
+    "TraceMutationWarning": ("torchlens.intervention.errors", "TraceMutationWarning"),
     "DirectWriteIgnoredWarning": (
         "torchlens.intervention.errors",
         "DirectWriteIgnoredWarning",
@@ -103,23 +103,23 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "UntrustedCallableError",
     ),
-    "OpaqueCallableInExecutableSaveError": (
+    "OpaqueCallableError": (
         "torchlens.intervention.errors",
-        "OpaqueCallableInExecutableSaveError",
+        "OpaqueCallableError",
     ),
     "SpecPortabilityError": ("torchlens.intervention.errors", "SpecPortabilityError"),
-    "DirectWriteInExecutableSaveError": (
+    "DirectWriteSaveError": (
         "torchlens.intervention.errors",
-        "DirectWriteInExecutableSaveError",
+        "DirectWriteSaveError",
     ),
     "NonExecutableSpecError": ("torchlens.intervention.errors", "NonExecutableSpecError"),
     "UnserializableDictKeyError": (
         "torchlens.intervention.errors",
         "UnserializableDictKeyError",
     ),
-    "BatchChunkInputAmbiguityError": (
+    "AmbiguousBatchInputError": (
         "torchlens.intervention.errors",
-        "BatchChunkInputAmbiguityError",
+        "AmbiguousBatchInputError",
     ),
     "ChunkedForwardConfigError": (
         "torchlens.intervention.errors",
@@ -138,9 +138,9 @@ _LEGACY_EXCEPTION_PATHS = {
     "EngineDispatchError": ("torchlens.intervention.errors", "EngineDispatchError"),
     "ModelMismatchError": ("torchlens.intervention.errors", "ModelMismatchError"),
     "AppendMismatchError": ("torchlens.intervention.errors", "AppendMismatchError"),
-    "AppendStreamingNotSupportedError": (
+    "AppendStreamingUnsupportedError": (
         "torchlens.intervention.errors",
-        "AppendStreamingNotSupportedError",
+        "AppendStreamingUnsupportedError",
     ),
     "AppendBatchDependenceError": (
         "torchlens.intervention.errors",
@@ -170,9 +170,9 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "UnclassifiedSelectorError",
     ),
-    "SiteAmbiguityError": ("torchlens.intervention.errors", "SiteAmbiguityError"),
+    "AmbiguousSiteError": ("torchlens.intervention.errors", "AmbiguousSiteError"),
     "RecursiveTracingError": ("torchlens.intervention.errors", "RecursiveTracingError"),
-    "AxisAmbiguityError": ("torchlens.intervention.errors", "AxisAmbiguityError"),
+    "AmbiguousAxisError": ("torchlens.intervention.errors", "AmbiguousAxisError"),
     "SpliceModuleDtypeError": ("torchlens.intervention.errors", "SpliceModuleDtypeError"),
     "SpliceModuleDeviceError": ("torchlens.intervention.errors", "SpliceModuleDeviceError"),
     "HookSignatureError": ("torchlens.intervention.errors", "HookSignatureError"),
@@ -180,7 +180,7 @@ _LEGACY_EXCEPTION_PATHS = {
     "HookSiteCoverageError": ("torchlens.intervention.errors", "HookSiteCoverageError"),
     "LiveModeLabelError": ("torchlens.intervention.errors", "LiveModeLabelError"),
     "BundleMemberError": ("torchlens.intervention.errors", "BundleMemberError"),
-    "BundleRelationshipError": ("torchlens.intervention.errors", "BundleRelationshipError"),
+    "BundleComparisonError": ("torchlens.intervention.errors", "BundleComparisonError"),
     "BaselineUndeterminedError": (
         "torchlens.intervention.errors",
         "BaselineUndeterminedError",
@@ -200,8 +200,8 @@ _LAZY_EXCEPTION_PATHS = {
         "AmbiguousGroupLifetimeError",
     ),
     "ArtifactSchemaAgeWarning": ("torchlens._io", "ArtifactSchemaAgeWarning"),
-    "ArtifactVersionBelowFloorError": ("torchlens._io", "ArtifactVersionBelowFloorError"),
-    "ArtifactVersionAboveRuntimeError": ("torchlens._io", "ArtifactVersionAboveRuntimeError"),
+    "ArtifactTooOldError": ("torchlens._io", "ArtifactTooOldError"),
+    "ArtifactTooNewError": ("torchlens._io", "ArtifactTooNewError"),
     "ArtifactRuntimeIncompatibleError": ("torchlens._io", "ArtifactRuntimeIncompatibleError"),
     "UnknownPersistedFieldError": ("torchlens._io", "UnknownPersistedFieldError"),
     "ArgumentConflictError": ("torchlens._errors", "ArgumentConflictError"),
@@ -211,7 +211,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._errors",
         "BackwardStreamUnavailableError",
     ),
-    "BackendAmbiguityError": ("torchlens.backends", "BackendAmbiguityError"),
+    "AmbiguousBackendError": ("torchlens.backends", "AmbiguousBackendError"),
     "BackendCapabilityConformanceError": (
         "torchlens.backends",
         "BackendCapabilityConformanceError",
@@ -231,7 +231,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens.backends.torch.rescue",
         "CaptureAttemptFailedWarning",
     ),
-    "CaptureContextError": ("torchlens._errors", "CaptureContextError"),
+    "CaptureNotActiveError": ("torchlens._errors", "CaptureNotActiveError"),
     # r3 b1-opus R64-3: the default-deny output-container tripwire escapes to
     # users from the public ``Op.multi_output_type`` property, so its except
     # must be spellable from the public error surface.
@@ -343,10 +343,10 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens.semantic._norm_reconstruction",
         "NormReconstructionError",
     ),
-    "EchoConfigError": ("torchlens.snoop._errors", "EchoConfigError"),
-    "EchoStatsError": ("torchlens.snoop._errors", "EchoStatsError"),
+    "NarrationConfigError": ("torchlens.snoop._errors", "NarrationConfigError"),
+    "NarrationStatsError": ("torchlens.snoop._errors", "NarrationStatsError"),
     "FittedArtifactError": ("torchlens.stats._fitted", "FittedArtifactError"),
-    "TvizError": ("torchlens.tviz._errors", "TvizError"),
+    "RenderError": ("torchlens.tviz._errors", "RenderError"),
     "RankRenderEndpointError": (
         "torchlens.visualization._rank_layout_internal.layout",
         "RankRenderEndpointError",
@@ -404,7 +404,7 @@ __all__ = [
     "BundleExperimentError",
     "BundleRelationError",
     "CaptureError",
-    "CheckpointSeriesLiveParamsError",
+    "ParamEvidenceMissingError",
     "CompatibilityError",
     "ConfigurationError",
     "DiagnosticSeverityError",
@@ -413,7 +413,7 @@ __all__ = [
     "EpisodeJoinError",
     "EpisodeLedgerError",
     "InterventionError",
-    "NumericAttestationError",
+    "ReplayValueMismatchError",
     "PathDivergenceError",
     "CollectiveBoundaryReplayError",
     "PoisonedRunError",

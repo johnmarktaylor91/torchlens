@@ -360,7 +360,7 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
     The higher-order rewalk parked its label type counter in
     ``trace.__dict__["_backward_grad_fn_type_counter"]`` -- an undeclared
     private field with no PORTABLE_STATE_SPEC row, so ``tl.save`` raised
-    TorchLensIOError after two differentiable grad passes. The counter is
+    ArtifactError after two differentiable grad passes. The counter is
     now rewalk-scoped scratch and never touches the trace.
     """
 

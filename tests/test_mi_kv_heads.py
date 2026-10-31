@@ -313,7 +313,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert annotation.heads == (0, 1, 2, 3)
     assert annotation.values == receipt.effects
 
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(tviz.RenderError) as excinfo:
         tviz.receipt_from_patch_grid(
             value_grid,
             layer=LAYERS[0],

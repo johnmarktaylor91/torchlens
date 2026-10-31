@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
@@ -267,7 +267,7 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     A modern torch build (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``) only needs the
     pause for ``__new__`` -- one crossing. Torch 2.1/2.2 additionally needs it
     for every ``__torch_function__`` return-conversion back into the subclass
-    (``as_subclass``; see ``SubclassConstructionUnderDispatchModeError``), and
+    (``as_subclass``; see ``TensorSubclassUnsupportedError``), and
     this forward's ``scratch.sum() * 0`` then ``x + ...`` chain reconstructs the
     subclass three more times -- four honest crossings there, not a regression.
     """
@@ -458,7 +458,7 @@ def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     path = tmp_path / f"{tamper_kind}.tlspec"
     with activate_prerelease_fields():
         tl.save(trace, path)
-        with pytest.raises(TorchLensIOError) as exc_info:
+        with pytest.raises(ArtifactError) as exc_info:
             tl.load(path)
     assert exc_info.value.fields["code"] == "primitive_op_fk_invalid"
 

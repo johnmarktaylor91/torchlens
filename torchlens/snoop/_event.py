@@ -84,13 +84,13 @@ class NarrationEvent:
     device: str | None = None
     output_index: int | None = None
     source_location: str | None = None
-    intervened: bool = False
+    has_intervention: bool = False
     #: Ordinal distance disclosed on buffered ``followed_by`` releases.
     late: int | None = None
     stats: NarrationStats | None = None
     #: Free-form single-line body for ``attempted`` / ``note`` kinds.
     text: str | None = None
-    direction: str = "forward"
+    signal: str = "forward"
     tier: str | None = None
     extra_labels: tuple[tuple[str, str], ...] = field(default=())
 

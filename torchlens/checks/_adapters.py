@@ -37,7 +37,7 @@ class OptimizerFacts:
     """
 
     kind: str
-    known: bool
+    is_known: bool
     decoupled_decay: bool | None
     band_reason: str | None
     param_group_facts: tuple[dict[str, Any], ...] = field(default_factory=tuple)
@@ -80,7 +80,7 @@ def optimizer_facts(optimizer: torch.optim.Optimizer) -> OptimizerFacts:
         groups.append(facts)
     return OptimizerFacts(
         kind=kind,
-        known=known,
+        is_known=known,
         decoupled_decay=_KNOWN_OPTIMIZERS.get(kind),
         band_reason=(
             None

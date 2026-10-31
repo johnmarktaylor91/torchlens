@@ -1699,7 +1699,7 @@ def to_disk(
         forces synchronous writes; ``True`` requires the async pipeline and
         refuses typed where it cannot be honored (``tl.record``). Writes
         land in submission order, a failed write raises
-        ``TorchLensIOError`` and marks the bundle PARTIAL, and finalization
+        ``ArtifactError`` and marks the bundle PARTIAL, and finalization
         waits for every pending write before the bundle publishes.
     max_pending_bytes:
         Pending snapshot byte budget for the async pipeline (``None`` uses

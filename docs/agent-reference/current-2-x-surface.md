@@ -533,7 +533,7 @@
   `wildcard_recv_unsupported`, and `collective_boundary_runnable_unsupported` (runnable save +
   forward-replay validation refuse on collective-crossing traces; metadata invariants run in
   full). The pre-join membership-lineage audit over per-rank ledgers lives in
-  `torchlens.distributed.audit_membership_lineages` and is run by the C1 merge engine. Arming
+  `torchlens.distributed.verify_membership_lineages` and is run by the C1 merge engine. Arming
   relaxes NO tier-(a) refusal: DTensor/TP/FSDP2/PP capture stays refused until the C2/C3 census
   proves fidelity. Distributed rank processes (initialized process group, non-daemonic) are the
   one sanctioned exception to the no-child-process capture guard.
@@ -572,7 +572,7 @@
   (manifest order preserved), payloads are snapshotted at submission (value-at-call-time survives
   later in-place mutation; the worker never runs a wrapped torch op),
   `to_disk(max_pending_bytes=)` (default 256 MiB) BLOCKS capture when the disk falls behind
-  (bounded RAM, measured exact), a failed write latches and raises typed `TorchLensIOError`
+  (bounded RAM, measured exact), a failed write latches and raises typed `ArtifactError`
   marking the temp bundle PARTIAL, and finalize drains every pending write before publish —
   async and sync bundles are byte-identical. `to_disk(async_writes=False)` restores synchronous
   writes; `tl.record` streaming stays synchronous and refuses an explicit `True`.
@@ -620,7 +620,7 @@
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
   Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-  `tl.errors.ArtifactVersionBelowFloorError` (drop-not-resurrect; the legacy field-alias
+  `tl.errors.ArtifactTooOldError` (drop-not-resurrect; the legacy field-alias
   ladders are deleted). The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 /
   2.32.4 artifacts LOAD (the compat ledger's governed producer windows are the authority;
   the floor is the STAMP, never a release name). Legacy 2.16 intervention specs remain
@@ -990,7 +990,7 @@
   Gemma-2 norm/pattern replay); a trace without those maps still refuses
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
-  (`SiteAmbiguityError`) on string/`tl.label` addressing
+  (`AmbiguousSiteError`) on string/`tl.label` addressing
   (do/attach_hooks/push_from/resolve_sites), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay

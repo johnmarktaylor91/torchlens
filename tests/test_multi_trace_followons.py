@@ -198,7 +198,7 @@ def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> N
 
     import pytest
 
-    from torchlens.errors import CheckpointSeriesLiveParamsError
+    from torchlens.errors import ParamEvidenceMissingError
 
     x = torch.randn(2, 3)
     model_a = _BufferParamModel(scale=1.0, weight=1.0)
@@ -210,7 +210,7 @@ def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> N
     buffer_out = bundle.buffers["scale"].out
     assert torch.equal(buffer_out, torch.cat([model_a.scale, model_b.scale], dim=0))
 
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = bundle.params["linear.weight"].weight_norm_diff
     assert excinfo.value.fields["code"] == "checkpoint_series_live_params"
 

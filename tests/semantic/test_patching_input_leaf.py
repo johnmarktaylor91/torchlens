@@ -246,7 +246,7 @@ def test_every_input_leaf_patches_its_own_recorded_address(
 
 
 @pytest.mark.smoke
-@pytest.mark.filterwarnings("ignore::torchlens._errors.TorchLensCaptureGapWarning")
+@pytest.mark.filterwarnings("ignore::torchlens._errors.CaptureGapWarning")
 def test_aliased_input_leaf_patches_every_site() -> None:
     """One tensor object at two input sites is replaced at BOTH sites.
 

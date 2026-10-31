@@ -33,7 +33,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, FieldPolicy, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, FieldPolicy
 from torchlens._io.prerelease import (
     PRERELEASE_STATE_KEY,
     gated_annotations_keys,
@@ -630,7 +630,7 @@ def _tampered_refuses(
     name: str,
     *,
     field: str,
-) -> TorchLensIOError:
+) -> ArtifactError:
     """Prove one planted tamper refuses teachingly and stays marker-contained.
 
     Parameters
@@ -646,7 +646,7 @@ def _tampered_refuses(
 
     Returns
     -------
-    TorchLensIOError
+    ArtifactError
         The typed load-boundary refusal for code-specific assertions.
     """
 
@@ -654,7 +654,7 @@ def _tampered_refuses(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         tl.save(trace, str(path))
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
     assert refusal.fields["field"] == field
@@ -883,7 +883,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     # Layer 1 (save-side mirror, WT1 A-IV item 22/W3): the forged save refuses
     # typed BEFORE any bytes land.
     save_path = tmp_path / "forged_marker.tlspec"
-    with pytest.raises(TorchLensIOError, match="structure-only"):
+    with pytest.raises(ArtifactError, match="structure-only"):
         tl.save(trace, str(save_path))
     assert not save_path.exists()
 
@@ -900,7 +900,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     state = _pickle.loads(metadata_path.read_bytes())
     state["structure_only"] = True
     metadata_path.write_bytes(_pickle.dumps(state))
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
     refusal = excinfo.value
     assert refusal.fields["field"] == "Trace.structure_only"
@@ -985,5 +985,5 @@ def test_newer_than_runtime_version_refuses_typed() -> None:
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(TorchLensIOError, match="only supports up to 10"):
+    with pytest.raises(ArtifactError, match="only supports up to 10"):
         read_tlspec_version({"tlspec_version": 11}, cls_name="Trace")

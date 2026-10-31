@@ -55,7 +55,7 @@ class SixNDFacts:
     quantity unless the hypothetical backward door was invoked.
     """
 
-    n_params: int
+    num_params: int
     d_numel: int
     two_nd: int
     six_nd: int
@@ -70,7 +70,7 @@ class SixNDFacts:
             else f"{100.0 * self.forward_delta_fraction:+.3f}%"
         )
         return [
-            f"6ND comparator (HF-as-implemented): N={self.n_params} params, "
+            f"6ND comparator (HF-as-implemented): N={self.num_params} params, "
             f"D={self.d_numel} main-input elements (pads counted)",
             f"  2ND forward-body heuristic = {self.two_nd} "
             f"(analytic forward vs 2ND: {delta}, heuristic-vs-exact)",
@@ -260,7 +260,7 @@ def _build_report(
     if d_numel is not None and core.params.total is not None:
         two_nd = 2 * core.params.total * d_numel
         six_nd = SixNDFacts(
-            n_params=core.params.total,
+            num_params=core.params.total,
             d_numel=d_numel,
             two_nd=two_nd,
             six_nd=6 * core.params.total * d_numel,
@@ -313,11 +313,11 @@ def _build_report(
 
 def flops_report(
     subject: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
-    breakdown_top_k: int = 5,
+    breakdown_k: int = 5,
 ) -> FlopsReport:
     """Build the one-call cost report from a trace OR a model (D10).
 
@@ -342,23 +342,23 @@ def flops_report(
     import torch.nn as nn
 
     if isinstance(subject, nn.Module):
-        if input_args is None:
+        if inputs is None:
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
                 remedy="Call tl.report.flops_report(model, example_inputs).",
             )
-        trace = _capture_for_report(subject, input_args, input_kwargs)
+        trace = _capture_for_report(subject, inputs, input_kwargs)
         try:
             return _build_report(
                 trace,
                 model=subject,
                 main_input_numel=main_input_numel,
-                breakdown_top_k=breakdown_top_k,
+                breakdown_top_k=breakdown_k,
             )
         finally:
             trace.cleanup()
-    if input_args is not None or input_kwargs:
+    if inputs is not None or input_kwargs:
         raise InvalidArgumentError(
             "input_args/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",
@@ -371,7 +371,7 @@ def flops_report(
         subject,
         model=None,
         main_input_numel=main_input_numel,
-        breakdown_top_k=breakdown_top_k,
+        breakdown_top_k=breakdown_k,
     )
 
 

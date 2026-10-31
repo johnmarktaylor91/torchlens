@@ -41,7 +41,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.utils as tlutils
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
@@ -122,7 +122,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     raised: BaseException | None = None
     try:
         tl.load(victim)
-    except (TorchLensIOError, pickle.UnpicklingError) as exc:
+    except (ArtifactError, pickle.UnpicklingError) as exc:
         raised = exc
 
     assert raised is not None, "forged LazyImportRef type-reduce was not blocked"

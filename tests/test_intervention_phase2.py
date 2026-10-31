@@ -10,8 +10,8 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention.errors import (
+    AmbiguousSiteError,
     MultiMatchWarning,
-    SiteAmbiguityError,
     SiteResolutionError,
 )
 from torchlens.intervention.resolver import SiteTable
@@ -158,7 +158,7 @@ def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> Non
     with pytest.raises(SiteResolutionError, match="max_fanout=None"):
         resolve_sites(phase2_log, tl.func("relu"), max_fanout=None)  # type: ignore[arg-type]
 
-    with pytest.raises(SiteAmbiguityError, match="exceeding max_fanout=1"):
+    with pytest.raises(AmbiguousSiteError, match="exceeding max_fanout=1"):
         phase2_log.resolve_sites(tl.func("relu"), max_fanout=1)
 
     with warnings.catch_warnings(record=True) as caught:

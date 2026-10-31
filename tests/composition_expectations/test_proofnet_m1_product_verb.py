@@ -103,7 +103,7 @@ M1_EXPECTATIONS: dict[tuple[str, str], Cell] = {
         REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT SG#5 / B2-10 family"
     ),
     ("recording", "save_analysis"): Cell(
-        REFUSES_UNTYPED, exc="TorchLensIOError", gap="DIGEST-AUDIT SG#24 (codeless scrub refusal)"
+        REFUSES_UNTYPED, exc="ArtifactError", gap="DIGEST-AUDIT SG#24 (codeless scrub refusal)"
     ),
     ("recording", "fork"): Cell(
         REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT product-secondary-verb sweep"

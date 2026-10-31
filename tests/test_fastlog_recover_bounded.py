@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 
 # The package re-exports the recover() FUNCTION under the same name, so the
 # module object must come from the import system directly.
@@ -78,7 +78,7 @@ def test_oversize_index_refuses_typed(tmp_path, monkeypatch) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text("x" * 2048, encoding="utf-8")
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 1024)
-    with pytest.raises(TorchLensIOError, match="index"):
+    with pytest.raises(ArtifactError, match="index"):
         tl.fastlog.recover(bundle)
 
 
@@ -120,5 +120,5 @@ def test_blob_hash_mismatch_refuses_typed(tmp_path) -> None:
     """A tampered blob (digest mismatch) still refuses typed."""
 
     blob_path, _digest = _write_blob(tmp_path / "blob.safetensors")
-    with pytest.raises(TorchLensIOError, match="Checksum mismatch"):
+    with pytest.raises(ArtifactError, match="Checksum mismatch"):
         recover_module._load_verified_blob_tensor(blob_path, "0" * 64)

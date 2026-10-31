@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import (
-    BackendAmbiguityError,
+    AmbiguousBackendError,
     BackendCapabilities,
     BackendMismatchError,
     BackendSpec,
@@ -202,7 +202,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
             validate_trace=_fake_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
@@ -301,7 +301,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                 validate_trace=_fake_validate_trace,
                 capabilities=BackendCapabilities(
                     backward_capture=False,
-                    validation_replay=False,
+                    has_validation_replay=False,
                     fastlog=False,
                     interventions=False,
                     rng_replay=False,
@@ -331,7 +331,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                 validate_trace=_fake_validate_trace,
                 capabilities=BackendCapabilities(
                     backward_capture=False,
-                    validation_replay=False,
+                    has_validation_replay=False,
                     fastlog=False,
                     interventions=False,
                     rng_replay=False,
@@ -357,7 +357,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
         validate_trace=_fake_validate_trace,
         capabilities=BackendCapabilities(
             backward_capture=False,
-            validation_replay=False,
+            has_validation_replay=False,
             fastlog=False,
             interventions=False,
             rng_replay=False,
@@ -1138,7 +1138,7 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     _register_fake_backend("fake_a", priority=99)
     _register_fake_backend("fake_b", priority=99)
     try:
-        with pytest.raises(BackendAmbiguityError, match="fake_a, fake_b"):
+        with pytest.raises(AmbiguousBackendError, match="fake_a, fake_b"):
             tl.trace(_FakeModel(), object())
     finally:
         unregister_backend_spec("fake_a")

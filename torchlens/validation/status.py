@@ -118,11 +118,11 @@ class ValidationReplayStatus:
         backend: str,
         source: ValidationReplaySource,
         payload_load_status: str | None = None,
-        replayed_node_count: int = 0,
-        unverified_node_count: int = 0,
-        pure_unverified_node_count: int = 0,
-        effect_region_node_count: int = 0,
-        failed_node_count: int = 0,
+        num_replayed_ops: int = 0,
+        num_unverified_ops: int = 0,
+        num_pure_unverified_ops: int = 0,
+        num_effect_region_ops: int = 0,
+        num_failed_ops: int = 0,
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
         decisions: Sequence[Mapping[str, Any]] | None = None,
@@ -174,11 +174,11 @@ class ValidationReplayStatus:
             reason=None,
             message=f"Replay validation {state}.",
             payload_load_status=payload_load_status,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            pure_unverified_node_count=pure_unverified_node_count,
-            effect_region_node_count=effect_region_node_count,
-            failed_node_count=failed_node_count,
+            replayed_node_count=num_replayed_ops,
+            unverified_node_count=num_unverified_ops,
+            pure_unverified_node_count=num_pure_unverified_ops,
+            effect_region_node_count=num_effect_region_ops,
+            failed_node_count=num_failed_ops,
             unverified_reason_counts=dict(unverified_reason_counts or {}),
             exempted_reason_counts=dict(exempted_reason_counts or {}),
             decisions=tuple(decisions or ()),
@@ -192,12 +192,12 @@ class ValidationReplayStatus:
         source: ValidationReplaySource,
         reason: str,
         message: str,
-        replayed_node_count: int,
-        unverified_node_count: int,
+        num_replayed_ops: int,
+        num_unverified_ops: int,
         payload_load_status: str | None = None,
-        pure_unverified_node_count: int = 0,
-        effect_region_node_count: int = 0,
-        failed_node_count: int = 0,
+        num_pure_unverified_ops: int = 0,
+        num_effect_region_ops: int = 0,
+        num_failed_ops: int = 0,
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
         decisions: Sequence[Mapping[str, Any]] | None = None,
@@ -250,11 +250,11 @@ class ValidationReplayStatus:
             reason=reason,
             message=message,
             payload_load_status=payload_load_status,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            pure_unverified_node_count=pure_unverified_node_count,
-            effect_region_node_count=effect_region_node_count,
-            failed_node_count=failed_node_count,
+            replayed_node_count=num_replayed_ops,
+            unverified_node_count=num_unverified_ops,
+            pure_unverified_node_count=num_pure_unverified_ops,
+            effect_region_node_count=num_effect_region_ops,
+            failed_node_count=num_failed_ops,
             unverified_reason_counts=dict(unverified_reason_counts or {}),
             exempted_reason_counts=dict(exempted_reason_counts or {}),
             decisions=tuple(decisions or ()),
@@ -266,11 +266,11 @@ class ValidationReplayStatus:
         *,
         backend: str,
         source: ValidationReplaySource,
-        replayed_node_count: int,
-        unverified_node_count: int,
-        pure_unverified_node_count: int = 0,
-        effect_region_node_count: int = 0,
-        failed_node_count: int = 0,
+        num_replayed_ops: int,
+        num_unverified_ops: int,
+        num_pure_unverified_ops: int = 0,
+        num_effect_region_ops: int = 0,
+        num_failed_ops: int = 0,
         payload_load_status: str | None = None,
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
@@ -315,19 +315,19 @@ class ValidationReplayStatus:
         """
 
         total_unverified_count = (
-            unverified_node_count + pure_unverified_node_count + effect_region_node_count
+            num_unverified_ops + num_pure_unverified_ops + num_effect_region_ops
         )
-        if failed_node_count:
+        if num_failed_ops:
             return cls.result(
                 passed=False,
                 backend=backend,
                 source=source,
                 payload_load_status=payload_load_status,
-                replayed_node_count=replayed_node_count,
+                replayed_node_count=num_replayed_ops,
                 unverified_node_count=total_unverified_count,
-                pure_unverified_node_count=pure_unverified_node_count,
-                effect_region_node_count=effect_region_node_count,
-                failed_node_count=failed_node_count,
+                pure_unverified_node_count=num_pure_unverified_ops,
+                effect_region_node_count=num_effect_region_ops,
+                failed_node_count=num_failed_ops,
                 unverified_reason_counts=unverified_reason_counts,
                 exempted_reason_counts=exempted_reason_counts,
                 decisions=decisions,
@@ -338,28 +338,28 @@ class ValidationReplayStatus:
                 source=source,
                 reason=(
                     "node_not_per_op_replayable"
-                    if pure_unverified_node_count or effect_region_node_count
+                    if num_pure_unverified_ops or num_effect_region_ops
                     else "region_not_per_op_replayable"
                 ),
                 message=(
                     "Replay validation partially verified this trace: "
-                    f"{replayed_node_count} nodes replayed, "
-                    f"{pure_unverified_node_count} pure nodes unverified, "
-                    f"{effect_region_node_count} effect regions unverified, "
-                    f"{unverified_node_count} legacy regions unverified, "
+                    f"{num_replayed_ops} nodes replayed, "
+                    f"{num_pure_unverified_ops} pure nodes unverified, "
+                    f"{num_effect_region_ops} effect regions unverified, "
+                    f"{num_unverified_ops} legacy regions unverified, "
                     "0 failures."
                 ),
-                replayed_node_count=replayed_node_count,
+                replayed_node_count=num_replayed_ops,
                 unverified_node_count=total_unverified_count,
-                pure_unverified_node_count=pure_unverified_node_count,
-                effect_region_node_count=effect_region_node_count,
+                pure_unverified_node_count=num_pure_unverified_ops,
+                effect_region_node_count=num_effect_region_ops,
                 payload_load_status=payload_load_status,
-                failed_node_count=failed_node_count,
+                failed_node_count=num_failed_ops,
                 unverified_reason_counts=unverified_reason_counts,
                 exempted_reason_counts=exempted_reason_counts,
                 decisions=decisions,
             )
-        if replayed_node_count == 0:
+        if num_replayed_ops == 0:
             return cls.unverified(
                 backend=backend,
                 source=source,
@@ -370,8 +370,8 @@ class ValidationReplayStatus:
                 ),
                 replayed_node_count=0,
                 unverified_node_count=0,
-                pure_unverified_node_count=pure_unverified_node_count,
-                effect_region_node_count=effect_region_node_count,
+                pure_unverified_node_count=num_pure_unverified_ops,
+                effect_region_node_count=num_effect_region_ops,
                 payload_load_status=payload_load_status,
                 failed_node_count=0,
                 unverified_reason_counts=unverified_reason_counts,
@@ -383,10 +383,10 @@ class ValidationReplayStatus:
             backend=backend,
             source=source,
             payload_load_status=payload_load_status,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            pure_unverified_node_count=pure_unverified_node_count,
-            effect_region_node_count=effect_region_node_count,
+            replayed_node_count=num_replayed_ops,
+            unverified_node_count=num_unverified_ops,
+            pure_unverified_node_count=num_pure_unverified_ops,
+            effect_region_node_count=num_effect_region_ops,
             failed_node_count=0,
             unverified_reason_counts=unverified_reason_counts,
             exempted_reason_counts=exempted_reason_counts,

@@ -210,7 +210,7 @@ MODEL_LOG_FIELD_ORDER = [
     "distributed_scope",
     "grouping_policy",
     "verbose",
-    "profile_enabled",
+    "has_timing",
     "has_gradients",
     "activation_transform",
     "_activation_transform_repr",

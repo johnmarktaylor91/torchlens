@@ -51,16 +51,16 @@ class HealthFacts:
     schema_version: int
     basis: str
     source_basis: str | None
-    checked: int
+    num_checked_ops: int
     nonfinite_labels: tuple[str, ...]
     alias_nonfinite_labels: tuple[str, ...]
-    unchecked: int
-    unexamined: int
-    unmapped: int
+    num_unchecked_ops: int
+    num_unexamined_ops: int
+    num_unmapped_ops: int
     capture_revision: str
 
     @property
-    def nonfinite_count(self) -> int:
+    def num_nonfinite_ops(self) -> int:
         """Nonfinite ops in the identity partition (alias rows excluded)."""
 
         return len(self.nonfinite_labels)
@@ -77,22 +77,26 @@ class HealthFacts:
 
         if self.nonfinite_labels or self.alias_nonfinite_labels:
             return "found"
-        if self.checked > 0 and self.unexamined == 0 and self.unchecked == 0:
+        if (
+            self.num_checked_ops > 0
+            and self.num_unexamined_ops == 0
+            and self.num_unchecked_ops == 0
+        ):
             return "checked_and_clean"
         return "not_checked"
 
-    def to_payload(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """JSON-primitive payload for the annotations channel."""
 
         return {
             "schema_version": self.schema_version,
             "basis": self.basis,
-            "checked": self.checked,
+            "checked": self.num_checked_ops,
             "nonfinite_labels": list(self.nonfinite_labels),
             "alias_nonfinite_labels": list(self.alias_nonfinite_labels),
-            "unchecked": self.unchecked,
-            "unexamined": self.unexamined,
-            "unmapped": self.unmapped,
+            "unchecked": self.num_unchecked_ops,
+            "unexamined": self.num_unexamined_ops,
+            "unmapped": self.num_unmapped_ops,
             "capture_revision": self.capture_revision,
         }
 
@@ -104,12 +108,12 @@ def _not_checked(basis: str, revision: str, *, unexamined: int = 0) -> HealthFac
         schema_version=HEALTH_FACTS_SCHEMA_VERSION,
         basis=basis,
         source_basis=None,
-        checked=0,
+        num_checked_ops=0,
         nonfinite_labels=(),
         alias_nonfinite_labels=(),
-        unchecked=0,
-        unexamined=unexamined,
-        unmapped=0,
+        num_unchecked_ops=0,
+        num_unexamined_ops=unexamined,
+        num_unmapped_ops=0,
         capture_revision=revision,
     )
 
@@ -141,12 +145,12 @@ def _parse_persisted(payload: Any, revision: str) -> HealthFacts:
             schema_version=int(payload["schema_version"]),
             basis="persisted",
             source_basis=basis,
-            checked=int(payload["checked"]),
+            num_checked_ops=int(payload["checked"]),
             nonfinite_labels=tuple(str(label) for label in payload["nonfinite_labels"]),
             alias_nonfinite_labels=tuple(str(label) for label in payload["alias_nonfinite_labels"]),
-            unchecked=int(payload["unchecked"]),
-            unexamined=int(payload["unexamined"]),
-            unmapped=int(payload["unmapped"]),
+            num_unchecked_ops=int(payload["unchecked"]),
+            num_unexamined_ops=int(payload["unexamined"]),
+            num_unmapped_ops=int(payload["unmapped"]),
             capture_revision=str(payload["capture_revision"]),
         )
     except (KeyError, TypeError, ValueError):
@@ -172,12 +176,12 @@ def _derive(trace: Any) -> HealthFacts:
         schema_version=HEALTH_FACTS_SCHEMA_VERSION,
         basis=coverage.basis,
         source_basis=None,
-        checked=coverage.checked,
+        num_checked_ops=coverage.checked,
         nonfinite_labels=partition_labels,
         alias_nonfinite_labels=alias_hits,
-        unchecked=coverage.unchecked,
-        unexamined=coverage.unexamined,
-        unmapped=coverage.unmapped,
+        num_unchecked_ops=coverage.unchecked,
+        num_unexamined_ops=coverage.unexamined,
+        num_unmapped_ops=coverage.unmapped,
         capture_revision=revision,
     )
 

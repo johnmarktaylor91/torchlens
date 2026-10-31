@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from tests import example_models
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
@@ -144,7 +144,7 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
     assert last_validation_failure() is None
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 @pytest.mark.parametrize(

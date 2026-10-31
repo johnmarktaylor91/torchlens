@@ -48,7 +48,7 @@ def cleanup(self: "Trace") -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If ``self`` is the trace a live capture window is currently writing
         into (code ``cleanup_during_active_capture``). Husking the active
         trace mid-window (reachable single-threaded from a forward hook or
@@ -59,7 +59,7 @@ def cleanup(self: "Trace") -> None:
         a capture stays supported.
     """
     from .. import _state
-    from .._errors import CaptureContextError
+    from .._errors import CaptureNotActiveError
     from .._fast_run import close_fast_run_session
     from ..backends.torch.backward import _purge_trace_from_backward_registry
     from ..backends.torch.tensor_tracking import remove_owned_state_grad_hooks
@@ -70,7 +70,7 @@ def cleanup(self: "Trace") -> None:
         # not crash on its own output (b6-opus R25).
         return
     if _state._active_trace is self:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "Trace.cleanup() was called on the trace a live TorchLens capture "
             "window is still writing into",
             code="cleanup_during_active_capture",

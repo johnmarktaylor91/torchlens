@@ -96,7 +96,7 @@ def _golden_report() -> ConformanceReport:
         funnel={},
         realism={},
         earned_tier="",
-        claim_eligible=False,
+        is_claim_eligible=False,
         environment={"torchlens_version": "0.0.0"},
         attestation_sha256="",
     )
@@ -192,7 +192,7 @@ def test_typed_backend_refusal_scores_unsupported() -> None:
         funnel={},
         realism={},
         earned_tier="",
-        claim_eligible=False,
+        is_claim_eligible=False,
         environment={},
         attestation_sha256="",
     )

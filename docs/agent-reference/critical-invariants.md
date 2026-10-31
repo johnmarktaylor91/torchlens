@@ -26,7 +26,7 @@
    (`backends/_finalize.py`); nothing resets it per pass.
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
 9a. Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-    `tl.errors.ArtifactVersionBelowFloorError`; legacy field-alias resurrection ladders are
+    `tl.errors.ArtifactTooOldError`; legacy field-alias resurrection ladders are
     deleted. The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 / 2.32.4
     artifacts load (the floor is the stamp, never a release name). Legacy 2.16 intervention
     specs remain loadable (floor covers Trace rehydration only). Save dry-runs `metadata.pkl`

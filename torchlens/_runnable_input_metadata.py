@@ -478,7 +478,7 @@ def _bind_runtime_inputs(
                     current_runtime=str(torch.__version__),
                     detection_stage="run_honesty_contract",
                     resolver_provenance=None,
-                    analysis_load_available=True,
+                    is_analysis_load_available=True,
                     details=(),
                 ),
             )

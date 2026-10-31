@@ -315,7 +315,7 @@ _REDIRECTS: dict[str, str] = {
     "TensorInputObservation": "use torchlens.data_classes.TensorInputObservation",
     "TensorLog": "use torchlens.types.TensorLog",
     "TensorSliceSpec": "use torchlens.types.TensorSliceSpec",
-    "TorchLensPostfuncError": "use torchlens.errors.TorchLensPostfuncError",
+    "UserTransformError": "use torchlens.errors.UserTransformError",
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",

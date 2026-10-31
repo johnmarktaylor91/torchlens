@@ -16,11 +16,11 @@ __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
 
-class TorchLensIOError(CompatibilityError, RuntimeError):
+class ArtifactError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported."""
 
 
-class ArtifactVersionBelowFloorError(TorchLensIOError):
+class ArtifactTooOldError(ArtifactError):
     """Raised when an artifact predates the supported rehydration floor.
 
     TorchLens loads artifacts stamped ``tlspec_version >= 6`` (the first
@@ -31,11 +31,11 @@ class ArtifactVersionBelowFloorError(TorchLensIOError):
     """
 
 
-class ArtifactVersionAboveRuntimeError(TorchLensIOError):
+class ArtifactTooNewError(ArtifactError):
     """Raised when an artifact declares a schema newer than this runtime's ceiling.
 
     The artifact is valid; the READER is too old. Distinct from
-    :class:`ArtifactVersionBelowFloorError` (artifact too old) and from
+    :class:`ArtifactTooOldError` (artifact too old) and from
     integrity refusals: the remedy is upgrading torchlens to the release that
     wrote the artifact (or newer), never editing the artifact. Every
     above-ceiling site routes through ``above_ceiling_error`` so the
@@ -45,7 +45,7 @@ class ArtifactVersionAboveRuntimeError(TorchLensIOError):
     """
 
 
-class ArtifactRuntimeIncompatibleError(TorchLensIOError):
+class ArtifactRuntimeIncompatibleError(ArtifactError):
     """Raised when the RUNTIME cannot serve an otherwise-valid artifact.
 
     A runtime-axis refusal (torch major-version mismatch, unparseable torch
@@ -56,7 +56,7 @@ class ArtifactRuntimeIncompatibleError(TorchLensIOError):
     """
 
 
-class UnknownPersistedFieldError(TorchLensIOError):
+class UnknownPersistedFieldError(ArtifactError):
     """Raised when incoming persisted state carries fields this reader does not know.
 
     The persisted-state contract (ecosystem MEMO 3.3): unknown fields refuse
@@ -73,7 +73,7 @@ class UnknownPersistedFieldError(TorchLensIOError):
     """
 
 
-class PreReleaseArtifactError(TorchLensIOError):
+class PreReleaseArtifactError(ArtifactError):
     """Raised when a pre-release-marked artifact loads without the switch.
 
     Sprint-gated fields persist only under the test-only activation switch
@@ -103,9 +103,9 @@ class ArtifactSchemaAgeWarning(TorchLensWarning):
 # unpickler allowlists exactly those paths -- the physical split must not
 # change a single persisted byte (move-compat law, memo org rule 9).
 for _cls in (
-    TorchLensIOError,
-    ArtifactVersionBelowFloorError,
-    ArtifactVersionAboveRuntimeError,
+    ArtifactError,
+    ArtifactTooOldError,
+    ArtifactTooNewError,
     ArtifactRuntimeIncompatibleError,
     UnknownPersistedFieldError,
     PreReleaseArtifactError,

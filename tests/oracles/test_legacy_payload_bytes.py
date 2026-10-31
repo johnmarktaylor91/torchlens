@@ -1,7 +1,7 @@
 """Closed-form oracles for the summary's two activation-payload byte totals.
 
-``SummaryTotals.at_capture_bytes`` is the bytes of every activation the capture
-saved; ``SummaryTotals.retained_now_bytes`` the bytes of those whose payload is
+``SummaryTotals.captured_bytes`` is the bytes of every activation the capture
+saved; ``SummaryTotals.retained_bytes`` the bytes of those whose payload is
 still here (resident or lazily loadable). Expected values are derived from the
 fixture's shapes in the comments, never read from TorchLens. These are the I2
 oracles the census (``tests/oracles/data/legacy_quantities.tsv``) names for

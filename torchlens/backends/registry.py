@@ -194,7 +194,7 @@ class BackendMismatchError(BackendRegistryError):
     default_remedy = "select the backend that owns the supplied model and tensor inputs"
 
 
-class BackendAmbiguityError(BackendRegistryError):
+class AmbiguousBackendError(BackendRegistryError):
     """Raised when backend auto-resolution has multiple equal-priority matches."""
 
     code = "backend_ambiguity"
@@ -296,7 +296,7 @@ class BackendCapabilities:
     """
 
     backward_capture: bool
-    validation_replay: bool
+    has_validation_replay: bool
     fastlog: bool
     interventions: bool
     rng_replay: bool
@@ -649,7 +649,7 @@ def registered_backend_specs() -> tuple[BackendSpec, ...]:
 def resolve_backend_spec(
     backend: BackendName | None,
     model: object,
-    input_args: object,
+    inputs: object,
     input_kwargs: dict[Any, Any] | None = None,
 ) -> BackendSpec:
     """Resolve the backend spec for a public call.
@@ -673,16 +673,14 @@ def resolve_backend_spec(
 
     if backend is not None:
         spec = get_backend_spec(str(backend))
-        if not spec.coercible and not spec.can_handle(model, input_args, input_kwargs):
+        if not spec.coercible and not spec.can_handle(model, inputs, input_kwargs):
             raise BackendMismatchError(
                 f"backend={backend!r} cannot handle model type {type(model).__qualname__}."
             )
         return spec
 
     matches = [
-        spec
-        for spec in registered_backend_specs()
-        if spec.can_handle(model, input_args, input_kwargs)
+        spec for spec in registered_backend_specs() if spec.can_handle(model, inputs, input_kwargs)
     ]
     if not matches:
         return get_backend_spec("torch")
@@ -690,5 +688,5 @@ def resolve_backend_spec(
     winners = [spec for spec in matches if spec.priority == max_priority]
     if len(winners) > 1:
         names = ", ".join(sorted(str(spec.name) for spec in winners))
-        raise BackendAmbiguityError(f"backend=None is ambiguous for: {names}.")
+        raise AmbiguousBackendError(f"backend=None is ambiguous for: {names}.")
     return winners[0]

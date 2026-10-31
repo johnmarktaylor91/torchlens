@@ -40,7 +40,7 @@ REMOVED_TOP_LEVEL_CASES = [
     ("TargetManifestDiff", "torchlens.types", "TargetManifestDiff"),
     ("TensorLog", "torchlens.types", "TensorLog"),
     ("TensorSliceSpec", "torchlens.types", "TensorSliceSpec"),
-    ("TorchLensPostfuncError", "torchlens.errors", "TorchLensPostfuncError"),
+    ("UserTransformError", "torchlens.errors", "UserTransformError"),
     ("TrainingModeConfigError", "torchlens.errors", "TrainingModeConfigError"),
     ("VisualizationOptions", "torchlens.options", "VisualizationOptions"),
     ("build_render_audit", "torchlens.experimental.dagua", "build_render_audit"),

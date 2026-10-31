@@ -17,7 +17,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import (
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
 )
@@ -244,7 +244,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
 
     for level in ("executable_with_callables", "portable"):
         path = tmp_path / f"where_{level}.tlspec"
-        with pytest.raises(OpaqueCallableInExecutableSaveError, match="Callable selector"):
+        with pytest.raises(OpaqueCallableError, match="Callable selector"):
             log.save_intervention(path, level=level)
 
 
@@ -627,7 +627,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 

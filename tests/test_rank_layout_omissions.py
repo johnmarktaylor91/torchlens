@@ -123,7 +123,7 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     try:
-        with pytest.warns(tl.errors.MutateInPlaceWarning):
+        with pytest.warns(tl.errors.TraceMutationWarning):
             trace.set(tl.func("relu"), torch.zeros(2, 3))
         dot_source, dot_messages = _draw(
             trace, tmp_path, "dot", vis_intervention_mode="as_node", vis_node_placement="dot"

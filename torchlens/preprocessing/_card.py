@@ -15,7 +15,7 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
-from ._audit import VERDICT_MISMATCH, PreprocessingAudit, audit
+from ._audit import VERDICT_MISMATCH, PreprocessingComparison, compare
 from ._records import COMPARABLE_FIELDS, DeclaredPreprocessing, Resolution
 
 if TYPE_CHECKING:
@@ -23,12 +23,12 @@ if TYPE_CHECKING:
 
 
 def check_card(
-    trace_or_record: Any,
+    trace: Any,
     *,
     model: Any = None,
     authority: Any = None,
     offline: bool | None = None,
-) -> PreprocessingAudit:
+) -> PreprocessingComparison:
     """Compare recorded preprocessing with the model's card; warn on mismatch.
 
     Parameters
@@ -49,7 +49,7 @@ def check_card(
 
     Returns
     -------
-    PreprocessingAudit
+    PreprocessingComparison
         The field-level report. ``applied_source`` is ``"recorded"`` when the
         record declares fields; an opaque or missing record compares as
         ``unknown``, never as a match.
@@ -68,11 +68,11 @@ def check_card(
 
     from ._authorities import resolve
 
-    record = _record_of(trace_or_record)
+    record = _record_of(trace)
     if authority is not None:
         card = authority if isinstance(authority, Resolution) else resolve(authority)
     else:
-        source = model if model is not None else _live_model(trace_or_record)
+        source = model if model is not None else _live_model(trace)
         if source is None:
             from torchlens._errors import InvalidArgumentError
 
@@ -83,7 +83,7 @@ def check_card(
                 remedy="pass model=<the model> or authority=<its preprocessing object>",
             )
         card = resolve(model=source, offline=offline)
-    report = audit(card, declared_from_record(record))
+    report = compare(card, declared_from_record(record))
     report = _relabel_recorded(report, record)
     if report.verdict == VERDICT_MISMATCH:
         from torchlens.errors import TorchLensWarning
@@ -151,8 +151,8 @@ def _live_model(trace_or_record: Any) -> Any:
 
 
 def _relabel_recorded(
-    report: PreprocessingAudit, record: ResolvedPreprocessing | None
-) -> PreprocessingAudit:
+    report: PreprocessingComparison, record: ResolvedPreprocessing | None
+) -> PreprocessingComparison:
     """Name the applied side ``recorded`` when the record declared fields."""
 
     from dataclasses import replace

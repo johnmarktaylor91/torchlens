@@ -24,7 +24,7 @@ from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
 from torchlens.observe import pass_peak_facts
 from torchlens.options import CaptureOptions
@@ -200,7 +200,7 @@ def test_malformed_backward_reason_refuses_at_load(
     path = tmp_path / f"forged_{why}.tlspec"
     tl.save(trace, path)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_backward_peak_memory_invalid"
     assert excinfo.value.fields["reason"] == why

@@ -184,7 +184,7 @@ def _row_findings(
     if row.n_nonfinite:
         findings.append(
             CheckFinding(
-                check="param_nonfinite",
+                check_name="param_nonfinite",
                 code="param_value_nonfinite",
                 severity="critical",
                 action="collect",
@@ -194,7 +194,7 @@ def _row_findings(
                     f"of {row.numel} elements. Every later step on corrupt "
                     "state is wasted compute."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={
                     "n_nan": float(row.n_nan),
@@ -209,7 +209,7 @@ def _row_findings(
         low, high = bounds[row.name]
         findings.append(
             CheckFinding(
-                check="param_bounds",
+                check_name="param_bounds",
                 code="param_bounds_violated",
                 severity="warning",
                 action="collect",
@@ -217,7 +217,7 @@ def _row_findings(
                     f"{row.name} violates declared bounds ({low}, {high}): "
                     f"{row.bounds_below} below, {row.bounds_above} above."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={
                     "below": float(row.bounds_below or 0),
@@ -233,7 +233,7 @@ def _row_findings(
     ):
         findings.append(
             CheckFinding(
-                check="dtype_headroom",
+                check_name="dtype_headroom",
                 code="param_dtype_headroom",
                 severity="warning",
                 action="collect",
@@ -242,7 +242,7 @@ def _row_findings(
                     f"{(1 - max_fraction) * 100:.0f}% of the {row.dtype} ceiling "
                     f"{row.dtype_max:.6g}; the next growth step can overflow."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"abs_max": row.abs_max, "dtype_max": row.dtype_max},
                 remedy="Rescale, clip, or move the tensor to a wider dtype.",
@@ -255,7 +255,7 @@ def _row_findings(
     ):
         findings.append(
             CheckFinding(
-                check="param_subnormal",
+                check_name="param_subnormal",
                 code="param_subnormal_heavy",
                 severity="warning",
                 action="collect",
@@ -265,7 +265,7 @@ def _row_findings(
                     f"{subnormal_fraction_threshold}); values this small "
                     "lose precision and can silently flush to zero."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"subnormal_fraction": row.subnormal_fraction},
                 remedy="Rescale the tensor or audit the upstream initialization/decay.",
@@ -274,12 +274,12 @@ def _row_findings(
     if row.zero_fraction == 1.0 and row.numel > 0:
         findings.append(
             CheckFinding(
-                check="param_all_zero",
+                check_name="param_all_zero",
                 code="param_all_zero",
                 severity="info",
                 action="collect",
                 message=f"{row.name} is entirely zero ({row.numel} elements).",
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"numel": float(row.numel)},
                 remedy="Expected for fresh biases/counters; suspicious for trained weights.",
@@ -288,7 +288,7 @@ def _row_findings(
     elif row.all_same and row.numel > 1:
         findings.append(
             CheckFinding(
-                check="param_all_same",
+                check_name="param_all_same",
                 code="param_all_same",
                 severity="warning",
                 action="collect",
@@ -296,7 +296,7 @@ def _row_findings(
                     f"{row.name} holds one repeated value across {row.numel} "
                     "elements -- a suspicious constant for a trained tensor."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"numel": float(row.numel)},
                 remedy="Check the initialization and whether the tensor ever receives updates.",

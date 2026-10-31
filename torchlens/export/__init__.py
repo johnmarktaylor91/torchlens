@@ -949,11 +949,11 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     gate's stable code and message. The gate is never bypassed.
     """
 
-    from ..intervention.errors import BundleRelationshipError
+    from ..intervention.errors import BundleComparisonError
 
     try:
         return bundle.norm_delta(), {"status": "computed", "operation": "norm_delta"}
-    except BundleRelationshipError as exc:
+    except BundleComparisonError as exc:
         return {}, {
             "status": "refused",
             "operation": "norm_delta",

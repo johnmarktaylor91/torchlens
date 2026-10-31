@@ -48,11 +48,11 @@ class ScanRow:
     dtype: str
     device: str
     numel: int
-    n_nan: int
-    n_posinf: int
-    n_neginf: int
+    num_nan: int
+    num_posinf: int
+    num_neginf: int
     zero_fraction: float | None
-    all_same: bool | None
+    is_constant: bool | None
     finite_min: float | None
     finite_max: float | None
     abs_max: float | None
@@ -60,14 +60,14 @@ class ScanRow:
     subnormal_fraction: float | None
     bounds_below: int | None
     bounds_above: int | None
-    audited: bool
+    is_audited: bool
     skip_reason: str | None
 
     @property
-    def n_nonfinite(self) -> int:
+    def num_nonfinite(self) -> int:
         """Total nonfinite elements (NaN + signed infinities)."""
 
-        return self.n_nan + self.n_posinf + self.n_neginf
+        return self.num_nan + self.num_posinf + self.num_neginf
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serializable payload for this row."""
@@ -80,11 +80,11 @@ class ScanRow:
             "dtype": self.dtype,
             "device": self.device,
             "numel": self.numel,
-            "n_nan": self.n_nan,
-            "n_posinf": self.n_posinf,
-            "n_neginf": self.n_neginf,
+            "n_nan": self.num_nan,
+            "n_posinf": self.num_posinf,
+            "n_neginf": self.num_neginf,
             "zero_fraction": self.zero_fraction,
-            "all_same": self.all_same,
+            "all_same": self.is_constant,
             "finite_min": self.finite_min,
             "finite_max": self.finite_max,
             "abs_max": self.abs_max,
@@ -92,7 +92,7 @@ class ScanRow:
             "subnormal_fraction": self.subnormal_fraction,
             "bounds_below": self.bounds_below,
             "bounds_above": self.bounds_above,
-            "audited": self.audited,
+            "audited": self.is_audited,
             "skip_reason": self.skip_reason,
         }
 
@@ -131,11 +131,11 @@ def _skipped_row(
         dtype=dtype,
         device=device,
         numel=numel,
-        n_nan=0,
-        n_posinf=0,
-        n_neginf=0,
+        num_nan=0,
+        num_posinf=0,
+        num_neginf=0,
         zero_fraction=None,
-        all_same=None,
+        is_constant=None,
         finite_min=None,
         finite_max=None,
         abs_max=None,
@@ -143,7 +143,7 @@ def _skipped_row(
         subnormal_fraction=None,
         bounds_below=None,
         bounds_above=None,
-        audited=False,
+        is_audited=False,
         skip_reason=reason,
     )
 
@@ -346,11 +346,11 @@ def _row_from_stats(  # noqa: PLR0913 -- one row's identity + measured stats; th
         dtype=str(tensor.dtype).removeprefix("torch."),
         device=str(tensor.device),
         numel=numel,
-        n_nan=int(n_nan),
-        n_posinf=int(n_posinf),
-        n_neginf=int(n_neginf),
+        num_nan=int(n_nan),
+        num_posinf=int(n_posinf),
+        num_neginf=int(n_neginf),
         zero_fraction=(int(n_zero) / numel) if numel else None,
-        all_same=bool(all_same) if numel else None,
+        is_constant=bool(all_same) if numel else None,
         finite_min=finite_min if numel and finite_count else None,
         finite_max=finite_max if numel and finite_count else None,
         abs_max=abs_max if numel and finite_count else None,
@@ -358,7 +358,7 @@ def _row_from_stats(  # noqa: PLR0913 -- one row's identity + measured stats; th
         subnormal_fraction=(int(n_subnormal) / numel) if numel and is_floating else None,
         bounds_below=int(n_below) if had_bounds else None,
         bounds_above=int(n_above) if had_bounds else None,
-        audited=True,
+        is_audited=True,
         skip_reason=None,
     )
 

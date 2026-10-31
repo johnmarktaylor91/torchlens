@@ -31,7 +31,7 @@ from torch.overrides import handle_torch_function, has_torch_function_unary  # n
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import CaptureContextError
+from ..._errors import CaptureNotActiveError
 from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ...data_classes.internal_types import FuncExecutionContext
@@ -64,7 +64,7 @@ from ...utils.tensor_utils import (
 )
 from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
-from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
+from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
@@ -1322,7 +1322,7 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
 # (non-reentrant) construction call was tried and reverted after it
 # corrupted interpreter state when exercised across several capture paths in
 # one process (segfault on torch 2.1.2) -- see
-# ``SubclassConstructionUnderDispatchModeError``.
+# ``TensorSubclassUnsupportedError``.
 _SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
     "__new__": 0,
     "_make_subclass": 0,
@@ -1537,7 +1537,7 @@ def torch_func_decorator(
                     out = func(*args, **kwargs)
                 except RuntimeError as exc:
                     if "already associated to a python object" in str(exc):
-                        raise SubclassConstructionUnderDispatchModeError(
+                        raise TensorSubclassUnsupportedError(
                             f"torchlens cannot construct the Tensor subclass "
                             f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} "
                             "while a TorchLens dispatch mode is active on this torch "
@@ -1919,7 +1919,7 @@ def torch_func_decorator(
                 and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
                 and "already associated to a python object" in str(exc)
             ):
-                raise SubclassConstructionUnderDispatchModeError(
+                raise TensorSubclassUnsupportedError(
                     f"torchlens could not construct the Tensor subclass via "
                     f"{func_name!r} even after pausing its own dispatch mode on this "
                     f"torch build (original torch error: {exc}). "
@@ -2889,7 +2889,7 @@ def unwrap_torch() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If a capture is currently active. Removing the wrappers mid-forward
         leaves the rest of that forward unlogged and returns a silently
         truncated Trace, so the call is refused instead (code
@@ -2920,7 +2920,7 @@ def _refuse_unwrap_during_active_capture() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If ``_active_trace`` is set or logging is enabled.
     """
 
@@ -2928,7 +2928,7 @@ def _refuse_unwrap_during_active_capture() -> None:
         return
     trace = _state._active_trace
     model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
         + (f" for model {model_label!r}" if model_label else ""),
         code="unwrap_during_active_capture",

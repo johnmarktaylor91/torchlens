@@ -423,7 +423,7 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
 
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
     metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
@@ -431,7 +431,7 @@ def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: 
     metadata["experiment_index"] = {"runs": [1]}
     metadata_path.write_text(json.dumps(metadata))
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "bundle_section_unknown"
 
