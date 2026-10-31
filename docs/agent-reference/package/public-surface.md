@@ -16,8 +16,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -134,5 +133,5 @@ FuncGraph static path is implemented for compiled/SavedModel entries (opaque reg
 honestly unverified). Static-label `intervene=` SHIPS for eager entries (two-level writable
 layer, fail-closed site reachability), and T1 derived gradients SHIP for eager entries via
 `tl.backends.tf.GradOptions` (graph-only captures refuse `grad_options` typed; `intervene=`
-cannot combine with `grad_options=`). Deferred: `halt=`/`recipes=`, true backward capture,
+cannot combine with `grad_options=`). Deferred: `stop_after=`/`recipes=`, true backward capture,
 and value-dependent predicates.

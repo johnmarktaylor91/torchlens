@@ -47,7 +47,7 @@ mechanism and records real values, real taken-branch control flow, op-level reco
 Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode design for
 compiled/SavedModel-style entries. SHIPPED for eager entries: static-label `intervene=`
 (two-level writable layer, fail-closed site reachability) and leaf + exact T1 intermediate
-derived gradients via `tl.backends.tf.GradOptions`. Still deferred: `halt=`/`recipes=`, true
+derived gradients via `tl.backends.tf.GradOptions`. Still deferred: `stop_after=`/`recipes=`, true
 backward capture, and value-dependent predicates (graph-only captures also refuse
 `grad_options` typed).
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
@@ -97,8 +97,7 @@ trace = tl.trace(
     model,
     x,
     save=conv_before_relu,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)

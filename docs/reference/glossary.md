@@ -79,7 +79,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   (both refuse a missing step with `record_generation_step_missing`). `seed=` seeds once
   for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
   decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
-  cache, `intervene=`, `halt=` and partial forward-error modes refuse with
+  cache, `intervene=`, `stop_after=` and partial forward-error modes refuse with
   `record_generation_unsupported`, whose `reason` field names what is unsupported.
 
 **Capture outcome**
@@ -1300,8 +1300,29 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
-: `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
-  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`.
+: `tl.options` groups the public option dataclasses: `CaptureOptions`,
+  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`,
+  `RecordingOptions`. The doors take only the model and the inputs by position;
+  every capture knob rides `capture=CaptureOptions(...)` (`activation_transform`,
+  `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
+  `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
+  `jax_static_argnums`, `grad_options`, `chunk_size` included), and `tl.record`'s
+  recorder knobs ride `recording=RecordingOptions(...)` (`default_op`,
+  `default_module`, `history_size`, `include_source_events`,
+  `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
+  `default_grad`, `postprocess`). The door keywords are `save=`, `intervene=`,
+  `stop_after=` (a site or a predicate; the former `halt=`), `storage=`,
+  `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`, `input_shape=`
+  and `on_zero_fire=`.
+
+**on_nonfinite (CaptureOptions)**
+: The one NaN/Inf policy, replacing `raise_on_nan` and `track_nonfinite`:
+  `'ignore'` (the default; neither checks nor records, today's default
+  behaviour), `'track'` (per-op finiteness verdicts, served by
+  `Trace.nonfinite_ops` / `Trace.nonfinite_coverage`), `'warn'` (tracks and
+  warns `capture_nonfinite_detected` once per capture when any op produced a
+  non-finite output) and `'raise'` (stop at the first non-finite tensor and
+  raise). Any other value refuses `on_nonfinite_invalid`.
 
 **Structural hash**
 : `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
@@ -1712,7 +1733,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   NaN or Inf. On default captures it derives from the memoized saved-payload
   scan already backing `print(trace)` — zero capture-time cost, one scan paid
   at first query. When the capture ran with
-  `CaptureOptions(track_nonfinite=True)` it serves the capture-time verdicts
+  `CaptureOptions(on_nonfinite='track')` it serves the capture-time verdicts
   instead, which also cover ops that retained no payload. An empty tuple is
   only as strong as its coverage; read `Trace.nonfinite_coverage` first.
 
@@ -1724,9 +1745,9 @@ shims, by declared contract. Each carries the same tag at its definition.
   survive postprocessing). The programmatic twin of the prose coverage-gap
   note in `first_nonfinite()`.
 
-**track_nonfinite (CaptureOptions)** — *unstable — no deprecation shim owed*
+**on_nonfinite='track' (CaptureOptions)** — *unstable — no deprecation shim owed*
 : Session-time opt-in: torch capture records a per-op finiteness verdict for
-  every committed op output. Never changes control flow (`raise_on_nan` stays
+  every committed op output. Never changes control flow (`on_nonfinite='raise'` stays
   the stop-and-throw and is independent); device flags are drained in one
   batch after the forward, never a per-op CUDA synchronization.
   `structure_only=True` refuses the combination typed. Load restores the
@@ -2976,7 +2997,7 @@ deprecation shim owed*
 : `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
   `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
   `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
-  stopped by `halt=` or `tl.recording.stop()`.
+  stopped by `stop_after=` or `tl.recording.stop()`.
 
 **CaptureOutcome failure and boundary fields**
 : `CaptureOutcome.error_type` (qualified exception type name of a failed capture),

@@ -22,7 +22,7 @@ x = torch.randn(1, 3, 224, 224, requires_grad=True)
 # save_mode="reference": the default detaching save mode frees the autograd
 # history the empirical probes consume.
 trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference"
+    model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
 op = trace["layer4.1.conv2"]
@@ -155,8 +155,7 @@ backward-ready graph, and reference-saved payloads; anything less is reported as
 trace = tl.trace(
     model,
     x.requires_grad_(True),
-    capture=tl.options.CaptureOptions(backward_ready=True),
-    save_mode="reference",
+    capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
 )
 
 # Exhaustive/sampled trace sweep over center units (and optionally corners).

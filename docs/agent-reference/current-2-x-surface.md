@@ -137,7 +137,7 @@
   (halted LIVE-provider replay refuses — loaded-sparse `run()` stays allowed).
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
-  FAILED, never COMPLETE. Refresh re-arms `raise_on_nan`. Halted analysis
+  FAILED, never COMPLETE. Refresh re-arms `on_nonfinite='raise'`. Halted analysis
   `Trace.save` works (the transient-leak refusal is fixed); halted `log_backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
@@ -145,11 +145,11 @@
   `trace.nonfinite_coverage` the frozen evidence disclosure (basis + checked/
   unchecked/unexamined counts — read it before trusting an empty answer). On
   default captures the record derives from the memoized saved-payload scan at
-  ZERO capture cost; `CaptureOptions(track_nonfinite=True)` opts into
+  ZERO capture cost; `CaptureOptions(on_nonfinite='track')` opts into
   capture-time per-op checks that also cover unsaved ops (selective-save
   captures), costing ~3-15% of capture time on CPU and deferring device flag
   reads to ONE batch at the finalize seam (never a per-op CUDA sync).
-  `raise_on_nan` stop-and-throw is unchanged and independent; `structure_only`
+  `on_nonfinite='raise'` stop-and-throw is unchanged and independent; `structure_only`
   refuses the combination typed. Session-time knob (`FieldPolicy.DROP`): load
   restores the default and loaded traces serve the saved-payload basis. Doc:
   `docs/reference/capture_outcomes.md` ("The queryable nonfinite record").
@@ -391,16 +391,16 @@
   captures refuse `grad_options` typed. Static-label `intervene=` ships for eager entries
   through a two-level writable layer (module-boundary substitution + curated tf.nn/tf.math
   functional wrap) with FAIL-CLOSED site reachability — a selector matching callback-captured
-  ops the wrap layer never saw refuses typed. `halt=`/`recipes=`, true backward capture, and
+  ops the wrap layer never saw refuses typed. `stop_after=`/`recipes=`, true backward capture, and
   value-dependent predicates remain deferred like sibling preview gaps.
-- The Paddle preview supports live forward `trace(intervene=...)` and `trace(halt=...)` (eager
+- The Paddle preview supports live forward `trace(intervene=...)` and `trace(stop_after=...)` (eager
   dygraph: the wrapper holds each concrete output before the caller sees it). The intervened op
   keeps its real identity with the replacement payload plus hook-minted `FireRecord`s; the replay
   oracle uses a narrow corroborated user-intervention carve-out, so a replacement value presented
   as captured-native FAILS validation. Builtin helper adapters: `zero_ablate`, `scale`, `add`,
   `replace_with` (others refuse typed); decisions are forward-only; intervention/halt predicates
   may be value-dependent (real `tensor_requires_grad`/`is_scalar_bool`/`bool_value` in the ctx);
-  `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`halt=`.
+  `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`stop_after=`.
   Value-dependent `save=`, streaming, fastlog, and rng_replay stay refused on paddle.
 - All four eager previews (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
   through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_index`/
@@ -727,8 +727,8 @@
   (capability contract: `docs/reference/structure_only_capabilities.md`), and
   value-dependent branches refuse DEVICE-NEUTRALLY with the user's exact
   source line (`value_dependent_branch_unsupported`; missing meta kernels
-  refuse `meta_kernel_unavailable`). Option conflicts (`raise_on_nan`,
-  `intervention_ready`, not-provably-value-free `halt=`) refuse
+  refuse `meta_kernel_unavailable`). Option conflicts (`on_nonfinite='raise'`,
+  `intervention_ready`, not-provably-value-free `stop_after=`) refuse
   `structure_only_option_conflict` at entry. `trace.structure_only` mirrors
   the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
@@ -1267,7 +1267,7 @@
   sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
   `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
   Sampled narration has `nonfinite_evidence.policy="unavailable"` with a reason.
-  Reuse with a positive `track_nonfinite` verdict has policy `"verdict"` for that
+  Reuse with a positive `on_nonfinite='track'` verdict has policy `"verdict"` for that
   family and renders "nonfinite present" with no count; a negative verdict has
   policy `"exact"`, reason `"track_nonfinite"`, and zero counts.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
@@ -1856,4 +1856,4 @@ object's docstring):
   admits `verdict` for presence without counts. `TensorStats.num_nan`,
   `TensorStats.num_posinf`, and `TensorStats.num_neginf` are optional exact counts;
   `TensorStats.num_nonfinite` and `TensorStats.num_finite` are `None` if any count
-  is unknown. Reused `track_nonfinite` false verdicts carry an exact zero census.
+  is unknown. Reused `on_nonfinite='track'` false verdicts carry an exact zero census.

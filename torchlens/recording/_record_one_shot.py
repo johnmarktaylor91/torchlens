@@ -306,9 +306,9 @@ def record(
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
         output = recorder(input_args, input_kwargs)
-    recording = recorder.recording
+    result = recorder.recording
     if postprocess != "none":
-        recording = recording.enrich(postprocess)
+        result = result.enrich(postprocess)
     if return_output:
-        return output, recording
-    return recording
+        return output, result
+    return result
