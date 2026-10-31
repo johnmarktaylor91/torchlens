@@ -3793,7 +3793,7 @@
      "_source_forward_file": "fact",
      "_source_forward_line": "fact",
      "_source_forward_signature": "fact",
-     "_source_frames": "fact",
+     "_source_frames": "enrichment",
      "_source_init_docstring": "fact",
      "_source_init_file": "fact",
      "_source_init_line": "fact",
@@ -4083,5 +4083,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "664eb669a0a8ed46b2b0f5aef525e8e3d09d2f9b634d6052493395f478cef782"
+ "writer_contract_digest": "003ffd0e2077ed5012cdaeb0fc6289fd9249cecc07b73a929c859f1bac003720"
 }
