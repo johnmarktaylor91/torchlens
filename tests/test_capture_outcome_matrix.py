@@ -85,16 +85,20 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
 def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
     """A halt with no recoverable tensor frontier fails typed at FINALIZE."""
 
-    import torchlens.backends.torch.ops as torch_ops
+    import torchlens._capture.stop as stop_module
+    import torchlens.backends.torch._ops_exhaustive as ops_exhaustive
+    import torchlens.backends.torch._ops_predicate_events as ops_predicate_events
     from torchlens import _state
     from torchlens.recording._halt import StopSignal
 
-    original = torch_ops.evaluate_halt_stop
+    original = stop_module.evaluate_halt_stop
 
     def _strip_frontier(trace, ctx, options, frontier_output=None):
         return original(trace, ctx, options, frontier_output=None)
 
-    monkeypatch.setattr(torch_ops, "evaluate_halt_stop", _strip_frontier)
+    # The home module and the capture modules that bound the evaluator by import.
+    for module in (stop_module, ops_exhaustive, ops_predicate_events):
+        monkeypatch.setattr(module, "evaluate_halt_stop", _strip_frontier)
 
     captured: list = []
 

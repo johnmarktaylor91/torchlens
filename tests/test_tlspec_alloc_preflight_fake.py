@@ -692,11 +692,9 @@ def test_view_proof_projection_runs_without_real_kernel_fallback(
             seen.append(kwargs.get("allow_fallback_kernels", True))
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(
-        torchlens._runnable_state_context,
-        "_count_bounded_fake_tensor_mode_class",
-        lambda: _Recording,
-    )
+    # The home module and the module that bound the factory by import.
+    for module in (torchlens._runnable_state_context, torchlens._runnable_call_arguments):
+        monkeypatch.setattr(module, "_count_bounded_fake_tensor_mode_class", lambda: _Recording)
     x = torch.randn(1, 4)
     bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
