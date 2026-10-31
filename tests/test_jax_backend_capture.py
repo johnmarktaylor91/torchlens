@@ -1822,7 +1822,8 @@ def test_jax_trace_rejects_hidden_consts() -> None:
         del params
         return x @ hidden
 
-    with pytest.raises(ValueError, match="closed-jaxpr constants"):
+    # Typed refusal (a ``ValueError`` subclass, so ``except ValueError`` still works).
+    with pytest.raises(BackendUnsupportedError, match="closed-jaxpr constants"):
         _trace_jax(uses_hidden, ({}, jnp.ones((2, 3))))
 
 

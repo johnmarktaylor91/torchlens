@@ -271,13 +271,14 @@ def reject_undeclared_consts(closed_jaxpr: Any) -> None:
 
     Raises
     ------
-    ValueError
-        If the jaxpr contains closure constants.
+    BackendUnsupportedError
+        If the jaxpr contains closure constants (a ``ValueError`` subclass, so
+        existing ``except ValueError`` callers keep working).
     """
 
     consts = tuple(getattr(closed_jaxpr, "consts", ()))
     if consts:
-        raise ValueError(
+        raise BackendUnsupportedError(
             "JAX backend found closed-jaxpr constants. Pass captured values as explicit "
             "pytree leaves to fn(params, *inputs); hidden closure constants are unsupported "
             "in this preview."
