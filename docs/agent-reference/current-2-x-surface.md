@@ -1034,17 +1034,6 @@
   `BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
   GROUPED FLOOR -- `trace.grad_fn_site_summary` rolls backward facts up per
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
-- PREDICATE RUNTIME EXTENSION POINT (S4 seam; every spelling
-  DOCUMENTED-UNSTABLE pending naming-session ratification):
-  `torchlens.ir.predicate_registry` is the ONE documented door through which
-  predicate consumers accept user predicates for the capture-lifecycle
-  `save`/`halt`/`until` slots (`PredicateProtocol` — one positional concrete
-  `RecordContext`; `coerce_predicate(value, slot=...)` — raw callables incl.
-  `BaseSelector` instances returned BY IDENTITY, registered names via a
-  slot-aware enforcing wrapper; `register_predicate(name)` — mutates nothing
-  on the user's object, stamps no loader-consulted attribute). The registry
-  is INERT until consumers adopt name acceptance. `intervene=`/grad slots are
-  outside the contract. Contract: `docs/reference/predicate_runtime.md`.
 - NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
   depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, open=False,
