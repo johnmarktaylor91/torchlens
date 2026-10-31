@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -192,16 +193,25 @@ def _requirement(artifact: Path, extras: tuple[str, ...]) -> str:
     return f"torchlens{suffix} @ {artifact.resolve().as_uri()}"
 
 
+@pytest.fixture
+def venv_dir(tmp_path: Path) -> Iterator[Path]:
+    """A venv location deleted after the test: each holds a full torch install."""
+
+    path = tmp_path / "venv"
+    yield path
+    shutil.rmtree(path, ignore_errors=True)
+
+
 @pytest.mark.parametrize("kind", ["wheel", "sdist"])
 @pytest.mark.parametrize("set_name", _selected_set_names())
 def test_clean_install(
-    set_name: str, kind: str, artifacts: dict[str, Path], tmp_path: Path
+    set_name: str, kind: str, artifacts: dict[str, Path], venv_dir: Path, tmp_path: Path
 ) -> None:
     """Install one artifact with one extras set into a fresh venv and probe it."""
 
     entry = SETS[set_name]
     base_python = _interpreter(entry.python)
-    venv = tmp_path / "venv"
+    venv = venv_dir
     subprocess.run([base_python, "-m", "venv", str(venv)], check=True, env=_clean_env())
     python = str(venv / "bin" / "python")
     constraints = GENERATOR.CONSTRAINTS_DIR / f"{set_name}.txt"
