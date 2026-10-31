@@ -84,3 +84,18 @@ def test_table_getter_flips_its_flag_when_the_surface_disappears(
     monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
     assert tc.get_device_constructors() is None
     assert tc.HAS_DEVICE_CONSTRUCTORS is False
+
+
+@pytest.mark.smoke
+def test_snapshot_forces_the_meta_item_and_mha_switch_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The snapshot reports the real probe result, not the unprobed ``False`` placeholder."""
+
+    monkeypatch.setattr(tc, "_META_ITEM_GUARD_PROBED", False)
+    monkeypatch.setattr(tc, "HAS_META_ITEM_GUARD", False)
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", False)
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    snapshot = tc.get_torch_capability_snapshot()
+    assert snapshot["HAS_META_ITEM_GUARD"] is tc._probe_meta_item_guard()
+    assert snapshot["HAS_MHA_FASTPATH_SWITCH"] is tc._probe_mha_fastpath_switch()
