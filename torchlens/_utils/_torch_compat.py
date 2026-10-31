@@ -637,40 +637,82 @@ def _import_module_attr_or_none(module_name: str, attr_name: str) -> Any | None:
     return getattr(module, attr_name, None)
 
 
-def _probe_variable_functions() -> bool:
-    """Return whether torch exposes the private C variable-functions table.
+_ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
+    "HAS_VARIABLE_FUNCTIONS": ("torch:_C._VariableFunctions",),
+    "HAS_TORCH_VF": ("torch:_VF",),
+    "HAS_TORCH_FUNC": ("torch:func",),
+    "HAS_FUNCTORCH_LEVEL_API": ("torch:_C._functorch.maybe_current_level",),
+    "HAS_FUNCTORCH_WRAPPED_TENSOR_API": ("torch:_C._functorch.is_functorch_wrapped_tensor",),
+    "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
+    "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
+    "HAS_JIT_OVERLOAD_RESOLVER": ("torch.jit._script:_get_overloads",),
+    "HAS_DEVICE_CONTEXT_DISPATCH": (
+        "torch.utils._device:DeviceContext",
+        "torch.overrides:_get_current_function_mode_stack",
+        "torch.overrides:_len_torch_function_stack",
+    ),
+    "HAS_DEVICE_CONSTRUCTORS": ("torch.utils._device:_device_constructors",),
+    "HAS_ACCUMULATE_GRAD_CLASS": ("torch:_C._functions.AccumulateGrad",),
+    "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
+    "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
+    "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
+    "HAS_NAMED_TENSOR_API": (
+        "torch:Tensor.names",
+        "torch:Tensor.has_names",
+        "torch:Tensor.refine_names",
+    ),
+    "HAS_GENERATOR_CLONE_STATE": ("torch:Generator.clone_state",),
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE": ("torch:Generator.graphsafe_get_state",),
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE": ("torch:Generator.graphsafe_set_state",),
+    "HAS_GENERATOR_PHILOX_STATE": ("torch:Generator.philox_state",),
+    "HAS_NODE_PREHOOK": ("torch.autograd.graph:Node.register_prehook",),
+    "HAS_FP32_PRECISION_CONTROLS": ("torch:backends.fp32_precision",),
+    "HAS_AMP_GRADSCALER": ("torch.amp:GradScaler",),
+    "HAS_RMSNORM_MODULE": ("torch:nn.RMSNorm",),
+}
+"""Declarative presence probes: flag -> ``"module:dotted.attr"`` paths that must all resolve.
 
-    Returns
-    -------
-    bool
-        True when ``torch._C._VariableFunctions`` is importable.
-    """
-
-    return _nested_getattr_or_none(torch, ("_C", "_VariableFunctions")) is not None
+One line per flag replaces a probe function while keeping feature detection: a
+torch release that drops a surface still flips its flag. Measured availability
+per flag lives in the data-only ``_torch_compat_table`` (never imported here, so
+the capture stack's import closure does not grow).
+"""
 
 
-def _probe_torch_vf() -> bool:
-    """Return whether torch exposes the private ``torch._VF`` namespace.
-
-    Returns
-    -------
-    bool
-        True when ``torch._VF`` is present.
-    """
-
-    return getattr(torch, "_VF", None) is not None
+def _split_attribute_path(spec: str) -> tuple[str, tuple[str, ...]]:
+    """Split a ``"module:dotted.attr"`` probe path into the module and its attribute segments."""
+    module_name, _, attr_path = spec.partition(":")
+    return module_name, tuple(attr_path.split("."))
 
 
-def _probe_torch_func() -> bool:
-    """Return whether torch exposes the public ``torch.func`` namespace.
+_SPLIT_PROBE_PATHS: dict[str, tuple[str, tuple[str, ...]]] = {
+    path: _split_attribute_path(path) for paths in _ATTRIBUTE_PROBES.values() for path in paths
+}
+"""Every probe path split once at import: two of the getters run on every wrapped op."""
 
-    Returns
-    -------
-    bool
-        True when ``torch.func`` is present.
-    """
 
-    return getattr(torch, "func", None) is not None
+def _resolve_attribute_path(spec: str) -> Any | None:
+    """Resolve one probe path, or return ``None`` when the module or any segment is absent."""
+    module_name, attrs = _SPLIT_PROBE_PATHS.get(spec) or _split_attribute_path(spec)
+    if module_name == "torch":
+        return _nested_getattr_or_none(torch, attrs)
+    resolved = _import_module_attr_or_none(module_name, attrs[0])
+    return _nested_getattr_or_none(resolved, attrs[1:]) if resolved is not None else None
+
+
+def _probe_attribute_paths(flag: str) -> bool:
+    """Return whether every :data:`_ATTRIBUTE_PROBES` path declared for ``flag`` resolves."""
+    if flag not in _ATTRIBUTE_PROBES:
+        raise ValueError(f"capability flag {flag} declares no attribute paths")
+    return all(_resolve_attribute_path(path) is not None for path in _ATTRIBUTE_PROBES[flag])
+
+
+def _resolve_or_mark_missing(flag: str, detail: str) -> Any | None:
+    """Resolve ``flag``'s first probe path; when absent, mark it missing with ``detail``."""
+    resolved = _resolve_attribute_path(_ATTRIBUTE_PROBES[flag][0])
+    if resolved is None:
+        mark_torch_capability_missing(flag, detail)
+    return resolved
 
 
 def _probe_functorch_apis() -> bool:
@@ -686,146 +728,6 @@ def _probe_functorch_apis() -> bool:
         _nested_getattr_or_none(torch, ("_functorch", "apis")) is not None
         or importlib.util.find_spec("torch._functorch.apis") is not None
     )
-
-
-def _probe_functorch_level_api() -> bool:
-    """Return whether torch exposes functorch transform-level introspection.
-
-    Returns
-    -------
-    bool
-        True when ``torch._C._functorch.maybe_current_level`` is present.
-    """
-
-    return _nested_getattr_or_none(torch, ("_C", "_functorch", "maybe_current_level")) is not None
-
-
-def _probe_functorch_wrapped_tensor_api() -> bool:
-    """Return whether torch exposes functorch wrapped-tensor detection.
-
-    Returns
-    -------
-    bool
-        True when ``torch._C._functorch.is_functorch_wrapped_tensor`` is present.
-    """
-
-    return (
-        _nested_getattr_or_none(torch, ("_C", "_functorch", "is_functorch_wrapped_tensor"))
-        is not None
-    )
-
-
-def _probe_jit_builtin_table() -> bool:
-    """Return whether TorchScript exposes the private builtin table.
-
-    Returns
-    -------
-    bool
-        True when ``torch.jit._builtins._builtin_table`` is present.
-    """
-
-    return _import_module_attr_or_none("torch.jit._builtins", "_builtin_table") is not None
-
-
-def _probe_jit_boolean_dispatch_table() -> bool:
-    """Return whether TorchScript exposes the private boolean-dispatch table.
-
-    Returns
-    -------
-    bool
-        True when ``torch._jit_internal.boolean_dispatched`` is present.
-    """
-
-    return _import_module_attr_or_none("torch._jit_internal", "boolean_dispatched") is not None
-
-
-def _probe_jit_overload_resolver() -> bool:
-    """Return whether TorchScript exposes the private overload resolver.
-
-    Returns
-    -------
-    bool
-        True when ``torch.jit._script._get_overloads`` is present.
-    """
-
-    return _import_module_attr_or_none("torch.jit._script", "_get_overloads") is not None
-
-
-def _probe_device_context_dispatch() -> bool:
-    """Return whether DeviceContext stack APIs needed for factory injection exist.
-
-    Returns
-    -------
-    bool
-        True when DeviceContext and torch function-mode stack APIs are present.
-    """
-
-    return (
-        _import_module_attr_or_none("torch.utils._device", "DeviceContext") is not None
-        and _import_module_attr_or_none("torch.overrides", "_get_current_function_mode_stack")
-        is not None
-        and _import_module_attr_or_none("torch.overrides", "_len_torch_function_stack") is not None
-    )
-
-
-def _probe_device_constructors() -> bool:
-    """Return whether torch exposes the private factory-constructor inventory.
-
-    Returns
-    -------
-    bool
-        True when ``torch.utils._device._device_constructors`` is present.
-    """
-
-    return _import_module_attr_or_none("torch.utils._device", "_device_constructors") is not None
-
-
-def _probe_accumulate_grad_class() -> bool:
-    """Return whether torch exposes the private AccumulateGrad class.
-
-    Returns
-    -------
-    bool
-        True when ``torch._C._functions.AccumulateGrad`` is present.
-    """
-
-    return _nested_getattr_or_none(torch, ("_C", "_functions", "AccumulateGrad")) is not None
-
-
-def _probe_current_graph_task_id() -> bool:
-    """Return whether torch exposes the autograd graph-task-id resolver.
-
-    Returns
-    -------
-    bool
-        True when ``torch._C._current_graph_task_id`` is present.
-    """
-
-    return _nested_getattr_or_none(torch, ("_C", "_current_graph_task_id")) is not None
-
-
-def _probe_fx_graph_module() -> bool:
-    """Return whether torch exposes ``torch.fx.GraphModule``.
-
-    Returns
-    -------
-    bool
-        True when the FX GraphModule type is importable.
-    """
-
-    return _nested_getattr_or_none(torch, ("fx", "GraphModule")) is not None
-
-
-def _probe_named_tensor_api() -> bool:
-    """Return whether native Torch named-tensor inspection/construction exists.
-
-    Returns
-    -------
-    bool
-        Whether the required native named-tensor surface is available.
-    """
-
-    return all(hasattr(torch.Tensor, attr) for attr in ("names", "has_names", "refine_names"))
 
 
 def _probe_cached_untyped_storage_wrapper() -> bool:
@@ -1571,37 +1473,6 @@ def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
     return HAS_MHA_FASTPATH_SWITCH
 
 
-def _probe_node_prehook() -> bool:
-    """Return whether autograd graph nodes support ``register_prehook``.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.autograd.graph.Node`` declares
-        ``register_prehook`` -- the slot-targeted freeze mechanism behind the
-        one-backward read's ``frozen=`` policy (M(reads) D6).
-    """
-
-    node_cls = _import_module_attr_or_none("torch.autograd.graph", "Node")
-    return node_cls is not None and hasattr(node_cls, "register_prehook")
-
-
-def _probe_fp32_precision_controls() -> bool:
-    """Return whether torch exposes the ``fp32_precision`` backend controls.
-
-    Returns
-    -------
-    bool
-        ``True`` on torch >= 2.9, where ``torch.backends.fp32_precision`` and
-        its per-backend children exist and the legacy
-        ``set_float32_matmul_precision`` / ``allow_tf32`` setters write them.
-        Absent on older torch, which is a healthy install: there is no
-        second representation to leak, so nothing degrades.
-    """
-
-    return hasattr(torch.backends, "fp32_precision")
-
-
 def _probe_deterministic_fill_flag() -> bool:
     """Return whether ``torch.utils.deterministic.fill_uninitialized_memory`` exists.
 
@@ -1620,21 +1491,6 @@ def _probe_deterministic_fill_flag() -> bool:
         return importlib.util.find_spec("torch.utils.deterministic") is not None
     except (ImportError, AttributeError, ValueError):
         return False
-
-
-def _probe_amp_gradscaler() -> bool:
-    """Return whether the device-agnostic ``torch.amp.GradScaler`` exists.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.amp`` exposes ``GradScaler`` directly (the
-        device-agnostic constructor; torch 2.1-2.2 only ship the CUDA-specific
-        ``torch.cuda.amp.GradScaler``). Absence is a healthy old install, not
-        a degradation -- TorchLens product code never constructs a scaler.
-    """
-
-    return _import_module_attr_or_none("torch.amp", "GradScaler") is not None
 
 
 def _probe_nn_attention_module() -> bool:
@@ -1669,21 +1525,6 @@ def _probe_nn_attention_module() -> bool:
         _import_module_attr_or_none("torch.nn.attention", "SDPBackend") is not None
         and _import_module_attr_or_none("torch.nn.attention", "sdpa_kernel") is not None
     )
-
-
-def _probe_rmsnorm_module() -> bool:
-    """Return whether ``torch.nn.RMSNorm`` exists.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.nn`` exposes the built-in ``RMSNorm`` module
-        (added torch 2.4). Absence is a healthy old install, not a
-        degradation -- TorchLens classifies RMSNorm-family modules by class
-        name, never by constructing ``torch.nn.RMSNorm`` itself.
-    """
-
-    return getattr(torch.nn, "RMSNorm", None) is not None
 
 
 def _probe_mha_fastpath_switch() -> bool:
@@ -1826,30 +1667,34 @@ def _probe_meta_item_guard() -> bool:
     return False
 
 
-HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
-HAS_TORCH_VF: bool = _probe_torch_vf()
-HAS_TORCH_FUNC: bool = _probe_torch_func()
+HAS_VARIABLE_FUNCTIONS: bool = _probe_attribute_paths("HAS_VARIABLE_FUNCTIONS")
+HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
+HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
 HAS_FUNCTORCH_APIS: bool = _probe_functorch_apis()
-HAS_FUNCTORCH_LEVEL_API: bool = _probe_functorch_level_api()
-HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_functorch_wrapped_tensor_api()
-HAS_JIT_BUILTIN_TABLE: bool = _probe_jit_builtin_table()
-HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_jit_boolean_dispatch_table()
-HAS_JIT_OVERLOAD_RESOLVER: bool = _probe_jit_overload_resolver()
-HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
-HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
-HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
-HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_current_graph_task_id()
-HAS_CURRENT_AUTOGRAD_NODE: bool = hasattr(torch._C, "_current_autograd_node")
-HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
-HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
+HAS_FUNCTORCH_LEVEL_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_LEVEL_API")
+HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
+HAS_JIT_BUILTIN_TABLE: bool = _probe_attribute_paths("HAS_JIT_BUILTIN_TABLE")
+HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_attribute_paths("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
+HAS_JIT_OVERLOAD_RESOLVER: bool = _probe_attribute_paths("HAS_JIT_OVERLOAD_RESOLVER")
+HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_attribute_paths("HAS_DEVICE_CONTEXT_DISPATCH")
+HAS_DEVICE_CONSTRUCTORS: bool = _probe_attribute_paths("HAS_DEVICE_CONSTRUCTORS")
+HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CLASS")
+HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
+HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
+HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
+HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_DYNAMO_ORIG_CALLABLE_MARKER: bool = False
 HAS_DYNAMO_EXPLAIN: bool = _probe_dynamo_explain_module()
-HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
-HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
-HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
-HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
+HAS_GENERATOR_CLONE_STATE: bool = _probe_attribute_paths("HAS_GENERATOR_CLONE_STATE")
+HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = _probe_attribute_paths(
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE"
+)
+HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = _probe_attribute_paths(
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE"
+)
+HAS_GENERATOR_PHILOX_STATE: bool = _probe_attribute_paths("HAS_GENERATOR_PHILOX_STATE")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 # Legacy ``torch.<dtype>Tensor`` constructor capture (``backends/torch/legacy_ctors.py``).
@@ -1871,12 +1716,12 @@ HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
-HAS_NODE_PREHOOK: bool = _probe_node_prehook()
+HAS_NODE_PREHOOK: bool = _probe_attribute_paths("HAS_NODE_PREHOOK")
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
-HAS_FP32_PRECISION_CONTROLS: bool = _probe_fp32_precision_controls()
-HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
+HAS_FP32_PRECISION_CONTROLS: bool = _probe_attribute_paths("HAS_FP32_PRECISION_CONTROLS")
+HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
-HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
+HAS_RMSNORM_MODULE: bool = _probe_attribute_paths("HAS_RMSNORM_MODULE")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
 HAS_REDUCE_TUPLE_DIM: bool = False
@@ -2265,9 +2110,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch 2.14): its absence is a healthy older install with no method to
         # drop a row for (same rationale as the three generator flags above).
         "HAS_GENERATOR_PHILOX_STATE",
-        # GradientEdge / Node.register_prehook postdate the torch>=2.1 floor:
-        # their absence is a healthy old install with nothing to shim -- the
-        # one-backward read refuses typed instead of degrading.
+        # A working GradientEdge postdates the torch>=2.1 floor (absent or broken
+        # through 2.3; Node.register_prehook is present from 2.1): absence is a
+        # healthy old install with nothing to shim -- the one-backward read
+        # refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
         # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the
@@ -2313,12 +2159,11 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch.distributed._functional_collectives._resolve_group /
         # torch.distributed.distributed_c10d._resolve_process_group (funcol
         # group resolution, merge-ranks C2 recording) are torch-private
-        # surfaces absent on torch 2.7.1 specifically (measured on the
-        # nightly fast-tier leg, 2026-10-02) though present on both the
-        # declared torch>=2.1 floor's neighbors and the canonical/newest
-        # pins: a healthy install with nothing to shim -- captured funcol
-        # calls refuse typed instead of recording correlated boundary nodes,
-        # the same honest degradation every other optional probe here takes.
+        # surfaces that read absent on every measured release before 2.13
+        # (``_torch_compat_table``): a healthy install with nothing to shim --
+        # captured funcol calls refuse typed instead of recording correlated
+        # boundary nodes, the same honest degradation every other optional
+        # probe here takes.
         "HAS_FUNCOL_GROUP_RESOLUTION",
         # torch._C._autograd._top_saved_tensors_default_hooks (peeks the
         # innermost installed default saved-tensors pack/unpack hook pair) is
@@ -2326,8 +2171,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # never merely "unprobed" -- on a torch build without it,
         # saved_tensors_default_hooks_active() honestly answers None instead
         # of degrading capture-time side-effect analysis; nothing shims it.
-        # Absent on torch 2.7.1 specifically (measured on the nightly
-        # fast-tier leg, 2026-10-02).
+        # Absent through torch 2.7 (measured; ``_torch_compat_table``).
         "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     }
 )
@@ -2412,6 +2256,8 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_reduce_tuple_dim_support(force_probe=True)
     get_cpu_half_kernels_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
+    get_meta_item_guard_support(force_probe=True)
+    get_mha_fastpath_switch_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)
@@ -2481,14 +2327,10 @@ def get_variable_function_names() -> list[str]:
         flipped ``HAS_VARIABLE_FUNCTIONS`` flag keeps the degradation visible.
     """
 
-    variable_functions = _nested_getattr_or_none(torch, ("_C", "_VariableFunctions"))
-    if variable_functions is None:
-        mark_torch_capability_missing(
-            "HAS_VARIABLE_FUNCTIONS",
-            "skipping torch._C._VariableFunctions-based function discovery",
-        )
-        return []
-    return dir(variable_functions)
+    variable_functions = _resolve_or_mark_missing(
+        "HAS_VARIABLE_FUNCTIONS", "skipping torch._C._VariableFunctions-based function discovery"
+    )
+    return [] if variable_functions is None else dir(variable_functions)
 
 
 def get_torch_vf_namespace() -> Any | None:
@@ -2500,13 +2342,7 @@ def get_torch_vf_namespace() -> Any | None:
         Private ``torch._VF`` namespace, or ``None`` when unavailable.
     """
 
-    namespace = getattr(torch, "_VF", None)
-    if namespace is None:
-        mark_torch_capability_missing(
-            "HAS_TORCH_VF",
-            "skipping torch._VF function decoration",
-        )
-    return namespace
+    return _resolve_or_mark_missing("HAS_TORCH_VF", "skipping torch._VF function decoration")
 
 
 def get_optional_torch_namespace(namespace_name: str) -> Any | None:
@@ -2554,14 +2390,10 @@ def get_accumulate_grad_class() -> Any:
         ``torch._C._functions.AccumulateGrad`` when present, otherwise ``()``.
     """
 
-    accumulate_grad_cls = _nested_getattr_or_none(torch, ("_C", "_functions", "AccumulateGrad"))
-    if accumulate_grad_cls is None:
-        mark_torch_capability_missing(
-            "HAS_ACCUMULATE_GRAD_CLASS",
-            "using AccumulateGrad name matching instead of class matching",
-        )
-        return ()
-    return accumulate_grad_cls
+    accumulate_grad_cls = _resolve_or_mark_missing(
+        "HAS_ACCUMULATE_GRAD_CLASS", "using AccumulateGrad name matching instead of class matching"
+    )
+    return () if accumulate_grad_cls is None else accumulate_grad_cls
 
 
 def get_current_graph_task_id_fn() -> Callable[[], Any] | None:
@@ -2573,25 +2405,18 @@ def get_current_graph_task_id_fn() -> Callable[[], Any] | None:
         ``torch._C._current_graph_task_id`` when present, otherwise ``None``.
     """
 
-    resolver = _nested_getattr_or_none(torch, ("_C", "_current_graph_task_id"))
-    if resolver is None:
-        mark_torch_capability_missing(
-            "HAS_CURRENT_GRAPH_TASK_ID",
-            "implicit backward pass boundaries cannot distinguish separate "
-            "engine invocations and fall back to the open-bracket heuristic",
-        )
-        return None
-    return resolver
+    return _resolve_or_mark_missing(
+        "HAS_CURRENT_GRAPH_TASK_ID",
+        "implicit backward pass boundaries cannot distinguish separate "
+        "engine invocations and fall back to the open-bracket heuristic",
+    )
 
 
 def get_current_autograd_node_fn() -> Callable[[], Any] | None:
     """Return autograd's executing-node resolver, or ``None`` (flag flipped) when absent."""
-    resolver = getattr(torch._C, "_current_autograd_node", None)
-    if resolver is None:
-        mark_torch_capability_missing(
-            "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
-        )
-    return resolver
+    return _resolve_or_mark_missing(
+        "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
+    )
 
 
 def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
@@ -2603,16 +2428,9 @@ def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
         ``torch._C._functorch.maybe_current_level`` or ``None`` when absent.
     """
 
-    maybe_current_level = _nested_getattr_or_none(
-        torch, ("_C", "_functorch", "maybe_current_level")
+    return _resolve_or_mark_missing(
+        "HAS_FUNCTORCH_LEVEL_API", "functorch transform-boundary detection is disabled"
     )
-    if maybe_current_level is None:
-        mark_torch_capability_missing(
-            "HAS_FUNCTORCH_LEVEL_API",
-            "functorch transform-boundary detection is disabled",
-        )
-        return None
-    return maybe_current_level
 
 
 def get_functorch_wrapped_tensor_checker() -> Callable[[Any], bool] | None:
@@ -2624,14 +2442,9 @@ def get_functorch_wrapped_tensor_checker() -> Callable[[Any], bool] | None:
         ``torch._C._functorch.is_functorch_wrapped_tensor`` or ``None``.
     """
 
-    checker = _nested_getattr_or_none(torch, ("_C", "_functorch", "is_functorch_wrapped_tensor"))
-    if checker is None:
-        mark_torch_capability_missing(
-            "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
-            "functorch wrapped-tensor equality handling is disabled",
-        )
-        return None
-    return checker
+    return _resolve_or_mark_missing(
+        "HAS_FUNCTORCH_WRAPPED_TENSOR_API", "functorch wrapped-tensor equality handling is disabled"
+    )
 
 
 def get_jit_builtin_table() -> dict[int, Any] | None:
@@ -2643,14 +2456,9 @@ def get_jit_builtin_table() -> dict[int, Any] | None:
         TorchScript builtin table, or ``None`` when unavailable.
     """
 
-    builtin_table = _import_module_attr_or_none("torch.jit._builtins", "_builtin_table")
-    if builtin_table is None:
-        mark_torch_capability_missing(
-            "HAS_JIT_BUILTIN_TABLE",
-            "TorchScript wrapper registration is disabled",
-        )
-        return None
-    return builtin_table
+    return _resolve_or_mark_missing(
+        "HAS_JIT_BUILTIN_TABLE", "TorchScript wrapper registration is disabled"
+    )
 
 
 def get_jit_boolean_dispatch_table() -> Any | None:
@@ -2669,14 +2477,10 @@ def get_jit_boolean_dispatch_table() -> Any | None:
         unavailable.
     """
 
-    table = _import_module_attr_or_none("torch._jit_internal", "boolean_dispatched")
-    if table is None:
-        mark_torch_capability_missing(
-            "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
-            "TorchScript boolean-dispatch wrapper registration is disabled",
-        )
-        return None
-    return table
+    return _resolve_or_mark_missing(
+        "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
+        "TorchScript boolean-dispatch wrapper registration is disabled",
+    )
 
 
 def get_jit_overload_resolver_module() -> Any | None:
@@ -2695,14 +2499,11 @@ def get_jit_overload_resolver_module() -> Any | None:
         unavailable.
     """
 
-    resolver = _import_module_attr_or_none("torch.jit._script", "_get_overloads")
-    if resolver is None:
-        mark_torch_capability_missing(
-            "HAS_JIT_OVERLOAD_RESOLVER",
-            "TorchScript overload normalization for wrapped functionals is disabled",
-        )
-        return None
-    return sys.modules.get("torch.jit._script")
+    resolver = _resolve_or_mark_missing(
+        "HAS_JIT_OVERLOAD_RESOLVER",
+        "TorchScript overload normalization for wrapped functionals is disabled",
+    )
+    return None if resolver is None else sys.modules.get("torch.jit._script")
 
 
 def get_device_context_type() -> type[Any] | None:
@@ -2714,14 +2515,9 @@ def get_device_context_type() -> type[Any] | None:
         ``torch.utils._device.DeviceContext`` or ``None`` when unavailable.
     """
 
-    device_context = _import_module_attr_or_none("torch.utils._device", "DeviceContext")
-    if device_context is None:
-        mark_torch_capability_missing(
-            "HAS_DEVICE_CONTEXT_DISPATCH",
-            "torch.device context kwarg injection is disabled",
-        )
-        return None
-    return device_context
+    return _resolve_or_mark_missing(
+        "HAS_DEVICE_CONTEXT_DISPATCH", "torch.device context kwarg injection is disabled"
+    )
 
 
 def get_current_function_mode_stack() -> Iterable[Any] | None:
@@ -3441,14 +3237,9 @@ def get_device_constructors() -> Any | None:
         ``torch.utils._device._device_constructors`` or ``None`` when absent.
     """
 
-    device_constructors = _import_module_attr_or_none("torch.utils._device", "_device_constructors")
-    if device_constructors is None:
-        mark_torch_capability_missing(
-            "HAS_DEVICE_CONSTRUCTORS",
-            "factory-function device injection inventory is disabled",
-        )
-        return None
-    return device_constructors
+    return _resolve_or_mark_missing(
+        "HAS_DEVICE_CONSTRUCTORS", "factory-function device injection inventory is disabled"
+    )
 
 
 def get_fx_graph_module_type() -> type[Any] | None:
@@ -3460,13 +3251,9 @@ def get_fx_graph_module_type() -> type[Any] | None:
         FX GraphModule type, or ``None`` when unavailable.
     """
 
-    graph_module_type = _nested_getattr_or_none(torch, ("fx", "GraphModule"))
-    if graph_module_type is None:
-        mark_torch_capability_missing(
-            "HAS_FX_GRAPH_MODULE",
-            "FX GraphModule compatibility detection is disabled",
-        )
-        return None
+    graph_module_type: type[Any] | None = _resolve_or_mark_missing(
+        "HAS_FX_GRAPH_MODULE", "FX GraphModule compatibility detection is disabled"
+    )
     return graph_module_type
 
 
