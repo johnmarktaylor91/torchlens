@@ -17,9 +17,7 @@ from typing import Any
 import torch
 
 from . import _state
-from ._transport import digest_byte_view
-from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
-from .runnable import (
+from ._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     ControlWitnessKind,
@@ -32,6 +30,8 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from ._transport import digest_byte_view
+from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
 from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from .utils._torch_symbols import torch_attr
 from .utils.lazy_state import raise_if_pending_state_slots

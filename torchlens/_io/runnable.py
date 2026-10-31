@@ -17,22 +17,7 @@ import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
-from .._runnable_state import runnable_tensor_byte_digest
-from ..backends.registry import BackendRegistryError, get_backend_spec
-from ..data_classes._state_adapter import state_items
-from ..errors import RunnablePreflightError
-from ..errors.runnable import SparseCorePayloadError
-from ..intervention.types import (
-    CapturedArgTemplate,
-    FunctionRegistryKey,
-    LiteralTensor,
-    LiteralValue,
-    ParentRef,
-    Unsupported,
-)
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
-from ..ir.container_registry import ModelSite, Role
-from ..runnable import (
+from .._runnable import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
@@ -92,6 +77,21 @@ from ..runnable import (
     derived_witness_completeness,
     encode_input_site_position,
 )
+from .._runnable_state import runnable_tensor_byte_digest
+from ..backends.registry import BackendRegistryError, get_backend_spec
+from ..data_classes._state_adapter import state_items
+from ..errors import RunnablePreflightError
+from ..errors.runnable import SparseCorePayloadError
+from ..intervention.types import (
+    CapturedArgTemplate,
+    FunctionRegistryKey,
+    LiteralTensor,
+    LiteralValue,
+    ParentRef,
+    Unsupported,
+)
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from ..ir.container_registry import ModelSite, Role
 from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from . import TorchLensIOError
 
@@ -342,7 +342,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
         )
 
-    from ..runnable import collective_boundaries_of
+    from .._runnable import collective_boundaries_of
 
     collective_boundaries = collective_boundaries_of(trace)
     if collective_boundaries:

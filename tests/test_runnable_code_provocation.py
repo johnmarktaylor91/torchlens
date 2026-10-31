@@ -27,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
@@ -35,7 +36,6 @@ from torchlens.errors import (
     RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 
 def _capture_options() -> CaptureOptions:

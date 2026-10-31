@@ -44,6 +44,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    WitnessCompleteness,
+)
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     PathDivergenceError,
@@ -52,11 +57,6 @@ from torchlens.errors import (
     RunnableTLSPECError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    NumericAttestationStatus,
-    PathFaithfulness,
-    WitnessCompleteness,
-)
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -897,7 +897,7 @@ class TestCorr27CloneGradFidelity:
 _CPU_ONLY_READINESS = """
 import sys, torch, torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import ReadinessStatus
+from torchlens._runnable import ReadinessStatus
 
 assert not torch.cuda.is_available()
 loaded = tl.load(sys.argv[1])
@@ -1422,7 +1422,7 @@ class TestContractLockstep:
     def test_contract_error_table_matches_enum_exactly(self) -> None:
         import re
 
-        from torchlens.runnable import RunnableErrorCode
+        from torchlens._runnable import RunnableErrorCode
 
         doc = (
             Path(__file__).resolve().parents[1]

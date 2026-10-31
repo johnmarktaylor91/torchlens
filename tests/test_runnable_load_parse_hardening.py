@@ -15,8 +15,8 @@ from torchlens._io.runnable_load import (
     _parse_rng_profile,
     _validated_dtype_literal,
 )
+from torchlens._runnable import ReadinessStatus
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ReadinessStatus
 
 
 class TinyModel(nn.Module):

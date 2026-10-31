@@ -222,7 +222,7 @@ def compare_rows(
         returns it directly.
     """
 
-    from torchlens.runnable import refuse_poisoned_trace
+    from torchlens._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")

@@ -33,9 +33,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import _runnable_state as runnable_state
-from torchlens._runnable_state import _preflight_random_init_allocation
-from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import (
+from torchlens._runnable import (
     AutocastDeviceContext,
     CallExecutionContext,
     ControlWitness,
@@ -51,6 +49,8 @@ from torchlens.runnable import (
     TensorSlotRole,
     TensorUseSite,
 )
+from torchlens._runnable_state import _preflight_random_init_allocation
+from torchlens.errors import RunCapabilityUnavailableError
 
 
 class _Tiny(nn.Module):

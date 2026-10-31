@@ -27,10 +27,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._runnable import StateSource
 from torchlens.capture._episode_ledger import derive_episode_status
 from torchlens.errors import EpisodeDeclarationError
 from torchlens.options import EpisodeSpec
-from torchlens.runnable import StateSource
 
 # ---------------------------------------------------------------------------
 # Axes (S2 sec 5 + amendment B.5). ``mixed_exact_ledger`` is the wildcard

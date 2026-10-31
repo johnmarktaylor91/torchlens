@@ -18,14 +18,14 @@ from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
 )
-from torchlens._runnable_state import runnable_tensor_byte_digest
-from torchlens.errors import StateBindingError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens._runnable_state import runnable_tensor_byte_digest
+from torchlens.errors import StateBindingError
+from torchlens.options import CaptureOptions
 
 
 def _fresh_warning() -> bool:
@@ -444,8 +444,8 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     """
     import copy
 
+    from torchlens._runnable import DivergencePolicy
     from torchlens.errors import PoisonedRunError
-    from torchlens.runnable import DivergencePolicy
 
     class _M(nn.Module):
         def __init__(self) -> None:

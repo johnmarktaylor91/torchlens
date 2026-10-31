@@ -15,8 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, StateSource
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, StateSource
 
 
 def _capture(model: nn.Module, args: Any) -> Any:
@@ -151,13 +151,13 @@ def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
 def test_r35_empty_slot_initializes_without_rng(shape: tuple[int, ...]) -> None:
     """Every legal empty shape allocates with PROVABLY zero RNG consumption."""
 
-    from torchlens._runnable_state import _initialize_slot
-    from torchlens.runnable import (
+    from torchlens._runnable import (
         StateSlotBinding,
         StateSlotRole,
         TensorSlotDescriptor,
         TensorSlotRole,
     )
+    from torchlens._runnable_state import _initialize_slot
 
     slot = TensorSlotDescriptor(
         slot_id="slot:weight_test",

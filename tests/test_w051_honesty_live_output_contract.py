@@ -21,10 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import DivergencePolicy, PathFaithfulness, RunnableErrorCode
 from torchlens.errors import PathDivergenceError
 from torchlens.ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, declared_leaf_slots
 from torchlens.options import CaptureOptions
-from torchlens.runnable import DivergencePolicy, PathFaithfulness, RunnableErrorCode
 
 
 class _TupleOut(nn.Module):

@@ -17,12 +17,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import RunCapabilityUnavailableError, RunPreconditionError
-from torchlens.runnable import (
+from torchlens._runnable import (
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ReadinessStatus,
     RunnableErrorCode,
 )
+from torchlens.errors import RunCapabilityUnavailableError, RunPreconditionError
 
 
 class _TinyModel(nn.Module):

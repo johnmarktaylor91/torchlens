@@ -8,14 +8,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from . import _state
-from ._runnable_state import (
-    RunResourceCeiling,
-    _guarded_defensive_materialize,
-)
-from .errors import (
-    PathDivergenceError,
-)
-from .runnable import (
+from ._runnable import (
     ContractCheck,
     PathFaithfulness,
     RunnableDiagnostic,
@@ -23,6 +16,13 @@ from .runnable import (
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
+)
+from ._runnable_state import (
+    RunResourceCeiling,
+    _guarded_defensive_materialize,
+)
+from .errors import (
+    PathDivergenceError,
 )
 from .utils._torch_compat import tensor_has_named_dims
 from .utils.alias_footprint import touched_bytes_relation

@@ -22,8 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_honesty import capture_honesty_facts, honesty_banner_lines
+from torchlens._runnable import PathFaithfulness
 from torchlens.data_classes._nonfinite import _has_nonfinite
-from torchlens.runnable import PathFaithfulness
 
 ESC = "\x1b"
 

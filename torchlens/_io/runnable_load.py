@@ -21,12 +21,7 @@ import torch
 from .. import _state
 from .._errors import _ActionableErrorMixin
 from .._input_walk import INPUT_CONTAINER_KINDS
-from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
-from ..backends import TORCH_BACKEND_NAME
-from ..constants import get_orig_torch_funcs
-from ..errors._base import TorchLensError
-from ..intervention.types import FunctionRegistryKey
-from ..runnable import (
+from .._runnable import (
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
@@ -94,6 +89,11 @@ from ..runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
+from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
+from ..backends import TORCH_BACKEND_NAME
+from ..constants import get_orig_torch_funcs
+from ..errors._base import TorchLensError
+from ..intervention.types import FunctionRegistryKey
 from ..utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
@@ -549,7 +549,7 @@ def _validate_required_witness_inventory(
     """
 
     from .._runnable_execution import _decode_literal
-    from .runnable import (
+    from ._runnable import (
         EMPTY_CONTAINER_PATH_MARKER,
         required_witness_family_members,
         witness_family_of,
@@ -1463,7 +1463,7 @@ def required_witness_family_members_shared(
 ) -> dict[str, list[str]]:
     """Resolve the shared witness->present-member derivation (single source)."""
 
-    from .runnable import required_witness_family_members
+    from ._runnable import required_witness_family_members
 
     return required_witness_family_members(witnesses)
 
@@ -2042,7 +2042,7 @@ def attach_sparse_run_readiness(
         # REHYDRATED trace's own container records imply (the replay consumes those
         # records for input binding and output reconstruction), so a lockstep
         # witness+member strip fails closed here, analysis-only.
-        from .runnable import _container_structure_witnesses
+        from ._runnable import _container_structure_witnesses
 
         container_members = tuple(
             witness.site_label for witness in _container_structure_witnesses(trace, start_order=0)

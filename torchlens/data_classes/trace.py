@@ -50,12 +50,12 @@ from torch import nn
 
 if TYPE_CHECKING:
     from .._io.streaming import BundleStreamWriter
-    from ..debug._audit import TraceAudit
-    from ..runnable import (
+    from .._runnable import (
         ArchivedActivation,
         ReadinessReport,
         SparseRunDescriptor,
     )
+    from ..debug._audit import TraceAudit
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 

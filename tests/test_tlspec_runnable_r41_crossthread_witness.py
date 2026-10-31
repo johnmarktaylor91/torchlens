@@ -53,6 +53,11 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.utils.rng as rng_mod
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    ReadinessStatus,
+)
 from torchlens.backends.torch.completeness_witness import (
     HOST_VALUE_ESCAPE_METHODS,
     HOST_VALUE_ESCAPE_MODULE_FUNCS,
@@ -71,11 +76,6 @@ from torchlens.errors.runnable import (
     RunCapabilityUnavailableError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    NumericAttestationStatus,
-    PathFaithfulness,
-    ReadinessStatus,
-)
 from torchlens.utils.rng import (
     HOST_NONDETERMINISM_REGISTRY,
     TORCH_RNG_SURFACE,

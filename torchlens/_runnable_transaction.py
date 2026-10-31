@@ -10,18 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from . import _state
-from ._runnable_state import (
-    PreparedRunnableState,
-    RunResourceCeiling,
-    runnable_tensor_byte_digest,
-)
-from .errors import (
-    PathDivergenceError,
-    RunCapabilityUnavailableError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
-from .runnable import (
+from ._runnable import (
     ActivationPayloadLayerDescriptor,
     ContractCheck,
     DivergencePolicy,
@@ -39,6 +28,17 @@ from .runnable import (
     TensorSlotRole,
     _RunUntilPlan,
 )
+from ._runnable_state import (
+    PreparedRunnableState,
+    RunResourceCeiling,
+    runnable_tensor_byte_digest,
+)
+from .errors import (
+    PathDivergenceError,
+    RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
+)
+from .intervention.replay import _CallConeNode, _walk_call_cone
 from .utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
@@ -729,7 +729,7 @@ def _run_truncation_record(plan: _RunUntilPlan, regime: str, cause: str | None =
 
     from hashlib import sha256
 
-    from .runnable import RunTruncation
+    from ._runnable import RunTruncation
 
     digest = sha256("\n".join(plan.skipped_raw_labels).encode("utf-8")).hexdigest()[:16]
     return RunTruncation(
@@ -1206,9 +1206,9 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     alias groups restored before the failure, and chains the restore exception.
     """
 
+    from ._runnable import mark_trace_path_status
     from ._runnable_state_live import LiveStateRestoreFailure, restore_live_declared_state
     from .errors import StateBindingError
-    from .runnable import mark_trace_path_status
 
     try:
         restore_live_declared_state(snapshot, trace=fork)

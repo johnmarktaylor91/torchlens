@@ -635,7 +635,7 @@ def _buffer_sinks(log):
 def _assert_buffer_sink_refusal(exc_info):
     """Assert one refusal is the typed D18 arm with the pinned term and code."""
 
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     assert "computational graph changed" in str(exc_info.value)
     assert exc_info.value.fields["code"] == RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE.value
@@ -677,7 +677,7 @@ def test_eval_mode_batchnorm_refresh_allowed_default_path():
 def test_eval_mode_batchnorm_run_default_path_verified():
     """D18 end-to-end: run() on an eval-BN model settles VERIFIED by default."""
 
-    from torchlens.runnable import PathFaithfulness
+    from torchlens._runnable import PathFaithfulness
 
     model = _BatchNormModel()
     model.eval()

@@ -13,8 +13,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _MUTATING: dict[str, tuple[Callable[[torch.Tensor], torch.Tensor], str]] = {
     "leaky_relu": (lambda h: F.leaky_relu(h, 0.1, inplace=True), "leaky_relu"),

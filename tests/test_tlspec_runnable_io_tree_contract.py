@@ -34,13 +34,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 def _save_runnable(

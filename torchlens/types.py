@@ -10,6 +10,7 @@ __tl_role__ = "FACADE"
 
 import torch
 
+from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from .data_classes.aten_op import AtenOp, OpRef
 from .data_classes.attribute_write import AttributeWrite
@@ -49,10 +50,14 @@ __all__ = [
     "Module",
     "ModuleCall",
     "ModuleInputSnapshot",
+    "NumericAttestationStatus",
     "OpRef",
     "Param",
+    "PathFaithfulness",
     "PreHookEffect",
     "Quantity",
+    "ReadinessStatus",
+    "RunProvider",
     "SaveLevel",
     "SiteTable",
     "SpecCompat",

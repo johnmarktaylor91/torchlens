@@ -67,7 +67,7 @@ scheduler never consumes them. Original-input, capture-equivalent real-state run
 physical), random-state, and nondeterministic-capture-context runs report `not_applicable`, and
 `attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
-`NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens.runnable` and are
+`NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens._runnable` and are
 documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 additions:
 `state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary

@@ -20,11 +20,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
+from torchlens._runnable import PathFaithfulness
 from torchlens.data_classes.trace import Conditional, ConditionalAccessor, ConditionalArm
 from torchlens.errors import PathDivergenceError
 from torchlens.errors.runnable import SparseCorePayloadError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 class ParamConditionalModel(nn.Module):

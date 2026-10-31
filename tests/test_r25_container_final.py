@@ -35,6 +35,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.ir.container import (
     ContainerSpec,
@@ -46,7 +47,6 @@ from torchlens.ir.container import (
     reconstruction_is_lossy_by_type,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAP = CaptureOptions(
     intervention_ready=True,

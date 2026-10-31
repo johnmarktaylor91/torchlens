@@ -5,7 +5,7 @@ explicit, versioned contract amendment superseding the frozen `sparse_recorded_t
 text; v1 artifacts remain covered by the legacy posture in section 1a).
 
 This is the single implementation contract for the complete sparse runnable `.tlspec` surface. The
-definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagreement between this
+definitions in `torchlens._runnable` are its behavior-free typed mirror. A disagreement between this
 document and those types is a release-blocking schema defect. Neither may change without an explicit,
 versioned contract amendment.
 

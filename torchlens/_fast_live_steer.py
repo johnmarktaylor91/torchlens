@@ -34,9 +34,9 @@ from torch import nn
 
 from . import _runnable_execution as _execution
 from ._errors import TorchLensWarning
+from ._runnable import ContractCheck, RunnableDiagnostic, RunnableErrorCode
 from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
 from .errors import RunCapabilityUnavailableError
-from .runnable import ContractCheck, RunnableDiagnostic, RunnableErrorCode
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a
 #: shape-varied run they read ``None`` instead of the capture-time numbers.

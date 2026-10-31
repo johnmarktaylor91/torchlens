@@ -260,8 +260,8 @@ def test_halted_trace_runnable_save_refuses_typed() -> None:
     conversion, surfacing through the runnable error vocabulary.
     """
 
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.errors import RunnablePreflightError
-    from torchlens.runnable import RunnableErrorCode
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)

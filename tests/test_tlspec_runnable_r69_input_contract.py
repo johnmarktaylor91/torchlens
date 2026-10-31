@@ -49,17 +49,17 @@ from torchlens._input_walk import (
     encode_mapping_key,
     snapshot_input_boundary,
 )
+from torchlens._runnable import (
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+)
 from torchlens.errors import (
     PathDivergenceError,
     RunnablePreflightError,
     RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-)
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -713,7 +713,7 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     twin["order"] = 9999
     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
     _json.dump(manifest, open(manifest_path, "w"))
-    from torchlens.runnable import ReadinessStatus
+    from torchlens._runnable import ReadinessStatus
 
     reloaded = tl.load(path)
     readiness = reloaded._runnable.readiness

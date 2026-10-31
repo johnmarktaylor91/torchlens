@@ -18,9 +18,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import StateSource
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
-from torchlens.runnable import StateSource
 
 
 @pytest.fixture()

@@ -33,9 +33,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._io.runnable_load import _validate_literal_atom_value
-from torchlens._runnable_state import _preflight_run_allocation, _recorded_output_slots
-from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import (
+from torchlens._runnable import (
     LiteralAtomKind,
     RunnableErrorCode,
     StateSlotBinding,
@@ -43,6 +41,8 @@ from torchlens.runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from torchlens._runnable_state import _preflight_run_allocation, _recorded_output_slots
+from torchlens.errors import RunCapabilityUnavailableError
 
 
 class _Tiny(nn.Module):
@@ -199,7 +199,7 @@ def test_literal_magnitude_bomb_degrades_to_analysis_only(tmp_path: Path) -> Non
     _tamper(bundle, _bomb)
     loaded = tl.load(str(bundle))
     readiness = loaded._runnable.readiness
-    from torchlens.runnable import ReadinessStatus
+    from torchlens._runnable import ReadinessStatus
 
     assert readiness.status is ReadinessStatus.UNAVAILABLE
     assert RunnableErrorCode.STATE_SHAPE_MISMATCH in {d.code for d in readiness.diagnostics}

@@ -13,9 +13,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.capture._episode_ledger import episode_ledger_for
 from torchlens.options import EpisodeSpec
-from torchlens.runnable import PathFaithfulness
 
 pytest.importorskip("transformers")
 

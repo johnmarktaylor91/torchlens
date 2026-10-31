@@ -11,14 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ._io._torch_symbols import torch_attr
-from ._runnable_state import (
-    _OUTPUT_COUNT_FLOOR,
-    state_metadata_full_violations,
-)
-from .errors import (
-    RunPreconditionError,
-)
-from .runnable import (
+from ._runnable import (
     ContractCheck,
     RunnableCallDescriptor,
     RunnableErrorCode,
@@ -26,6 +19,13 @@ from .runnable import (
     StateSlotRole,
     TensorSlotDescriptor,
     TensorSlotRole,
+)
+from ._runnable_state import (
+    _OUTPUT_COUNT_FLOOR,
+    state_metadata_full_violations,
+)
+from .errors import (
+    RunPreconditionError,
 )
 from .utils._torch_compat import tensor_version_or_none
 

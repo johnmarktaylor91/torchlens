@@ -14,14 +14,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
-from torchlens.errors import NumericAttestationError
-from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens.errors import NumericAttestationError
+from torchlens.options import CaptureOptions, SaveOptions
 
 
 class ActivationPayloadModel(nn.Module):

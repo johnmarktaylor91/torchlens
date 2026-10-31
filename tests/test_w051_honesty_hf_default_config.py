@@ -21,8 +21,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 pytest.importorskip("transformers")
 

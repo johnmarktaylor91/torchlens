@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 class HostScalarEscapeModel(nn.Module):
@@ -583,7 +583,7 @@ def test_every_witness_family_consumer_reachable_from_fast_provider() -> None:
     import inspect
 
     import torchlens._fast_run as fast_run_module
-    from torchlens.runnable import WITNESS_FAMILY_REGISTRY
+    from torchlens._runnable import WITNESS_FAMILY_REGISTRY
 
     # Scoped scan: the sparse session class body plus its constructor path
     # (build/prepare seams live at module level but are called from build()).
@@ -661,7 +661,7 @@ def test_fast_bind_outputs_refuses_op_label_slot_arity_mismatch() -> None:
     from types import SimpleNamespace
 
     from torchlens._fast_run import _FastSparseSession
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     slots_by_id = {
         "s1": SimpleNamespace(

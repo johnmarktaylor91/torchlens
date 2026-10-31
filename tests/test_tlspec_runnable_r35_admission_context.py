@@ -13,13 +13,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError, RunPreconditionError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError, RunPreconditionError
+from torchlens.options import CaptureOptions
 from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 

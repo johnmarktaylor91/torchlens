@@ -918,7 +918,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
         DescriptorStructuralBoundError,
     )
     from torchlens._io.state_keys import PortableStateKeyError
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.validation.invariants import MetadataInvariantError
 
     return (

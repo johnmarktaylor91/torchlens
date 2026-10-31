@@ -38,8 +38,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -188,7 +188,7 @@ def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
     detected at the resolver's registry-coherence stage.
     """
 
-    from torchlens.runnable import ReadinessStatus, RunnableErrorCode
+    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
 
     clean = _save(tmp_path / "clean.tlspec")
     tampered = _retarget_registry(clean, tmp_path / "tampered.tlspec", "__add__", "__sub__")
@@ -214,8 +214,8 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     the distinction the r83 S3 relocation exists to preserve (r83 regression 2).
     """
 
+    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
     from torchlens.errors import ReattachError
-    from torchlens.runnable import ReadinessStatus, RunnableErrorCode
 
     clean = _save(tmp_path / "clean.tlspec")
     tampered = _retarget_registry(

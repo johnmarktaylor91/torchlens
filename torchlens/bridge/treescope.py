@@ -88,7 +88,7 @@ BRIDGE_LEDGER: dict[str, str] = {
     "torchlens.data_classes.module.Module": "one_line",
     "torchlens.data_classes.module.ModuleCall": "one_line",
     "torchlens.fastlog.types.Recording": "one_line",
-    "torchlens.runnable.RunResult": "one_line",
+    "torchlens._runnable.RunResult": "one_line",
     "torchlens.data_classes.grad_fn.GradFn": "one_line",
     "torchlens.data_classes.grad_fn.GradFnCall": "one_line",
 }

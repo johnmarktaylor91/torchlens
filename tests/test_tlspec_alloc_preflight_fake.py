@@ -39,6 +39,13 @@ import torch.nn.functional as F
 import torchlens as tl
 import torchlens._runnable_execution as rex
 from tests.test_tlspec_runnable_alloc_bomb import _tamper
+from torchlens._runnable import (
+    LiteralAtom,
+    LiteralAtomKind,
+    LiteralSequence,
+    LiteralSequenceKind,
+    LiteralTorchSymbol,
+)
 from torchlens._runnable_execution import (
     _MAX_DECODE_NESTING_DEPTH,
     _decode_literal,
@@ -53,13 +60,6 @@ from torchlens.errors import (
     RunCapabilityUnavailableError,
     RunnableTLSPECError,
     RuntimeSignatureDriftError,
-)
-from torchlens.runnable import (
-    LiteralAtom,
-    LiteralAtomKind,
-    LiteralSequence,
-    LiteralSequenceKind,
-    LiteralTorchSymbol,
 )
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}

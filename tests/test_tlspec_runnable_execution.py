@@ -14,6 +14,15 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._runnable import (
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    RunProvider,
+    RunResult,
+    StateSource,
+    WitnessCompleteness,
+)
 from torchlens._runnable_execution import _fresh_bare_tensor_root
 from torchlens._runnable_state import prepare_runnable_state
 from torchlens.errors import (
@@ -23,15 +32,6 @@ from torchlens.errors import (
     RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-    RunProvider,
-    RunResult,
-    StateSource,
-    WitnessCompleteness,
-)
 
 
 def test_fresh_bare_tensor_root_fails_closed_for_duck_trace() -> None:
@@ -1240,7 +1240,7 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     and refuses typed at run preparation (the floor re-assert belt).
     """
 
-    from torchlens.runnable import (
+    from torchlens._runnable import (
         WITNESS_GAP_REGISTRY,
         WitnessCoverageGap,
         WitnessGapKind,

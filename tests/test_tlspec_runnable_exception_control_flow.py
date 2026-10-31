@@ -18,15 +18,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
-from torchlens.errors import RuntimeSignatureDriftError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
     WitnessCompleteness,
 )
+from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+from torchlens.errors import RuntimeSignatureDriftError
+from torchlens.options import CaptureOptions
 
 
 def _capture(model: nn.Module, x: Any) -> Any:

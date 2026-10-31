@@ -9,15 +9,7 @@ import numpy as np
 import torch
 
 from . import _state
-from ._runnable_state import (
-    RunResourceCeiling,
-    prepare_runnable_state,
-    validate_run_seed,
-)
-from .errors import (
-    RunPreconditionError,
-)
-from .runnable import (
+from ._runnable import (
     ActivationPayloadLayerDescriptor,
     ContractCheck,
     DivergencePolicy,
@@ -31,6 +23,14 @@ from .runnable import (
     StateSource,
     derived_witness_completeness,
     mark_trace_path_status,
+)
+from ._runnable_state import (
+    RunResourceCeiling,
+    prepare_runnable_state,
+    validate_run_seed,
+)
+from .errors import (
+    RunPreconditionError,
 )
 
 if TYPE_CHECKING:

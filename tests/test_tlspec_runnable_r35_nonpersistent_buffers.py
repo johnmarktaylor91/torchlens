@@ -18,12 +18,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens.options import CaptureOptions
 
 
 class _MixedBufferModel(nn.Module):

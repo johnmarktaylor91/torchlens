@@ -26,9 +26,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import DivergencePolicy, NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import DivergencePolicy, NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:

@@ -468,9 +468,9 @@ class RefreshProjector:
         "computational graph changed" term, so historical callers survive.
         """
 
+        from .._runnable import RunnableErrorCode
         from ..errors.runnable import BufferSinkRoutingError
         from ..partial import PartialTrace
-        from ..runnable import RunnableErrorCode
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "
@@ -519,7 +519,7 @@ class RefreshProjector:
         evidence key still governs).
         """
 
-        from ..runnable import is_mode_sensitive_qualname
+        from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
         qualname = getattr(sink_layer, "buffer_source_func_name", None)

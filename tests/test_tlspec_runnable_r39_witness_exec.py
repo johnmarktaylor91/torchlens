@@ -40,14 +40,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import RunnablePreflightError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     ReadinessStatus,
     RunnableErrorCode,
 )
+from torchlens.errors import RunnablePreflightError
+from torchlens.options import CaptureOptions
 from torchlens.utils import rng as rng_utils
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}

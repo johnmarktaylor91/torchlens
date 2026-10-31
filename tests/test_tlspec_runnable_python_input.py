@@ -17,13 +17,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 class BoolBranch(nn.Module):
@@ -293,7 +293,7 @@ def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
 
 import dataclasses  # noqa: E402
 
-from torchlens.runnable import RunnableErrorCode  # noqa: E402
+from torchlens._runnable import RunnableErrorCode  # noqa: E402
 
 
 class _TwoArgModel(nn.Module):

@@ -5,7 +5,7 @@ artifacts. It explains the ownership boundary and the invariants a maintainer ne
 order to change the subsystem safely. The exhaustive, frozen contract remains
 [`runnable_tlspec_contract.md`](runnable_tlspec_contract.md). If this model and the
 exhaustive contract disagree, the exhaustive contract and the behavior-free types in
-`torchlens.runnable` are authoritative; the disagreement is a release-blocking defect.
+`torchlens._runnable` are authoritative; the disagreement is a release-blocking defect.
 
 ## Scope
 
@@ -24,7 +24,7 @@ The subsystem has four ownership regions:
 
 | Owner | Responsibility |
 |---|---|
-| `torchlens.runnable` | Frozen public schemas, enums, reports, and error vocabulary |
+| `torchlens._runnable` | Frozen schemas, enums, reports, and error vocabulary (private; the `.tlspec` format is the contract) |
 | Runnable internals | Descriptor semantics, validation, resolution, state preparation, execution, and attestation |
 | `torchlens._io` | Manifest and blob transport, syntax-level encoding/decoding, integrity, and filesystem transactions |
 | `Trace` | User-facing properties and provider selection through one private runnable-state seam |
@@ -40,7 +40,7 @@ The narrow coordinator vocabulary is:
 - `execute`: run the selected provider transactionally and settle one result.
 
 `bundle.py` orchestrates transport through this boundary. It must not import or invoke private
-witness-builder helpers directly. `torchlens.runnable` remains behavior-free and must not import
+witness-builder helpers directly. `torchlens._runnable` remains behavior-free and must not import
 I/O, capture, state preparation, or execution modules.
 
 No optional package extra is warranted. Sparse runnable execution requires no dependency beyond
@@ -192,7 +192,7 @@ never import a slice module directly; moving a name off its contract module is a
 change.
 
 **E1 -- Descriptor.** `SparseRunDescriptor` plus the closed enums and dataclasses in
-`torchlens.runnable`, mirrored 1:1 by the exhaustive contract document. The registries a
+`torchlens._runnable`, mirrored 1:1 by the exhaustive contract document. The registries a
 consumer extends by adding a row are `WITNESS_FAMILY_REGISTRY` (the only dispatch
 authority for witness producer/parser/mutation handling), `WITNESS_GAP_REGISTRY`, and
 `CANONICAL_INITIALIZER_BY_ROLE`. New descriptor content is a versioned contract amendment
@@ -262,4 +262,4 @@ keyword-only-with-default revision in the same change as its documentation.
    `_finalize_provider_run`; no verdict derivation from the persisted completeness
    summary; no local alias-engine reimplementation; no bare state-path clones outside
    the byte-guard core; no direct legacy runnable Trace-attribute readers;
-   `torchlens.runnable` import purity.
+   `torchlens._runnable` import purity.

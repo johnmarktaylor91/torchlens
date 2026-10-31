@@ -495,7 +495,7 @@ def test_loaded_sparse_control_run_is_verified_and_attested(tmp_path) -> None:
     """Positive control for the two wrapper-defect plants below."""
 
     import torchlens as tl
-    from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
+    from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 
     path, x = _save_runnable_tanh(tmp_path)
     result = tl.load(path).run(inputs=x)

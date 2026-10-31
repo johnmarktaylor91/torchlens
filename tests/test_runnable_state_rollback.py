@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from torchlens import _runnable_state
+from torchlens._runnable import StateSource
 from torchlens._runnable_state import PreparedRunnableState, _apply_state_metadata_facts
 from torchlens.errors import StateBindingError
-from torchlens.runnable import StateSource
 
 
 class _Binding:

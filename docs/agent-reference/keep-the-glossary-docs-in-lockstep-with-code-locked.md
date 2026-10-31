@@ -153,7 +153,7 @@ whole-storage byte comparison + per-consumption sampling, with the raw `data_ptr
 to `unverifiable`, and a read-only exposure staying `verified`. Full boundary in
 `docs/reference/runnable_tlspec_contract.md` section 11.
 
-The frozen runnable enums live in `torchlens.runnable`: `ReadinessStatus`, `RunProvider`,
+The frozen runnable enums live in `torchlens._runnable`: `ReadinessStatus`, `RunProvider`,
 `StateSource`, `PathFaithfulness`, `DivergencePolicy`, `NumericAttestationStatus`, and
 `RunnableErrorCode`. Public code branches on these values or the structured report, not exception
 text. The exhaustive error vocabulary and release threshold are maintained in

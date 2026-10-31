@@ -218,7 +218,7 @@ def save_intervention(
     from ..capture.outcome import require_capture_capability
 
     require_capture_capability(log, "save_analysis")
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "intervention export")
     save_level = _coerce_save_level(level)

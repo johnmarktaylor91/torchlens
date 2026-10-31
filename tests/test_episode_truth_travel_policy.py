@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.capture._annotations_travel import (
     TRAVEL_CAPTURE_EVIDENCE,
     register_travel_policy,
@@ -35,7 +36,6 @@ from torchlens.capture._episode_ledger import (
     validate_loaded_episode_annotations,
 )
 from torchlens.options import EpisodeSpec
-from torchlens.runnable import PathFaithfulness
 
 V = 16
 N_STEPS = 3

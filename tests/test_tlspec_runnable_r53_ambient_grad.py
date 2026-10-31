@@ -24,9 +24,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import AmbientExecutionContext, PathFaithfulness
 from torchlens.errors import RunnableTLSPECError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import AmbientExecutionContext, PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -208,7 +208,7 @@ def test_live_grad_read_never_ceilings_or_degrades(tmp_path: Path) -> None:
     """No-over-trigger pin: a model that merely READS ``torch.is_grad_enabled()``
     stays VERIFIED (+ATTESTED with archive) -- reads are never witnessed."""
 
-    from torchlens.runnable import NumericAttestationStatus
+    from torchlens._runnable import NumericAttestationStatus
 
     torch.manual_seed(0)
     model = GradBranchModel().eval()

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import torch
 
 if TYPE_CHECKING:
-    from .runnable import (
+    from ._runnable import (
         ArchivedActivation,
         DivergencePolicy,
         PathFaithfulness,

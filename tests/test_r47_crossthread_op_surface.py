@@ -41,6 +41,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch import completeness_witness as cw
 from torchlens.backends.torch.completeness_witness import (
     _torch_ops_call_classes,
@@ -48,7 +49,6 @@ from torchlens.backends.torch.completeness_witness import (
     host_escape_observer_install_failed,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 

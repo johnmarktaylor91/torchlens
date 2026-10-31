@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, ReadinessStatus
 from torchlens.constants import (
     BACKWARD_PASS_FIELD_ORDER,
     BUFFER_LOG_FIELD_ORDER,
@@ -39,7 +40,6 @@ from torchlens.data_classes.op import Op
 from torchlens.data_classes.param import Param
 from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
 
 @dataclass(frozen=True)

@@ -13,9 +13,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
+from torchlens._runnable import PathFaithfulness, ReadinessStatus, RunnableErrorCode
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, ReadinessStatus, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,

@@ -35,9 +35,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import RunnablePreflightError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
     WITNESS_GAP_REGISTRY,
@@ -48,6 +46,8 @@ from torchlens.runnable import (
     WitnessGapKind,
     derive_required_witness_members,
 )
+from torchlens.errors import RunnablePreflightError
+from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -73,7 +73,7 @@ def _mutate(path: Path, mutate: Callable[[dict], None]) -> None:
 def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
     """Load + run one artifact; classify the outcome without ever masking VERIFIED."""
 
-    from torchlens.runnable import DivergencePolicy
+    from torchlens._runnable import DivergencePolicy
 
     loaded = tl.load(path)
     readiness = loaded._runnable.readiness
@@ -339,7 +339,7 @@ def test_r71_registry_closure_meta() -> None:
 def test_r71_derivation_independence(tmp_path: Path) -> None:
     from dataclasses import fields, replace
 
-    from torchlens.runnable import RequiredWitnessInventory, WitnessCompleteness
+    from torchlens._runnable import RequiredWitnessInventory, WitnessCompleteness
 
     structure_fields = {field.name for field in fields(ReplayWitnessStructure)}
     assert structure_fields == {

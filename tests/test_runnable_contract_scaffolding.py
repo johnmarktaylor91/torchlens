@@ -7,8 +7,7 @@ from dataclasses import fields
 
 import pytest
 
-from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
-from torchlens.runnable import (
+from torchlens._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -29,6 +28,7 @@ from torchlens.runnable import (
     StateSlotRole,
     WitnessCompleteness,
 )
+from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
 
 
 @pytest.mark.smoke
@@ -197,7 +197,7 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
 # conflict matrix is bound by CODE LIST, never by count.
 
 _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
-    "torchlens.runnable": (
+    "torchlens._runnable": (
         "WITNESS_FAMILY_REGISTRY",
         "WITNESS_GAP_REGISTRY",
         "CANONICAL_INITIALIZER_BY_ROLE",

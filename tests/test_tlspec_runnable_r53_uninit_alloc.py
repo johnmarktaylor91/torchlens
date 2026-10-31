@@ -31,9 +31,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors.runnable import NumericAttestationError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -658,7 +658,7 @@ def test_nondeterministic_sources_field_vocabulary(tmp_path: Path) -> None:
     a seeded model declares ``seeded_rng``; the live provider declares
     nothing (it gathers no descriptor evidence)."""
 
-    from torchlens.runnable import NONDETERMINISTIC_SOURCE_VOCABULARY
+    from torchlens._runnable import NONDETERMINISTIC_SOURCE_VOCABULARY
 
     x = torch.randn(2, 4)
     report = _run_report(SeededRandModel(), x, tmp_path)

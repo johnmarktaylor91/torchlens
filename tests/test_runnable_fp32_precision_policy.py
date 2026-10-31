@@ -21,8 +21,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.utils import _torch_compat as tc
 
 pytestmark = pytest.mark.skipif(

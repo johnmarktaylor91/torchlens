@@ -13,10 +13,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import _encode_literal
+from torchlens._runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
 from torchlens._runnable_execution import _decode_literal
 from torchlens.errors.runnable import NumericAttestationError, RunPreconditionError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,

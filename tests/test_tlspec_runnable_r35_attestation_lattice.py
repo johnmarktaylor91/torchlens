@@ -16,12 +16,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.options import CaptureOptions
 
 
 class _AddOneModel(nn.Module):
@@ -88,14 +88,14 @@ def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
 def test_r35_report_constructor_rejects_attested_nonverified() -> None:
     """The prohibited ATTESTED + non-VERIFIED combination is unrepresentable."""
 
-    from torchlens._runnable_execution import _run_report
-    from torchlens.runnable import (
+    from torchlens._runnable import (
         ReadinessReport,
         ReadinessStatus,
         RunProvider,
         StateSource,
         WitnessCompleteness,
     )
+    from torchlens._runnable_execution import _run_report
 
     readiness = ReadinessReport(
         status=ReadinessStatus.READY,

@@ -18,14 +18,14 @@ from typing import Any, TypeAlias
 
 import torch
 
-from .errors import RunCapabilityUnavailableError
-from .runnable import (
+from ._runnable import (
     LiteralTorchSymbol,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from .errors import RunCapabilityUnavailableError
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent the admitted pure-view slots of one run may have, summed.

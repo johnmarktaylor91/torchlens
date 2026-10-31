@@ -17,14 +17,14 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
     TensorSlotRole,
 )
+from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.options import CaptureOptions
 
 
 class _Chain(nn.Module):
@@ -319,7 +319,7 @@ def test_truncated_result_refuses_all_saves(tmp_path):
 def test_truncated_result_refuses_rerun():
     """3.3.2: re-running a truncated result refuses typed at the run door."""
 
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     _model, _log, result = _live_until_relu()
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:

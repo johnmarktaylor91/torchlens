@@ -54,11 +54,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import (
     _ALLOWED_FORWARD_DUNDERS,
     _is_denied_forward_dunder_name,

@@ -1379,7 +1379,7 @@ def _preflight_log(log: Trace) -> None:
         Model log to validate.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     if not getattr(log, "_tracing_finished", False):

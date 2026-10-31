@@ -27,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens._runnable_state import (
     _state_metadata_signature,
     _state_placement_canonical,
@@ -42,7 +43,6 @@ from torchlens.backends.torch.completeness_witness import (
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 

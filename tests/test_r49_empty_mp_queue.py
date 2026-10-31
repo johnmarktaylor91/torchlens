@@ -28,8 +28,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 from torchlens.utils.rng import host_nondeterminism_monitor
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}

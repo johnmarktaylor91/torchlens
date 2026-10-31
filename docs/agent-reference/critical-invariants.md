@@ -178,7 +178,7 @@
     `Trace._fast_run_session` is a session-time `FieldPolicy.DROP` field (ordered under a private
     name, never persisted), ledgered in
     `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`.
-19. Runnable public vocabulary is frozen in `torchlens.runnable`: readiness is `ready|unavailable`,
+19. Runnable vocabulary is frozen in the private `torchlens._runnable` (a user reads the report enums as `tl.types.*`): readiness is `ready|unavailable`,
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
     and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never

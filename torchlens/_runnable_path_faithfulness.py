@@ -7,11 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._runnable_state import (
-    PreparedRunnableState,
-    runnable_tensor_byte_digest,
-)
-from .runnable import (
+from ._runnable import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
@@ -30,6 +26,10 @@ from .runnable import (
     StateSource,
     WitnessCompleteness,
     derived_witness_completeness,
+)
+from ._runnable_state import (
+    PreparedRunnableState,
+    runnable_tensor_byte_digest,
 )
 
 if TYPE_CHECKING:

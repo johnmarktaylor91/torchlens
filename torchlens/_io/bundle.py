@@ -80,14 +80,14 @@ from .tensor_policy import FailReason, Ok
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
-    from ..bundle import Bundle
-    from ..intervention.types import InterventionSpec
-    from ..runnable import (
+    from .._runnable import (
         ActivationPayloadMember,
         SlotByteDigest,
         SparseRunDescriptor,
         StateByteDigest,
     )
+    from ..bundle import Bundle
+    from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
@@ -541,7 +541,7 @@ def save(
             capability="save_analysis",
             status="unknown" if settled is None else settled.status.value,
         )
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     # The poison gate only applies to products that carry sparse-run state; a
     # PartialTrace / Recording has none, so there is nothing to refuse.
@@ -557,8 +557,8 @@ def save(
             require_capture_capability(trace, "save_runnable")
         except CaptureOutcomeError as outcome_exc:
             if outcome_exc.fields.get("code") == "N4":
+                from .._runnable import RunnableErrorCode
                 from ..errors import RunnablePreflightError
-                from ..runnable import RunnableErrorCode
 
                 raise RunnablePreflightError(
                     "Runnable save refuses a HALTED capture: the recorded graph "
@@ -603,7 +603,7 @@ def save(
             arguments=("include_activations", "level"),
         )
     if save_level == "runnable":
-        from .runnable import (
+        from ._runnable import (
             require_sparse_run_descriptor,
             sparse_descriptor_to_json,
             with_activation_payload,
@@ -687,7 +687,7 @@ def save(
             sparse_runnable=sparse_run_descriptor is not None,
         )
         if sparse_run_descriptor is not None:
-            from .runnable import assert_sparse_core_has_no_tensor_payload
+            from ._runnable import assert_sparse_core_has_no_tensor_payload
 
             scrubbed_state["_buffer_initial_values"] = {}
             assert_sparse_core_has_no_tensor_payload(scrubbed_state)
@@ -944,8 +944,8 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
         Typed save refusal for any label the load door would refuse.
     """
 
+    from .._runnable import RunnableErrorCode
     from ..errors import RunnablePreflightError
-    from ..runnable import RunnableErrorCode
 
     for name in names:
         if not isinstance(name, str) or name == "":
@@ -1092,9 +1092,9 @@ def _capture_activation_blob_specs(
         If a selected payload is unavailable or is not a dense torch tensor.
     """
 
+    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
     from .._runnable_execution import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
-    from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
@@ -1773,7 +1773,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
       descriptor) carrying STRAY runnable payload blobs is a real inconsistency; hard-fail.
     """
 
-    from ..runnable import RunProvider
+    from .._runnable import RunProvider
 
     if trace.runnable_descriptor is not None:
         return "bind"
@@ -1986,8 +1986,8 @@ def _bind_archived_activation_payload(
         If descriptor membership, blob entries, or file checksums disagree.
     """
 
+    from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
     from .._runnable_state import runnable_tensor_byte_digest
-    from ..runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
@@ -2017,7 +2017,7 @@ def _bind_archived_activation_payload(
         return
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
-    from ..runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+    from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
 
     if declared.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
         raise TorchLensIOError(

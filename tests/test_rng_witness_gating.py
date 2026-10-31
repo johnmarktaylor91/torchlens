@@ -19,8 +19,8 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import WitnessCompleteness, WitnessGapKind
 from torchlens.options import CaptureOptions
-from torchlens.runnable import WitnessCompleteness, WitnessGapKind
 
 
 class _ProfileProbeModel(nn.Module):
