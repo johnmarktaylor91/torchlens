@@ -281,3 +281,53 @@ def test_resnet_stage_backward_validation_passes() -> None:
 
     torch.manual_seed(0)
     assert tl.validate(_TinyResNet().eval(), torch.randn(1, 3, 8, 8), scope="backward")
+
+
+def _refreshed_trace(model: nn.Module, x: torch.Tensor, save_grads: object) -> tl.Trace:
+    """Trace ``model`` on one input, then refresh it onto ``x`` with ``save_new_outs``."""
+
+    trace = tl.trace(
+        model, torch.randn_like(x), capture=CaptureOptions(save_grads=save_grads, random_seed=0)
+    )
+    trace.save_new_outs(model, x, random_seed=1)
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    return trace
+
+
+@pytest.mark.parametrize("family", ["relu_", "add_", "iadd"])
+@pytest.mark.parametrize("spelling", ["selector", "all"])
+def test_refresh_projection_records_the_retain_grad_gradient_at_in_place_output(
+    family: str, spelling: str
+) -> None:
+    """After ``save_new_outs``, a module ending in place records the eager gradient.
+
+    The refresh rebinds gradient hooks onto the target trace; for an in-place
+    op that rebind must hook the live result, not the dead-end logged copy.
+    """
+
+    torch.manual_seed(0)
+    model = _Wrapper(_EndsInPlace(family)).eval()
+    x = torch.randn(2, 6)
+    reference = _module_output_reference(copy.deepcopy(model), x, "inner")
+    save_grads = tl.module("inner") if spelling == "selector" else True
+    trace = _refreshed_trace(model, x, save_grads)
+    sites = list(trace.find_sites(tl.module("inner")))
+    assert len(sites) == 1
+    assert sites[0].grad is not None
+    assert torch.allclose(sites[0].grad, reference)
+
+
+@pytest.mark.parametrize("func_name", ["add_", "mul_", "relu_"])
+def test_refresh_projection_records_each_in_place_version_gradient(func_name: str) -> None:
+    """After ``save_new_outs``, each write to one tensor keeps its own version's gradient."""
+
+    torch.manual_seed(0)
+    model = _WrittenThreeTimes().eval()
+    x = torch.randn(2, 6)
+    reference = _per_version_reference(copy.deepcopy(model), x)
+    assert not torch.allclose(reference["add_"], reference["relu_"])
+    trace = _refreshed_trace(model, x, True)
+    sites = [op for op in trace if getattr(op, "func_name", None) == func_name]
+    assert len(sites) == 1
+    assert sites[0].grad is not None
+    assert torch.allclose(sites[0].grad, reference[func_name])
