@@ -380,6 +380,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "export-bridge target with no declared extra; extras-gap candidate reported 2026-08-15",
     ),
+    "yaml": (TEST_EXTRA, "PyYAML (declared in the test extra); the docs-site tool tests"),
 }
 
 # importorskip call sites whose target is computed, not a string literal.
