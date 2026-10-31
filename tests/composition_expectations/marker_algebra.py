@@ -62,7 +62,6 @@ MARKER_ALGEBRA: dict[str, str] = {
     "rare": "scheduling",
     "big_memory": "scheduling",
     "optional": "capability",
-    "requires_assertions": "capability",
     "backend_parity": "suite",
     "backend_jax": "capability",
     "backend_mlx": "capability",

@@ -368,9 +368,7 @@ jobs:
           uv pip check
 
       - name: Verdict identity under python -O
-        # requires_assertions-marked tests self-skip under -O (their whole
-        # point is needing `assert`); everything else must reach identical
-        # verdicts with assertions stripped.
+        # Validation must reach identical verdicts with assertions stripped.
         run: |
           python -O -c "assert True or False; print('assertions stripped:', not __debug__)"
           python -O -m pytest tests/test_validation.py \
