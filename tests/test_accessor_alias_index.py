@@ -378,7 +378,7 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
         accessor = TraceOpAccessor(ops, trace.layer_num_calls)
         assert accessor._resolve_substring(probe_key) is first
         assert accessor._alias_index_unavailable is True
-        assert accessor._alias_index is None
+        assert accessor._alias_indexes is None
         # The degraded accessor stays degraded and stays correct.
         assert accessor._resolve_substring(probe_key) is first
         # A full-miss scan does reach the unreadable Op -- and must raise there

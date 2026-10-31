@@ -2,9 +2,11 @@
 
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
+from ..constants import RAW_LABEL_SUFFIX
 from ._accessor_base import Accessor
 from .op import Op
 
@@ -103,6 +105,45 @@ class OrphanAccessor(Accessor[Op]):
         return "orphan"
 
 
+@dataclass(frozen=True)
+class _AliasIndexes:
+    """Reverse indexes behind ``TraceOpAccessor._resolve_substring``.
+
+    ``final`` maps each final-tier alias to its Op, ``collisions`` the final-tier
+    aliases two Ops claim, ``raw`` each unsuffixed raw spelling to its Op, and
+    ``layer`` each bare layer label to its Ops in list order.
+    """
+
+    final: dict[Any, Op]
+    collisions: dict[Any, list[Op]]
+    raw: dict[Any, Op]
+    layer: dict[Any, list[Op]]
+
+
+def _claim_alias(index: dict[Any, Op], collisions: dict[Any, list[Op]], alias: Any, op: Op) -> None:
+    """Record ``alias -> op``; a second, different Op makes the alias a collision."""
+
+    existing = index.setdefault(alias, op)
+    if existing is op or not isinstance(alias, str):
+        return
+    claimants = collisions.setdefault(alias, [existing])
+    if op not in claimants:
+        claimants.append(op)
+
+
+def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
+    """Raise when one final label names several Ops, rather than guess one."""
+
+    if not claimants:
+        return
+    names = ", ".join(f"{op.label!r} (raw {op._label_raw!r})" for op in claimants[:10])
+    raise AmbiguousOpLookupError(
+        f"Op label {key!r} is claimed by {len(claimants)} different ops: {names}. "
+        "A final label must name exactly one op; this is corrupt labeling, not an "
+        "ambiguous user key."
+    )
+
+
 class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups."""
 
@@ -119,20 +160,35 @@ class TraceOpAccessor(Accessor[Op]):
 
         op_lookup: OrderedDict[str, Op] = OrderedDict()
         self._raw_index_lookup: dict[int, Op] = {}
+        # Final Op labels name exactly one row. Two rows sharing one is corrupt
+        # labeling; recording it here makes every lookup of that label refuse
+        # instead of silently answering with whichever row came last.
+        duplicate_labels: dict[str, list[Op]] = {}
         for op in ops:
-            op_lookup[op.label] = op
+            label = op.label
+            existing = op_lookup.get(label)
+            if isinstance(label, str) and existing is not None and existing is not op:
+                duplicate_labels.setdefault(label, [existing]).append(op)
+            op_lookup[label] = op
             self._raw_index_lookup[op.raw_index] = op
         super().__init__(op_lookup, item_list=list(ops))
+        self._duplicate_labels = duplicate_labels
         self._layer_num_calls = dict(layer_num_calls)
         # Lazily built reverse indexes for ``_resolve_substring``; see
         # ``_ensure_alias_indexes``. Lifetime is this accessor instance, whose
         # ``_list`` is immutable post-finalization and already rebuilt through the
         # existing ``_TRACE_OP_ACCESSOR_CACHE`` invalidation, so this adds no new
         # invalidation surface.
-        self._alias_index: dict[Any, Op] | None = None
-        self._layer_alias_index: dict[Any, list[Op]] | None = None
+        self._alias_indexes: _AliasIndexes | None = None
         self._alias_index_unavailable = False
         self._resolved_op_cache: dict[str, Op] = {}
+
+    def __getitem__(self, key: int | str) -> Op:
+        """Return an op by ordinal or label, refusing a label two ops claim."""
+
+        if isinstance(key, str):
+            _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
+        return super().__getitem__(key)
 
     def by_raw_index(self, raw_index: int) -> Op:
         """Return an Op by its realtime raw capture index.
@@ -156,6 +212,7 @@ class TraceOpAccessor(Accessor[Op]):
     def _resolve_pass_qualified(self, key: str) -> Op | None:
         """Resolve pass-qualified Op labels without returning parent Layers."""
 
+        _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
         if key in self._dict:
             return self._dict[key]
         return None
@@ -179,64 +236,88 @@ class TraceOpAccessor(Accessor[Op]):
             return [direct]
         return [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
 
-    def _ensure_alias_indexes(self) -> tuple[dict[Any, Op], dict[Any, list[Op]]] | None:
+    def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
 
-        The scanning form of ``_resolve_substring`` returns the FIRST Op in list
-        order any of whose aliases equals the key, where the alias set is the union
-        of the two per-Op match conditions. ``setdefault`` over both conditions in
-        list order therefore stores exactly that minimum-index winner for every
-        alias, and the second index reproduces the bare-parent-label match list in
-        the same order -- so the indexed lookup is result-identical to the scan,
-        ``AmbiguousOpLookupError`` message included.
+        Aliases come in two tiers, and a final-label alias always outranks a raw
+        one. The final tier is what graph edges, ``Trace.__getitem__`` and users
+        name: the pass-qualified label, its short form, the suffixed raw label
+        (``x_raw`` cannot collide with a final label; an unsuffixed one is a raw
+        spelling and joins the raw tier), and the bare layer label of a
+        single-pass layer. The raw tier is the unsuffixed raw spelling
+        (``Op.raw_label``), whose ``{type}_{type_idx}_{raw_idx}`` shape matches
+        the final ``{type}_{type_idx}_{step_idx}`` shape. Once grouping folds
+        passes into one layer the two numberings drift apart, and one Op's raw
+        spelling can equal another Op's final label. Before the tiers, list
+        order decided that tie, so a final label referenced by the graph could
+        resolve to a different, earlier Op whose raw spelling happened to match
+        it. A raw spelling shadowed that way stays reachable through its
+        suffixed form or :meth:`by_raw_index`.
+
+        A final-tier alias claimed by two different Ops is corrupt labeling and
+        is kept in a collision table so the lookup refuses with
+        ``AmbiguousOpLookupError`` instead of picking one. The third index
+        reproduces the bare-parent-label match list in list order.
 
         Building touches label attributes on every Op, which the early-returning
         scan may never have reached. If any read fails (e.g. an unfinished Op whose
         label slot is unset mid-capture), the indexes are abandoned and the scan is
-        used instead, which reproduces the original raise-or-return behavior exactly.
+        used instead, which applies the same tiers.
 
         Returns
         -------
-        tuple[dict[Any, Op], dict[Any, list[Op]]] | None
-            The ``(alias -> Op, layer alias -> Ops)`` index pair, or ``None`` when
-            the indexes could not be built and the scan must be used.
+        _AliasIndexes | None
+            The index bundle, or ``None`` when the indexes could not be built and
+            the scan must be used.
         """
 
-        if self._alias_index is not None and self._layer_alias_index is not None:
-            return self._alias_index, self._layer_alias_index
+        if self._alias_indexes is not None:
+            return self._alias_indexes
         if self._alias_index_unavailable:
             return None
-        alias_index: dict[Any, Op] = {}
+        final_index: dict[Any, Op] = {}
+        collisions: dict[Any, list[Op]] = {}
+        raw_index: dict[Any, Op] = {}
         layer_alias_index: dict[Any, list[Op]] = {}
-        layer_num_calls = self._layer_num_calls
         try:
             for op in self._list:
-                layer_label = op.layer_label
-                layer_label_short = op.layer_label_short
-                for alias in (op.label, op.label_short, op._label_raw, op.raw_label):
-                    alias_index.setdefault(alias, op)
-                if layer_num_calls.get(layer_label, 0) == 1:
-                    for alias in (layer_label, layer_label_short):
-                        alias_index.setdefault(alias, op)
-                for alias in {layer_label, layer_label_short}:
+                for alias in self._final_aliases(op):
+                    _claim_alias(final_index, collisions, alias, op)
+                raw_index.setdefault(op.raw_label, op)
+                for alias in {op.layer_label, op.layer_label_short}:
                     layer_alias_index.setdefault(alias, []).append(op)
         except Exception:
             self._alias_index_unavailable = True
             return None
-        self._alias_index = alias_index
-        self._layer_alias_index = layer_alias_index
-        return alias_index, layer_alias_index
+        self._alias_indexes = _AliasIndexes(final_index, collisions, raw_index, layer_alias_index)
+        return self._alias_indexes
+
+    def _final_aliases(self, op: Op) -> list[Any]:
+        """Return the final-tier aliases of one Op (see ``_ensure_alias_indexes``)."""
+
+        aliases = [op.label, op.label_short]
+        label_raw = op._label_raw
+        # Only a SUFFIXED raw label is final-tier: ``x_raw`` cannot be a final
+        # label. An unsuffixed ``_label_raw`` has the raw-spelling shape and is
+        # served by the raw tier (``Op.raw_label`` returns it unchanged).
+        if isinstance(label_raw, str) and label_raw.endswith(RAW_LABEL_SUFFIX):
+            aliases.append(label_raw)
+        if self._layer_num_calls.get(op.layer_label, 0) == 1:
+            aliases.extend((op.layer_label, op.layer_label_short))
+        return aliases
 
     def _resolve_substring_by_scan(self, key: str) -> Op | None:
         """Resolve by linear scan, used when the alias indexes are unavailable."""
 
+        final_matches: list[Op] = []
         for op in self._list:
-            if key in {op.label, op.label_short, op._label_raw, op.raw_label}:
-                return op
-            if self._layer_num_calls.get(op.layer_label, 0) == 1 and key in {
-                op.layer_label,
-                op.layer_label_short,
-            }:
+            if key in self._final_aliases(op) and op not in final_matches:
+                final_matches.append(op)
+        _refuse_colliding_label(key, final_matches if len(final_matches) > 1 else None)
+        if final_matches:
+            return final_matches[0]
+        for op in self._list:
+            if key == op.raw_label:
                 return op
         parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
         return self._resolve_parent_matches(parent_matches)
@@ -264,11 +345,13 @@ class TraceOpAccessor(Accessor[Op]):
         indexes = self._ensure_alias_indexes()
         if indexes is None:
             return self._resolve_substring_by_scan(key)
-        alias_index, layer_alias_index = indexes
-        direct = alias_index.get(key)
+        _refuse_colliding_label(key, indexes.collisions.get(key))
+        direct = indexes.final.get(key)
+        if direct is None:
+            direct = indexes.raw.get(key)
         if direct is not None:
             return direct
-        return self._resolve_parent_matches(layer_alias_index.get(key, ()))
+        return self._resolve_parent_matches(indexes.layer.get(key, ()))
 
     def _resolved_op(self, key: str) -> Op:
         """Return ``self[key]``, memoized per lookup key.

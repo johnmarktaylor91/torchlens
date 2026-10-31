@@ -432,6 +432,9 @@ _check_special_layer_lists = _rebind_function(
 _check_capture_edge_survival = _rebind_function(
     _invariants_topology._check_capture_edge_survival, globals()
 )
+_check_op_label_resolution = _rebind_function(
+    _invariants_topology._check_op_label_resolution, globals()
+)
 _check_graph_topology = _rebind_function(_invariants_topology._check_graph_topology, globals())
 _check_sibling_relation_derivation = _rebind_function(
     _invariants_topology._check_sibling_relation_derivation, globals()
