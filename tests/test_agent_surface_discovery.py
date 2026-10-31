@@ -52,7 +52,7 @@ def test_breadcrumb_spellings_resolve_cold() -> None:
 def test_docs_taught_facade_names_resolve_cold() -> None:
     """tl._utils / tl.bridge / tl.backends / tl.callbacks / tl.agent cold-resolve."""
 
-    for spelling in ("tl._utils.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
+    for spelling in ("tl.report.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
         _resolves_cold(spelling)
 
 

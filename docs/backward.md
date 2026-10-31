@@ -178,7 +178,7 @@ carry that attribute forward, the replacement is skipped instead of installed, s
 for that enter and torch's own hook-stack accounting is never desynced). Any flag withdraws the
 affirmative "no checkpoint invocation observed" verdict. The private `_checkpoint_hook` class
 resolves through the compat chokepoint behind the named `HAS_CHECKPOINT_HOOK_CLASS` capability
-flag (visible in `tl._utils.doctor()` / `tl.compat.report()`); a torch without it degrades
+flag (visible in `tl.report.doctor()` / `tl.compat.report()`); a torch without it degrades
 fail-closed — the classifier mints NO tokens, never a false one. The sibling
 `HAS_CHECKPOINT_INTERNAL_HOOK_CLASS` flag (same visibility) tracks whether this torch runtime's
 checkpoint hooks carry that private identity state at all; its absence (torch 2.13 and earlier)
@@ -209,7 +209,7 @@ under. The label splits that row's count and never moves a FLOP between rows. A 
 pass that checkpoints, or a trace without checkpoint evidence, reads the recompute share as
 `None` (unknown), never a guess. Matching a call to the node that ran it needs torch's
 executing-node resolver; on a build without it (`HAS_CURRENT_AUTOGRAD_NODE` is `False` in
-`tl._utils.doctor()` and `tl.compat.report()`) no call is charged to a node and the executed count
+`tl.report.doctor()` and `tl.compat.report()`) no call is charged to a node and the executed count
 reads unknown with that reason.
 
 `tl.report.cost_tree(trace)` carries the same counts per module call: `self_forward_mac_flops`
@@ -328,5 +328,5 @@ The `BackwardPassEnd` sidecar event discloses which close path fired (`engine_dr
 `sync_point`, DOCUMENTED-UNSTABLE values, runtime-only in wave 2; the projected `BackwardPass`
 field was deliberately deferred at the tlspec v8 bump and waits for a future one). The engine's final-callback handle resolves through the
 compat chokepoint behind the named `HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK` capability flag
-(visible in `tl._utils.doctor()` / `tl.compat.report()`); without it every implicit close takes
+(visible in `tl.report.doctor()` / `tl.compat.report()`); without it every implicit close takes
 the sync-point backstop.

@@ -38,11 +38,11 @@ True hot_path
 ```
 
 For *environment* problems (rather than trace problems), start with
-[`tl._utils.doctor()`](#tlutilsdoctor) below.
+[`tl.report.doctor()`](#tlreportdoctor) below.
 
-## `tl._utils.doctor`
+## `tl.report.doctor`
 
-`tl._utils.doctor()` runs a TorchLens startup health check and returns a structured
+`tl.report.doctor()` runs a TorchLens startup health check and returns a structured
 `DoctorReport` — use it first when captures fail before a trace even exists (import
 errors, missing renderers, stale wrapper installs). It lives in `tl._utils`, not
 `tl.debug`, because it needs no trace.
@@ -65,7 +65,7 @@ The report is a tuple of `DoctorCheck(name, status, detail)` rows, one per probe
 ```python
 import torchlens as tl
 
-report = tl._utils.doctor()
+report = tl.report.doctor()
 print(report.show())          # text table
 bad = [c for c in report.checks if c.status == "FAIL"]
 ```

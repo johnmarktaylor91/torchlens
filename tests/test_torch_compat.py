@@ -761,7 +761,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
 
     L8 floor fix: a torch build whose ``torch.utils.deterministic`` submodule
     is absent (torch 2.1.x) must still show the flag in the diagnostic
-    snapshot (``tl.compat.report()`` / ``tl._utils.doctor()``), mirroring the
+    snapshot (``tl.compat.report()`` / ``tl.report.doctor()``), mirroring the
     live capability rather than dropping the key.
     """
 

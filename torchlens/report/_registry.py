@@ -284,7 +284,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
     ),
     SurfaceEntry(
         key="doctor",
-        spelling="tl._utils.doctor()",
+        spelling="tl.report.doctor()",
         subject="ENVIRONMENT",
         register="VERDICT",
         invariants=("checks_and_skips_complete",),
@@ -293,7 +293,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=(),
         refuses_when="never",
         cost_class="env_probe",
-        example="tl._utils.doctor()",
+        example="tl.report.doctor()",
     ),
 )
 

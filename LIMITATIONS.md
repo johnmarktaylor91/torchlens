@@ -137,7 +137,7 @@ it with `parallelize_module` / `fully_shard` / pipeline stages, or materialize t
 inventing joins when ranks disagree (`docs/reference/merged_trace_contract.md`).
 
 Detection is capability-probed, never version-parsed, and every degradation point is visible as a
-named flag in `torchlens._utils.doctor()` / `tl.compat.report()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
+named flag in `torchlens.report.doctor()` / `tl.compat.report()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
 and `HAS_PIPELINING`. When one is absent, detection falls back from an exact `isinstance` check to
 structural namespace matching, and the affected report row says so.
 

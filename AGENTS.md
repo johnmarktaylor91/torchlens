@@ -35,7 +35,7 @@ Every fragile torch-private-API probe or cross-version torch signature must rout
 `torchlens/_utils/_torch_compat.py`. Feature-detect the runtime capability; do not parse
 `torch.__version__` for behavioral branching. Every graceful degradation must flip a named
 `HAS_*` capability flag and be visible through the torch capability snapshot in
-`torchlens._utils.doctor()` / `torchlens.compat.report()`.
+`torchlens.report.doctor()` / `torchlens.compat.report()`.
 
 ## Model Menagerie and the classics corpus
 

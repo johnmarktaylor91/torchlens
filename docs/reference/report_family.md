@@ -24,7 +24,7 @@ real fixture in its declared state.
 | `tl.report.backward_estimate(trace)` | The HYPOTHETICAL training-backward counterfactual behind its named door. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.roofline(trace, ridge_intensity=...)` | Theoretical intensity/work map; bound verdicts are hypotheses. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.overhead(model, x)` | Measured capture cost on YOUR model and host (never an estimate). | RUN-RESOURCES | SHAPE | new_forward |
-| `tl._utils.doctor()` | Is my environment healthy: versions, capabilities, degradations. | ENVIRONMENT | VERDICT | env_probe |
+| `tl.report.doctor()` | Is my environment healthy: versions, capabilities, degradations. | ENVIRONMENT | VERDICT | env_probe |
 
 ## Refusal conditions
 

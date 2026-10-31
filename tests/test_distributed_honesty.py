@@ -692,7 +692,7 @@ def test_capability_snapshot_exposes_distributed_flags() -> None:
 
 
 def test_doctor_reports_distributed_capability_flags() -> None:
-    """``tl._utils.doctor()`` surfaces the new flags like every other capability.
+    """``tl.report.doctor()`` surfaces the new flags like every other capability.
 
     The capability row is a grouped absences-first summary (r-b4 R26-4): a
     flag appears in the row text by name only when it is absent; a present
@@ -700,7 +700,7 @@ def test_doctor_reports_distributed_capability_flags() -> None:
     """
 
     snapshot = tl._utils.capability_snapshot()
-    text = str(tl._utils.doctor())
+    text = str(tl.report.doctor())
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
         assert flag in snapshot
         if not snapshot[flag]:

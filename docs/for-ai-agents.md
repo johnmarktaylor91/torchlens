@@ -275,7 +275,7 @@ walkthrough, also served as an MCP resource.
 
 The nine tools:
 
-- `torchlens_doctor` — environment health check (`tl._utils.doctor()` rows).
+- `torchlens_doctor` — environment health check (`tl.report.doctor()` rows).
 - `torchlens_api_map` — the public-surface index generated from the ONE export registry,
   plus the capabilities block (tools, CLI verbs, schema ids, budget knobs,
   `writes: false`, `executes_user_code: false`); pass `name=` for one detailed record.

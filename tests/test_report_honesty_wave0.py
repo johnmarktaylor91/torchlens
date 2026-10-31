@@ -185,7 +185,7 @@ def test_guide_next_steps_are_reader_executable() -> None:
     assert steps["inventory"] == "trace.bill_of_materials()"
     assert steps["resource_profile"] == "trace.profile(level='module')"
     assert steps["nonfinite_evidence"] == "trace.first_nonfinite()"
-    assert steps["environment_diagnosis"] == "tl._utils.doctor()"
+    assert steps["environment_diagnosis"] == "tl.report.doctor()"
 
 
 def test_guide_next_steps_are_conditional_on_state() -> None:
@@ -334,7 +334,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
 def test_doctor_report_repr_is_bounded() -> None:
     """DoctorReport repr is the designed multi-line render with capped lines."""
 
-    doctor_report = tl._utils.doctor()
+    doctor_report = tl.report.doctor()
     rendered = repr(doctor_report)
     assert rendered.startswith("TorchLens doctor report:")
     for line in rendered.splitlines():

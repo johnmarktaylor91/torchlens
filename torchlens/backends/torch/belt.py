@@ -185,7 +185,7 @@ class BeltReport:
     not be measured, so it is neither belt-patched nor proven mode-visible.
     A stale pre-wrap reference to it would lose ops with zero signal while
     the capture still reports ``capture_verified=True``. Consumers
-    (``torchlens._utils.doctor()`` and ``torchlens.compat.report()``) surface
+    (``torchlens.report.doctor()`` and ``torchlens.compat.report()``) surface
     these rows; the details make the failure actionable per build.
     """
 

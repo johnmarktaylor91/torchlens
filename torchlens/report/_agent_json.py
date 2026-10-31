@@ -121,7 +121,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
         steps["logged_values"] = "trace.logged_values"
-    steps["environment_diagnosis"] = "tl._utils.doctor()"
+    steps["environment_diagnosis"] = "tl.report.doctor()"
     return steps
 
 

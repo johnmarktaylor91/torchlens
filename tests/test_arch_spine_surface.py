@@ -49,7 +49,7 @@ def test_root_budget_is_frozen() -> None:
         "+1 by C04: the lazy L4 submodule namespace tl.transforms (transforms "
         "memo s7 home; not in __all__) -- +2 by F29: the lazy submodule "
         "namespaces tl.agent (the agent inspection surface, FACADE, not in "
-        "__all__) and tl._utils (the docs teach tl._utils.doctor(); the row was "
+        "__all__) and tl._utils (the docs taught its doctor() before tl.report; the row was "
         "missing so the taught spelling raised on a cold import; L1, not in "
         "__all__) -- and +1 by F20: the lazy L6 submodule namespace "
         "tl.neuro (brainpipe memo s3 home, the memory-planned extraction "

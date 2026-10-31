@@ -1689,7 +1689,7 @@ def _torch_capabilities_row() -> CompatRow:
         details += "; optional_absent=" + ", ".join(optional_absent)
     details += "; full dump: report.capability_snapshot()"
     suggestion = (
-        "Run torchlens._utils.doctor() for the same snapshot; missing flags indicate graceful "
+        "Run torchlens.report.doctor() for the same snapshot; missing flags indicate graceful "
         "degradation of private runtime integration points."
         if missing
         else ""
@@ -1772,7 +1772,7 @@ def _mechanical_belt_row() -> CompatRow:
         True,
         details,
         "Avoid holding pre-wrap references to the named functions; "
-        "see torchlens._utils.doctor() for per-failure exception details.",
+        "see torchlens.report.doctor() for per-failure exception details.",
     )
 
 

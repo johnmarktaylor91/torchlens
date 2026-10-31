@@ -18,7 +18,7 @@ from torchlens.backends.torch.wrappers import wrap_torch
 def test_doctor_returns_sane_report() -> None:
     """Doctor returns structured checks and a printable report."""
 
-    report = tl._utils.doctor()
+    report = tl.report.doctor()
     assert report.checks
     names = {check.name for check in report.checks}
     assert {
@@ -47,7 +47,7 @@ def test_doctor_surfaces_every_runtime_capability() -> None:
     accessor spelling, so no capability can go silently invisible.
     """
 
-    report = tl._utils.doctor()
+    report = tl.report.doctor()
     row = next(check for check in report.checks if check.name == "runtime capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
 
@@ -70,7 +70,7 @@ def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyP
     original_relu = _state._decorated_to_orig[id(__import__("torch").relu)]
     monkeypatch.setattr("torch.relu", original_relu)
 
-    report = tl._utils.doctor()
+    report = tl.report.doctor()
     row = next(check for check in report.checks if check.name == "torch wrapper bindings")
 
     assert row.status == "WARN"
