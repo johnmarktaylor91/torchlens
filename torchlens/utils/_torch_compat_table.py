@@ -88,6 +88,7 @@ def _row(
     attribute_paths: tuple[str, ...] = (),
     measured: bool = True,
 ) -> CapabilityRow:
+    """Build one row with keyword-only columns so the table reads as data."""
     return CapabilityRow(flag, absent_on, attribute_paths, measured)
 
 
