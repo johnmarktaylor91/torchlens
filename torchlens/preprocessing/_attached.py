@@ -72,7 +72,7 @@ def attach_authority(model: ModelT, authority: Any) -> ModelT:
     from ._authorities import _probe_torchvision_weights, resolve
 
     resolution = resolve(authority)
-    if resolution.record.source == "unknown":
+    if resolution.preprocessing.source == "unknown":
         raise InvalidArgumentError(
             f"attach_authority: {type(authority).__name__} declares no "
             "preprocessing, so attaching it would record nothing.",
@@ -140,7 +140,7 @@ def discover_open_clip(model: Any) -> Resolution | None:
 
     transform = image_transform_v2(PreprocessCfg(**dict(config)), is_train=False)
     resolution = _as_model_metadata(_adapt_compose(transform))
-    record = resolution.record
+    record = resolution.preprocessing
     record.source = "open_clip_preprocess_cfg"
     record.identifier = type(model).__name__
     record.description = f"open_clip visual.preprocess_cfg of {type(model).__name__}"
@@ -196,13 +196,13 @@ def record_for_transform(transform: Any) -> ResolvedPreprocessing | None:
 
     for adapter in _REGISTERED_ADAPTERS:
         if adapter.probe(transform):
-            return adapter.adapt(transform).record
+            return adapter.adapt(transform).preprocessing
     if probe_torchvision_preset(transform):
-        return adapt_torchvision_preset(transform).record
+        return adapt_torchvision_preset(transform).preprocessing
     if _probe_hf_processor(transform):
         from ._authorities import _adapt_hf_processor
 
-        return _adapt_hf_processor(transform).record
+        return _adapt_hf_processor(transform).preprocessing
     return None
 
 

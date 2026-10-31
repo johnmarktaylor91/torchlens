@@ -71,9 +71,9 @@ def test_streamed_halted_capture_loads_halted(tmp_path):
         halt=tl.func("linear"),
         storage=tl.to_disk(str(path)),
     )
-    assert trace.outcome.status is CaptureStatus.HALTED
+    assert trace.outcome.status is CaptureStatus.STOPPED
     loaded = tl.load(path)
-    assert loaded.outcome.status is CaptureStatus.HALTED
+    assert loaded.outcome.status is CaptureStatus.STOPPED
 
 
 def test_post_stage_failure_never_publishes(tmp_path):

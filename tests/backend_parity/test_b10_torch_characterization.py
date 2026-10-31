@@ -262,7 +262,7 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
     trace = tl.trace(
         _SelectiveFastPassModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=["relu"], random_seed=1703),
+        capture=tl.options.CaptureOptions(layers_to_save=["relu"], seed=1703),
     )
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
@@ -348,12 +348,12 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
     full = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1704),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1704),
     )
     selective = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["dropout"], random_seed=1704),
+        capture=tl.options.CaptureOptions(layers_to_save=["dropout"], seed=1704),
     )
 
     assert selective.capture_mode == "exhaustive"

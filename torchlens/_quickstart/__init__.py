@@ -27,7 +27,7 @@ from ._gate import (
 )
 from ._grammar import InputSpec, parse_input_size, synthesize
 from ._plan import InputPlan, normalize_gold_args, resolve_rung
-from ._primitive import ExecutionReceipt, capture_concrete
+from ._primitive import ExecutionReceipt
 from ._provenance import (
     InputProvenance,
     TensorFacts,
@@ -59,7 +59,6 @@ __all__ = [
     "SynthesizedValueReadWarning",
     "TensorFacts",
     "attach_provenance",
-    "capture_concrete",
     "internal_read",
     "is_gold",
     "normalize_gold_args",

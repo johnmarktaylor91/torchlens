@@ -175,7 +175,7 @@ def test_record_does_not_crash_on_registered_buffer_output() -> None:
     # extraction itself, regardless of what the predicate saves.
     recording = tl.record(model, x, default_op=True)
     assert recording is not None
-    assert recording.failed is False
+    assert recording.is_failed is False
 
     trace = recording.to_trace()
     try:

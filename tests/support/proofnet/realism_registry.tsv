@@ -45,7 +45,6 @@ clear_capture_cache	toy	referenced	F36-freeze
 clip_grad	toy	referenced	F36-freeze
 contains	toy	referenced	F36-freeze
 dead	toy	referenced	F36-freeze
-decide_recording_of_batch	toy	referenced	F36-freeze
 export	toy	referenced	F36-freeze
 extract	R1	referenced	F36-freeze
 extract_dataset	R1	referenced	F36-freeze
@@ -87,7 +86,6 @@ project_onto	toy	referenced	F36-freeze
 project_out	toy	referenced	F36-freeze
 random_selection	toy	referenced	F36-freeze
 record	toy	referenced	F36-freeze
-record_kpi_in_graph	toy	referenced	F36-freeze
 regex	toy	referenced	F36-freeze
 register_container	toy	referenced	F36-freeze
 register_tensor_connection	toy	referenced	F36-freeze

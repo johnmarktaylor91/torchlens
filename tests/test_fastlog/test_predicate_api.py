@@ -39,7 +39,7 @@ def test_predicate_accepts_record_context_signature() -> None:
         seen.append(ctx)
         return ctx.kind == "op"
 
-    recording = tl.fastlog.record(PredicateApiModel(), torch.ones(2), save=keep_op)
+    recording = tl.record(PredicateApiModel(), torch.ones(2), save=keep_op)
 
     assert len(recording) > 0
     assert seen
@@ -58,14 +58,14 @@ def test_predicate_accepts_supported_return_types(result: bool | CaptureSpec | N
 
         return result if ctx.kind == "op" else False
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         PredicateApiModel(),
         torch.ones(2),
         save=keep_op,
         default_op=True,
     )
 
-    assert recording.n_ops == 1
+    assert recording.num_ops == 1
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,7 @@ def test_predicate_rejects_invalid_return_types_with_event_context(bad_result: A
         return bad_result if ctx.kind == "op" else False
 
     with pytest.raises(PredicateError) as exc_info:
-        tl.fastlog.record(PredicateApiModel(), torch.ones(2), save=keep_op)
+        tl.record(PredicateApiModel(), torch.ones(2), save=keep_op)
 
     assert exc_info.value.ctx is not None or exc_info.value.failures
     if exc_info.value.ctx is not None:

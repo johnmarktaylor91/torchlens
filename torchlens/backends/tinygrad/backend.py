@@ -39,7 +39,7 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendUnsupportedError, get_backend_spec
+from ...backends.registry import BackendUnsupportedError, get_backend_spec
 from ...capture.outcome import stamp_backend_finalized
 from ...fastlog.types import CaptureSpec
 from ...options import CaptureOptions, merge_capture_options
@@ -363,9 +363,9 @@ class TinygradBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -373,7 +373,7 @@ class TinygradBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
@@ -381,9 +381,9 @@ class TinygradBackend:
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
@@ -391,7 +391,7 @@ class TinygradBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
@@ -403,7 +403,7 @@ class TinygradBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -451,9 +451,9 @@ class TinygradBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -476,7 +476,7 @@ class TinygradBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_raw_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
@@ -702,7 +702,7 @@ class TinygradBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         compute_input_output_distances: bool = True,
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
@@ -719,7 +719,7 @@ class TinygradBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             param_source="none",
             compute_input_output_distances=compute_input_output_distances,
         )

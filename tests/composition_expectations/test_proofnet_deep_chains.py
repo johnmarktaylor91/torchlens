@@ -37,21 +37,21 @@ def test_chain_halted_settle_save_load_report_doors(tmp_path: Any) -> None:
     import torchlens as tl
 
     halted = tl.trace(_model(), _x(), halt=tl.func("relu"))
-    assert halted.outcome.status.name == "HALTED"
+    assert halted.outcome.status.name == "STOPPED"
     path = tmp_path / "halted.tlspec"
     halted.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.outcome.status.name == "HALTED", "the halt fact fell off at the save/load hop"
+    assert loaded.outcome.status.name == "STOPPED", "the halt fact fell off at the save/load hop"
     for door, text in (
         ("summary", str(loaded.summary())),
         ("explain", tl.report.explain(loaded)),
     ):
-        assert "halt" in text.lower(), (
-            f"the {door} door on the LOADED halted trace never says halted --"
+        assert "stopped" in text.lower(), (
+            f"the {door} door on the LOADED stopped trace never says stopped --"
             " the honesty fact was laundered at a chain hop"
         )
     payload = loaded.to_agent_json()
-    assert "halted" in str(payload).lower()
+    assert "stopped" in str(payload).lower()
 
 
 def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:

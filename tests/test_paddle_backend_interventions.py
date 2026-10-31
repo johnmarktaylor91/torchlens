@@ -22,7 +22,6 @@ import numpy as np  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens.backends import (  # noqa: E402
     BackendUnsupportedError,
-    get_backend_spec,
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
@@ -93,7 +92,7 @@ def _ablated_trace() -> Any:
 def test_paddle_capability_lift_is_real() -> None:
     """The lifted flag binds a resolvable implementing surface."""
 
-    spec = get_backend_spec("paddle")
+    spec = tl.backends.spec("paddle")
     assert spec.capabilities.interventions is True
     implementation = require_capability_implementation(spec, "interventions")
     assert implementation is not None

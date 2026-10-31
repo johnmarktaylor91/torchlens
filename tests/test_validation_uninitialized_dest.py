@@ -227,9 +227,9 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        save_arg_values=True,
-        random_seed=0,
-        save_rng_states=True,
+        save_args=True,
+        seed=0,
+        save_rng=True,
     )
     try:
         # Corrupt a __setitem__ op's replay so the recomputed value diverges.
@@ -304,9 +304,9 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        save_arg_values=True,
-        random_seed=0,
-        save_rng_states=True,
+        save_args=True,
+        seed=0,
+        save_rng=True,
     )
     try:
         # Locate the SECOND index_copy_ (destination parent is the first write).

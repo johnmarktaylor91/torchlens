@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions
+from torchlens.options import CaptureOptions, SaveOptions, StorageOptions
 
 
 class _TinyModel(nn.Module):
@@ -113,7 +113,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
 
 
 def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
-    """save_raw_gradients=False drops raw grad storage but preserves raw metadata."""
+    """save_raw_grads=False drops raw grad storage but preserves raw metadata."""
 
     trace = tl.trace(
         _TinyModel(),
@@ -121,7 +121,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
         capture=CaptureOptions(save_grads="all"),
         save=SaveOptions(
             grad_transform=lambda t: t.mean(),
-            save_raw_gradients=False,
+            save_raw_grads=False,
         ),
     )
     trace.log_backward(_output_loss(trace))
@@ -221,7 +221,7 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(layers_to_save="all"),
         save=SaveOptions(activation_transform=torch.mean),
-        streaming=StreamingOptions(bundle_path=bundle_path),
+        streaming=StorageOptions(bundle_path=bundle_path),
     )
     layer = _first_transformed_layer(trace)
     restored = tl.load(bundle_path)

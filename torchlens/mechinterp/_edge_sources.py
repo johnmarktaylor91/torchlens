@@ -223,7 +223,7 @@ def classify_leaf(trace: Any, label: str, attention_addresses: frozenset[str]) -
                 message=f"Attention module {address!r} writes into the residual stream but "
                 "exposes no per-head result view, so its heads cannot be graph nodes.",
                 remedy="load the model with attn_implementation='eager' (or capture fused SDPA "
-                "with capture=tl.options.CaptureOptions(save_arg_values=True)) and capture "
+                "with capture=tl.options.CaptureOptions(save_args=True)) and capture "
                 "with layers_to_save='all'",
                 module_address=address,
             )

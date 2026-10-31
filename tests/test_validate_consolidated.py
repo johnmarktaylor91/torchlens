@@ -59,8 +59,8 @@ def test_validate_forward_and_saved_scopes(model_and_input: tuple[TinyModel, tor
     """Consolidated forward and saved scopes should return booleans."""
 
     model, x = model_and_input
-    assert isinstance(tl.validate(model, x, scope="forward", random_seed=42), bool)
-    assert isinstance(tl.validate(model, x, scope="saved", random_seed=42), bool)
+    assert isinstance(tl.validate(model, x, scope="forward", seed=42), bool)
+    assert isinstance(tl.validate(model, x, scope="saved", seed=42), bool)
 
 
 def test_validate_backward_scope(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
@@ -110,7 +110,7 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
 
     monkeypatch.setattr(tl.Trace, "log_backward", corrupt_captured_grad)
 
-    assert not tl.validate(model, x, scope="backward", random_seed=42)
+    assert not tl.validate(model, x, scope="backward", seed=42)
 
 
 def test_scope_backward_with_metadata(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
@@ -151,10 +151,10 @@ def test_validate_scope_backward_random_seed(
         "torchlens.validation.consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
-        assert tl.validate(model, x, scope="backward", random_seed=42)
+        assert tl.validate(model, x, scope="backward", seed=42)
     assert validator.call_args is not None
-    assert validator.call_args.kwargs["random_seed"] == 42
-    assert tl.validate(model, x, scope="backward", random_seed=42)
+    assert validator.call_args.kwargs["seed"] == 42
+    assert tl.validate(model, x, scope="backward", seed=42)
 
 
 def test_validate_intervention_scope_returns_report(
@@ -163,7 +163,7 @@ def test_validate_intervention_scope_returns_report(
     """Intervention scope returns a report with explicit unevaluated axes."""
 
     model, x = model_and_input
-    report = tl.validate(model, x, scope="intervention", random_seed=42)
+    report = tl.validate(model, x, scope="intervention", seed=42)
     assert isinstance(report, InterventionValidationReport)
     assert bool(report) is report.passed
     assert set(report.details) == {
@@ -245,7 +245,7 @@ def test_validate_scope_end_trims_the_host_allocator(
 
     monkeypatch.setattr(cleanup_mod, "_trim_host_allocator", counting_trim)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    assert tl.validate(model, torch.randn(2, 4), scope="forward", random_seed=0) is True
+    assert tl.validate(model, torch.randn(2, 4), scope="forward", seed=0) is True
     assert calls["n"] >= 3, f"only {calls['n']} allocator trims ran; the scope-end trim is missing"
 
 
@@ -268,13 +268,13 @@ def test_validate_peak_instrumentation_is_opt_in(
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
 
     monkeypatch.delenv("TORCHLENS_VALIDATE_PEAK_MEMORY", raising=False)
-    assert tl.validate(model, torch.randn(2, 4), scope="forward", random_seed=0) is True
+    assert tl.validate(model, torch.randn(2, 4), scope="forward", seed=0) is True
     assert last_validation_peak_memory() is None, (
         "default validate populated peak observations without the opt-in"
     )
 
     monkeypatch.setenv("TORCHLENS_VALIDATE_PEAK_MEMORY", "1")
-    assert tl.validate(model, torch.randn(2, 4), scope="forward", random_seed=0) is True
+    assert tl.validate(model, torch.randn(2, 4), scope="forward", seed=0) is True
     peaks = last_validation_peak_memory()
     assert peaks is not None and "host_rss_peak_delta_bytes" in peaks
     assert peaks["host_rss_peak_delta_bytes"] >= 0

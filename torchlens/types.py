@@ -24,6 +24,7 @@ from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInp
 from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
+from .captured_run import TraceLike
 from .intervention import SiteTable, SpecCompat, TargetManifestDiff
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 __all__ = [
+    "TraceLike",
     "AtenOp",
     "AttributeWrite",
     "BackwardPass",

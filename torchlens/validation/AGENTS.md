@@ -53,7 +53,7 @@ Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, an
    (R75-1; backward validation's stock-autograd pass does the same). If
    the wrappers cannot be removed because a capture is active, validation
    refuses rather than blessing a wrap-state-dependent ground truth.
-2. Run `trace(..., capture=CaptureOptions(layers_to_save="all", save_arg_values=True))`
+2. Run `trace(..., capture=CaptureOptions(layers_to_save="all", save_args=True))`
    (the flat kwargs are deprecated aliases that warn).
 3. Check logged output matches ground truth.
 4. Walk backward from outputs, replaying each saved operation from saved parents.
@@ -96,7 +96,7 @@ bridge extras.
   copies of grad-requiring arguments.
 - `_perturb_layer_outs()` is bounded by `MAX_PERTURB_ATTEMPTS`.
 - Validation requires saved function args for replay; check callers preserve
-  `save_arg_values=True`.
+  `save_args=True`.
 
 ## backward.py
 

@@ -39,7 +39,7 @@ tl.extract_dataset(
     ["layer4"],
     batch_size=3,
     path=output_dir,
-    transform={"layer4": T.chain(T.flatten(), T.srp(16, seed=0))},
+    output_transform={"layer4": T.chain(T.flatten(), T.srp(16, seed=0))},
     progress=False,
 )
 loaded = tl.load(output_dir)

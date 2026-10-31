@@ -40,7 +40,7 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
   `collapse_plan`, `collapse_schedule`) 3/3 · `tl.validate` all 4 scopes ·
   capture-time kwargs (`storage=tl.to_disk`, `streaming`, `hooks`, `layers_to_save`,
   `chunk_size`, `activation_transform`/`grad_transform` (both verified INERT),
-  `module_filter`, `random_seed`, `recipes`) demonstrated · vanilla dunder protocol
+  `module_filter`, `seed`, `recipes`) demonstrated · vanilla dunder protocol
   (`len`/iteration/membership) on `Trace` (nb 01) and `Bundle` (nb 08).
 
 Notable fixes verified since the June 2026 pass (dropped from GAP cells, kept in the

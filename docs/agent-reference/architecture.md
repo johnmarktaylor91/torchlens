@@ -254,13 +254,13 @@ Key entry points:
   `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
   `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
   failed partial `Recording`. Failed partials set `status="partial_error"`, `failed=True`,
-  string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields.
+  string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. Trace failed captures separately expose
   `exc.partial_log`, recoverable with `tl._partial.from_failed_capture(exc)`.
 - Every capture product carries one settled typed outcome: `Trace.outcome` /
   `Recording.outcome` / `PartialTrace.outcome` return a frozen `CaptureOutcome`
-  (COMPLETE / HALTED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),
+  (COMPLETE / STOPPED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),
   persisted as `_capture_outcome` (tlspec v7) and validated fail-closed at load.
   Capability gates N1-N5 branch on `tl.errors.CaptureOutcomeError.fields["code"]`;
   swallowed halt/nonfinite signals raise `tl.errors.StopSignalSwallowedError`.

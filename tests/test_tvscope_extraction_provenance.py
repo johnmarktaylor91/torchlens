@@ -20,11 +20,8 @@ pytest.importorskip("torchvision")
 
 import torchlens as tl  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens.dataset_extraction import (  # noqa: E402
-    INPUT_PREPROCESSING_SCHEMA,
-    DatasetExtractionResumeError,
-    input_preprocessing_of,
-)
+from torchlens._extraction_provenance import INPUT_PREPROCESSING_SCHEMA, input_preprocessing_of
+from torchlens.dataset_extraction import DatasetExtractionResumeError
 
 
 class _SmallCNN(nn.Module):
@@ -71,7 +68,7 @@ def resolution() -> pp.Resolution:
         }
     )
     return pp.Resolution(
-        record=base.record,
+        preprocessing=base.preprocessing,
         declared=base.declared,
         transform=lambda batch: (batch - 0.5) / 0.5,
     )

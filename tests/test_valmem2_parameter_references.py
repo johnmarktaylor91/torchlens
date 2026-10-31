@@ -1,11 +1,11 @@
 """Forward validation keeps its own parameter arguments by reference, under a version guard.
 
-Validation captures with ``save_arg_values=True`` on a deep copy of the model.
+Validation captures with ``save_args=True`` on a deep copy of the model.
 During that one capture a parameter argument is kept by reference rather than
 copied, and its version counter is recorded. These tests pin:
 
 * the reference is taken only inside validation's capture, on the deep copy;
-  a user's ``save_arg_values=True`` trace still saves copies, and the context
+  a user's ``save_args=True`` trace still saves copies, and the context
   is cleared on every exit, an exception included;
 * a model that writes a parameter in place during forward makes validation
   rerun with every argument copied (the guard's fallback, recorded as a
@@ -45,7 +45,7 @@ def _validate(model: nn.Module, x: torch.Tensor) -> tuple[bool, list[Any], int]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             verdict = _user_public_impls._validate_forward_pass_torch(
-                model, x, random_seed=0, _trace_observer=observe
+                model, x, seed=0, _trace_observer=observe
             )
     finally:
         handle.remove()
@@ -58,7 +58,7 @@ def _copy_only_verdict(model: nn.Module, x: torch.Tensor) -> bool:
     unwrapped: Callable[..., bool] = _user_public_impls._validate_forward_pass_torch.__wrapped__  # type: ignore[attr-defined]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(unwrapped(model, x, random_seed=0))
+        return bool(unwrapped(model, x, seed=0))
 
 
 def _fallbacks(diagnostics: list[Any]) -> list[Any]:
@@ -202,7 +202,7 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
     assert arg_references.active_argument_references() is None
     assert arg_references._SESSION.get() is None
     trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     )
     linears = [op for op in trace.layer_list if op.func_name == "linear"]
     assert len(linears) == 2

@@ -179,7 +179,7 @@ def _refuse_structure_only_payload_selections(
             "save_grads",
         )
     streaming_options = facts.streaming_options
-    if streaming_options.bundle_path is not None or streaming_options.out_callback is not None:
+    if streaming_options.bundle_path is not None or streaming_options.on_save is not None:
         _refuse_values(
             "structure_only=True cannot stream activation payloads to disk or "
             "callbacks; there are no value payloads to stream",
@@ -192,11 +192,11 @@ def _refuse_structure_only_option_payloads(
 ) -> None:
     """Payload-recording OPTION values refuse typed."""
 
-    if capture_options.is_field_explicit("save_arg_values") and capture_options.save_arg_values:
+    if capture_options.is_field_explicit("save_args") and capture_options.save_args:
         _refuse_values(
             "structure_only=True cannot record non-tensor argument VALUES as "
-            "payloads via save_arg_values",
-            "save_arg_values",
+            "payloads via save_args",
+            "save_args",
         )
     if capture_options.is_field_explicit("layer_visualizers") and capture_options.layer_visualizers:
         _refuse_values(
@@ -209,10 +209,13 @@ def _refuse_structure_only_option_payloads(
             "structure_only=True cannot retain the raw input payload",
             "save_raw_input",
         )
-    if capture_options.is_field_explicit("save_raw_output") and capture_options.save_raw_output:
+    if (
+        capture_options.is_field_explicit("save_transformed_output")
+        and capture_options.save_transformed_output
+    ):
         _refuse_values(
             "structure_only=True cannot retain the raw output payload",
-            "save_raw_output",
+            "save_transformed_output",
         )
     if capture_options.is_field_explicit("output_style") and capture_options.output_style:
         _refuse_values(

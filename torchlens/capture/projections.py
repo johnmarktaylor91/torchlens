@@ -128,7 +128,7 @@ class _StorageBackend(Protocol):
 
 
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
-    """Resolve storage destinations from StreamingOptions."""
+    """Resolve storage destinations from StorageOptions."""
 
     if options.streaming is None or options.streaming.bundle_path is None:
         return StorageIntent(in_ram=True, on_disk=False)
@@ -152,14 +152,14 @@ def _empty_recording(options: RecordingOptions) -> Recording:
             if options.streaming is None or options.streaming.bundle_path is None
             else Path(options.streaming.bundle_path)
         ),
-        n_ops=0,
+        num_ops=0,
         start_times=[],
         end_times=[],
         predicate_failures=[],
         predicate_failure_overflow_count=0,
-        halted=False,
-        halt_reason=None,
-        halts_by_pass={},
+        is_stopped=False,
+        stop_reason=None,
+        stops_by_pass={},
         keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         history_size=options.history_size,
         save_grads_repr=repr(options.save_grads) if options.save_grads is not None else None,
@@ -571,12 +571,12 @@ def _capture_policy_from_spec(spec: CaptureSpec) -> CapturePolicy:
         Immutable policy shared by equivalent event decisions.
     """
 
-    key = (spec.save_out, spec.keep_grad, spec.save_mode)
+    key = (spec.save_out, spec.save_grad, spec.save_mode)
     policy = _CAPTURE_POLICY_CACHE.get(key)
     if policy is None:
         policy = CapturePolicy(
             save_payload=spec.save_out,
-            save_grad=spec.keep_grad,
+            save_grad=spec.save_grad,
             save_mode=spec.save_mode,
         )
         _CAPTURE_POLICY_CACHE[key] = policy
@@ -704,7 +704,7 @@ def _sparse_output_ref(
 
     The caller resolves both flags from the capture spec: the recorded detach
     flag is ``False`` whenever the payload was kept graph-connected, either by
-    ``keep_grad`` or by an attached session.
+    ``save_grad`` or by an attached session.
     """
 
     return OutputRef(
@@ -787,7 +787,7 @@ def _record_from_record_context(
             ctx,
             values,
             has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
-            detach_saved_activations=not (spec.keep_grad or not detach_unkept),
+            detach_saved_activations=not (spec.save_grad or not detach_unkept),
             container_path=container_path,
         ),
         is_bottom_level=bool(ctx.is_bottom_level_func),
@@ -956,7 +956,7 @@ def append_projected_event(
     """Append one lightweight predicate record to ``trace.capture_events``."""
 
     if not hasattr(trace, "capture_events"):
-        from .._ir import CaptureEvents
+        from torchlens._ir.capture_events import CaptureEvents
 
         trace.capture_events = CaptureEvents()
     label_raw = ctx.raw_label or ctx.label
@@ -1446,7 +1446,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
     """
 
     from .._ir.events import GradFnFired, OpGradObserved
-    from ..fastlog.types import GradientRecord
+    from ..fastlog.types import GradRecord
 
     trace = state.runtime_trace
     if trace is None:
@@ -1475,10 +1475,10 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
         spec = CaptureSpec(
             save_out=event.payload_ref is not None or event.transformed_payload_ref is not None,
             save_metadata=True,
-            keep_grad=False,
+            save_grad=False,
         )
         state.recording.add_grad_record(
-            GradientRecord(
+            GradRecord(
                 ctx=ctx,
                 spec=spec,
                 ram_payload=event.payload_ref
@@ -1490,7 +1490,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
                     else None
                 ),
                 metadata={"timestamp": event.timestamp, "seq": ordinal},
-                recorded_at=event.timestamp,
+                recorded_time=event.timestamp,
             )
         )
 
@@ -1500,7 +1500,7 @@ def _maybe_add_grad_fn_metadata_record(
 ) -> None:
     """Append a metadata-only grad-fn record when the active policy selects it."""
 
-    from ..fastlog.types import GradientRecord
+    from ..fastlog.types import GradRecord
 
     grad_fn = getattr(trace, "grad_fn_logs", {}).get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):
@@ -1509,7 +1509,7 @@ def _maybe_add_grad_fn_metadata_record(
     ctx = GradRecordContext(
         label=grad_fn.label,
         grad_fn_class_name=grad_fn.class_name,
-        type=grad_fn.type,
+        kind=grad_fn.type,
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
         has_forward_op=False,
@@ -1523,11 +1523,11 @@ def _maybe_add_grad_fn_metadata_record(
     if not isinstance(decision, CaptureSpec) or not decision.save_metadata:
         return
     state.recording.add_grad_record(
-        GradientRecord(
+        GradRecord(
             ctx=ctx,
-            spec=CaptureSpec(save_out=False, save_metadata=True, keep_grad=False),
+            spec=CaptureSpec(save_out=False, save_metadata=True, save_grad=False),
             metadata={"timestamp": event.timestamp, "seq": ordinal},
-            recorded_at=event.timestamp,
+            recorded_time=event.timestamp,
         )
     )
 
@@ -1547,7 +1547,7 @@ def _grad_record_context_from_op_grad_event(
             return GradRecordContext(
                 label=event.op_label,
                 grad_fn_class_name="",
-                type=fastlog_ctx.layer_type or "op",
+                kind=fastlog_ctx.layer_type or "op",
                 backward_call_index=event.pass_index,
                 grad_kind="grad_output",
                 grad_output_index=0,
@@ -1568,7 +1568,7 @@ def _grad_record_context_from_op_grad_event(
         return GradRecordContext(
             label=event.op_label,
             grad_fn_class_name="",
-            type="op",
+            kind="op",
             backward_call_index=event.pass_index,
             grad_kind="grad_output",
             has_forward_op=False,
@@ -1584,7 +1584,7 @@ def _grad_record_context_from_op_grad_event(
     return GradRecordContext(
         label=event.op_label,
         grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
-        type=getattr(op, "layer_type", None) or "op",
+        kind=getattr(op, "layer_type", None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
         grad_output_index=0,

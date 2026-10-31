@@ -263,9 +263,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     """Review probe, reverse direction: flipping interventions=False in place
     refuses trace(intervene=) typed — the table stays load-bearing on MLX."""
 
-    from torchlens.backends import get_backend_spec
-
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "interventions", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="interventions=False"):

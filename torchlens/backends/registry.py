@@ -241,7 +241,7 @@ GATED_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "fastlog",
         "interventions",
         "rng_replay",
-        "streaming",
+        "has_streaming",
         "structure_only_capture",
     }
 )
@@ -267,7 +267,7 @@ class BackendCapabilities:
         Whether operation-level RNG replay is supported.
     payload_materialization:
         Whether loaded payloads can materialize as runtime arrays.
-    streaming:
+    has_streaming:
         Whether streaming save is supported.
     structure_only_capture:
         Whether structure-only capture (``structure_only=True``) is
@@ -301,7 +301,7 @@ class BackendCapabilities:
     interventions: bool
     rng_replay: bool
     payload_materialization: bool
-    streaming: bool
+    has_streaming: bool
     structure_only_capture: bool = False
     intermediate_derived_grads: bool = False
     input_container_structure: Literal["none", "paths_only", "full_spec"] = "none"
@@ -396,7 +396,7 @@ _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES: tuple[str, ...] = (
     "build_record_context",
     "cleanup_failed_forward_session",
     "cleanup_forward_memory",
-    "cleanup_halted_forward_session",
+    "cleanup_stopped_forward_session",
     "cleanup_model_session",
     "copy_replacement_metadata",
     "detect_backend_semantics",

@@ -50,7 +50,7 @@ from ._params import compare_params
 from ._params_audit import ParamAudit, audit_params
 from ._precision import BisectPrecisionReport, PrecisionRow as PrecisionRow, bisect_precision
 from ._recompute import recompute_candidates
-from ._rerun import clone_input_tree, isolated_capture, preserved_rng_state
+from ._rerun import clone_input_tree, preserved_rng_state
 
 __all__ = [
     "BackwardNanReport",
@@ -90,7 +90,6 @@ __all__ = [
     "dead_neurons_rows",
     "dtype_range_audit",
     "first_divergence",
-    "isolated_capture",
     "preserved_rng_state",
     "walk_grad_fn",
     "gradient_flow_audit",

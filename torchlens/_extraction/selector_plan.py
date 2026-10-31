@@ -121,7 +121,7 @@ def _refuse_partial_units(value: Any) -> None:
         code="extraction_selector_partial_units",
         remedy=(
             "pass the site's selector (e.g. tl.func/tl.in_module) or its "
-            "label, then slice elements downstream with transform= or read "
+            "label, then slice elements downstream with output_transform= or read "
             "the artifact and index it"
         ),
         selection=repr(value)[:200],

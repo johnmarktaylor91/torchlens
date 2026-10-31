@@ -58,7 +58,7 @@ def test_mlx_preview_rejects_random_seed() -> None:
             lambda x: x + 1,
             mx.array([1.0]),
             backend="mlx",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 

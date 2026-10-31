@@ -395,7 +395,7 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=torch.abs,
+        output_transform=torch.abs,
     )
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
@@ -406,13 +406,13 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         path=tmp_path,
         progress=False,
         resume=True,
-        transform=torch.abs,
+        output_transform=torch.abs,
     )
     assert len(paths) == 3
     loaded = load_extraction(tmp_path)
     assert loaded.manifest["status"] == "complete"
     clean = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=torch.abs
+        model, _stimuli(), _LAYERS, batch_size=4, progress=False, output_transform=torch.abs
     )
     for key, tensor in clean.items():
         assert torch.equal(loaded.activations[key], tensor)
@@ -441,7 +441,7 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -453,7 +453,7 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
             path=tmp_path,
             progress=False,
             resume=True,
-            transform=opaque_step,
+            output_transform=opaque_step,
         )
     assert excinfo.value.fields["code"] == "extraction_resume_opaque_transform"
     assert any("set_unordered" in ref for ref in excinfo.value.fields["opaque_references"])
@@ -484,7 +484,7 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
         pipeline_id="exp-7",
     )
     _interrupt_after(tmp_path, 1)
@@ -496,7 +496,7 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         path=tmp_path,
         progress=False,
         resume=True,
-        transform=opaque_step,
+        output_transform=opaque_step,
         pipeline_id="exp-7",
     )
     assert len(paths) == 3
@@ -523,7 +523,7 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -535,7 +535,7 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
             path=tmp_path,
             progress=False,
             resume=True,
-            transform=opaque_step,
+            output_transform=opaque_step,
             pipeline_id="invented-later",
         )
     assert excinfo.value.fields["code"] == "extraction_resume_pipeline_id_invalid"
@@ -553,7 +553,7 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=spec_chain,
+        output_transform=spec_chain,
     )
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
@@ -564,7 +564,7 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         path=tmp_path,
         progress=False,
         resume=True,
-        transform=spec_chain,
+        output_transform=spec_chain,
     )
     assert len(paths) == 3
     assert load_extraction(tmp_path).activations["relu"].dtype == torch.float16
@@ -581,7 +581,7 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform=chain(tl.transforms.cast(torch.float16)),
+        output_transform=chain(tl.transforms.cast(torch.float16)),
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -593,7 +593,7 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
             path=tmp_path,
             progress=False,
             resume=True,
-            transform=chain(tl.transforms.cast(torch.float32)),
+            output_transform=chain(tl.transforms.cast(torch.float32)),
         )
     assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
     assert "transform_pipeline" in excinfo.value.fields["mismatched_fields"]
@@ -611,7 +611,7 @@ def test_c_implemented_transform_torch_abs_dispatches_unary() -> None:
 
     model = _Model(seed=0).eval()
     out = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=torch.abs
+        model, _stimuli(), _LAYERS, batch_size=4, progress=False, output_transform=torch.abs
     )
     reference = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
     assert torch.equal(out["logits"], reference["logits"].abs())
@@ -628,7 +628,12 @@ def test_declared_ctx_transform_receives_site_label() -> None:
 
     model = _Model(seed=0).eval()
     tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=with_context(probe)
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        progress=False,
+        output_transform=with_context(probe),
     )
     assert set(seen) == {"relu", "logits"}
 
@@ -644,7 +649,7 @@ def test_t_c2_row_axis_guard_refuses_launderers() -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform=lambda tensor: tensor.mean(dim=0),
+            output_transform=lambda tensor: tensor.mean(dim=0),
         )
     assert excinfo.value.fields["code"] == "transform_row_axis_violated"
     with pytest.raises(TransformContractError) as excinfo:
@@ -654,7 +659,7 @@ def test_t_c2_row_axis_guard_refuses_launderers() -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform=lambda tensor: "not a tensor",
+            output_transform=lambda tensor: "not a tensor",
         )
     assert excinfo.value.fields["code"] == "transform_output_invalid"
 
@@ -692,7 +697,7 @@ def test_t_c6_frozen_plan_refuses_lying_transform_before_publication(tmp_path: P
             batch_size=4,
             path=tmp_path,
             progress=False,
-            transform=TransformSpec(name=name, version=1),
+            output_transform=TransformSpec(name=name, version=1),
         )
     assert excinfo.value.fields["code"] == "transform_plan_violated"
     assert not list(tmp_path.glob("batch_*.pt")), "refused BEFORE publication"
@@ -710,7 +715,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
         _LAYERS,
         batch_size=4,
         progress=False,
-        transform={"relu": "magnitude", DEFAULT: chain(tl.transforms.cast(torch.float16))},
+        output_transform={"relu": "magnitude", DEFAULT: chain(tl.transforms.cast(torch.float16))},
     )
     assert out["relu"].dtype == torch.float32 and torch.all(out["relu"] >= 0)
     assert out["logits"].dtype == torch.float16
@@ -721,7 +726,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform={"typo": "magnitude"},
+            output_transform={"typo": "magnitude"},
         )
     assert excinfo.value.fields["code"] == "transform_mapping_key_unknown"
     # Disk mode records the per-site records in the signature.
@@ -732,7 +737,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
         batch_size=4,
         path=tmp_path,
         progress=False,
-        transform={"relu": "magnitude", DEFAULT: None},
+        output_transform={"relu": "magnitude", DEFAULT: None},
     )
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     per_site: dict[str, Any] = manifest["signature"]["transform_pipeline"]["per_site"]

@@ -39,7 +39,7 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
-from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
+from ..backends.registry import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
 from ..errors import TorchLensWarning
 from . import (
     TLSPEC_VERSION,

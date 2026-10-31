@@ -298,7 +298,7 @@ class CaptureBackend(Protocol):
         """
         ...
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up backend state after a halted forward capture.
 
         Parameters

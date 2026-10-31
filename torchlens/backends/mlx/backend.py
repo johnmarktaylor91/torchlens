@@ -39,14 +39,14 @@ from ..._ir.workspaces import RawGraphWorkspace
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import (
+from ...backends.registry import (
     BackendName,
     BackendUnsupportedError,
     get_backend_spec,
     require_capability_implementation,
 )
 from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.types import CaptureSpec
 from ...validation.status import ValidationReplaySource, ValidationReplayStatus  # noqa: TC001
 from .._finalize import (
@@ -760,7 +760,7 @@ class MLXBackend:
 
         cleanup_model_session(session, prepared_model)
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up MLX state after a halted forward capture."""
 
         self.cleanup_model_session(session, prepared_model)
@@ -1096,11 +1096,11 @@ class MLXBackend:
         save_raw_activations: bool = True,
         detach_saved_activations: bool = False,
         save_grads: bool | str | list[Any] | object | None = None,
-        random_seed: int | None = None,
+        seed: int | None = None,
         num_context_lines: int = 7,
-        save_arg_values: bool = False,
-        save_code_context: bool = False,
-        save_rng_states: bool = False,
+        save_args: bool = False,
+        save_source_context: bool = False,
+        save_rng: bool = False,
         recurrence_detection: bool = True,
         compute_input_output_distances: bool = True,
         verbose: bool = False,
@@ -1112,7 +1112,7 @@ class MLXBackend:
         save_raw_input: str | bool = "small",
         batch_render: str = "auto",
         output_transform: object | None = None,
-        save_raw_output: str | bool = "small",
+        save_transformed_output: str | bool = "small",
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool = False,
         module_identity_mode: str | None = None,
@@ -1127,10 +1127,10 @@ class MLXBackend:
                 "layers_to_save": layers_to_save,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
-                "save_arg_values": save_arg_values,
+                "save_args": save_args,
                 "save_grads": save_grads,
-                "save_code_context": save_code_context,
-                "save_rng_states": save_rng_states,
+                "save_source_context": save_source_context,
+                "save_rng": save_rng,
                 "backward_ready": backward_ready,
                 "module_filter": module_filter,
                 "transform": transform,
@@ -1141,7 +1141,7 @@ class MLXBackend:
             MLX_PREVIEW_TRACE_OPTION_POLICY,
             spec=get_backend_spec("mlx"),
         )
-        if random_seed is not None:
+        if seed is not None:
             raise BackendUnsupportedError(
                 "MLX backend preview does not support random_seed; pass explicit MLX RNG "
                 "state through the model/input surface instead."
@@ -1186,27 +1186,27 @@ class MLXBackend:
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_args,
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=cast("Callable[[Any], Any] | None", transform),
+            input_transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -1245,7 +1245,7 @@ class MLXBackend:
         setattr(
             trace,
             "random_seed",
-            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
+            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
@@ -1260,11 +1260,11 @@ class MLXBackend:
             kwargs = {} if input_kwargs is None else dict(input_kwargs)
             self._label_source_arrays(trace, args, kwargs)
             trace.capture_start_time = time.time()
-            halt_signal: HaltSignal | None = None
+            halt_signal: StopSignal | None = None
             try:
                 with self.active_logging(trace):
                     output = cast(Any, model)(*args, **kwargs)
-            except HaltSignal as signal:
+            except StopSignal as signal:
                 # Save-then-halt ordering: the frontier op's events were
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
@@ -1920,7 +1920,7 @@ class MLXBackend:
                 reason=halt_label,
                 boundary_label=halt_label,
             )
-            raise HaltSignal(halt_label, frontier_output=output)
+            raise StopSignal(halt_label, frontier_output=output)
         return output
 
     def _apply_mlx_intervention(self, plan: Any, leaf: Any) -> Any:

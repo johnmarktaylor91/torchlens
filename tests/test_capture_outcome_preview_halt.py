@@ -3,7 +3,7 @@
 Every preview backend (tf / mlx / tinygrad / paddle / jax) settles through the
 ONE ``stamp_backend_finalized`` chokepoint as the last act of its capture
 entry. Paddle ships ``halt=`` and MLX carries ``_mlx_halt_selector``; both
-catch their ``HaltSignal``, write the structural halt fields, and fall through
+catch their ``StopSignal``, write the structural halt fields, and fall through
 the same tail to that stamp. Before the fix the stamp was unconditionally
 COMPLETE, so a halted preview product carried a wrongly-blessed settled
 status: on save+load the coherence matrix saw ``complete`` against structural
@@ -50,14 +50,14 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
 
     trace = _halted_trace()
     outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.HALTED
+    assert outcome.status is CaptureStatus.STOPPED
     # An attested stamp, not a structural derivation.
-    assert outcome.derived is False
-    assert outcome.partial is True
+    assert outcome.is_derived is False
+    assert outcome.is_partial is True
     assert outcome.reason == trace.halt_reason
     assert outcome.boundary_label == trace.halt_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
-    assert outcome.n_ops_committed is not None
+    assert outcome.num_committed_ops is not None
     # The stamp is the trace's settled outcome, in both homes.
     assert outcome_for(trace) is outcome
     assert trace.outcome is outcome
@@ -70,8 +70,8 @@ def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     assert bool(getattr(trace, "halted", False)) is False
     outcome = stamp_backend_finalized(trace)
     assert outcome.status is CaptureStatus.COMPLETE
-    assert outcome.derived is False
-    assert outcome.partial is False
+    assert outcome.is_derived is False
+    assert outcome.is_partial is False
     assert outcome.reason is None
     assert outcome.frontier_labels is None
 
@@ -92,7 +92,7 @@ def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> No
     loaded = tl.load(str(path))
     assert loaded.halted is True
     assert loaded.outcome is not None
-    assert loaded.outcome.status is CaptureStatus.HALTED
+    assert loaded.outcome.status is CaptureStatus.STOPPED
     # N1: a non-degraded halted artifact re-saves.
     loaded.save(str(tmp_path / "preview_halted_again.tlspec"))
 
@@ -115,7 +115,7 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
     """
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
-    assert "except HaltSignal" in source, backend
+    assert "except StopSignal" in source, backend
     assert re.search(r"trace\.halted\s*=\s*True", source), backend
     stamp_lines = [
         index
@@ -142,7 +142,7 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
     body = source.split("def stamp_backend_finalized(", 1)[1]
     body = body.split("\ndef ", 1)[0]
     assert 'getattr(trace, "halted"' in body
-    assert "CaptureStatus.HALTED" in body
+    assert "CaptureStatus.STOPPED" in body
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ def test_mlx_halted_capture_settles_halted() -> None:
     )
     assert trace.halted is True
     assert trace.outcome is not None
-    assert trace.outcome.status is CaptureStatus.HALTED
+    assert trace.outcome.status is CaptureStatus.STOPPED
 
 
 def test_paddle_halted_capture_settles_halted() -> None:
@@ -195,7 +195,7 @@ def test_paddle_halted_capture_settles_halted() -> None:
     )
     assert trace.halted is True
     assert trace.outcome is not None
-    assert trace.outcome.status is CaptureStatus.HALTED
+    assert trace.outcome.status is CaptureStatus.STOPPED
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     """A latched stop request with no structural halt is a swallowed signal.
 
     The halt-capable preview raise sites latch a ``StopRequest`` before
-    raising ``HaltSignal`` (torch ``evaluate_halt`` parity). If user code eats
+    raising ``StopSignal`` (torch ``evaluate_halt`` parity). If user code eats
     the signal in a broad ``except``, the capture reaches the stamp un-halted;
     before the fix that took the COMPLETE arm -- a wrongly-blessed settled
     status for a capture whose halt never actually stopped the forward.
@@ -244,28 +244,28 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
         boundary_label=trace.halt_frontier,
     )
     outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.HALTED
+    assert outcome.status is CaptureStatus.STOPPED
     assert "_stop_requested" not in trace.__dict__
 
 
 @pytest.mark.parametrize("backend", _HALT_CAPABLE_PREVIEW_BACKENDS)
 def test_halt_capable_preview_backend_latches_stop_request_before_raising(backend: str) -> None:
-    """Source lockstep: every preview HaltSignal raise latches the request first.
+    """Source lockstep: every preview StopSignal raise latches the request first.
 
-    The latch write must precede EVERY ``raise HaltSignal`` in the backend so
+    The latch write must precede EVERY ``raise StopSignal`` in the backend so
     a swallowed signal is detectable at the stamp; a raise without a latch
     reopens the swallowed-halt COMPLETE blessing for that site.
     """
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
     lines = source.splitlines()
-    raise_lines = [index for index, line in enumerate(lines) if "raise HaltSignal(" in line]
+    raise_lines = [index for index, line in enumerate(lines) if "raise StopSignal(" in line]
     assert raise_lines, backend
     latch_lines = [index for index, line in enumerate(lines) if '"_stop_requested"' in line]
     for raise_line in raise_lines:
         preceding = [index for index in latch_lines if 0 <= raise_line - index <= 12]
         assert preceding, (
-            f"{backend}: raise HaltSignal at line {raise_line + 1} has no "
+            f"{backend}: raise StopSignal at line {raise_line + 1} has no "
             "StopRequest latch write within the preceding 12 lines"
         )
 

@@ -806,7 +806,7 @@ def _attempt_live_forward(
                 model,
                 input_args,
                 input_kwargs=input_kwargs,
-                random_seed=ctx.seed,
+                seed=ctx.seed,
                 _run_until_plan=until_plan,
             )
     except Exception as exc:  # not BaseException: KeyboardInterrupt/SystemExit stay raw

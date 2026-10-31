@@ -312,7 +312,7 @@ def test_trace_module_code_context_uses_capture_cache(monkeypatch: pytest.Monkey
     trace = torchlens.trace(
         RepeatedCaller(),
         torch.ones(1),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     child_contexts = [
         module_call.code_context

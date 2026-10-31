@@ -62,7 +62,7 @@ attributes held across a later wrap-state change).
 2. Non-persistent buffers in use (the runnable-save family already
    enumerates them).
 3. Training modes, per module (`module.training`).
-4. Global + per-device RNG states (captured today under `save_rng_states`).
+4. Global + per-device RNG states (captured today under `save_rng`).
 5. Plain instance attributes mutated by `forward` (bounded scan; the
    implementation-fingerprint attribute walk is the existing precedent).
 6. Parameter `requires_grad` (already restored per session).

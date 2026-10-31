@@ -202,8 +202,8 @@ class TestRecorderCoverage:
             activation_transform=summary(lambda t: t.float().mean().unsqueeze(0)),
             save_raw_activations=False,
         ) as recorder:
-            recorder.log(torch.randn(2, 8))
-            recorder.log(torch.randn(2, 8))
+            recorder(torch.randn(2, 8))
+            recorder(torch.randn(2, 8))
         recording = recorder.recording
         inputs = [r for r in recording.records if r.ctx.kind == "input"]
         assert len(inputs) == 2, "one input record per rollout"
@@ -220,16 +220,16 @@ class TestRecorderCoverage:
 
         with tl.fastlog.Recorder(
             model,
-            default_op=CaptureSpec(save_out=True, keep_grad=True),
+            default_op=CaptureSpec(save_out=True, save_grad=True),
             save_grads=True,
             grad_transform=summary(lambda t: t.float().abs().sum().unsqueeze(0)),
-            save_raw_gradients=False,
+            save_raw_grads=False,
             backward_ready=True,
         ) as recorder:
-            out_1 = recorder.log(torch.randn(2, 8, requires_grad=True))
-            recorder.log_backward(out_1.sum())
-            out_2 = recorder.log(torch.randn(2, 8, requires_grad=True))
-            recorder.log_backward(out_2.sum())
+            out_1 = recorder(torch.randn(2, 8, requires_grad=True))
+            recorder.backward(out_1.sum())
+            out_2 = recorder(torch.randn(2, 8, requires_grad=True))
+            recorder.backward(out_2.sum())
         recording = recorder.recording
         assert recording.grad_records, "backward coverage: grad records present"
         for grad_record in recording.grad_records:

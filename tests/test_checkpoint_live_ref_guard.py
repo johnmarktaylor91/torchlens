@@ -330,7 +330,7 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
     model = stepped_pair["model"]
     x = stepped_pair["x"]
     halted = tl.trace(model, x, halt=tl.func("relu"))
-    assert halted.outcome.status.name == "HALTED"
+    assert halted.outcome.status.name == "STOPPED"
     bundle = tl.bundle({"h": halted, "c": stepped_pair["trace_before"]})
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
         _ = bundle.params[_WEIGHT].weight_norm_diff

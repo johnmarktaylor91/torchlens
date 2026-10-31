@@ -52,7 +52,7 @@ def _capture(model: nn.Module, x: torch.Tensor):
     log = trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     with torch.no_grad():
         ground_truth = model(x)

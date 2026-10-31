@@ -180,7 +180,7 @@ def _is_default_ram_payload(state: Any, spec: CaptureSpec) -> bool:
         and state.storage_intent.in_ram
         and not state.storage_intent.on_disk
         and state.options.activation_transform is None
-        and not spec.keep_grad
+        and not spec.save_grad
         and spec.device is None
         and spec.dtype is None
         and spec.save_mode == "copy"

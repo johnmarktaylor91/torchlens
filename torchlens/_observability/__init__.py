@@ -52,7 +52,7 @@ from ._kernels import (
     SpineResult,
     spine_vector_fused,
 )
-from ._kineto import ExtractionResult, NormalizedEvent, extract_events
+from ._kineto import NormalizedEvent
 from ._memory_parity import (
     EMITTED_CATEGORIES,
     NEVER_EMITTED_CATEGORIES,
@@ -137,7 +137,6 @@ __all__ = [
     "ArmSpec",
     "DerivedQuantile",
     "EventStream",
-    "ExtractionResult",
     "Histogram",
     "HistogramDescriptor",
     "HistogramResult",
@@ -186,7 +185,6 @@ __all__ = [
     "contact_sheet_pages",
     "derived_quantile",
     "derived_quantiles",
-    "extract_events",
     "format_markdown",
     "histogram_payload",
     "is_summary_transform",

@@ -81,7 +81,7 @@ classifier_trace.output_table(top_n=5)
 input_trace = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_trace.draw(show_input_transform_summary=True)
 

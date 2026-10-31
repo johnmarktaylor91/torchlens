@@ -438,7 +438,7 @@ OUT (documented handoffs, never silent):
   substrate wave; additive capability, never leaves a half-migrated representation. If
   sprint capacity remains after M13 it may be picked up; otherwise it is the first named
   handoff.
-- **`Recording`/`RecordingState`/`ActivationRecord`/`GradientRecord` tables**: same
+- **`Recording`/`RecordingState`/`ActivationRecord`/`GradRecord` tables**: same
   anti-pattern, sparse product (K rows, not 10^4-10^6); RAM win negligible, surface risk
   real. Mechanical-later handoff — it reuses the same pools/arena, so later
   decomposition is mechanical. Requires its own memory census and public oracle.
@@ -575,7 +575,7 @@ loaded analysis and runnable traces. Three deterministic byte streams per case:
   sets sorted by canonical bytes; dicts as ordered pairs; only documented volatile
   fields masked, each into a named bucket proven against a baseline-vs-baseline run.
   The documented volatile surface is `_ARTIFACT_VOLATILE_METADATA_FIELDS` in `torchlens/_constants.py`
-  (metadata.pkl: `random_seed`, capture start/end times, `_phase_timings`, the four
+  (metadata.pkl: `seed`, capture start/end times, `_phase_timings`, the four
   duration fields, `forward_peak_memory`) plus `_ARTIFACT_VOLATILE_MANIFEST_FIELDS`
   (manifest.json: `created_at`, `rng_state_digests`) — empirically derived from a
   same-seed two-process control; masking anything else is a contract widening that

@@ -99,7 +99,7 @@ def test_in_place_mutation_truthful_snapshots_and_validation_replay() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_arg_values=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
     )
     call = _call(trace)
 
@@ -226,7 +226,7 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     trace = tl.trace(
         model,
         _Box(torch.tensor([-2.0, 1.0])),
-        capture=tl.options.CaptureOptions(save_arg_values=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
     )
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]
@@ -567,13 +567,13 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
 
     for streaming in (
         None,
-        tl.options.StreamingOptions(
+        tl.options.StorageOptions(
             bundle_path=tmp_path / "recording.tlfast", retain_in_memory=False
         ),
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))
-        recording = tl.fastlog.record(model, torch.ones(1), default_op=True, streaming=streaming)
+        recording = tl.record(model, torch.ones(1), default_op=True, streaming=streaming)
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))
 

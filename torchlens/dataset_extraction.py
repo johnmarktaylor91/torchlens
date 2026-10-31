@@ -50,16 +50,13 @@ from ._errors import InvalidArgumentError
 from ._extraction import (
     BatchEnvelope,
     RaggedBatch,
-    as_torch_dataset,
     export_extraction,
-    feature_matrix,
     hf_collate,
     is_selector_request,
     open_extraction,
     register_pure_module,
     resolve_dtype_policy,
     resolve_pool_policy,
-    shuffled_batches,
     validate_output_keys,
     validate_ragged_mode,
     validate_shard_format,
@@ -88,7 +85,6 @@ from ._extraction.token_store import (
     validate_store_input_ids,
 )
 from ._extraction_provenance import (
-    INPUT_PREPROCESSING_SCHEMA,
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
@@ -99,15 +95,11 @@ from .transforms._pipeline import pipeline_record as _pipeline_record
 #: Legacy v1 manifest schema id (still readable forever; superseded on write).
 MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1
 
-#: Native shard format recorded for legacy ``.pt`` artifacts (a manifest
-#: FIELD, so a later format change is a value change, not a layout break).
-NATIVE_FORMAT = "pt_shards_v1"
-
 
 def _coerce_transform_slot(
     transform: Any, layer_plan: dict[str, str]
 ) -> tuple[dict[str, TransformPipeline | None], Any]:
-    """Route the ``transform=`` slot through the one coercion door (memo B1).
+    """Route the ``output_transform=`` slot through the one coercion door (memo B1).
 
     Parameters
     ----------
@@ -295,7 +287,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     batch_size: int = 32,
     device: torch.device | str | None = None,
     path: str | Path | None = None,
-    transform: Any = None,
+    output_transform: Any = None,
     progress: bool = True,
     *,
     resume: bool = False,
@@ -342,7 +334,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     output_dir:
         Optional directory. When supplied, each batch is committed as an
         immutable shard under the v2 protocol and paths are returned.
-    transform:
+    output_transform:
         Transform slot, through the ONE :func:`torchlens.transforms.
         coerce_transform` door (DOCUMENTED-UNSTABLE). Selector-valued
         ``layers=`` accepts ``None`` or one global chain (per-site
@@ -367,7 +359,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         opt-out), or an assertion Mapping for unmeasurable models.
     input_transform:
         The unambiguous INPUT-preprocessing path (tvscope B5,
-        DOCUMENTED-UNSTABLE spelling), distinct from ``transform=`` which
+        DOCUMENTED-UNSTABLE spelling), distinct from ``output_transform=`` which
         transforms OUTPUTS before storage. Pass a
         :class:`torchlens.preprocessing.Resolution` (the golden path: the
         authority's own callable and its provenance travel together, the
@@ -519,7 +511,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
 
     selector_pipeline: TransformPipeline | None = None
     if is_selector_request(layers):
-        if isinstance(transform, Mapping):
+        if isinstance(output_transform, Mapping):
             raise InvalidArgumentError(
                 "Selector-valued layers= cannot take a per-site transform "
                 "Mapping: the plan's output keys (including namespaced "
@@ -533,7 +525,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         layers_kind = "selector"
         layer_plan: dict[str, str] = {}
         pipelines: dict[str, TransformPipeline | None] = {}
-        selector_pipeline = coerce_transform(transform)
+        selector_pipeline = coerce_transform(output_transform)
         transform_record = _pipeline_record(selector_pipeline)
         if isinstance(layers, Mapping):
             validate_output_keys(layers.keys())
@@ -546,7 +538,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
             validate_output_keys(layers.keys())
         layer_plan = _tl._normalize_extract_layers(layers)
         layers_kind = "mapping" if isinstance(layers, Mapping) else "sequence"
-        pipelines, transform_record = _coerce_transform_slot(transform, layer_plan)
+        pipelines, transform_record = _coerce_transform_slot(output_transform, layer_plan)
 
     if input_identity is not None:
         # The input-transform identity joins the resume signature as a
@@ -578,7 +570,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         checksums=checksums_level,
         pipeline_id=pipeline_id,
         acknowledge_v1_prefix=acknowledge_v1_prefix,
-        transform_raw=transform,
+        transform_raw=output_transform,
         selector_pipeline=selector_pipeline,
         input_transform=input_callable,
         input_block=input_block,
@@ -844,22 +836,14 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
 
 
 __all__ = [
-    "INPUT_PREPROCESSING_SCHEMA",
-    "MANIFEST_FILENAME",
-    "NATIVE_FORMAT",
     "BatchEnvelope",
     "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
     "TokenRows",
-    "as_torch_dataset",
     "export_extraction",
-    "extract_dataset",
-    "feature_matrix",
     "hf_collate",
-    "input_preprocessing_of",
     "open_extraction",
     "register_pure_module",
     "relabel_extraction",
-    "shuffled_batches",
 ]

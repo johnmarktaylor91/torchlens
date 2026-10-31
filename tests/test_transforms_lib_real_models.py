@@ -161,7 +161,7 @@ def test_resnet50_heterogeneous_extraction_end_to_end(tmp_path) -> None:
         layers=["layer2", "layer3", "layer4", "avgpool"],
         batch_size=4,
         path=out_dir,
-        transform=dict(chains),
+        output_transform=dict(chains),
         progress=False,
     )
     from torchlens.dataset_extraction import load_extraction
@@ -385,7 +385,7 @@ def test_opaque_chain_discloses_identification_only(tmp_path) -> None:
         layers=["avgpool"],
         batch_size=4,
         path=out_dir,
-        transform=lambda tensor: tensor.flatten(1),
+        output_transform=lambda tensor: tensor.flatten(1),
         progress=False,
     )
     from torchlens.dataset_extraction import load_extraction

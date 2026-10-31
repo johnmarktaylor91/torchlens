@@ -254,7 +254,7 @@ def test_capture_digest_minted_and_recomputable_from_the_product():
         model,
         _prompt(),
         episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
-        capture=tl.options.CaptureOptions(random_seed=1234),
+        capture=tl.options.CaptureOptions(seed=1234),
     )
     ledger = trace.episode
     assert ledger is not None
@@ -292,7 +292,7 @@ def test_capture_digest_differs_across_seeds():
             model,
             _prompt(),
             episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
-            capture=tl.options.CaptureOptions(random_seed=seed),
+            capture=tl.options.CaptureOptions(seed=seed),
         )
 
     first = capture(1234).episode.header.capture_digest

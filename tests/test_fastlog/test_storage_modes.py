@@ -12,7 +12,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.fastlog import CaptureSpec, PredicateError, RecordContext, RecordingConfigError
-from torchlens.options import StreamingOptions
+from torchlens.options import StorageOptions
 
 
 class StorageModel(nn.Module):
@@ -30,7 +30,7 @@ class StorageModel(nn.Module):
         return self.linear(x).relu()
 
 
-def _first_payload_record(recording: tl.fastlog.Recording) -> tl.fastlog.ActivationRecord:
+def _first_payload_record(recording: tl.Recording) -> tl.fastlog.ActivationRecord:
     """Return the first record with a RAM payload."""
 
     return next(record for record in recording if record.ram_payload is not None)
@@ -39,7 +39,7 @@ def _first_payload_record(recording: tl.fastlog.Recording) -> tl.fastlog.Activat
 def test_ram_only_keep_grad_false_records_detached_tensor() -> None:
     """RAM-only keep_grad=False stores a detached tensor payload."""
 
-    recording = tl.fastlog.record(StorageModel(), torch.ones(1, 3), default_op=True)
+    recording = tl.record(StorageModel(), torch.ones(1, 3), default_op=True)
     payload = _first_payload_record(recording).ram_payload
 
     assert payload is not None
@@ -51,10 +51,10 @@ def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() ->
     """RAM-only keep_grad=True keeps an attached clone that reaches parameters."""
 
     model = StorageModel()
-    recording = tl.fastlog.record(
+    recording = tl.record(
         model,
         torch.ones(1, 3),
-        default_op=CaptureSpec(keep_grad=True),
+        default_op=CaptureSpec(save_grad=True),
     )
     payload = _first_payload_record(recording).ram_payload
 
@@ -68,14 +68,14 @@ def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() ->
 def test_view_save_mode_promotes_keep_grad() -> None:
     """CaptureSpec save_mode='view' records an attached payload honestly."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
         default_op=CaptureSpec(save_mode="view"),
     )
     record = _first_payload_record(recording)
 
-    assert record.spec.keep_grad is True
+    assert record.spec.save_grad is True
     assert record.ram_payload is not None
     assert record.ram_payload.requires_grad is True
     assert record.ram_payload.grad_fn is not None
@@ -85,7 +85,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
     """Reference-mode payloads projected to Trace retain the mutation tripwire."""
 
     with pytest.warns(UserWarning, match="save_mode='reference'"):
-        recording = tl.fastlog.record(
+        recording = tl.record(
             StorageModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(save_mode="reference"),
@@ -103,7 +103,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
 def test_true_predicate_inherits_default_save_mode() -> None:
     """Predicate ``True`` decisions inherit the default storage policy."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
@@ -121,11 +121,11 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
 ) -> None:
     """RAM+disk mirror keeps RAM attached and disk payload detached."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
-        default_op=CaptureSpec(keep_grad=True),
-        streaming=StreamingOptions(
+        default_op=CaptureSpec(save_grad=True),
+        streaming=StorageOptions(
             bundle_path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
@@ -141,11 +141,11 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
 def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) -> None:
     """Disk-only storage rejects static keep_grad defaults before recording."""
 
-    with pytest.raises(RecordingConfigError, match="keep_grad=True"):
+    with pytest.raises(RecordingConfigError, match="save_grad=True"):
         tl.fastlog.Recorder(
             StorageModel(),
-            default_op=CaptureSpec(keep_grad=True),
-            streaming=StreamingOptions(
+            default_op=CaptureSpec(save_grad=True),
+            streaming=StorageOptions(
                 bundle_path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
@@ -162,14 +162,14 @@ def test_disk_only_predicate_keep_grad_rejected_before_record_write(
     def keep_op(ctx: RecordContext) -> CaptureSpec | bool:
         """Request keep_grad for the first operation event."""
 
-        return CaptureSpec(keep_grad=True) if ctx.kind == "op" else False
+        return CaptureSpec(save_grad=True) if ctx.kind == "op" else False
 
     with pytest.raises(PredicateError, match="disk-only"):
-        tl.fastlog.record(
+        tl.record(
             StorageModel(),
             torch.ones(1, 3),
             save=keep_op,
-            streaming=StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     partials = list(tmp_path.glob("disk.tlfast.tmp.*"))
@@ -182,10 +182,10 @@ def test_keep_grad_true_integer_dtype_rejected_per_record() -> None:
     """keep_grad=True with an integer dtype transform is rejected per record."""
 
     with pytest.raises(PredicateError, match="integer or bool"):
-        tl.fastlog.record(
+        tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(keep_grad=True, dtype=torch.int32),
+            default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
         )
 
 
@@ -193,11 +193,11 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
     """keep_grad=True with an explicit CPU device warns once and records."""
 
     with pytest.warns(UserWarning, match="explicit device target") as warnings_seen:
-        recording = tl.fastlog.record(
+        recording = tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(keep_grad=True, device="cpu"),
-            streaming=StreamingOptions(
+            default_op=CaptureSpec(save_grad=True, device="cpu"),
+            streaming=StorageOptions(
                 bundle_path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),
@@ -231,7 +231,7 @@ def test_model_parameter_requires_grad_flags_preserved() -> None:
     model.linear.bias.requires_grad_(False)
     before = {name: param.requires_grad for name, param in model.named_parameters()}
 
-    tl.fastlog.record(model, torch.ones(1, 3), default_op=True)
+    tl.record(model, torch.ones(1, 3), default_op=True)
 
     after = {name: param.requires_grad for name, param in model.named_parameters()}
     assert after == before

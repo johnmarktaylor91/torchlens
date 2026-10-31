@@ -142,7 +142,7 @@ from ...capture.projections import (
 from ...capture.salient_args import extract_salient_args
 from ...capture.session import capture_session_for
 from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog._storage_resolver import _resolve_storage
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import (

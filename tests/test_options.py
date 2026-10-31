@@ -12,7 +12,7 @@ from torchlens.options import (
     InterventionOptions,
     ReplayOptions,
     SaveOptions,
-    StreamingOptions,
+    StorageOptions,
     VisualizationOptions,
     merge_streaming_options,
 )
@@ -23,7 +23,7 @@ _OPTION_CLASSES = [
     VisualizationOptions,
     ReplayOptions,
     InterventionOptions,
-    StreamingOptions,
+    StorageOptions,
 ]
 
 
@@ -57,5 +57,5 @@ def test_option_class_is_frozen(option_cls: type[Any]) -> None:
 def test_streaming_option_rejects_bool_with_clear_type_error() -> None:
     """The grouped streaming option should not leak raw bool attribute errors."""
 
-    with pytest.raises(TypeError, match="received bool, not StreamingOptions"):
+    with pytest.raises(TypeError, match="received bool, not StorageOptions"):
         merge_streaming_options(streaming=True)  # type: ignore[arg-type]

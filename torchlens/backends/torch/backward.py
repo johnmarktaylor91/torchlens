@@ -3012,7 +3012,7 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
 
     from ...fastlog.types import CaptureSpec
 
-    return value is True or (isinstance(value, CaptureSpec) and value.keep_grad)
+    return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
 
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
@@ -3084,11 +3084,11 @@ def log_recording_backward(
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:
-        raise RecorderStateError("Recording.log_backward() requires a live recording state")
+        raise RecorderStateError("Recording.backward() requires a live recording state")
     trace = getattr(recording_state, "runtime_trace", None)
     if trace is None:
         raise RecorderStateError(
-            "Recording.log_backward() requires a live runtime trace from Recorder.log()."
+            "Recording.backward() requires a live runtime trace from Recorder(...)."
         )
     effective_save_grads = (
         save_grads if save_grads is not None else recording_state.options.save_grads
@@ -3102,7 +3102,7 @@ def log_recording_backward(
         and _is_static_truthy_keep_grad(effective_save_grads)
     ):
         raise InvalidStorageError(
-            "save_grads=True with CaptureSpec(keep_grad=True) is incompatible with "
+            "save_grads=True with CaptureSpec(save_grad=True) is incompatible with "
             "disk-only fastlog gradient storage"
         )
     selected_forward_labels = _selected_fastlog_forward_labels(recording)
@@ -3119,7 +3119,7 @@ def log_recording_backward(
                 and _is_static_truthy_keep_grad(decision)
             ):
                 raise InvalidStorageError(
-                    "save_grads returned CaptureSpec(keep_grad=True), which is incompatible "
+                    "save_grads returned CaptureSpec(save_grad=True), which is incompatible "
                     "with disk-only fastlog gradient storage"
                 )
             return decision

@@ -413,8 +413,8 @@ def test_carry_state_does_not_change_the_trace():
     model = _Stateful().train()
     twin = copy.deepcopy(model)
     x = torch.randn(2, 3, 8, 8)
-    pure = tl.trace(model, x, capture=CaptureOptions(random_seed=3))
-    carried = tl.trace(twin, x, capture=CaptureOptions(random_seed=3, carry_state=True))
+    pure = tl.trace(model, x, capture=CaptureOptions(seed=3))
+    carried = tl.trace(twin, x, capture=CaptureOptions(seed=3, carry_state=True))
     assert [op.layer_label for op in pure.layer_list] == [
         op.layer_label for op in carried.layer_list
     ]

@@ -23,7 +23,7 @@ from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
 )
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
@@ -210,7 +210,7 @@ def log_source_tensor_predicate(
         # input/buffer event, after the append.
         _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
-    except HaltSignal:
+    except StopSignal:
         raise
     except (TorchLensPostfuncError, TrainingModeConfigError):
         # Postfunc + train-mode validation errors are storage failures and

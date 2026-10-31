@@ -54,7 +54,6 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -65,6 +64,7 @@ from ...backends._finalize import (
     stamp_preview_graph_shape_hash,
     value_nbytes as _nbytes,
 )
+from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...capture._nonfinite_prefix import strip_raw_label_suffix
 from ...capture.outcome import stamp_backend_finalized
 from ...fastlog.types import CaptureSpec
@@ -417,9 +417,9 @@ class JAXBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -427,7 +427,7 @@ class JAXBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
             jax_control_flow=jax_control_flow,
             jax_max_control_flow_unroll=jax_max_control_flow_unroll,
@@ -437,9 +437,9 @@ class JAXBackend:
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
@@ -447,7 +447,7 @@ class JAXBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         jax_control_flow = capture_options.jax_control_flow
         jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
@@ -461,7 +461,7 @@ class JAXBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -523,9 +523,9 @@ class JAXBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -546,7 +546,7 @@ class JAXBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_raw_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
@@ -906,7 +906,7 @@ class JAXBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         compute_input_output_distances: bool = True,
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
@@ -923,7 +923,7 @@ class JAXBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             param_source="pytree-derived",
             compute_input_output_distances=compute_input_output_distances,
         )
@@ -2775,7 +2775,7 @@ class JAXBackend:
             Returns when all options are supported.
         """
 
-        if options["save_rng_states"]:
+        if options["save_rng"]:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
                 "save_rng_states and torch-style RNG replay are unsupported."

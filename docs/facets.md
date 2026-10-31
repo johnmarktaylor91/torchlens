@@ -204,7 +204,7 @@ Use `tl.facet(name)` for a named facet and `tl.head(index, name)` or
 log = tl.trace(
     model,
     x,
-    capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
 )
 edited = log.fork("ablated")
 edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
@@ -317,8 +317,8 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-`reconstruction_ready=True` enables `save_arg_values=True` and
-`save_rng_states=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
+`reconstruction_ready=True` enables `save_args=True` and
+`save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
 so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
 the q_proj/k_proj outputs.
 

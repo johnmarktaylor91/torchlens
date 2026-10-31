@@ -546,7 +546,7 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     validate_metadata: bool = True,
-    random_seed: int | None = None,
+    seed: int | None = None,
     atol: float | None = None,
     rtol: float | None = None,
     validate_layer_grads: bool = True,
@@ -623,8 +623,8 @@ def validate_backward_pass(
         input_kwargs = {}
     if loss_fn is None:
         loss_fn = _sum_tensors
-    if random_seed is None:
-        random_seed = random.randint(1, 4294967294)
+    if seed is None:
+        seed = random.randint(1, 4294967294)
     input_args = normalize_input_args(input_args, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
@@ -640,7 +640,7 @@ def validate_backward_pass(
     stock_identity_addresses = None
 
     try:
-        set_random_seed(random_seed)
+        set_random_seed(seed)
         stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
             input_args, input_kwargs, model_device
         )
@@ -665,7 +665,7 @@ def validate_backward_pass(
                         stock_inputs,
                         stock_kwargs,
                         loss_fn=loss_fn,
-                        random_seed=random_seed,
+                        seed=seed,
                         state_dict_snapshot=state_dict,
                     )
                 else:
@@ -690,7 +690,7 @@ def validate_backward_pass(
         restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
         _restore_leaf_parameters(leaf_flags)
         _restore_training_mode(model, original_training)
-        set_random_seed(random_seed)
+        set_random_seed(seed)
         logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
             input_args, input_kwargs, model_device
         )
@@ -702,7 +702,7 @@ def validate_backward_pass(
             capture=CaptureOptions(
                 layers_to_save="all",
                 save_grads="all",
-                random_seed=random_seed,
+                seed=seed,
             ),
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)

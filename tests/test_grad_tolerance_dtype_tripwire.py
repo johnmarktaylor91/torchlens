@@ -182,7 +182,7 @@ def test_fp64_param_grad_corruption_fails_the_backward_verdict(
     assert not backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -197,7 +197,7 @@ def test_fp64_param_grad_clean_run_still_passes() -> None:
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -222,7 +222,7 @@ def test_fp16_few_ulp_param_grad_agreement_is_not_a_false_fail(
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float16),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -242,7 +242,7 @@ def test_explicit_tolerances_still_override_every_dtype(
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
         atol=PARAM_GRAD_VALIDATION_ATOL,
@@ -278,7 +278,7 @@ def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     assert not backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
     )
 
@@ -341,7 +341,7 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
         passed = fns[spelling](
             model,
             torch.randn(2, 4, dtype=torch.float64),
-            random_seed=11,
+            seed=11,
             validate_metadata=False,
             validate_layer_grads=False,
         )

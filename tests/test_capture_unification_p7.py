@@ -106,18 +106,16 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
 
 
 def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> None:
-    """Recording and Trace subclass CapturedRun and satisfy ActivationLookup."""
+    """Recording and Trace subclass TraceLike and satisfy ActivationLookup."""
 
     model = ConvReluAdd()
     x = torch.randn(1, 1, 4, 4)
 
-    recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=17)
-    trace = tl.trace(
-        model, x, save=tl.func("conv2d"), capture=tl.options.CaptureOptions(random_seed=17)
-    )
+    recording = tl.record(model, x, save=tl.func("conv2d"), seed=17)
+    trace = tl.trace(model, x, save=tl.func("conv2d"), capture=tl.options.CaptureOptions(seed=17))
 
-    assert issubclass(type(recording), tl.CapturedRun)
-    assert issubclass(type(trace), tl.CapturedRun)
+    assert issubclass(type(recording), tl.types.TraceLike)
+    assert issubclass(type(trace), tl.types.TraceLike)
     assert not issubclass(type(trace), type(recording))
     assert isinstance(recording, tl.ActivationLookup)
     assert isinstance(trace, tl.ActivationLookup)
@@ -129,9 +127,9 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
     model = ConvReluAdd()
     x = torch.randn(1, 1, 4, 4)
 
-    recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=23)
+    recording = tl.record(model, x, save=tl.func("conv2d"), seed=23)
     cooked = recording.to_trace()
-    full = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=23))
+    full = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=23))
 
     assert _structure(cooked) == _structure(full)
     # Provenance honesty: the cooked projection runs exhaustive-style
@@ -174,7 +172,7 @@ def test_recording_to_trace_materializes_input_layers_and_backfills_timing() -> 
     x = torch.randn(1, 1, 4, 4)
 
     before = time.time()
-    recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=31)
+    recording = tl.record(model, x, save=tl.func("conv2d"), seed=31)
     cooked = recording.to_trace()
     after = time.time()
 
@@ -212,7 +210,7 @@ def test_recording_to_trace_inputs_come_from_materialization(
 ) -> None:
     """Plain and buffer-writing recordings get input lists from normal Step 0."""
 
-    recording = tl.record(model, x, save=lambda _ctx: True, random_seed=37)
+    recording = tl.record(model, x, save=lambda _ctx: True, seed=37)
     cooked = recording.to_trace()
 
     expected_raw_inputs = {
@@ -257,7 +255,7 @@ def test_recording_to_trace_passes_full_metadata_invariants(model_factory) -> No
     model = model_factory().eval()
     x = torch.randn(2, 4)
 
-    cooked = tl.record(model, x, save=tl.func("relu"), random_seed=41).to_trace()
+    cooked = tl.record(model, x, save=tl.func("relu"), seed=41).to_trace()
 
     # FULL chain -- must not raise MetadataInvariantError for any contract.
     check_metadata_invariants(cooked)
@@ -285,10 +283,8 @@ def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> Non
 
     x = torch.randn(2, 4)
 
-    cooked = tl.record(model_factory().eval(), x, save=tl.func("relu"), random_seed=41).to_trace()
-    exhaustive = tl.trace(
-        model_factory().eval(), x, capture=tl.options.CaptureOptions(random_seed=41)
-    )
+    cooked = tl.record(model_factory().eval(), x, save=tl.func("relu"), seed=41).to_trace()
+    exhaustive = tl.trace(model_factory().eval(), x, capture=tl.options.CaptureOptions(seed=41))
 
     assert _module_tree(cooked) == _module_tree(exhaustive)
     assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
@@ -302,9 +298,9 @@ def test_removed_keep_aliases_raise_type_error() -> None:
     x = torch.randn(1, 1, 4, 4)
 
     with pytest.raises(TypeError, match="keep_op"):
-        tl.record(model, x, keep_op=tl.func("conv2d"), random_seed=29)
+        tl.record(model, x, keep_op=tl.func("conv2d"), seed=29)
     with pytest.raises(TypeError, match="keep_module"):
-        tl.record(model, x, keep_module=lambda ctx: True, random_seed=29)
+        tl.record(model, x, keep_module=lambda ctx: True, seed=29)
 
 
 # ---------------------------------------------------------------------------
@@ -420,10 +416,8 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     model = AllCategory().eval()
     x = torch.randn(2, 4)
 
-    cooked = tl.record(model, x, save=tl.func("relu"), random_seed=11).to_trace()
-    exhaustive = tl.trace(
-        AllCategory().eval(), x, capture=tl.options.CaptureOptions(random_seed=11)
-    )
+    cooked = tl.record(model, x, save=tl.func("relu"), seed=11).to_trace()
+    exhaustive = tl.trace(AllCategory().eval(), x, capture=tl.options.CaptureOptions(seed=11))
 
     # FULL invariant chain -- both must be clean.
     check_metadata_invariants(cooked)
@@ -474,9 +468,7 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     halt = lambda ctx: getattr(ctx, "func_name", "") == "relu"  # noqa: E731
 
     exhaustive = tl.trace(_HaltNested().eval(), x, halt=halt)
-    cooked = tl.record(
-        _HaltNested().eval(), x, save=tl.func("relu"), halt=halt, random_seed=9
-    ).to_trace()
+    cooked = tl.record(_HaltNested().eval(), x, save=tl.func("relu"), halt=halt, seed=9).to_trace()
 
     # .halted must be TRUE (not silently False) and match exhaustive exactly.
     assert cooked.halted is True
@@ -505,9 +497,9 @@ def test_recording_to_trace_halted_without_payload_rejected() -> None:
             x,
             save=tl.func("this_function_name_never_matches"),
             halt=lambda ctx: getattr(ctx, "func_name", "") == "relu",
-            random_seed=9,
+            seed=9,
         )
-    assert recording.halted is True
+    assert recording.is_stopped is True
     assert len(recording.records) == 0
     with pytest.raises(RuntimeError, match="halted Recording that retained no raw activation"):
         recording.to_trace()
@@ -563,10 +555,10 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     #     matching a control recording read BEFORE to_trace().
     rec_after = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
     _ = rec_after.to_trace()
-    contexts_after = len(rec_after.recording_trace.contexts)
+    contexts_after = len(rec_after.lazy_trace.contexts)
 
     rec_before = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
-    contexts_before = len(rec_before.recording_trace.contexts)
+    contexts_before = len(rec_before.lazy_trace.contexts)
     _ = rec_before.to_trace()
 
     assert contexts_after == contexts_before
@@ -590,11 +582,11 @@ def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
             return torch.relu(x + 1)
 
     with tl.fastlog.Recorder(RepeatRelu(), save=lambda ctx: ctx.kind == "op") as recorder:
-        recorder.log(torch.ones(1, 3))
-        recorder.log(torch.ones(1, 3) * 2)
+        recorder(torch.ones(1, 3))
+        recorder(torch.ones(1, 3) * 2)
 
     recording = recorder.recording
-    assert recording.n_passes == 2
+    assert recording.num_passes == 2
     with pytest.raises(RuntimeError, match="multi-pass Recordings"):
         recording.to_trace()
 
@@ -658,7 +650,7 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
         x,
         save=tl.func("linear"),
         halt=_second_linear_halt,
-        random_seed=11,
+        seed=11,
     ).to_trace()
 
     assert cooked.halted is True
@@ -707,5 +699,5 @@ def test_recording_to_trace_backfills_random_seed() -> None:
     """
 
     x = torch.randn(2, 4)
-    cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), random_seed=4242).to_trace()
+    cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), seed=4242).to_trace()
     assert cooked.random_seed == 4242

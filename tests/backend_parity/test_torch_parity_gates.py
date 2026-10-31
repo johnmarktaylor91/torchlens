@@ -169,8 +169,8 @@ def _default_trace() -> Trace:
         x,
         capture=CaptureOptions(
             layers_to_save="all",
-            random_seed=1701,
-            save_arg_values=True,
+            seed=1701,
+            save_args=True,
         ),
     )
 
@@ -186,7 +186,7 @@ def _selective_trace() -> Trace:
 
     _guard_update_generation()
     model, x = _seeded_branchy_input()
-    return tl.trace(model, x, save=tl.func("tanh"), capture=CaptureOptions(random_seed=1702))
+    return tl.trace(model, x, save=tl.func("tanh"), capture=CaptureOptions(seed=1702))
 
 
 def _backward_ready_trace() -> Trace:
@@ -207,7 +207,7 @@ def _backward_ready_trace() -> Trace:
             layers_to_save="all",
             save_grads="all",
             backward_ready=True,
-            random_seed=1701,
+            seed=1701,
         ),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())

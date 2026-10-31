@@ -312,7 +312,7 @@ def _assert_works(verb: str, result: Any) -> None:
     elif verb == "outcome":
         assert result.status.name in {
             "COMPLETE",
-            "HALTED",
+            "STOPPED",
             "ABORTED_NONFINITE",
             "FAILED",
             "UNATTESTED",

@@ -23,8 +23,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
 from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
+from torchlens._extraction.resume import MANIFEST_FILENAME
 from torchlens.dataset_extraction import (
-    MANIFEST_FILENAME,
     DatasetExtractionResumeError,
     load_extraction,
 )
@@ -405,7 +405,7 @@ def test_manifest_is_self_describing(tmp_path: Path) -> None:
         batch_size=3,
         path=tmp_path,
         progress=False,
-        transform=lambda tensor: tensor.mean(dim=1),
+        output_transform=lambda tensor: tensor.mean(dim=1),
         stimulus_ids=ids,
     )
     manifest = json.loads((tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8"))

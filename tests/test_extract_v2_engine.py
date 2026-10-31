@@ -17,13 +17,13 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._errors import InvalidArgumentError
 from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 from torchlens.dataset_extraction import (
     BatchEnvelope,
     DatasetExtractionResumeError,
-    extract_dataset,
     open_extraction,
 )
 
@@ -105,7 +105,7 @@ def test_row_count_is_input_derived_and_refuses_drift(tmp_path: Path) -> None:
         return BatchEnvelope(
             args=(torch.stack(items),),
             kwargs={},
-            row_count=len(items) + 1,
+            num_rows=len(items) + 1,
             mask=None,
             disclosure={"kind": "test"},
         )
@@ -444,7 +444,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
         ["relu"],
         batch_size=2,
         path=tmp_path,
-        transform=scale_two,
+        output_transform=scale_two,
         progress=False,
     )
     _interrupt_after(tmp_path, 1)
@@ -455,7 +455,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
             ["relu"],
             batch_size=2,
             path=tmp_path,
-            transform=scale_three,
+            output_transform=scale_three,
             progress=False,
             resume=True,
         )

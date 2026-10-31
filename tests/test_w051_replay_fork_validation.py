@@ -1,6 +1,6 @@
 """Full validation of NON-identity edited forks (AUD-CODE 2.9).
 
-``validate_forward_pass`` on ANY pushed fork with ``save_arg_values=True``
+``validate_forward_pass`` on ANY pushed fork with ``save_args=True``
 false-FAILED at the first downstream op (``argument_logging: parent not
 logged as an argument``) because the argument-logging check compared the
 child's capture-time ``saved_args`` snapshot against the PUSHED
@@ -49,7 +49,7 @@ def two():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield model, x, trace

@@ -831,7 +831,7 @@ def _metadata_invariant_contracts_for_trace(
         requirements.
     """
 
-    from ..backends import get_backend_spec
+    from ..backends.registry import get_backend_spec
 
     spec = get_backend_spec(getattr(trace, "backend", "torch"))
     torch_spec = get_backend_spec("torch")

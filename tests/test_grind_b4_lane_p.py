@@ -164,7 +164,7 @@ def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     cache_root = tmp_path / "capture"
     assert len(list(cache_root.glob("*.pkl"))) == 2
-    assert user_funcs.clear_capture_cache(tmp_path) == 2
+    assert user_funcs.clear_cache(tmp_path) == 2
     assert list(cache_root.glob("*.pkl")) == []
     assert (cache_root / ".capture_cache_secret").is_file()
 
@@ -308,8 +308,8 @@ def test_streamed_bundle_lazy_load_keeps_relation_labels_as_strings(tmp_path: Pa
     tl.trace(
         _TwoOpModel(),
         torch.randn(1, 1, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
     lazy_log = tl.load(bundle_path, lazy=True)
     for op in lazy_log.ops:
@@ -408,20 +408,20 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     )
 
 
-def test_clear_capture_cache_is_public(tmp_path: Path) -> None:
-    """The round-1-agreed remedy tl.clear_capture_cache() is reachable (r2 F39-3).
+def test_clear_cache_is_public(tmp_path: Path) -> None:
+    """The round-1-agreed remedy tl.clear_cache() is reachable (r2 F39-3).
 
-    user_funcs.clear_capture_cache shipped unexported: not in ``__all__`` and
+    The cache-clearing remedy shipped unexported: not in ``__all__`` and
     absent from the top-level namespace, so a user hitting the entry/byte cap
     or an oversized-entry refusal had no supported way to clear the cache.
     """
 
-    assert "clear_capture_cache" in tl.__all__
+    assert "clear_cache" in tl.__all__
     x = torch.ones(1, 1)
     model = nn.Linear(1, 1, bias=False)
     tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert len(list((tmp_path / "capture").glob("*.pkl"))) == 1
-    assert tl.clear_capture_cache(tmp_path) == 1
+    assert tl.clear_cache(tmp_path) == 1
     assert list((tmp_path / "capture").glob("*.pkl")) == []
 
 

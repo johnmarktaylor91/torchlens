@@ -17,11 +17,7 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-    get_backend_spec,
-)
+from torchlens.backends import BackendRuntimeCompatibilityError, BackendUnsupportedError
 from torchlens.backends.jax import capabilities
 
 jax = pytest.importorskip("jax")
@@ -1232,7 +1228,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
 def test_jax_capability_flags_match_preview_contract() -> None:
     """JAX capability exports should match the M1 preview surface."""
 
-    spec = get_backend_spec("jax")
+    spec = tl.backends.spec("jax")
 
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.validation_replay is True
@@ -1304,7 +1300,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
     import jax.numpy as jnp
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.backends import BackendCapabilityConformanceError
 
     def model(x: Any) -> Any:
         """Return a tanh-projected input.
@@ -1322,7 +1318,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
         return jnp.tanh(x @ jnp.ones((4, 3)))
 
-    spec = get_backend_spec("jax")
+    spec = tl.backends.spec("jax")
     object.__setattr__(spec.capabilities, "interventions", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):

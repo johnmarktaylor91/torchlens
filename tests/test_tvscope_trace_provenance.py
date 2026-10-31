@@ -39,7 +39,7 @@ def test_transform_capture_stamps_user_transform_record() -> None:
         _Tiny().eval(),
         [1.0] * 8,
         capture=tl.options.CaptureOptions(
-            transform=lambda x: torch.tensor([x], dtype=torch.float32)
+            input_transform=lambda x: torch.tensor([x], dtype=torch.float32)
         ),
     )
     record = log.input_preprocessor

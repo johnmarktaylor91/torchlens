@@ -324,7 +324,7 @@ def test_user_capture_composes_required_fields() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(save_code_context=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_source_context=True)},
     )
     assert table.shape == (1,)
 
@@ -349,8 +349,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={
-            "capture": tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
-        },
+        trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save="all", save_args=True)},
     )
     assert table.shape == (1,)

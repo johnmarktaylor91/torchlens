@@ -39,7 +39,7 @@ from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_captu
 from .._ir.container_registry import ModelSite, Phase, Role, walk_container
 from .._quantities import Bytes, Duration
 from .._runnable_seam import runnable_trace_state
-from ..backends import (
+from ..backends.registry import (
     TORCH_BACKEND_NAME,
     BackendName,
     BackendUnsupportedError,
@@ -47,7 +47,7 @@ from ..backends import (
     get_backend_spec,
     resolve_backend_spec,
 )
-from ..fastlog._halt import HaltSignal
+from ..fastlog._halt import StopSignal
 from . import peak_memory
 from .config import InternalCaptureConfig
 from .outcome import (
@@ -84,7 +84,7 @@ from .._utils.rng import (
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
 
 _AUTO_SEED_ENTROPY = random.Random()
-"""Private entropy stream for ``random_seed=None`` capture seed picks (R57).
+"""Private entropy stream for ``seed=None`` capture seed picks (R57).
 
 Seeded once from OS entropy at import. Drawing the auto seed from the user's
 global ``random`` engine either advanced that stream past the capture's
@@ -501,7 +501,7 @@ def _run_predicate_forward_with_root_frame(
                 predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
             )
             evaluate_halt_stop(trace, enter_ctx, state.options)
-    except HaltSignal:
+    except StopSignal:
         raise
     except Exception as exc:
         state.handle_predicate_exception(enter_ctx, exc)
@@ -554,7 +554,7 @@ def _run_predicate_forward_with_root_frame(
                     predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                 )
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
-        except HaltSignal:
+        except StopSignal:
             if active_model_exc is None:
                 raise
         except Exception as exc:
@@ -587,7 +587,7 @@ def save_new_outs(
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
     grad_layers_to_save: str | list[Any] | None = "all",
-    random_seed: int | None = None,
+    seed: int | None = None,
     backward_ready: bool | None = None,
     _run_until_plan: Any | None = None,
 ) -> None:
@@ -610,7 +610,7 @@ def save_new_outs(
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
         grad_layers_to_save: List of layers whose grads should be saved.
-        random_seed: Which random seed to use for deterministic reproduction.
+        seed: Which random seed to use for deterministic reproduction.
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
@@ -639,7 +639,7 @@ def save_new_outs(
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
                 grad_layers_to_save=grad_layers_to_save,
-                random_seed=random_seed,
+                seed=seed,
                 backward_ready=None,
                 _run_until_plan=_run_until_plan,
             )
@@ -656,7 +656,7 @@ def save_new_outs(
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
-    refresh_seed = self.random_seed if random_seed is None else random_seed
+    refresh_seed = self.random_seed if seed is None else seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
         expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
@@ -675,20 +675,20 @@ def save_new_outs(
         activation_transform=getattr(self, "activation_transform", None),
         grad_transform=getattr(self, "grad_transform", None),
         save_raw_activations=getattr(self, "save_raw_activations", True),
-        save_raw_gradients=getattr(self, "save_raw_gradients", True),
+        save_raw_grads=getattr(self, "save_raw_gradients", True),
         save_mode=getattr(self, "save_mode", "copy"),
         capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
         keep_orphans=getattr(self, "keep_orphans", False),
         mark_layer_depths=getattr(self, "mark_layer_depths", False),
         detach_saved_activations=getattr(self, "detach_saved_activations", False),
-        save_arg_values=getattr(self, "save_arg_values", False),
+        save_args=getattr(self, "save_arg_values", False),
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
-        random_seed=refresh_seed,
+        seed=refresh_seed,
         num_context_lines=getattr(self, "num_context_lines", 7),
         optimizer=getattr(self, "_optimizer", None),
-        save_code_context=getattr(self, "save_code_context", False),
-        save_rng_states=getattr(self, "save_rng_states", False),
+        save_source_context=getattr(self, "save_code_context", False),
+        save_rng=getattr(self, "save_rng_states", False),
         recurrence_detection=getattr(self, "recurrence_detection", True),
         verbose=getattr(self, "verbose", False),
         backward_ready=getattr(self, "backward_ready", False),
@@ -704,7 +704,7 @@ def save_new_outs(
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
-        save_raw_output=getattr(self, "save_raw_output", "small"),
+        save_transformed_output=getattr(self, "save_raw_output", "small"),
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
         _resolved_grad_layer_nums_to_save=(
@@ -1413,7 +1413,7 @@ def _settle_interrupted_halted_arm(
     trace: "Trace",
     capture_session: Any,
     interrupt_exc: BaseException,
-    halt_exc: HaltSignal,
+    halt_exc: StopSignal,
 ) -> None:
     """Stamp an interrupt that escaped the halted arm, never masking it.
 
@@ -1429,7 +1429,7 @@ def _settle_interrupted_halted_arm(
             capture_session,
             interrupt_exc,
             interrupted=True,
-            settlement_note=(
+            note=(
                 "interrupted during halted finalization after halt at "
                 f"{getattr(halt_exc, 'reason', '')!r}"
             ),
@@ -1450,7 +1450,7 @@ def _settle_interrupted_halted_arm(
 def _finalize_halted_trace(
     self: "Trace",
     backend: CaptureBackend,
-    halt_exc: HaltSignal,
+    halt_exc: StopSignal,
     model: object,
     input_tensors: list[Any],
     postprocess: bool,
@@ -1530,7 +1530,7 @@ def run_and_log_inputs_through_model(
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str | int] | None = "all",
     grad_layers_to_save: str | list[str | int] | None = "all",
-    random_seed: int | None = None,
+    seed: int | None = None,
     postprocess: bool = True,
     reservation_resume: object | None = None,
 ) -> Any:
@@ -1553,17 +1553,17 @@ def run_and_log_inputs_through_model(
     pass restores the same pre-forward RNG state so stochastic layers produce
     identical graph structure.
     """
-    if random_seed is None:
+    if seed is None:
         # R57 (neutrality half): the auto-seed pick draws from a PRIVATE
         # entropy stream, never the user's global ``random`` engine. Drawing
         # from the global stream either leaked one ``randint`` advance past
         # the restore bracket below (capture not byte-neutral to a seeded
-        # host process) or, if bracketed, made every ``random_seed=None``
+        # host process) or, if bracketed, made every ``seed=None``
         # capture reuse the identical seed (correlated dropout across runs).
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
-        random_seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self.random_seed = random_seed  # type: ignore[assignment]
+        seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
+    self.random_seed = seed  # type: ignore[assignment]
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,
@@ -1662,7 +1662,7 @@ def run_and_log_inputs_through_model(
                 set_rng_from_saved_states(pre_capture_rng_states)
 
         _rng_restorers.append(_restore_user_global_rng)
-        backend.seed_rng(self, random_seed)
+        backend.seed_rng(self, seed)
         try:
             input_args, input_kwargs, input_arg_names, model_device = (
                 backend.setup_inputs_and_device(
@@ -1754,7 +1754,7 @@ def run_and_log_inputs_through_model(
         if self.capture_mode == "exhaustive":
             self._pre_forward_rng_states = backend.snapshot_rng(self)
 
-        from .._ir import CaptureEvents
+        from torchlens._ir.capture_events import CaptureEvents
 
         self.capture_events = CaptureEvents()
         capture_events = self.capture_events
@@ -1773,7 +1773,7 @@ def run_and_log_inputs_through_model(
             capture_mode=str(self.capture_mode),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            random_seed=seed,
             postprocess=postprocess,
             stop=self._stop_directive,
         )
@@ -1783,7 +1783,7 @@ def run_and_log_inputs_through_model(
             backend_name=str(_backend_name_for_trace(self)),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=seed,
             postprocess=postprocess,
         )
         attach_capture_events_session(capture_events, capture_session)
@@ -2102,7 +2102,7 @@ def run_and_log_inputs_through_model(
         _publish_streamed_bundle_at_settlement(self)
         return outputs
 
-    except HaltSignal as halt_exc:
+    except StopSignal as halt_exc:
         compiled_unwrap_exception = sys.exc_info()
         options = getattr(self, "_predicate_save_options", None)
         if (
@@ -2130,7 +2130,7 @@ def run_and_log_inputs_through_model(
                     self,
                     capture_session,
                     secondary_exc,
-                    settlement_note=(
+                    note=(
                         "halted finalization failed after halt at "
                         f"{getattr(halt_exc, 'reason', '')!r}"
                     ),
@@ -2164,7 +2164,7 @@ def run_and_log_inputs_through_model(
                     capture_session.snapshot_recording_projection(self)
                     self._fastlog_captured_run_core = capture_session.seal()
             finally:
-                backend.cleanup_halted_forward_session(
+                backend.cleanup_stopped_forward_session(
                     self, (model, input_tensors, (input_args, input_kwargs))
                 )
         except Exception as secondary_exc:
@@ -2173,9 +2173,7 @@ def run_and_log_inputs_through_model(
                 self,
                 capture_session,
                 secondary_exc,
-                settlement_note=(
-                    f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"
-                ),
+                note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
             )
             _scrub_failed_capture_transients(self)
             raise
@@ -2254,7 +2252,7 @@ def run_and_log_inputs_through_model(
             # pre-settlement arms. The transient scrub runs after settlement
             # (R11/R32: the escaping partial must not pin live input tensors
             # or the payload-bearing event stream).
-            settle_failed(self, capture_session, e, n_ops_committed=committed_ops)
+            settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
             _scrub_failed_capture_transients(self)
         raise e
 
@@ -2294,7 +2292,7 @@ def run_and_log_inputs_through_model(
                     capture_session,
                     interrupt_exc,
                     interrupted=True,
-                    n_ops_committed=committed_ops,
+                    num_committed_ops=committed_ops,
                 )
                 _scrub_failed_capture_transients(self)
             except Exception as settle_exc:

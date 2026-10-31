@@ -259,7 +259,7 @@ layer.ops  # dict[int, Op]
 - `out` for some output/getitem cases may reference parent saved data directly.
 - `grad` is a bare reference; do not mutate it in-place.
 - `var_names` records bare source assignment target names for an op when
-  `save_code_context=True`; inline, unnameable, dynamic-source, attribute, and
+  `save_source_context=True`; inline, unnameable, dynamic-source, attribute, and
   subscript targets are represented as `[]`.
 - `save_activation()` must route through `safe_copy()` and respect `backward_ready`.
 - `TensorLog` is a compatibility alias from `op.py`; new docs should prefer

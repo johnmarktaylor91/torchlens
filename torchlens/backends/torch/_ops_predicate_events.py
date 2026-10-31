@@ -47,7 +47,7 @@ from ...capture.projections import (
 )
 from ...capture.session import capture_session_for
 from ...capture.stop import evaluate_halt_stop
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import (
     CaptureSpec,
@@ -219,7 +219,7 @@ def _emit_predicate_operation_events(
                 container_path=container_path,
             )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
-        except HaltSignal:
+        except StopSignal:
             raise
         except (TorchLensPostfuncError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and

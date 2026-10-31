@@ -70,7 +70,7 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
         model,
         torch.tensor([[prompt]]),
         episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
-        capture=CaptureOptions(random_seed=0),
+        capture=CaptureOptions(seed=0),
         **extra,
     )
 

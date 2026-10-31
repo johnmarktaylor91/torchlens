@@ -29,7 +29,7 @@ class DefaultsModel(nn.Module):
 def test_default_op_accepts_bool_and_capture_spec(default_op: bool | CaptureSpec) -> None:
     """Operation defaults accept bool and CaptureSpec values."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         DefaultsModel(),
         torch.ones(1, 2),
         default_module=True,
@@ -46,7 +46,7 @@ def test_default_module_accepts_bool_and_capture_spec(
 ) -> None:
     """Module defaults accept bool and CaptureSpec values."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         DefaultsModel(),
         torch.ones(1, 2),
         save=lambda ctx: False,
@@ -60,7 +60,7 @@ def test_default_module_accepts_bool_and_capture_spec(
 def test_none_abstain_uses_default_op() -> None:
     """A None operation predicate return falls back to default_op."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         DefaultsModel(),
         torch.ones(1, 2),
         save=lambda ctx: None,

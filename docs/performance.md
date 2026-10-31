@@ -44,7 +44,7 @@ trace = tl.trace(
     model,
     x,
     save=tl.func("relu"),
-    capture=CaptureOptions(save_code_context=False),
+    capture=CaptureOptions(save_source_context=False),
 )
 relu_site = trace.find_sites(tl.func("relu")).first()
 relu_activation = relu_site.out
@@ -81,10 +81,10 @@ When a fastlog forward raises, the default remains `on_forward_error="raise"`. O
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
 `on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
 returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
-`Recording.log_backward()`. `MemoryError` is swallowed like any other forward exception under
+`Recording.backward()`. `MemoryError` is swallowed like any other forward exception under
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
 `on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
@@ -95,13 +95,13 @@ with `tl._partial.from_failed_capture(exc)`.
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_code_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
 | Gradients | `capture=CaptureOptions(save_grads=False)` (the default) unless needed | Backward-ready captures preserve more state and hooks. |
 | Forward-only autograd | `inference_only=True`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
-| Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.log_backward()` refuses otherwise. |
+| Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.backward()` refuses otherwise. |
 | Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Recurrence detection | `capture=CaptureOptions(recurrence_detection=False)` | Measured 39-42% of capture time off models with thousands of repeated ops (hand-rolled top-level loops, unrolled decodes). Repeated ops stay separate layers instead of rolling into one multi-pass layer, so a 6-iteration loop yields `relu_1_2 ... relu_6_7` (each `num_passes=1`) instead of one `relu_1_2` with `num_passes=6`. `is_recurrent` and `max_layer_op_count` are still reported. It is a TIME knob only: retained activation bytes are unchanged. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |

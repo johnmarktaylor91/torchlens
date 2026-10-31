@@ -49,8 +49,8 @@ class _LazyIOModel(nn.Module):
 def _build_log(
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
-    save_rng_states: bool = False,
+    save_args: bool = False,
+    save_rng: bool = False,
 ) -> Trace:
     """Build a deterministic ``Trace`` for lazy I/O tests.
 
@@ -58,9 +58,9 @@ def _build_log(
     ----------
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the log.
 
     Returns
@@ -77,9 +77,9 @@ def _build_log(
         inputs,
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
-            save_arg_values=save_arg_values,
-            save_rng_states=save_rng_states,
-            random_seed=seed,
+            save_args=save_args,
+            save_rng=save_rng,
+            seed=seed,
         ),
     )
 
@@ -88,8 +88,8 @@ def _save_bundle(
     tmp_path: Path,
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
-    save_rng_states: bool = False,
+    save_args: bool = False,
+    save_rng: bool = False,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
     path_name: str = "bundle.tl",
@@ -102,9 +102,9 @@ def _save_bundle(
         Temporary test directory.
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the source log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the source log.
     include_saved_args:
         Whether nested captured args should be persisted in the bundle.
@@ -121,8 +121,8 @@ def _save_bundle(
 
     trace = _build_log(
         seed=seed,
-        save_arg_values=save_arg_values,
-        save_rng_states=save_rng_states,
+        save_args=save_args,
+        save_rng=save_rng,
     )
     bundle_path = tmp_path / path_name
     trace.save(
@@ -331,7 +331,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -357,7 +357,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -377,8 +377,8 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
-        save_rng_states=True,
+        save_args=True,
+        save_rng=True,
         include_saved_args=True,
         include_rng_states=True,
         path_name="saved_args_and_rng.tl",

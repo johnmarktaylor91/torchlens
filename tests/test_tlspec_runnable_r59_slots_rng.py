@@ -64,7 +64,7 @@ def _sweep(model: nn.Module) -> list[tuple[Any, str]]:
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tuple[tl.Trace, tl.RunResult]:

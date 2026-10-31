@@ -73,9 +73,9 @@ class UniverseDescriptor:
 
 
 def _backends() -> tuple[str, ...]:
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    return tuple(sorted(spec.name for spec in registered_backend_specs()))
+    return tuple(sorted(spec.name for spec in specs()))
 
 
 def _public_operations() -> tuple[str, ...]:

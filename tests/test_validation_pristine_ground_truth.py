@@ -170,7 +170,7 @@ def test_backward_validation_runs_pristine_stock_pass() -> None:
     assert validate_backward_pass(
         model,
         torch.randn(2, 4),
-        random_seed=3,
+        seed=3,
         validate_metadata=False,
     )
     assert _state._is_decorated

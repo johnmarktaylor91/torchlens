@@ -75,12 +75,12 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `failed=True`, string-only error metadata, `n_ops_completed`,
+  set `status="partial_error"`, `failed=True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
-  converted with `Recording.to_trace()` or used with `Recording.log_backward()`.
+  converted with `Recording.to_trace()` or used with `Recording.backward()`.
   `tl.record` installs gradient hooks only when `backward_ready=True`, `save_grads=` or
-  `default_grad=` is given; otherwise `Recording.log_backward()` refuses
+  `default_grad=` is given; otherwise `Recording.backward()` refuses
   (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
   `inference_only=True` (`Trace.inference_only`, `outcome.inference_only`), and a later
@@ -122,7 +122,7 @@
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen
   `CaptureOutcome` (`tl.types.{CaptureOutcome, CaptureStatus, CapturePhase,
-  FailureOrigin}`): status one of COMPLETE / HALTED / ABORTED_NONFINITE / FAILED
+  FailureOrigin}`): status one of COMPLETE / STOPPED / ABORTED_NONFINITE / FAILED
   (with FORWARD/FINALIZE/POSTPROCESS/TEARDOWN phase) / UNATTESTED (legacy
   finished artifacts without attestation — never blessed COMPLETE) / UNKNOWN
   (unprovable, most restrictive). The outcome PERSISTS (`_capture_outcome`,
@@ -1259,7 +1259,7 @@
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
   `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
   (the op-inventory check that fails when a backend silently drops an op).
-- LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
+- LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
@@ -1348,13 +1348,13 @@
   `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
   token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
   `TokenRows` (one row per token, with `stimulus_row` and `position`), and
-  `shuffled_batches(reader, n, buffer_shards=k, tokens=True)` is the cross-shard mixing buffer.
+  `reader.shuffled_batches(n, buffer_shards=k, tokens=True)` is the cross-shard mixing buffer.
   `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
 - BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
   whole-model extraction planner over the extraction artifact --
-  `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, transform=,
+  `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, output_transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
   total-scaled), executes the transform chain LIVE at the probe, and keys the plan to
@@ -1397,10 +1397,10 @@
   recipe never anchors `verified`); a PIL image whose model resolves no authority
   refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
   silently; its explicit opt-in is
-  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
-  `tl.trace(transform=)` capture whose transform IS a recognized authority (the object
+  `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object
   `weights.transforms()` returns, an HF image processor) stamps that authority's own
   record, any other transform honest `user_transform` provenance; `attach_authority`
   records an authority a model cannot carry (torchvision weights), discovery also reads
@@ -1422,7 +1422,7 @@
   continuation) plus `input_provenance=` (disk-only stamp), and every new manifest
   carries the `tl_input_preprocessing_v1` block (authority + audit + verdict +
   unknown reasons + versions; legacy artifacts read as unknown via
-  `input_preprocessing_of`/`LoadedExtraction.input_preprocessing`; resume never
+  `ExtractionReader.input_preprocessing`/`LoadedExtraction.input_preprocessing`; resume never
   grafts). Docs: `docs/neuroai/` (journey/loaders/BYO-alignment/demand ledger) +
   the rewritten `docs/migration/from_thingsvision.md`.
 - Per-unit streaming statistics (DOCUMENTED-UNSTABLE): `tl.stats.Quantile` and
@@ -1630,3 +1630,13 @@
   `intervention`, as do the `tl.attribution.CausalAuditSet` rows (without `site` and `component`). Refusals `attribution_audit_claim_unsupported`,
   `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
+- Capture door and options, current spellings: the recording knobs group in
+  `tl.options.RecordingOptions`, narration in `tl.options.NarrationOptions` (`narrate=`), and
+  streaming saves in `tl.options.StorageOptions` (also `tl.user_funcs.StorageOptions`). The
+  recorder vocabulary is `tl.fastlog.GradRecord`, `tl.fastlog.DryRun`, `tl.fastlog.stop()` and
+  `tl.fastlog.StopSignal`; a stopped capture settles `CaptureStatus.STOPPED` (value `"stopped"`).
+  `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The backend registry
+  reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
+  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
+  `tl.clear_cache()` (`tl.user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
+  and `tl.report.isolated_capture`.

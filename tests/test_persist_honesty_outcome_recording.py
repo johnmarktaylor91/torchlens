@@ -104,7 +104,7 @@ def aborted_bundle(tmp_path):
         storage=tl.to_disk(str(tmp_path / "bundle")),
         on_forward_error="return_partial",
     )
-    assert rec.failed and rec.bundle_path is not None
+    assert rec.is_failed and rec.bundle_path is not None
     assert (rec.bundle_path / "PARTIAL").exists()
     return rec.bundle_path
 
@@ -112,11 +112,11 @@ def aborted_bundle(tmp_path):
 @pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.fastlog.recover(aborted_bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is True
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is True
     assert "aborted" in (recovered.error_repr or "")
     assert recovered.outcome.status is CaptureStatus.FAILED
-    assert recovered.outcome.recovered is True
+    assert recovered.outcome.is_recovered is True
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
@@ -135,8 +135,8 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     # remains, with no PARTIAL/REASON abort debris.
     (bundle / "manifest.json").unlink()
     recovered = tl.fastlog.recover(bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is False
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is False
     assert recovered.outcome.status is CaptureStatus.UNKNOWN
 
 
@@ -163,7 +163,7 @@ def test_loaded_recording_backward_refuses(tmp_path):
     trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.recording_backward()
+        loaded.capture_backward()
 
 
 def test_live_log_backward_still_works():

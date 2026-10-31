@@ -1,4 +1,4 @@
-"""Regression tests for fastlog early-abort via ``tl.fastlog.halt``."""
+"""Regression tests for fastlog early-abort via ``tl.fastlog.stop``."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 import torchlens.capture.projections as fastlog_state
-from torchlens.fastlog import HaltSignal, PredicateError, RecordContext, RecorderStateError
+from torchlens.fastlog import PredicateError, RecordContext, RecorderStateError, StopSignal
 
 
 class FiveOpModel(nn.Module):
@@ -48,19 +48,19 @@ def _keep_ops_until_fourth(ctx: RecordContext) -> bool:
     """Halt before recording the fourth operation."""
 
     if ctx.kind == "op" and ctx.step_index == 4:
-        tl.fastlog.halt("stop")
+        tl.fastlog.stop("stop")
     return ctx.kind == "op"
 
 
-def _op_compute_indexes(recording: tl.fastlog.Recording) -> list[int | None]:
+def _op_compute_indexes(recording: tl.Recording) -> list[int | None]:
     """Return compute indexes for retained operation records."""
 
     return [record.ctx.step_index for record in recording.records if record.ctx.kind == "op"]
 
 
 def _as_recording(
-    result: tl.fastlog.Recording | tuple[Any, tl.fastlog.Recording],
-) -> tl.fastlog.Recording:
+    result: tl.Recording | tuple[Any, tl.Recording],
+) -> tl.Recording:
     """Narrow record() results when return_output=False is used."""
 
     if isinstance(result, tuple):
@@ -72,12 +72,12 @@ def test_halt_basic_halts_recording() -> None:
     """A predicate halt preserves records captured before the halt point."""
 
     recording = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
+        tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "stop"
-    assert recording.halts_by_pass == {1: "stop"}
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "stop"
+    assert recording.stops_by_pass == {1: "stop"}
     assert _op_compute_indexes(recording) == [1, 2, 3]
     assert recording.predicate_failures == []
 
@@ -94,8 +94,8 @@ def test_record_halt_predicate_stops_after_save_decision() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "sigmoid_1_5_raw"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "sigmoid_1_5_raw"
     assert _op_compute_indexes(recording) == [1, 2, 3, 4]
     assert recording.predicate_failures == []
 
@@ -111,10 +111,10 @@ def test_record_halt_only_skips_unsaved_projected_events() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "sigmoid_1_5_raw"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "sigmoid_1_5_raw"
     assert recording.records == []
-    assert recording.recording_trace.events == ()
+    assert recording.lazy_trace.events == ()
     assert recording.predicate_failures == []
 
 
@@ -125,14 +125,14 @@ def test_halt_reason_default_empty_string() -> None:
         """Halt on the first operation."""
 
         if ctx.kind == "op":
-            tl.fastlog.halt()
+            tl.fastlog.stop()
         return True
 
-    recording = _as_recording(tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=keep_op))
+    recording = _as_recording(tl.record(FiveOpModel(), torch.tensor(1.0), save=keep_op))
 
-    assert recording.halted is True
-    assert recording.halt_reason == ""
-    assert recording.halts_by_pass == {1: ""}
+    assert recording.is_stopped is True
+    assert recording.stop_reason == ""
+    assert recording.stops_by_pass == {1: ""}
 
 
 def test_halt_leaves_no_residue() -> None:
@@ -141,7 +141,7 @@ def test_halt_leaves_no_residue() -> None:
     model = ChildModuleModel()
     original_requires_grad = [param.requires_grad for param in model.parameters()]
 
-    tl.fastlog.record(model, torch.ones(1, 3), save=_keep_ops_until_fourth)
+    tl.record(model, torch.ones(1, 3), save=_keep_ops_until_fourth)
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
@@ -150,19 +150,19 @@ def test_halt_leaves_no_residue() -> None:
 
 
 def test_halt_imports_resolvable() -> None:
-    """Every HaltSignal except site has a matching import."""
+    """Every StopSignal except site has a matching import."""
 
     repo_root = Path(__file__).resolve().parents[1]
     files_with_except = [
         path
         for path in (repo_root / "torchlens").rglob("*.py")
-        if "except HaltSignal" in path.read_text(encoding="utf-8")
+        if "except StopSignal" in path.read_text(encoding="utf-8")
     ]
 
     assert files_with_except
     for path in files_with_except:
         text = path.read_text(encoding="utf-8")
-        assert "import HaltSignal" in text, path.relative_to(repo_root)
+        assert "import StopSignal" in text, path.relative_to(repo_root)
 
 
 def test_halt_from_inside_module_enter_predicate() -> None:
@@ -172,11 +172,11 @@ def test_halt_from_inside_module_enter_predicate() -> None:
         """Halt on the child module entry."""
 
         if ctx.kind == "module_enter" and ctx.address == "linear":
-            tl.fastlog.halt("module enter")
+            tl.fastlog.stop("module enter")
         return False
 
     recording = _as_recording(
-        tl.fastlog.record(
+        tl.record(
             ChildModuleModel(),
             torch.ones(1, 3),
             halt=halt_on_enter,
@@ -185,8 +185,8 @@ def test_halt_from_inside_module_enter_predicate() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "module enter"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "module enter"
     assert any(record.ctx.kind == "module_enter" for record in recording.records)
     assert [
         event.label_raw
@@ -202,11 +202,11 @@ def test_halt_from_inside_module_exit_predicate() -> None:
         """Halt on the child module exit."""
 
         if ctx.kind == "module_exit" and ctx.address == "linear":
-            tl.fastlog.halt("module exit")
+            tl.fastlog.stop("module exit")
         return False
 
     recording = _as_recording(
-        tl.fastlog.record(
+        tl.record(
             ChildModuleModel(),
             torch.ones(1, 3),
             halt=halt_on_exit,
@@ -215,8 +215,8 @@ def test_halt_from_inside_module_exit_predicate() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "module exit"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "module exit"
     assert any(record.ctx.kind == "module_enter" for record in recording.records)
     assert [
         event.label_raw
@@ -232,11 +232,11 @@ def test_halt_source_predicate() -> None:
         """Halt on the first input event."""
 
         if ctx.kind == "input":
-            tl.fastlog.halt("input")
+            tl.fastlog.stop("input")
         return True
 
     recording = _as_recording(
-        tl.fastlog.record(
+        tl.record(
             FiveOpModel(),
             torch.tensor(1.0),
             save=keep_op,
@@ -244,8 +244,8 @@ def test_halt_source_predicate() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "input"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "input"
     assert recording.records == []
     assert [
         event.label_raw
@@ -266,8 +266,8 @@ def test_record_halt_predicate_can_stop_on_source_event() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "input_1_raw"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "input_1_raw"
     assert recording.records == []
 
 
@@ -283,8 +283,8 @@ def test_record_halt_predicate_module_exit_boundary() -> None:
         )
     )
 
-    assert recording.halted is True
-    assert recording.halt_reason == "linear:exit:1"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "linear:exit:1"
     assert [record.ctx.layer_type for record in recording.records] == ["linear"]
 
 
@@ -313,7 +313,7 @@ def test_halt_does_not_propagate_as_predicate_failure() -> None:
     """Halt is not aggregated through predicate exception handling."""
 
     recording = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
+        tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
     )
 
     assert recording.predicate_failures == []
@@ -331,27 +331,27 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
         nonlocal call_count
         if ctx.kind == "op" and ctx.step_index == 2:
             call_count += 1
-            tl.fastlog.halt(f"halt {call_count}")
+            tl.fastlog.stop(f"halt {call_count}")
         return ctx.kind == "op"
 
     with tl.fastlog.Recorder(FiveOpModel(), save=keep_op) as recorder:
-        recorder.log(torch.tensor(1.0))
-        recorder.log(torch.tensor(1.0))
+        recorder(torch.tensor(1.0))
+        recorder(torch.tensor(1.0))
 
-    assert recorder.recording.halted is True
-    assert recorder.recording.halt_reason == "halt 1"
-    assert recorder.recording.halts_by_pass == {1: "halt 1", 2: "halt 2"}
+    assert recorder.recording.is_stopped is True
+    assert recorder.recording.stop_reason == "halt 1"
+    assert recorder.recording.stops_by_pass == {1: "halt 1", 2: "halt 2"}
 
 
 def test_recording_log_backward_on_halted_raises() -> None:
     """Backward logging is rejected on halted recordings."""
 
     recording = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
+        tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
     )
 
-    with pytest.raises(RecorderStateError, match="Cannot call log_backward on halted Recording"):
-        recording.log_backward(torch.ones((), requires_grad=True))
+    with pytest.raises(RecorderStateError, match="Cannot call backward on halted Recording"):
+        recording.backward(torch.ones((), requires_grad=True))
 
 
 def test_halt_through_user_except_exception() -> None:
@@ -362,25 +362,25 @@ def test_halt_through_user_except_exception() -> None:
 
         if ctx.kind == "op" and ctx.step_index == 1:
             try:
-                tl.fastlog.halt("base")
+                tl.fastlog.stop("base")
             except Exception:
                 return False
         return True
 
-    recording = _as_recording(tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=keep_op))
+    recording = _as_recording(tl.record(FiveOpModel(), torch.tensor(1.0), save=keep_op))
 
-    assert recording.halted is True
-    assert recording.halt_reason == "base"
+    assert recording.is_stopped is True
+    assert recording.stop_reason == "base"
 
 
 def test_halted_recording_partial_events_present() -> None:
     """Recording trace keeps chronological contexts through the halt point."""
 
     recording = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
+        tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
     )
 
-    assert [ctx.step_index for ctx in recording.recording_trace.events if ctx.kind == "op"] == [
+    assert [ctx.step_index for ctx in recording.lazy_trace.events if ctx.kind == "op"] == [
         1,
         2,
         3,
@@ -393,28 +393,28 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
 
     bundle_path = tmp_path / "halt_bundle"
     recording = _as_recording(
-        tl.fastlog.record(
+        tl.record(
             FiveOpModel(),
             torch.tensor(1.0),
             save=_keep_ops_until_fourth,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
     )
     loaded = tl.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recording.halted is True
-    assert loaded.halted is True
-    assert loaded.halt_reason == "stop"
-    assert loaded.halts_by_pass == {1: "stop"}
-    assert recovered.halted is True
+    assert recording.is_stopped is True
+    assert loaded.is_stopped is True
+    assert loaded.stop_reason == "stop"
+    assert loaded.stops_by_pass == {1: "stop"}
+    assert recovered.is_stopped is True
 
 
 def test_halt_signal_inherits_from_base_exception_not_exception() -> None:
-    """HaltSignal bypasses regular Exception handlers."""
+    """StopSignal bypasses regular Exception handlers."""
 
-    assert issubclass(HaltSignal, BaseException)
-    assert not issubclass(HaltSignal, Exception)
+    assert issubclass(StopSignal, BaseException)
+    assert not issubclass(StopSignal, Exception)
 
 
 def test_recording_log_backward_refusals_carry_stable_codes() -> None:
@@ -424,10 +424,8 @@ def test_recording_log_backward_refusals_carry_stable_codes() -> None:
     the halted arm is the documented Recording-scoped strictness code.
     """
 
-    halted = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
-    )
+    halted = _as_recording(tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth))
     with pytest.raises(RecorderStateError) as halted_exc:
-        halted.log_backward(torch.ones((), requires_grad=True))
+        halted.backward(torch.ones((), requires_grad=True))
     assert halted_exc.value.fields["code"] == "recording_backward_halted"
     assert halted_exc.value.fields["capability"] == "backward"

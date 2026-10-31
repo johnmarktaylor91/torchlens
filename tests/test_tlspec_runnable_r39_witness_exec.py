@@ -56,7 +56,7 @@ _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache"
 def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=seed, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=seed, **_CAP))
 
 
 def _roundtrip(
@@ -930,7 +930,7 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
         # the UNVERIFIABLE+poison verdict, not the warning; tolerate it (the project errors on
         # torchlens UserWarnings) without weakening the verdict assertion.
         warnings.simplefilter("ignore")
-        live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+        live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.poisoned is True
@@ -941,7 +941,7 @@ def test_live_bare_tensor_output_stays_verified() -> None:
 
     x = torch.randn(2, 4)
     model = _BareTensorOut()
-    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.poisoned is False
@@ -960,7 +960,7 @@ def test_live_dict_output_stays_verified() -> None:
 
     x = torch.randn(2, 4)
     model = _DictOut()
-    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 

@@ -21,7 +21,7 @@ import torchlens as tl
 import torchlens._postprocess as pp
 from torchlens.capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
 from torchlens.fastlog import Recorder
-from torchlens.fastlog._halt import HaltSignal
+from torchlens.fastlog._halt import StopSignal
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -37,9 +37,9 @@ def test_complete_capture_settles_attested_complete() -> None:
     outcome = trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.COMPLETE
-    assert outcome.derived is False
-    assert outcome.partial is False
-    assert outcome.n_ops_committed is not None and outcome.n_ops_committed >= 3
+    assert outcome.is_derived is False
+    assert outcome.is_partial is False
+    assert outcome.num_committed_ops is not None and outcome.num_committed_ops >= 3
     assert outcome.inference_only is False
     # The transient phase marker never survives settlement.
     assert "_capture_phase" not in trace.__dict__
@@ -49,7 +49,7 @@ def test_recorder_scratch_pass_settles_complete() -> None:
     """Path 2: the postprocess=False scratch trace settles COMPLETE."""
 
     with Recorder(ThreeStageModel(), save=lambda ctx: ctx.kind == "op") as recorder:
-        recorder.log(torch.ones(1, 3))
+        recorder(torch.ones(1, 3))
         scratch = recorder._state.runtime_trace
     assert scratch is not None
     assert scratch.outcome is not None
@@ -65,9 +65,9 @@ def test_halted_capture_settles_attested_halted() -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     outcome = trace.outcome
     assert outcome is not None
-    assert outcome.status is CaptureStatus.HALTED
-    assert outcome.derived is False
-    assert outcome.partial is True
+    assert outcome.status is CaptureStatus.STOPPED
+    assert outcome.is_derived is False
+    assert outcome.is_partial is True
     assert outcome.reason == trace.halt_reason
     assert outcome.boundary_label == trace.halt_reason
     # Frontier labels are the FINAL post-postprocess output labels.
@@ -111,15 +111,15 @@ def test_recorder_halt_pass_settles_attested_halted_unfinished(monkeypatch) -> N
     with Recorder(
         ThreeStageModel(), save=lambda ctx: ctx.kind == "op", halt=halt_on_relu
     ) as recorder:
-        output = recorder.log(torch.ones(1, 3))
+        output = recorder(torch.ones(1, 3))
     assert output is None
-    assert recorder.recording.halted is True
+    assert recorder.recording.is_stopped is True
     assert scratch_traces
     scratch = scratch_traces[-1]
     outcome = scratch.outcome
     assert outcome is not None
-    assert outcome.status is CaptureStatus.HALTED
-    assert outcome.derived is False
+    assert outcome.status is CaptureStatus.STOPPED
+    assert outcome.is_derived is False
     assert bool(scratch.__dict__.get("_tracing_finished")) is False
 
 
@@ -147,7 +147,7 @@ def test_forward_failure_settles_failed_forward_user_op() -> None:
     assert outcome.phase is CapturePhase.FORWARD
     assert outcome.origin is FailureOrigin.USER_OP
     assert outcome.error_type == "RuntimeError"
-    assert outcome.n_ops_committed is not None and outcome.n_ops_committed >= 1
+    assert outcome.num_committed_ops is not None and outcome.num_committed_ops >= 1
 
 
 def test_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
@@ -203,7 +203,7 @@ def test_freeze_failure_stamps_failed_postprocess(monkeypatch) -> None:
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.POSTPROCESS
-    assert outcome.n_ops_committed is not None and outcome.n_ops_committed >= 3
+    assert outcome.num_committed_ops is not None and outcome.num_committed_ops >= 3
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ def test_nonfinite_abort_settles_aborted_nonfinite() -> None:
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
     assert outcome.boundary_kind == "op"
     assert outcome.boundary_label is not None
-    assert outcome.partial is True
+    assert outcome.is_partial is True
 
 
 # ---------------------------------------------------------------------------
@@ -288,12 +288,12 @@ def test_halted_postprocess_failure_settles_failed_postprocess(monkeypatch) -> N
     monkeypatch.setattr(pp, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
     outcome = captured[0].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.POSTPROCESS
-    assert "halted finalization failed" in (outcome.settlement_note or "")
+    assert "halted finalization failed" in (outcome.note or "")
 
 
 def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
@@ -308,12 +308,12 @@ def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
     monkeypatch.setattr(TorchBackend, "cleanup_model_session", _boom)
     with pytest.raises(ValueError, match="planted halted-cleanup") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
     outcome = sessions[-1].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.FINALIZE
-    assert outcome.settlement_note is not None
+    assert outcome.note is not None
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +340,7 @@ def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.TEARDOWN
-    assert "demoted_from=complete" in (outcome.settlement_note or "")
+    assert "demoted_from=complete" in (outcome.note or "")
     session = trace.__dict__.get("_capture_session")
     if session is not None and session.outcome is not None:
         assert session.outcome.capture_outcome is outcome
@@ -359,8 +359,8 @@ def test_cooked_trace_settles_attested_complete() -> None:
     outcome = cooked.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.COMPLETE
-    assert outcome.derived is False
-    assert outcome.settlement_note == "cooked_from=recording"
+    assert outcome.is_derived is False
+    assert outcome.note == "cooked_from=recording"
 
 
 def test_cooked_halted_trace_settles_attested_halted() -> None:
@@ -370,12 +370,12 @@ def test_cooked_halted_trace_settles_attested_halted() -> None:
         save=lambda ctx: ctx.kind == "op",
         halt=halt_on_relu,
     )
-    assert recording.halted is True
+    assert recording.is_stopped is True
     cooked = recording.to_trace()
     outcome = cooked.outcome
     assert outcome is not None
-    assert outcome.status is CaptureStatus.HALTED
-    assert outcome.settlement_note == "cooked_from=recording"
+    assert outcome.status is CaptureStatus.STOPPED
+    assert outcome.note == "cooked_from=recording"
     # Frontier is the FINAL remapped output label of the cooked graph.
     assert outcome.frontier_labels == tuple(cooked.output_layers)
 
@@ -461,7 +461,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
         error_ref=weakref.ref(latched),
     )
 
-    outcome = settle_failed(trace, None, unrelated, n_ops_committed=0)
+    outcome = settle_failed(trace, None, unrelated, num_committed_ops=0)
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.error_type == "torchlens.errors._base.CaptureError"
     assert outcome.reason == "event stream desync"
@@ -469,7 +469,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
     # The exact latched exception still classifies the clean abort.
     trace2 = SimpleNamespace()
     trace2.__dict__["_stop_requested"] = trace.__dict__["_stop_requested"]
-    aborted = settle_failed(trace2, None, latched, n_ops_committed=0)
+    aborted = settle_failed(trace2, None, latched, num_committed_ops=0)
     assert aborted.status is CaptureStatus.ABORTED_NONFINITE
     assert aborted.reason == "nan in relu_1_1"
 
@@ -556,7 +556,7 @@ def test_hostile_str_fastlog_return_partial_builds_failed_recording() -> None:
         save=lambda ctx: ctx.kind == "op",
         on_forward_error="return_partial",
     )
-    assert recording.failed is True
+    assert recording.is_failed is True
     assert recording.status == "partial_error"
     outcome = recording.outcome
     assert outcome is not None
@@ -573,7 +573,7 @@ def test_hostile_repr_fastlog_return_partial_records_fallback_repr() -> None:
         save=lambda ctx: ctx.kind == "op",
         on_forward_error="return_partial",
     )
-    assert recording.failed is True
+    assert recording.is_failed is True
     assert recording.error_repr == "<unrepresentable _HostileReprError: __repr__ raised>"
 
 

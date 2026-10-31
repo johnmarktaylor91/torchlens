@@ -154,7 +154,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section(f"Model: {name} — {description}", level=1))
 
     # Log the forward pass
-    log = trace_fn(model, x, capture=CaptureOptions(random_seed=42))
+    log = trace_fn(model, x, capture=CaptureOptions(seed=42))
 
     # ===== A. Trace Overview =====
     out.write(_section("A. Trace Overview", level=2))
@@ -493,7 +493,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
         try:
             grad_log = trace_fn(
-                model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42)
+                model, x, capture=tl.options.CaptureOptions(save_grads=True, seed=42)
             )
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].out
@@ -1030,7 +1030,7 @@ def _build_latex_report() -> str:
 
     for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
         model = model_cls()
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
         doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
 
         # A. Model Summary
@@ -1402,7 +1402,7 @@ def _vis(
         view=vis_mode,
         depth=depth,
         code_panel=code_panel,
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             container_path=opj(VIS_DIR, filename),
             save_only=True,
@@ -1429,7 +1429,7 @@ def _vis_grad(
     """
     pdf_path = Path(VIS_DIR) / f"{filename}.pdf"
     pdf_path.unlink(missing_ok=True)
-    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42))
+    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True, seed=42))
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(

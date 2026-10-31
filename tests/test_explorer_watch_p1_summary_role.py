@@ -142,7 +142,7 @@ class TestTraceTrainModeCarveOut:
             model,
             x,
             grad_transform=summary(_histo64),
-            save=tl.options.SaveOptions(save_raw_gradients=False),
+            save=tl.options.SaveOptions(save_raw_grads=False),
             capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
         )
         log.log_backward(log[log.output_layers[0]].out.sum())
@@ -160,7 +160,7 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=CaptureSpec(save_out=True, keep_grad=True),
+            default_op=CaptureSpec(save_out=True, save_grad=True),
             activation_transform=summary(_histo64),
             save_raw_activations=False,
         )
@@ -182,7 +182,7 @@ class TestFastlogCarveOut:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, keep_grad=True),
+                default_op=CaptureSpec(save_out=True, save_grad=True),
                 activation_transform=_histo64,
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"

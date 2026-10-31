@@ -47,7 +47,6 @@ from ._lifecycle import (
     is_armed,
 )
 from ._recognizer import (
-    UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
     is_vetted_build,
@@ -55,7 +54,6 @@ from ._recognizer import (
 
 __all__ = [
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
-    "UNCAPTURED_COLLECTIVE_OP",
     "AmbiguousGroupLifetimeError",
     "ArmingRecord",
     "GroupIdentity",

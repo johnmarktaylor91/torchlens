@@ -13,7 +13,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
-  `save_grads=` or `default_grad=` is given; without one, `Recording.log_backward()` refuses with
+  `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
   code `recording_backward_not_requested`.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
@@ -25,7 +25,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.record(..., detach_saved_activations=False)` (also `tl.fastlog.Recorder` and
   `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
-  (`backward_ready_conflict`). A per-site `CaptureSpec(keep_grad=True)` stays attached either
+  (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
   temporary disk comes back detached, with a `RuntimeWarning` naming the count.
   `Trace.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
@@ -39,11 +39,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   silently treated as complete.
 
 **Failed partial Recording**
-: A `Recording` with `status="partial_error"` and `failed=True`. Use
+: A `Recording` with `status="partial_error"` and `is_failed=True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
-  `n_ops_completed`, and best-effort `last_event_*` fields. It cannot be passed to
-  `Recording.to_trace()` or `Recording.log_backward()`.
+  `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
+  `Recording.to_trace()` or `Recording.backward()`.
 
 **Generation recording** *(spellings documented-unstable)*
 : `tl.record(model, input_ids, save=..., generate_kwargs={...})` runs the model's own Hugging Face
@@ -56,7 +56,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `.sequences`, `.prompt_length`, `.settings` (the settings that decide the tokens, the torch seed
   and an RNG-state digest), `.not_recorded` (cache tensors, the sampling between forwards, the
   last token's own position), `.n_steps`, `.records_at(step)` and `.step_of_position(position)`
-  (both refuse a missing step with `record_generation_step_missing`). `random_seed=` seeds once
+  (both refuse a missing step with `record_generation_step_missing`). `seed=` seeds once
   for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
   decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
   cache, `intervene=`, `halt=` and partial forward-error modes refuse with
@@ -64,7 +64,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Capture outcome**
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
-  `COMPLETE`, `HALTED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
+  `COMPLETE`, `STOPPED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
   also identify the phase. See [Capture outcomes](capture_outcomes.md).
 
 **Inference-only capture**
@@ -473,7 +473,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   tensor content (including device and `requires_grad`), training flags, module tree and
   `forward` code, plain instance attributes, user-registered module hooks, inputs, and capture
   configuration to all match. Entries are HMAC-authenticated, bounded by entry count and bytes,
-  and `tl.clear_capture_cache()` empties the cache while preserving its secret.
+  and `tl.clear_cache()` empties the cache while preserving its secret.
 
 ## Replay and intervention
 
@@ -1186,18 +1186,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   token-axis activations. `ExtractionReader.token_batch(shard_index, keys=None)` and
   `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
   token as a `torchlens.dataset_extraction.TokenRows` (`values` per key, `stimulus_row`,
-  `position`, `n_tokens`); padding is never a token row.
-  `torchlens.dataset_extraction.shuffled_batches(reader, batch_size, *, seed=0,
+  `position`, `num_tokens`); padding is never a token row.
+  `ExtractionReader.shuffled_batches(batch_size, *, seed=0,
   keys=None, buffer_shards=1, tokens=False)` shuffles across `buffer_shards` shards at
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
 : `tl.observers.tap` creates a tap observer for a site; `tl.observers.span` records a named observer span
   around captures or hook execution (the former `record_span` alias is removed);
-  `tl.record_kpi_in_graph` records a user KPI on the active capture graph;
-  `tl.register_tensor_connection` registers a manual parent-child tensor edge during
-  capture; `tl.decide_recording_of_batch` retroactively keeps or discards a captured
-  batch log.
+  `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge during
+  capture.
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
@@ -1221,7 +1219,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   traced model and normalizes plain attributes holding torch functions from the other wrap
   epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
   itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
-  session-scoped); `tl.clear_capture_cache`
+  session-scoped); `tl.clear_cache`
   empties the capture cache; `tl.io.list_traces` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 
@@ -1246,7 +1244,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Options**
 : `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
-  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StreamingOptions`.
+  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`.
 
 **Structural hash**
 : `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
@@ -1258,7 +1256,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   output container.
 
 **Capture-product bases**
-: `tl.CapturedRun` is the shared base for uncooked and cooked capture projections;
+: `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections;
   `tl.ActivationLookup` is the protocol for raw-label/pass/address activation lookup
   consumers.
 
@@ -1678,10 +1676,10 @@ vocabulary*
   call-site grouping, `grouper_v1` for the structural grouper that serves
   captures without call-site evidence, `unknown` when grouping did not run),
   `effective`, and
-  `settlement_note`. Loads validate against the exact writer key set, closed
+  `note`. Loads validate against the exact writer key set, closed
   vocabularies, and coherence rules C1–C8; parse failure or incoherence
   warns once and settles to THE canonical degraded representation
-  (`policy="unknown"`, `settlement_note="grouping_stamp_<reason>"`), which
+  (`policy="unknown"`, `note="grouping_stamp_<reason>"`), which
   round-trips byte-stable and stays degraded — verdicts only worsen across
   persistence. Legacy pre-stamp artifacts settle silently to
   `grouping_stamp_legacy`; degraded stamps refuse stamp-consuming
@@ -2232,7 +2230,7 @@ shim owed*
 **torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
 : The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
   center-crop 224, ImageNet mean/std), passed as
-  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`. A PIL image
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`. A PIL image
   whose model resolves no preprocessing authority (torchvision weights
   handle, timm data config, HF image processor) refuses typed
   `preprocessing_unresolved` instead of receiving this recipe silently. The
@@ -2860,3 +2858,82 @@ deprecation shim owed*
   `slug` and `scan` characters and the file size (`neuronpedia_upload_argument_invalid`).
   HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
   `neuronpedia_upload_response_invalid`.
+
+## Capture door and options: current spellings
+
+**Capture keywords**
+: `CaptureOptions` and the capture doors spell the capture knobs `seed=` (`CaptureOptions.seed`),
+  `save_args=` (`CaptureOptions.save_args`), `save_source_context=`
+  (`CaptureOptions.save_source_context`), `save_rng=` (`CaptureOptions.save_rng`),
+  `save_transformed_output=` (`CaptureOptions.save_transformed_output`) and `input_transform=`
+  (`CaptureOptions.input_transform`). `CaptureOptions.receipt()` returns the per-field option
+  receipt (each public field, its value and why). The saved `Trace` keeps its stored field names
+  in this release.
+
+**Recording keywords**
+: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+  `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
+  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
+  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sink` receives the
+  narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
+  narrates only when the forward raises, and `NarrationOptions.tail_on_error` is how many of the
+  last selected events the sink receives on a forward exception.
+
+**StorageOptions**
+: `tl.options.StorageOptions` (also reachable as `tl.user_funcs.StorageOptions`) groups the
+  streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
+  `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
+  `on_save=`),
+  `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,
+  `StorageOptions.as_dict()`, `StorageOptions.from_values()` and
+  `StorageOptions.is_field_explicit()`.
+
+**CaptureOutcome flags**
+: `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
+  `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
+  `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
+  stopped by `halt=` or `tl.fastlog.stop()`.
+
+**Recording state**
+: `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
+  `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
+  `Recording.records_in_pass(pass_index)`, `Recording.num_ops` (`num_ops=`),
+  `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
+  `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
+  (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
+  `ActivationRecord.recorded_time` and `GradRecord.recorded_time` (`recorded_time=`) stamp when a
+  record was taken.
+
+**Recording types**
+: `tl.fastlog.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
+  `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
+  `GradRecord.transformed_disk_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
+  `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.repredicate(...)`,
+  `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
+  names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
+  `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
+  (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
+  `TraceLike.sibling_events`, `TraceLike.activation_by_raw_label(raw_label)`,
+  `TraceLike.activations_by_pass(pass_index)`, `TraceLike.activations_by_address(address)` and
+  `TraceLike.activation_payloads_by_raw_label`).
+
+**Backend registry**
+: `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
+  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`.
+  `BackendCapabilities.has_streaming` is the streaming-save capability flag (flag name
+  `has_streaming`). `CaptureBackend.cleanup_stopped_forward_session` tears down a forward
+  stopped early.
+
+**Extraction and preprocessing names**
+: `BatchEnvelope.num_rows` and `RaggedBatch.num_rows` (`num_rows=`), `TokenRows.num_tokens`,
+  `Resolution.preprocessing` and `SiteMatrix.shaping` (`shaping=`).
+  `tl.extract_dataset(..., output_transform=...)`, `tl.brainpipe.extraction_plan(...,
+  output_transform=...)` and `tl._observability.is_summary_transform(output_transform)` take the
+  output transform;
+  `input_transform=` preprocesses inputs.
+
+**Admin and debugging names**
+: `tl.clear_cache()` (also `tl.user_funcs.clear_cache`) empties the capture cache;
+  `tl.observers.register_tensor_connection` registers a tensor connection;
+  `tl.report.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
+  (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.

@@ -183,9 +183,7 @@ def test_both_validator_captures_receive_the_save_options() -> None:
     seen: list[tuple[Any, Any, bool]] = []
 
     def recording_runner(*args: Any, **kwargs: Any) -> Any:
-        seen.append(
-            (kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_arg_values"])
-        )
+        seen.append((kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_args"]))
         return real_runner(*args, **kwargs)
 
     model, x = _net_and_input()
@@ -273,7 +271,7 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, output_device="cpu"),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
     )
     devices = {op.out.device.type for op in trace.layer_list if op.out is not None}
     assert devices == {"cpu"}
@@ -292,7 +290,7 @@ def _assert_corrupted_activation_fails(device: str) -> None:
 
     def corrupting_runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
+        if kwargs["save_args"]:
             relu = next(op for op in trace.layer_list if op.func_name == "relu")
             assert relu.out.device.type == "cpu"
             relu.out = relu.out + 1.0
@@ -327,8 +325,8 @@ def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name
     torch.manual_seed(0)
     model = getattr(example_models, model_name)().to("cuda")
     x = torch.rand(6, 3, 24, 24, device="cuda")
-    assert tl.validate(model, x, scope="forward", random_seed=0) is True
-    assert tl.validate(model, x, scope="forward", random_seed=0, output_device="cpu") is True
+    assert tl.validate(model, x, scope="forward", seed=0) is True
+    assert tl.validate(model, x, scope="forward", seed=0, output_device="cpu") is True
 
 
 @_CUDA

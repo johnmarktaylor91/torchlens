@@ -49,7 +49,7 @@ def _capture(model: nn.Module, args: Any, seed: int = 0) -> Any:
     return tl.trace(
         model,
         args,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=seed),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=seed),
     )
 
 
@@ -58,7 +58,7 @@ def _quiet_validate(model: nn.Module, args: Any) -> bool:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(validate_forward_pass(model, args, random_seed=0))
+        return bool(validate_forward_pass(model, args, seed=0))
 
 
 def _op_with_func_name(trace: Any, func_name: str) -> Any:

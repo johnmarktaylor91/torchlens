@@ -18,15 +18,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
-from torchlens.dataset_extraction import (
-    MANIFEST_FILENAME,
-    DatasetExtractionResumeError,
-    extract_dataset,
-    open_extraction,
-)
+from torchlens._extraction.resume import MANIFEST_FILENAME
+from torchlens.dataset_extraction import DatasetExtractionResumeError, open_extraction
 
 _LAYERS = {"a": "fc1", "b": "act", "c": "fc2", "d": "fc3"}
 

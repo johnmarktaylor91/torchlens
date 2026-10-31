@@ -9,11 +9,8 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens._ir import (
-    _DEFERRED_VALUE,
-    CaptureEvents,
-    MLXValueUnavailableError,
-)
+from torchlens._ir import _DEFERRED_VALUE, MLXValueUnavailableError
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.intervention import FunctionEventInput
 from torchlens.backends import BackendUnsupportedError
 from torchlens.capture.projections import _record_from_record_context
@@ -130,7 +127,7 @@ def test_mlx_emit_function_outputs_produces_topology_complete_events() -> None:
         capture_events=events,
         _mlx_saved_payloads=[],
         save_raw_activations=True,
-        save_code_context=False,
+        save_source_context=False,
         detach_saved_activations=False,
         activation_transform=None,
     )

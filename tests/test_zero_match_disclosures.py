@@ -42,7 +42,7 @@ def test_halt_that_fires_does_not_warn() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         log = tl.trace(_model(), torch.randn(2, 3), halt=tl.func("linear"))
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     assert not any("matched zero sites" in str(item.message) for item in caught)
 
 

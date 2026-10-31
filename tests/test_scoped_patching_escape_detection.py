@@ -563,7 +563,7 @@ def test_rng_and_escape_profile_detectors_coarm_without_lost_detection() -> None
                 intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
-                random_seed=7,
+                seed=7,
             ),
         )
 
@@ -775,7 +775,7 @@ def test_witness_internal_storage_read_does_not_self_trip_detector() -> None:
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=7,
+            seed=7,
         ),
     )
     self_trips = [

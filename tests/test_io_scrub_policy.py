@@ -98,10 +98,10 @@ def _build_live_log() -> Trace:
         x,
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
-            save_arg_values=True,
-            save_rng_states=True,
-            save_code_context=True,
-            random_seed=0,
+            save_args=True,
+            save_rng=True,
+            save_source_context=True,
+            seed=0,
         ),
     )
 
@@ -354,7 +354,7 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
     "log_backward": "autograd execution; writes gradient state",
-    "recording_backward": "autograd execution; writes gradient state",
+    "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "release_param_refs": "destructive; nulls live parameter refs",
     "do": "intervention editor (mutates fork state)",
@@ -785,7 +785,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
             capture_container_structure=True,
             cache=False,
             save_raw_input=raw_policy,
-            save_raw_output=raw_policy,
+            save_transformed_output=raw_policy,
         ),
     )
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"

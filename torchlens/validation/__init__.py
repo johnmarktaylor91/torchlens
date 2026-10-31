@@ -917,7 +917,7 @@ def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
         If backend-aware fields are invalid.
     """
 
-    from ..backends import UnknownBackendError, get_backend_spec
+    from ..backends.registry import UnknownBackendError, get_backend_spec
 
     backend_name = manifest.get("backend")
     if not isinstance(backend_name, str) or backend_name == "":

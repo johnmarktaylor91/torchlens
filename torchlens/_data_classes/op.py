@@ -3203,7 +3203,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     def do(
         self,
-        transform: Any,
+        input_transform: Any,
         *,
         model: Any = None,
         x: Any = None,
@@ -3230,7 +3230,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         return self._source_trace_or_error().do(
             self.layer_label,
-            transform,
+            input_transform,
             model=model,
             x=x,
             intervention=intervention,
@@ -3782,7 +3782,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         t: torch.Tensor,
         t_args: list[Any] | tuple[Any, ...],
         t_kwargs: dict[str, Any],
-        save_arg_values: bool,
+        save_args: bool,
         activation_transform: Callable[..., Any] | None = None,
     ) -> None:
         """Save the output tensor (and optionally args) for this operation.
@@ -3839,7 +3839,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             # Restricted to plain "copy" mode -- reference/view copies are
             # free and cpu_async has fence side effects.
             dedup_cached_out = (
-                _dedup_cached_identity_out(trace, t, self.annotations, save_arg_values)
+                _dedup_cached_identity_out(trace, t, self.annotations, save_args)
                 if store_raw and save_mode == "copy"
                 else None
             )
@@ -3873,7 +3873,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                         raw_out,
                         self._layer_label_raw,
                         self.annotations,
-                        save_arg_values,
+                        save_args,
                     )
                 if isinstance(raw_out, torch.Tensor):
                     mark_detached_saved_activation(t, raw_out, self._layer_label_raw)
@@ -3948,7 +3948,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 )
 
         # Tensor args and kwargs:
-        if save_arg_values:
+        if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
             self._internal_set(

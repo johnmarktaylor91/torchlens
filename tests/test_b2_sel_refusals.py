@@ -188,7 +188,7 @@ def _head_slices(trace: Any, head: int) -> list[torch.Tensor]:
 @pytest.mark.heavy
 def test_unscoped_head_reports_the_sites_it_writes() -> None:
     model, ids = _gpt2()
-    capture = tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+    capture = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     clean = tl.trace(model, ids, capture=capture)
     edited = clean.fork("ablated")
     with warnings.catch_warnings(record=True) as caught:

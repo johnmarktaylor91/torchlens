@@ -42,9 +42,9 @@ def _capture_full_trace(model: nn.Module, x: torch.Tensor):
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        save_arg_values=True,
-        random_seed=0,
-        save_rng_states=True,
+        save_args=True,
+        seed=0,
+        save_rng=True,
     )
 
 

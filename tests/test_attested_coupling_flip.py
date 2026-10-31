@@ -115,7 +115,7 @@ def _coupled(runner: nn.Module, ids: torch.Tensor, intervene: object, **spec_kwa
         ids,
         episode=spec,
         intervene=intervene,
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
 
 
@@ -223,7 +223,7 @@ def test_changed_output_and_changed_step_count():
         EosRunner(model, eos=int(model(ids).argmax(-1)[0]), max_steps=5),
         ids,
         episode=EpisodeOptions(stepped_module=model),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     baseline_steps = len(baseline.annotations["episode"]["rows"])
 
@@ -238,7 +238,7 @@ def test_changed_output_and_changed_step_count():
         ids,
         episode=EpisodeOptions(stepped_module=model2),
         intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     perturbed_steps = len(perturbed.annotations["episode"]["rows"])
     assert perturbed.outcome.status.name == "COMPLETE"
@@ -300,7 +300,7 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
         runner,
         _ids(),
         episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     # The new input has the captured length, so every pass keeps its captured
     # shape. The "Tensor shape changed" warning this row used to expect came
@@ -350,7 +350,7 @@ def test_forced_feed_couples_with_perturbation_disclosed():
         _ids(),
         episode=EpisodeOptions(stepped_module=model, forced_tokens=forced),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     header = _header(log)
     assert header["token_feed"] == "forced"
@@ -384,9 +384,9 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
         episode=EpisodeOptions(stepped_module=runner.model, num_steps=4),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         halt=stop_at_third_step,
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     rows = log.annotations["episode"]["rows"]
     statuses = [row["status"] for row in rows]
     assert statuses[-1] == "absent"  # the never-started tail is absent
@@ -414,7 +414,7 @@ def test_selective_save_couples_and_keeps_evidence():
         episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
         intervene=tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)),
         save=tl.func("tanh"),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     assert _fire_counts(log) == [0, 1, 0]
     assert log.episode_coupling.coupled is True
@@ -467,7 +467,7 @@ def test_exogenous_join_couples_with_per_segment_facts():
         _ids(),
         episode=EpisodeOptions(stepped_module=runner.model, num_steps=5),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     envelope = _header(log)["step_join"]
     assert envelope is not None and envelope["break_step"] == 2
@@ -505,7 +505,7 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
             _ids(),
             episode=EpisodeOptions(stepped_module=model, num_steps=4),
             intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-            capture=tl.options.CaptureOptions(random_seed=SEED),
+            capture=tl.options.CaptureOptions(seed=SEED),
         )
 
 

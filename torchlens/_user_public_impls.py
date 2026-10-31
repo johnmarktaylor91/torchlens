@@ -53,7 +53,7 @@ from ._validation_state_snapshot import (
     snapshot_state_for_restore,
     state_matches_snapshot,
 )
-from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .backends.registry import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .errors import TraceNotReproducibleWarning
 from .options import (
     CaptureOptions,
@@ -550,7 +550,7 @@ def show_model_graph(
     fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     recurrence_detection: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
@@ -590,7 +590,7 @@ def show_model_graph(
     random_seed:
         Fixed RNG seed for stochastic models. The capture reseeds the global
         RNG engines for its forward and restores their prior states afterwards;
-        see ``CaptureOptions.random_seed``.
+        see ``CaptureOptions.seed``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
@@ -640,7 +640,7 @@ def show_model_graph(
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        random_seed=random_seed,
+        seed=seed,
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
@@ -675,7 +675,7 @@ def draw_backward(
     ----------
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
+        or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
     collapsed_node_spec_fn:
@@ -756,7 +756,7 @@ def draw_combined(
     ----------
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
+        or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)``.
     backward_node_spec_fn:
@@ -908,7 +908,7 @@ def validate_forward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -983,7 +983,7 @@ def validate_forward_pass(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        random_seed=random_seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **save_options,
@@ -1128,9 +1128,9 @@ def _warn_if_validation_trace_not_reproducible(
                 mark_layer_depths=False,
                 detach_saved_activations=False,
                 save_grads=False,
-                save_arg_values=False,
-                random_seed=random_seed,
-                save_rng_states=False,
+                save_args=False,
+                seed=random_seed,
+                save_rng=False,
                 output_device=retrace_output_device,
                 save_budget=retrace_save_budget,
             )
@@ -1303,7 +1303,7 @@ def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -1323,7 +1323,7 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_arg_values=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches
@@ -1332,7 +1332,7 @@ def _validate_forward_pass_torch(
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_arg_values=True is required:**  The validation replay re-executes
+    **Why save_args=True is required:**  The validation replay re-executes
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
@@ -1344,7 +1344,7 @@ def _validate_forward_pass_torch(
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
-    random_seed:
+    seed:
         Fixed RNG seed for reproducibility (auto-generated if None). Reseeds
         the process-global RNG engines without restoring them; see
         ``tl.trace``'s ``random_seed``.
@@ -1416,9 +1416,9 @@ def _validate_forward_pass_torch(
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).
-    if random_seed is None:
-        random_seed = random.randint(1, 4294967294)
-    set_random_seed(random_seed)
+    if seed is None:
+        seed = random.randint(1, 4294967294)
+    set_random_seed(seed)
     input_args = normalize_input_args(input_args, model)
     if not input_kwargs:
         input_kwargs = {}
@@ -1684,7 +1684,7 @@ def _validate_forward_pass_torch(
             )
 
         # Step 2: Run the model *through* TorchLens, saving all outs.
-        # save_arg_values=True is essential - the replay needs each function's
+        # save_args=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
         from . import _state
 
@@ -1703,9 +1703,9 @@ def _validate_forward_pass_torch(
                     mark_layer_depths=False,
                     detach_saved_activations=False,
                     save_grads=False,
-                    save_arg_values=True,
-                    random_seed=random_seed,
-                    save_rng_states=True,
+                    save_args=True,
+                    seed=seed,
+                    save_rng=True,
                     output_device=output_device,
                     save_budget=save_budget,
                 )
@@ -1724,7 +1724,7 @@ def _validate_forward_pass_torch(
                 validation_model,
                 reproducibility_input_args,
                 reproducibility_input_kwargs,
-                random_seed,
+                seed,
             )
         else:
             from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
@@ -1835,7 +1835,7 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     validate_metadata: bool = True,
-    random_seed: int | None = None,
+    seed: int | None = None,
     atol: float | None = None,
     rtol: float | None = None,
     validate_layer_grads: bool = True,
@@ -1892,7 +1892,7 @@ def validate_backward_pass(
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
-        random_seed=random_seed,
+        seed=seed,
         atol=atol,
         rtol=rtol,
         validate_layer_grads=validate_layer_grads,

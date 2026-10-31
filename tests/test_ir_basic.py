@@ -15,14 +15,12 @@ from torchlens._ir import (
     ArgTemplateRef,
     BackendSemantics,
     BlobRef,
-    CaptureEvents,
     CapturePolicy,
     ConditionalEvent,
     DeferredRef,
     DeviceRef,
     DtypeRef,
     FunctionCallRef,
-    ModuleCaptureWorkspace,
     ModuleEnterEvent,
     ModuleExitEvent,
     ModuleFrame,
@@ -37,8 +35,10 @@ from torchlens._ir import (
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import InterventionState, PreHookProvenanceEvent
 from torchlens._ir.intervention import FireResult, FunctionEventInput, InterventionTemplateRef
+from torchlens._ir.workspaces import ModuleCaptureWorkspace
 from torchlens.types import ContainerSpec
 
 

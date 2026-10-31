@@ -439,7 +439,7 @@ class ExtractionPlan:
             batch_size=self.batch_size,
             device=device,
             path=path,
-            transform=self._transform,
+            output_transform=self._transform,
             progress=progress,
             resume=resume,
             **kwargs,
@@ -588,7 +588,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
     sites: Any = "all",
     n_stimuli: int,
     batch_size: int,
-    transform: Any = None,
+    output_transform: Any = None,
     memory_budget: Any = None,
     safety_margin: float = 0.15,
     engine: str = "trace",
@@ -618,7 +618,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
     batch_size:
         The run's batch size. Belongs to the user (D-10): the planner
         refuses over-budget plans with arithmetic, never shrinks this.
-    transform:
+    output_transform:
         Optional unary transform executed live at the probe.
     memory_budget:
         Optional budget accepted by :func:`parse_bytes`.
@@ -672,9 +672,9 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
     # one-time wrapper/import allocations that would contaminate the
     # two-point resident fit (a 100x first-reading skew was measured on a
     # cold process). Its facts and pair are discarded.
-    _probe_once(model, probe_inputs, transform)
-    facts_1, pair_1 = _probe_once(model, probe_inputs, transform)
-    facts_2, pair_2 = _probe_once(model, doubled, transform)
+    _probe_once(model, probe_inputs, output_transform)
+    facts_1, pair_1 = _probe_once(model, probe_inputs, output_transform)
+    facts_2, pair_2 = _probe_once(model, doubled, output_transform)
 
     requested: list[str] | None
     if isinstance(sites, str) and sites == "all":
@@ -712,7 +712,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
         tuple(probe_inputs.shape[1:]),
         str(probe_inputs.dtype),
         batch_size,
-        repr(transform) if transform is not None else None,
+        repr(output_transform) if output_transform is not None else None,
         type(model).__qualname__,
     )
     plan = ExtractionPlan(
@@ -720,7 +720,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
         batch_size=batch_size,
         n_stimuli=n_stimuli,
         input_signature=signature,
-        transform_repr=repr(transform) if transform is not None else None,
+        transform_repr=repr(output_transform) if output_transform is not None else None,
         engine=engine,
         memory_budget_bytes=budget_bytes,
         safety_margin=safety_margin,
@@ -730,7 +730,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
         peak_basis=peak_basis,
         model_class=type(model).__qualname__,
         _model_ref=weakref.ref(model),
-        _transform=transform,
+        _transform=output_transform,
     )
     # The fitted retained bytes per batch are a deterministic FLOOR on the
     # run's peak (the payloads must exist to be written); the RSS reading is

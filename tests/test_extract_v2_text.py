@@ -17,7 +17,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.dataset_extraction import extract_dataset, hf_collate, open_extraction
+from torchlens import extract_dataset
+from torchlens.dataset_extraction import hf_collate, open_extraction
 
 pytestmark = [pytest.mark.real_model, pytest.mark.heavy]
 

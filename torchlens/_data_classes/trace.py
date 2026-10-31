@@ -85,7 +85,7 @@ from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
-from ..captured_run import CapturedRun
+from ..captured_run import TraceLike
 from ..intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
@@ -893,7 +893,7 @@ class Trace(
     TraceExportMixin,
     TraceVisualizationMixin,
     TraceNarrateMixin,
-    CapturedRun,
+    TraceLike,
 ):
     """Top-level container for a logged forward pass.
 
@@ -1672,18 +1672,18 @@ class Trace(
         activation_transform: _ActivationPostfunc | None = None,
         grad_transform: _GradientPostfunc | None = None,
         save_raw_activations: bool = True,
-        save_raw_gradients: bool = True,
+        save_raw_grads: bool = True,
         save_mode: SaveMode = "copy",
         keep_orphans: bool = False,
-        save_arg_values: bool = False,
+        save_args: bool = False,
         save_grads: Any = None,
         capture_tensor_grad_hooks: bool = True,
         detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
         num_context_lines: int = 7,
         optimizer: torch.optim.Optimizer | None = None,
-        save_code_context: bool = False,
-        save_rng_states: bool = False,
+        save_source_context: bool = False,
+        save_rng: bool = False,
         recurrence_detection: bool = True,
         verbose: bool = False,
         backward_ready: bool = False,
@@ -1695,13 +1695,13 @@ class Trace(
         distributed_witness: str = "none",
         save_budget: SaveBudgetOption = "auto",
         facet_registry_snapshot: Any | None = None,
-        transform: Callable[[Any], Any] | None = None,
+        input_transform: Callable[[Any], Any] | None = None,
         raw_input: Any | None = None,
         save_raw_input: str | bool = "small",
         batch_render: str = "auto",
         output_transform: Callable[[Any], Any] | None = None,
         raw_output: Any | None = None,
-        save_raw_output: str | bool = "small",
+        save_transformed_output: str | bool = "small",
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None,
         save_visualizations: bool = False,
     ) -> None:
@@ -1830,8 +1830,8 @@ class Trace(
         self.save_arg_templates = False
         self.raw_input = raw_input
         self.input_preprocessor: ResolvedPreprocessing | None = None
-        self._transform = transform
-        self.transform_repr = repr(transform) if transform is not None else None
+        self._transform = input_transform
+        self.transform_repr = repr(input_transform) if input_transform is not None else None
         self.save_raw_input = save_raw_input
         self.batch_render = batch_render
         self.raw_output = raw_output
@@ -1840,7 +1840,7 @@ class Trace(
         self.output_id2label: dict[int, str] | None = None
         self.output_num_classes: int | None = None
         self._output_transform = output_transform
-        self.save_raw_output = save_raw_output
+        self.save_raw_output = save_transformed_output
         self.layer_visualizers = layer_visualizers
         self.save_visualizations = save_visualizations
         self._visualizer_dir: str | None = None
@@ -1850,7 +1850,7 @@ class Trace(
         self.input_annotations: dict[str, Any] = {}
         self.grad_transform = grad_transform
         self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
-        self.save_raw_gradients = save_raw_gradients
+        self.save_raw_gradients = save_raw_grads
         self.save_mode = save_mode
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
@@ -1905,11 +1905,11 @@ class Trace(
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self._halt_returns_partial_trace = False
         self._replay_arg_version_data_complete = True
-        self.save_arg_values = save_arg_values
+        self.save_arg_values = save_args
         self.save_grads = "all" if save_grads is True else save_grads
         self.capture_tensor_grad_hooks = capture_tensor_grad_hooks
-        self.save_code_context = save_code_context
-        self.save_rng_states = save_rng_states
+        self.save_code_context = save_source_context
+        self.save_rng_states = save_rng
         self.recurrence_detection = recurrence_detection
         # L1 grouping surface: "structural" is the only entry-legal knob
         # value in wave 0 (others refuse typed at trace entry); the stamp is
@@ -2592,7 +2592,7 @@ class Trace(
             # The frozen vocabulary designates UNKNOWN as the most-restrictive
             # value and the save gate already lands there; ``None`` is outside
             # the vocabulary and was the one unsettled read (b6-opus R25).
-            return CaptureOutcome(status=CaptureStatus.UNKNOWN, derived=True)
+            return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
         return outcome_for(self)
 
     @property
@@ -3409,7 +3409,7 @@ class Trace(
         # projection's pass-index base and cumulative baselines so a new
         # backward numbers itself after the preserved passes and a full
         # rebuild keeps (never silently erases) the pre-pickle projection.
-        from .._ir import CaptureEvents
+        from torchlens._ir.capture_events import CaptureEvents
 
         self.__dict__["_capture_events"] = CaptureEvents.detached_from(self)
         # The projection guard is derived from the stream that just got

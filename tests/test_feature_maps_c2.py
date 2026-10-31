@@ -113,7 +113,7 @@ def _conv_trace(save: Any = None, *, n_stimuli: int = 4) -> tl.Trace:
         _TinyConv().eval(),
         _input_batch(n_stimuli),
         save=selector,
-        capture=tl.options.CaptureOptions(random_seed=123),
+        capture=tl.options.CaptureOptions(seed=123),
     )
 
 

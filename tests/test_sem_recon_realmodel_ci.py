@@ -41,7 +41,7 @@ from torchlens.semantic.patching import PatchApplicationError
 # heavy tier per the marker lint's 5 s smoke budget.
 pytestmark = pytest.mark.real_model
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
 
 
 @pytest.fixture(scope="module")

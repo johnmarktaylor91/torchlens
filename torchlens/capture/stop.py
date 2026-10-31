@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..errors import CaptureError
-from ..fastlog._halt import HaltSignal
+from ..fastlog._halt import StopSignal
 from ..fastlog.exceptions import PredicateError
 
 if TYPE_CHECKING:
@@ -172,7 +172,7 @@ class StopDirective:
                     boundary_kind=getattr(ctx, "kind", None),
                     boundary_label=boundary_label,
                 )
-            raise HaltSignal(
+            raise StopSignal(
                 ctx.label,
                 frontier_output=frontier_output,
                 boundary_kind=getattr(ctx, "kind", None),

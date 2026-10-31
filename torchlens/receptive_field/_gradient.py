@@ -14,7 +14,7 @@ import torch
 
 from .. import _state
 from .._utils._torch_compat import tensor_any_over_dims
-from ..backends import BackendUnsupportedError, get_backend_spec
+from ..backends.registry import BackendUnsupportedError, get_backend_spec
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,

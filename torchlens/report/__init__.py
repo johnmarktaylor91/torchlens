@@ -114,6 +114,7 @@ from ._summary_report import (
 )
 
 __all__ = [
+    "isolated_capture",
     "BACKWARD_STATES",
     "CACHE_RESIDENT_BYTES_DEFAULT",
     "COST_CLASSES",
@@ -230,3 +231,13 @@ __all__ = [
     "sketch_grad_fn",
     "walk_grad_fn",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve ``isolated_capture`` lazily (its code lives with the rerun helpers)."""
+
+    if name == "isolated_capture":
+        from ..debug._rerun import isolated_capture
+
+        return isolated_capture
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

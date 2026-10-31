@@ -273,7 +273,7 @@ def test_capture_restores_user_global_rng_streams() -> None:
     np.random.seed(4711)
     torch.manual_seed(99)
     before = _global_rng_fingerprint()
-    tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=1234))
+    tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(seed=1234))
     assert _global_rng_fingerprint() == before, (
         "capture left the user's global RNG engines reseeded"
     )
@@ -288,7 +288,7 @@ def test_failed_capture_restores_user_global_rng_streams() -> None:
     torch.manual_seed(939)
     before = _global_rng_fingerprint()
     with pytest.raises(RuntimeError, match="injected forward failure"):
-        tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=77))
+        tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(seed=77))
     assert _global_rng_fingerprint() == before, (
         "failed capture leaked the seeded RNG engines to the user"
     )
@@ -298,7 +298,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     """Auto-seeded captures still draw FRESH seeds after the restore.
 
     The seed pick (``random.randint``) deliberately stays OUTSIDE the restore
-    bracket: restoring the pick too would make every ``random_seed=None``
+    bracket: restoring the pick too would make every ``seed=None``
     capture reuse the identical seed, silently correlating dropout patterns
     across runs.
     """
@@ -391,7 +391,7 @@ def test_capture_is_rng_neutral_to_the_host_process() -> None:
     untouched (queued RNG-reseed fork); only the leak is closed. The
     auto-seed pick itself draws from a PRIVATE entropy stream (never the
     user's global engines), so neutrality holds even with
-    ``random_seed=None`` while consecutive captures still get fresh seeds.
+    ``seed=None`` while consecutive captures still get fresh seeds.
     """
 
     import random as _random

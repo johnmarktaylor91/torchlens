@@ -18,12 +18,12 @@ TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = {
     "intervene": "interventions",
     "halt": "interventions",
     "recipes": "interventions",
-    "storage": "streaming",
-    "streaming": "streaming",
+    "storage": "has_streaming",
+    "streaming": "has_streaming",
     "save_grads": "backward_capture",
     "backward_ready": "backward_capture",
-    "save_rng_states": "rng_replay",
-    "random_seed": "rng_replay",
+    "save_rng": "rng_replay",
+    "seed": "rng_replay",
     "structure_only": "structure_only_capture",
 }
 """Public trace options whose support is owned by a ``BackendCapabilities`` flag.
@@ -367,12 +367,12 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "JAX backend preview does not support save_grads; full-save forward capture only. "
             "Use tl.backends.jax.GradOptions for derived gradients."
         ),
-        "save_arg_values": (
-            "JAX backend preview does not support save_arg_values; full-save forward capture "
+        "save_args": (
+            "JAX backend preview does not support save_args; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
-        "save_code_context": (
-            "JAX backend preview does not support save_code_context; full-save forward capture "
+        "save_source_context": (
+            "JAX backend preview does not support save_source_context; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "backward_ready": (
@@ -417,9 +417,9 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -448,9 +448,9 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -480,9 +480,9 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
         for name in (
             "activation_transform",
             "detach_saved_activations",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -510,9 +510,9 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",

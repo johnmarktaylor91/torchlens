@@ -19,13 +19,15 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._extraction.harvest_schema import (
     EXECUTABLE_ADDRESS_CLASSES,
     HARVEST_BLOCK_KEY,
     validate_harvest_block,
 )
-from torchlens.dataset_extraction import MANIFEST_FILENAME, extract_dataset, open_extraction
+from torchlens._extraction.resume import MANIFEST_FILENAME
+from torchlens.dataset_extraction import open_extraction
 
 pytestmark = pytest.mark.slow
 

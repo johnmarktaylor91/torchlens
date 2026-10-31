@@ -32,7 +32,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     log = tl.trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     dec = mi.residual_decomposition(log)

@@ -125,7 +125,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         eager_model,
         (),
         dict(encoded),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     try:
         eager_coverage = sem.facet_coverage(eager_trace)

@@ -37,7 +37,7 @@ def test_accumulate_ram_raises_at_end_with_capped_failures() -> None:
     """RAM accumulate mode collects failures up to max_predicate_failures."""
 
     with pytest.raises(PredicateError) as exc_info:
-        tl.fastlog.record(
+        tl.record(
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,
@@ -63,7 +63,7 @@ def test_fail_fast_raises_on_first_failure() -> None:
         raise PredicateError("first failure", ctx=ctx)
 
     with pytest.raises(PredicateError, match="first failure"):
-        tl.fastlog.record(
+        tl.record(
             ExceptionModel(),
             torch.ones(1, 3),
             save=keep_op,
@@ -77,7 +77,7 @@ def test_auto_maps_to_accumulate_for_ram() -> None:
     """Auto predicate error mode accumulates failures for RAM-only sessions."""
 
     with pytest.raises(PredicateError) as exc_info:
-        tl.fastlog.record(
+        tl.record(
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,
@@ -102,12 +102,12 @@ def test_auto_maps_to_fail_fast_for_disk(tmp_path: Path) -> None:
         raise PredicateError("disk failure", ctx=ctx)
 
     with pytest.raises(PredicateError, match="disk failure"):
-        tl.fastlog.record(
+        tl.record(
             ExceptionModel(),
             torch.ones(1, 3),
             save=keep_op,
             on_predicate_error="auto",
-            streaming=tl.options.StreamingOptions(
+            streaming=tl.options.StorageOptions(
                 bundle_path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
@@ -120,7 +120,7 @@ def test_max_predicate_failures_tracks_overflow_separately() -> None:
     """Overflow failures are counted separately from retained failures."""
 
     with pytest.raises(PredicateError) as exc_info:
-        tl.fastlog.record(
+        tl.record(
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,

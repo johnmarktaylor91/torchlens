@@ -83,7 +83,7 @@ def _gallery_capture() -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
 
 
@@ -231,7 +231,7 @@ def test_cross_run_patch_gallery_row():
     model = _GalleryNet().double()
     x_a = torch.randn(1, 1, 12, 12, dtype=torch.float64)
     x_b = torch.randn(1, 1, 12, 12, dtype=torch.float64)
-    options = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+    options = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
     trace_a = tl.trace(model, x_a, capture=options)
     trace_b = tl.trace(model, x_b, capture=options)
     try:

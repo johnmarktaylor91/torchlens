@@ -201,7 +201,7 @@ def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, A
     trace = tl.trace(rig["root"], rig["example"], episode=rig["spec"](), halt=tl.func("tanh"))
     classification, _ = _expect("halt_predicate")
     assert classification in {ORTHOGONAL, COUPLED}
-    assert trace.outcome.status.name == "HALTED"
+    assert trace.outcome.status.name == "STOPPED"
     ledger = trace.annotations["episode"]
     statuses = [row["status"] for row in ledger["rows"]]
     assert statuses, "halted episode carries no per-step rows"

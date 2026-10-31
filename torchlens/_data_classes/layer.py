@@ -1827,7 +1827,7 @@ class Layer(_SelectionOperand):
 
     def do(
         self,
-        transform: Any,
+        input_transform: Any,
         *,
         model: Any = None,
         x: Any = None,
@@ -1854,7 +1854,7 @@ class Layer(_SelectionOperand):
 
         return self._source_trace_or_error().do(
             self._intervention_site(),
-            transform,
+            input_transform,
             model=model,
             x=x,
             intervention=intervention,

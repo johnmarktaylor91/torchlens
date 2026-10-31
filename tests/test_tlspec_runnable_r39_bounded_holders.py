@@ -63,7 +63,7 @@ def _branch(x: torch.Tensor, value: float) -> torch.Tensor:
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
 
 
 def _host_rng_consumed(model: nn.Module, x: torch.Tensor) -> bool:

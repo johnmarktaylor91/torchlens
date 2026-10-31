@@ -230,7 +230,7 @@ class PreprocessingAudit:
     def to_json(self) -> dict[str, Any]:
         """Serialize the full report (the manifest-block payload shape)."""
 
-        record = self.authority.record
+        record = self.authority.preprocessing
         return {
             "schema": "tl_preprocessing_audit_v1",
             "authority": {
@@ -464,7 +464,7 @@ def audit(
     from ._authorities import resolve as _resolve
 
     resolution = authority if isinstance(authority, Resolution) else _resolve(authority)
-    authority_status = status_of(resolution.record)
+    authority_status = status_of(resolution.preprocessing)
     authority_fields = (
         resolution.declared.comparable_fields()
         if resolution.declared is not None

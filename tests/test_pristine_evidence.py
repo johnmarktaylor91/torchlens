@@ -24,7 +24,6 @@ import torchlens as tl
 from torchlens._data_classes._trace_pristine import derive_pristine, pristine_touch_evidence
 from torchlens._runnable import PathFaithfulness
 from torchlens._trace_state import TraceState
-from torchlens.backends import registered_backend_specs
 from torchlens.backends._intervention_evidence import records_intervention_evidence
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
@@ -247,7 +246,7 @@ def test_derivation_rule(backend: str, version: int, history: list[Any], expecte
 
 
 def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
-    names = {spec.name for spec in registered_backend_specs()}
+    names = {spec.name for spec in tl.backends.specs()}
     assert "torch" in names and len(names) > 1
     for name in sorted(names):
         stub = SimpleNamespace(

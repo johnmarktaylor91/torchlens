@@ -77,7 +77,7 @@ def _normalize_capture_decision(
         return CaptureSpec(
             save_out=True,
             save_metadata=True,
-            keep_grad=default_spec.keep_grad,
+            save_grad=default_spec.save_grad,
             device=default_spec.device,
             dtype=default_spec.dtype,
             save_mode=default_spec.save_mode,

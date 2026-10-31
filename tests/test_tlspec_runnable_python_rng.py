@@ -68,7 +68,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=seed,
+            seed=seed,
         ),
     )
 

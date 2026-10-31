@@ -16,7 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.fastlog import Recorder, load
-from torchlens.options import StreamingOptions
+from torchlens.options import StorageOptions
 
 
 def _model() -> nn.Module:
@@ -29,11 +29,11 @@ def _inputs() -> list[torch.Tensor]:
     return [torch.randn(1, 3, generator=generator) for _ in range(3)]
 
 
-def _record_passes(save, **recorder_kwargs) -> tl.fastlog.Recording:
+def _record_passes(save, **recorder_kwargs) -> tl.Recording:
     model = _model()
     with Recorder(model, save=save, **recorder_kwargs) as recorder:
         for x in _inputs():
-            recorder.log((x,))
+            recorder((x,))
     return recorder.recording
 
 
@@ -65,7 +65,7 @@ def test_selector_save_matches_plain_callable_record_for_record() -> None:
 def test_selector_save_disk_bundle_loads_one_record_per_pass(tmp_path: Path) -> None:
     bundle = tmp_path / "bundle"
     recording = _record_passes(
-        tl.func("relu"), streaming=StreamingOptions(bundle_path=bundle, retain_in_memory=True)
+        tl.func("relu"), streaming=StorageOptions(bundle_path=bundle, retain_in_memory=True)
     )
     loaded = load(bundle)
 

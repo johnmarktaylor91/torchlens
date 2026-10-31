@@ -194,10 +194,10 @@ Forward exceptions keep the historical behavior unless you opt in. With
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
 failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
 valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
-`Recording.log_backward()` reject them.
+`Recording.backward()` reject them.
 
 For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 `tl._partial.from_failed_capture(exc)`.

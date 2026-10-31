@@ -301,11 +301,11 @@ def test_fold_arm3_halted_member() -> None:
     """A trailing HALTED member folds to episode_halted_at_step k."""
 
     result = derive_episode_status(
-        [("complete", None), ("halted", None)], n_declared=None, ledger=None
+        [("complete", None), ("stopped", None)], n_declared=None, ledger=None
     )
     assert result.status == "episode_halted_at_step"
     assert result.at_step == 1
-    assert result.member_status == "HALTED"
+    assert result.member_status == "STOPPED"
 
 
 def test_fold_arm5_aborted_nonfinite_verbatim() -> None:

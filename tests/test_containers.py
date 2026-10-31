@@ -322,11 +322,11 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
 
     model = HFLikeModel()
     x = torch.tensor([1.0])
-    default_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=0))
+    default_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=0))
     explicit_false_trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=False),
+        capture=tl.options.CaptureOptions(seed=0, capture_container_structure=False),
     )
 
     assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
@@ -518,14 +518,13 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
     from types import SimpleNamespace
 
     from torchlens._data_classes.container import Role, _trace_container_capability
-    from torchlens.backends import get_backend_spec
 
     unknown = SimpleNamespace(backend="no_such_backend_zzz")
     assert _trace_container_capability(unknown, Role.CALL_OUTPUT) == "none"
     assert _trace_container_capability(unknown, Role.MODEL_INPUT) == "none"
 
     legacy = SimpleNamespace()  # no backend attribute at all
-    torch_caps = get_backend_spec("torch").capabilities
+    torch_caps = tl.backends.spec("torch").capabilities
     assert _trace_container_capability(legacy, Role.CALL_OUTPUT) == str(
         torch_caps.output_container_structure
     )

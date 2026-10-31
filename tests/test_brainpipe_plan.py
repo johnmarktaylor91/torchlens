@@ -138,7 +138,7 @@ def test_plan_run_executes_through_the_artifact_runner() -> None:
         torch.randn(4, 16),
         n_stimuli=20,
         batch_size=5,
-        transform=lambda t: t.mean(dim=-1, keepdim=True),
+        output_transform=lambda t: t.mean(dim=-1, keepdim=True),
     )
     result = plan.run(torch.randn(20, 16), progress=False)
     assert set(result) == {site.label for site in plan.included_sites}

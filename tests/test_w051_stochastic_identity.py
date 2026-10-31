@@ -39,7 +39,7 @@ def _capture(model: nn.Module, seed: int, **kwargs: object) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, random_seed=seed, **kwargs),
+        capture=tl.options.CaptureOptions(intervention_ready=True, seed=seed, **kwargs),
     )
 
 
@@ -79,9 +79,9 @@ def test_content_digest_hashes_retained_payloads() -> None:
     torch.manual_seed(0)
     model = _TwoBlock()
     torch.manual_seed(1)
-    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
+    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
     torch.manual_seed(2)
-    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
+    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
     address_one = population([run_one], origin="o")
     address_two = population([run_two], origin="o")
     assert address_one.identity == address_two.identity
@@ -128,7 +128,7 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     def capture(model, seed):
         torch.manual_seed(seed)
         return tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(
-            intervention_ready=True, random_seed=seed))
+            intervention_ready=True, seed=seed))
 
     torch.manual_seed(0)
     model = TwoBlock()

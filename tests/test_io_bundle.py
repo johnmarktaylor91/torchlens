@@ -102,9 +102,7 @@ def _build_conv_log(seed: int = 0) -> Trace:
     torch.manual_seed(seed)
     model = _ConvBundleModel()
     x = torch.randn(1, 3, 8, 8)
-    return trace_fn(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed)
-    )
+    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=seed))
 
 
 def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
@@ -127,7 +125,7 @@ def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
     return trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
         save=tl.options.SaveOptions(activation_transform=transform),
     )
 
@@ -285,7 +283,7 @@ def test_manifest_provenance_roundtrip_and_hash_determinism(tmp_path: Path) -> N
     model = _InputTransformModel().eval()
     inputs = torch.arange(12, dtype=torch.float32).reshape(3, 4)
     captured = trace_fn(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=44)
+        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", seed=44)
     )
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
@@ -482,7 +480,7 @@ def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) ->
     trace = trace_fn(
         _InputTransformModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(transform=double_input),
+        capture=tl.options.CaptureOptions(input_transform=double_input),
     )
     assert trace.transform_repr == repr(double_input)
     assert trace._transform is double_input
@@ -1026,7 +1024,7 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     """``save_raw_input=True`` must stringify un-picklable objects, not pickle them raw.
 
     Unmocked, public-API-only repro of the root cause behind the BLOCKER
-    above: ``save_raw_input=True``/``save_raw_output=True`` (documented
+    above: ``save_raw_input=True``/``save_transformed_output=True`` (documented
     top-level ``tl.trace()`` kwargs) previously routed raw values through
     the unsafe ``_scrub_value()`` passthrough, so a generator (or any other
     live, un-picklable object) nested inside a raw input reached
@@ -1045,7 +1043,7 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
         model,
         raw_input,
         capture=tl.options.CaptureOptions(
-            transform=lambda d: d["tensor"], save_raw_input=True, random_seed=0
+            input_transform=lambda d: d["tensor"], save_raw_input=True, seed=0
         ),
     )
     assert isinstance(trace.raw_input["meta"], type(make_generator()))
@@ -1094,7 +1092,7 @@ def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
         model,
         raw_input,
         capture=tl.options.CaptureOptions(
-            transform=lambda d: d["x"], save_raw_input=True, random_seed=0
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
         ),
     )
 
@@ -1134,7 +1132,7 @@ def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
         model,
         raw_input,
         capture=tl.options.CaptureOptions(
-            transform=lambda d: d["x"], save_raw_input=True, random_seed=0
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
         ),
     )
 
@@ -1172,7 +1170,7 @@ def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_elem
         model,
         raw_input,
         capture=tl.options.CaptureOptions(
-            transform=lambda d: d["x"], save_raw_input=True, random_seed=0
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
         ),
     )
 
@@ -1217,7 +1215,7 @@ def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpic
         model,
         raw_input,
         capture=tl.options.CaptureOptions(
-            transform=lambda d: d["x"], save_raw_input=True, random_seed=0
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
         ),
     )
 

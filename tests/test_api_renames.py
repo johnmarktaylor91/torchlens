@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import user_funcs
-from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
@@ -42,7 +42,7 @@ _VISUALIZATION_CASES = [
 _STREAMING_CASES = [
     ("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),
     ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
-    ("out_callback", "out_sink", torch.sigmoid, "out_sink"),
+    ("on_save", "out_sink", torch.sigmoid, "out_sink"),
 ]
 
 
@@ -297,7 +297,7 @@ def test_streaming_options_group_supports_every_field(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            streaming=StreamingOptions(**option_kwargs),
+            streaming=StorageOptions(**option_kwargs),
         )
 
     assert captured[captured_key] == value

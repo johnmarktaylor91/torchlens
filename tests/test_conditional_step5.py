@@ -118,7 +118,7 @@ class AssertNotBranchModel(nn.Module):
 
 
 class SaveSourceContextFalseModel(nn.Module):
-    """``if``/``else`` model used with ``save_code_context=False``."""
+    """``if``/``else`` model used with ``save_source_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the model forward pass.
@@ -144,7 +144,7 @@ class SaveSourceContextFalseModel(nn.Module):
 def _log_model(
     model: nn.Module,
     x: torch.Tensor,
-    save_code_context: bool = True,
+    save_source_context: bool = True,
 ) -> Trace:
     """Log a forward pass for a small inline test model.
 
@@ -154,7 +154,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_code_context:
+    save_source_context:
         Whether rich source loading is enabled during capture.
 
     Returns
@@ -166,7 +166,7 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        capture=CaptureOptions(save_code_context=save_code_context),
+        capture=CaptureOptions(save_source_context=save_source_context),
     )
 
 
@@ -495,7 +495,7 @@ def test_save_code_context_false_still_attributes_branches() -> None:
     trace = _log_model(
         SaveSourceContextFalseModel(),
         torch.ones(2, 2),
-        save_code_context=False,
+        save_source_context=False,
     )
     event = _get_only_event(trace)
     bool_layers = _get_terminal_bool_layers(trace)

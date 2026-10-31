@@ -180,4 +180,5 @@ def finish_echo(echo_session: EchoSession | None, trace: Any) -> None:
     if echo_session is None:
         return
     outcome_status = getattr(getattr(trace, "outcome", None), "status", None)
-    echo_session.finish("halted" if getattr(outcome_status, "name", "") == "HALTED" else "complete")
+    is_stopped = getattr(outcome_status, "name", "") == "STOPPED"
+    echo_session.finish("halted" if is_stopped else "complete")

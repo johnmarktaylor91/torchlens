@@ -232,7 +232,7 @@ assert relu.out.shape == (2, 8)
   asks for one; `trace.inference_only` reports the value in force.
 - **`tl.record` skips gradient hooks by default.** It installs them only when
   `backward_ready=True`, `save_grads=` or `default_grad=` is given, so pass one of those before a
-  `Recording.log_backward()`, which refuses otherwise.
+  `Recording.backward()`, which refuses otherwise.
 - **Keep the wrappers installed.** `tl.trace` keeps torch wrapped between calls by default.
   `CaptureOptions(unwrap_when_done=True)` re-wraps on the next call, a fixed 2 to 5% per trace
   on the small models.

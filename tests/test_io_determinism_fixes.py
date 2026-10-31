@@ -117,14 +117,14 @@ class _BufferedModel(torch.nn.Module):
         return self.linear(value) + self.offset
 
 
-def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
+def _save_seeded_trace(path: Path, *, seed: int) -> tl.Trace:
     """Capture, save, and reload one trace with a chosen capture seed.
 
     Parameters
     ----------
     path:
         Destination bundle path.
-    random_seed:
+    seed:
         Capture seed controlling the live parameter barcode.
 
     Returns
@@ -137,7 +137,7 @@ def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
     trace = tl.trace(
         _LinearModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(random_seed=random_seed),
+        capture=tl.options.CaptureOptions(seed=seed),
     )
     trace.save(path)
     return tl.load(path)
@@ -148,8 +148,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
 
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
-    first = _save_seeded_trace(first_path, random_seed=1)
-    second = _save_seeded_trace(second_path, random_seed=2)
+    first = _save_seeded_trace(first_path, seed=1)
+    second = _save_seeded_trace(second_path, seed=2)
 
     first_param_ops = [op for op in first.layer_list if op.uses_params]
     second_param_ops = [op for op in second.layer_list if op.uses_params]

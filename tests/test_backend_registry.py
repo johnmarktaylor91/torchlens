@@ -25,11 +25,6 @@ from torchlens.backends import (
     BackendUnsupportedError,
     CaptureBackend,
     UnknownBackendError,
-    get_backend_spec,
-    register_backend_spec,
-    registered_backend_specs,
-    resolve_backend_spec,
-    unregister_backend_spec,
 )
 from torchlens.backends.default_specs import (
     _contains_other_backend_tensor,
@@ -119,7 +114,7 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
         _TinyModel().eval(),
         torch.ones(1),
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
     )
     trace.backend = "fake"
     trace.module_identity_mode = "function_root"
@@ -192,7 +187,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
         The fake spec is registered.
     """
 
-    register_backend_spec(
+    tl.backends.register(
         BackendSpec(
             name=name,
             can_handle=_fake_can_handle,
@@ -206,7 +201,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 interventions=False,
                 rng_replay=False,
                 payload_materialization=False,
-                streaming=False,
+                has_streaming=False,
                 module_identity_modes=("function_root",),
                 save_levels=("audit",),
             ),
@@ -226,14 +221,12 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
 
     model = _TinyModel()
     x = torch.ones(1)
-    legacy = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1)
-    )
+    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=1))
     explicit = tl.trace(
         model,
         x,
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
     )
     assert explicit.backend == legacy.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
@@ -291,7 +284,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
         return cast(CaptureBackend, object())
 
     with pytest.raises(TypeError, match="capture_backend.*missing"):
-        register_backend_spec(
+        tl.backends.register(
             BackendSpec(
                 name="fake_conformance",
                 can_handle=_fake_can_handle,
@@ -305,7 +298,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     interventions=False,
                     rng_replay=False,
                     payload_materialization=False,
-                    streaming=False,
+                    has_streaming=False,
                 ),
                 capture_backend=bad_capture_backend,
             )
@@ -321,7 +314,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
         raise ImportError("cannot import name X from partially initialized module Y")
 
     with pytest.raises(ImportError, match="partially initialized module"):
-        register_backend_spec(
+        tl.backends.register(
             BackendSpec(
                 name="fake_partial_import",
                 can_handle=_fake_can_handle,
@@ -335,7 +328,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     interventions=False,
                     rng_replay=False,
                     payload_materialization=False,
-                    streaming=False,
+                    has_streaming=False,
                 ),
                 capture_backend=bad_capture_backend,
             )
@@ -346,7 +339,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
     """Replacing a spec removes aliases owned by the old spec."""
 
     for name in ("fake_alias_probe", "fake_alias_probe_old"):
-        unregister_backend_spec(name)
+        tl.backends.unregister(name)
     old_spec = BackendSpec(
         name="fake_alias_probe",
         aliases=("fake_alias_probe_old",),
@@ -361,7 +354,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             interventions=False,
             rng_replay=False,
             payload_materialization=False,
-            streaming=False,
+            has_streaming=False,
         ),
     )
     new_spec = BackendSpec(
@@ -373,26 +366,26 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
         capabilities=old_spec.capabilities,
     )
     try:
-        register_backend_spec(old_spec)
-        assert get_backend_spec("fake_alias_probe_old") is old_spec
+        tl.backends.register(old_spec)
+        assert tl.backends.spec("fake_alias_probe_old") is old_spec
 
-        register_backend_spec(new_spec, replace=True)
+        tl.backends.register(new_spec, replace=True)
 
-        assert get_backend_spec("fake_alias_probe") is new_spec
+        assert tl.backends.spec("fake_alias_probe") is new_spec
         with pytest.raises(UnknownBackendError):
-            get_backend_spec("fake_alias_probe_old")
+            tl.backends.spec("fake_alias_probe_old")
     finally:
-        unregister_backend_spec("fake_alias_probe")
-        unregister_backend_spec("fake_alias_probe_old")
+        tl.backends.unregister("fake_alias_probe")
+        tl.backends.unregister("fake_alias_probe_old")
 
 
 def test_capability_sources_agree_for_preview_backends() -> None:
     """Compatibility capability modules read from the registered specs."""
 
-    jax_spec = get_backend_spec("jax")
-    mlx_spec = get_backend_spec("mlx")
-    paddle_spec = get_backend_spec("paddle")
-    tinygrad_spec = get_backend_spec("tinygrad")
+    jax_spec = tl.backends.spec("jax")
+    mlx_spec = tl.backends.spec("mlx")
+    paddle_spec = tl.backends.spec("paddle")
+    tinygrad_spec = tl.backends.spec("tinygrad")
 
     assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
     assert jax_spec.capabilities.validation_replay == jax_capabilities.supports_validation_replay
@@ -419,8 +412,8 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     )
     assert jax_spec.serialization_policy.payload_policy == jax_capabilities.payload_policy
 
-    assert get_backend_spec("torch").capabilities.input_container_structure == "full_spec"
-    assert get_backend_spec("torch").capabilities.output_container_structure == "full_spec"
+    assert tl.backends.spec("torch").capabilities.input_container_structure == "full_spec"
+    assert tl.backends.spec("torch").capabilities.output_container_structure == "full_spec"
 
     assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
     assert mlx_spec.capabilities.validation_replay == mlx_capabilities.supports_validation_replay
@@ -516,15 +509,15 @@ def test_capability_sources_agree_for_preview_backends() -> None:
 def test_paddle_backend_registered_with_alias_and_priority() -> None:
     """Paddle default spec is registered with its alias and phase priority."""
 
-    spec = get_backend_spec("paddle")
+    spec = tl.backends.spec("paddle")
     assert spec.name == "paddle"
     assert spec.capture_backend is None
-    assert get_backend_spec("paddlepaddle") is spec
+    assert tl.backends.spec("paddlepaddle") is spec
     assert spec.priority == 40
-    assert get_backend_spec("torch").priority == 0
-    assert get_backend_spec("mlx").priority == 10
-    assert get_backend_spec("jax").priority == 20
-    assert get_backend_spec("tinygrad").priority == 30
+    assert tl.backends.spec("torch").priority == 0
+    assert tl.backends.spec("mlx").priority == 10
+    assert tl.backends.spec("jax").priority == 20
+    assert tl.backends.spec("tinygrad").priority == 30
 
 
 def test_paddle_detector_returns_false_without_paddle(
@@ -596,7 +589,7 @@ def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
 
     assert _mlx_can_handle(MlxModule(), MlxArray(), None)
     assert not _mlx_can_handle(MlxModule(), (MlxArray(), TFTensor()), None)
-    assert resolve_backend_spec(None, MlxModule(), (MlxArray(), TFTensor())).name == "torch"
+    assert tl.backends.resolve(None, MlxModule(), (MlxArray(), TFTensor())).name == "torch"
     with pytest.raises(ValueError, match="Unsupported model type"):
         tl.trace(MlxModule(), (MlxArray(), TFTensor()))
 
@@ -776,7 +769,7 @@ def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     # Autorouting must still resolve a plain torch nn.Module to the torch
     # backend even though the TF probe raised internally -- the crash must
     # not propagate up through ``resolve_backend_spec``.
-    assert resolve_backend_spec(None, _TinyModel(), torch.ones(1)).name == "torch"
+    assert tl.backends.resolve(None, _TinyModel(), torch.ones(1)).name == "torch"
     trace = tl.trace(_TinyModel(), torch.ones(1))
     assert trace.backend == "torch"
 
@@ -814,11 +807,11 @@ def test_tf_detector_reraises_genuine_backend_mismatch(
         _tf_can_handle(keras_model, object(), None)
 
 
-def test_tf_backend_rejects_random_seed_without_importing_tensorflow() -> None:
-    """TensorFlow preview random_seed is a typed unsupported option."""
+def test_tf_backend_rejects_seed_without_importing_tensorflow() -> None:
+    """TensorFlow preview seed= is a typed unsupported option."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
-        TFBackend().capture_trace(lambda x: x, object(), random_seed=123)
+    with pytest.raises(BackendUnsupportedError, match="does not support: seed"):
+        TFBackend().capture_trace(lambda x: x, object(), seed=123)
 
 
 def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
@@ -852,9 +845,9 @@ def test_explicit_paddle_backend_resolves_to_spec() -> None:
             return x
 
     x = paddle.to_tensor([1.0])
-    spec = get_backend_spec("paddle")
-    assert resolve_backend_spec("paddle", _PaddleLayer(), x) is spec
-    assert resolve_backend_spec("paddlepaddle", _PaddleLayer(), x) is spec
+    spec = tl.backends.spec("paddle")
+    assert tl.backends.resolve("paddle", _PaddleLayer(), x) is spec
+    assert tl.backends.resolve("paddlepaddle", _PaddleLayer(), x) is spec
 
 
 def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
@@ -938,7 +931,7 @@ def test_registered_capture_backends_conform_to_protocol() -> None:
         "tinygrad": "tinygrad",
     }
 
-    for spec in registered_backend_specs():
+    for spec in tl.backends.specs():
         if spec.capture_backend is None:
             continue
         if spec.name in dependency_modules:
@@ -1035,7 +1028,7 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
         assert result.validate_forward_pass([]) is True
         assert tl.validate(_FakeModel(), object(), scope="forward", backend="fake")
     finally:
-        unregister_backend_spec("fake")
+        tl.backends.unregister("fake")
 
 
 def test_public_option_spine_rejects_unsupported_explicit_option() -> None:
@@ -1051,7 +1044,7 @@ def test_public_option_spine_rejects_unsupported_explicit_option() -> None:
                 capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
             )
     finally:
-        unregister_backend_spec("fake")
+        tl.backends.unregister("fake")
 
 
 def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -> None:
@@ -1073,7 +1066,7 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         assert loaded[0].backend_address.startswith("fake:")
         assert check_metadata_invariants(loaded) is True
     finally:
-        unregister_backend_spec("fake")
+        tl.backends.unregister("fake")
 
 
 @pytest.mark.parametrize(
@@ -1109,7 +1102,7 @@ def test_fake_backend_invariant_corruptions_fail(
         with pytest.raises(MetadataInvariantError, match=match):
             check_metadata_invariants(trace)
     finally:
-        unregister_backend_spec("fake")
+        tl.backends.unregister("fake")
 
 
 @pytest.mark.parametrize("bad_backend", ["", None])
@@ -1140,5 +1133,5 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
         with pytest.raises(BackendAmbiguityError, match="fake_a, fake_b"):
             tl.trace(_FakeModel(), object())
     finally:
-        unregister_backend_spec("fake_a")
-        unregister_backend_spec("fake_b")
+        tl.backends.unregister("fake_a")
+        tl.backends.unregister("fake_b")

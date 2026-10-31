@@ -97,7 +97,7 @@ def check_card(
         warnings.warn(
             TorchLensWarning(
                 f"recorded preprocessing does not match the model's card "
-                f"({card.record.identifier}): {rows}",
+                f"({card.preprocessing.identifier}): {rows}",
                 code="preprocessing_card_mismatch",
             ),
             stacklevel=2,

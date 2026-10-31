@@ -38,7 +38,7 @@ class CaptureStatus(str, Enum):
     """Terminal status vocabulary for one capture product."""
 
     COMPLETE = "complete"
-    HALTED = "halted"
+    STOPPED = "stopped"
     ABORTED_NONFINITE = "aborted_nonfinite"
     FAILED = "failed"
     UNATTESTED = "unattested"
@@ -105,14 +105,14 @@ class CaptureOutcome:
     boundary_kind: str | None = None
     boundary_label: str | None = None
     frontier_labels: tuple[str, ...] | None = None
-    n_ops_committed: int | None = None
+    num_committed_ops: int | None = None
     inference_only: bool = False
-    recovered: bool = False
-    derived: bool = False
-    settlement_note: str | None = None
+    is_recovered: bool = False
+    is_derived: bool = False
+    note: str | None = None
 
     @property
-    def partial(self) -> bool | None:
+    def is_partial(self) -> bool | None:
         """Return the honest partiality claim for this outcome.
 
         ``True`` for a known prefix or failure, ``False`` for settled
@@ -123,7 +123,7 @@ class CaptureOutcome:
         if self.status is CaptureStatus.COMPLETE:
             return False
         if self.status in (
-            CaptureStatus.HALTED,
+            CaptureStatus.STOPPED,
             CaptureStatus.ABORTED_NONFINITE,
             CaptureStatus.FAILED,
         ):
@@ -144,11 +144,11 @@ class CaptureOutcome:
             "frontier_labels": (
                 None if self.frontier_labels is None else list(self.frontier_labels)
             ),
-            "n_ops_committed": self.n_ops_committed,
+            "n_ops_committed": self.num_committed_ops,
             "inference_only": self.inference_only,
-            "recovered": self.recovered,
-            "derived": self.derived,
-            "settlement_note": self.settlement_note,
+            "recovered": self.is_recovered,
+            "derived": self.is_derived,
+            "settlement_note": self.note,
         }
 
 
@@ -235,7 +235,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # disarm the check for exactly the most-suspect artifacts.
     "validation_entry": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: "allow_scoped:halted ground-truth output block skipped",
+        CaptureStatus.STOPPED: "allow_scoped:halted ground-truth output block skipped",
         CaptureStatus.ABORTED_NONFINITE: "refuse:N2",
         CaptureStatus.FAILED: "refuse:N2",
         CaptureStatus.UNATTESTED: _ALLOW,
@@ -245,7 +245,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # provably-unfinished artifacts; HALTED and UNATTESTED re-export stay open.
     "save_analysis": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: _ALLOW,
+        CaptureStatus.STOPPED: _ALLOW,
         CaptureStatus.ABORTED_NONFINITE: "refuse:N1",
         CaptureStatus.FAILED: "refuse:N1",
         CaptureStatus.UNATTESTED: _ALLOW,
@@ -255,7 +255,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # ABORTED/FAILED/UNKNOWN are subsumed by N1 at the same entry.
     "save_runnable": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: "refuse:N4",
+        CaptureStatus.STOPPED: "refuse:N4",
         CaptureStatus.ABORTED_NONFINITE: "refuse:N1",
         CaptureStatus.FAILED: "refuse:N1",
         CaptureStatus.UNATTESTED: "allow_scoped:existing runnable preflights are the gate",
@@ -266,7 +266,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # fast=True. The recorded prefix cannot re-drive a full native forward.
     "live_replay": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: "refuse:N5",
+        CaptureStatus.STOPPED: "refuse:N5",
         CaptureStatus.ABORTED_NONFINITE: "refuse:N3",
         CaptureStatus.FAILED: "refuse:N3",
         CaptureStatus.UNATTESTED: _ALLOW,
@@ -276,7 +276,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # under pause_logging(): the HALTED failure mode cannot occur there.
     "loaded_sparse_run": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: _ALLOW,
+        CaptureStatus.STOPPED: _ALLOW,
         CaptureStatus.ABORTED_NONFINITE: "refuse:N3",
         CaptureStatus.FAILED: "refuse:N3",
         CaptureStatus.UNATTESTED: _ALLOW,
@@ -286,7 +286,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
     # halted capture IS the captured prefix, so HALTED stays allowed.
     "backward": {
         CaptureStatus.COMPLETE: _ALLOW,
-        CaptureStatus.HALTED: _ALLOW,
+        CaptureStatus.STOPPED: _ALLOW,
         CaptureStatus.ABORTED_NONFINITE: "refuse:N3",
         CaptureStatus.FAILED: "refuse:N3",
         CaptureStatus.UNATTESTED: _ALLOW,
@@ -455,7 +455,7 @@ def require_capture_capability(
             RuntimeWarning,
             stacklevel=3,
         )
-        outcome = CaptureOutcome(status=CaptureStatus.UNKNOWN, derived=True)
+        outcome = CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
     cell = CAPTURE_OUTCOME_CAPABILITIES[capability][outcome.status]
     if cell.startswith("refuse:"):
         code = cell.split(":", 1)[1]
@@ -624,11 +624,11 @@ def parse_outcome_payload(payload: object) -> CaptureOutcome:
         boundary_kind=_str_or_none("boundary_kind"),
         boundary_label=_str_or_none("boundary_label"),
         frontier_labels=frontier,
-        n_ops_committed=n_ops,
+        num_committed_ops=n_ops,
         inference_only=_bool("inference_only"),
-        recovered=_bool("recovered"),
-        derived=_bool("derived"),
-        settlement_note=_str_or_none("settlement_note"),
+        is_recovered=_bool("recovered"),
+        is_derived=_bool("derived"),
+        note=_str_or_none("settlement_note"),
     )
 
 
@@ -661,7 +661,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
     # emit HALTED / UNATTESTED / UNKNOWN exclusively; every settle stamp
     # writes ``derived=False``. A derived COMPLETE / ABORTED_NONFINITE /
     # FAILED payload is therefore internally contradictory (R06).
-    if outcome.derived and outcome.status in (
+    if outcome.is_derived and outcome.status in (
         CaptureStatus.COMPLETE,
         CaptureStatus.ABORTED_NONFINITE,
         CaptureStatus.FAILED,
@@ -671,7 +671,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
     # disk-recovery marker; a COMPLETE payload carrying either forges
     # provenance no writer can produce (R06).
     if outcome.status is CaptureStatus.COMPLETE and (
-        outcome.reason is not None or outcome.recovered
+        outcome.reason is not None or outcome.is_recovered
     ):
         return "carries a reason or recovered marker no COMPLETE writer produces"
     boundary_evidence = [
@@ -716,7 +716,7 @@ def attestation_coherent(
         return False
     if outcome.status is CaptureStatus.COMPLETE:
         return (not halted) and finished
-    if outcome.status is CaptureStatus.HALTED:
+    if outcome.status is CaptureStatus.STOPPED:
         # The re-raise path settles attested HALTED without postprocess, so
         # either ``_tracing_finished`` value is coherent.
         return halted
@@ -731,7 +731,7 @@ def attestation_coherent(
     if outcome.status is CaptureStatus.UNATTESTED:
         # Only re-saves of DERIVED outcomes may carry UNATTESTED; a settle
         # stamp can never produce it.
-        return (not halted) and finished and outcome.derived
+        return (not halted) and finished and outcome.is_derived
     return False
 
 
@@ -754,22 +754,22 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
         reason = state.get("halt_reason")
         frontier = state.get("halt_frontier")
         return CaptureOutcome(
-            status=CaptureStatus.HALTED,
+            status=CaptureStatus.STOPPED,
             reason=reason if isinstance(reason, str) else None,
             boundary_label=frontier if isinstance(frontier, str) else None,
             inference_only=inference_only,
-            derived=True,
+            is_derived=True,
         )
     if finished and not halted:
         return CaptureOutcome(
             status=CaptureStatus.UNATTESTED,
             inference_only=inference_only,
-            derived=True,
+            is_derived=True,
         )
     return CaptureOutcome(
         status=CaptureStatus.UNKNOWN,
         inference_only=inference_only,
-        derived=True,
+        is_derived=True,
     )
 
 
@@ -799,8 +799,8 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
         )
         return CaptureOutcome(
             status=CaptureStatus.UNKNOWN,
-            derived=True,
-            settlement_note=f"attestation_parse_failed: {exc}",
+            is_derived=True,
+            note=f"attestation_parse_failed: {exc}",
         )
     halted = bool(state.get("halted"))
     finished = bool(state.get("_tracing_finished"))
@@ -820,8 +820,8 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
         )
         return CaptureOutcome(
             status=CaptureStatus.UNKNOWN,
-            derived=True,
-            settlement_note=(
+            is_derived=True,
+            note=(
                 f"attestation_incoherent_internal: status={outcome.status.value} "
                 f"{internal_violation}"
             ),
@@ -837,8 +837,8 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
         )
         return CaptureOutcome(
             status=CaptureStatus.UNKNOWN,
-            derived=True,
-            settlement_note=(
+            is_derived=True,
+            note=(
                 f"attestation_incoherent: status={outcome.status.value} "
                 f"halted={halted} finished={finished}"
             ),
@@ -976,7 +976,7 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
 _TERMINAL_STATE_FOR_STATUS: dict[CaptureStatus, str] = {
     CaptureStatus.COMPLETE: "complete",
-    CaptureStatus.HALTED: "halted",
+    CaptureStatus.STOPPED: "halted",
     CaptureStatus.ABORTED_NONFINITE: "failed",
     CaptureStatus.FAILED: "failed",
     CaptureStatus.UNATTESTED: "failed",
@@ -1069,7 +1069,7 @@ def settle_completed(trace: object, session: object) -> CaptureOutcome:
         session,
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
-            n_ops_committed=count_committed_ops(trace),
+            num_committed_ops=count_committed_ops(trace),
             inference_only=bool(getattr(trace, "inference_only", False)),
         ),
     )
@@ -1114,12 +1114,12 @@ def settle_halted(
         trace,
         session,
         CaptureOutcome(
-            status=CaptureStatus.HALTED,
+            status=CaptureStatus.STOPPED,
             reason=reason if isinstance(reason, str) else None,
             boundary_kind=getattr(halt_exc, "boundary_kind", None),
             boundary_label=boundary_label,
             frontier_labels=frontier,
-            n_ops_committed=count_committed_ops(trace),
+            num_committed_ops=count_committed_ops(trace),
             inference_only=bool(getattr(trace, "inference_only", False)),
         ),
     )
@@ -1131,8 +1131,8 @@ def settle_failed(
     exc: BaseException,
     *,
     interrupted: bool = False,
-    settlement_note: str | None = None,
-    n_ops_committed: int | None = None,
+    note: str | None = None,
+    num_committed_ops: int | None = None,
 ) -> CaptureOutcome:
     """Settle one failed capture (paths 5-6, 8; halted-secondary via note).
 
@@ -1142,8 +1142,8 @@ def settle_failed(
     and diagnostic origin attribution.
     """
 
-    if n_ops_committed is None:
-        n_ops_committed = count_committed_ops(trace)
+    if num_committed_ops is None:
+        num_committed_ops = count_committed_ops(trace)
     stop_request = trace.__dict__.get("_stop_requested")
     if (
         isinstance(stop_request, StopRequest)
@@ -1168,9 +1168,9 @@ def settle_failed(
                 reason=stop_request.reason,
                 boundary_kind=stop_request.boundary_kind,
                 boundary_label=stop_request.boundary_label,
-                n_ops_committed=n_ops_committed,
+                num_committed_ops=num_committed_ops,
                 inference_only=bool(getattr(trace, "inference_only", False)),
-                settlement_note=settlement_note,
+                note=note,
             ),
         )
     origin = FailureOrigin.INTERRUPT if interrupted else classify_failure_origin(exc)
@@ -1183,9 +1183,9 @@ def settle_failed(
             origin=origin,
             reason=safe_exception_str(exc),
             error_type=_qualified_type_name(exc),
-            n_ops_committed=n_ops_committed,
+            num_committed_ops=num_committed_ops,
             inference_only=bool(getattr(trace, "inference_only", False)),
-            settlement_note=settlement_note,
+            note=note,
         ),
     )
 
@@ -1214,7 +1214,7 @@ def demote_outcome(
     settled = outcome_for(trace)
     if settled is None or settled.status not in (
         CaptureStatus.COMPLETE,
-        CaptureStatus.HALTED,
+        CaptureStatus.STOPPED,
     ):
         return None
     demoted = CaptureOutcome(
@@ -1226,10 +1226,10 @@ def demote_outcome(
         boundary_kind=settled.boundary_kind,
         boundary_label=settled.boundary_label,
         frontier_labels=settled.frontier_labels,
-        n_ops_committed=settled.n_ops_committed,
+        num_committed_ops=settled.num_committed_ops,
         inference_only=settled.inference_only,
-        recovered=settled.recovered,
-        settlement_note=f"demoted_from={settled.status.value}: {note}",
+        is_recovered=settled.is_recovered,
+        note=f"demoted_from={settled.status.value}: {note}",
     )
     trace.__dict__["_capture_outcome"] = demoted
     run_outcome = getattr(session, "outcome", None)
@@ -1262,8 +1262,8 @@ def stamp_forked(fork: object, parent: object) -> CaptureOutcome:
     parent_status = "unsettled" if parent_outcome is None else parent_outcome.status.value
     derived = dataclass_replace(
         derived,
-        n_ops_committed=(None if parent_outcome is None else parent_outcome.n_ops_committed),
-        settlement_note=f"forked_from={parent_status}",
+        num_committed_ops=(None if parent_outcome is None else parent_outcome.num_committed_ops),
+        note=f"forked_from={parent_status}",
     )
     fork.__dict__["_capture_outcome"] = derived
     return derived
@@ -1290,19 +1290,19 @@ def stamp_cooked(
 
     if halted:
         outcome = CaptureOutcome(
-            status=CaptureStatus.HALTED,
+            status=CaptureStatus.STOPPED,
             reason=reason,
             boundary_kind=boundary_kind,
             boundary_label=boundary_label if boundary_label is not None else reason,
             frontier_labels=None if frontier_label is None else (frontier_label,),
-            n_ops_committed=count_committed_ops(trace),
-            settlement_note="cooked_from=recording",
+            num_committed_ops=count_committed_ops(trace),
+            note="cooked_from=recording",
         )
     else:
         outcome = CaptureOutcome(
             status=CaptureStatus.COMPLETE,
-            n_ops_committed=count_committed_ops(trace),
-            settlement_note="cooked_from=recording",
+            num_committed_ops=count_committed_ops(trace),
+            note="cooked_from=recording",
         )
     return _stamp(trace, None, outcome)
 
@@ -1377,11 +1377,11 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
             trace,
             None,
             CaptureOutcome(
-                status=CaptureStatus.HALTED,
+                status=CaptureStatus.STOPPED,
                 reason=reason if isinstance(reason, str) else None,
                 boundary_label=frontier_label if isinstance(frontier_label, str) else None,
                 frontier_labels=frontier,
-                n_ops_committed=count_committed_ops(trace),
+                num_committed_ops=count_committed_ops(trace),
                 inference_only=bool(getattr(trace, "inference_only", False)),
             ),
         )
@@ -1390,7 +1390,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         None,
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
-            n_ops_committed=count_committed_ops(trace),
+            num_committed_ops=count_committed_ops(trace),
             inference_only=bool(getattr(trace, "inference_only", False)),
         ),
     )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .capture_events import (
-    CaptureEvents,
     register_live_event as register_live_event,
 )
 from .container import ContainerSpec
@@ -61,7 +60,6 @@ from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, Ten
 from .semantics import BackendSemantics, CapturePolicy
 from .workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
-    ModuleCaptureWorkspace,
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
@@ -73,7 +71,6 @@ __all__ = [
     "BackwardPassStart",
     "BlobRef",
     "BufferWriteEvent",
-    "CaptureEvents",
     "CapturePolicy",
     "ConditionalEvent",
     "ContainerSpec",
@@ -114,7 +111,6 @@ __all__ = [
     "walk_container",
     "TensorRef",
     "LEGACY_TRACE_BUILD_STATE_KEYS",
-    "ModuleCaptureWorkspace",
     "RawGraphWorkspace",
     "WrapperRuntimeWorkspace",
     "_DEFERRED_VALUE",

@@ -13,7 +13,7 @@ TARGET_ALL = [
     # export without this row, leaving main red on the frozen-surface test.
     "trace",
     "release_model",
-    "clear_capture_cache",
+    "clear_cache",
     "export",
     "fingerprint",
     "fastlog",
@@ -21,16 +21,12 @@ TARGET_ALL = [
     "record",
     "Recording",
     "ActivationLookup",
-    "CapturedRun",
     "load",
     "bundle",
     "pluck",
     "extract",
     "extract_dataset",
     "validate",
-    "decide_recording_of_batch",
-    "record_kpi_in_graph",
-    "register_tensor_connection",
     "show_bundle_graph",
     "summary",
     "options",
@@ -167,7 +163,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `span`; removes `sites` = 76. Internal sprint 2 adds `export` and
     `AmbiguousOpLookupError` = 78. Tech-debt sprint adds
     `ReentrantTraceError` = 79. Capture unification and backward/public option
-    follow-ups add `ActivationLookup`, `CapturedRun`, `decide_recording_of_batch`,
+    follow-ups add `ActivationLookup`, `TraceLike`, `decide_recording_of_batch`,
     `record_kpi_in_graph`, `register_tensor_connection`, `show_bundle_graph`,
     `options`, `to_disk`, `grad_input`, `grad_output`, and `in_backward_pass` = 90.
     The provisional structural-hash namespace and CI tripwire add `hash` and
@@ -176,7 +172,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `grad_fn_label` (its own selector kind after the label-kind collision fix) = 94.
     Merge-ranks rung C1 adds `merge_ranks` and `merge_report` (spec'd
     top-level entry points; machinery lives in `torchlens._merged`) = 96.
-    The grind R39 cache remedy exports `clear_capture_cache` (the agreed
+    The grind R39 cache remedy exports `clear_cache` (the agreed
     user-facing half of the capture-cache bounds fix) = 97.
     The L6 selection algebra (feature work, DOCUMENTED-UNSTABLE pending
     naming-session ratification) adds `Selection`, `ResolvedSelection`,

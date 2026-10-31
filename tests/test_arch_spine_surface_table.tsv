@@ -45,7 +45,7 @@ torchlens.captured_run	torchlens.captured_run	L3	core	0	0
 torchlens.changed	torchlens.selection_compare	L4	core	1	0
 torchlens.clamp	torchlens.intervention.helpers	L4	core	1	0
 torchlens.clamp_grad	torchlens.intervention.helpers	L4	core	1	0
-torchlens.clear_capture_cache	torchlens.user_funcs	FACADE	facade	1	0
+torchlens.clear_cache	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.clip_grad	torchlens.intervention.helpers	L4	core	1	0
 torchlens.compat	torchlens.compat	L3	core	0	0
 torchlens.contains	torchlens.intervention.selectors	L4	core	1	0

@@ -19,9 +19,9 @@ pytestmark = pytest.mark.backend_parity
 
 
 def _spec_flipped_true(name: str, flag: str):
-    from torchlens.backends import get_backend_spec
+    import torchlens as tl
 
-    original = get_backend_spec(name)
+    original = tl.backends.spec(name)
     implementations = dict(original.capability_implementations or {})
     implementations[flag] = lambda: object()
     return original, dataclasses.replace(
@@ -35,10 +35,10 @@ def _spec_flipped_true(name: str, flag: str):
 def test_jax_interventions_flip_with_binding_refuses_at_trace() -> None:
     jnp = pytest.importorskip("jax.numpy")
     import torchlens as tl
-    from torchlens.backends import BackendCapabilityConformanceError, register_backend_spec
+    from torchlens.backends import BackendCapabilityConformanceError
 
     original, opened = _spec_flipped_true("jax", "interventions")
-    register_backend_spec(opened, replace=True)
+    tl.backends.register(opened, replace=True)
     try:
 
         def model(x):
@@ -47,7 +47,7 @@ def test_jax_interventions_flip_with_binding_refuses_at_trace() -> None:
         with pytest.raises(BackendCapabilityConformanceError, match="never\\s+dispatches"):
             tl.trace(model, jnp.ones((2,)), backend="jax", intervene=object())
     finally:
-        register_backend_spec(original, replace=True)
+        tl.backends.register(original, replace=True)
 
 
 @pytest.mark.backend_tinygrad
@@ -56,10 +56,10 @@ def test_tinygrad_backward_flip_with_binding_refuses_at_trace() -> None:
     from tinygrad import Tensor
 
     import torchlens as tl
-    from torchlens.backends import BackendCapabilityConformanceError, register_backend_spec
+    from torchlens.backends import BackendCapabilityConformanceError
 
     original, opened = _spec_flipped_true("tinygrad", "backward_capture")
-    register_backend_spec(opened, replace=True)
+    tl.backends.register(opened, replace=True)
     try:
 
         def model(x):
@@ -73,4 +73,4 @@ def test_tinygrad_backward_flip_with_binding_refuses_at_trace() -> None:
                 capture=tl.options.CaptureOptions(backward_ready=True),
             )
     finally:
-        register_backend_spec(original, replace=True)
+        tl.backends.register(original, replace=True)

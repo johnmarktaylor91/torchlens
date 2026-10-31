@@ -616,7 +616,7 @@ def _build_grad_payloads(
     tuple[torch.Tensor | None, Any | None, bool]
         Raw payload, transformed payload, and whether the build ran past the
         policy gate (``built=True`` means the payload pair — including a
-        legitimately-``None`` raw slot under ``save_raw_gradients=False`` —
+        legitimately-``None`` raw slot under ``save_raw_grads=False`` —
         is THE charged retention for this grad+label and safe to reuse).
     """
 

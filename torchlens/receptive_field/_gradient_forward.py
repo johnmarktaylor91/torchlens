@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from ..backends import BackendUnsupportedError, get_backend_spec
+from ..backends.registry import BackendUnsupportedError, get_backend_spec
 from ._engine_forward import solve_projective
 from ._errors import ReceptiveFieldUnavailableError
 from ._gradient import (

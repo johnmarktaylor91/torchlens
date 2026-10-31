@@ -16,6 +16,7 @@ from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction import (
     apply_pool,
@@ -26,7 +27,7 @@ from torchlens._extraction import (
     trim_batch,
 )
 from torchlens._extraction.ragged import RaggedBatch
-from torchlens.dataset_extraction import extract_dataset, relabel_extraction
+from torchlens.dataset_extraction import relabel_extraction
 
 
 def _model() -> nn.Module:
@@ -495,7 +496,7 @@ def test_selector_transform_mapping_refuses() -> None:
             _model(),
             torch.randn(4, 3),
             tl.func("relu"),
-            transform={"a": torch.abs},
+            output_transform={"a": torch.abs},
             progress=False,
         )
     assert _code(excinfo) == "extraction_selector_transform_mapping_unsupported"

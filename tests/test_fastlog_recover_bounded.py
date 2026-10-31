@@ -40,7 +40,7 @@ def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(bomb + "\n" + bomb + "\n", encoding="utf-8")
     recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    assert recording.is_recovered is True
     assert recording.records == []
     assert recording.recovery_warnings
 
@@ -50,7 +50,7 @@ def test_missing_ctx_is_a_warning_not_a_keyerror(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(json.dumps({"spec": {}}) + "\n", encoding="utf-8")
     recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    assert recording.is_recovered is True
     assert recording.records == []
     assert any("malformed" in warning for warning in recording.recovery_warnings)
 
@@ -61,7 +61,7 @@ def test_metadata_depth_bomb_degrades_to_empty_metadata(tmp_path) -> None:
     (bundle / "fastlog_index.jsonl").write_text("", encoding="utf-8")
     (bundle / "metadata.json").write_text("[" * depth + "]" * depth, encoding="utf-8")
     recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    assert recording.is_recovered is True
 
 
 def test_recovery_warnings_are_bounded_with_a_summary(tmp_path) -> None:

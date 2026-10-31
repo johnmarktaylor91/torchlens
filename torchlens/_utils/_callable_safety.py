@@ -1059,7 +1059,7 @@ def _pure_view(name: str) -> bool:
         with _mode_free_probe_context():
             # Deterministic constructors, never ``torch.randn`` (B8-7): the
             # probes used to draw from the user's GLOBAL default generator at
-            # first-capture lazy import, perturbing even a ``random_seed=``-
+            # first-capture lazy import, perturbing even a ``seed=``-
             # pinned capture. Distinct element values keep the pure-read
             # equality checks below meaningful; zero RNG is consumed.
             if use_complex:

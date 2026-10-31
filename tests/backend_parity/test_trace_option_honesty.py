@@ -6,7 +6,8 @@ from typing import Any
 
 import pytest
 
-from torchlens.backends import BackendSpec, BackendUnsupportedError, registered_backend_specs
+import torchlens as tl
+from torchlens.backends import BackendSpec, BackendUnsupportedError
 from torchlens.backends._options import (
     JAX_PREVIEW_TRACE_OPTION_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
@@ -49,9 +50,9 @@ _PREVIEW_DEFAULT_OPTIONS: dict[str, Any] = {
     "activation_transform": None,
     "detach_saved_activations": False,
     "save_grads": None,
-    "save_arg_values": False,
-    "save_code_context": False,
-    "save_rng_states": False,
+    "save_args": False,
+    "save_source_context": False,
+    "save_rng": False,
     "backward_ready": False,
     "module_filter": None,
     "transform": None,
@@ -69,9 +70,9 @@ _PREVIEW_UNSUPPORTED_VALUES: tuple[tuple[str, Any], ...] = (
     ("activation_transform", lambda value: value),
     ("detach_saved_activations", True),
     ("save_grads", True),
-    ("save_arg_values", True),
-    ("save_code_context", True),
-    ("save_rng_states", True),
+    ("save_args", True),
+    ("save_source_context", True),
+    ("save_rng", True),
     ("backward_ready", True),
     ("module_filter", lambda module: True),
     ("transform", lambda value: value),
@@ -84,7 +85,7 @@ _PREVIEW_UNSUPPORTED_VALUES: tuple[tuple[str, Any], ...] = (
 )
 
 
-@pytest.mark.parametrize("spec", registered_backend_specs(), ids=lambda spec: str(spec.name))
+@pytest.mark.parametrize("spec", tl.backends.specs(), ids=lambda spec: str(spec.name))
 @pytest.mark.parametrize("option_name", PUBLIC_OPTION_SPINE_TRACE_OPTIONS)
 def test_registered_backend_public_trace_options_are_declared_or_rejected(
     spec: BackendSpec,

@@ -111,7 +111,7 @@ trace = tl.trace(
     model,
     "0.1,0.2,2.0,1.0",
     capture=tl.options.CaptureOptions(
-        transform=text_to_tensor,
+        input_transform=text_to_tensor,
         save_raw_input="small",
     ),
 )
@@ -167,7 +167,7 @@ trace = tl.trace(
     model,
     image_list,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         output_style="classification",
         save_raw_input=True,
     ),
@@ -196,7 +196,7 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),
@@ -304,7 +304,7 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),
@@ -347,7 +347,7 @@ core flow runs without downloading external model weights.
 - `tl._autoroute.output.unregister(...)`
 - `tl._autoroute.output.list()`
 - `tl._autoroute.output.info(...)`
-- `tl.trace(..., capture=CaptureOptions(transform=..., save_raw_input=..., batch_render=...))`
+- `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
 - `Trace.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`

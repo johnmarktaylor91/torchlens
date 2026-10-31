@@ -130,7 +130,7 @@ def _batches(n: int = 3, rows: int = 2) -> list[tuple[torch.Tensor, torch.Tensor
 
 def _capture(model: nn.Module, ids: torch.Tensor) -> Any:
     return tl.trace(
-        model, ids, capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+        model, ids, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     )
 
 

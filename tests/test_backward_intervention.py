@@ -13,7 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._data_classes.grad_fn import GradFn
-from torchlens._ir import CaptureEvents
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.selector_eval import selector_from_spec
 from torchlens.backends.torch.backward import (
     _clear_pending_accumulate_grad_records,

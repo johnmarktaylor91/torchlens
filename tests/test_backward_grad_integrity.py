@@ -90,7 +90,7 @@ def test_reentered_recording_backward_restores_tensor_backward() -> None:
 
     trace = _armed_trace()
     original_backward = torch.Tensor.backward
-    context = trace.recording_backward()
+    context = trace.capture_backward()
     try:
         with context:
             with context:

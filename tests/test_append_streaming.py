@@ -10,7 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import AppendStreamingNotSupportedError
-from torchlens.options import CaptureOptions, ReplayOptions, StreamingOptions
+from torchlens.options import CaptureOptions, ReplayOptions, StorageOptions
 
 
 class _StreamingAppendModel(nn.Module):
@@ -86,11 +86,11 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
         model,
         torch.randn(1, 3),
         capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
-        streaming=StreamingOptions(out_callback=_sink),
+        streaming=StorageOptions(on_save=_sink),
     )
 
     assert received
-    with pytest.raises(AppendStreamingNotSupportedError, match="out_callback streaming"):
+    with pytest.raises(AppendStreamingNotSupportedError, match="on_save streaming"):
         trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 

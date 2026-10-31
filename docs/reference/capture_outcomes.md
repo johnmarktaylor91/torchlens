@@ -7,10 +7,10 @@ the record or on the stable refusal codes below — never on exception text.
 
 ## The status vocabulary
 
-| status | meaning | `partial` |
+| status | meaning | `is_partial` |
 |---|---|---|
 | `COMPLETE` | settled complete; attested by the settlement stamp | `False` |
-| `HALTED` | stopped by `halt=` or imperative `tl.fastlog.halt()`; an honest prefix | `True` |
+| `STOPPED` | stopped by `stop=` or imperative `tl.fastlog.stop()`; an honest prefix | `True` |
 | `ABORTED_NONFINITE` | stopped by the `raise_on_nan` policy | `True` |
 | `FAILED` | the capture raised; phase + diagnostic origin attribution | `True` |
 | `UNATTESTED` | structurally finished, but no settlement evidence (legacy artifacts only) | `None` |
@@ -80,7 +80,7 @@ Artifacts WITHOUT an attestation derive from structural evidence alone, by
 truthiness (`False` / `None` / absent are one class):
 
 ```
-halted and finished      -> HALTED      (derived)
+halted and finished      -> STOPPED      (derived)
 halted and not finished  -> UNKNOWN     (the halted postprocess never completed)
 finished and not halted  -> UNATTESTED  (genuine-complete and tail-failure are indistinguishable)
 otherwise                -> UNKNOWN
@@ -89,7 +89,7 @@ otherwise                -> UNKNOWN
 No legacy Trace without attestation ever derives `COMPLETE`. Finalized
 `Recording` bundles keep their construction-status derivation
 (`complete`/`halted` at finalize time is a construction proof); `recover()`
-products are `UNKNOWN` (or reconstructed `HALTED` where the halt markers
+products are `UNKNOWN` (or reconstructed `STOPPED` where the halt markers
 survived) with `recovered=True`. Derived outcomes never upgrade across
 re-saves: `UNATTESTED` re-saves stay `UNATTESTED`.
 
@@ -99,14 +99,14 @@ Enforced through the ONE chokepoint
 (`require_capture_capability(trace, capability)`); refusals raise
 `tl.errors.CaptureOutcomeError` with a stable `fields["code"]`:
 
-| capability | COMPLETE | HALTED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
+| capability | COMPLETE | STOPPED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
 |---|---|---|---|---|---|
 | validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
 | `Trace.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
 | `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `halted_capture_not_runnable`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
 | live replay: refresh / `save_new_outs` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
-| `log_backward` / `backward` / `recording_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
+| `log_backward` / `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
 | draw / `report.explain` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |
 
 Row rationales, stated once:
@@ -129,9 +129,9 @@ Row rationales, stated once:
   re-capture without `halt=`, or use loaded-sparse `run()`.
 - **N4** is a crash→typed conversion: no legacy workflow successfully saved a
   halted runnable (the producer preflight already failed).
-- **`Recording.log_backward`** refuses a failed partial with the table's N3
+- **`Recording.backward`** refuses a failed partial with the table's N3
   code (`RecorderStateError`, `fields["code"] == "N3"`) and additionally
-  refuses HALTED with `fields["code"] == "recording_backward_halted"` — a
+  refuses STOPPED with `fields["code"] == "recording_backward_halted"` — a
   deliberate Recording-scoped strictness beyond the table's HALTED-allow
   cell, which describes Trace-side backward (a halted Trace holds the prefix
   autograd graph; a halted Recording is a sparse event product whose frontier
@@ -203,13 +203,13 @@ downstream consumers saw.
 
 ## The stop-request latch (F6)
 
-`evaluate_halt`, `raise_nonfinite`, and imperative `tl.fastlog.halt()` all
+`evaluate_halt`, `raise_nonfinite`, and imperative `tl.fastlog.stop()` all
 latch a stop request on the active trace before raising. If the forward then
 returns "normally" — user code swallowed the control signal in a broad
 `except:` — the boundary checkpoint raises
 `tl.errors.StopSignalSwallowedError` and the capture settles FAILED, never
 COMPLETE. The halt-capable preview backends (paddle's shipped `halt=`, MLX's
-halt selector) hold the same contract: their `HaltSignal` raise sites latch
+halt selector) hold the same contract: their `StopSignal` raise sites latch
 the request on the trace, and `stamp_backend_finalized` — the one preview
 settlement stamp — consumes the latch, refusing a latched-but-unhalted
 capture with the same typed error and a FAILED settlement instead of the
@@ -222,7 +222,7 @@ ABORTED_NONFINITE (the abort did not actually stop the forward). Imperative
 Every product constructor settles through the authority: the torch
 orchestrator's arms (success, halted partial-return, halted re-raise,
 failure, interrupt), `Recording.to_trace()` (`cooked_from=recording`
-provenance note; a halted cooked trace is HALTED and hits N4/N5), each
+provenance note; a halted cooked trace is STOPPED and hits N4/N5), each
 recorder pass and the recorder exit, and every preview backend's capture
 entry (`stamp_backend_finalized` as the LAST act after all tail work). A
 failure BEFORE any product is reachable — configuration errors, backend
@@ -231,7 +231,7 @@ constructor failures, preview-backend tail failures between the structural
 exception propagates and no stamp exists, so a hypothetical pickle of the
 escaped object derives UNATTESTED, never COMPLETE. Post-settlement teardown
 failures demote the settled outcome to FAILED/TEARDOWN in both homes
-(`settlement_note` discloses `demoted_from=...`); the exception preempts the
+(`note` discloses `demoted_from=...`); the exception preempts the
 return, so no product escapes carrying the undemoted claim.
 
 `_tracing_finished` remains a STRUCTURAL finished-ness marker, never a
@@ -255,7 +255,7 @@ sits inside a region whose only success exit reaches an authority stamp.
   documented skip, not a behavior change.
 - `TerminalState` / `RunOutcome.state` is the first-transition log; it and
   the outcome may legitimately disagree only in the demotion direction,
-  disclosed by `settlement_note`.
+  disclosed by `note`.
 - Preview cleanup asymmetry vs the torch orchestrator: MLX and Paddle run
   `cleanup_model_session` in a `finally` positioned BEFORE their settlement
   stamp (settlement is the last act, per the path-20 contract), so a
@@ -274,7 +274,7 @@ sits inside a region whose only success exit reaches an authority stamp.
 `tl.types.{CaptureOutcome, CaptureStatus, CapturePhase, FailureOrigin}`;
 `tl.errors.{CaptureOutcomeError, StopSignalSwallowedError,
 PartialCaptureLookupError}`; `RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE`;
-two additive `HaltSignal.__init__` kwargs (`boundary_kind`,
+two additive `StopSignal.__init__` kwargs (`boundary_kind`,
 `boundary_label`); the stored `Recording._outcome` field; the persisted
 `_capture_outcome` Trace field (tlspec v7). Zero renames; nothing enters
 top-level `__all__`.

@@ -32,13 +32,12 @@ from ._literals import (
     VisRendererLiteral,
 )
 from ._option_receipt import (
-    EchoOptions,
+    NarrationOptions,
     OptionReceiptEntry,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
-    option_receipt,
 )
 from ._options_validation import (
     _normalize_layout,
@@ -56,6 +55,7 @@ from ._vocab.node_spec import NodeSpec
 if TYPE_CHECKING:
     from ._data_classes.layer import Layer
     from ._data_classes.module import Module
+    from .fastlog.options import RecordingOptions as RecordingOptions
 
 T = TypeVar("T")
 _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -64,23 +64,23 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
-    "transform",
+    "input_transform",
     "save_raw_input",
     "batch_render",
     "output_transform",
     "output_style",
     "output_head",
-    "save_raw_output",
+    "save_transformed_output",
     "layer_visualizers",
     "save_visualizations",
     "keep_orphans",
     "output_device",
-    "save_arg_values",
+    "save_args",
     "save_grads",
     "capture_tensor_grad_hooks",
-    "save_code_context",
-    "save_rng_states",
-    "random_seed",
+    "save_source_context",
+    "save_rng",
+    "seed",
     "source_context_lines",
     "optimizer",
     "compute_input_output_distances",
@@ -176,7 +176,7 @@ _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "bundle_path",
     "retain_in_memory",
-    "out_callback",
+    "on_save",
     "include_custom_attributes",
     "include_buffer_values",
     "async_writes",
@@ -184,23 +184,23 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
 )
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
-    "transform": "transform",
+    "input_transform": "input_transform",
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
     "output_transform": "output_transform",
     "output_style": "output_style",
     "output_head": "output_head",
-    "save_raw_output": "save_raw_output",
+    "save_transformed_output": "save_transformed_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
-    "save_arg_values": "save_arg_values",
+    "save_args": "save_args",
     "save_grads": "save_grads",
     "capture_tensor_grad_hooks": "capture_tensor_grad_hooks",
-    "save_code_context": "save_code_context",
-    "save_rng_states": "save_rng_states",
-    "random_seed": "random_seed",
+    "save_source_context": "save_source_context",
+    "save_rng": "save_rng",
+    "seed": "seed",
     "source_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
@@ -231,7 +231,7 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_transform": "activation_transform",
     "grad_transform": "grad_transform",
     "save_raw_activations": "save_raw_activations",
-    "save_raw_gradients": "save_raw_gradients",
+    "save_raw_grads": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "view": "view",
@@ -260,7 +260,7 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
     "retain_in_memory": "retain_in_memory",
-    "out_callback": "out_callback",
+    "on_save": "on_save",
 }
 
 
@@ -421,283 +421,283 @@ def _merge_grouped_options(
 class CaptureOptions:
     """Grouped capture options for ``trace``.
 
-    Parameters
-    ----------
-    layers_to_save:
-        Activation layer selector to capture.
-    transform:
-        Optional callable applied once to the user input before ``model.forward``.
-    save_raw_input:
-        Raw user-input save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    batch_render:
-        Raw-input batch rendering policy for visualization. Supported values are
-        ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
-        ``"shape_only"``.
-    output_transform:
-        Optional callable applied once to the model output after ``model.forward``.
-    output_style:
-        Optional semantic output decode style.
-    output_head:
-        Optional live-output head to decode.
-    save_raw_output:
-        Raw model-output save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    layer_visualizers:
-        Optional mapping from site selectors to per-layer thumbnail callables.
-    save_visualizations:
-        Whether rendered visualizer image files should be copied into portable bundles.
-    keep_orphans:
-        Whether island ops (computations unreachable from both the model inputs and
-        outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
-        to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
-        enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
-    output_device:
-        Device placement for saved tensors.
-    save_arg_values:
-        Whether non-tensor function arguments are captured.
-    save_grads:
-        Backward gradient-retention policy. ``True`` captures all gradients,
-        ``False``/``None`` disables capture, and selectors restrict retention:
-        label strings/ordinal lists, ``tl.*`` selectors, and bare callables
-        are all honored (never collapsed to "all"). A bare callable is
-        evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
-        before any backward) and must return a strict ``bool``; only matching
-        ops receive gradient hooks.
-    save_code_context:
-        Whether source-text context is captured in addition to source identity.
-    save_rng_states:
-        Whether operation-level RNG states are captured.
-    random_seed:
-        Fixed seed used for deterministic capture. The capture snapshots the
-        global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
-        its RNG state is already live), reseeds every engine with this seed
-        for its own forward, and restores the snapshot on every exit path,
-        including a failed capture. Code after the capture therefore draws
-        the same numbers as it would without the capture. When ``None`` (the
-        default) the seed is drawn from a private entropy-seeded stream, not
-        the global ``random`` engine, so ``torch.manual_seed(k)`` before an
-        unseeded capture does NOT make the capture reproducible; pass
-        ``random_seed=`` explicitly for that. The seed used is recorded on
-        ``trace.random_seed``.
-    source_context_lines:
-        Number of source-context lines to store.
-    optimizer:
-        Optional optimizer used to annotate optimized parameters.
-    compute_input_output_distances:
-        Whether input/output graph distances are computed.
-    detach_saved_activations:
-        Whether saved tensors are detached from autograd. The default
-        ``False`` keeps saved activations graph-connected, which retains the
-        captured autograd graph alongside the payloads: measured ~1.48x the
-        saved-payload bytes live on a resnet18 capture, vs ~1.01x with
-        ``True``. Pass ``True`` for forward-only analysis when that
-        multiplier matters (R33).
-    recurrence_detection:
-        Whether repeated graph patterns are detected during postprocess.
-    intervention_ready:
-        Whether replay-template metadata is captured for intervention APIs.
-    capture_container_structure:
-        Whether to persist input and output container structure without
-        enabling intervention replay metadata.
-    hooks:
-        Optional live hook plan applied during capture.
-    unwrap_when_done:
-        Whether Torch functions are unwrapped after this call.
-    verbose:
-        Whether progress messages are printed.
-    backward_ready:
-        Whether capture keeps autograd-connected tensors for training workflows.
-    inference_only:
-        Whether capture wraps the user forward in ``torch.no_grad()``. When
-        omitted, a capture entered under ``torch.no_grad()`` or
-        ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
-        ``save_grads`` or ``intervention_ready`` asks for a backward; the
-        Trace reports the effective value. The implied value is cleared when
-        the forward re-enables grad (``torch.enable_grad()`` inside it) and an
-        output carries autograd history.
-    carry_state:
-        Whether the capture keeps the model state its forward changed
-        (forward-equivalent: norm running statistics, buffer writes, training
-        modes and plain attributes advance exactly as one direct ``model(x)``
-        would, the spelling ``trace.run(carry_state=True)`` uses; no capture
-        advances the caller's random streams under either setting). The default
-        ``False`` makes the capture a pure observer: buffers, random state,
-        training modes and plain instance attributes are restored afterwards,
-        on success and on failure. What the forward wrote to plain attributes
-        is recorded on the trace under either setting, so a value the forward
-        stashes on a module is read from
-        ``trace.modules[address].attribute_writes`` (``Module.attribute_writes``;
-        objects without a value snapshot are restored by identity only, see
-        the capture-state contract). A cache hit runs no forward, so nothing
-        advances (DOCUMENTED-UNSTABLE).
-    name:
-        Optional user-facing name for the returned log.
-    cache:
-        Whether to use the content-hash capture cache. The key covers model
-        tensor content (including per-tensor device and ``requires_grad``),
-        training flags, non-persistent buffers, module tree and ``forward``
-        code, plain instance attributes (bounded digest), user-registered
-        module hooks, inputs, and the capture configuration; closure cells,
-        globals referenced by ``forward``, and the interior state of opaque
-        attribute objects remain outside the key (documented boundary).
-        ``torchlens.clear_capture_cache()`` empties the cache.
-    cache_dir:
-        Optional directory for content-hash cache entries.
-    module_filter:
-        Optional THIRD save gate composed (AND) with ``save=`` /
-        ``layers_to_save``: an op's payload is retained only when the
-        save selection picks it AND this predicate returns truthy. The
-        predicate receives an op-record namespace (the legacy-shaped
-        ``SimpleNamespace`` of captured op fields such as ``func_name``,
-        ``layer_label``, and ``modules``), NEVER an
-        ``nn.Module`` instance — a filter written against modules (e.g.
-        ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-        ZERO payloads. Returning ``False`` keeps metadata but skips payload
-        saving; a capture whose every selected payload was suppressed by
-        this gate emits a ``module_filter_zero_saved`` warning.
-    stop_after:
-        Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
-        spelling): capture halts immediately AFTER the named site is
-        captured, returning a partial halted trace that includes it. The
-        site compiles into the halt engine on emission identity: a string
-        halts at the first emission whose module address
-        (``"encoder.layer.4"``, at that module's exit boundary) or function
-        name (``"relu"``) matches, a live selector (``tl.func("relu")``,
-        ``tl.module(...)``) halts at its first match, and a callable
-        predicate halts when it returns True. Finalized postprocess labels
-        (``"relu_1_2"``) do not exist during capture and refuse typed
-        (``stop_after_site_not_live``). A selector-shaped site that never
-        fires refuses typed (``stop_after_never_fired``); a callable that
-        never fires warns. Cannot combine with ``halt=``
-        (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
-    jax_control_flow:
-        Declared JAX control-flow policy. Backends other than torch reject
-        explicit use until their implementation phase supports it.
-    jax_max_control_flow_unroll:
-        Declared maximum JAX control-flow unroll count.
-    module_identity_mode:
-        Declared backend module-mode selection passthrough.
-    payload_policy:
-        Declared payload materialization/codec policy passthrough.
-    save_preview:
-        Non-torch preview backends' declared flag reserving extended ``save=``
-        semantics; the shipped torch ``save=`` kwarg is independent of it.
-    emit_nvtx:
-        Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
-        ranges around each logged operation. Range names carry call identity
-        (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
-        are separated under ``torchlens::internal::`` so the Nsight timeline
-        shows model work, not capture plumbing. NVTX markers are visible in
-        NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
-        enabling it can add small per-op overhead. The option applies to full
-        ``tl.trace`` capture and is preserved through ``tl.record``-style
-        options, although sparse recording may only expose ranges for operations
-        it actually logs.
-    measure_python_peak_memory:
-        Whether the host-side forward-pass peak recorded in
-        ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
-        Python-allocation peak. On CPU it adds to the peak measured under
-        ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
-        ``None`` and this probe fills only the peak pair's ``live`` value. A
-        measured CPU peak of 0 (a model too small to move the coarse-grained
-        resident counters) is recorded as ``None`` with
-        ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
-        for the duration of the forward pass, which is precise for small models
-        but taxes every traced operation (measured at 1.7x-2.5x total capture
-        time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
-        report the true device peak and ignore this option.
-    distributed_witness:
-        Session-time witness level for collective boundary records captured
-        under the distributed opt-in. ``"none"`` (the default) records
-        structure and correlation only; ``"digest"`` additionally stores
-        byte-exact SHA-256 digests of each contribution at issue and each
-        destination at observed completion (redundant evidence that can only
-        DEMOTE a merge verdict, never rescue one -- and a synchronization cost
-        on accelerator captures). ``"payload"`` is reserved for the merge
-        artifact story and currently refuses. Like
-        ``measure_python_peak_memory`` this is a session-time knob: it changes
-        what capture pays for, not what a trace means, and load restores the
-        default. The per-boundary ``witness.policy_resolved`` field IS
-        portable evidence of what was captured.
-    save_budget:
-        Ceiling on the bytes of activation payload a single capture may retain,
-        enforced per device. ``"auto"`` (the default)
-        allows half of each device's *available* memory measured at that device's
-        first save; a float in ``(0, 1]`` sets a different fraction; an int sets
-        an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
-        budget stops capture with
-        :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
-        is admitted before allocation from source-tensor bytes and retained storage
-        is alias-aware. This is not a general OOM guarantee: the model forward,
-        transform-only deltas, and cross-device temporaries can allocate before they
-        are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
-        ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
-        Devices whose headroom cannot be measured are left unbudgeted and
-        emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
-        cap to enforce those devices.
-    raise_on_nan:
-        Whether capture should stop at the first NaN or Inf tensor.
-    track_nonfinite:
-        Whether torch capture records a per-op finiteness verdict
-        (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
-        ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
-        control flow, reads device flags in one post-forward batch. A
-        session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
-    track_device_memory:
-        Whether torch capture samples device allocator counters around each op call, served by
-        ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
-        opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
-        per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
-    structure_only:
-        Whether this capture runs under the structure-only contract
-        (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
-        no deprecation shim owed on rename). Structure-only capture records
-        the op graph, module hierarchy, parameter geometry, and per-op
-        shape/dtype as HYPOTHESES while every value-bearing claim is refused
-        typed or gated; value-dependent branches refuse with the user's
-        source line. Torch-only; the capability contract lives in
-        ``docs/reference/structure_only_capabilities.md``.
-    log_injections:
-        Whether computation inside intervention hooks is recorded as anchored
-        injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
-        (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
-    measure_host_peak_memory:
-        Whether CPU captures measure ``Trace.forward_peak_memory`` and
-        ``Trace.backward_peak_memory`` (a session-time knob).
-        Measuring needs a per-bracket reset of the process-wide resident high-water
-        mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
-        ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
-        ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
-        option. CUDA peaks and the MPS allocator delta ignore it.
+        Parameters
+        ----------
+        layers_to_save:
+            Activation layer selector to capture.
+        input_transform:
+    Optional callable applied once to the user input before ``model.forward``.
+        save_raw_input:
+            Raw user-input save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        batch_render:
+            Raw-input batch rendering policy for visualization. Supported values are
+            ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
+            ``"shape_only"``.
+        output_transform:
+            Optional callable applied once to the model output after ``model.forward``.
+        output_style:
+            Optional semantic output decode style.
+        output_head:
+            Optional live-output head to decode.
+        save_raw_output:
+            Raw model-output save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        layer_visualizers:
+            Optional mapping from site selectors to per-layer thumbnail callables.
+        save_visualizations:
+            Whether rendered visualizer image files should be copied into portable bundles.
+        keep_orphans:
+            Whether island ops (computations unreachable from both the model inputs and
+            outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
+            to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
+            enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
+        output_device:
+            Device placement for saved tensors.
+        save_arg_values:
+            Whether non-tensor function arguments are captured.
+        save_grads:
+            Backward gradient-retention policy. ``True`` captures all gradients,
+            ``False``/``None`` disables capture, and selectors restrict retention:
+            label strings/ordinal lists, ``tl.*`` selectors, and bare callables
+            are all honored (never collapsed to "all"). A bare callable is
+            evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
+            before any backward) and must return a strict ``bool``; only matching
+            ops receive gradient hooks.
+        save_code_context:
+            Whether source-text context is captured in addition to source identity.
+        save_rng_states:
+            Whether operation-level RNG states are captured.
+        random_seed:
+            Fixed seed used for deterministic capture. The capture snapshots the
+            global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
+            its RNG state is already live), reseeds every engine with this seed
+            for its own forward, and restores the snapshot on every exit path,
+            including a failed capture. Code after the capture therefore draws
+            the same numbers as it would without the capture. When ``None`` (the
+            default) the seed is drawn from a private entropy-seeded stream, not
+            the global ``random`` engine, so ``torch.manual_seed(k)`` before an
+            unseeded capture does NOT make the capture reproducible; pass
+            ``seed=`` explicitly for that. The seed used is recorded on
+            ``trace.seed``.
+        source_context_lines:
+            Number of source-context lines to store.
+        optimizer:
+            Optional optimizer used to annotate optimized parameters.
+        compute_input_output_distances:
+            Whether input/output graph distances are computed.
+        detach_saved_activations:
+            Whether saved tensors are detached from autograd. The default
+            ``False`` keeps saved activations graph-connected, which retains the
+            captured autograd graph alongside the payloads: measured ~1.48x the
+            saved-payload bytes live on a resnet18 capture, vs ~1.01x with
+            ``True``. Pass ``True`` for forward-only analysis when that
+            multiplier matters (R33).
+        recurrence_detection:
+            Whether repeated graph patterns are detected during postprocess.
+        intervention_ready:
+            Whether replay-template metadata is captured for intervention APIs.
+        capture_container_structure:
+            Whether to persist input and output container structure without
+            enabling intervention replay metadata.
+        hooks:
+            Optional live hook plan applied during capture.
+        unwrap_when_done:
+            Whether Torch functions are unwrapped after this call.
+        verbose:
+            Whether progress messages are printed.
+        backward_ready:
+            Whether capture keeps autograd-connected tensors for training workflows.
+        inference_only:
+            Whether capture wraps the user forward in ``torch.no_grad()``. When
+            omitted, a capture entered under ``torch.no_grad()`` or
+            ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
+            ``save_grads`` or ``intervention_ready`` asks for a backward; the
+            Trace reports the effective value. The implied value is cleared when
+            the forward re-enables grad (``torch.enable_grad()`` inside it) and an
+            output carries autograd history.
+        carry_state:
+            Whether the capture keeps the model state its forward changed
+            (forward-equivalent: norm running statistics, buffer writes, training
+            modes and plain attributes advance exactly as one direct ``model(x)``
+            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            advances the caller's random streams under either setting). The default
+            ``False`` makes the capture a pure observer: buffers, random state,
+            training modes and plain instance attributes are restored afterwards,
+            on success and on failure. What the forward wrote to plain attributes
+            is recorded on the trace under either setting, so a value the forward
+            stashes on a module is read from
+            ``trace.modules[address].attribute_writes`` (``Module.attribute_writes``;
+            objects without a value snapshot are restored by identity only, see
+            the capture-state contract). A cache hit runs no forward, so nothing
+            advances (DOCUMENTED-UNSTABLE).
+        name:
+            Optional user-facing name for the returned log.
+        cache:
+            Whether to use the content-hash capture cache. The key covers model
+            tensor content (including per-tensor device and ``requires_grad``),
+            training flags, non-persistent buffers, module tree and ``forward``
+            code, plain instance attributes (bounded digest), user-registered
+            module hooks, inputs, and the capture configuration; closure cells,
+            globals referenced by ``forward``, and the interior state of opaque
+            attribute objects remain outside the key (documented boundary).
+            ``torchlens.clear_cache()`` empties the cache.
+        cache_dir:
+            Optional directory for content-hash cache entries.
+        module_filter:
+            Optional THIRD save gate composed (AND) with ``save=`` /
+            ``layers_to_save``: an op's payload is retained only when the
+            save selection picks it AND this predicate returns truthy. The
+            predicate receives an op-record namespace (the legacy-shaped
+            ``SimpleNamespace`` of captured op fields such as ``func_name``,
+            ``layer_label``, and ``modules``), NEVER an
+            ``nn.Module`` instance — a filter written against modules (e.g.
+            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
+            ZERO payloads. Returning ``False`` keeps metadata but skips payload
+            saving; a capture whose every selected payload was suppressed by
+            this gate emits a ``module_filter_zero_saved`` warning.
+        stop_after:
+            Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
+            spelling): capture halts immediately AFTER the named site is
+            captured, returning a partial halted trace that includes it. The
+            site compiles into the halt engine on emission identity: a string
+            halts at the first emission whose module address
+            (``"encoder.layer.4"``, at that module's exit boundary) or function
+            name (``"relu"``) matches, a live selector (``tl.func("relu")``,
+            ``tl.module(...)``) halts at its first match, and a callable
+            predicate halts when it returns True. Finalized postprocess labels
+            (``"relu_1_2"``) do not exist during capture and refuse typed
+            (``stop_after_site_not_live``). A selector-shaped site that never
+            fires refuses typed (``stop_after_never_fired``); a callable that
+            never fires warns. Cannot combine with ``halt=``
+            (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
+        jax_control_flow:
+            Declared JAX control-flow policy. Backends other than torch reject
+            explicit use until their implementation phase supports it.
+        jax_max_control_flow_unroll:
+            Declared maximum JAX control-flow unroll count.
+        module_identity_mode:
+            Declared backend module-mode selection passthrough.
+        payload_policy:
+            Declared payload materialization/codec policy passthrough.
+        save_preview:
+            Non-torch preview backends' declared flag reserving extended ``save=``
+            semantics; the shipped torch ``save=`` kwarg is independent of it.
+        emit_nvtx:
+            Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
+            ranges around each logged operation. Range names carry call identity
+            (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
+            are separated under ``torchlens::internal::`` so the Nsight timeline
+            shows model work, not capture plumbing. NVTX markers are visible in
+            NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
+            enabling it can add small per-op overhead. The option applies to full
+            ``tl.trace`` capture and is preserved through ``tl.record``-style
+            options, although sparse recording may only expose ranges for operations
+            it actually logs.
+        measure_python_peak_memory:
+            Whether the host-side forward-pass peak recorded in
+            ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
+            Python-allocation peak. On CPU it adds to the peak measured under
+            ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
+            ``None`` and this probe fills only the peak pair's ``live`` value. A
+            measured CPU peak of 0 (a model too small to move the coarse-grained
+            resident counters) is recorded as ``None`` with
+            ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
+            for the duration of the forward pass, which is precise for small models
+            but taxes every traced operation (measured at 1.7x-2.5x total capture
+            time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
+            report the true device peak and ignore this option.
+        distributed_witness:
+            Session-time witness level for collective boundary records captured
+            under the distributed opt-in. ``"none"`` (the default) records
+            structure and correlation only; ``"digest"`` additionally stores
+            byte-exact SHA-256 digests of each contribution at issue and each
+            destination at observed completion (redundant evidence that can only
+            DEMOTE a merge verdict, never rescue one -- and a synchronization cost
+            on accelerator captures). ``"payload"`` is reserved for the merge
+            artifact story and currently refuses. Like
+            ``measure_python_peak_memory`` this is a session-time knob: it changes
+            what capture pays for, not what a trace means, and load restores the
+            default. The per-boundary ``witness.policy_resolved`` field IS
+            portable evidence of what was captured.
+        save_budget:
+            Ceiling on the bytes of activation payload a single capture may retain,
+            enforced per device. ``"auto"`` (the default)
+            allows half of each device's *available* memory measured at that device's
+            first save; a float in ``(0, 1]`` sets a different fraction; an int sets
+            an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
+            budget stops capture with
+            :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
+            is admitted before allocation from source-tensor bytes and retained storage
+            is alias-aware. This is not a general OOM guarantee: the model forward,
+            transform-only deltas, and cross-device temporaries can allocate before they
+            are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
+            ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
+            Devices whose headroom cannot be measured are left unbudgeted and
+            emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
+            cap to enforce those devices.
+        raise_on_nan:
+            Whether capture should stop at the first NaN or Inf tensor.
+        track_nonfinite:
+            Whether torch capture records a per-op finiteness verdict
+            (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
+            ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
+            control flow, reads device flags in one post-forward batch. A
+            session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
+        track_device_memory:
+            Whether torch capture samples device allocator counters around each op call, served by
+            ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+            opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
+            per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
+        structure_only:
+            Whether this capture runs under the structure-only contract
+            (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
+            no deprecation shim owed on rename). Structure-only capture records
+            the op graph, module hierarchy, parameter geometry, and per-op
+            shape/dtype as HYPOTHESES while every value-bearing claim is refused
+            typed or gated; value-dependent branches refuse with the user's
+            source line. Torch-only; the capability contract lives in
+            ``docs/reference/structure_only_capabilities.md``.
+        log_injections:
+            Whether computation inside intervention hooks is recorded as anchored
+            injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
+            (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+        measure_host_peak_memory:
+            Whether CPU captures measure ``Trace.forward_peak_memory`` and
+            ``Trace.backward_peak_memory`` (a session-time knob).
+            Measuring needs a per-bracket reset of the process-wide resident high-water
+            mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
+            ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
+            ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
+            option. CUDA peaks and the MPS allocator delta ignore it.
 
-    Examples
-    --------
-    >>> opts = CaptureOptions(layers_to_save=["fc1"], random_seed=0)
-    >>> opts.layers_to_save
-    ['fc1']
+        Examples
+        --------
+        >>> opts = CaptureOptions(layers_to_save=["fc1"], seed=0)
+        >>> opts.layers_to_save
+        ['fc1']
     """
 
     layers_to_save: str | list[Any] | None = "all"
-    transform: Callable[[Any], Any] | None = None
+    input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
     output_style: str | None = None
     output_head: str | None = None
-    save_raw_output: str | bool = "small"
+    save_transformed_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
-    save_arg_values: bool = False
+    save_args: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
     capture_tensor_grad_hooks: bool = True
-    save_code_context: bool = False
-    save_rng_states: bool = False
-    random_seed: int | None = None
+    save_source_context: bool = False
+    save_rng: bool = False
+    seed: int | None = None
     source_context_lines: int = 7
     optimizer: Any = None
     compute_input_output_distances: bool = True
@@ -736,23 +736,23 @@ class CaptureOptions:
     def __init__(
         self,
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
-        transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         output_style: str | None | MissingType = MISSING,
         output_head: str | None | MissingType = MISSING,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
-        save_arg_values: bool | MissingType = MISSING,
+        save_args: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | Callable[[Any], Any] | None | MissingType = MISSING,
         capture_tensor_grad_hooks: bool | MissingType = MISSING,
-        save_code_context: bool | MissingType = MISSING,
-        save_rng_states: bool | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        save_source_context: bool | MissingType = MISSING,
+        save_rng: bool | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         source_context_lines: int | MissingType = MISSING,
         optimizer: Any | MissingType = MISSING,
         compute_input_output_distances: bool | MissingType = MISSING,
@@ -795,7 +795,9 @@ class CaptureOptions:
             "layers_to_save": _resolve_option_value(
                 "layers_to_save", layers_to_save, "all", specified_fields
             ),
-            "transform": _resolve_option_value("transform", transform, None, specified_fields),
+            "input_transform": _resolve_option_value(
+                "input_transform", input_transform, None, specified_fields
+            ),
             "save_raw_input": _resolve_option_value(
                 "save_raw_input", save_raw_input, "small", specified_fields
             ),
@@ -811,8 +813,8 @@ class CaptureOptions:
             "output_head": _resolve_option_value(
                 "output_head", output_head, None, specified_fields
             ),
-            "save_raw_output": _resolve_option_value(
-                "save_raw_output", save_raw_output, "small", specified_fields
+            "save_transformed_output": _resolve_option_value(
+                "save_transformed_output", save_transformed_output, "small", specified_fields
             ),
             "layer_visualizers": _resolve_option_value(
                 "layer_visualizers", layer_visualizers, None, specified_fields
@@ -826,9 +828,7 @@ class CaptureOptions:
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
             ),
-            "save_arg_values": _resolve_option_value(
-                "save_arg_values", save_arg_values, False, specified_fields
-            ),
+            "save_args": _resolve_option_value("save_args", save_args, False, specified_fields),
             "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
             "capture_tensor_grad_hooks": _resolve_option_value(
                 "capture_tensor_grad_hooks",
@@ -836,15 +836,11 @@ class CaptureOptions:
                 True,
                 specified_fields,
             ),
-            "save_code_context": _resolve_option_value(
-                "save_code_context", save_code_context, False, specified_fields
+            "save_source_context": _resolve_option_value(
+                "save_source_context", save_source_context, False, specified_fields
             ),
-            "save_rng_states": _resolve_option_value(
-                "save_rng_states", save_rng_states, False, specified_fields
-            ),
-            "random_seed": _resolve_option_value(
-                "random_seed", random_seed, None, specified_fields
-            ),
+            "save_rng": _resolve_option_value("save_rng", save_rng, False, specified_fields),
+            "seed": _resolve_option_value("seed", seed, None, specified_fields),
             "source_context_lines": _resolve_option_value(
                 "source_context_lines", source_context_lines, 7, specified_fields
             ),
@@ -979,6 +975,29 @@ class CaptureOptions:
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
+    def receipt(
+        self,
+        *,
+        adjustments: Mapping[str, tuple[Any, str]] | None = None,
+    ) -> tuple[Any, ...]:
+        """Return the per-field option receipt: each public field, its value and why.
+
+        Parameters
+        ----------
+        adjustments:
+            Field name -> ``(effective_value, reason)`` for options a consumer
+            forced, normalized or refused after construction.
+
+        Returns
+        -------
+        tuple[Any, ...]
+            One receipt entry per public field, in field order.
+        """
+
+        from ._option_receipt import option_receipt
+
+        return option_receipt(self, adjustments=adjustments)
+
 
 @dataclass(frozen=True, init=False)
 class SaveOptions:
@@ -1013,7 +1032,7 @@ class SaveOptions:
         activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
@@ -1029,7 +1048,7 @@ class SaveOptions:
                 "save_raw_activations", save_raw_activations, True, specified_fields
             ),
             "save_raw_gradients": _resolve_option_value(
-                "save_raw_gradients", save_raw_gradients, True, specified_fields
+                "save_raw_gradients", save_raw_grads, True, specified_fields
             ),
         }
         _set_frozen_fields(self, _SAVE_FIELDS, values)
@@ -1548,7 +1567,7 @@ class InterventionOptions:
 
 
 @dataclass(frozen=True, init=False)
-class StreamingOptions:
+class StorageOptions:
     """Grouped streaming-save options for ``trace``.
 
     Parameters
@@ -1557,7 +1576,7 @@ class StreamingOptions:
         Portable bundle directory for streamed out saves.
     retain_in_memory:
         Whether streamed outs remain in memory.
-    out_callback:
+    on_save:
         Callback invoked with ``(label, tensor)`` for each saved out.
     include_custom_attributes:
         Whether harvested module attributes (``Module.custom_attributes``)
@@ -1589,14 +1608,14 @@ class StreamingOptions:
 
     Examples
     --------
-    >>> opts = StreamingOptions(bundle_path="run.tlspec", retain_in_memory=False)
+    >>> opts = StorageOptions(bundle_path="run.tlspec", retain_in_memory=False)
     >>> opts.retain_in_memory
     False
     """
 
     bundle_path: str | Path | None = None
     retain_in_memory: bool = True
-    out_callback: Callable[[str, torch.Tensor], None] | None = None
+    on_save: Callable[[str, torch.Tensor], None] | None = None
     include_custom_attributes: bool = True
     include_buffer_values: bool = True
     async_writes: bool | None = None
@@ -1607,7 +1626,7 @@ class StreamingOptions:
         self,
         bundle_path: str | Path | None | MissingType = MISSING,
         retain_in_memory: bool | MissingType = MISSING,
-        out_callback: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+        on_save: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
         *,
         include_custom_attributes: bool | MissingType = MISSING,
         include_buffer_values: bool | MissingType = MISSING,
@@ -1624,9 +1643,7 @@ class StreamingOptions:
             "retain_in_memory": _resolve_option_value(
                 "retain_in_memory", retain_in_memory, True, specified_fields
             ),
-            "out_callback": _resolve_option_value(
-                "out_callback", out_callback, None, specified_fields
-            ),
+            "on_save": _resolve_option_value("on_save", on_save, None, specified_fields),
             "include_custom_attributes": _resolve_option_value(
                 "include_custom_attributes", include_custom_attributes, True, specified_fields
             ),
@@ -1658,7 +1675,7 @@ class StreamingOptions:
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
-    ) -> StreamingOptions:
+    ) -> StorageOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -1675,7 +1692,7 @@ def to_disk(
     include_buffer_values: bool = True,
     async_writes: bool | None = None,
     max_pending_bytes: int | None = None,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Return storage options that stream selected payloads to a bundle.
 
     Parameters
@@ -1709,12 +1726,12 @@ def to_disk(
 
     Returns
     -------
-    StreamingOptions
+    StorageOptions
         Storage options suitable for ``trace(..., storage=...)`` and
         ``record(..., streaming=...)``.
     """
 
-    return StreamingOptions(
+    return StorageOptions(
         bundle_path=path,
         retain_in_memory=retain_in_memory,
         include_custom_attributes=include_custom_attributes,
@@ -1862,21 +1879,21 @@ def merge_intervention_options(
 
 def merge_streaming_options(
     *,
-    streaming: StreamingOptions | None,
+    streaming: StorageOptions | None,
     **flat_values: Any,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Merge individual streaming kwargs into a grouped options object."""
 
     return cast(
-        StreamingOptions,
+        StorageOptions,
         _merge_grouped_options(
             option=streaming,
-            option_factory=StreamingOptions,
+            option_factory=StorageOptions,
             flat_to_group=_STREAMING_FLAT_TO_GROUP,
             flat_values=flat_values,
             group_name="streaming",
             conflict_message=(
-                "conflicting streaming options: pass either StreamingOptions or individual kwargs, "
+                "conflicting streaming options: pass either StorageOptions or individual kwargs, "
                 "not both"
             ),
         ),
@@ -1951,15 +1968,25 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 
 
 __all__ = [
+    "RecordingOptions",
     "CaptureOptions",
-    "EchoOptions",
+    "NarrationOptions",
     "EpisodeOptions",
     "InterventionOptions",
     "OptionReceiptEntry",
     "ReplayOptions",
     "SaveOptions",
-    "StreamingOptions",
-    "option_receipt",
+    "StorageOptions",
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve ``RecordingOptions`` lazily (its module imports this one)."""
+
+    if name == "RecordingOptions":
+        from .fastlog.options import RecordingOptions
+
+        return RecordingOptions
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

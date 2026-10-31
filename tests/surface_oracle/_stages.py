@@ -96,11 +96,11 @@ def build_stage_snapshots(
     stages: dict[str, Any] = {}
     _seed_everything()
     # The capture seed is pinned EXPLICITLY: since a51e9b65 (R57 RNG
-    # neutrality) a `random_seed=None` capture draws its auto-seed from a
+    # neutrality) a `seed=None` capture draws its auto-seed from a
     # private OS-entropy stream, so the seeded global `random` engine no
     # longer leaks a reproducible pick into `trace.random_seed` (and, via
     # capture-entry reseeding, into the param/tensor barcode stream).
-    trace = tl.trace(model, model_input, capture=tl.options.CaptureOptions(random_seed=_SEED))
+    trace = tl.trace(model, model_input, capture=tl.options.CaptureOptions(seed=_SEED))
     stages["live"] = snapshot_trace_surface(trace)
 
     def _stage(name: str, build: Callable[[], Any]) -> None:

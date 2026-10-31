@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 from torchlens._io import BlobRef as PortableBlobRef
-from torchlens._ir import CaptureEvents
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import (
     ModuleEnterEvent,
     ModuleExitEvent,

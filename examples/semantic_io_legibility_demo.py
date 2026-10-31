@@ -149,7 +149,9 @@ def main() -> None:
     text_trace = tl.trace(
         model,
         "0.1,0.2,2.0,1.0",
-        capture=tl.options.CaptureOptions(transform=text_to_tensor, output_style="classification"),
+        capture=tl.options.CaptureOptions(
+            input_transform=text_to_tensor, output_style="classification"
+        ),
     )
     text_trace.input_preprocessor = ResolvedPreprocessing(
         source="example.transform",

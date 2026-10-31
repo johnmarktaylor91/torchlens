@@ -147,7 +147,7 @@ class Resolution:
 
     Attributes
     ----------
-    record:
+    preprocessing:
         The persisted-friendly :class:`~torchlens._data_classes.trace.\
 ResolvedPreprocessing` provenance record (source, identifier, verified,
         config, description).
@@ -160,7 +160,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
         authorities (explicit dicts) and unknown resolutions.
     """
 
-    record: ResolvedPreprocessing
+    preprocessing: ResolvedPreprocessing
     declared: DeclaredPreprocessing | None
     transform: Callable[[Any], Any] | None
 
@@ -174,7 +174,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
             ``"authoritative"`` / ``"unverified_fallback"`` / ``"unknown"``.
         """
 
-        return status_of(self.record)
+        return status_of(self.preprocessing)
 
 
 def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> Resolution:
@@ -204,7 +204,7 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
     if fetch is not None:
         config["fetch"] = dict(fetch)
     return Resolution(
-        record=ResolvedPreprocessing(
+        preprocessing=ResolvedPreprocessing(
             source="unknown",
             identifier="unknown",
             verified=False,

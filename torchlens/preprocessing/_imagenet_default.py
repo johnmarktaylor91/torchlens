@@ -116,7 +116,7 @@ def imagenet_default() -> Callable[[Any], torch.Tensor]:
     Resize 256, center-crop 224, ``ToTensor``, ImageNet mean/std
     normalization; a single PIL image becomes a batch of one and a list of
     PIL images becomes one batch. Pass it as
-    ``CaptureOptions(transform=imagenet_default())``. The capture's
+    ``CaptureOptions(input_transform=imagenet_default())``. The capture's
     ``input_preprocessor`` record says ``source="imagenet_default"`` with
     status ``unverified_fallback``: the recipe is TorchLens-authored, never
     read from the model.

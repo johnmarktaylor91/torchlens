@@ -148,35 +148,35 @@ class TFBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
         layers_to_save = capture_options.layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
-        random_seed = resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
         module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
@@ -238,9 +238,9 @@ class TFBackend:
             activation_transform=activation_transform,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -271,11 +271,11 @@ class TFBackend:
                 save_raw_activations=save_raw_activations,
                 detach_saved_activations=detach_saved_activations,
                 save_grads=save_grads,
-                random_seed=random_seed,
+                seed=random_seed,
                 num_context_lines=num_context_lines,
-                save_arg_values=save_arg_values,
-                save_code_context=save_code_context,
-                save_rng_states=save_rng_states,
+                save_args=save_arg_values,
+                save_source_context=save_code_context,
+                save_rng=save_rng_states,
                 recurrence_detection=recurrence_detection,
                 compute_input_output_distances=compute_input_output_distances,
                 verbose=verbose,
@@ -287,7 +287,7 @@ class TFBackend:
                 save_raw_input=save_raw_input,
                 batch_render=batch_render,
                 output_transform=output_transform,
-                save_raw_output=save_raw_output,
+                save_transformed_output=save_raw_output,
                 layer_visualizers=layer_visualizers,
                 save_visualizations=save_visualizations,
                 tf=tf,
@@ -341,11 +341,11 @@ class TFBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            random_seed=random_seed,
+            seed=random_seed,
             num_context_lines=num_context_lines,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -357,7 +357,7 @@ class TFBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             tf=tf,
@@ -537,11 +537,11 @@ class TFBackend:
         save_raw_activations: bool,
         detach_saved_activations: bool,
         save_grads: object | None,
-        random_seed: int | None,
+        seed: int | None,
         num_context_lines: int,
-        save_arg_values: bool,
-        save_code_context: bool,
-        save_rng_states: bool,
+        save_args: bool,
+        save_source_context: bool,
+        save_rng: bool,
         recurrence_detection: bool,
         verbose: bool,
         backward_ready: bool,
@@ -553,7 +553,7 @@ class TFBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         layer_visualizers: dict[Any, Any] | None,
         save_visualizations: bool,
         tf: Any,
@@ -625,27 +625,27 @@ class TFBackend:
             activation_transform=cast(Any, activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=False,
-            save_arg_values=save_arg_values,
+            save_args=save_args,
             save_grads=save_grads,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast(Any, module_filter),
             emit_nvtx=False,
-            transform=cast(Any, transform),
+            input_transform=cast(Any, transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast(Any, output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -662,7 +662,7 @@ class TFBackend:
         setattr(
             trace,
             "random_seed",
-            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
+            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
         )
         return trace
 
@@ -1053,9 +1053,9 @@ def _reject_unsupported_options(
     activation_transform: object | None,
     detach_saved_activations: bool,
     save_grads: object | None,
-    save_arg_values: bool,
-    save_code_context: bool,
-    save_rng_states: bool,
+    save_args: bool,
+    save_source_context: bool,
+    save_rng: bool,
     backward_ready: bool,
     module_filter: object | None,
     transform: object | None,
@@ -1111,9 +1111,9 @@ def _reject_unsupported_options(
             "activation_transform": activation_transform,
             "detach_saved_activations": detach_saved_activations,
             "save_grads": save_grads,
-            "save_arg_values": save_arg_values,
-            "save_code_context": save_code_context,
-            "save_rng_states": save_rng_states,
+            "save_args": save_args,
+            "save_source_context": save_source_context,
+            "save_rng": save_rng,
             "backward_ready": backward_ready,
             "module_filter": module_filter,
             "transform": transform,

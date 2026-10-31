@@ -181,7 +181,7 @@ def _render_dot_source(
     Tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    trace = tl.trace(model, x, capture=CaptureOptions(save_code_context=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(save_source_context=True))
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(

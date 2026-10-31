@@ -27,9 +27,10 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
 from torchlens._utils._torch_compat import TorchCapabilityWarning
-from torchlens.dataset_extraction import extract_dataset, load_extraction
+from torchlens.dataset_extraction import load_extraction
 from torchlens.errors._base import TorchLensWarning
 
 
@@ -439,7 +440,7 @@ def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
     envelope = BatchEnvelope(
         args=(),
         kwargs={"input_ids": ids, "attention_mask": mask},
-        row_count=2,
+        num_rows=2,
         mask=mask,
         disclosure={"kind": "test"},
     )

@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
+from torchlens._ir.capture_events import CaptureEvents
+
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -29,13 +31,7 @@ from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.module import HookInfo
 from ..._data_classes.param import Param, ParamAccessor
 from ..._errors import CaptureContextError
-from ..._ir import (
-    CaptureEvents,
-    ModuleEnterEvent,
-    ModuleExitEvent,
-    ModuleFrame,
-    ModulePrepEvent,
-)
+from ..._ir import ModuleEnterEvent, ModuleExitEvent, ModuleFrame, ModulePrepEvent
 from ..._ir.container_registry import ModuleSite, Phase, Role, walk_container
 from ..._ir.op_record import (
     amend_module_boundary_retention,
@@ -54,7 +50,7 @@ from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
 )
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._module_arg_stubs import stub_module_arg_payloads
@@ -772,7 +768,7 @@ def _add_shared_module_aliases(
 # ---------------------------------------------------------------------------
 
 
-def _get_class_metadata(module_class: type, save_code_context: bool = False) -> dict[str, Any]:
+def _get_class_metadata(module_class: type, save_source_context: bool = False) -> dict[str, Any]:
     """Return class-level metadata for a module class, cached across instances.
 
     When ``save_code_context`` is False (default), skips expensive
@@ -804,7 +800,7 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
             user_custom_methods.append(attr_name)
     meta["user_custom_methods"] = user_custom_methods
 
-    if save_code_context:
+    if save_source_context:
         try:
             meta["class_source_file"] = inspect.getfile(module_class)
         except (TypeError, OSError):
@@ -945,7 +941,7 @@ def _capture_module_metadata(
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
     save_source = getattr(trace, "save_code_context", False)
-    class_meta = _get_class_metadata(type(module), save_code_context=save_source)
+    class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
 
@@ -2398,7 +2394,7 @@ def module_forward_decorator(
                         predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                     )
                     _evaluate_halt(enter_ctx, state.options)
-            except HaltSignal:
+            except StopSignal:
                 _mstack.pop_frame(state.module_stack, frame)
                 raise
             except Exception as exc:
@@ -2486,7 +2482,7 @@ def module_forward_decorator(
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
                         _evaluate_halt(exit_ctx, state.options, frontier_output=out)
-                except HaltSignal:
+                except StopSignal:
                     if active_model_exc is None:
                         raise
                 except Exception as exc:

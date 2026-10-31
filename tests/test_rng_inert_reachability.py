@@ -671,7 +671,7 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
                 intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
-                random_seed=1,
+                seed=1,
             ),
         )
         path = tmp_path / "hidden_generator.tlspec"
@@ -713,7 +713,7 @@ def test_benign_model_with_c_callables_stays_verified(tmp_path: Path) -> None:
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=1,
+            seed=1,
         ),
     )
     path = tmp_path / "benign_c_callables.tlspec"
@@ -855,7 +855,7 @@ def test_ambient_graph_subclass_generator_draw_still_unverifiable(tmp_path: Path
                 intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
-                random_seed=1,
+                seed=1,
             ),
         )
         path = tmp_path / "ambient_subclass.tlspec"

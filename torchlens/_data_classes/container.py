@@ -809,7 +809,7 @@ def _trace_container_capability(trace: Any, role: Role) -> str:
     # CLOSED to "none".
     backend = getattr(trace, "backend", None) or "torch"
     try:
-        from ..backends import get_backend_spec
+        from ..backends.registry import get_backend_spec
 
         capabilities = get_backend_spec(str(backend)).capabilities
         if role in {Role.CALL_INPUT, Role.MODEL_INPUT}:

@@ -810,7 +810,7 @@ def enumerate_extraction_sites(
                 key=key,
                 requested=key,
                 matrix=shaped.matrix,
-                per_stimulus_shape=tuple(shaped.record.input_shape[1:]),
+                per_stimulus_shape=tuple(shaped.shaping.input_shape[1:]),
                 source_dtype=str(shaped.matrix.dtype).removeprefix("torch."),
                 layer_label=key,
                 pass_index=None,

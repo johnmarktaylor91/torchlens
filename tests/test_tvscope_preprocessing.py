@@ -61,14 +61,14 @@ class TestResolver:
         """A real shipped family declares NO fields; resolution stays honest."""
 
         assert detection_resolution.declared is None
-        assert detection_resolution.record.config.get("declares") == "nothing"
+        assert detection_resolution.preprocessing.config.get("declares") == "nothing"
         assert detection_resolution.transform is not None
 
     def test_explicit_mapping_resolves_with_aliases(self) -> None:
         """Explicit declarations accept canonical + alias keys, disclose the rest."""
 
         resolution = pp.resolve({"image_mean": [0.5, 0.5, 0.5], "std": 0.5, "mystery_knob": 3})
-        assert resolution.record.source == "explicit_declaration"
+        assert resolution.preprocessing.source == "explicit_declaration"
         assert resolution.status == provenance.STATUS_AUTHORITATIVE
         assert resolution.declared is not None
         assert resolution.declared.mean == pytest.approx((0.5, 0.5, 0.5))
@@ -87,7 +87,7 @@ class TestResolver:
                 "interpolation": "bicubic",
             }
         )
-        assert resolution.record.source == "timm"
+        assert resolution.preprocessing.source == "timm"
         assert resolution.declared is not None
         assert resolution.declared.crop_size == 224
         assert resolution.declared.resize_size == 256
@@ -108,7 +108,7 @@ class TestResolver:
             ]
         )
         resolution = pp.resolve(pipeline)
-        assert resolution.record.source == "compose_pipeline"
+        assert resolution.preprocessing.source == "compose_pipeline"
         assert resolution.declared is not None
         assert resolution.declared.resize_size == 256
         assert resolution.declared.crop_size == 224
@@ -137,7 +137,7 @@ class TestResolver:
 
         resolution = pp.resolve(model=torch.nn.Linear(4, 4))
         assert resolution.status == provenance.STATUS_UNKNOWN
-        assert resolution.record.source == "unknown"
+        assert resolution.preprocessing.source == "unknown"
         assert resolution.transform is None
 
     def test_registry_extension_wins_over_builtins(self) -> None:
@@ -154,12 +154,12 @@ class TestResolver:
             """Resolve the marker with a distinctive source."""
 
             resolution = pp.unknown_resolution("custom")
-            resolution.record.source = "custom_adapter"
+            resolution.preprocessing.source = "custom_adapter"
             return resolution
 
         pp.register_authority_adapter("custom", probe, adapt)
         try:
-            assert pp.resolve(marker).record.source == "custom_adapter"
+            assert pp.resolve(marker).preprocessing.source == "custom_adapter"
         finally:
             from torchlens.preprocessing import _authorities
 
@@ -264,7 +264,7 @@ class TestAuditOracle:
             description="fallback",
         )
         assert fallback.status == provenance.STATUS_UNVERIFIED_FALLBACK
-        resolution = pp.Resolution(record=fallback, declared=None, transform=None)
+        resolution = pp.Resolution(preprocessing=fallback, declared=None, transform=None)
         report = pp.audit(resolution, None)
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons

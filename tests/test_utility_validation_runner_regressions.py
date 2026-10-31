@@ -383,7 +383,7 @@ def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     pre_call_state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
 
     with pytest.raises(RuntimeError, match="intentional mid-pass failure"):
-        validate_forward_pass(model, torch.ones(2), random_seed=1)
+        validate_forward_pass(model, torch.ones(2), seed=1)
 
     assert model.num_calls == expected_original_calls
     post_call_state = model.state_dict()

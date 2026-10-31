@@ -1379,7 +1379,7 @@ def test_subclass_disabled_dispatch_mutation_is_outside_observational_reach() ->
         trace = tl.trace(
             _SubclassHiddenMutationModel(),
             torch.tensor([1.0, 2.0]),
-            capture=tl.options.CaptureOptions(save_arg_values=True),
+            capture=tl.options.CaptureOptions(save_args=True),
         )
 
     operators = [d["operator"] for d in trace.completeness_diagnostics]

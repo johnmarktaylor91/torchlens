@@ -228,7 +228,7 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     foreign = torch.randn(3, requires_grad=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with trace.recording_backward():
+        with trace.capture_backward():
             (foreign * 2).sum().backward()
     unmatched = [w for w in caught if "did not" in str(w.message)]
     assert len(unmatched) == 1

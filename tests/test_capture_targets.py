@@ -16,17 +16,6 @@ from torchlens.backends.torch.ops import _save_activation_fields
 from torchlens.options import CaptureOptions
 
 
-class _KpiModel(torch.nn.Module):
-    """Tiny model that records a KPI during capture."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run a small forward pass."""
-
-        y = torch.relu(x)
-        tl.record_kpi_in_graph("loss", float(y.sum().detach()))
-        return y
-
-
 class _ConfiguredClassifier(torch.nn.Module):
     """Tiny classifier carrying HF-style output metadata on ``config``."""
 
@@ -76,13 +65,6 @@ def test_capture_memory_fields_and_forward_source_line() -> None:
     assert isinstance(log.forward_source_line, int)
     assert all(hasattr(layer, "bytes_delta_at_call") for layer in log.layer_list)
     assert all(hasattr(layer, "bytes_peak_at_call") for layer in log.layer_list)
-
-
-def test_record_kpi_in_graph() -> None:
-    """Attach arbitrary KPI metadata during capture."""
-
-    log = tl.trace(_KpiModel(), torch.ones(1, 2))
-    assert "loss" in log.annotations
 
 
 def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
@@ -281,8 +263,8 @@ def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
     source = torch.randn(1, 2)
     first_op, second_op = trace.layer_list[:2]
 
-    first_op.save_activation(source, (), {}, save_arg_values=False)
-    second_op.save_activation(source, (), {}, save_arg_values=False)
+    first_op.save_activation(source, (), {}, save_args=False)
+    second_op.save_activation(source, (), {}, save_args=False)
 
     assert first_op.out is second_op.out
     assert second_op.annotations["dedup_reference_label"] == first_op._layer_label_raw

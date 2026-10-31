@@ -407,7 +407,7 @@ row, absent tail) and are write-once at settlement. The ledger is a
 DISCLOSURE, never a settlement authority: the episode product settles through
 the one existing `CaptureOutcome` authority with its vocabulary unchanged,
 and every capability gate (N1–N5) applies verbatim. Truncation stays a
-run/report term: an episode halted at a step boundary settles HALTED with a
+run/report term: an episode halted at a step boundary settles STOPPED with a
 clean prefix and the truncation disclosed on the ledger
 (`steps_completed`, `truncated_at_step`) — nothing rounds up.
 
@@ -485,10 +485,10 @@ open across forced joins.
 ## The managed RNG recipe
 
 Episode captures use the managed seeding discipline: the capture's effective
-`random_seed` (drawn or passed, exactly as for any capture) is recorded as
+`seed` (drawn or passed, exactly as for any capture) is recorded as
 the ledger `entry_seed`. Re-running the same declaration with the same seed
 reproduces a sampled episode bit-identically; pass
-`capture=CaptureOptions(random_seed=...)` explicitly for cross-run
+`capture=CaptureOptions(seed=...)` explicitly for cross-run
 reproduction.
 
 ## Escalation (session semantics)

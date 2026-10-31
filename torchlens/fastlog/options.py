@@ -10,7 +10,7 @@ from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
-from ..options import StreamingOptions
+from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
@@ -51,13 +51,13 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "on_predicate_error",
     "on_forward_error",
     "streaming",
-    "random_seed",
+    "seed",
     "activation_transform",
     "save_raw_activations",
     "save_grads",
     "default_grad",
     "grad_transform",
-    "save_raw_gradients",
+    "save_raw_grads",
     "echo",
     "detach_saved_activations",
 )
@@ -93,24 +93,24 @@ class RecordingOptions:
     max_predicate_failures: int
     on_predicate_error: PredicateErrorMode
     on_forward_error: ForwardErrorMode
-    streaming: StreamingOptions | None
-    random_seed: int | None
+    streaming: StorageOptions | None
+    seed: int | None
     activation_transform: _ActivationPostfunc | None
     save_raw_activations: bool
     save_grads: GradPredicateFn | bool | CaptureSpec | None
     default_grad: bool | CaptureSpec
     grad_transform: _GradientPostfunc | None
-    save_raw_gradients: bool
-    #: Normalized live-narration options (``torchlens.options.EchoOptions``)
+    save_raw_grads: bool
+    #: Normalized live-narration options (``torchlens.options.NarrationOptions``)
     #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
     #: the narration engine -- seams read the armed session off the trace.
     echo: Any | None
     #: Whether a retained activation whose capture spec does not ask for
-    #: ``keep_grad`` is detached from the autograd graph. ``True`` (the
+    #: ``save_grad`` is detached from the autograd graph. ``True`` (the
     #: ``record`` default) stores detached copies; ``False`` stores
     #: graph-connected copies wherever the source tensor carries autograd
     #: history, as ``tl.trace``'s default save does. A spec with
-    #: ``keep_grad=True`` stays attached either way. Disk payloads are always
+    #: ``save_grad=True`` stays attached either way. Disk payloads are always
     #: detached inspection copies.
     detach_saved_activations: bool
     _specified_fields: frozenset[str] = field(
@@ -134,15 +134,15 @@ class RecordingOptions:
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
-        streaming: StreamingOptions | None | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        streaming: StorageOptions | None | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
-        echo: Any | None | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
+        narrate: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
@@ -181,9 +181,7 @@ class RecordingOptions:
                 "on_forward_error", on_forward_error, "raise", specified_fields
             ),
             "streaming": _resolve_recording_option("streaming", streaming, None, specified_fields),
-            "random_seed": _resolve_recording_option(
-                "random_seed", random_seed, None, specified_fields
-            ),
+            "seed": _resolve_recording_option("seed", seed, None, specified_fields),
             "activation_transform": _resolve_recording_option(
                 "activation_transform", activation_transform, None, specified_fields
             ),
@@ -199,10 +197,10 @@ class RecordingOptions:
             "grad_transform": _resolve_recording_option(
                 "grad_transform", grad_transform, None, specified_fields
             ),
-            "save_raw_gradients": _resolve_recording_option(
-                "save_raw_gradients", save_raw_gradients, True, specified_fields
+            "save_raw_grads": _resolve_recording_option(
+                "save_raw_grads", save_raw_grads, True, specified_fields
             ),
-            "echo": _resolve_recording_option("echo", echo, None, specified_fields),
+            "echo": _resolve_recording_option("echo", narrate, None, specified_fields),
             "detach_saved_activations": _resolve_recording_option(
                 "detach_saved_activations", detach_saved_activations, True, specified_fields
             ),
@@ -254,7 +252,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     save_grads = values["save_grads"]
     default_grad = values["default_grad"]
     grad_transform = values["grad_transform"]
-    save_raw_gradients = values["save_raw_gradients"]
+    save_raw_grads = values["save_raw_grads"]
     detach_saved_activations = values["detach_saved_activations"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise InvalidArgumentError(
@@ -364,7 +362,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             argument="grad_transform",
         )
     for flag_name, flag in (
-        ("save_raw_gradients", save_raw_gradients),
+        ("save_raw_grads", save_raw_grads),
         ("detach_saved_activations", detach_saved_activations),
     ):
         if not isinstance(flag, bool):
@@ -391,15 +389,15 @@ def merge_recording_options(
     max_predicate_failures: int | MissingType = MISSING,
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
     on_forward_error: ForwardErrorMode | MissingType = MISSING,
-    streaming: StreamingOptions | None | MissingType = MISSING,
-    random_seed: int | None | MissingType = MISSING,
+    streaming: StorageOptions | None | MissingType = MISSING,
+    seed: int | None | MissingType = MISSING,
     activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
     save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-    save_raw_gradients: bool | MissingType = MISSING,
-    echo: Any | None | MissingType = MISSING,
+    save_raw_grads: bool | MissingType = MISSING,
+    narrate: Any | None | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
@@ -422,14 +420,15 @@ def merge_recording_options(
         "on_predicate_error": on_predicate_error,
         "on_forward_error": on_forward_error,
         "streaming": streaming,
-        "random_seed": random_seed,
+        "seed": seed,
         "activation_transform": activation_transform,
         "save_raw_activations": save_raw_activations,
         "save_grads": save_grads,
         "default_grad": default_grad,
         "grad_transform": grad_transform,
-        "save_raw_gradients": save_raw_gradients,
-        "echo": echo,
+        "save_raw_grads": save_raw_grads,
+        # The narrate= keyword fills the stored echo field.
+        "echo": narrate,
         "detach_saved_activations": detach_saved_activations,
     }
     for field_name, value in incoming.items():
