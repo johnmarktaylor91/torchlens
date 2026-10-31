@@ -8,10 +8,11 @@ or branching on ``nonfinite_ops`` goes red until consciously ledgered.
 
 import ast
 import pathlib
+import sys
 
-import pytest
+from _harness import PACKAGE_ROOT, run_checks
 
-_PACKAGE_ROOT = pathlib.Path(__file__).resolve().parent.parent / "torchlens"
+_PACKAGE_ROOT = PACKAGE_ROOT
 
 #: Raw per-op compute fields the aggregation service owns (costreport D1).
 _RAW_COMPUTE_FIELDS = frozenset(
@@ -75,8 +76,7 @@ def _relative(path: pathlib.Path) -> str:
     return str(path.relative_to(_PACKAGE_ROOT)).replace("\\", "/")
 
 
-@pytest.mark.heavy
-def test_only_licensed_modules_read_raw_compute_fields() -> None:
+def check_only_licensed_modules_read_raw_compute_fields() -> None:
     """costreport D1: the import lint that makes 'one source' checkable.
 
     heavy tier: the whole-package AST scan crossed the 7s smoke budget once
@@ -105,7 +105,7 @@ def test_only_licensed_modules_read_raw_compute_fields() -> None:
     )
 
 
-def test_licensed_compute_ledger_stays_true() -> None:
+def check_licensed_compute_ledger_stays_true() -> None:
     """A licensed module that stops reading the fields leaves the ledger."""
 
     for relative in LICENSED_COMPUTE_READERS:
@@ -122,7 +122,7 @@ def test_licensed_compute_ledger_stays_true() -> None:
         assert hits, f"ledger row {relative} is stale (no raw compute reads remain)"
 
 
-def test_no_builder_reads_nonfinite_ops() -> None:
+def check_no_builder_reads_nonfinite_ops() -> None:
     """sumfam D5: builders branch on nonfinite_verdict, never the tuple.
 
     The false negative lives inside an ``if trace.nonfinite_ops:`` on a
@@ -150,3 +150,20 @@ def test_no_builder_reads_nonfinite_ops() -> None:
         "builder-side nonfinite_ops reads (branch on trace.nonfinite_verdict / "
         f"trace.health_facts instead): {offenders}"
     )
+
+
+CHECKS = (
+    check_only_licensed_modules_read_raw_compute_fields,
+    check_licensed_compute_ledger_stays_true,
+    check_no_builder_reads_nonfinite_ops,
+)
+
+
+def main() -> int:
+    """Run every factcore_import_lint check and return the exit status."""
+
+    return run_checks("factcore_import_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
