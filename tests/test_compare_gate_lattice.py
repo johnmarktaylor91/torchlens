@@ -390,3 +390,24 @@ def test_fork_comparison_workflow_stays_open() -> None:
     assert matrix.shape == (2, 2)
     rows = bundle.rank_changes()
     assert rows
+
+
+def test_at_label_compare_runs_the_comparison_gate() -> None:
+    """``at(label).compare()`` carries the gate ``compare_at`` ran; the label view itself reads."""
+
+    model = _TwoLayer()
+    torch.manual_seed(11)
+    cross_input = tl.Bundle(
+        {"a": _capture(model, torch.randn(2, 4)), "b": _capture(model, torch.randn(2, 4))}
+    )
+    label = next(
+        str(layer.layer_label)
+        for layer in cross_input["a"].layer_list
+        if "relu" in str(layer.layer_label)
+    )
+    view = cross_input.at(label)
+    assert set(view.members) == {"a", "b"}
+    with pytest.raises(BundleComparisonError) as excinfo:
+        view.compare()
+    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["operation"] == "at.compare"
