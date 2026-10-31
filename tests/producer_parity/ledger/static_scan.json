@@ -5520,14 +5520,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "equivalence_class",
-  "file": "torchlens/bundle/_deltas.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/bundle/_lineage.py",
