@@ -40,6 +40,35 @@ _RANDOM_FUNCS = frozenset(
     }
 )
 _INPLACE_MARKERS = ("_",)
+
+
+def _draws_random_numbers(feature: str) -> bool:
+    """Whether a ``func:<name>`` coverage feature names an op that draws random numbers.
+
+    The hand list above is the floor; beyond it the test is torch's own
+    ``nondeterministic_seeded`` tag on the ATen operator (``exponential_``,
+    ``uniform_``, ``random_`` and every other seeded sampler, so a Gumbel-softmax
+    forward counts as stochastic without a name being spelled here).
+    """
+
+    if feature in _RANDOM_FUNCS:
+        return True
+    if not feature.startswith("func:"):
+        return False
+    name = feature[len("func:") :]
+    candidates = (name, name[:-1]) if name.endswith("_") and not name.startswith("_") else (name,)
+    for candidate in candidates:
+        packet = getattr(torch.ops.aten, candidate, None)
+        overloads = getattr(packet, "overloads", None)
+        if not callable(overloads):
+            continue
+        for overload_name in overloads():
+            tags = getattr(getattr(packet, overload_name), "tags", ())
+            if torch.Tag.nondeterministic_seeded in tags:
+                return True
+    return False
+
+
 _VIEW_FUNCS = frozenset(
     {
         "func:view",
@@ -106,7 +135,7 @@ def _corpus_tags(entry: CorpusEntry) -> frozenset[str]:
         tags.add("views")
     if any(f.startswith("dtype:") and f not in {"dtype:float32"} for f in features):
         tags.add("dtype")
-    if features & _RANDOM_FUNCS:
+    if any(_draws_random_numbers(feature) for feature in features):
         tags.add("stochastic")
     if any(f.startswith("mod:") for f in features):
         tags.add("child_module")

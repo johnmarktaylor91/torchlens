@@ -74,7 +74,9 @@ Add a row, never a file.
 * A toy model: add a `_toy(name, ModelClass, inputs_factory, *tags)` row to
   `TOY_CASES` in `cases.py`. Tags the features consult: `child_module`,
   `float_output`, `recurrent`, `stochastic` (the forward draws random
-  numbers, so second-run comparisons are not applicable), `containers` (the
+  numbers, so second-run comparisons are not applicable; a corpus case gets it
+  when a `func:` feature is on the hand list or torch tags the ATen operator
+  `nondeterministic_seeded`), `containers` (the
   inputs are not one tensor), `inplace`, `views`, `branching`, `dtype`.
 
 ## Adding a feature
