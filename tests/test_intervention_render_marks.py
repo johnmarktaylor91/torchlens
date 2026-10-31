@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
+from torchlens.intervention.selectors import grad_fn_label
 from torchlens.intervention.types import Edit, FireRecord
 from torchlens.options import VisualizationOptions
 from torchlens.visualization._edit_highlighter import HighlighterStyle, highlight_svg
@@ -387,7 +388,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
             gf for gf in trace.autograd.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
         )
         trace.attach_hooks(
-            tl.intervention.grad_fn_label(grad_fn.label),
+            grad_fn_label(grad_fn.label),
             tl.hook_grad(named_backward),
             confirm_mutation=True,
         )

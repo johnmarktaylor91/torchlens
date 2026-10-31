@@ -13,6 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._ir.container import HFKey, NamedField, TupleIndex
 from torchlens._utils.collections import assign_into_container_by_path
+from torchlens.intervention.selectors import output_at
 
 
 class DemoModelOutput(dict):
@@ -403,7 +404,7 @@ def test_output_at_selects_nested_container_path() -> None:
         torch.tensor([1.0]),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    site = trace.resolve_sites(tl.intervention.output_at(("past_key_values", 0, 1))).first()
+    site = trace.resolve_sites(output_at(("past_key_values", 0, 1))).first()
 
     assert site.layer_label in trace.output_layers
     assert torch.equal(site.out, torch.tensor([4.0]))

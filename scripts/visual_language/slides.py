@@ -754,7 +754,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                capture={"intervention_ready": True, "save_arg_values": True},
+                capture={"intervention_ready": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
                 # since the F32 fix), so the crop shows both passes.
@@ -783,7 +783,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery_diff",
-                capture={"intervention_ready": True, "save_arg_values": True},
+                capture={"intervention_ready": True, "save_args": True},
                 prep="fork_edit",
                 crop=('node(text~"linear_1_1:1")', 'node(text~"linear_1_1:2")'),
             ),
@@ -1264,7 +1264,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "ImageNet",
-                capture={"transform": "@to_tensor"},
+                capture={"input_transform": "@to_tensor"},
                 kwargs={"show_input_transform_summary": True},
                 crop=("node(text~preprocess)",),
             ),
@@ -1289,7 +1289,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "ImageNet",
-                capture={"transform": "@to_tensor", "output_transform": "@decode"},
+                capture={"input_transform": "@to_tensor", "output_transform": "@decode"},
                 crop=("node(text~green)",),
             ),
         ),

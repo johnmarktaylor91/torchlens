@@ -50,7 +50,7 @@ class Sentinel:
 
 
 _GRAD = {"save_grads": "all"}
-_EDIT = {"intervention_ready": True, "save_arg_values": True}
+_EDIT = {"intervention_ready": True, "save_args": True}
 
 SENTINELS: tuple[Sentinel, ...] = (
     Sentinel(
@@ -227,7 +227,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "a",
                 "ImageNet",
                 "show_input_transform_summary=True",
-                capture={"transform": "@to_tensor", "output_transform": "@decode"},
+                capture={"input_transform": "@to_tensor", "output_transform": "@decode"},
                 kwargs={"show_input_transform_summary": True},
             ),
         ),

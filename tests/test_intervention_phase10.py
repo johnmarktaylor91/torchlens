@@ -33,6 +33,7 @@ from torchlens.intervention.save import (
     resolve_function_registry_key,
     save_intervention,
 )
+from torchlens.intervention.selectors import output_at
 from torchlens.intervention.types import (
     Edit,
     FireRecord,
@@ -258,7 +259,7 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
     )
 
     with pytest.warns(MultiMatchWarning):
-        output_labels = log.resolve_sites(tl.intervention.output_at(0).to_target_spec()).labels()
+        output_labels = log.resolve_sites(output_at(0).to_target_spec()).labels()
     assert "chunk_1_2" in output_labels
     with pytest.warns(MultiMatchWarning):
         regex_labels = log.resolve_sites(tl.label_matches("chunk_[12]").to_target_spec()).labels()
@@ -291,9 +292,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log.attach_hooks(
-            tl.intervention.output_at(1), tl.zero_ablate(), confirm_mutation=True
-        )
+        output_log.attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)

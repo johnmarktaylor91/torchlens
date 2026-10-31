@@ -17,13 +17,13 @@ from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, Visua
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
     ("depth", "vis_call_depth", 5, "vis_call_depth"),
-    ("container_path", "vis_outpath", "custom.gv", "vis_outpath"),
+    ("container_path", "vis_outpath", "custom.gv", "path"),
     ("save_only", "vis_save_only", True, "vis_save_only"),
-    ("file_format", "vis_fileformat", "svg", "vis_fileformat"),
+    ("file_format", "vis_fileformat", "svg", "file_format"),
     # Canonical tri-state value on purpose: the legacy bools are themselves a
     # deprecated VALUE now (grind b4, R48-1), and these two cases assert the
     # routing of the NAME, so a bool here would smuggle a second warning in.
-    ("show_buffers", "vis_buffers", "always", "show_buffer_layers"),
+    ("show_buffers", "vis_buffers", "always", "show_buffers"),
     ("direction", "vis_direction", "leftright", "direction"),
     ("graph_overrides", "vis_graph_overrides", {"ranksep": "2.0"}, "vis_graph_overrides"),
     ("edge_overrides", "vis_edge_overrides", {"color": "red"}, "vis_edge_overrides"),
@@ -36,7 +36,7 @@ _VISUALIZATION_CASES = [
     ("module_overrides", "vis_module_overrides", {"color": "blue"}, "vis_module_overrides"),
     ("layout", "vis_node_placement", "dot", "vis_node_placement"),
     ("renderer", "vis_renderer", "dagua", "vis_renderer"),
-    ("theme", "vis_theme", "gallery", "vis_theme"),
+    ("theme", "vis_theme", "gallery", "theme"),
     ("node_style", "vis_node_mode", "profiling", "node_mode"),
 ]
 _STREAMING_CASES = [
@@ -78,7 +78,7 @@ class _DummyLog:
         self,
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
-        vis_outpath: str = "modelgraph",
+        path: str = "modelgraph",
         vis_graph_overrides: dict[str, Any] | None = None,
         node_mode: str = "default",
         node_spec_fn: Any = None,
@@ -90,12 +90,12 @@ class _DummyLog:
         vis_grad_edge_overrides: dict[str, Any] | None = None,
         vis_module_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
-        show_buffer_layers: bool = False,
+        file_format: str = "pdf",
+        show_buffers: bool = False,
         direction: str = "bottomup",
         vis_node_placement: str = "auto",
         vis_renderer: str = "graphviz",
-        vis_theme: str = "torchlens",
+        theme: str = "torchlens",
         vis_intervention_mode: str = "node_mark",
         vis_show_cone: bool = False,
     ) -> str:
@@ -105,7 +105,7 @@ class _DummyLog:
             {
                 "vis_mode": vis_mode,
                 "vis_call_depth": vis_call_depth,
-                "vis_outpath": vis_outpath,
+                "path": path,
                 "vis_graph_overrides": vis_graph_overrides,
                 "node_mode": node_mode,
                 "node_spec_fn": node_spec_fn,
@@ -116,12 +116,12 @@ class _DummyLog:
                 "vis_grad_edge_overrides": vis_grad_edge_overrides,
                 "vis_module_overrides": vis_module_overrides,
                 "vis_save_only": vis_save_only,
-                "vis_fileformat": vis_fileformat,
-                "show_buffer_layers": show_buffer_layers,
+                "file_format": file_format,
+                "show_buffers": show_buffers,
                 "direction": direction,
                 "vis_node_placement": vis_node_placement,
                 "vis_renderer": vis_renderer,
-                "vis_theme": vis_theme,
+                "theme": theme,
                 "vis_intervention_mode": vis_intervention_mode,
                 "vis_show_cone": vis_show_cone,
             }

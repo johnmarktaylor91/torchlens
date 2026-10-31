@@ -10,6 +10,7 @@ import torch
 import torchlens as tl
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
+from torchlens.intervention.selectors import output_at
 from torchlens.options import CaptureOptions
 
 
@@ -444,7 +445,7 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(
             intervention_ready=True,
-            hooks={tl.intervention.output_at(1): _zero_hook},
+            hooks={output_at(1): _zero_hook},
         ),
     )
 
