@@ -19,12 +19,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import file_cap  # noqa: E402
 import governance  # noqa: E402
+import id_lint  # noqa: E402
+import layering  # noqa: E402
 from _common import FAIL, SKIP, Outcome  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 
 CHECKS: list[tuple[str, Callable[[Path], Outcome]]] = [
+    ("layering", layering.check),
+    ("import-contracts", layering.check_contracts),
+    ("file-cap", file_cap.check),
+    ("id-lint", id_lint.check),
     # Policy checks moved out of tests/ (each module's own checks; see governance.py).
     ("internal-id-lint", governance.as_check("internal_id_lint")),
     ("mypy-ratchet", governance.as_check("mypy_ratchet")),
