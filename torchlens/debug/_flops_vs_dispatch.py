@@ -52,6 +52,15 @@ class FlopsCrossCheck(Report):
     provenance: dict[str, Any] = field(default_factory=dict)
     coverage_notes: tuple[str, ...] = ()
 
+    def __repr__(self) -> str:
+        """One bounded line: the two totals, the delta and the verdict."""
+
+        return (
+            f"FlopsCrossCheck(native_total={self.native_total}, "
+            f"torchlens_total={self.torchlens_total}, delta={self.delta}, "
+            f"status={self._report_status()})"
+        )
+
     def _report_subject(self) -> str:
         """What this report examined (the card's subject)."""
 
