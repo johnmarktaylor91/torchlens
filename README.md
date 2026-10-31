@@ -65,7 +65,8 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
   [Receptive & projective fields](docs/receptive_projective_fields.md) |
   [AI-agent quick reference](docs/for-ai-agents.md) |
   [Limitations and remedies](docs/reference/limitations.md) |
-  [Migration tables](docs/migration/)
+  [Migration tables](docs/migration/) |
+  [Maintainer docs](docs/maintainers/architecture.md)
 
 
 ## Validated across thousands of catalog entries
