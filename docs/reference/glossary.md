@@ -2975,17 +2975,25 @@ deprecation shim owed*
 **Admin and debugging names**
 : `tl.clear_cache()` (also `torchlens._user_funcs.clear_cache`) empties the capture cache;
   `tl.observers.register_tensor_connection` registers a tensor connection;
-  `tl.debug.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
+  `tl.debug.isolated_capture` runs a capture in isolation, with `tl.debug.preserved_rng_state()`
+  and `tl.debug.clone_input_tree(...)` as its parts; `Trace.capture_backward`
   (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
 ### Debugging tools and report results
 **DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*
 : Coverage-bounded dtype range audit result.
+**clone_input_tree (`tl.debug.clone_input_tree`)** — *unstable — no deprecation shim owed*
+: Return a detached clone of an input tree for one isolated run: tensors are detached and
+  cloned (keeping `requires_grad`), dicts, lists and tuples are rebuilt as new containers, and
+  other leaves pass through as the same object.
 **dtype_range (`tl.debug.dtype_range`)** — *unstable — no deprecation shim owed*
 : Audit saved activations for numeric-range and precision hazards.
 **nonfinite_origin (`tl.debug.nonfinite_origin`)** — *unstable — no deprecation shim owed*
 : One-call NaN forensics.
 **param_health (`tl.debug.param_health`)** — *unstable — no deprecation shim owed*
 : Audit parameter/buffer space for numeric-health findings.
+**preserved_rng_state (`tl.debug.preserved_rng_state`)** — *unstable — no deprecation shim owed*
+: Context manager that saves the Python, NumPy, torch CPU and initialized CUDA RNG states and
+  restores them when the block exits, normally or by an exception.
 **ExplainReport (`tl.report.ExplainReport`)** — *unstable — no deprecation shim owed*
 : The plain-language report trace.explain() returns: a str of multi-section prose.
 **FlopsCrossCheck (`tl.report.FlopsCrossCheck`)** — *unstable — no deprecation shim owed*

@@ -1636,7 +1636,8 @@
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
-  and `tl.debug.isolated_capture`.
+  and `tl.debug.isolated_capture` (with its parts `tl.debug.preserved_rng_state()` and
+  `tl.debug.clone_input_tree(...)`).
 
 ## Debugging tools and report results
 
@@ -1647,10 +1648,12 @@ Debugging tools live in `tl.debug`, trace-describing reports in `tl.report`.
 | `tl.debug.DTypeRangeReport` | Coverage-bounded dtype range audit result. |
 | `tl.debug.NonfiniteReport` | One-call NaN forensics report. |
 | `tl.debug.ParamHealthReport` | Notebook-friendly parameter-space audit. |
+| `tl.debug.clone_input_tree` | Return a detached clone of an input tree for one isolated run. |
 | `tl.debug.dtype_range` | Audit saved activations for numeric-range and precision hazards. |
 | `tl.debug.grad_health` | Audit saved op gradients for vanishing, exploding, and zero gradients. |
 | `tl.debug.nonfinite_origin` | One-call NaN forensics. |
 | `tl.debug.param_health` | Audit parameter/buffer space for numeric-health findings. |
+| `tl.debug.preserved_rng_state` | Context manager restoring the Python, NumPy, torch and CUDA RNG states on exit. |
 | `tl.report.ExplainReport` | The plain-language report trace.explain() returns: a str of multi-section prose. |
 | `tl.report.FlopsCrossCheck` | Side-by-side dispatch-formula evidence (never an oracle). |
 | `tl.report.HealthReport` | Notebook-friendly report from trace-local health diagnostics. |

@@ -29,13 +29,15 @@ from torchlens._surface import surface_rows
 TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 
 #: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
-#: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
-#: only go down through a decided surface change. 975 -> 974: the option
-#: receipt removal (e7449cd47) took tl.options.OptionReceiptEntry off the surface.
-#: 974 -> 967: round 2 (module moves) made the visualization (5 names) and
-#: semantic (2 names) packages private. 967 -> 965: the 2.x saved-file cut
-#: removed ``tl.report.CompatWindow`` and ``tl.errors.ArtifactSchemaAgeWarning``.
-DEEP_WALK_FLOOR = 965
+#: round-1 surface (lazy namespaces plus public non-lazy submodules, with
+#: ``tl.debug``'s ``clone_input_tree`` and ``preserved_rng_state`` kept by
+#: namespace ruling 1: 975 -> 977); it may only go down through a decided
+#: surface change. 977 -> 976: the option receipt removal (e7449cd47) took
+#: tl.options.OptionReceiptEntry off the surface. 976 -> 969: round 2 (module
+#: moves) made the visualization (5 names) and semantic (2 names) packages
+#: private. 969 -> 967: the 2.x saved-file cut removed ``tl.report.CompatWindow``
+#: and ``tl.errors.ArtifactSchemaAgeWarning``.
+DEEP_WALK_FLOOR = 967
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
