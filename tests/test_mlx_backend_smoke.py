@@ -65,7 +65,9 @@ def test_mlx_unwrapped_output_marks_capture_unverified() -> None:
     assert not list(trace.output_ops)
 
     wrapped = tl.trace(lambda v: mx.add(v, 1.0), mx.array([1.0, 2.0]), backend="mlx")
-    assert wrapped.capture_verified is True
+    # A clean capture leaves the field unset (the missing-attribute guard raises).
+    assert getattr(wrapped, "capture_verified", True) is True
+    assert getattr(wrapped, "capture_verification_reason", None) is None
     assert len(list(wrapped.output_ops)) == 1
 
 
