@@ -265,7 +265,7 @@ class GqaInfo:
 
     Parameters
     ----------
-    n_query_heads:
+    num_query_heads:
         Number of query heads.
     n_kv_heads:
         Number of key/value heads (groups); shared storage is never
