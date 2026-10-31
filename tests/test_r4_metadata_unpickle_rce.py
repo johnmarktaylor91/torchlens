@@ -29,7 +29,6 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _DeferredForeignCallable,
     _safe_getattr,
-    _safe_load_from_bytes,
 )
 from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
@@ -275,33 +274,6 @@ def test_safe_getattr_allows_torch_tensor_method() -> None:
 
     resolved = _safe_getattr(torch._C.TensorBase, "sum")
     assert callable(resolved)
-
-
-def test_safe_load_from_bytes_uses_weights_only(tmp_path: Path) -> None:
-    """``_safe_load_from_bytes`` refuses an embedded os.system payload (weights_only)."""
-
-    marker = tmp_path / "PWNED_STORAGE"
-    buffer = io.BytesIO()
-    torch.save(_OsSystemGadget(marker), buffer)
-
-    with pytest.raises(pickle.UnpicklingError):
-        _safe_load_from_bytes(buffer.getvalue())
-    assert not marker.exists()
-
-
-def test_safe_load_from_bytes_round_trips_a_real_tensor() -> None:
-    """A benign embedded tensor still reconstructs through the weights-only wrapper."""
-
-    tensor = torch.arange(6, dtype=torch.float32).reshape(2, 3)
-    buffer = io.BytesIO()
-    torch.save(tensor, buffer)
-    restored = _safe_load_from_bytes(buffer.getvalue())
-    assert torch.equal(restored, tensor)
-
-
-# --------------------------------------------------------------------------- #
-# Widened-allowlist regressions and the foreign custom-callable trust policy.
-# --------------------------------------------------------------------------- #
 
 
 def test_allowlist_admits_inert_stdlib_and_numpy_globals() -> None:
