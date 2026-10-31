@@ -147,7 +147,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     "scale": (lambda: scale(3.0), lambda out: 3.0 * out, "coord"),
     "clamp": (lambda: clamp(min=-0.3, max=0.3), lambda out: out.clamp(-0.3, 0.3), "coord"),
     # A linear tail and a sum loss make the gradient independent of the draw.
-    "noise": (lambda: add_noise(0.1, seed=0), lambda out: out + 0.0, "coord"),
+    "add_noise": (lambda: add_noise(0.1, seed=0), lambda out: out + 0.0, "coord"),
     "steer": (lambda: steer(_V, 2.0, dim=-1), lambda out: out + 2.0 * _V, "value"),
     "add(scalar)": (lambda: add(2.0), lambda out: out + 2.0, "coord"),
     "add(tensor)": (lambda: add(_CONST), lambda out: out + _CONST, "value"),
@@ -158,7 +158,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         lambda out: (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
-    "project_off": (
+    "project_out": (
         lambda: project_out(_V, dim=-1),
         lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
@@ -188,7 +188,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         lambda out: torch.zeros_like(out) + out.mean(),
         "coord",
     ),
-    "mean_fill(ref)": (
+    "mean_fill(reference)": (
         lambda: mean_fill(_site_donors(), dim="all"),
         _cut(torch.zeros_like),
         "value",
@@ -198,7 +198,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
-    "affine_source": (
+    "set_affine_coordinates": (
         lambda: set_affine_coordinates(_AW, bias=_AB),
         lambda out: out @ _AW.T + _AB,
         "source",
