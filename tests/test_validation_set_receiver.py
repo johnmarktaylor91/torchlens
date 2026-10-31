@@ -254,18 +254,8 @@ _SHAPE_CHANGING = [
     _SetToStorageView,
     _SetToWholeStorage,
 ]
-# On the copy path validation also re-traces the copy from its post-forward
-# state. When that state already holds the binding ``set_`` applies (an empty
-# buffer emptied again, a buffer already viewing the storage), the re-trace
-# records the later read of the buffer differently and reports the model as
-# stateful; see test_stateful_set_overloads_return_a_verdict_on_the_copy_path.
-_RETRACE_STATEFUL = [_SetToNothing, _SetToStorageView, _SetToWholeStorage]
-
 _VALIDATING_CASES = [
-    (model_cls, copy_fails)
-    for model_cls in _SHAPE_CHANGING
-    for copy_fails in (False, True)
-    if copy_fails or model_cls not in _RETRACE_STATEFUL
+    (model_cls, copy_fails) for model_cls in _SHAPE_CHANGING for copy_fails in (False, True)
 ]
 
 
@@ -332,15 +322,20 @@ def test_set_overloads_validate_and_leave_the_model_restored(
     _assert_restored(model, objects, values)
 
 
-@pytest.mark.parametrize("model_cls", _RETRACE_STATEFUL)
-def test_stateful_set_overloads_return_a_verdict_on_the_copy_path(
-    model_cls: type[nn.Module],
-) -> None:
-    """Validation returns a verdict, never raises, and replay itself passes.
+@pytest.mark.parametrize(
+    "model_cls",
+    [
+        pytest.param(_SetToNothing, id="AGT-2474"),
+        pytest.param(_SetToStorageView, id="AGT-2475"),
+        pytest.param(_SetToWholeStorage, id="whole-storage"),
+    ],
+)
+def test_set_repros_validate_on_the_default_copy_path(model_cls: type[nn.Module]) -> None:
+    """The default (deep-copy) path returns True with no failure recorded.
 
-    The only failure allowed is the stateful-model re-trace finding (the
-    re-trace runs from the copy's post-forward state; replay of the first
-    capture passed before it). The caller's tensors are untouched either way.
+    Validation re-traces the copy from its post-forward state, where the
+    buffer already holds the binding ``set_`` applies. The re-trace must
+    capture the graph the first trace captured.
     """
 
     torch.manual_seed(0)
@@ -351,14 +346,9 @@ def test_stateful_set_overloads_return_a_verdict_on_the_copy_path(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         verdict = _validate_forward_pass_torch(model, torch.rand(4), _trace_observer=traces.append)
-    assert isinstance(verdict, bool)
     (trace,) = traces
-    failure = get_validation_failure(trace)
-    if verdict:
-        assert failure is None
-    else:
-        assert failure is not None
-        assert failure.check == "retrace_mismatch"
+    assert get_validation_failure(trace) is None
+    assert verdict is True
     _assert_restored(model, objects, values)
 
 
