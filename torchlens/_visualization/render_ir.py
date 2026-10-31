@@ -874,7 +874,7 @@ def _resolve_node_decision(
         container_max_inline=context.container_max_inline,
         pending_nodes=[],
     )
-    theme = resolve_theme(context.theme, for_paper=context.for_paper)
+    theme = resolve_theme(context.theme)
     resolved_specs: list[Any] = []
     if emission.kind == "module_box":
         _build_collapsed_module_node(

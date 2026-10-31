@@ -30,7 +30,7 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
     assert (tmp_path / f"{theme}.svg").exists()
 
 
-def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) -> None:
+def test_visualization_options_convenience_knobs_forward_to_draw(tmp_path: Path) -> None:
     """Grouped convenience knobs should forward to draw."""
 
     log = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))

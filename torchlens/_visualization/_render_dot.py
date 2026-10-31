@@ -272,7 +272,7 @@ def _resolve_draw_request(
     """
 
     show_buffer_layers = _normalize_buffer_visibility(request.show_buffer_layers)
-    theme = resolve_theme(request.theme, for_paper=request.for_paper)
+    theme = resolve_theme(request.theme)
     node_overlay = resolve_overlay_request(trace, request.node_overlay)
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
@@ -1136,10 +1136,9 @@ def _publish_forward_render(
     Returns
     -------
     Any
-        The Graphviz graph when ``return_graph`` was requested, else the source.
+        The published DOT source.
     """
 
-    request = context.request
     dot = context.dot
     compose_code_panel = context.source_text is not None and _code_panel_composition_available(
         target.fileformat, context.engine
@@ -1222,8 +1221,6 @@ def _publish_forward_render(
             )
         except subprocess.CalledProcessError as error:
             _raise_graphviz_failure("forward graph", source_path, error)
-    if request.return_graph:
-        return dot
     return final_source
 
 
@@ -1308,8 +1305,6 @@ def draw(
     show_legend: bool | None = None,
     font_size: int | None = None,
     dpi: int | None = None,
-    for_paper: bool = False,
-    return_graph: bool = False,
     order_siblings: bool = True,
     show_containers: ShowContainersLiteral = False,
     container_max_inline: int = 12,
@@ -1334,7 +1329,7 @@ def draw(
     Returns
     -------
     Any
-        Renderer-specific result, Graphviz graph, or final DOT source.
+        Renderer-specific result or the final DOT source.
     """
     _validate_draw_options(node_mode, vis_intervention_mode, collapse, fold_repeats)
     _validate_draw_flag_options(
@@ -1342,8 +1337,6 @@ def draw(
         vis_save_only=vis_save_only,
         vis_show_cone=vis_show_cone,
         show_legend=show_legend,
-        for_paper=for_paper,
-        return_graph=return_graph,
         order_siblings=order_siblings,
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
@@ -1388,8 +1381,6 @@ def draw(
         show_legend=show_legend,
         font_size=font_size,
         dpi=dpi,
-        for_paper=for_paper,
-        return_graph=return_graph,
         order_siblings=order_siblings,
         container_max_inline=container_max_inline,
         show_input_transform_summary=show_input_transform_summary,
