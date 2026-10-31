@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Literal, cast
 
-from ..fastlog.exceptions import RecordingConfigError
-from ..fastlog.types import ActivationRecord, Recording
+from ..recording.exceptions import RecordingConfigError
+from ..recording.types import ActivationRecord, Recording
 
 EnrichmentStep = Literal["module_path_strings", "param_addresses"]
 _ALL_FEASIBLE: tuple[EnrichmentStep, ...] = ("module_path_strings",)

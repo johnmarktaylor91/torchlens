@@ -98,7 +98,7 @@ def _op_rows(trace: Any) -> list[Any]:
 def _public_label(op: Any) -> str:
     """Canonical public label through the item-1 convention."""
 
-    from ..capture._nonfinite_prefix import canonical_public_label
+    from .._capture._nonfinite_prefix import canonical_public_label
 
     return canonical_public_label(op)
 

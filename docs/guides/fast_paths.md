@@ -224,7 +224,7 @@ assert relu.out.shape == (2, 8)
   tokens, CPU, `inference_only=True`). A module that wraps most of the model still copies most
   ops. A selector that mixes `tl.module(...)` with other terms (`&`, `~`, or `|` with
   `tl.func(...)`) still holds every op output as a candidate and spills to temporary files past
-  a 64 MB budget; `torchlens.capture.preflight.address_preflight` reports it as deferred.
+  a 64 MB budget; `torchlens._capture.preflight.address_preflight` reports it as deferred.
 - **`CaptureOptions(inference_only=True)`** runs the forward under `torch.no_grad()`. It saved
   about 5% per trace in the measurement above. A capture entered inside `torch.no_grad()` or
   `torch.inference_mode()` implies it unless a backward option (`backward_ready`, `save_grads`)

@@ -826,7 +826,7 @@ def overhead(
 
     import torch
 
-    from ..user_funcs import trace as _trace
+    from .._user_funcs import trace as _trace
 
     unknown = sorted(set(tiers) - set(COST_REPORT_TIERS))
     if unknown:

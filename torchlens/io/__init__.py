@@ -28,7 +28,7 @@ from ..options import suppress_mutate_warnings
 def list_traces() -> tuple[Any, ...]:
     """Return a snapshot of currently live TorchLens traces."""
 
-    from .. import user_funcs
+    from .. import _user_funcs as user_funcs
 
     return user_funcs.list_logs()
 
@@ -36,7 +36,7 @@ def list_traces() -> tuple[Any, ...]:
 def reset_naming_counter(class_name: str | None = None) -> None:
     """Reset automatic TorchLens trace naming counters."""
 
-    from .. import user_funcs
+    from .. import _user_funcs as user_funcs
 
     user_funcs.reset_naming_counter(class_name)
 

@@ -5,7 +5,7 @@ consumes (resolved by dataflow, never forward enumeration, never an
 architecture registry): each qualifying addition is a SPINE step whose other
 operand is the WRITER that wrote into the stream; hops across
 value-preserving ops are proposed by the shared op-kind grammar and verified
-by payload identity (``torchlens.semantic._hops``); every step carries the
+by payload identity (``torchlens._semantic._hops``); every step carries the
 op's pass-qualified label and live site key (day-one identity -- a pass-blind
 walk is silently half-wrong on a plain gpt2 forward, measured 13/25).
 
@@ -33,7 +33,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
-from ..semantic._hops import VALUE_GRAMMAR, HopRefusal, HopWalk, walk_upstream
+from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, HopWalk, walk_upstream
 from ._errors import refuse
 
 __all__ = ["SpineNode", "SpineWalk", "walk_spine"]

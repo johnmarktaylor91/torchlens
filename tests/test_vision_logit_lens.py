@@ -33,12 +33,12 @@ from tests.real_model.r0.families import (  # noqa: E402
     _hf_config,
     build_clip,
 )
-from torchlens.errors import TorchLensWarning  # noqa: E402
-from torchlens.semantic.logit_lens import (  # noqa: E402
+from torchlens._semantic.logit_lens import (  # noqa: E402
     LogitLensError,
     logit_lens,
     logit_lens_predictions,
 )
+from torchlens.errors import TorchLensWarning  # noqa: E402
 
 pytestmark = pytest.mark.real_model
 

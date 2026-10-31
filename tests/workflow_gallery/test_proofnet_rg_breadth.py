@@ -33,7 +33,7 @@ def test_rg06_attribution_patching_finite_with_zero_negative_control(
     table with restored params/grads/mode, and the clean-vs-clean negative
     control attributes (approximately) nothing."""
 
-    import torchlens.semantic.patching as patching
+    import torchlens._semantic.patching as patching
 
     loaded = rg_loader("r1-gpt2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]

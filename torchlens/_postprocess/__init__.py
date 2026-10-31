@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture.session import capture_session_for_events
 from .._data_classes._compaction import compact_op_metadata as _compact_op_metadata
 from .._errors import InvalidArgumentError
 from .._ir.capture_events import _clone_op_event_for_replay
@@ -57,7 +58,6 @@ from .._utils.hashing import (
 )
 from .._utils.tensor_utils import _is_cuda_available
 from ..backends.torch.ops import _compact_ancestor_sets
-from ..capture.session import capture_session_for_events
 from . import ast_branches
 
 # Historical import surface: the contract artifacts live in _contracts.py
@@ -603,7 +603,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         and self.__dict__.get("_out_writer") is not None
     )
     # WT1 A-IV item 18 (lane A08): a step-18 STAGED streamed bundle publishes
-    # at the settlement seam (capture/trace.py), which runs after this scrub;
+    # at the settlement seam (_capture/trace.py), which runs after this scrub;
     # popping the writer here would strand the staged bundle in its temp dir.
     keep_staged_publish = bool(
         getattr(self.__dict__.get("_out_writer"), "staged_for_settlement", False)

@@ -30,7 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
 from torchlens.backends.torch import _ops_retention
 from torchlens.options import CaptureOptions

@@ -24,10 +24,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.capture.session as session_mod
+import torchlens._capture.session as session_mod
+from torchlens._capture.plan import CapturePlan
+from torchlens._capture.preflight import _escrow_remedy
 from torchlens._save_budget import SaveBudgetExceededError
-from torchlens.capture.plan import CapturePlan
-from torchlens.capture.preflight import _escrow_remedy
 from torchlens.errors import TorchLensWarning
 
 _LAYER = "model.layers.2"

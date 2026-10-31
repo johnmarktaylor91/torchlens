@@ -4,7 +4,7 @@ The node-presentation VALUE vocabulary consumed by strata below PRESENT:
 ``options`` at the engine boundary and the viz/repgeom/receptive-field
 appliances all type against :class:`NodeSpec` and the node-callback aliases.
 Only vocabulary lives here (Rule V3: no behavior smuggling) -- the render
-behavior helpers stay in :mod:`torchlens.visualization.node_spec`, which
+behavior helpers stay in :mod:`torchlens._visualization.node_spec`, which
 re-exports these names so no public spelling changes.
 """
 
@@ -124,4 +124,4 @@ CollapsedNodeSpecFn = Callable[["Module", NodeSpec], NodeSpec | None]
 
 
 # Pickle-visible identity stays the historical path (move-compat law).
-NodeSpec.__module__ = "torchlens.visualization.node_spec"
+NodeSpec.__module__ = "torchlens._visualization.node_spec"

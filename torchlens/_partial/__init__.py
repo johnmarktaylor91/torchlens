@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
+from .._capture.outcome import safe_exception_str
 from .._data_classes._nonfinite import first_nonfinite_layer
 from .._data_classes.field_policy import FieldPolicy
-from ..capture.outcome import safe_exception_str
 from ..errors import TorchLensError
 
 if TYPE_CHECKING:
@@ -116,7 +116,7 @@ class PartialTrace:
     def outcome(self) -> Any | None:
         """Return the ONE settled capture outcome (the inner trace's stamp)."""
 
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         return outcome_for(self)
 
@@ -694,7 +694,7 @@ def _display_label(layer: Op) -> str:
         Canonical public label when finalized, else the raw identity.
     """
 
-    from ..capture._nonfinite_prefix import canonical_public_label
+    from .._capture._nonfinite_prefix import canonical_public_label
 
     label = canonical_public_label(layer)
     return label if label else _raw_label(layer)

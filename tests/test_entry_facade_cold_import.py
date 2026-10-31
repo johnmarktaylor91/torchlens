@@ -43,7 +43,7 @@ import torchlens as tl
 results["post_import_absent"] = [
     name for name in (
         "torchlens.bridge", "torchlens.callbacks", "torchlens.neuro",
-        "torchlens._notebook", "torchlens.semantic",
+        "torchlens._notebook", "torchlens._semantic",
         "rsatoolbox", "brainscore_core", "IPython", "jupyter_client",
         "fake_recipe_pkg",
     ) if name in sys.modules
@@ -103,7 +103,7 @@ results["foreign_after_pickle"] = [
 ]
 
 # Cell 5: explicit activation imports and runs the planted provider ONCE.
-from torchlens.semantic import recipes
+from torchlens._semantic import recipes
 inventory = recipes.installed_recipe_providers()
 results["inventory_has_plant"] = any(
     row["name"] == "planted" and row["activated"] == "false" for row in inventory

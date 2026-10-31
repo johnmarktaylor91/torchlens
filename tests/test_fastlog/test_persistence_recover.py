@@ -69,7 +69,7 @@ def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
     original = _write_bundle(bundle_path)
 
     loaded = tl.load(bundle_path)
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert loaded.is_recovered is False
     assert recovered.is_recovered is False
@@ -99,7 +99,7 @@ def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> Non
     }
     assert original_values, "sanity: at least one record should have captured a raw payload"
 
-    for reload_fn in (tl.load, tl.fastlog.recover):
+    for reload_fn in (tl.load, tl.recording.recover):
         reloaded = reload_fn(bundle_path)
         rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
         assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"
@@ -118,7 +118,7 @@ def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
     )
     (bundle_path / "manifest.json").unlink()
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recovered.is_recovered is True
     assert len(recovered.records) > 0
@@ -132,7 +132,7 @@ def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
     )
     (bundle_path / "manifest.json").write_text("{", encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recovered.is_recovered is True
     assert len(recovered.records) > 0
@@ -148,7 +148,7 @@ def test_recover_missing_jsonl_raises(tmp_path: Path) -> None:
     (bundle_path / "fastlog_index.jsonl").unlink()
 
     with pytest.raises(RecoveryError, match="no recoverable index"):
-        tl.fastlog.recover(bundle_path)
+        tl.recording.recover(bundle_path)
 
 
 def test_recover_skips_truncated_last_jsonl_line(tmp_path: Path) -> None:
@@ -162,7 +162,7 @@ def test_recover_skips_truncated_last_jsonl_line(tmp_path: Path) -> None:
     text = index_path.read_text(encoding="utf-8")
     index_path.write_text(text + '{"ctx":', encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("truncated tail" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) > 0
@@ -180,7 +180,7 @@ def test_recover_skips_malformed_middle_line_and_continues(tmp_path: Path) -> No
     lines.insert(1, "not-json")
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("malformed line" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) == len(lines) - 1
@@ -195,7 +195,7 @@ def test_recover_skips_missing_blob_record(tmp_path: Path) -> None:
     (bundle_path / "manifest.json").unlink()
     _first_blob(bundle_path).unlink()
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("missing blob" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) > 0
@@ -210,7 +210,7 @@ def test_recover_skips_hash_mismatch_record(tmp_path: Path) -> None:
     (bundle_path / "manifest.json").unlink()
     _first_blob(bundle_path).write_bytes(b"corrupt")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("hash mismatch" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
@@ -228,7 +228,7 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
     with pytest.raises(ArtifactError, match="failed integrity validation"):
         tl.load(bundle_path)
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recovered.is_recovered is True
     assert recovered.status == "recovered"
@@ -253,7 +253,7 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     with pytest.raises(ArtifactError, match="failed integrity validation"):
         tl.load(bundle_path)
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recovered.is_recovered is True
     assert recovered.status == "recovered"
@@ -279,7 +279,7 @@ def test_recover_depth_bomb_index_line_degrades_to_malformed_warning(tmp_path: P
     lines.insert(1, "[" * 100_000)
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("malformed line" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) == len(lines) - 1
@@ -296,7 +296,7 @@ def test_recover_depth_bomb_tail_line_degrades_to_truncated_tail(tmp_path: Path)
     text = index_path.read_text(encoding="utf-8")
     index_path.write_text(text + "[" * 100_000, encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert any("truncated tail" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) > 0
@@ -309,9 +309,9 @@ def test_recover_oversized_index_refuses_typed(
 
     import importlib
 
-    # ``torchlens.fastlog.recover`` the ATTRIBUTE is the re-exported recover()
+    # ``torchlens.recording.recover`` the ATTRIBUTE is the re-exported recover()
     # function; import_module reaches the shadowed submodule itself.
-    recover_module = importlib.import_module("torchlens.fastlog.recover")
+    recover_module = importlib.import_module("torchlens.recording.recover")
 
     bundle_path = _copy_bundle(
         _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "oversized"
@@ -320,7 +320,7 @@ def test_recover_oversized_index_refuses_typed(
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 8)
 
     with pytest.raises(ArtifactError, match="ceiling") as excinfo:
-        tl.fastlog.recover(bundle_path)
+        tl.recording.recover(bundle_path)
     assert excinfo.value.fields["code"] == "fastlog_index_too_large"
 
 
@@ -333,7 +333,7 @@ def test_recover_depth_bomb_metadata_degrades_to_empty_metadata(tmp_path: Path) 
     (bundle_path / "manifest.json").unlink()
     (bundle_path / "metadata.json").write_text("[" * 100_000, encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recovered.is_recovered is True
     assert len(recovered.records) > 0
@@ -358,7 +358,7 @@ def test_recovery_warnings_capped_with_accurate_suppression_count(tmp_path: Path
     lines[1:1] = ["not-json"] * 3000
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     warning_list = recovered.recovery_warnings
     malformed = [w for w in warning_list if w.startswith("malformed line")]
@@ -399,7 +399,7 @@ def test_cleanup_partial_treats_bundle_name_as_data_not_glob(tmp_path: Path) -> 
         victim.mkdir()
         (victim / "PARTIAL").write_text("", encoding="utf-8")
 
-    removed = tl.fastlog.cleanup_partial(tmp_path / "run[01]")
+    removed = tl.recording.cleanup_partial(tmp_path / "run[01]")
 
     assert removed == []
     assert victim_a.is_dir()
@@ -413,7 +413,7 @@ def test_cleanup_partial_still_sweeps_own_partials(tmp_path: Path) -> None:
     own.mkdir()
     (own / "PARTIAL").write_text("", encoding="utf-8")
 
-    removed = tl.fastlog.cleanup_partial(tmp_path / "run0")
+    removed = tl.recording.cleanup_partial(tmp_path / "run0")
 
     assert removed == [own]
     assert not own.exists()
@@ -424,7 +424,7 @@ def test_disk_finalize_baseexception_marks_partial(
 ) -> None:
     """A KeyboardInterrupt mid-finalize must leave a PARTIAL-marked .tmp dir."""
 
-    from torchlens.fastlog import storage_disk as storage_disk_module
+    from torchlens.recording import storage_disk as storage_disk_module
 
     def _interrupt(_entries: object) -> None:
         raise KeyboardInterrupt
@@ -451,7 +451,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
 ) -> None:
     """Publish must refuse, not silently replace, a target created mid-record."""
 
-    from torchlens.fastlog import storage_disk as storage_disk_module
+    from torchlens.recording import storage_disk as storage_disk_module
 
     bundle_path = tmp_path / "raced.tlfast"
     real_build = storage_disk_module._build_fastlog_manifest
@@ -490,7 +490,7 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
     (bundle_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(ArtifactTooOldError):
-        tl.fastlog.recover(bundle_path)
+        tl.recording.recover(bundle_path)
 
 
 def test_recover_index_read_allocates_the_file_not_the_ceiling(tmp_path: Path) -> None:
@@ -504,7 +504,7 @@ def test_recover_index_read_allocates_the_file_not_the_ceiling(tmp_path: Path) -
     import importlib
     import tracemalloc
 
-    recover_module = importlib.import_module("torchlens.fastlog.recover")
+    recover_module = importlib.import_module("torchlens.recording.recover")
     index_path = tmp_path / "fastlog_index.jsonl"
     index_path.write_text('{"kind": "noop"}\n' * 10)
 

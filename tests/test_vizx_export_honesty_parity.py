@@ -32,9 +32,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.outcome import CaptureStatus
 from torchlens._capture_honesty import capture_honesty_facts
 from torchlens._runnable import PathFaithfulness
-from torchlens.capture.outcome import CaptureStatus
 from torchlens.options import CaptureOptions
 
 #: The block's own schema stamp is not a fact about the capture.

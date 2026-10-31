@@ -3,7 +3,7 @@
 Every "artifact is newer than this runtime" site raises
 ``ArtifactTooNewError`` through the one ``above_ceiling_error``
 chokepoint; runtime-axis refusals (torch major mismatch) are the distinct
-``ArtifactRuntimeIncompatibleError``; and ``tl.fastlog.recover`` re-raises
+``ArtifactRuntimeIncompatibleError``; and ``tl.recording.recover`` re-raises
 governed compatibility refusals instead of salvaging them (D-ECO-9).
 """
 
@@ -134,7 +134,7 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
 def test_recover_reraises_governed_refusals() -> None:
     """recover() salvages corruption, never a governed compatibility refusal."""
 
-    from torchlens.fastlog.recover import _GOVERNED_COMPATIBILITY_REFUSALS
+    from torchlens.recording.recover import _GOVERNED_COMPATIBILITY_REFUSALS
 
     assert ArtifactTooOldError in _GOVERNED_COMPATIBILITY_REFUSALS
     assert ArtifactTooNewError in _GOVERNED_COMPATIBILITY_REFUSALS
@@ -157,7 +157,7 @@ def test_recover_refuses_future_version_bundle(tmp_path) -> None:
     )
     (bundle / "fastlog_index.jsonl").write_text("", encoding="utf-8")
 
-    from torchlens.fastlog import recover
+    from torchlens.recording import recover
 
     with pytest.raises(ArtifactTooNewError):
         recover(bundle)

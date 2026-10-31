@@ -896,7 +896,7 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
             remedy="pass the forward input explicitly as log.run(model, x)",
             argument="x",
         )
-    from ..user_funcs import _reject_opaque_wrappers
+    from .._user_funcs import _reject_opaque_wrappers
 
     _reject_opaque_wrappers(model)
 
@@ -958,7 +958,7 @@ def _capture_with_active_spec(
         Fresh log built off to the side.
     """
 
-    from ..user_funcs import (
+    from .._user_funcs import (
         _run_model_and_save_specified_outs,
         _unwrap_data_parallel,
         check_model_and_input_variants,

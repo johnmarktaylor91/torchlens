@@ -83,7 +83,7 @@ def test_authenticated_cache_still_hits(cache_root: Path) -> None:
     the assertion pins the self-authenticating record rather than the pair.
     """
 
-    from torchlens.user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
     first = tl.trace(
@@ -176,7 +176,7 @@ def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_p
     import hashlib
     import hmac
 
-    from torchlens.user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
     tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))

@@ -158,7 +158,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_nonfinite_prefix_finalized": "capture_config",
     "_nonfinite_prefix_finalize_error": "capture_config",
     # Whole-field classification only: per-SUB-KEY travel across fresh
-    # executions is governed by capture/_annotations_travel.py (foldA D6);
+    # executions is governed by _capture/_annotations_travel.py (foldA D6);
     # the provider settlement finalizer applies it to every run product.
     "annotations": "graph",
     "observer_spans": "graph",

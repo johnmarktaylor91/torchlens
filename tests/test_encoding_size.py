@@ -25,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._encoding import (
+from torchlens._visualization._encoding import (
     DEFAULT_NODE_HEIGHT_IN,
     DEFAULT_NODE_WIDTH_IN,
     LAYER_SOURCE_ROWS,
@@ -35,7 +35,7 @@ from torchlens.visualization._encoding import (
     resolve_size_by,
     resolve_size_scale,
 )
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -481,7 +481,7 @@ def test_legend_false_honored_with_size_channel(mlp_log: tl.Trace, tmp_path: Pat
 
 
 def test_request_hash_ignores_size_fields() -> None:
-    from torchlens.visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest()
     sized = ResolvedRenderRequest(size_by="dims", scale="linear", encoding=object())
@@ -494,7 +494,7 @@ def test_request_hash_ignores_size_fields() -> None:
 
 
 def test_funnel_drops_size_fields_on_image_specs() -> None:
-    from torchlens.visualization._render_leaf import _node_spec_to_graphviz_args
+    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
 
     spec = NodeSpec(lines=["x"], width=2.0, height=1.0, fixedsize="false", image="node.png")
     args = _node_spec_to_graphviz_args(spec)
@@ -503,7 +503,7 @@ def test_funnel_drops_size_fields_on_image_specs() -> None:
 
 
 def test_funnel_emits_size_fields_without_image() -> None:
-    from torchlens.visualization._render_leaf import _node_spec_to_graphviz_args
+    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
 
     spec = NodeSpec(lines=["x"], width=2.0, height=1.0, fixedsize="false")
     args = _node_spec_to_graphviz_args(spec)
@@ -514,7 +514,7 @@ def test_funnel_emits_size_fields_without_image() -> None:
 def test_extra_attrs_wins_over_nodespec_size_fields() -> None:
     """The power valve wins by merge order — a rule, not an accident."""
 
-    from torchlens.visualization._render_leaf import _node_spec_to_graphviz_args
+    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
 
     spec = NodeSpec(lines=["x"], width=2.0, height=1.0, extra_attrs={"width": "9"})
     args = _node_spec_to_graphviz_args(spec)
@@ -592,13 +592,13 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
     expected = {
         # Record-derived image branches (2x fixedsize) + input-batch montage
         # (fixedsize/width/height) — non-encodable node classes.
-        "visualization/_render_nodes.py": 5,
+        "_visualization/_render_nodes.py": 5,
         # Intervention-hook diamond helper (width/height in extra_attrs).
-        "visualization/_render_edges.py": 2,
+        "_visualization/_render_edges.py": 2,
         # Collapsed container-record node (fixedsize).
-        "visualization/_render_flow.py": 1,
+        "_visualization/_render_flow.py": 1,
         # THE NodeSpec funnel (fixedsize key + width/height emissions).
-        "visualization/_render_leaf.py": 3,
+        "_visualization/_render_leaf.py": 3,
         # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
         "viz/feature_maps.py": 1,
         # C01 architecture move: the three node-visual writer sites left
@@ -607,7 +607,7 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         # Stage-0 lens audit reads graphviz plain-output geometry back into a
         # measurement record ("width"/"height" keys) -- a READER of the
         # rendered layout, never a node-arg writer; no node class involved.
-        "visualization/lenses/audit/stage0.py": 2,
+        "_visualization/lenses/audit/stage0.py": 2,
         # ScoreInterval.to_dict's "width" key is a bootstrap interval's
         # high - low (a statistic in a plain data dict), never a graphviz
         # node arg; the module renders nothing and touches no node class.

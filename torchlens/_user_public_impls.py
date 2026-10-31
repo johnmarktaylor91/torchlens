@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from torchlens.backends.registry import BackendUnsupportedError
 
-from . import _validation_argument_references as _arg_references, user_funcs as _user_funcs
+from . import _user_funcs as _user_funcs, _validation_argument_references as _arg_references
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
@@ -55,6 +55,7 @@ from ._validation_state_snapshot import (
     snapshot_state_for_restore,
     state_matches_snapshot,
 )
+from ._visualization.code_panel import CodePanelOption
 from .backends.registry import BackendName, resolve_backend_spec
 from .errors import TraceNotReproducibleWarning
 from .options import (
@@ -63,7 +64,6 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
-from .visualization.code_panel import CodePanelOption
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -886,8 +886,8 @@ def show_bundle_graph(
     if direction not in {"forward", "backward", "both", "overlay"}:
         raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
 
-    from .visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-    from .visualization._render_utils import direction_to_rankdir
+    from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
+    from ._visualization._render_utils import direction_to_rankdir
 
     options = BundlePictureOptions(
         outpath=path,
@@ -1600,7 +1600,7 @@ def _validate_forward_pass_torch(
                 "the same defective enumeration.",
                 _trace_observer,
             )
-        # Deduplicate by structural address to match how capture/trace.py extracts
+        # Deduplicate by structural address to match how _capture/trace.py extracts
         # outputs (same tensor returned in multiple positions is counted once).
         addresses_used = []
         ground_truth_output_tensors = []

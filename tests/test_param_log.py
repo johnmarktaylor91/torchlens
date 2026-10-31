@@ -12,9 +12,9 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._errors import AmbiguousOpLookupError
+from torchlens._visualization import show_model_graph
+from torchlens._visualization.themes import resolve_theme
 from torchlens.types import Param
-from torchlens.visualization import show_model_graph
-from torchlens.visualization.themes import resolve_theme
 
 #: Parameter fills as the DEFAULT skin renders them.
 _TRAINABLE = resolve_theme("torchlens").semantic_palette["params_trainable"]

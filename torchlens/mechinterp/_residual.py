@@ -21,7 +21,7 @@ from typing import Any
 
 import torch
 
-from ..semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
+from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 from ._walk import SpineNode, SpineWalk, walk_spine
@@ -76,7 +76,7 @@ def _deepest_value_ancestor(trace: Any, op: Any) -> tuple[Any, str]:
     def _grammar_stop(candidate: Any) -> bool:
         """Anchor at the first op the grammar does not propose across."""
 
-        from ..semantic import _hops
+        from .._semantic import _hops
 
         return _hops._propose(candidate, VALUE_GRAMMAR) is None
 

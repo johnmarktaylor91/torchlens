@@ -20,11 +20,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._capture._weightsfree_admission import enforce_settlement_invariants
 from torchlens._capture_honesty import honesty_preamble_lines
 from torchlens._errors import WeightsfreeIntegrityError
 from torchlens.backends.torch import completeness_witness, rescue
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.capture._weightsfree_admission import enforce_settlement_invariants
 from torchlens.options import CaptureOptions
 
 

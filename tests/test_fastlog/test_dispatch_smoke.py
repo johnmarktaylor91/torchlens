@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from torchlens import _state
+from torchlens._capture.projections import RecordingState, active_recording_state
 from torchlens._data_classes.trace import Trace
 from torchlens.backends.torch.model_prep import (
     _cleanup_model_session,
@@ -15,9 +16,8 @@ from torchlens.backends.torch.model_prep import (
     _prepare_model_session,
 )
 from torchlens.backends.torch.sources import log_source_tensor
-from torchlens.capture.projections import RecordingState, active_recording_state
-from torchlens.fastlog.options import RecordingOptions
-from torchlens.fastlog.types import CaptureSpec, Recording
+from torchlens.recording.options import RecordingOptions
+from torchlens.recording.types import CaptureSpec, Recording
 
 
 class TinyMlp(nn.Module):

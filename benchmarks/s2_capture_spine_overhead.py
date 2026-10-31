@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 class ThousandOpModel(nn.Module):

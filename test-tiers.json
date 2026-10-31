@@ -25,10 +25,10 @@
       "--tb=short"
     ],
     "map": {
-      "torchlens/visualization/themes.py": [
+      "torchlens/_visualization/themes.py": [
         "tests/test_themes.py"
       ],
-      "torchlens/visualization/theme_registry.py": [
+      "torchlens/_visualization/theme_registry.py": [
         "tests/test_themes.py"
       ]
     }

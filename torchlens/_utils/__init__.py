@@ -427,7 +427,7 @@ def _probe_fingerprint() -> DoctorCheck:
     """
 
     try:
-        from torchlens.user_funcs import _fingerprint_model_weights
+        from torchlens._user_funcs import _fingerprint_model_weights
 
         model = nn.Linear(2, 1)
         fingerprint = _fingerprint_model_weights(model)

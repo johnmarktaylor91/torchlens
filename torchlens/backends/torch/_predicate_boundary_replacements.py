@@ -43,14 +43,14 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         whose parent is the op the edit replaced.
     """
 
+    from ..._capture.predicates import _evaluate_keep_op, build_op_record_context
+    from ..._capture.projections import append_projected_event
     from ..._ir.predicate import RetroactiveCaptureDecision
-    from ...capture.predicates import _evaluate_keep_op, build_op_record_context
-    from ...capture.projections import append_projected_event
-    from ...fastlog.types import CaptureSpec
     from ...intervention.runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
     )
+    from ...recording.types import CaptureSpec
     from ._ops_predicates import _record_predicate_output
     from .model_prep import _live_intervention_machinery_armed, _note_replacement_event
     from .ops import _walk_output_tensors_with_paths

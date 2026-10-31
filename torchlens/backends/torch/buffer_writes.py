@@ -1624,7 +1624,7 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
         with _state.pause_logging():
             storage = tensor.untyped_storage()
             if tensor.is_meta:
-                from ...capture._weightsfree_admission import meta_storage_key
+                from ..._capture._weightsfree_admission import meta_storage_key
 
                 cdata = meta_storage_key(tensor)
                 if cdata is None:

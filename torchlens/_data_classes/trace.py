@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
 
 from .. import _state
+from .._captured_run import TraceLike
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError
 from .._io import (
@@ -86,7 +87,6 @@ from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
-from ..captured_run import TraceLike
 from ..intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
@@ -1007,7 +1007,7 @@ class Trace(
             The retained stream is removed and its working lanes are cleared.
         """
 
-        from ..captured_run import forget_event_stream
+        from .._captured_run import forget_event_stream
 
         forget_event_stream(self)
 
@@ -1102,7 +1102,7 @@ class Trace(
         # diagnostics never mistake a cooked projection for a live exhaustive
         # capture. Session-only; not a portable fact.
         "_cooked_from": FieldPolicy.DROP,
-        # Settlement-authority state (torchlens/capture/outcome.py). The
+        # Settlement-authority state (torchlens/_capture/outcome.py). The
         # settled outcome is a PERSISTED portable fact (tlspec v7): saved as
         # its string-only payload, parsed against closed vocabularies and the
         # status coherence matrix at load. The phase marker and stop-request
@@ -1715,7 +1715,7 @@ class Trace(
         self.capture_mode: Literal["exhaustive", "predicate"] = "exhaustive"
         # L7a: True marks a structure-only capture (the flag declares the
         # mode; every value-bearing claim is a hypothesis and value consumers
-        # gate through torchlens.capture.structure_only). DOCUMENTED-UNSTABLE
+        # gate through torchlens._capture.structure_only). DOCUMENTED-UNSTABLE
         # spelling pending naming-session ratification.
         self.structure_only: bool = False
         # tlspec v9 entry-dark slots (C07): the structure-only evidence
@@ -2088,11 +2088,11 @@ class Trace(
 
         Returns
         -------
-        torchlens.capture._plan_check.PlanCheckReport
+        torchlens._capture._plan_check.PlanCheckReport
             Frozen audit report.
         """
 
-        from ..capture._plan_check import check_plan
+        from .._capture._plan_check import check_plan
 
         return check_plan(self, plan)
 
@@ -2499,7 +2499,7 @@ class Trace(
             state; capability gates independently treat it as UNKNOWN).
         """
 
-        from ..capture.outcome import CaptureOutcome, CaptureStatus, outcome_for
+        from .._capture.outcome import CaptureOutcome, CaptureStatus, outcome_for
 
         if self.__dict__.get("_tl_cleaned_up", False):
             # cleanup() deletes the settled sidecar with every other field.
@@ -2733,7 +2733,7 @@ class Trace(
         print honestly instead. Never raises; the suffix degrades silently
         when the facts are unavailable (mid-capture, legacy artifacts).
         """
-        from ..visualization._summary_internal import format_model_repr
+        from .._visualization._summary_internal import format_model_repr
 
         return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
 
@@ -3383,7 +3383,7 @@ class Trace(
         # helper reads only the restored __dict__ and never consults
         # rehydration side effects; rehydration keys on the same truthiness
         # convention independently.
-        from ..capture.outcome import resolve_loaded_outcome
+        from .._capture.outcome import resolve_loaded_outcome
 
         self.__dict__["_capture_outcome"] = resolve_loaded_outcome(self.__dict__)
         # Grouping-policy stamp: adopt-or-degrade (L1). An absent stamp
@@ -3425,7 +3425,7 @@ class Trace(
         if isinstance(self.__dict__.get("annotations"), dict) and (
             "episode" in self.__dict__["annotations"]
         ):
-            from ..capture._episode_ledger import validate_loaded_episode_annotations
+            from .._capture._episode_ledger import validate_loaded_episode_annotations
 
             validate_loaded_episode_annotations(self)
         _state.register_log(self)
@@ -3955,11 +3955,11 @@ class Trace(
         overall verdict); neither trace is mutated — the verdict registers in
         a weak-keyed side table consulted by the structure-only capability
         chokepoint (a REFUTED discharge flips hypothesis consumers to typed
-        refusals). See ``torchlens.capture.structure_only.discharge_against``
+        refusals). See ``torchlens._capture.structure_only.discharge_against``
         for the full join/precondition contract.
         """
 
-        from ..capture.structure_only import discharge_against as _discharge
+        from .._capture.structure_only import discharge_against as _discharge
 
         return _discharge(self, real_trace)
 

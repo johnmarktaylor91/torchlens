@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog.exceptions import RecorderStateError
-from torchlens.fastlog.types import _RAW_METADATA_FIELDS
+from torchlens.recording.exceptions import RecorderStateError
+from torchlens.recording.types import _RAW_METADATA_FIELDS
 
 
 def _model() -> nn.Module:

@@ -23,7 +23,7 @@ import torchlens as tl
 pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
-from torchlens.semantic.coverage import facet_coverage  # noqa: E402
+from torchlens._semantic.coverage import facet_coverage  # noqa: E402
 
 pytestmark = pytest.mark.real_model
 

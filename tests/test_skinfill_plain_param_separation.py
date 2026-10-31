@@ -18,7 +18,7 @@ import math
 
 import pytest
 
-from torchlens.visualization.themes import (
+from torchlens._visualization.themes import (
     LEGACY_SEMANTIC_PALETTE,
     OKABE_ITO_SEMANTIC_PALETTE,
     THEME_PRESETS,

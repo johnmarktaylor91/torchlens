@@ -195,7 +195,7 @@ class TestRecorderCoverage:
     @pytest.mark.smoke
     def test_input_summaries_across_rollouts(self) -> None:
         model = _model()
-        with tl.fastlog.Recorder(
+        with tl.recording.Recorder(
             model,
             default_op=True,
             include_source_events=True,
@@ -216,9 +216,9 @@ class TestRecorderCoverage:
     @pytest.mark.smoke
     def test_backward_summaries_across_rollouts(self) -> None:
         model = _model()
-        from torchlens.fastlog import CaptureSpec
+        from torchlens.recording import CaptureSpec
 
-        with tl.fastlog.Recorder(
+        with tl.recording.Recorder(
             model,
             default_op=CaptureSpec(save_out=True, save_grad=True),
             save_grads=True,

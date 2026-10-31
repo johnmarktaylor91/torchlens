@@ -72,7 +72,7 @@ def test_plan_check_value_callable_refuses_typed() -> None:
 
 @pytest.mark.smoke
 def test_plan_check_refuted_source_refuses() -> None:
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_trace()
     real = tl.trace(Toy(width=6), torch.randn(2, 4))

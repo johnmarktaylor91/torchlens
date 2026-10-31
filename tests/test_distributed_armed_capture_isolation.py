@@ -30,7 +30,7 @@ from test_weightsfree_fixtures import (
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import classify_failure_origin
+from torchlens._capture.outcome import classify_failure_origin
 from torchlens.distributed import _lifecycle
 from torchlens.types import FailureOrigin
 

@@ -3,7 +3,7 @@
 A tuned lens (Belrose et al., the `tuned-lens` package) decodes each block's
 hidden state into logits through a small learned translator per layer, where
 the plain logit lens uses the model's final norm and unembedding alone.
-`torchlens.semantic.logit_lens` reads the per-block hidden states from a trace
+`torchlens._semantic.logit_lens` reads the per-block hidden states from a trace
 and accepts any decoder through `lens=`: one callable for every layer, or a
 mapping from block address to a per-layer callable. This page builds that
 mapping from a `tuned_lens.TunedLens`. TorchLens does not train or ship tuned
@@ -49,7 +49,7 @@ import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
-from torchlens.semantic import logit_lens
+from torchlens._semantic import logit_lens
 from tuned_lens import TunedLens
 
 torch.manual_seed(0)

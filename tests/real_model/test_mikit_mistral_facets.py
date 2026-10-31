@@ -134,7 +134,7 @@ def _expected_shape(facet: str) -> tuple[int, ...]:
 @pytest.mark.parametrize("impl", ["eager", "sdpa"])
 def test_mistral_facet_floors(impl):
     import torchlens as tl
-    from torchlens.semantic.coverage import facet_coverage
+    from torchlens._semantic.coverage import facet_coverage
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

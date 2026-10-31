@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._render_nodes import compute_default_node_lines
+from torchlens._visualization._render_nodes import compute_default_node_lines
 
 
 class VaryingRecurrent(nn.Module):

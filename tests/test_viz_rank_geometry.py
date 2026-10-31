@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
 
 
 class _Recurrent(nn.Module):
@@ -132,7 +132,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
 
 class Recurrent(nn.Module):
     def __init__(self):

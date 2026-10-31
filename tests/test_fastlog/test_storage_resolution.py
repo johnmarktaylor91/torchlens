@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import torchlens as tl
-from torchlens.capture.projections import _resolve_storage_intent
-from torchlens.fastlog.options import RecordingOptions
+from torchlens._capture.projections import _resolve_storage_intent
+from torchlens.recording.options import RecordingOptions
 
 
 def test_streaming_none_is_ram_only_intent() -> None:

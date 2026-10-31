@@ -186,7 +186,7 @@ def test_m5_feature_map_evolution_recurrent_error_vocabulary():
 # M4 — rank _compute_topological_layout order is PYTHONHASHSEED-independent
 # ---------------------------------------------------------------------------
 _M4_SNIPPET = (
-    "from torchlens.visualization._rank_layout_internal.layout import "
+    "from torchlens._visualization._rank_layout_internal.layout import "
     "_compute_topological_layout\n"
     "labels=['alpha','beta','gamma','delta','epsilon','zeta']\n"
     "nd={n:{'node_label':n,'attrs':{}} for n in labels}\n"
@@ -216,7 +216,7 @@ def test_m4_rank_order_deterministic_across_hashseed():
 def test_m4_within_rank_sort_is_total_order():
     # Multi-root graph, no edges: every node is its own rank-0 root; positions
     # must follow the (module, node_label) total order deterministically.
-    from torchlens.visualization._rank_layout_internal.layout import (
+    from torchlens._visualization._rank_layout_internal.layout import (
         _compute_topological_layout,
     )
 

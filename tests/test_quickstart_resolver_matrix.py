@@ -23,7 +23,7 @@ from torchlens._quickstart import (
     trace_input_provenance,
 )
 from torchlens._quickstart._primitive import state_dict_hash
-from torchlens.user_funcs import render
+from torchlens._user_funcs import render
 
 
 def _cnn() -> nn.Module:

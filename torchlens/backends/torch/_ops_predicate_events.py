@@ -8,6 +8,29 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture.arg_positions import (
+    DYNAMIC_SPEC_UNCACHEABLE,
+    FUNC_ARG_SPECS,
+    VARIADIC_TENSOR_ARG_FUNCS,
+    ArgSpec,
+    _cache_dynamic_spec,
+    _normalize_func_name,
+    dynamic_spec_covers_call,
+    extract_tensors_and_params,
+)
+from ..._capture.plan import EnrichmentLevel
+from ..._capture.predicates import (
+    _evaluate_keep_op,
+    _is_halt_only_capture,
+    build_op_record_context,
+)
+from ..._capture.projections import (
+    LiveOpView,
+    append_projected_event,
+    get_active_recording_state,
+)
+from ..._capture.session import capture_session_for
+from ..._capture.stop import evaluate_halt_stop
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
@@ -24,32 +47,9 @@ from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
 )
-from ...capture.arg_positions import (
-    DYNAMIC_SPEC_UNCACHEABLE,
-    FUNC_ARG_SPECS,
-    VARIADIC_TENSOR_ARG_FUNCS,
-    ArgSpec,
-    _cache_dynamic_spec,
-    _normalize_func_name,
-    dynamic_spec_covers_call,
-    extract_tensors_and_params,
-)
-from ...capture.plan import EnrichmentLevel
-from ...capture.predicates import (
-    _evaluate_keep_op,
-    _is_halt_only_capture,
-    build_op_record_context,
-)
-from ...capture.projections import (
-    LiveOpView,
-    append_projected_event,
-    get_active_recording_state,
-)
-from ...capture.session import capture_session_for
-from ...capture.stop import evaluate_halt_stop
-from ...fastlog._halt import StopSignal
-from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import (
+from ...recording._halt import StopSignal
+from ...recording.exceptions import PredicateError
+from ...recording.types import (
     CaptureSpec,
 )
 from ._tl import (

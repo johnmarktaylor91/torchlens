@@ -120,7 +120,7 @@ class _CatModel(torch.nn.Module):
 
 
 def test_cat_left_commute_funcs() -> None:
-    from torchlens.visualization._render_common import COMMUTE_FUNCS
+    from torchlens._visualization._render_common import COMMUTE_FUNCS
 
     assert "cat" not in COMMUTE_FUNCS
     # The genuinely commutative rows stay.
@@ -171,7 +171,7 @@ def _toy_trace() -> tl.Trace:
 def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
     import subprocess as sp
 
-    from torchlens.visualization import _render_utils
+    from torchlens._visualization import _render_utils
 
     log = _toy_trace()
     outpath = tmp_path / "boom"
@@ -185,7 +185,7 @@ def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
                     partial.write(b"partial")
         raise sp.CalledProcessError(1, cmd, output=b"", stderr=b"boom")
 
-    from torchlens.visualization._render_common import GraphvizRenderError
+    from torchlens._visualization._render_common import GraphvizRenderError
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", exploding_subprocess)
     with pytest.raises(GraphvizRenderError):
@@ -234,7 +234,7 @@ def test_geometry_record_is_runtime_only() -> None:
 
 
 def test_scale_clamp_parsing() -> None:
-    from torchlens.visualization.render_execution import parse_layout_scale
+    from torchlens._visualization.render_execution import parse_layout_scale
 
     stderr = "dot: graph is too large for cairo-renderer bitmaps. Scaling by 0.324492 to fit\n"
     assert parse_layout_scale(stderr) == pytest.approx(0.324492)
@@ -244,8 +244,8 @@ def test_scale_clamp_parsing() -> None:
 def test_exit_zero_stderr_is_surfaced(tmp_path, monkeypatch) -> None:
     import subprocess as sp
 
+    from torchlens._visualization import _render_utils
     from torchlens.errors._base import TorchLensWarning
-    from torchlens.visualization import _render_utils
 
     log = _toy_trace()
     real_run = _render_utils.run_bounded_subprocess
@@ -298,9 +298,9 @@ def test_rank_layout_renders_batchnorm_buffers_all_modes(tmp_path, mode) -> None
 
 @pytest.mark.smoke
 def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
-    from torchlens.visualization.node_universe import build_node_universe
-    from torchlens.visualization.request import ResolvedRenderRequest
-    from torchlens.visualization.source_graph import build_source_graph
+    from torchlens._visualization.node_universe import build_node_universe
+    from torchlens._visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.source_graph import build_source_graph
 
     log = _bn_trace()
     request = ResolvedRenderRequest(show_buffer_layers="meaningful")
@@ -312,10 +312,10 @@ def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
 
 
 def test_rank_endpoint_invariant_raises_typed() -> None:
-    from torchlens.errors import _base as errors_base  # noqa: F401  (import guard)
-    from torchlens.visualization._rank_layout_internal.layout import (
+    from torchlens._visualization._rank_layout_internal.layout import (
         RankRenderEndpointError,
     )
+    from torchlens.errors import _base as errors_base  # noqa: F401  (import guard)
 
     assert RankRenderEndpointError.code == "rank_render_endpoint_undeclared"
     assert issubclass(RankRenderEndpointError, RuntimeError)

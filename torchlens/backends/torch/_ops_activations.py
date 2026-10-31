@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.flops import compute_backward_flops, compute_forward_flops
 from ..._data_classes.op import (
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
@@ -28,7 +29,6 @@ from ..._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
-from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,

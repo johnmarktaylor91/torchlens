@@ -30,9 +30,9 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._capture.outcome import FailureOrigin, classify_failure_origin
 from torchlens._utils import _torch_compat
 from torchlens.backends.torch import _protocol_redispatch
-from torchlens.capture.outcome import FailureOrigin, classify_failure_origin
 
 
 def _ensure_wrapped() -> None:
@@ -372,7 +372,7 @@ def test_handler_error_after_redispatch_classifies_user_op(post_wrap_bag: type) 
     assert "_protocol_redispatch.py" in {Path(frame.filename).name for frame in frames}
     assert classify_failure_origin(exc) is FailureOrigin.USER_OP
     # The classifier matches the re-offer line by source text; pin it exists.
-    from torchlens.capture import outcome
+    from torchlens._capture import outcome
 
     source = Path(_protocol_redispatch.__file__).read_text()
     assert outcome._PROTOCOL_REDISPATCH_MARKER in source

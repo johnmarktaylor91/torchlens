@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._capture.projections import LiveOpView
+from ..._capture.stop import evaluate_halt_stop
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
     Op,
@@ -21,8 +23,6 @@ from ..._utils.display import _timed_phase
 from ..._utils.tensor_utils import (
     safe_copy,
 )
-from ...capture.projections import LiveOpView
-from ...capture.stop import evaluate_halt_stop
 from ._tl import (
     get_tensor_label,
     set_tensor_label,

@@ -20,9 +20,9 @@ from ._fed_by import FED_BY_KIND, settle_fed_by_params
 from ._relations import MEMBER_ROW_KINDS, MemberRelationRow, MemberRelationTable
 
 if TYPE_CHECKING:
+    from .._capture._episode_fold import EpisodeFoldResult
+    from .._capture._episode_ledger import EpisodeLedger
     from .._data_classes.trace import Trace
-    from ..capture._episode_fold import EpisodeFoldResult
-    from ..capture._episode_ledger import EpisodeLedger
     from . import Bundle
 
 
@@ -286,7 +286,7 @@ def _bundle_derive_episode_status(
         lands on the fail-closed ``episode_unknown`` default arm.
     """
 
-    from ..capture._episode_fold import derive_episode_status as _fold_episode_status
+    from .._capture._episode_fold import derive_episode_status as _fold_episode_status
 
     # ``isinstance`` narrows past OpaqueRelationRow (preserved unknown
     # namespaced kinds carry no readable params/endpoints and never fold).

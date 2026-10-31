@@ -19,7 +19,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CapturePhase,
     CaptureStatus,
@@ -87,7 +87,7 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
 
     import torchlens.backends.torch.ops as torch_ops
     from torchlens import _state
-    from torchlens.fastlog._halt import StopSignal
+    from torchlens.recording._halt import StopSignal
 
     original = torch_ops.evaluate_halt_stop
 

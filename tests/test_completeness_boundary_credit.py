@@ -27,10 +27,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.user_funcs import _validate_forward_pass_torch
 
 
 @pytest.fixture

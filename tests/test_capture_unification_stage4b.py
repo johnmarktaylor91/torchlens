@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.projectors import RecordingProjector
+from torchlens._capture.projectors import RecordingProjector
 
 
 class DualProjectionToy(nn.Module):

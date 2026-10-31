@@ -23,9 +23,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._header_block import KEY_TABLE_ID, key_swatches
-from torchlens.visualization._legend import LEGEND_NODE_NAME, backward_key_sections
-from torchlens.visualization.themes import THEME_PRESETS
+from torchlens._visualization._header_block import KEY_TABLE_ID, key_swatches
+from torchlens._visualization._legend import LEGEND_NODE_NAME, backward_key_sections
+from torchlens._visualization.themes import THEME_PRESETS
 
 
 class _Nested(nn.Module):

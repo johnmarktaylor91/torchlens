@@ -5,7 +5,7 @@ hidden state projected through the model's own head (or a user ``lens=``),
 one distribution per layer and position. The named statistics are entropy,
 KL from the final output, cross-entropy and rank of a target token, and the
 top probability. Every batch is traced, its layers are projected ONE at a
-time through the shared lens helper of ``torchlens.semantic.logit_lens``,
+time through the shared lens helper of ``torchlens._semantic.logit_lens``,
 each projection is reduced to its statistics and dropped, and the values
 fold into ``Spine`` accumulators (one per statistic and layer) plus a
 per-position running sum, so memory is constant in the number of batches.
@@ -163,7 +163,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
             remedy="pass an iterable of batches, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
             argument="data",
         )
-    from ..semantic.logit_lens import _LensRequest
+    from .._semantic.logit_lens import _LensRequest
 
     request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify)
     folder = _TrajectoryFolder(statistics)
@@ -261,9 +261,9 @@ class _TrajectoryFolder:
     ) -> None:
         """Trace one ``(model_input, targets)`` batch, project layer by layer, reduce and fold."""
 
+        from .._semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
+        from .._user_funcs import trace
         from ..options import CaptureOptions
-        from ..semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
-        from ..user_funcs import trace
 
         model_input, targets = batch
         names = self._resolve_names(targets is not None)

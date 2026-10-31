@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
 from torchlens._data_classes.layer import Layer
-from torchlens.visualization._encoding import (
+from torchlens._visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
     LIGHT_RAMP,
@@ -36,7 +36,7 @@ from torchlens.visualization._encoding import (
     interpolate_hex,
     resolve_color_by,
 )
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -220,7 +220,7 @@ def test_plain_draw_untouched_by_channel_machinery(mlp_log: tl.Trace, tmp_path: 
 def test_request_hash_ignores_channel_fields() -> None:
     """Channels are presentation-only: the collapse-planning hash is untouched."""
 
-    from torchlens.visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest(vis_mode="rolled")
     with_channel = ResolvedRenderRequest(vis_mode="rolled", color_by="bytes", encoding=object())
@@ -332,7 +332,7 @@ def test_auto_large_graph_forces_dot_with_notice(
 ) -> None:
     """AUTO + cost>threshold + channel: dot forced, notice names channel+cost."""
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 0)
     with pytest.warns(UserWarning, match="color_by"):
@@ -495,7 +495,7 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
     assert layer.layer_label not in state.colors
     # The per-pass row carries its OWN note now (themes memo item 11): the
     # old pass-1 read painted a uniform mid-ramp from a min:1/max:1 domain.
-    from torchlens.visualization._encoding import NOTE_PER_PASS_ROLLED
+    from torchlens._visualization._encoding import NOTE_PER_PASS_ROLLED
 
     assert NOTE_PER_PASS_ROLLED in state.notes
 
@@ -726,7 +726,7 @@ def test_interpolate_hex_endpoints_and_clamp() -> None:
 
 
 def test_bundle_diff_consumes_shared_interpolation() -> None:
-    from torchlens.visualization.bundle_diff import _delta_color
+    from torchlens._visualization.bundle_diff import _delta_color
 
     assert _delta_color(0.0, 1.0) == "#FFFFFF"
     assert _delta_color(1.0, 1.0) == interpolate_hex("#FFFFFF", "#C93F3F", 1.0)
@@ -737,7 +737,7 @@ def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
     anchor is deliberately off-ground (never equal to the default fill --
     the white-on-white absence defect's dark analog)."""
 
-    from torchlens.visualization.themes import resolve_theme
+    from torchlens._visualization.themes import resolve_theme
 
     _draw(mlp_log, tmp_path, color_by="bytes", theme="dark")
     state = _state(mlp_log)

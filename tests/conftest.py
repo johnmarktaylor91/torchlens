@@ -52,7 +52,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.backends.torch.ops", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED", set()),
     ("torchlens._data_classes.op", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
-    ("torchlens.fastlog._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
+    ("torchlens.recording._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens._postprocess.ast_branches", "_source_drift_warned", set()),
     # SAE splice warnings (latents size, zero variance): once per session per code.
     ("torchlens.bridge.sae", "_WARNED_CODES", set()),
@@ -71,19 +71,19 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     # capture in the package, and reset per test here so a test that trips it
     # via a direct log_current_rng_states() call cannot degrade later tests.
     ("torchlens._utils.rng", "_cuda_rng_unusable", False),
-    ("torchlens.user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
+    ("torchlens._user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
     ("torchlens._utils.introspection", "_col_offset_cache_warned", False),
     ("torchlens.validation._stock_layer_grads", "_PASS_INDEX_PARSE_WARNED", False),
-    ("torchlens.visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),
+    ("torchlens._visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),
     # The functional (global-mutated) copy moved to _render_ordering with the
     # renderer-thinning extraction; _render_dot keeps only an inert
     # star-import binding.
-    ("torchlens.visualization._render_ordering", "_SIBLING_ORDER_WARNING_EMITTED", False),
-    ("torchlens.visualization.auto_collapse", "_COUNT_MISMATCH_WARNING_EMITTED", False),
+    ("torchlens._visualization._render_ordering", "_SIBLING_ORDER_WARNING_EMITTED", False),
+    ("torchlens._visualization.auto_collapse", "_COUNT_MISMATCH_WARNING_EMITTED", False),
     # WeakSet of Traces that already got the collapse-ceiling decline warning;
     # a plain set() reset would strong-pin those Traces for the session.
-    ("torchlens.visualization.collapse_optimizer", "_CEILING_WARNED_TRACES", weakref.WeakSet()),
-    ("torchlens.visualization._collapse_disclosures", "_BUDGET_WARNED_TRACES", weakref.WeakSet()),
+    ("torchlens._visualization.collapse_optimizer", "_CEILING_WARNED_TRACES", weakref.WeakSet()),
+    ("torchlens._visualization._collapse_disclosures", "_BUDGET_WARNED_TRACES", weakref.WeakSet()),
 )
 
 
@@ -1300,7 +1300,7 @@ def _reset_warn_once_sentinels() -> Iterator[None]:
 #: it) AND lock-disciplined container access.
 _CONTENT_REGISTRIES: tuple[tuple[str, str, str | None], ...] = (
     ("torchlens._ir.container", "_CONTAINER_REGISTRY", "_CONTAINER_REGISTRY_LOCK"),
-    ("torchlens.capture.flops", "_CUSTOM_OP_RULES", None),
+    ("torchlens._capture.flops", "_CUSTOM_OP_RULES", None),
 )
 
 

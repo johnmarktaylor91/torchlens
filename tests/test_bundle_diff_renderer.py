@@ -14,8 +14,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 from torchlens.errors import MultiMatchWarning
-from torchlens.visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 GOLDEN_SVG = SNAPSHOT_DIR / "bundle_diff_clean_vs_zero_relu.svg"

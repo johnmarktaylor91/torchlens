@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal, TextIO, cast
 
 if TYPE_CHECKING:
     from .._trace_slice import TraceSlice
+    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
         ReceptiveFieldProfile,
@@ -13,7 +14,6 @@ if TYPE_CHECKING:
     )
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
-    from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceSource
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
@@ -168,12 +168,12 @@ class TraceStatsMixin(_TraceMixinBase):
     def _cost_forward_peak_memory_pair(self: "Trace") -> "dict[str, Any] | None":
         """Session-time (live, resident) forward peak pair with backend named.
 
-        Full contract: :func:`torchlens.capture.peak_memory.read_peak_pair`
+        Full contract: :func:`torchlens._capture.peak_memory.read_peak_pair`
         (F20 brainpipe D-7; spelling DOCUMENTED-UNSTABLE). ``None`` on loaded
         artifacts, which never re-measure.
         """
 
-        from ..capture.peak_memory import read_peak_pair
+        from .._capture.peak_memory import read_peak_pair
 
         return read_peak_pair(self)
 
@@ -288,12 +288,12 @@ class TraceStatsMixin(_TraceMixinBase):
 
         Discoverability seam only (lane F40a; spelling DOCUMENTED-UNSTABLE
         pending the naming session): delegates to
-        ``torchlens.capture._episode_ledger.capture_kind_for``. A fresh
+        ``torchlens._capture._episode_ledger.capture_kind_for``. A fresh
         re-execution product whose episode evidence the annotations travel
         policy dropped reads ``"plain"``.
         """
 
-        from ..capture._episode_ledger import capture_kind_for
+        from .._capture._episode_ledger import capture_kind_for
 
         return capture_kind_for(self)
 
@@ -306,10 +306,10 @@ class TraceStatsMixin(_TraceMixinBase):
         ``header``, ordered per-step ``rows``, ``steps_completed``, and
         ``truncated_at_step``. ``None`` for plain captures, pre-finalize
         declarations, and quarantined/dropped payloads -- delegates to
-        ``torchlens.capture._episode_ledger.episode_ledger_for``.
+        ``torchlens._capture._episode_ledger.episode_ledger_for``.
         """
 
-        from ..capture._episode_ledger import episode_ledger_for
+        from .._capture._episode_ledger import episode_ledger_for
 
         return episode_ledger_for(self)
 
@@ -325,10 +325,10 @@ class TraceStatsMixin(_TraceMixinBase):
         per-segment facts. ``None`` for plain captures and quarantined
         payloads; a digest mismatch refuses typed
         (``episode_coupling_unbound``) -- delegates to
-        ``torchlens.capture._episode_coupling.attest_coupling``.
+        ``torchlens._capture._episode_coupling.attest_coupling``.
         """
 
-        from ..capture._episode_coupling import attest_coupling
+        from .._capture._episode_coupling import attest_coupling
 
         return attest_coupling(self)
 
@@ -923,9 +923,9 @@ class TraceStatsMixin(_TraceMixinBase):
             ``(module_address, priority)`` sorted by ``(-priority, address)``.
         """
 
-        from ..visualization import collapse_optimizer
-        from ..visualization.auto_collapse import analyze_collapse
-        from ..visualization.collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
+        from .._visualization import collapse_optimizer
+        from .._visualization.auto_collapse import analyze_collapse
+        from .._visualization.collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
 
         ceiling = collapse_optimizer.COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER
         if len(self.layer_list) > ceiling:
@@ -961,7 +961,7 @@ class TraceStatsMixin(_TraceMixinBase):
             ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
         """
 
-        from ..visualization.auto_collapse import collapse_order
+        from .._visualization.auto_collapse import collapse_order
 
         return collapse_order(self, mode=mode)
 
@@ -980,7 +980,7 @@ class TraceStatsMixin(_TraceMixinBase):
             selects the public monotone collapse schedule, where ``0.0`` is
             the full graph and ``1.0`` is byte-identical to ``"max"``.
         context:
-            Optional :class:`torchlens.visualization.collapse_plan.RenderContext`.
+            Optional :class:`torchlens._visualization.collapse_plan.RenderContext`.
             When omitted, the default unrolled Graphviz context is used.
 
         Returns
@@ -1016,8 +1016,8 @@ class TraceStatsMixin(_TraceMixinBase):
                 argument="mode",
             )
 
-        from ..visualization.collapse_optimizer import select_collapse_level, select_collapse_plan
-        from ..visualization.collapse_plan import RenderContext
+        from .._visualization.collapse_optimizer import select_collapse_level, select_collapse_plan
+        from .._visualization.collapse_plan import RenderContext
 
         resolved_context = RenderContext() if context is None else context
         result = (
@@ -1044,7 +1044,7 @@ class TraceStatsMixin(_TraceMixinBase):
         Parameters
         ----------
         context:
-            Optional :class:`torchlens.visualization.collapse_plan.RenderContext`.
+            Optional :class:`torchlens._visualization.collapse_plan.RenderContext`.
             When omitted, the default unrolled Graphviz context is used.
 
         Returns
@@ -1055,8 +1055,8 @@ class TraceStatsMixin(_TraceMixinBase):
             collapsed module-address set.
         """
 
-        from ..visualization.collapse_ladder import collapse_schedule
-        from ..visualization.collapse_plan import RenderContext
+        from .._visualization.collapse_ladder import collapse_schedule
+        from .._visualization.collapse_plan import RenderContext
 
         resolved_context = RenderContext() if context is None else context
         return collapse_schedule(self, resolved_context)

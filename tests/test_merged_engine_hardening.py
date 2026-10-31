@@ -545,7 +545,7 @@ class TestMemberOutcomeGate:
     """
 
     def _core(self, rank: int, status=None, boundaries=None):
-        from torchlens.capture.outcome import CaptureOutcome
+        from torchlens._capture.outcome import CaptureOutcome
 
         trace = trace_for_boundaries(
             boundaries if boundaries is not None else [boundary(rank, 0)],
@@ -565,23 +565,23 @@ class TestMemberOutcomeGate:
 
     @pytest.mark.smoke
     def test_failed_member_refuses_typed(self):
-        from torchlens.capture.outcome import CaptureStatus
+        from torchlens._capture.outcome import CaptureStatus
 
         self._assert_refuses([self._core(0, CaptureStatus.FAILED), self._core(1)])
 
     def test_aborted_nonfinite_member_refuses_typed(self):
-        from torchlens.capture.outcome import CaptureStatus
+        from torchlens._capture.outcome import CaptureStatus
 
         self._assert_refuses([self._core(0), self._core(1, CaptureStatus.ABORTED_NONFINITE)])
 
     def test_unknown_member_refuses_typed(self):
-        from torchlens.capture.outcome import CaptureStatus
+        from torchlens._capture.outcome import CaptureStatus
 
         self._assert_refuses([self._core(0, CaptureStatus.UNKNOWN), self._core(1)])
 
     def test_merge_report_shares_the_gate(self):
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_report
-        from torchlens.capture.outcome import CaptureStatus
 
         with pytest.raises(MergeInputError) as excinfo:
             merge_report([self._core(0, CaptureStatus.FAILED), self._core(1)])
@@ -606,8 +606,8 @@ class TestMemberOutcomeGate:
         return [core(0, status0), core(1, status1)]
 
     def test_halted_member_merges_with_disclosure_never_silent_attested_complete(self):
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.STOPPED, CaptureStatus.COMPLETE))
         assert merged.value_status is MergeValueStatus.ATTESTED_COMPLETE
@@ -618,8 +618,8 @@ class TestMemberOutcomeGate:
         assert summary.index("stopped") < summary.index("attested_complete")
 
     def test_unattested_member_merges_with_disclosure(self):
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.COMPLETE, CaptureStatus.UNATTESTED))
         assert merged.member_outcomes[1] == "unattested"
@@ -627,8 +627,8 @@ class TestMemberOutcomeGate:
 
     @pytest.mark.smoke
     def test_disclosure_survives_release(self):
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.STOPPED, CaptureStatus.COMPLETE))
         merged.release()
@@ -644,8 +644,8 @@ class TestMemberOutcomeGate:
         assert "member capture outcomes" not in merged.summary()
 
     def test_complete_members_carry_no_disclosure_line(self):
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.COMPLETE, CaptureStatus.COMPLETE))
         assert merged.member_outcomes == {0: "complete", 1: "complete"}
@@ -655,8 +655,8 @@ class TestMemberOutcomeGate:
         """Path inputs load through resolve_rank_inputs' one chokepoint."""
 
         import torchlens._io.bundle as bundle_module
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         failed = self._core(0, CaptureStatus.FAILED)
         monkeypatch.setattr(bundle_module, "load", lambda path: failed)
@@ -669,8 +669,8 @@ class TestMemberOutcomeGate:
     @pytest.mark.smoke
     def test_path_supplied_halted_member_is_disclosed(self, monkeypatch, tmp_path):
         import torchlens._io.bundle as bundle_module
+        from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
-        from torchlens.capture.outcome import CaptureStatus
 
         cores = {
             str(tmp_path / "rank0.tlspec"): self._attested_pair(
@@ -699,7 +699,7 @@ class TestHaltedMemberArtifactRoundTrip:
         torch.manual_seed(0)
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
         if halted:
-            from torchlens.capture.outcome import CaptureOutcome, CaptureStatus
+            from torchlens._capture.outcome import CaptureOutcome, CaptureStatus
 
             # Persist a coherent HALTED attestation: the structural halted
             # marker plus the settled stamp, exactly what a halt= capture

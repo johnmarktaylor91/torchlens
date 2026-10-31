@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture import peak_memory, trace as capture_trace
-from torchlens.capture.peak_memory import CPU_ZERO_PEAK_REASON
+from torchlens._capture import peak_memory, trace as capture_trace
+from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions, ReplayOptions
 
 

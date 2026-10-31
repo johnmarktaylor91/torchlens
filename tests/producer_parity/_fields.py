@@ -54,7 +54,7 @@ from torchlens._ir.op_record import (
 from torchlens._ir.predicate import ModuleStackFrame, RecordContext
 from torchlens._ir.refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, TensorRef
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy
-from torchlens.fastlog.types import CaptureSpec
+from torchlens.recording.types import CaptureSpec
 
 # Roots for the Tier walker: every dataclass the record graph can carry,
 # including classes hidden behind ``object``-typed fields (record_context,

@@ -166,8 +166,8 @@ def isolated_capture(
         runs.
     """
 
+    from .._user_funcs import release_model, trace
     from ..options import CaptureOptions
-    from ..user_funcs import release_model, trace
 
     run_model = copy.deepcopy(model)
     # Releasing the copy starts its preparation from scratch (a no-op on

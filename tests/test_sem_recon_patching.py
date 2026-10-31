@@ -26,10 +26,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._semantic.patching import PatchApplicationError
 from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.errors._base import TorchLensWarning
 from torchlens.facets import FacetSpec
-from torchlens.semantic.patching import PatchApplicationError
 
 
 class ParamHeads(nn.Module):
@@ -97,7 +97,7 @@ def param_attention_recipe(module: Any) -> dict[str, Any]:
 def _register_recipes() -> Iterator[None]:
     """Register this module's recipes at RUN time, restoring the registry after."""
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(
@@ -211,7 +211,7 @@ def test_fire_ledger_refuses_never_fired() -> None:
     baseline in this state (the measured real-HF silent no-op class).
     """
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="never fired") as never_fired_exc:
         _require_effective_patch(
@@ -231,7 +231,7 @@ def test_fire_ledger_refuses_all_refused_replacements() -> None:
     never read the fire record's replaced flag.
     """
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="refused.*replaced=False"):
         _require_effective_patch(
@@ -242,7 +242,7 @@ def test_fire_ledger_refuses_all_refused_replacements() -> None:
 
 
 def test_fire_ledger_accepts_replaced_fire() -> None:
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     _require_effective_patch(
         _StubPatchedLog([_StubRecord(100.5, replaced=True)], hooks_fired=1),
@@ -254,7 +254,7 @@ def test_fire_ledger_accepts_replaced_fire() -> None:
 def test_fire_ledger_ignores_stale_records_from_earlier_runs() -> None:
     """Records minted BEFORE this run cannot vouch for it."""
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="never fired"):
         _require_effective_patch(

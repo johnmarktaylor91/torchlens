@@ -142,7 +142,7 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     """RG04: the lens at the final layer IS the model's own logits."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
+    import torchlens._semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     with torch.no_grad():
@@ -176,7 +176,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
     deliberately. The live numeric intervention parity for this venue rides
     RG07's frozen-complement oracle."""
 
-    import torchlens.semantic.patching as patching
+    import torchlens._semantic.patching as patching
 
     model, tokenizer = lm["model"], lm["tokenizer"]
     pair = prompt("clean-factual-1")

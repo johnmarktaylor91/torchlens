@@ -17,7 +17,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.visualization.surgery_visuals import surgery_census
+from torchlens._visualization.surgery_visuals import surgery_census
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
@@ -48,7 +48,7 @@ def _assert_no_banned_verbs(text: str) -> None:
 def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     """Render the surgery lens focused on one block; return (svg, census)."""
 
-    from torchlens.visualization.surgery_visuals import render_surgery
+    from torchlens._visualization.surgery_visuals import render_surgery
 
     outpath = str(tmp_path / stem)
     render_surgery(
@@ -136,7 +136,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
         ),
         capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
     )
-    from torchlens.visualization.surgery_visuals import surgery_facts
+    from torchlens._visualization.surgery_visuals import surgery_facts
 
     facts = surgery_facts(log)
     splice_rows = [

@@ -25,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._weightsfree_admission import (
+from torchlens._capture._weightsfree_admission import (
     stamp_wrap_generation,
     wrap_generation_of,
 )
@@ -59,7 +59,7 @@ def test_generation_mismatch_refuses_before_any_verdict() -> None:
     """The D8 condition as a stamp fact (the full factorial rides the
     subprocess leg): mismatched generations refuse typed pre-digest."""
 
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     structure = tl.trace(Toy(), torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
     real = tl.trace(Toy(), torch.randn(2, 4))

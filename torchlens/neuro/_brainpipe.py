@@ -470,7 +470,7 @@ def _probe_once(
     """
 
     from .. import options as tl_options
-    from ..user_funcs import trace
+    from .._user_funcs import trace
 
     log = trace(model, inputs, capture=tl_options.CaptureOptions(inference_only=True))
     facts: dict[str, dict[str, Any]] = {}

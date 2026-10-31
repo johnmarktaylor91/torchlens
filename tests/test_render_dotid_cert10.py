@@ -1,7 +1,7 @@
 """Regression tests for embedded-quote/backslash escaping in the rank-engine DOT emitter.
 
 ``_dot_id()``/``_dot_quote()`` in
-``torchlens/visualization/_rank_layout_internal/layout.py`` wrap raw values in
+``torchlens/_visualization/_rank_layout_internal/layout.py`` wrap raw values in
 ``"..."`` for DOT text but, before this fix, never escaped an embedded
 literal ``"`` (or ``\\``) character. A module/``ModuleDict`` key containing a
 literal double-quote produces DOT text like ``"a"b"`` -- an unterminated
@@ -25,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
 pytest.importorskip("graphviz")
 

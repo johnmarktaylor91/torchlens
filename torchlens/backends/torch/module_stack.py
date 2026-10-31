@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import torch.nn as nn
 
-from ...fastlog.types import ModuleStackFrame
+from ...recording.types import ModuleStackFrame
 from ._tl import get_module_meta
 
 

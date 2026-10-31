@@ -172,7 +172,7 @@ def test_recorder_resets_per_pass_and_marks_passes() -> None:
 
     sink = io.StringIO()
     model = TwoBlock()
-    with tl.fastlog.Recorder(model, narrate=NarrationOptions(select=True, sink=sink)) as recorder:
+    with tl.recording.Recorder(model, narrate=NarrationOptions(select=True, sink=sink)) as recorder:
         recorder(torch.randn(2, 4))
         recorder(torch.randn(2, 4))
     lines = _transcript(sink)

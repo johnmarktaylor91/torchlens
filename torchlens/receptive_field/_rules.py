@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol, TypeAlias
 
-from ..capture.arg_positions import _normalize_func_name
+from .._capture.arg_positions import _normalize_func_name
 from ._errors import ReceptiveFieldConfigurationError
 
 if TYPE_CHECKING:

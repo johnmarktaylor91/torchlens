@@ -14,14 +14,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import collapse_optimizer
-from torchlens.visualization.collapse_ladder import (
+from torchlens._visualization import collapse_optimizer
+from torchlens._visualization.collapse_ladder import (
     CollapseEvent,
     auto_from_ladder,
     build_event_ladder,
     collapse_schedule,
 )
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 class _Block(nn.Module):
@@ -132,7 +132,7 @@ def test_every_event_rides_exactly_one_step(stack_trace) -> None:
 def test_auto_is_first_in_band_ladder_point(stack_trace) -> None:
     """The unfrozen auto contract: first step meeting the readable band."""
 
-    from torchlens.visualization.auto_collapse import _readable_band_high
+    from torchlens._visualization.auto_collapse import _readable_band_high
 
     context = RenderContext()
     schedule = collapse_schedule(stack_trace, context)
@@ -154,7 +154,7 @@ def test_band_miss_serves_disclosed_strongest_point() -> None:
     assert "band_missed" in (result.reason or "")
     assert "floor" not in (result.reason or "").split("band_missed")[0].lower() or True
     # The disclosure comes from the REALIZED plan (memo D7).
-    from torchlens.visualization.collapse_plan import count
+    from torchlens._visualization.collapse_plan import count
 
     assert result.strongest_plan_count == count(result.plan)
 
@@ -208,8 +208,8 @@ def test_rolled_gru_auto_identity_and_max_cut() -> None:
     ``max`` (non-empty "rnn" cut below the full count).
     """
 
-    from torchlens.visualization.auto_collapse import resolve_collapse_fn
-    from torchlens.visualization.collapse_plan import collapse_plan_for_trace, count
+    from torchlens._visualization.auto_collapse import resolve_collapse_fn
+    from torchlens._visualization.collapse_plan import collapse_plan_for_trace, count
 
     trace = tl.trace(_GRUWrapper(), torch.randn(1, 6, 8))
     try:

@@ -223,7 +223,7 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
     script = _load_floor_script()
     payload = {
         "files": {
-            "torchlens/capture/trace.py": {
+            "torchlens/_capture/trace.py": {
                 "summary": {
                     "covered_lines": 10,
                     "num_statements": 100,

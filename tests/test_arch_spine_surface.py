@@ -95,7 +95,7 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.export",
         "torchlens.facets",
         "torchlens.report",
-        "torchlens.visualization",
+        "torchlens._visualization",
         "torchlens.viz",
         # Pre-existing L6+/bridge namespaces the A10 facade made lazily
         # resolvable as root attributes (they were importable submodules long

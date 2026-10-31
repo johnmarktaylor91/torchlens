@@ -305,7 +305,7 @@ def log_function_output_tensors(
     # ops.py rebinds this function under its own globals (the split-module
     # pattern), so module-level helpers here are not visible at runtime.
     if getattr(self, "structure_only", False):
-        from ...capture._weightsfree_admission import weightsfree_meta_active
+        from ..._capture._weightsfree_admission import weightsfree_meta_active
 
         if weightsfree_meta_active(self):
             from ._weightsfree_transparency import caller_is_torch_decomposition

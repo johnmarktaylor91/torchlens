@@ -21,11 +21,11 @@ For slice keys: returns a list slice of ``layer_list``.
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..capture.projections import LiveOpView
+    from .._capture.projections import LiveOpView
     from .trace import Trace
 
+from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
-from ..capture.projections import LiveOpView
 from ..intervention.errors import AmbiguousSiteError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec

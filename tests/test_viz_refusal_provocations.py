@@ -30,7 +30,7 @@ def small_trace() -> Iterator[object]:
 
 
 def test_direction_refuses_typed() -> None:
-    from torchlens.visualization._render_utils import direction_to_rankdir
+    from torchlens._visualization._render_utils import direction_to_rankdir
 
     with pytest.raises(InvalidArgumentError) as exc_info:
         direction_to_rankdir("diagonal")
@@ -80,8 +80,8 @@ def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
 def test_graphviz_render_failure_refuses_typed(
     small_trace, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from torchlens.visualization import _render_utils
-    from torchlens.visualization._render_common import GraphvizRenderError
+    from torchlens._visualization import _render_utils
+    from torchlens._visualization._render_common import GraphvizRenderError
 
     def _boom(cmd, **kwargs):
         raise subprocess.CalledProcessError(1, cmd, output=b"", stderr=b"synthetic engine crash")

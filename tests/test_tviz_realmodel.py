@@ -128,7 +128,7 @@ def test_gpt2_lens_pictures_and_decomposition(gpt2_logs, tmp_path) -> None:
     """Streaming lens -> ribbon/trajectory; score decomposition closes."""
 
     tokenizer, input_ids, log_eager, _ = gpt2_logs
-    from torchlens.semantic.logit_lens import logit_lens_predictions
+    from torchlens._semantic.logit_lens import logit_lens_predictions
 
     paris = tokenizer(" Paris").input_ids[0]
     predictions = logit_lens_predictions(log_eager, tokens=[paris])
@@ -246,8 +246,8 @@ def test_qwen_gqa_disclosure(tmp_path) -> None:
     heads over 2 kv groups, shared-heads header on every panel.
     """
 
-    from torchlens.semantic import facets as facet_registry
-    from torchlens.semantic.recipes.attention import gqa_attention
+    from torchlens._semantic import facets as facet_registry
+    from torchlens._semantic.recipes.attention import gqa_attention
 
     tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
     model = transformers.AutoModelForCausalLM.from_pretrained(

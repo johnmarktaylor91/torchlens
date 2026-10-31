@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.auto_collapse import _run_fold_members_uniform
+from torchlens._visualization.auto_collapse import _run_fold_members_uniform
 
 
 class _ConvBlock(nn.Module):
@@ -469,7 +469,7 @@ def test_run_fold_never_folds_unresolvable_wiring(monkeypatch) -> None:
     # F11 (collapse memo item 6): the wiring walk moved to
     # _collapse_signatures with the B1 fingerprint memo; the patch target
     # follows the callee's defining module so the degrade arm still fires.
-    from torchlens.visualization import _collapse_signatures, auto_collapse
+    from torchlens._visualization import _collapse_signatures, auto_collapse
 
     trace = tl.trace(_WiringStack([False, False, False]), torch.randn(2, 8))
     assert _run_fold_members_uniform(trace, ("blocks.0", "blocks.1", "blocks.2"))
@@ -510,7 +510,7 @@ def test_indexed_parent_stem_shared_for_bare_root_children() -> None:
     each carried a DISTINCT run key and no run could ever extend.
     """
 
-    from torchlens.visualization.auto_collapse import _indexed_parent_stem
+    from torchlens._visualization.auto_collapse import _indexed_parent_stem
 
     stems = {_indexed_parent_stem(str(i)) for i in range(8)}
     assert len(stems) == 1, f"root siblings must share one stem; got {stems}"
@@ -529,7 +529,7 @@ def test_fold_repeats_true_folds_root_child_runs() -> None:
     the inertness was scoped precisely to direct children of the root.
     """
 
-    from torchlens.visualization.auto_collapse import resolve_repeat_folds
+    from torchlens._visualization.auto_collapse import resolve_repeat_folds
 
     torch.manual_seed(0)
     trace = tl.trace(nn.Sequential(*[_LinBlock() for _ in range(8)]), torch.randn(2, 8))

@@ -11,13 +11,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._semantic import (
+    facets as facets_mod,
+)
+from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 from torchlens.errors import MissingFacetError
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import (
-    facets as facets_mod,
-)
-from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 
 
 class _Record:
@@ -929,7 +929,7 @@ def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:
     import copy
     import pickle
 
-    from torchlens.semantic.facets import AbsenceReason
+    from torchlens._semantic.facets import AbsenceReason
 
     error = MissingFacetError(
         "q",

@@ -19,9 +19,9 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as pp
-from torchlens.capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
-from torchlens.fastlog import Recorder
-from torchlens.fastlog._halt import StopSignal
+from torchlens._capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
+from torchlens.recording import Recorder
+from torchlens.recording._halt import StopSignal
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -322,7 +322,7 @@ def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
 
 
 def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -447,7 +447,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
     import weakref
     from types import SimpleNamespace
 
-    from torchlens.capture.outcome import StopRequest, settle_failed
+    from torchlens._capture.outcome import StopRequest, settle_failed
     from torchlens.errors import CaptureError
 
     latched = CaptureError("nan in relu_1_1")
@@ -512,7 +512,7 @@ class _HostileReprModel(nn.Module):
 
 
 def test_safe_exception_str_survives_hostile_str() -> None:
-    from torchlens.capture.outcome import safe_exception_repr, safe_exception_str
+    from torchlens._capture.outcome import safe_exception_repr, safe_exception_str
 
     hostile = _HostileStrError("boom")
     assert safe_exception_str(hostile) == "<unprintable _HostileStrError: __str__ raised>"
@@ -591,7 +591,7 @@ def test_hostile_str_fastlog_raise_path_keeps_identity() -> None:
 def test_hostile_str_teardown_failure_still_demotes(monkeypatch) -> None:
     """The demotion note survives a hostile-__str__ teardown exception."""
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -619,7 +619,7 @@ def test_teardown_demotion_carries_the_teardown_error_type(monkeypatch) -> None:
     had to string-parse the free-text reason.
     """
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -650,7 +650,7 @@ def test_teardown_double_fault_never_swallows_an_unwinding_interrupt(monkeypatch
 
     import warnings as warnings_module
 
-    from torchlens.capture import trace as trace_module
+    from torchlens._capture import trace as trace_module
 
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")
@@ -684,7 +684,7 @@ def test_teardown_failure_on_ordinary_paths_still_propagates(monkeypatch) -> Non
     """Pin: with no control-flow exception unwinding, a post-settlement
     teardown failure itself propagates (the demote-and-raise contract)."""
 
-    from torchlens.capture import trace as trace_module
+    from torchlens._capture import trace as trace_module
 
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")

@@ -6,7 +6,7 @@ torchlens/_runnable_state_context.py::_fake_tensor_mode_class
 torchlens/_state.py::call_token
 torchlens/_state.py::module_token
 torchlens/_utils/_callable_safety.py::_torch_overridable_callable_ids
-torchlens/user_funcs.py::<assign> cache_config
-torchlens/visualization/_fonts.py::_fontconfig_file_for
-torchlens/visualization/_header_block.py::_private_swatch_dir
-torchlens/visualization/_header_block.py::_text_width
+torchlens/_user_funcs.py::<assign> cache_config
+torchlens/_visualization/_fonts.py::_fontconfig_file_for
+torchlens/_visualization/_header_block.py::_private_swatch_dir
+torchlens/_visualization/_header_block.py::_text_width

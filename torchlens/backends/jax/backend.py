@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Final, cast
 
+from ..._capture._nonfinite_prefix import strip_raw_label_suffix
+from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes._compaction import compact_op_metadata
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
@@ -65,10 +67,8 @@ from ...backends._finalize import (
     value_nbytes as _nbytes,
 )
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
-from ...capture._nonfinite_prefix import strip_raw_label_suffix
-from ...capture.outcome import stamp_backend_finalized
-from ...fastlog.types import CaptureSpec
 from ...options import CaptureOptions, merge_capture_options
+from ...recording.types import CaptureSpec
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,

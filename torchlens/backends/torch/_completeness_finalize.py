@@ -332,7 +332,7 @@ def _is_value_free_capture(trace: Any) -> bool:
 
     if bool(getattr(trace, "structure_only", False)):
         return True
-    from ...capture._weightsfree_admission import admission_record_for
+    from ..._capture._weightsfree_admission import admission_record_for
 
     return admission_record_for(trace) is not None
 

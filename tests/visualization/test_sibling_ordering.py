@@ -12,7 +12,7 @@ pytest.importorskip("torchvision")
 import torchvision.models as tv_models  # noqa: E402
 
 import torchlens as tl
-from torchlens.visualization._render_dot import _strip_sibling_rank_groups
+from torchlens._visualization._render_dot import _strip_sibling_rank_groups
 
 
 def _plain_nodes(dot_source: str) -> dict[str, tuple[float, float]]:
@@ -355,7 +355,7 @@ def test_over_budget_graph_skips_verification_with_notice(
 ) -> None:
     """Graphs whose verification layouts exceed the layout budget skip the pass."""
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     with torch.no_grad():
         log = tl.trace(CodexDistorter(depth=5).eval(), torch.randn(1, 3))
@@ -400,7 +400,7 @@ def test_chainless_over_budget_graph_stays_silent(
 
     import warnings as warnings_module
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
     with torch.no_grad():

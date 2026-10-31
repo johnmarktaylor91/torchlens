@@ -27,7 +27,7 @@ import torch
 from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
 import torchlens as tl
-from torchlens.capture.outcome import CaptureStatus, outcome_for, stamp_backend_finalized
+from torchlens._capture.outcome import CaptureStatus, outcome_for, stamp_backend_finalized
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -213,7 +213,7 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     status for a capture whose halt never actually stopped the forward.
     """
 
-    from torchlens.capture.outcome import StopRequest
+    from torchlens._capture.outcome import StopRequest
     from torchlens.errors import StopSignalSwallowedError
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
@@ -235,7 +235,7 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
 def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     """A normally-halted capture (latch + structural halt) stamps HALTED."""
 
-    from torchlens.capture.outcome import StopRequest
+    from torchlens._capture.outcome import StopRequest
 
     trace = _halted_trace()
     trace.__dict__["_stop_requested"] = StopRequest(

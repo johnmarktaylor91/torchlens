@@ -26,13 +26,13 @@ import torch.nn as nn
 from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
-from torchlens._capture_honesty import episode_facts
-from torchlens.capture import _episode_ledger as episode_ledger_module
-from torchlens.capture._episode_ledger import (
+from torchlens._capture import _episode_ledger as episode_ledger_module
+from torchlens._capture._episode_ledger import (
     ResolvedEpisode,
     _derive_step_evidence,
     episode_step_join_claim,
 )
+from torchlens._capture_honesty import episode_facts
 from torchlens.options import CaptureOptions, EpisodeOptions
 
 V = 16

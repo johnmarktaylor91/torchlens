@@ -171,7 +171,7 @@ def test_projection_unresolvable_refuses():
 def test_norm_reconstruction_refusals():
     """norm_eps_unavailable / norm_geometry_mismatch / norm_convention_unmatched."""
 
-    from torchlens.semantic._norm_reconstruction import (
+    from torchlens._semantic._norm_reconstruction import (
         NormReconstructionError,
         reconstruct_norm,
     )

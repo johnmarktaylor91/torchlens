@@ -13,8 +13,8 @@ import warnings as warnings_module
 import pytest
 import torch
 
-from torchlens.visualization import collapse_optimizer
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization import collapse_optimizer
+from torchlens._visualization.collapse_plan import RenderContext
 
 torchvision = pytest.importorskip("torchvision")
 

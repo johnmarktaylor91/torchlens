@@ -21,7 +21,7 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ...fastlog.types import CaptureSpec
+from ...recording.types import CaptureSpec
 from ._tf_compat import get_op_callbacks_module
 from .modules import TFModuleTree, device_ref_from_tf_device, patched_tf_module_stack
 

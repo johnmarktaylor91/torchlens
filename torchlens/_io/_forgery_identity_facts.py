@@ -149,7 +149,7 @@ def _validate_episode_step_stamps(trace: Trace) -> None:
             )
         stamped_labels.append(label)
     if stamped_labels:
-        from ..capture._episode_ledger import capture_kind_for
+        from .._capture._episode_ledger import capture_kind_for
 
         if capture_kind_for(trace) != "episode":
             _refuse_identity(

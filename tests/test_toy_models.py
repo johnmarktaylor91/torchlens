@@ -15,10 +15,10 @@ import torch
 
 import torchlens as tl
 from torchlens import trace
+from torchlens._user_funcs import log_model_metadata
+from torchlens._visualization import show_model_graph
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.user_funcs import log_model_metadata
 from torchlens.validation import validate_forward_pass
-from torchlens.visualization import show_model_graph
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 
@@ -2037,7 +2037,7 @@ def test_functional_after_submodule_not_box():
     A torch.relu after a nn.Linear inside a container module should not get
     box-shaped rendering (which is reserved for module outputs).
     """
-    from torchlens.visualization._render_nodes import _get_node_address_shape_color
+    from torchlens._visualization._render_nodes import _get_node_address_shape_color
 
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)

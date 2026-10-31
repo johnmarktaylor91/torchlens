@@ -34,7 +34,7 @@ def test_dynamic_graph_records_1000_ops_with_varying_event_counts() -> None:
     """Recorder handles 1000 input-dependent ops and preserves pass counts."""
 
     model = DynamicMLP()
-    with tl.fastlog.Recorder(model, save=lambda ctx: ctx.kind == "op") as recorder:
+    with tl.recording.Recorder(model, save=lambda ctx: ctx.kind == "op") as recorder:
         for index in range(1000):
             recorder(torch.full((1, 4), float(index)))
     recording = recorder.recording

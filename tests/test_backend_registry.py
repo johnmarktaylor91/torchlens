@@ -17,6 +17,7 @@ from _source_corpus import package_ast, package_files, package_source
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.trace import _capture_backend_from_registry
 from torchlens.backends import (
     BackendCapabilities,
     BackendSpec,
@@ -36,7 +37,6 @@ from torchlens.backends.paddle import capabilities as paddle_capabilities
 from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, SerializationPolicy
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
-from torchlens.capture.trace import _capture_backend_from_registry
 from torchlens.errors import (
     AmbiguousBackendError,
     BackendMismatchError,

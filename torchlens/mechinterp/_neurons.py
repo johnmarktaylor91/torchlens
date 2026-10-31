@@ -32,7 +32,7 @@ from typing import Any
 
 import torch
 
-from ..semantic.tolerances import within_reconstruction_tolerance
+from .._semantic.tolerances import within_reconstruction_tolerance
 from ._errors import refuse
 from ._heads import _facet_keys_or_none, _shape_row_value
 from ._params import _math_weight, _orientation, _projection_for, _weight_params
@@ -361,7 +361,7 @@ def mlp_neuron_contributions(
             code="mi_neuron_geometry_unavailable",
             message="No module in the trace exposes the MLP down-projection vocabulary "
             "(down_out/output).",
-            remedy="capture with the builtin MLP recipes (import torchlens.semantic); "
+            remedy="capture with the builtin MLP recipes (import torchlens._semantic); "
             "models without a recognised MLP have no neuron rows",
         )
     selected = _select_mlps(modules, layers)

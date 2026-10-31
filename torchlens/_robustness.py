@@ -447,7 +447,7 @@ def check_model_and_input_variants(
             distributed) is unchanged by admission.
 
     Returns:
-        ``torchlens.capture._weightsfree_admission.MetaAdmissionRecord`` when
+        ``torchlens._capture._weightsfree_admission.MetaAdmissionRecord`` when
         a meta substrate was admitted, else ``None``. The capture entry
         registers the record against the Trace; settlement consumes it (an
         admitted meta offense without the final marker fails closed).
@@ -694,7 +694,7 @@ def _meta_admission_row_open() -> bool:
     the table module's own accessor, never duplicated.
     """
 
-    from .capture.structure_only import meta_admission_open
+    from ._capture.structure_only import meta_admission_open
 
     return meta_admission_open()
 
@@ -750,7 +750,7 @@ def _maybe_admit_meta(model: nn.Module, input_args: Any, input_kwargs: dict[str,
         )
 
     from . import _state
-    from .capture._weightsfree_admission import MetaAdmissionRecord, self_test_meta_identity
+    from ._capture._weightsfree_admission import MetaAdmissionRecord, self_test_meta_identity
 
     self_test_meta_identity()
 

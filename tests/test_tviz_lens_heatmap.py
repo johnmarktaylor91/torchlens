@@ -14,7 +14,7 @@ import torch
 
 import torchlens
 import torchlens.errors
-from torchlens.semantic.logit_lens import LogitLens, LogitLensEntry
+from torchlens._semantic.logit_lens import LogitLens, LogitLensEntry
 from torchlens.transformer._lens_heatmap import (
     MAX_HEATMAP_POSITIONS,
     _clip,

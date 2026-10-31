@@ -18,8 +18,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import run_layout_json
-from torchlens.visualization._render_utils import cluster_caption_attrs
+from torchlens._visualization._geometry_audit import run_layout_json
+from torchlens._visualization._render_utils import cluster_caption_attrs
 
 
 class _TailHeavy(nn.Module):

@@ -649,7 +649,7 @@ PHASES: dict[str, tuple[str, str]] = {
     "apply_mutation": ("torchlens._data_classes.trace", "Trace._apply_do_mutation"),
     "record_audit": ("torchlens._data_classes.trace", "Trace._record_do_intervention_event"),
     "rerun_capture": ("torchlens.intervention.rerun", "_capture_with_active_spec"),
-    "rerun_capture_core": ("torchlens.user_funcs", "_run_model_and_save_specified_outs"),
+    "rerun_capture_core": ("torchlens._user_funcs", "_run_model_and_save_specified_outs"),
     "rng_monitor_window": ("torchlens._utils.rng", "host_nondeterminism_monitor.__enter__"),
     "rerun_validate": ("torchlens.intervention.rerun", "_validate_rerun_result"),
     "rerun_reconcile_fires": ("torchlens.intervention.rerun", "_reconcile_rerun_hook_fires"),

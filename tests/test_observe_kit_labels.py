@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._nonfinite_prefix import resolve_raw_label
+from torchlens._capture._nonfinite_prefix import resolve_raw_label
 from torchlens.errors import CaptureError
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent

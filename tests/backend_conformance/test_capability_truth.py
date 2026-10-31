@@ -96,7 +96,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "rng_replay": True,
         "has_streaming": True,
         # Lifted 2026-08 (L7a wave 0): structure-only capture with the typed
-        # chokepoint in torchlens.capture.structure_only
+        # chokepoint in torchlens._capture.structure_only
         # (tests/test_structure_only_entry.py); DOCUMENTED-UNSTABLE pending
         # naming-session/S2 ratification.
         "structure_only_capture": True,

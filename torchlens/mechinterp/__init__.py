@@ -21,8 +21,8 @@ UNSTABLE pending the naming sprint.
 
 from __future__ import annotations
 
-from ..semantic import patching
-from ..semantic.logit_lens import LogitLens, LogitLensPrediction, LogitLensPredictions
+from .._semantic import patching
+from .._semantic.logit_lens import LogitLens, LogitLensPrediction, LogitLensPredictions
 from ..stats._trajectory import TrajectoryStats, measure_trajectory
 from ._aliases import AliasResolution, alias_report, resolve_alias, translation_table
 from ._compose import apply_norm_scale, full_decomposition, stack_facet

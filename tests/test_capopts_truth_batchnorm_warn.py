@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 

@@ -16,15 +16,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import PreReleaseArtifactError
-from torchlens._io.prerelease import PRERELEASE_MARKER
-from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     EpisodeLedger,
     EpisodeLedgerHeader,
     EpisodeLedgerRow,
     derive_episode_status,
 )
+from torchlens._io import PreReleaseArtifactError
+from torchlens._io.prerelease import PRERELEASE_MARKER
+from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
 from torchlens.errors import BundleRelationError
 
 

@@ -9,11 +9,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._partial import from_failed_capture
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
     resolve_episode_declaration,
 )
+from torchlens._partial import from_failed_capture
 from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeOptions
 from torchlens.types import PartialTrace

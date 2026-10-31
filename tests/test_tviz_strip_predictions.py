@@ -18,7 +18,7 @@ import torch.nn.functional as F
 import torchlens
 import torchlens.errors
 import torchlens.transformer as tviz
-from torchlens.semantic.logit_lens import (
+from torchlens._semantic.logit_lens import (
     PROVENANCE_NATIVE,
     PROVENANCE_PROJECTED,
     LogitLensPrediction,

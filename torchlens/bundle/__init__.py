@@ -78,9 +78,9 @@ from ._vary import bundle_vary as _bundle_vary
 if TYPE_CHECKING:
     from torch import nn
 
+    from .._capture.outcome import CaptureOutcome
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from ..capture.outcome import CaptureOutcome
 
 
 _OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
@@ -435,7 +435,7 @@ class Bundle:
             Derived worst-of-members fold over the current members.
         """
 
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         return _fold_member_outcomes(
             [(name, outcome_for(member)) for name, member in self._members.items()]

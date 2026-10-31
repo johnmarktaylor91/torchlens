@@ -1285,7 +1285,7 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
         Pairs of public facet names and ``FacetSpec`` objects.
     """
 
-    from ..semantic.facets import Facet, FacetSpec
+    from .._semantic.facets import Facet, FacetSpec
 
     resolved: list[tuple[str, Any]] = []
     seen: set[tuple[int, str, str]] = set()

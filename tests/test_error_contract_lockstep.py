@@ -72,27 +72,27 @@ _CONSTANT_SPELLED_CODES: dict[str, tuple[str, str]] = {
     # inline-literal scanner cannot see them; each is spelled as a module
     # constant beside the table.
     "structure_only_measurements_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_MEASUREMENTS_UNSUPPORTED",
     ),
     "structure_only_runnable_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_RUNNABLE_UNSUPPORTED",
     ),
     "structure_only_replay_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_REPLAY_UNSUPPORTED",
     ),
     "structure_only_validation_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_VALIDATION_UNSUPPORTED",
     ),
     "structure_only_backward_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_BACKWARD_UNSUPPORTED",
     ),
     "structure_only_episode_unsupported": (
-        "torchlens/capture/structure_only.py",
+        "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_EPISODE_UNSUPPORTED",
     ),
 }

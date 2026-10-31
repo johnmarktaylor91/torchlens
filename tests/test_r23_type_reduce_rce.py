@@ -151,7 +151,7 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target
         ("torchlens.intervention.types", "InterventionSpec"),
         ("torchlens.intervention.types", "Edit"),
-        ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
+        ("torchlens._semantic.facets", "FacetRegistrySnapshot"),
         ("torchlens._ir.container_registry", "ContainerRecord"),
     ]
     for module, name in admitted:

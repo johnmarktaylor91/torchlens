@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RecordingConfigError
-from torchlens.fastlog import CaptureSpec
+from torchlens.recording import CaptureSpec
 
 
 class DefaultsModel(nn.Module):
@@ -77,7 +77,7 @@ def test_noop_recorder_configuration_errors_at_construction() -> None:
     """A statically empty recorder configuration is rejected immediately."""
 
     with pytest.raises(RecordingConfigError, match="would capture nothing"):
-        tl.fastlog.Recorder(
+        tl.recording.Recorder(
             DefaultsModel(),
             save=None,
             default_op=False,

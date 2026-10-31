@@ -13,12 +13,12 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._ir.intervention import FireResult
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
-from ..capture.arg_positions import _normalize_func_name
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -1824,7 +1824,7 @@ def _append_active_spec_records(records: list[FireRecord]) -> None:
     # FireRecord passes through, so the armed coupling session of an
     # intervened episode capture attributes fires here -- independent of
     # whether a spec ledger is installed.
-    from ..capture._episode_coupling import active_coupling_session
+    from .._capture._episode_coupling import active_coupling_session
 
     coupling = active_coupling_session()
     if coupling is not None:

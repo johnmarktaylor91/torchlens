@@ -35,12 +35,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization._segment_descriptors import (
+from torchlens._visualization._segment_descriptors import (
     _op_segment_owner_key,
     _segment_owner_key,
 )
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 class RolledLeaf(nn.Module):

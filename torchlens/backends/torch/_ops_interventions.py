@@ -8,6 +8,16 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ... import _state as _st
+from ..._capture.arg_positions import (
+    _normalize_func_name,
+)
+from ..._capture.predicates import (
+    _evaluate_intervene_op,
+    build_op_record_context,
+)
+from ..._capture.projections import (
+    get_active_recording_state,
+)
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._ir.container import (
     ContainerSpec,
@@ -16,20 +26,7 @@ from ..._ir.container import (
 )
 from ..._ir.intervention import FireResult
 from ..._state import pause_logging
-from ...capture.arg_positions import (
-    _normalize_func_name,
-)
-from ...capture.predicates import (
-    _evaluate_intervene_op,
-    build_op_record_context,
-)
-from ...capture.projections import (
-    get_active_recording_state,
-)
 from ...errors._base import CompatibilityError
-from ...fastlog.types import (
-    RecordContext,
-)
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (
@@ -38,6 +35,9 @@ from ...intervention.selectors import (
 from ...intervention.types import (
     InterventionDecision,
     TargetSpec,
+)
+from ...recording.types import (
+    RecordContext,
 )
 from ._tl import (
     get_label_list,

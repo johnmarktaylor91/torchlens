@@ -141,7 +141,7 @@ class TestMechanismIsRedCapable:
 
         planted = (
             *coverage.label_template_universe(),
-            SourceItem("wobble factor:", "torchlens/visualization/_label_format.py:999"),
+            SourceItem("wobble factor:", "torchlens/_visualization/_label_format.py:999"),
         )
         failures = coverage.check_label_templates(planted)
         assert _reported(failures, "`wobble factor:`", "_label_format.py:999")

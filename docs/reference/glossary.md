@@ -42,7 +42,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
   `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
   of them. `tl.extract(..., detach_saved_activations=False)` and
-  `tl.record(..., detach_saved_activations=False)` (also `tl.fastlog.Recorder` and
+  `tl.record(..., detach_saved_activations=False)` (also `tl.recording.Recorder` and
   `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
   (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
@@ -1279,10 +1279,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections.
 
 **Namespaces**
-: `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;
-  `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
+: `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
+  `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl.visualization.show_bundle_graph` renders a bundle's graph:
+  Trace collections and `tl._visualization.show_bundle_graph` renders a bundle's graph:
   `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
@@ -1740,7 +1740,7 @@ deprecation shim owed*
   parameter geometry, and per-op shape/dtype are recorded with every
   value-bearing claim a HYPOTHESIS; value payloads are never retained,
   value-requiring consumers refuse typed through
-  `torchlens.capture.structure_only.require_structure_only_capability`, and
+  `torchlens._capture.structure_only.require_structure_only_capability`, and
   value-dependent branches refuse with the user's source line
   (device-neutral). The mirror field `trace.structure_only` declares the
   mode. Capability contract:
@@ -2233,7 +2233,7 @@ shim owed*
   `VisualizationOptions.theme`.
 
 **theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `tl.visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+: `tl._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
@@ -2241,7 +2241,7 @@ shim owed*
 
 **Bundled render font** — *unstable — no deprecation shim owed*
 : Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5
-  (SIL Open Font License 1.1, shipped unmodified under `torchlens/visualization/fonts/` with its
+  (SIL Open Font License 1.1, shipped unmodified under `torchlens/_visualization/fonts/` with its
   license) through a fontconfig file layered over the caller's own (it maps `Helvetica` and
   `Arial`, the family Graphviz's PostScript alias table asks for), so text metrics no longer
   depend on which face a machine has installed. The emitted DOT keeps `fontname="Helvetica"`.
@@ -2579,8 +2579,8 @@ deprecation shim owed*
   `activations`, `backward`, `annotations`), every figure read from fields
   the trace already carries — the rollup mints no new claims.
 
-**logit_lens (torchlens.semantic)** — *unstable — no deprecation shim owed*
-: `torchlens.semantic.logit_lens(trace)` projects each block's
+**logit_lens (torchlens._semantic)** — *unstable — no deprecation shim owed*
+: `torchlens._semantic.logit_lens(trace)` projects each block's
   residual-stream facet through the model's own final norm + unembedding,
   returning a `LogitLens` (per-layer logits, `summary()`,
   `top_tokens()`). The reconstructed lens is validated against the captured
@@ -2917,7 +2917,7 @@ deprecation shim owed*
   last selected events the sink receives on a forward exception.
 
 **StorageOptions**
-: `tl.options.StorageOptions` (also reachable as `tl.user_funcs.StorageOptions`) groups the
+: `tl.options.StorageOptions` (also reachable as `tl._user_funcs.StorageOptions`) groups the
   streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
   `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
   `on_save=`),
@@ -2929,7 +2929,7 @@ deprecation shim owed*
 : `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
   `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
   `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
-  stopped by `halt=` or `tl.fastlog.stop()`.
+  stopped by `halt=` or `tl.recording.stop()`.
 
 **Recording state**
 : `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
@@ -2942,11 +2942,11 @@ deprecation shim owed*
   record was taken.
 
 **Recording types**
-: `tl.fastlog.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
+: `tl.recording.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
   `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
-  `GradRecord.transformed_disk_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
+  `GradRecord.transformed_disk_payload`), `tl.recording.DryRun` (`DryRun.events`,
   `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.filter(...)`,
-  `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
+  `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.recording.stop()` and `tl.recording.StopSignal`. `GradRecordContext.kind`
   names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
   `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
   (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
@@ -2969,7 +2969,7 @@ deprecation shim owed*
   `input_transform=` preprocesses inputs.
 
 **Admin and debugging names**
-: `tl.clear_cache()` (also `tl.user_funcs.clear_cache`) empties the capture cache;
+: `tl.clear_cache()` (also `tl._user_funcs.clear_cache`) empties the capture cache;
   `tl.observers.register_tensor_connection` registers a tensor connection;
   `tl.debug.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
   (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
@@ -3369,8 +3369,8 @@ The sections above describe each surface in depth.
 | `tl.types.RunReport` | Honesty, state, resolution, and contract metadata for one run |
 | `tl.types.RunnableCompatibility` | Producer/runtime versions recorded for readiness diagnostics |
 | `tl.types.RunnableDiagnostic` | Structured diagnostic shared by preflight, readiness, and run reports |
-| `tl.user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
-| `tl.user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
+| `tl._user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
+| `tl._user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
 ### Members
 | Spelling | Meaning |
 | --- | --- |

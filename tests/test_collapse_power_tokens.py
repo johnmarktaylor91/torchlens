@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import graphviz
 
-from torchlens.visualization.collapse_plan import SegmentDescriptor
-from torchlens.visualization.themes import (
+from torchlens._visualization.collapse_plan import SegmentDescriptor
+from torchlens._visualization.themes import (
     COLLAPSE_KIND_TOKENS_DEFAULT,
     THEME_PRESETS,
     CollapseTokens,
@@ -58,7 +58,7 @@ def test_tokens_derive_from_theme() -> None:
 def test_segment_capsule_uses_theme_tokens() -> None:
     """The K4 emitter paints from the active theme, not hardcodes."""
 
-    from torchlens.visualization._render_nodes import _queue_segment_node
+    from torchlens._visualization._render_nodes import _queue_segment_node
 
     descriptor = SegmentDescriptor(
         name="seg_test",

@@ -1,8 +1,8 @@
 """AUD-CODE 2.12 (lane W051-SEMANTIC): half-precision norm reconstruction.
 
-The shared norm linearization (``torchlens.semantic._norm_reconstruction``)
+The shared norm linearization (``torchlens._semantic._norm_reconstruction``)
 recomputed a norm in the PAYLOAD dtype -- five bf16 roundings -- while the
-reconstruction tolerance model (``torchlens.semantic.tolerances``,
+reconstruction tolerance model (``torchlens._semantic.tolerances``,
 ``RECONSTRUCTION_ULP_HEADROOM[bf16] = 4``) budgets an fp32-accumulate,
 round-once recompute. Every bf16/fp16 norm therefore refused
 ``norm_convention_unmatched`` with a wrong diagnosis (a precision artifact
@@ -36,12 +36,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from torchlens._utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
-from torchlens.semantic._norm_reconstruction import (
+from torchlens._semantic._norm_reconstruction import (
     NormReconstructionError,
     reconstruct_norm,
 )
-from torchlens.semantic.tolerances import within_reconstruction_tolerance
+from torchlens._semantic.tolerances import within_reconstruction_tolerance
+from torchlens._utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
 
 _requires_cpu_half_kernels = pytest.mark.skipif(
     not get_cpu_half_kernels_support(),

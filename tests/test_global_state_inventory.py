@@ -17,8 +17,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._capture import projections, trace as capture_trace
 from torchlens.backends.torch import _tl as torch_tl, completeness_witness, rescue
-from torchlens.capture import projections, trace as capture_trace
 
 MUTATING_METHODS = frozenset(
     {
@@ -570,8 +570,8 @@ _HOT_STATE_SUBSET_PREFIXES = (
     "torchlens/_capture_state_helpers.py",
     "torchlens/_save_budget.py",
     "torchlens/backends/torch/",
-    "torchlens/capture/",
-    "torchlens/fastlog/",
+    "torchlens/_capture/",
+    "torchlens/recording/",
     "torchlens/_utils/rng.py",
     "torchlens/_utils/_torch_compat.py",
 )
@@ -777,7 +777,7 @@ def test_refused_concurrent_record_never_installs_recording_state(
     reservation refuses before the install.
     """
 
-    from torchlens.fastlog import _recorder as recorder_module
+    from torchlens.recording import _recorder as recorder_module
 
     installs: list[Any] = []
     real_install = recorder_module.active_recording_state

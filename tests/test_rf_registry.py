@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 import pytest
 from support.rf_isolation import preserved_rf_registry
 
-from torchlens.capture.arg_positions import _normalize_func_name
+from torchlens._capture.arg_positions import _normalize_func_name
 from torchlens.receptive_field import _rules
 
 

@@ -24,8 +24,8 @@ from torchlens._capture_state_helpers import (
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
+from torchlens._user_funcs import _reject_opaque_wrappers
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
-from torchlens.user_funcs import _reject_opaque_wrappers
 
 
 class _Tiny(nn.Module):
@@ -254,7 +254,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     graph_path = tmp_path / "compiled_graph"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(
+        tl._visualization.show_model_graph(
             torch.compile(_Tiny(), backend="eager"),
             input_tensor,
             visualization=tl.options.VisualizationOptions(

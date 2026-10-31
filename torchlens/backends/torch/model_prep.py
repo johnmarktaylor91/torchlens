@@ -50,7 +50,7 @@ from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
 )
-from ...fastlog._halt import StopSignal
+from ...recording._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._module_arg_stubs import stub_module_arg_payloads
@@ -1167,7 +1167,7 @@ def _record_module_entry_metadata(
         kwargs,
     )
     module_call_label_str = f"{module_address}:{module_call_index}"
-    from ...capture.session import capture_session_for
+    from ..._capture.session import capture_session_for
 
     capture_session = capture_session_for(trace)
     if capture_session is not None:
@@ -1572,7 +1572,7 @@ def _ensure_module_output_tensor_logged(
         # ops are untraceable, so attaching the previous op as a "parent" would
         # be a fabricated edge. Register it as a clean graph source.
         parent_labels = []
-    from ...capture.projections import LiveOpView
+    from ..._capture.projections import LiveOpView
 
     parent_entries = [
         LiveOpView(trace, trace.capture_events.live_index.require_event(label))
@@ -2136,7 +2136,7 @@ def _record_module_exit_metadata(
             output_tensor_leaf_count=len(output_entries),
         )
     )
-    from ...capture.session import capture_session_for
+    from ..._capture.session import capture_session_for
 
     capture_session = capture_session_for(trace)
     if capture_session is not None:
@@ -2174,13 +2174,13 @@ def _record_predicate_module_boundary_outputs(
         ops are added to the sparse recording once.
     """
 
+    from ..._capture.predicates import _evaluate_keep_op, _plain_module_union
+    from ..._capture.projections import _record_from_record_context
     from ..._ir.predicate import RetroactiveCaptureDecision
     from ..._ir.selector_eval import selector_contains_kind
-    from ...capture.predicates import _evaluate_keep_op, _plain_module_union
-    from ...capture.projections import _record_from_record_context
-    from ...fastlog.types import ActivationRecord
     from ...intervention.runtime import _peek_module_intervention_parent_labels
     from ...intervention.selectors import BaseSelector
+    from ...recording.types import ActivationRecord
     from .ops import _walk_output_tensors_with_paths
 
     log_predicate_boundary_replacements(trace, state, out)
@@ -2340,17 +2340,17 @@ def module_forward_decorator(
         _state.note_fingerprint_token(_state.module_token(_module_address(module)))
 
         if trace.capture_mode == "predicate":
-            from ...capture.predicates import (
+            from ..._capture.predicates import (
                 _evaluate_halt,
                 _is_halt_only_capture,
                 _module_capture_spec,
             )
-            from ...capture.projections import (
+            from ..._capture.projections import (
                 _build_record_context,
                 append_projected_event,
                 get_active_recording_state,
             )
-            from ...fastlog.types import ActivationRecord, CaptureSpec
+            from ...recording.types import ActivationRecord, CaptureSpec
 
             state = get_active_recording_state()
             frame = _mstack.push_frame(trace, state.module_stack, module)
@@ -2575,8 +2575,8 @@ def module_forward_decorator(
             )
             options = getattr(trace, "_predicate_save_options", None)
             if options is not None and options.halt is not None:
-                from ...capture.predicates import _evaluate_halt
-                from ...capture.projections import _build_record_context
+                from ..._capture.predicates import _evaluate_halt
+                from ..._capture.projections import _build_record_context
 
                 exit_ctx = _build_record_context(
                     kind="module_exit",

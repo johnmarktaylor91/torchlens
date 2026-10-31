@@ -64,7 +64,7 @@ __all__ = [
     "receipt_rows",
 ]
 
-VIS_PREFIX = "torchlens.visualization."
+VIS_PREFIX = "torchlens._visualization."
 EXEMPT_PREFIX = "exempt: "
 
 DRAW_ENTRY_POINTS: Mapping[str, str] = {
@@ -86,7 +86,7 @@ CALL_ENTRY = {
 
 
 def resolve_locator(locator: str) -> object:
-    """Import ``module:symbol`` (module relative to ``torchlens.visualization`` when short)."""
+    """Import ``module:symbol`` (module relative to ``torchlens._visualization`` when short)."""
 
     module_name, _, symbol = locator.partition(":")
     if not module_name.startswith("torchlens"):
@@ -146,7 +146,7 @@ def _signature_literal_vocab(aliases: list[VocabValue]) -> list[VocabValue]:
 
 
 def _module_vocab() -> list[VocabValue]:
-    from torchlens.visualization import (
+    from torchlens._visualization import (
         _encoding,
         _surgery_diff,
         code_panel,
@@ -158,7 +158,7 @@ def _module_vocab() -> list[VocabValue]:
         theme_registry,
         themes,
     )
-    from torchlens.visualization.lenses import _filter, _nonfinite, _roster
+    from torchlens._visualization.lenses import _filter, _nonfinite, _roster
 
     rows = [str(v) for k, v in vars(_encoding).items() if k.startswith("ROW_")]
     lenses = set(_roster.ROSTER) | {lens.name for lens in theme_registry.list_lenses()}
@@ -184,7 +184,7 @@ def _module_vocab() -> list[VocabValue]:
     ]
     out: list[VocabValue] = []
     for name, values in groups:
-        out += _vocab(name, values, f"torchlens.visualization.{name}")
+        out += _vocab(name, values, f"torchlens._visualization.{name}")
     return out
 
 
@@ -222,7 +222,7 @@ def vocabulary_universe() -> tuple[VocabValue, ...]:
 def legend_universe() -> tuple[LegendText, ...]:
     """Every legend row text the forward, backward and encoding legends can show."""
 
-    from torchlens.visualization import _header_block, _legend, themes
+    from torchlens._visualization import _header_block, _legend, themes
 
     every_role = frozenset(_legend.LEGEND_ROLES)
     sections: list[tuple[str, Any]] = []
@@ -646,7 +646,7 @@ def gate_namespace() -> dict[str, Any]:
     """Modules a row's gating expression may name, by short name."""
 
     from torchlens import _literals
-    from torchlens.visualization import _render_common, modes, themes
+    from torchlens._visualization import _render_common, modes, themes
 
     return {
         "themes": themes,

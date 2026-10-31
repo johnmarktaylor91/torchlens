@@ -107,18 +107,18 @@ CANONICAL_SUBMODULES = [
     "torchlens.experimental",
     "torchlens.experimental.dagua",
     "torchlens.export",
-    "torchlens.fastlog",
+    "torchlens.recording",
     "torchlens.fingerprint",
     "torchlens.io",
     "torchlens.options",
     "torchlens._partial",
     "torchlens.report",
-    "torchlens.semantic",
+    "torchlens._semantic",
     "torchlens.stats",
     "torchlens.types",
     "torchlens._utils",
     "torchlens.validation",
-    "torchlens.visualization",
+    "torchlens._visualization",
     "torchlens.viz",
 ]
 
@@ -203,7 +203,7 @@ def test_phase_b_exports_are_top_level_importable() -> None:
     assert torchlens.export is importlib.import_module("torchlens.export")
     assert torchlens.errors.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
     assert importlib.import_module("torchlens.facets") is importlib.import_module(
-        "torchlens.semantic.facets"
+        "torchlens._semantic.facets"
     )
 
 

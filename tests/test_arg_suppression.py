@@ -22,13 +22,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._arg_suppression import (
+from torchlens._visualization._arg_suppression import (
     SUPPRESSION_CANDIDATE_TABLE,
     compute_suppressed_arg_keys,
     suppressed_arg_keys_for_record,
 )
-from torchlens.visualization._label_format import format_module_kwargs
-from torchlens.visualization._render_nodes import compute_default_node_lines
+from torchlens._visualization._label_format import format_module_kwargs
+from torchlens._visualization._render_nodes import compute_default_node_lines
 
 # ---------------------------------------------------------------------------
 # Fixtures

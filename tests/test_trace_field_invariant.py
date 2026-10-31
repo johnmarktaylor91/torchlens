@@ -105,7 +105,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         # deliberately absent from MODEL_LOG_FIELD_ORDER because they do not
         # survive save/load. ``_module_call_accessor`` is the exact sibling of
         # the allowlisted ``_buffer_accessor``; ``measure_python_peak_memory``
-        # is the documented tracemalloc opt-in read back by capture/trace.py;
+        # is the documented tracemalloc opt-in read back by _capture/trace.py;
         # ``save_budget`` and its live accountant are the honesty/safety
         # phase's per-device retained-bytes ceiling.
         "_module_call_accessor",

@@ -161,8 +161,8 @@ def _fire_boundary_predicate_hooks(
     tuple means the predicate declined this site.
     """
 
+    from .._capture.predicates import _evaluate_intervene_op
     from ..backends.torch.ops import _record_predicate_intervention_spec
-    from ..capture.predicates import _evaluate_intervene_op
     from .hooks import normalize_hook_plan
     from .runtime import (
         _apply_live_hooks,

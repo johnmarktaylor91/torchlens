@@ -35,7 +35,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._data_classes.layer import Layer
-from torchlens.visualization import _render_leaf
+from torchlens._visualization import _render_leaf
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -166,7 +166,7 @@ def _counted_draw(
     monkeypatch.setattr(_render_leaf, "_collapsed_module_rolling_suffix_map", counting_map)
     monkeypatch.setattr(_render_leaf, "_same_layer_reachability", counting_reach)
     for module_name in ("_render_dot", "_render_nodes", "render_ir"):
-        module = __import__(f"torchlens.visualization.{module_name}", fromlist=[module_name])
+        module = __import__(f"torchlens._visualization.{module_name}", fromlist=[module_name])
         if hasattr(module, "_collapsed_module_rolling_suffix"):
             monkeypatch.setattr(module, "_collapsed_module_rolling_suffix", counting_suffix)
 

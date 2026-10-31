@@ -5,7 +5,7 @@ through the capture label universe (``tl.label``, ``tl.label_contains``, ``tl.la
 time the base ``RecordContext`` only carries the RAW label (e.g. ``"conv2d_2_4_raw"``);
 the short/friendly ``"{layer_type}_{type_index}"`` label (e.g. ``"conv2d_2"``) is
 synthesized only by the alias retry in
-``torchlens.capture.predicates._evaluate_keep_op``. Before the fix,
+``torchlens._capture.predicates._evaluate_keep_op``. Before the fix,
 ``_keep_op_needs_alias_retry`` excluded label-matching structured selectors, so a
 short-label ``save=`` selector matched zero sites and warned.
 """
@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.predicates import _keep_op_needs_alias_retry
+from torchlens._capture.predicates import _keep_op_needs_alias_retry
 
 
 def _build_two_conv_chain() -> tuple[nn.Module, torch.Tensor]:

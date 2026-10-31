@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     _HEADER_PAYLOAD_KEYS,
     _ROW_PAYLOAD_KEYS,
     EPISODE_LEDGER_VERSION,

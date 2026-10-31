@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     episode_ledger_for,
     escalation_spec,
 )

@@ -26,14 +26,14 @@ pytest.importorskip("transformers")
 
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
-from torchlens.errors._base import TorchLensWarning
-from torchlens.semantic.logit_lens import (
+from torchlens._semantic.logit_lens import (
     PROVENANCE_NATIVE,
     LogitLensError,
     logit_lens,
     logit_lens_predictions,
 )
-from torchlens.semantic.patching import PatchApplicationError
+from torchlens._semantic.patching import PatchApplicationError
+from torchlens.errors._base import TorchLensWarning
 
 # File-level: the real_model selection marker only. Cost tiers are per-test:
 # the logit-lens/attribution rows are smoke (sub-second on the cached capture);

@@ -96,7 +96,7 @@ An op without a cost rule never silently counts as zero — it lands in the
 unknown ledger with the exact remedy invocation:
 
 ```python
-from torchlens.capture.flops import register_op_rule
+from torchlens._capture.flops import register_op_rule
 
 register_op_rule("my_custom_op", lambda *args, **kwargs: 0)
 ```

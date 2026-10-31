@@ -12,8 +12,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.errors import PredicateError, RecordingConfigError
-from torchlens.fastlog import CaptureSpec, RecordContext
 from torchlens.options import StorageOptions
+from torchlens.recording import CaptureSpec, RecordContext
 
 
 class StorageModel(nn.Module):
@@ -31,7 +31,7 @@ class StorageModel(nn.Module):
         return self.linear(x).relu()
 
 
-def _first_payload_record(recording: tl.Recording) -> tl.fastlog.ActivationRecord:
+def _first_payload_record(recording: tl.Recording) -> tl.recording.ActivationRecord:
     """Return the first record with a RAM payload."""
 
     return next(record for record in recording if record.ram_payload is not None)
@@ -143,7 +143,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
     """Disk-only storage rejects static keep_grad defaults before recording."""
 
     with pytest.raises(RecordingConfigError, match="save_grad=True"):
-        tl.fastlog.Recorder(
+        tl.recording.Recorder(
             StorageModel(),
             default_op=CaptureSpec(save_grad=True),
             streaming=StorageOptions(

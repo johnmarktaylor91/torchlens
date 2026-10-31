@@ -278,7 +278,7 @@ print(reference.result() == spines[label].result())
 
 `tl.mechinterp.measure_trajectory(model, data)` measures the logit-lens
 trajectory: each block's hidden state projected through the model's own
-final norm and head (the lens `torchlens.semantic.logit_lens` builds and
+final norm and head (the lens `torchlens._semantic.logit_lens` builds and
 validates, or a user `lens=` such as a tuned lens), one distribution per
 layer and position. It traces each batch, projects one layer at a time,
 reduces it to the named statistics and drops it, so only one
@@ -301,7 +301,7 @@ a model fed embeddings, no batches).
 ```python
 from torch import nn
 from torchlens.facets import FacetSpec
-from torchlens.semantic.recipes._helpers import parameter_spec
+from torchlens._semantic.recipes._helpers import parameter_spec
 
 class DocBlock(nn.Module):
     def __init__(self):
@@ -351,7 +351,7 @@ print(traj.compute_stats("target_rank")["blocks.1"].mean)
   numbers of a whole model's run (this page across a dataset, the stats line on
   each op of a trace).
 - `tl.stats.aggregate` captures with the ordinary verified `tl.trace` engine; for
-  tight training loops that only need a few sites, `tl.fastlog.Recorder`
+  tight training loops that only need a few sites, `tl.recording.Recorder`
   (built once, `.log()` per step) is the cheaper repeated-capture door.
 - The observability kernels (`RunningStats`, `Histogram`) have one implementation
   home shared with the `torchlens.trackers.watch` tiers; see

@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization._render_flow import _get_max_call_depth
+from torchlens._visualization._render_flow import _get_max_call_depth
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 

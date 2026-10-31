@@ -36,13 +36,13 @@ from tests.test_sae4_latent_facets import (
     _TwoSites,
 )
 from tests.test_sae4_multi_call_modules import MultiHeadSelfAttention
+from torchlens._semantic.facets import Facet
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
     MultiMatchWarning,
     SelectorCapabilityError,
     SiteResolutionError,
 )
-from torchlens.semantic.facets import Facet
 
 _READY = tl.options.CaptureOptions(intervention_ready=True)
 

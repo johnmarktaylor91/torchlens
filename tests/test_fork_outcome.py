@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import CaptureStatus
+from torchlens._capture.outcome import CaptureStatus
 
 
 class _Net(nn.Module):
@@ -109,7 +109,7 @@ def test_fork_keeps_analysis_capabilities(parent_trace: tl.Trace, tmp_path) -> N
     fork.save(path)
     assert tl.load(path)["relu_1_2"] is not None
     # validation entry allows UNATTESTED (the tripwire stays armed).
-    from torchlens.capture.outcome import require_capture_capability
+    from torchlens._capture.outcome import require_capture_capability
 
     require_capture_capability(fork, "validation_entry")
     require_capture_capability(fork, "backward")

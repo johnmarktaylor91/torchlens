@@ -334,7 +334,7 @@ def _activate_one(entry_point: metadata.EntryPoint, candidate: ProviderCandidate
         candidate.version,
     )
     if candidate.group == "torchlens.recipes":
-        from ..semantic.recipes import activate_entrypoint_recipes
+        from .._semantic.recipes import activate_entrypoint_recipes
 
         activate_entrypoint_recipes([candidate.name])
         return

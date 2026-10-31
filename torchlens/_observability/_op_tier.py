@@ -241,8 +241,8 @@ class OpTierCollector:
 
         import warnings
 
-        from .. import fastlog
-        from ..fastlog import _record_one_shot
+        from .. import recording as fastlog
+        from ..recording import _record_one_shot
 
         _record: Any = _record_one_shot.record
 
@@ -407,7 +407,7 @@ class OpTierCollector:
         without writing a block into the history.
         """
 
-        from ..fastlog import _record_one_shot
+        from ..recording import _record_one_shot
 
         _record: Any = _record_one_shot.record
 
@@ -442,7 +442,7 @@ class OpTierCollector:
                 code="watch_lifecycle_invalid",
                 remedy="Wrap the training step in collector.step(global_step).",
             )
-        from ..fastlog import _record_one_shot
+        from ..recording import _record_one_shot
 
         _record: Any = _record_one_shot.record
 

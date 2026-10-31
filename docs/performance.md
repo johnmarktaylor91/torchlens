@@ -351,7 +351,7 @@ to keep before the first long capture:
 - `CaptureOptions(save_budget=...)` (default `"auto"`) caps saved bytes; an exceeded budget
   raises `SaveBudgetExceededError` rather than exhausting memory, and `output_device="cpu"` keeps
   saved activations in host memory.
-- For a logit-lens sweep over many positions, `torchlens.semantic.logit_lens_predictions`
+- For a logit-lens sweep over many positions, `torchlens._semantic.logit_lens_predictions`
   projects one layer at a time and keeps only top-k summaries.
 - For many forwards or generation, a bound spec (and its `generate`) saves nothing at all; editing
   the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).

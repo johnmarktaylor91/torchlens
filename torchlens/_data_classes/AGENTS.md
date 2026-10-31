@@ -81,7 +81,7 @@ Single-pass layers delegate unknown attrs to `ops[0]`. Multi-pass per-pass field
 `Trace` owns more than storage: lookup, `draw`, `save`,
 `find_sites`, `resolve_sites`, `fork`, `run`, `push`, `summary`,
 (loading is module-level `tl.load`, never `trace.load`; there is no
-`Trace.show_graph` — use `draw` or `torchlens.visualization.show_model_graph`;
+`Trace.show_graph` — use `draw` or `torchlens._visualization.show_model_graph`;
 `rerun`/`replay` are deprecated aliases of `run`/`push` that warn),
 `preview_fastlog`, and validation convenience custom_methods all live here or are attached via
 helper modules.

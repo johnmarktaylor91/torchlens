@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -42,9 +43,8 @@ from ..._postprocess._selective_save import (
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import get_backend_spec
-from ...capture.outcome import stamp_backend_finalized
-from ...fastlog.types import CaptureSpec
 from ...options import CaptureOptions, merge_capture_options
+from ...recording.types import CaptureSpec
 from ...validation.status import (
     ValidationReplaySource,
     ValidationStatus,

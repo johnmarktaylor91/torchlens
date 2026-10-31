@@ -26,11 +26,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_derivation import (
+from torchlens._capture._episode_derivation import (
     rederived_evidence_matches,
     validate_step_output_positions,
 )
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     EpisodeLedger,
     EpisodeLedgerHeader,
     EpisodeLedgerRow,

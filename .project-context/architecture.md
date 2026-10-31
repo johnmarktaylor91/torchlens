@@ -12,7 +12,7 @@ checked by every wrapper, the active `Trace` reference, and capture-control muta
 Keeps its own imports minimal (stdlib plus `errors._base`) to stay near the bottom of the
 dependency graph.
 
-### `torchlens/user_funcs.py`
+### `torchlens/_user_funcs.py`
 Public API entry points: `tl.trace()` lives here, along with `show_model_graph()`, the
 authenticated capture cache, and admin helpers (`list_logs()`, `reset_naming_counter()`).
 Orchestrates the two-pass strategy for selective saves via
@@ -36,7 +36,7 @@ per-op logging split:
 - `_completeness_*.py` / `completeness_witness.py` — capture-completeness witness.
 - `collectives.py` — explicit `torch.distributed` collective boundary ops.
 
-### `torchlens/capture/`
+### `torchlens/_capture/`
 Backend-neutral capture orchestration: `trace.py` (forward-pass runner and session
 setup/cleanup), `projections.py` (sparse predicate recording and `OpEvent` emission),
 `predicates.py`/`stop.py` (capture decisions, halt/nonfinite), `outcome.py` (settled
@@ -63,7 +63,7 @@ The tripwire: `core.py` (forward replay orchestration), `backward.py`,
 conditionals, backward, buffers, equivalence, modules/params), `exemptions.py`
 (narrow, contract-scoped exemptions only — see the validation-integrity rule).
 
-### `torchlens/visualization/`
+### `torchlens/_visualization/`
 Graphviz rendering pipeline (`_render_dot.py` orchestrates; nodes/edges/leaf/common split
 across `_render_*.py`), smart collapse v2 (`auto_collapse.py`, `collapse_plan.py`,
 `collapse_optimizer.py`), `renderers/` (graphviz backend), and the dagua bridge — the
@@ -271,7 +271,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_user_public_impls.py` | Private implementations backing public user-facing utility commands |
 | `captured_run.py` | Shared public base types for TorchLens captured runs |
 | `constants.py` | FIELD_ORDER tuples (canonical field sets) and torch function discovery sets |
-| `facets.py` | Lazy alias stub: self-replaces in `sys.modules` with canonical `torchlens.semantic.facets` |
+| `facets.py` | Lazy alias stub: self-replaces in `sys.modules` with canonical `torchlens._semantic.facets` |
 | `hash.py` | Provisional public structural-hash helpers |
 | `observers.py` | User observer helpers: taps, scalar logs, record spans |
 | `options.py` | Grouped option dataclasses (`CaptureOptions`, ...) for public TorchLens APIs |
@@ -344,7 +344,7 @@ decide it.
   and actionable-message helpers built on `errors._base`; `intervention/errors.py`
   owns the intervention error catalog (severity tags, field-formatted messages) and
   imports from both.
-- `torchlens/facets.py` + `torchlens/semantic/`: `semantic/` is the canonical
+- `torchlens/facets.py` + `torchlens/_semantic/`: `semantic/` is the canonical
   implementation (`semantic/facets.py` plus `recipes` and `patching`); top-level
   `facets.py` is a lazy import-alias stub that replaces itself in `sys.modules` with
-  `torchlens.semantic.facets` so the two module objects are identity-equal.
+  `torchlens._semantic.facets` so the two module objects are identity-equal.

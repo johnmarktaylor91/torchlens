@@ -28,15 +28,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._edge_multiplicity import _ARG_LABEL_MIDPOINT_FANIN
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._edge_multiplicity import _ARG_LABEL_MIDPOINT_FANIN
+from torchlens._visualization._geometry_audit import (
     AuditResult,
     ParsedLayout,
     audit_layout,
     parse_layout_json,
     run_layout_json,
 )
-from torchlens.visualization.lenses.audit import stage0
+from torchlens._visualization.lenses.audit import stage0
 
 
 class _FanCat(nn.Module):

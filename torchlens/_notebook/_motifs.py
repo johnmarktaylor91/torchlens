@@ -97,7 +97,7 @@ def resolve_motif_table(theme: str = "torchlens") -> tuple[Motif, ...]:
     # Cosmetic resolution may never break a render: any registry fault
     # falls through to the provisional default table.
     with contextlib.suppress(Exception):
-        from ..visualization import theme_registry
+        from .._visualization import theme_registry
 
         table = getattr(theme_registry, "status_motif_table", None)
         if callable(table):
@@ -117,7 +117,7 @@ def resolve_diverging_anchors(theme: str = "torchlens") -> tuple[str, str, str]:
 
     # Same never-break-a-render discipline as the motif seam above.
     with contextlib.suppress(Exception):
-        from ..visualization import theme_registry
+        from .._visualization import theme_registry
 
         anchors = getattr(theme_registry, "diverging_anchors", None)
         if callable(anchors):

@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import _render_ordering, _render_utils
+from torchlens._visualization import _render_ordering, _render_utils
 
 
 def _reference_dot_line_is_complete(line: str) -> bool:

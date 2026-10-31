@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..capture.flops import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
+from .._capture.flops import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

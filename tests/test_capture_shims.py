@@ -14,14 +14,14 @@ import pytest
 
 
 def test_kernel_shim_module_is_gone() -> None:
-    """``torchlens.capture.kernel`` no longer exists as an import path."""
+    """``torchlens._capture.kernel`` no longer exists as an import path."""
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("torchlens.capture.kernel")
+        importlib.import_module("torchlens._capture.kernel")
 
 
 def test_trace_projector_shim_is_gone() -> None:
-    """``TraceProjector`` no longer resolves on ``torchlens.capture.projectors``."""
-    from torchlens.capture import projectors
+    """``TraceProjector`` no longer resolves on ``torchlens._capture.projectors``."""
+    from torchlens._capture import projectors
 
     with pytest.raises(AttributeError):
         projectors.TraceProjector  # noqa: B018

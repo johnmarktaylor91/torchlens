@@ -18,13 +18,13 @@ from _source_corpus import package_ast, package_files
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._structure_only_bridge import (
+from torchlens._capture._structure_only_bridge import (
     STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN,
     compute_bound_state_digests,
     declared_slot_geometry_digest,
     validate_and_digest_bound_buffers,
 )
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )

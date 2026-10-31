@@ -103,7 +103,7 @@ def _validate(method: str, steps: int | None, example_reduction: str) -> int:
 def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
     """Capture ``model`` on ``inputs`` with every op saved and autograd on."""
 
-    from ..user_funcs import trace as capture_trace
+    from .._user_funcs import trace as capture_trace
 
     with torch.enable_grad():
         return capture_trace(model, inputs, intervene=intervene)

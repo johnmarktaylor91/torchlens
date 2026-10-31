@@ -11,9 +11,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.layer import Layer
+from torchlens._visualization import node_spec as node_spec_mod
+from torchlens._visualization.overlays import external_overlay_value
 from torchlens.experimental.dagua import NodeSpec
-from torchlens.visualization import node_spec as node_spec_mod
-from torchlens.visualization.overlays import external_overlay_value
 
 
 def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:

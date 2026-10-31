@@ -14,8 +14,8 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
-from torchlens.capture.compute_record import derive_compute_record_for_op
-from torchlens.capture.flops import COUNTED_BEYOND_FLOP_COUNTER_MODE
+from torchlens._capture.compute_record import derive_compute_record_for_op
+from torchlens._capture.flops import COUNTED_BEYOND_FLOP_COUNTER_MODE
 from torchlens.report import backward_status
 
 

@@ -12,8 +12,8 @@ Two independent bugs, same theme (registered buffers not surfaced correctly):
    reordering ``rehydrate_trace`` so accessors are rebuilt AFTER blob
    resolution.
 
-2. ``tl.record()`` crash on buffer-only output (torchlens/capture/trace.py,
-   torchlens/fastlog/_recorder.py): a model returning a registered buffer as
+2. ``tl.record()`` crash on buffer-only output (torchlens/_capture/trace.py,
+   torchlens/recording/_recorder.py): a model returning a registered buffer as
    (part of) its output crashed fastlog's one-shot ``tl.record()`` with a
    ``RuntimeError``, even though ``tl.trace()`` handled the identical model
    fine. Two compounding causes: (a) the postprocess=False branch (always

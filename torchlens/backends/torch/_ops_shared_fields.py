@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture.arg_positions import (
+    _normalize_func_name,
+)
+from ..._capture.projections import LiveOpView
+from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
     Op,
@@ -20,11 +25,6 @@ from ..._utils.introspection import (
 from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
-from ...capture.arg_positions import (
-    _normalize_func_name,
-)
-from ...capture.projections import LiveOpView
-from ...capture.salient_args import extract_salient_args
 from ._tl import (
     get_live_label_list,
     get_tensor_label,

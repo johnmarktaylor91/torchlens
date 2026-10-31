@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
+from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
 from .._data_classes._site_key import SiteKeyMinter
 from .._data_classes.layer import Layer
@@ -21,7 +22,6 @@ from .._postprocess.finalization import _build_module_logs, _build_root_module_l
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
-from ..capture._nonfinite_prefix import strip_raw_label_suffix
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]

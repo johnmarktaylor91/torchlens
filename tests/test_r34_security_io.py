@@ -61,9 +61,9 @@ from torchlens._io.scrub import (
 )
 from torchlens._runnable import LiteralAtom, LiteralAtomKind
 from torchlens._utils._callable_safety import is_pure_forward_callable
-from torchlens.fastlog.storage_disk import _dtype_from_name
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
+from torchlens.recording.storage_disk import _dtype_from_name
 
 # --------------------------------------------------------------------------- #
 # secE-1 -- resolver torchlens-walk branch now applies the torch-purity gate.

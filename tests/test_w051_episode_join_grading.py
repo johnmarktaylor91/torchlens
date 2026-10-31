@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_join import _exogenous_position_count, default_break_teaching
-from torchlens.capture._episode_ledger import episode_ledger_for
+from torchlens._capture._episode_join import _exogenous_position_count, default_break_teaching
+from torchlens._capture._episode_ledger import episode_ledger_for
 from torchlens.errors.episode import EpisodeDeclarationError
 from torchlens.options import EpisodeOptions
 

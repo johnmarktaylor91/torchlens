@@ -1,7 +1,7 @@
 """Node-data overlay writer over the existing overlay vocabulary (memo D8).
 
 A thin serializer, not a second resolver: values come from the SAME closed
-overlay vocabulary ``Trace.draw`` uses (``torchlens/visualization/
+overlay vocabulary ``Trace.draw`` uses (``torchlens/_visualization/
 overlays.py``) plus its ``field:<name>`` / callable escape hatch, so every
 proposed new stat is a one-liner, never a new preset vocabulary. Missing,
 nonfinite, and rolled-varying values are OMITTED and counted by reason --
@@ -18,8 +18,8 @@ from collections.abc import Callable
 from typing import Any
 
 from ..._errors import InvalidArgumentError
+from ..._visualization.overlays import builtin_overlay_value, normalize_overlay_name
 from ...errors._base import TorchLensError
-from ...visualization.overlays import builtin_overlay_value, normalize_overlay_name
 from ._errors import ModelExplorerExportError
 from ._ids import PROXY_ID_PREFIX
 

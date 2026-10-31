@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture.salient_args import _build_arg_name_map, extract_salient_args
+from torchlens._capture.salient_args import _build_arg_name_map, extract_salient_args
 
 # ---------------------------------------------------------------------------
 # Unit tests for extract_salient_args

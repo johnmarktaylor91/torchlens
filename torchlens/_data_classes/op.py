@@ -2157,10 +2157,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         DOCUMENTED-UNSTABLE spelling (A07 numbers-truth lane; the C02 FactCore
         substrate consumes this). ``None`` for boundary pseudo-rows and ops
-        with unknown FLOPs. See ``torchlens.capture.flops.ComputeRecord``.
+        with unknown FLOPs. See ``torchlens._capture.flops.ComputeRecord``.
         """
 
-        from ..capture.compute_record import derive_compute_record_for_op
+        from .._capture.compute_record import derive_compute_record_for_op
 
         return derive_compute_record_for_op(self)
 
@@ -3466,7 +3466,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         cache = self._slot("_facets_cache")
         if cache is None:
-            from ..semantic.facets import FacetView
+            from .._semantic.facets import FacetView
 
             cache = FacetView(self)
             object.__setattr__(self, "_facets_cache", cache)

@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._encoding import (
+from torchlens._visualization._encoding import (
     COLOR_TRANSFORM_VOCABULARY,
     NOTE_CONSTANT,
     NOTE_LOG_NONPOSITIVE,
@@ -68,7 +68,7 @@ def test_degenerate_size_domain_unencodes_never_grows() -> None:
     difference from an unencoded node that the data cannot support.
     """
 
-    from torchlens.visualization._encoding import _compute_size_geometry, resolve_size_by
+    from torchlens._visualization._encoding import _compute_size_geometry, resolve_size_by
 
     state = EncodingState(size_spec=resolve_size_by("dims"))
     state.size_values = {"a": 4.0, "b": 4.0, "c": 4.0}
@@ -161,7 +161,7 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
         )
         state = log._last_encoding_state if hasattr(log, "_last_encoding_state") else None
         if state is None:
-            from torchlens.visualization._encoding import EncodingState as _ES
+            from torchlens._visualization._encoding import EncodingState as _ES
 
             del _ES  # fall through to the DOT-level assertion below
         graph = log.draw(

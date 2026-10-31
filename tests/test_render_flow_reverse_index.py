@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.visualization import _render_flow
+from torchlens._visualization import _render_flow
 
 
 class _SkipChain(nn.Module):

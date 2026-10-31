@@ -20,10 +20,10 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._visualization import _render_ordering
+from torchlens._visualization._render_common import SiblingOrderChain
+from torchlens._visualization._render_flow import _inject_sibling_rank_groups
 from torchlens.errors._base import TorchLensWarning
-from torchlens.visualization import _render_ordering
-from torchlens.visualization._render_common import SiblingOrderChain
-from torchlens.visualization._render_flow import _inject_sibling_rank_groups
 
 _SUBGRAPH_OPEN = re.compile(r'^\s*subgraph\s+"?([^"{]+?)"?\s*\{\s*$')
 _NAME = r'(?:"(?:[^"\\]|\\.)*"|[A-Za-z0-9_.:]+)'
@@ -132,7 +132,7 @@ def test_sibling_rank_groups_stay_inside_member_cluster(
 ) -> None:
     """The four models that broke Graphviz 16 emit each chain once and in a holding cluster."""
 
-    from torchlens.visualization import _render_dot
+    from torchlens._visualization import _render_dot
 
     real_verify = _render_dot._verify_and_apply_sibling_ordering
     emitted: list[tuple[str, int]] = []

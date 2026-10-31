@@ -89,7 +89,7 @@ def test_summary_discloses_unknown_flops_operations() -> None:
     rebuilt = log.summary()
     assert "pad" in rebuilt
     assert "lower bounds" in rebuilt
-    assert "remedy: torchlens.capture.flops.register_op_rule" in rebuilt
+    assert "remedy: torchlens._capture.flops.register_op_rule" in rebuilt
 
 
 @pytest.mark.parametrize("training", [True, False])

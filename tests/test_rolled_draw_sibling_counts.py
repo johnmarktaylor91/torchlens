@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import _render_nodes
+from torchlens._visualization import _render_nodes
 
 
 class _SplitReuse(nn.Module):

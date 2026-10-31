@@ -16,6 +16,7 @@ import numpy as np
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ... import _state
+from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -46,9 +47,8 @@ from ...backends.registry import (
     get_backend_spec,
     require_capability_implementation,
 )
-from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...fastlog._halt import StopSignal
-from ...fastlog.types import CaptureSpec
+from ...recording._halt import StopSignal
+from ...recording.types import CaptureSpec
 from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,

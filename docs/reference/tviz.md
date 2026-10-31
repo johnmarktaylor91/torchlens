@@ -76,14 +76,14 @@ tl.viz.attention(views[0].head_view(9), "h9.svg")   # one square panel
 tl.viz.attention_atlas(views, "atlas.pdf")           # overview + detail pages
 
 # Streaming lens pictures (probabilities always full-vocabulary denominator)
-from torchlens.semantic.logit_lens import logit_lens_predictions
+from torchlens._semantic.logit_lens import logit_lens_predictions
 preds = logit_lens_predictions(log, tokens=[answer_id])
 traj = tviz.prediction_trajectory(preds, tokenizer=tok, target_token_id=answer_id)
 tviz.render_prediction_ribbon(traj, "ribbon.pdf")
 tviz.render_answer_trajectory(traj, "answer.pdf")
 
 # Layers-by-positions heatmap over the full logit-lens result
-from torchlens.semantic.logit_lens import logit_lens
+from torchlens._semantic.logit_lens import logit_lens
 tl.viz.logit_lens(logit_lens(log), "lens.pdf", tokens=tokens, tokenizer=tok)
 
 # Loss + entropy strips from ONE logits source (alignment proof travels)

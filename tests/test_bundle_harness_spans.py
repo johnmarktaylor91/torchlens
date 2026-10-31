@@ -451,7 +451,7 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
     bundle.add(_member(model, [4, 5]), names="revise")
     bundle.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
     bundle.relate("successor_of", "revise", "critique")
-    source = tl.visualization.show_bundle_graph(
+    source = tl._visualization.show_bundle_graph(
         bundle,
         nodes="members",
         path=str(tmp_path / "members"),
@@ -477,9 +477,9 @@ def _statement(source: str, head: str) -> str:
 
 def test_members_render_refuses_a_backward_direction(model: _TinyLM) -> None:
     with pytest.raises(ValueError, match="direction"):
-        tl.visualization.show_bundle_graph(_harness(model), nodes="members", direction="backward")
+        tl._visualization.show_bundle_graph(_harness(model), nodes="members", direction="backward")
     with pytest.raises(ValueError, match="nodes"):
-        tl.visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
+        tl._visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

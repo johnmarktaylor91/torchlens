@@ -698,7 +698,7 @@ def _require_mergeable_outcome(trace: Any, source: str) -> None:
     parse remains its gate.
     """
 
-    from ..capture.outcome import CaptureStatus, outcome_for
+    from .._capture.outcome import CaptureStatus, outcome_for
 
     outcome = outcome_for(trace)
     if outcome is None:

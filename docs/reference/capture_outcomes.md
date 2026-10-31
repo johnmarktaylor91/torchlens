@@ -2,7 +2,7 @@
 
 Every TorchLens capture product carries ONE typed, settled answer to "how did
 this capture end": the `CaptureOutcome` record, written by the single
-settlement authority in `torchlens/capture/outcome.py`. Consumers branch on
+settlement authority in `torchlens/_capture/outcome.py`. Consumers branch on
 the record or on the stable refusal codes below — never on exception text.
 
 ## The status vocabulary
@@ -10,7 +10,7 @@ the record or on the stable refusal codes below — never on exception text.
 | status | meaning | `is_partial` |
 |---|---|---|
 | `COMPLETE` | settled complete; attested by the settlement stamp | `False` |
-| `STOPPED` | stopped by `stop=` or imperative `tl.fastlog.stop()`; an honest prefix | `True` |
+| `STOPPED` | stopped by `stop=` or imperative `tl.recording.stop()`; an honest prefix | `True` |
 | `ABORTED_NONFINITE` | stopped by the `raise_on_nan` policy | `True` |
 | `FAILED` | the capture raised; phase + diagnostic origin attribution | `True` |
 | `UNATTESTED` | structurally finished, but no settlement evidence (legacy artifacts only) | `None` |
@@ -203,7 +203,7 @@ downstream consumers saw.
 
 ## The stop-request latch (F6)
 
-`evaluate_halt`, `raise_nonfinite`, and imperative `tl.fastlog.stop()` all
+`evaluate_halt`, `raise_nonfinite`, and imperative `tl.recording.stop()` all
 latch a stop request on the active trace before raising. If the forward then
 returns "normally" — user code swallowed the control signal in a broad
 `except:` — the boundary checkpoint raises

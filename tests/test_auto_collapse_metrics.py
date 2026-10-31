@@ -14,12 +14,12 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens.visualization._condensed_flow as condensed_flow
-import torchlens.visualization.auto_collapse as auto_collapse
-import torchlens.visualization.collapse_optimizer as collapse_optimizer
-from torchlens.visualization._render_common import format_collapsed_module_contents
-from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
-from torchlens.visualization.auto_collapse import (
+import torchlens._visualization._condensed_flow as condensed_flow
+import torchlens._visualization.auto_collapse as auto_collapse
+import torchlens._visualization.collapse_optimizer as collapse_optimizer
+from torchlens._visualization._render_common import format_collapsed_module_contents
+from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
+from torchlens._visualization.auto_collapse import (
     _assert_plan_count,
     _child_condensed_flow_graphs,
     _flow_graph_for_sibling_group,
@@ -30,8 +30,8 @@ from torchlens.visualization.auto_collapse import (
     resolve_collapse_fn,
     resolve_repeat_folds,
 )
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import (
     CollapsePlan,
     OpSegment,
     RawOp,
@@ -2900,7 +2900,7 @@ def test_strict_mode_never_keys_on_ambient_pytest_marker(
     alone armed strict mode.
     """
 
-    from torchlens.visualization._render_common import strict_collapse_checks_enabled
+    from torchlens._visualization._render_common import strict_collapse_checks_enabled
 
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "downstream::test_case (call)")
     monkeypatch.delenv("TORCHLENS_COLLAPSE_STRICT", raising=False)
@@ -2922,7 +2922,7 @@ def test_strict_mode_env_parse_is_closed_vocabulary(
     """
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.visualization._render_common import strict_collapse_checks_enabled
+    from torchlens._visualization._render_common import strict_collapse_checks_enabled
 
     for spelling in ("true", "TRUE", "yes", "on", "1", " 1 "):
         monkeypatch.setenv("TORCHLENS_COLLAPSE_STRICT", spelling)

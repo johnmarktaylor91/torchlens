@@ -19,8 +19,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import (
     RenderContext,
     collapse_plan_for_trace,
     count,
@@ -246,7 +246,7 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     # F9 unit wiring: when the DP frontier empties, the result must carry
     # planner="floor_fallback" + the K_CAP diagnosis, the draw must warn,
     # and the render caption must carry a visible notice.
-    import torchlens.visualization.collapse_optimizer as co
+    import torchlens._visualization.collapse_optimizer as co
     from torchlens.errors._base import TorchLensWarning
 
     log = tl.trace(_RootFanModel(), torch.randn(2, 4))

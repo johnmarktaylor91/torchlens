@@ -23,14 +23,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.facets import FacetSpec
-from torchlens.semantic.logit_lens import (
+from torchlens._semantic.logit_lens import (
     PROVENANCE_NATIVE,
     PROVENANCE_PROJECTED,
     LogitLensError,
     logit_lens,
     logit_lens_predictions,
 )
+from torchlens.facets import FacetSpec
 
 VOCAB, D_MODEL, SEQ, KEEP = 11, 6, 5, 2
 
@@ -84,7 +84,7 @@ def _block_recipe(module: Any) -> dict[str, Any]:
 
 
 def _head_recipe(module: Any) -> dict[str, Any]:
-    from torchlens.semantic.recipes._helpers import config_value, parameter_spec
+    from torchlens._semantic.recipes._helpers import config_value, parameter_spec
 
     trace = module.trace
     head = trace.modules["lm_head"]
@@ -117,7 +117,7 @@ _HEAD_FACETS = (
 def _register_recipes() -> Iterator[None]:
     """Register the toy recipes at RUN time, restoring the registry after."""
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(class_name="LensBlock", target_scope="module", facets=("resid_post",))(

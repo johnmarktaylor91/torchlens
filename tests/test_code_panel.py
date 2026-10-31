@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import code_panel
-from torchlens.visualization.code_panel import (
+from torchlens._visualization import code_panel
+from torchlens._visualization.code_panel import (
     MAX_CODE_PANEL_LINE_CHARS,
     _wrap_source_line,
     capture_model_source_code,
@@ -550,8 +550,8 @@ def test_code_panel_svg_renders_through_bounded_runner(monkeypatch: Any) -> None
 
     import graphviz
 
-    from torchlens.visualization import _render_utils
-    from torchlens.visualization._render_utils import RENDER_TIMEOUT_SECONDS
+    from torchlens._visualization import _render_utils
+    from torchlens._visualization._render_utils import RENDER_TIMEOUT_SECONDS
 
     def _pipe_forbidden(self: Any, *args: Any, **kwargs: Any) -> bytes:
         raise AssertionError("graphviz.Digraph.pipe() is unbounded and must not be used")

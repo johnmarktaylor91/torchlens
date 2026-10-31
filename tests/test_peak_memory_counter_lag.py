@@ -28,7 +28,7 @@ from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture import peak_memory
+from torchlens._capture import peak_memory
 from torchlens.options import CaptureOptions
 
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096

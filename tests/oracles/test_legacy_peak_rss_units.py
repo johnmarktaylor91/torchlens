@@ -2,7 +2,7 @@
 
 ``getrusage(2)`` reports ``ru_maxrss`` in bytes on macOS and in kibibytes on
 Linux and the BSDs. Where ``/proc/self/status`` has no ``VmHWM`` line (every
-non-Linux host), :func:`torchlens.capture.peak_memory.peak_rss_bytes` falls
+non-Linux host), :func:`torchlens._capture.peak_memory.peak_rss_bytes` falls
 back to ``ru_maxrss``, and the CPU backward peak is the growth of that reading
 over a pass. The expected values below are the platform rule applied to a
 fixed raw reading, never a TorchLens output.
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from torchlens.capture import peak_memory
+from torchlens._capture import peak_memory
 
 RAW = 360_235_008  # a raw ru_maxrss reading
 

@@ -46,7 +46,7 @@ SANCTIONED_INPLACE_OP_LANE_WRITERS = frozenset(
         # the ``_copy_for_replay`` projection a cook owns (never the sealed
         # Recording stream) and explicitly nulls ``_amended_fold_cache``
         # afterwards. Named in torchlens/CLAUDE.md ("Journal Producer").
-        ("fastlog/types.py", "_backfill_cooked_ancestry", "subscript_write"),
+        ("recording/types.py", "_backfill_cooked_ancestry", "subscript_write"),
     }
 )
 

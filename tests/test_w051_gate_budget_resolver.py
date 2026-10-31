@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.visualization import lenses
+from torchlens._visualization import lenses
 
 
 @pytest.fixture

@@ -107,10 +107,10 @@ def test_fastlog_dispositions_are_declared() -> None:
 
     import importlib
 
-    storage_disk = importlib.import_module("torchlens.fastlog.storage_disk")
-    recover = importlib.import_module("torchlens.fastlog.recover")
-    cleanup = importlib.import_module("torchlens.fastlog.cleanup")
-    types = importlib.import_module("torchlens.fastlog.types")
+    storage_disk = importlib.import_module("torchlens.recording.storage_disk")
+    recover = importlib.import_module("torchlens.recording.recover")
+    cleanup = importlib.import_module("torchlens.recording.cleanup")
+    types = importlib.import_module("torchlens.recording.types")
     assert storage_disk.__tl_layer__ == "L2"
     assert recover.__tl_layer__ == "L3"
     assert cleanup.__tl_layer__ == "L3"

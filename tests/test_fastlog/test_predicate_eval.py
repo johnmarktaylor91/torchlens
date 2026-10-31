@@ -7,16 +7,16 @@ from dataclasses import asdict
 import pytest
 import torch
 
-from torchlens.capture.predicates import (
+from torchlens._capture.predicates import (
     _evaluate_keep_op,
     _module_capture_spec,
     _normalize_capture_decision,
 )
-from torchlens.capture.projections import _build_record_context
-from torchlens.fastlog.exceptions import PredicateError
-from torchlens.fastlog.options import RecordingOptions
-from torchlens.fastlog.types import CaptureSpec, ModuleStackFrame
+from torchlens._capture.projections import _build_record_context
 from torchlens.intervention.selectors import BaseSelector
+from torchlens.recording.exceptions import PredicateError
+from torchlens.recording.options import RecordingOptions
+from torchlens.recording.types import CaptureSpec, ModuleStackFrame
 
 
 def _ctx() -> object:

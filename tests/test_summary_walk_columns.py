@@ -17,7 +17,7 @@ from torch import nn
 from torch.nn.utils import prune
 
 import torchlens as tl
-from torchlens.capture.flops import ATTENTION_FULL_SQUARE_NOTE
+from torchlens._capture.flops import ATTENTION_FULL_SQUARE_NOTE
 from torchlens.report._summary_render import ATTENTION_MARK
 
 
@@ -258,7 +258,7 @@ def test_explain_flops_line_discloses_the_full_square() -> None:
 def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None:
     """U04.2 (b): an attention node's flops label field and flops overlay add the note."""
 
-    from torchlens.visualization._render_nodes import compute_default_node_lines
+    from torchlens._visualization._render_nodes import compute_default_node_lines
 
     trace = _attention_trace()
     layers = list(trace.layer_logs.values())

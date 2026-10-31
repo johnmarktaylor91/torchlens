@@ -859,8 +859,8 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
     {
         # Trace runtime-state enum + capture config / stop directives.
         ("torchlens._trace_state", "TraceState"),
-        ("torchlens.capture.config", "InternalCaptureConfig"),
-        ("torchlens.capture.stop", "StopDirective"),
+        ("torchlens._capture.config", "InternalCaptureConfig"),
+        ("torchlens._capture.stop", "StopDirective"),
         # Portable I/O blob reference (NamedTuple of ids).
         ("torchlens._io", "BlobRef"),
         # Buffer / grad / param / op / layer / module data records + accessors.
@@ -984,17 +984,17 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens._quantities", "_FloatQuantity"),
         ("torchlens._quantities", "_IntQuantity"),
         # Semantic facet snapshot + recipe descriptor data types.
-        ("torchlens.semantic.facets", "AbsenceReason"),
-        ("torchlens.semantic.facets", "FacetCapabilityFlags"),
-        ("torchlens.semantic.facets", "FacetContribution"),
-        ("torchlens.semantic.facets", "FacetFunction"),
-        ("torchlens.semantic.facets", "FacetMenuItem"),
-        ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
-        ("torchlens.semantic.facets", "FacetSpec"),
-        ("torchlens.semantic.facets", "TransformPrimitive"),
-        ("torchlens.semantic.facets", "_RegisteredRecipe"),
+        ("torchlens._semantic.facets", "AbsenceReason"),
+        ("torchlens._semantic.facets", "FacetCapabilityFlags"),
+        ("torchlens._semantic.facets", "FacetContribution"),
+        ("torchlens._semantic.facets", "FacetFunction"),
+        ("torchlens._semantic.facets", "FacetMenuItem"),
+        ("torchlens._semantic.facets", "FacetRegistrySnapshot"),
+        ("torchlens._semantic.facets", "FacetSpec"),
+        ("torchlens._semantic.facets", "TransformPrimitive"),
+        ("torchlens._semantic.facets", "_RegisteredRecipe"),
         # Visualization code-panel source text value type.
-        ("torchlens.visualization.code_panel", "SourceText"),
+        ("torchlens._visualization.code_panel", "SourceText"),
     }
 )
 

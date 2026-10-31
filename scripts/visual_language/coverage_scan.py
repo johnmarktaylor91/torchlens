@@ -133,7 +133,7 @@ def scanned_files() -> tuple[Path, ...]:
 
     def wanted(rel: str) -> bool:
         return (
-            rel.startswith("torchlens/visualization/")
+            rel.startswith("torchlens/_visualization/")
             or rel == "torchlens/_vocab/node_spec.py"
             or rel.startswith("torchlens/experimental/dagua/")
         )

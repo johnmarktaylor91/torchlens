@@ -26,7 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 from torchlens._errors import InvalidArgumentError
-from torchlens.visualization._render_utils import direction_to_rankdir
+from torchlens._visualization._render_utils import direction_to_rankdir
 
 
 class _TwoLayer(nn.Module):

@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._io import _json
-from ..intervention.resolver import resolve_sites
-from ..user_funcs import (
+from .._user_funcs import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
+from ..intervention.resolver import resolve_sites
 from .diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,

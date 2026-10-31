@@ -76,7 +76,7 @@ def test_nested_trace_in_pre_admission_reserved_window_refuses(
     while the outer capture still completes cleanly.
     """
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     real_prep = capture_trace.prepare_compiled_capture
     probe: dict[str, object] = {}

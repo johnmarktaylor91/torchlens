@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RecorderStateError
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 class SimpleMlp(nn.Module):
@@ -127,7 +127,7 @@ def test_record_label_lookup_legacy_capture_events_returns_each_record_once() ->
 def test_recorder_context_records_multiple_forwards() -> None:
     """Recorder accumulates explicitly logged forwards across a loop."""
 
-    with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
+    with tl.recording.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
         for _ in range(5):
             recorder(torch.ones(1, 3))
 
@@ -138,7 +138,7 @@ def test_recorder_context_records_multiple_forwards() -> None:
 def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:
     """Repeated raw labels retain every pass payload instead of overwriting."""
 
-    with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
+    with tl.recording.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
         recorder(torch.ones(1, 3))
         recorder(torch.ones(1, 3) * 2)
 
@@ -154,7 +154,7 @@ def test_direct_model_call_inside_recorder_block_does_not_capture() -> None:
     """Only Recorder.__call__ opens the capture scope."""
 
     model = SimpleMlp()
-    with tl.fastlog.Recorder(model, save=_keep_all_ops) as recorder:
+    with tl.recording.Recorder(model, save=_keep_all_ops) as recorder:
         recorder(torch.ones(1, 3))
         before = len(recorder._state.recording.records)  # noqa: SLF001
         model(torch.ones(1, 3))
@@ -166,7 +166,7 @@ def test_direct_model_call_inside_recorder_block_does_not_capture() -> None:
 def test_dry_run_returns_events_without_tensor_payloads() -> None:
     """Dry-run returns event contexts and no retained tensor payloads."""
 
-    trace = tl.fastlog.dry_run(SimpleMlp(), torch.ones(1, 3), save=_keep_all_ops)
+    trace = tl.recording.dry_run(SimpleMlp(), torch.ones(1, 3), save=_keep_all_ops)
 
     assert trace.events
     assert all(not hasattr(event, "ram_payload") for event in trace.events)
@@ -176,6 +176,6 @@ def test_dry_run_returns_events_without_tensor_payloads() -> None:
 def test_recorder_recording_before_exit_raises() -> None:
     """Recorder.recording is guarded until __exit__ finalizes."""
 
-    with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
+    with tl.recording.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
         with pytest.raises(RecorderStateError):
             _ = recorder.recording

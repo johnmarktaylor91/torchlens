@@ -1,6 +1,6 @@
 """The generic patching-grid driver + thin presets (mikit section 7).
 
-Rides the live-hook rerun route (the shipped ``torchlens.semantic.patching``
+Rides the live-hook rerun route (the shipped ``torchlens._semantic.patching``
 primitives, receipts included): every cell earns a positive fire ledger --
 a hook that did not fire is an EXCEPTION, never a number -- plus donor
 difference accounting, transactional model/RNG/hook cleanup, and metric
@@ -23,9 +23,7 @@ from typing import Any
 
 import torch
 
-from ..errors._base import TorchLensWarning
-from ..intervention.selectors import facet as facet_selector
-from ..semantic.patching import (
+from .._semantic.patching import (
     _baseline_traces,
     _CounterfactualStateGuard,
     _facet_tensor,
@@ -35,6 +33,8 @@ from ..semantic.patching import (
     _teardown,
     _warn_if_campaign_all_identical,
 )
+from ..errors._base import TorchLensWarning
+from ..intervention.selectors import facet as facet_selector
 from ._errors import refuse
 from ._records import _pandas_frame
 

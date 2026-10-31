@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 from torchlens.viz.node_plots import _DRAW_SCALE, _legend_bbox, _legend_height
 
 ANALYTIC_POINTS = np.array(

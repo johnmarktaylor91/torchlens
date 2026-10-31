@@ -71,7 +71,7 @@ _R1_SCOPES = (
     "README.md",
     "torchlens/intervention/",
     "torchlens/bundle/",
-    "torchlens/visualization/",
+    "torchlens/_visualization/",
 )
 
 #: R1 patterns: an execution subject claimed skipped/deleted/removed.
@@ -231,8 +231,8 @@ def test_banned_execution_verb_scanner_is_red_capable(tmp_path: Path) -> None:
 def test_three_axes_stay_apart() -> None:
     """R2: settlement, relation grade, and protocol scope never trade members."""
 
+    from torchlens._capture.outcome import CaptureStatus
     from torchlens.bundle._relations import RELATION_CLAIM_GRADES
-    from torchlens.capture.outcome import CaptureStatus
 
     capture_values = {member.value for member in CaptureStatus}
     assert capture_values == _CAPTURE_STATUS_VALUES, (

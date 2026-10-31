@@ -46,7 +46,7 @@ _LAZY_MODULE_CASES = (
 
 #: Third-party packages a bare ``import torchlens`` must never pull. FROZEN and
 #: grow-only: every name here is either a real one-hop risk from the eagerly
-#: imported ``torchlens.visualization`` (graphviz, PIL) or an expensive optional
+#: imported ``torchlens._visualization`` (graphviz, PIL) or an expensive optional
 #: integration that belongs behind a lazy facade. ``numpy`` is deliberately
 #: absent -- torch imports it itself, so it is not TorchLens's to defer.
 _HEAVY_IMPORT_DENYLIST = frozenset(
@@ -645,8 +645,8 @@ def test_bare_import_defers_lazified_feature_modules() -> None:
 
     _run_import_script(
         "import sys; import torchlens; "
-        "blocked = ('torchlens.fastlog', 'torchlens.intervention', "
-        "'torchlens.user_funcs', 'torchlens._data_classes'); "
+        "blocked = ('torchlens.recording', 'torchlens.intervention', "
+        "'torchlens._user_funcs', 'torchlens._data_classes'); "
         "assert not any(name == prefix or name.startswith(prefix + '.') "
         "for prefix in blocked for name in sys.modules)"
     )

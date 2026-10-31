@@ -32,7 +32,7 @@ def test_step_input_from_field_defaults_to_none_and_accepts_str_or_int() -> None
 
 
 def _join_consumer_wired() -> bool:
-    from torchlens.capture._episode_join import EpisodeJoinSession
+    from torchlens._capture._episode_join import EpisodeJoinSession
 
     return "step_input_from" in inspect.signature(EpisodeJoinSession.__init__).parameters
 

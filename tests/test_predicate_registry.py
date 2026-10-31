@@ -18,6 +18,10 @@ import pickle
 import pytest
 
 import torchlens as tl
+from torchlens._capture.predicates import (
+    _is_supported_followed_by_predicate,
+    _keep_op_needs_alias_retry,
+)
 from torchlens._ir import predicate_registry
 from torchlens._ir.predicate import RetroactiveCaptureDecision
 from torchlens._ir.predicate_registry import (
@@ -25,13 +29,9 @@ from torchlens._ir.predicate_registry import (
     register_predicate,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens.capture.predicates import (
-    _is_supported_followed_by_predicate,
-    _keep_op_needs_alias_retry,
-)
-from torchlens.fastlog.exceptions import PredicateError
-from torchlens.fastlog.types import CaptureSpec
 from torchlens.intervention.selectors import BaseSelector
+from torchlens.recording.exceptions import PredicateError
+from torchlens.recording.types import CaptureSpec
 
 SLOTS = ("save", "halt", "until")
 

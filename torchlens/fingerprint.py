@@ -211,7 +211,7 @@ def _model_hash(captured_model: Any, example_input: Any) -> str:
         SHA-256 structural hash for the captured trace.
     """
 
-    from .user_funcs import trace as capture_trace
+    from ._user_funcs import trace as capture_trace
 
     captured_trace = capture_trace(
         captured_model,

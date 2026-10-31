@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import EpisodeLedger, episode_ledger_for
+from torchlens._capture._episode_ledger import EpisodeLedger, episode_ledger_for
 from torchlens.errors import EpisodeJoinError, TorchLensWarning
 from torchlens.options import EpisodeOptions
 
@@ -155,7 +155,7 @@ def test_forged_envelope_quarantines_at_the_load_seam() -> None:
     every artifact load routes through, never loading as claims (the
     episode x step_join x save/load composition row)."""
 
-    from torchlens.capture._episode_ledger import validate_loaded_episode_annotations
+    from torchlens._capture._episode_ledger import validate_loaded_episode_annotations
 
     log = _capture(GreedyRunner)
     payload = json.loads(json.dumps(log.annotations["episode"]))
@@ -184,6 +184,6 @@ def test_absent_envelope_reads_unmeasured_and_series_refuses() -> None:
     assert excinfo.value.fields["code"] == "episode_join_unmeasured"
     # The narrow gates (replay, fold) deliberately keep shipped behavior on
     # unmeasured artifacts: no measured break, no new refusal.
-    from torchlens.capture._episode_join import refuse_broken_join_claim
+    from torchlens._capture._episode_join import refuse_broken_join_claim
 
     refuse_broken_join_claim(log)  # does not raise

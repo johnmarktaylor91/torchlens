@@ -1,6 +1,6 @@
 # Facet-Recipe Maintenance Sweep (durable prompt)
 
-You are auditing TorchLens's semantic facet recipes (`torchlens/semantic/recipes/`)
+You are auditing TorchLens's semantic facet recipes (`torchlens/_semantic/recipes/`)
 against the current model landscape. Re-run this sweep periodically, after each
 conference cycle, or whenever a more capable model becomes available (a smarter
 auditor finds more gaps). Your output is **PROPOSALS FOR REVIEW ONLY** -- you must
@@ -26,12 +26,12 @@ incomplete and biased toward GPT-2/Llama-era decoder LMs.
    Extend the roster with `--spec your_models.py` (a module exposing
    `iter_models()` yielding `(name, model, input_args)`), e.g. drawn from the
    Model Menagerie catalog (modelmenagerie.ai) or fresh HF releases. Traces feed
-   `torchlens.semantic.facet_coverage`, whose per-module rows split
+   `torchlens._semantic.facet_coverage`, whose per-module rows split
    recipe-classified modules from structural-only ones and carry typed absence
    reasons.
 
 2. The registered-recipe inventory: `tl.facets.functions()` and
-   `torchlens.semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`.
+   `torchlens._semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`.
 
 ## Hunt axes (cover ALL of them)
 
@@ -73,7 +73,7 @@ incomplete and biased toward GPT-2/Llama-era decoder LMs.
    enough" anchor (see `_resid_mid_spec`'s history: the first-add fallback was
    removed because it invented meaningless midpoints).
 5. **Proposals only.** Output is a review document per family. Do NOT edit
-   `torchlens/semantic/recipes/`, do NOT register recipes in any process you leave
+   `torchlens/_semantic/recipes/`, do NOT register recipes in any process you leave
    running, do NOT open auto-merging PRs.
 
 ## Output format (one block per proposed family)

@@ -368,10 +368,10 @@ def test_logit_lens_true_oracle_final_layer_equals_model_logits(r0_capture):
     reproduces the model's own logits bitwise (same-process fp32 CPU).
     """
 
-    import torchlens.semantic
+    import torchlens._semantic
 
     cap = r0_capture("gpt2", "sdpa")
-    result = torchlens.semantic.logit_lens(cap.trace)
+    result = torchlens._semantic.logit_lens(cap.trace)
     assert result.entries, "logit_lens returned no per-layer projections"
     with torch.no_grad():
         direct = cap.model(**cap.input_kwargs).logits

@@ -154,7 +154,7 @@ def test_validate_fail_emits_one_summarizing_warning() -> None:
     from torch import nn
 
     import torchlens as tl
-    import torchlens.user_funcs as user_funcs_module
+    import torchlens._user_funcs as user_funcs_module
     from torchlens.errors import TorchLensWarning
 
     real_validate = user_funcs_module.validate_forward_pass

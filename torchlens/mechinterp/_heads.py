@@ -24,7 +24,7 @@ from typing import Any
 
 import torch
 
-from ..semantic.tolerances import within_reconstruction_tolerance
+from .._semantic.tolerances import within_reconstruction_tolerance
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 
@@ -279,7 +279,7 @@ def attention_head_contributions(
             code="mi_head_geometry_unavailable",
             message="No module in the trace exposes the attention head vocabulary "
             "(result/attn_out/n_q_heads/d_head).",
-            remedy="capture with the builtin attention recipes (import torchlens.semantic); "
+            remedy="capture with the builtin attention recipes (import torchlens._semantic); "
             "attention-free architectures have no head rows",
         )
     selected = _select_layers(modules, layers)

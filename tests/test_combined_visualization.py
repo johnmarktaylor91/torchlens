@@ -7,12 +7,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._render_common import GRADIENT_ARROW_COLOR
-from torchlens.visualization._render_leaf import (
+from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
+from torchlens._visualization._render_leaf import (
     _module_key_for_grad_fn,
     _param_module_for_accumulate_grad,
 )
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 
 
 class _LinearReluModel(nn.Module):
@@ -133,7 +133,7 @@ def test_draw_combined_top_level_function(tmp_path: Path) -> None:
     """Top-level draw_combined renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = tl.visualization.draw_combined(
+    dot = tl._visualization.draw_combined(
         trace,
         visualization=tl.options.VisualizationOptions(
             container_path=str(tmp_path / "top_level_combined"),

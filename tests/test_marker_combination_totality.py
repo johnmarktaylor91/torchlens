@@ -27,8 +27,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._capture._episode_ledger import derive_episode_status
 from torchlens._runnable import StateSource
-from torchlens.capture._episode_ledger import derive_episode_status
 from torchlens.errors import EpisodeDeclarationError
 from torchlens.options import EpisodeOptions
 
@@ -200,7 +200,7 @@ def test_plain_structure_only_truncation_cell_refuses_typed() -> None:
     refuses through the ONE structure-only capability chokepoint.
     """
 
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     trace = tl.trace(

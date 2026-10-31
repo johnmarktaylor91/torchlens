@@ -24,8 +24,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 from torchlens._constants import get_orig_torch_funcs
-from torchlens.capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 
 _RANDOM_LIKE_FACTORIES = ("rand_like", "randn_like", "randint_like")
 

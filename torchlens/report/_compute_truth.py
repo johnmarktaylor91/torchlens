@@ -24,9 +24,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
 from .._errors import InvalidArgumentError
 from .._quantities import Flops, Macs
-from ..capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -169,7 +169,7 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
                 example_shapes=tuple(
                     tuple(op.shape) if getattr(op, "shape", None) else None for op in ops[:3]
                 ),
-                remedy=(f"torchlens.capture.flops.register_op_rule({func_name!r}, <flops_fn>)"),
+                remedy=(f"torchlens._capture.flops.register_op_rule({func_name!r}, <flops_fn>)"),
             )
         )
     return tuple(ledger)
@@ -486,7 +486,7 @@ def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
             code="flop_convention_unavailable",
             remedy=(
                 "Report under the stored fma=2 convention, or register a cost rule "
-                "declaring the op's MAC split (torchlens.capture.flops.register_op_rule)."
+                "declaring the op's MAC split (torchlens._capture.flops.register_op_rule)."
             ),
         )
     return Flops(total)

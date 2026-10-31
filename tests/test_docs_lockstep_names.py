@@ -110,7 +110,7 @@ def test_agent_docs_use_current_internal_paths() -> None:
         (root / path).read_text(encoding="utf-8") for path in ("torchlens/validation/AGENTS.md",)
     )
     assert "tlspec_manifest_v{schema_version}.json" in validation_docs
-    assert "capture/backward.py" not in validation_docs
+    assert "_capture/backward.py" not in validation_docs
 
     intervention_doc = (root / "torchlens/intervention/AGENTS.md").read_text(encoding="utf-8")
     assert "tl.Bundle" in intervention_doc
@@ -218,7 +218,7 @@ def test_capture_outcomes_doc_vocabulary_locksteps_with_the_enums() -> None:
     appear in their sections.
     """
 
-    from torchlens.capture.outcome import (
+    from torchlens._capture.outcome import (
         _REFUSAL_HINTS,
         CapturePhase,
         CaptureStatus,
@@ -336,7 +336,7 @@ def test_documented_dotted_spellings_resolve() -> None:
 #: docs cover them at concept level, name-by-name coverage would be noise.
 CURATED_NAMESPACE_DOCS = {
     "torchlens.attribution": ("docs/reference/attribution.md",),
-    "torchlens.semantic": ("docs/facets.md",),
+    "torchlens._semantic": ("docs/facets.md",),
     "torchlens.debug": ("docs/reference/debug.md",),
 }
 #: ``docs/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"

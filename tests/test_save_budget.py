@@ -38,8 +38,8 @@ from torchlens._save_budget import (
     format_bytes,
     resolve_save_budget,
 )
-from torchlens.fastlog import _storage_resolver
 from torchlens.options import CaptureOptions
+from torchlens.recording import _storage_resolver
 
 
 def _model() -> nn.Module:

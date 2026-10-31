@@ -757,7 +757,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
         return
     # Downward (L4 -> L2) import, deferred to keep this module's import-time
     # footprint free of the capture package (the file-local Trace precedent).
-    from .capture._episode_ledger import EPISODE_ANNOTATIONS_KEY
+    from ._capture._episode_ledger import EPISODE_ANNOTATIONS_KEY
 
     payload = annotations.get(EPISODE_ANNOTATIONS_KEY)
     if not isinstance(payload, Mapping):

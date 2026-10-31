@@ -17,10 +17,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses.audit import palette_distinguishability
-from torchlens.visualization.node_spec import NodeSpec
-from torchlens.visualization.themes import (
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses.audit import palette_distinguishability
+from torchlens._visualization.node_spec import NodeSpec
+from torchlens._visualization.themes import (
     LEGACY_SEMANTIC_PALETTE,
     OKABE_ITO_SEMANTIC_PALETTE,
     THEME_PRESETS,
@@ -52,7 +52,7 @@ def test_semantic_palette_default_is_the_shared_read_only_legacy_proxy() -> None
     import dataclasses
     from types import MappingProxyType
 
-    from torchlens.visualization.themes import VisualizationTheme
+    from torchlens._visualization.themes import VisualizationTheme
 
     theme = VisualizationTheme(
         name="probe",

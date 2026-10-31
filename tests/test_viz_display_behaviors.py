@@ -245,7 +245,7 @@ def test_channel_grid_discloses_hidden_channels() -> None:
 def test_normalize_image_tensor_is_nonfinite_robust() -> None:
     """One bad pixel or a constant image never blacks out the whole tile."""
 
-    from torchlens.visualization._render_nodes import _normalize_image_tensor
+    from torchlens._visualization._render_nodes import _normalize_image_tensor
 
     ramp = torch.linspace(0.0, 4.0, steps=12).reshape(1, 3, 4)
     poisoned = ramp.clone()

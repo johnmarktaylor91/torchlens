@@ -1670,8 +1670,8 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     if writer is None:
         return
 
+    from .._capture.outcome import outcome_for
     from .._io.scrub import scrub_for_save
-    from ..capture.outcome import outcome_for
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer stages its own bundle and never passes the

@@ -110,11 +110,11 @@ def test_met_doors_are_importable_through_their_public_spellings() -> None:
 
     probes: dict[str, tuple[str, str]] = {
         "backend_specs": ("torchlens.backends", "BackendSpec"),
-        "facet_recipes": ("torchlens.semantic.recipes", "installed_recipe_providers"),
+        "facet_recipes": ("torchlens._semantic.recipes", "installed_recipe_providers"),
         "autoroute": ("torchlens._autoroute._registry", ""),
         "receptive_field_rules": ("torchlens.receptive_field._rules", "register_rf_rule"),
         "transform_providers": ("torchlens.transforms._registry", ""),
-        "lens_skin_door": ("torchlens.visualization.theme_registry", ""),
+        "lens_skin_door": ("torchlens._visualization.theme_registry", ""),
         "preprocessing_authorities": ("torchlens.preprocessing", "register_authority_adapter"),
         "entry_point_activation": ("torchlens._ecosystem.plugins", "activate"),
     }
@@ -152,9 +152,9 @@ def test_open_row_facet_settlement_triggers() -> None:
         "(vocabulary relocation) or the deletability contract landed; flip the "
         "facet census rows and add the typed-empty engine-absent probe here"
     )
-    facets_home = PACKAGE_ROOT / "semantic/facets.py"
+    facets_home = PACKAGE_ROOT / "_semantic/facets.py"
     assert facets_home.exists() and "class FacetSpec" in facets_home.read_text(), (
-        "FacetSpec left semantic/facets.py -- execute the census flip: the "
+        "FacetSpec left _semantic/facets.py -- execute the census flip: the "
         "evidence vocabulary found its L0/L1 home"
     )
 

@@ -565,7 +565,7 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
     id lands instead of ``adhoc:<helper>``.
     """
 
-    import torchlens.user_funcs as user_funcs
+    import torchlens._user_funcs as user_funcs
     from torchlens.intervention import hooks as hooks_mod
 
     model, x = _seeded(_MLP)

@@ -30,12 +30,12 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness, StateSource
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureStatus,
     outcome_for,
     require_capture_capability,
 )
+from torchlens._runnable import PathFaithfulness, StateSource
 from torchlens.errors import RunCapabilityUnavailableError, TorchLensWarning
 from torchlens.options import CaptureOptions
 

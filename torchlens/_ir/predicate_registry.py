@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from .predicate import RecordContext, RetroactiveCaptureDecision
 
 if TYPE_CHECKING:
-    from ..fastlog.options import PredicateDecision
+    from ..recording.options import PredicateDecision
 
 __all__ = ["PredicateProtocol", "coerce_predicate", "register_predicate"]
 
@@ -158,7 +158,7 @@ def register_predicate(
                 "underlying plain predicate callable instead, or pass the selector "
                 "directly (raw callables never need registration)."
             )
-        from ..fastlog.exceptions import PredicateError
+        from ..recording.exceptions import PredicateError
 
         with _REGISTRY_LOCK:
             if name in _BUILTIN_PREDICATES:
@@ -220,7 +220,7 @@ def _make_registered_wrapper(
 
             result = fn(ctx)
             if not isinstance(result, bool):
-                from ..fastlog.exceptions import PredicateError
+                from ..recording.exceptions import PredicateError
 
                 raise PredicateError(
                     f"registered predicate {name!r} in the {slot!r} slot must return "
@@ -239,7 +239,7 @@ def _make_registered_wrapper(
 
             result = fn(ctx)
             if isinstance(result, RetroactiveCaptureDecision):
-                from ..fastlog.exceptions import PredicateError
+                from ..recording.exceptions import PredicateError
 
                 raise PredicateError(
                     f"registered predicate {name!r} returned a "
@@ -308,7 +308,7 @@ def coerce_predicate(value: Any, *, slot: PredicateSlot) -> Callable[[RecordCont
     if isinstance(value, str):
         entry = _lookup_registered(value)
         if entry is None:
-            from ..fastlog.exceptions import PredicateError
+            from ..recording.exceptions import PredicateError
 
             raise PredicateError(
                 f"no predicate registered under name {value!r}. Remedy: register it "

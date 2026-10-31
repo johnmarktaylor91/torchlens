@@ -11,13 +11,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.plan import CapturePlan, RetentionKind, RetentionProfile
+from torchlens._capture.session import CaptureSession
 from torchlens._trace_selector_helpers import _make_layers_to_save_predicate
 from torchlens.backends.default_specs import _tf_runtime_supported
-from torchlens.capture.plan import CapturePlan, RetentionKind, RetentionProfile
-from torchlens.capture.session import CaptureSession
-from torchlens.fastlog import RecordContext
-from torchlens.fastlog.exceptions import PredicateError
 from torchlens.intervention.errors import SelectorCompositionError
+from torchlens.recording import RecordContext
+from torchlens.recording.exceptions import PredicateError
 from torchlens.validation.invariants import _check_backend_neutral_graph_topology
 
 
@@ -175,7 +175,7 @@ def test_layers_to_save_absorbed_path_honors_substrings() -> None:
 def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None:
     """Pass-qualified substrings save only the matching model-call pass."""
 
-    with tl.fastlog.Recorder(TinyLinear(), save=lambda ctx: ctx.kind == "op") as recorder:
+    with tl.recording.Recorder(TinyLinear(), save=lambda ctx: ctx.kind == "op") as recorder:
         recorder(torch.randn(2, 4))
         recorder(torch.randn(2, 4))
     contexts = [

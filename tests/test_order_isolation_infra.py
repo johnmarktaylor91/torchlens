@@ -234,7 +234,7 @@ def test_content_registries_are_restored_between_tests(
     fixture_fn = conftest_plugin._restore_content_registries
     raw = getattr(fixture_fn, "__wrapped__", None) or fixture_fn.__pytest_wrapped__.obj
 
-    from torchlens.capture.flops import _CUSTOM_OP_RULES
+    from torchlens._capture.flops import _CUSTOM_OP_RULES
 
     sentinel = "r76_isolation_probe_op"
     assert sentinel not in _CUSTOM_OP_RULES

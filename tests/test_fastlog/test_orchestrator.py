@@ -7,10 +7,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
-import torchlens.capture.projections as fastlog_state
-from torchlens.fastlog.exceptions import PredicateError
-from torchlens.fastlog.options import RecordingOptions
+from torchlens.recording.exceptions import PredicateError
+from torchlens.recording.options import RecordingOptions
 
 
 class RootOnly(nn.Module):

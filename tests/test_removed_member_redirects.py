@@ -20,8 +20,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
+from torchlens._visualization.themes import THEME_PRESETS
 from torchlens.options import VisualizationOptions
-from torchlens.visualization.themes import THEME_PRESETS
 
 
 class _Toy(nn.Module):
@@ -139,7 +139,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/io/__init__.py", None),
     ("torchlens/observers.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
-    ("torchlens/visualization/themes.py", "VisualizationTheme"),
+    ("torchlens/_visualization/themes.py", "VisualizationTheme"),
 ]
 
 

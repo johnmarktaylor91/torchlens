@@ -187,7 +187,7 @@ def _raise_teaching_refusal(
 ) -> None:
     """Raise the sec-2.3 typed teaching refusal for one user-frame escape."""
 
-    from ...capture.structure_only import ValueDependentBranchError
+    from ..._capture.structure_only import ValueDependentBranchError
 
     consumer_kind = _classify_consumer_kind(filename, line)
     substrate = _tensor_substrate(tensor)
@@ -578,7 +578,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         )
         entry_frame = f"{externals[0][0]}:{externals[0][1]}" if externals else None
         if isinstance(exc, NotImplementedError):
-            from ...capture.structure_only import MetaKernelUnavailableError
+            from ..._capture.structure_only import MetaKernelUnavailableError
 
             op_name = _wrapper_op_name(exc)
             location = f"{failing_file}:{failing_line}" if failing_file else "<unknown>"
@@ -642,7 +642,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
             # C-level callee died at an external CALL site (the
             # unenumerated-escape shape, e.g. tensor.tobytes() on meta). The
             # exception family + provenance decide; message text never does.
-            from ...capture.structure_only import ValueDependentBranchError
+            from ..._capture.structure_only import ValueDependentBranchError
 
             location = f"{failing_file}:{failing_line}" if failing_file else "<unknown>"
             raise ValueDependentBranchError(

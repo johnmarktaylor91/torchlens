@@ -1,7 +1,7 @@
 """Regression tests for the ``first_input``/``"input"`` facet on the torch backend.
 
 cert9-f5 fix (round-8-prep peripheral MAJOR): ``first_input``/``first_input_spec``
-(``torchlens/semantic/recipes/_helpers.py``) read ``ModuleCall.forward_args``, which
+(``torchlens/_semantic/recipes/_helpers.py``) read ``ModuleCall.forward_args``, which
 finalization ("GC-11", ``torchlens/_postprocess/finalization.py``) unconditionally
 nulls for the default ``torch_module`` module-identity mode -- the mode ordinary
 ``nn.Module`` tracing uses. That made the built-in ``"input"``/``"indices"`` facet
@@ -103,8 +103,8 @@ def test_first_input_spec_falls_back_when_forward_args_absent() -> None:
     logic itself is pinned, independent of any one recipe's wiring.
     """
 
-    from torchlens.semantic.facets import AbsenceReason
-    from torchlens.semantic.recipes._helpers import first_input_spec
+    from torchlens._semantic.facets import AbsenceReason
+    from torchlens._semantic.recipes._helpers import first_input_spec
 
     model = nn.Sequential(nn.Linear(4, 4), nn.LayerNorm(4))
     x = torch.randn(2, 4)

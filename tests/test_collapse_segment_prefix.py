@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 import torch
 
-import torchlens.visualization.collapse_optimizer as collapse_optimizer
+import torchlens._visualization.collapse_optimizer as collapse_optimizer
 from tests.test_collapse_optimizer import (
     SegmentPrefixTail,
     SequentialEncoderHead,
@@ -23,13 +23,13 @@ from tests.test_collapse_optimizer import (
     UniqueWideFanModel,
     _trace,
 )
-from torchlens.visualization.collapse_optimizer import (
+from torchlens._visualization.collapse_optimizer import (
     _child_segment_covered_ops,
     _segment_is_legal,
     collapse_schedule,
     select_collapse_plan,
 )
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 def _reference_longest_legal_segment_prefix(
@@ -89,7 +89,7 @@ class _SegmentPrefixProbe:
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Patch the optimizer to cross-check every prefix search."""
 
-        module = "torchlens.visualization.collapse_optimizer"
+        module = "torchlens._visualization.collapse_optimizer"
         real_prefix = collapse_optimizer._longest_legal_segment_prefix
         real_legal = collapse_optimizer._segment_is_legal
         real_covered = collapse_optimizer._child_segment_covered_ops

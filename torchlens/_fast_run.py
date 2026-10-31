@@ -1630,7 +1630,7 @@ class _FastLiveSession:
                 self._poison_and_raise(failed)
             if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
                 op.save_activation(value, (), {}, False)
-        # Same rule as capture (capture/trace.py): the transformed raw output
+        # Same rule as capture (_capture/trace.py): the transformed raw output
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
         output_transform = self.output_transform

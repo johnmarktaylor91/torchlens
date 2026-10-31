@@ -20,9 +20,9 @@ from torchlens._ir.workspaces import (
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
+from torchlens._visualization._summary_internal._builder import _live_op_count
 from torchlens.backends._protocol import CaptureBackend
 from torchlens.backends.torch._tl import get_tensor_label
-from torchlens.visualization._summary_internal._builder import _live_op_count
 
 
 class _MidForwardProbe(nn.Module):
@@ -132,8 +132,8 @@ def test_no_hot_path_liveoprecord_construction_or_field_writes() -> None:
         root / "torchlens/backends/torch/model_prep.py",
         root / "torchlens/backends/torch/buffer_writes.py",
         root / "torchlens/backends/torch/tensor_tracking.py",
-        root / "torchlens/capture/trace.py",
-        root / "torchlens/user_funcs.py",
+        root / "torchlens/_capture/trace.py",
+        root / "torchlens/_user_funcs.py",
     ]
     hot_source = "\n".join(path.read_text() for path in hot_files)
 

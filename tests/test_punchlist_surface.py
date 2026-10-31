@@ -100,7 +100,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "normalize_hook",
         "resolve_metric",
     ),
-    "torchlens.semantic": (
+    "torchlens._semantic": (
         "FacetCoverageReport",
         "LogitLensEntry",
         "ModuleCoverageRow",
@@ -108,7 +108,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "FacetMenuItem",
         "TransformPrimitive",
     ),
-    "torchlens.semantic.facets": (
+    "torchlens._semantic.facets": (
         "FacetKey",
         "RecordScope",
         "mark_current_registry_as_builtins",
@@ -116,7 +116,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "FacetMenuItem",
         "TransformPrimitive",
     ),
-    "torchlens.capture.outcome": (
+    "torchlens._capture.outcome": (
         "count_committed_ops",
         "current_capture_phase",
         "set_capture_phase",
@@ -134,7 +134,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
 KEPT_WITH_EVIDENCE: dict[str, tuple[str, ...]] = {
     "torchlens.stats": ("StreamingStat",),
     # The facets vocabulary is published as tl.facets (its module home).
-    "torchlens.semantic.facets": ("AttentionHeadView",),
+    "torchlens._semantic.facets": ("AttentionHeadView",),
 }
 
 #: Batch-8-retired alias spellings that must never be re-advertised by ANY

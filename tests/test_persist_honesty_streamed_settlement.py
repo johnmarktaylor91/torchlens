@@ -20,9 +20,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.outcome import CaptureStatus
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError
-from torchlens.capture.outcome import CaptureStatus
 
 
 def _model():

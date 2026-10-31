@@ -21,11 +21,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils._torch_compat import get_meta_item_guard_support
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     MetaKernelUnavailableError,
     ValueDependentBranchError,
 )
+from torchlens._utils._torch_compat import get_meta_item_guard_support
 from torchlens.options import CaptureOptions
 
 STRUCTURE = CaptureOptions(structure_only=True)
@@ -293,8 +293,8 @@ def _neutralize_layer1(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _neutralize_layer2(monkeypatch: pytest.MonkeyPatch) -> None:
-    from torchlens import capture as capture_pkg  # noqa: F401
-    from torchlens.capture import trace as capture_trace_module
+    from torchlens import _capture as capture_pkg  # noqa: F401
+    from torchlens._capture import trace as capture_trace_module
 
     monkeypatch.setattr(
         capture_trace_module,

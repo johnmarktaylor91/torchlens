@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization import _fonts, render_execution
 from torchlens.errors._base import TorchLensWarning
-from torchlens.visualization import _fonts, render_execution
 
 
 class _Tiny(nn.Module):
@@ -346,7 +346,7 @@ def test_fk4_pathological_trace_renders_bounded_overview_with_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Past the pre-gate, auto renders top-level boxes and writes the manifest."""
-    from torchlens.visualization import collapse_optimizer
+    from torchlens._visualization import collapse_optimizer
 
     monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 0)
     trace = tl.trace(_RootFloodWithBlocks(), torch.randn(2, 4))
@@ -384,7 +384,7 @@ def test_fk4_floor_residual_writes_manifest(
     empties and the floor plan serves. The readable band is narrowed to one
     unit so that plan is certainly over the band: the residual FK4 discloses.
     """
-    from torchlens.visualization import auto_collapse
+    from torchlens._visualization import auto_collapse
 
     monkeypatch.setattr(auto_collapse, "_readable_band_high", lambda trace: 1)
     trace = tl.trace(_RootFloodWithBlocks(), torch.randn(2, 4))
