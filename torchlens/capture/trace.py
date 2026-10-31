@@ -92,7 +92,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace.seed``.
+always disclosed on ``trace.random_seed``.
 """
 
 
@@ -656,7 +656,7 @@ def save_new_outs(
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
-    refresh_seed = self.seed if random_seed is None else random_seed
+    refresh_seed = self.random_seed if random_seed is None else random_seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
         expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
@@ -763,7 +763,7 @@ def save_new_outs(
     # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
     # proof leaves the field absent -> the live reconstructor fails closed (not faithful).
     self._runnable.output_losslessness = refreshed._runnable.output_losslessness
-    if self.save_args:
+    if self.save_arg_values:
         self._replay_arg_version_data_complete = True
 
 
@@ -1563,7 +1563,7 @@ def run_and_log_inputs_through_model(
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
         random_seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self.seed = random_seed  # type: ignore[assignment]
+    self.random_seed = random_seed  # type: ignore[assignment]
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,

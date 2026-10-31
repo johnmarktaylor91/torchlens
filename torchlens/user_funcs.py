@@ -1528,10 +1528,10 @@ def _run_model_and_save_specified_outs(
     capture_tensor_grad_hooks: bool = True,
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
-    save_arg_values: bool = False,
+    save_args: bool = False,
     save_grads: bool = False,
     grads_to_save: str | list[int | str] | None = "all",
-    random_seed: int | None = None,
+    seed: int | None = None,
     num_context_lines: int = 7,
     optimizer: Any = None,
     save_code_context: bool = False,
@@ -1634,17 +1634,17 @@ def _run_model_and_save_specified_outs(
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_activations: If True, saved tensors are detached from the autograd graph.
-        save_arg_values: If True, store the non-tensor arguments to each function call.
+        save_args: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_outs``).
         save_grads: If True, register backward hooks to capture grads.
         grads_to_save: Which layer grads to save.
-        random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
+        seed: Fixed RNG seed for reproducibility (important for stochastic models).
             The capture snapshots the global RNG states (random/NumPy/torch CPU, plus
             CUDA when live), reseeds them for its forward, and restores the snapshot on
             every exit path, so code after the capture continues its own streams. When
             None the seed is drawn from a private entropy-seeded stream, so an outer
             ``torch.manual_seed`` does not make an unseeded capture reproducible. The
-            seed used is recorded on ``trace.seed``.
+            seed used is recorded on ``trace.random_seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -1925,7 +1925,7 @@ def _run_model_and_save_specified_outs(
             save_mode=save_mode,
             capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             keep_orphans=keep_orphans,
-            save_args=save_arg_values,
+            save_args=save_args,
             save_grads=grads_to_save if save_grads else None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=mark_layer_depths,
@@ -2133,7 +2133,7 @@ def _run_model_and_save_specified_outs(
                 input_kwargs,
                 layers_to_save,
                 grads_to_save,
-                random_seed,
+                seed,
                 reservation_resume=_reservation_token,
             )
     except BaseException as exc:
@@ -2943,7 +2943,7 @@ def _trace_torch_model(
     capture_output_structure: bool | MissingType = MISSING,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
-    echo: Any | None = None,
+    narrate: Any | None = None,
     retain_output_parents_for_layers_to_save: bool = False,
     _selective_layers_to_save_request: object | None = None,
 ) -> Trace:
@@ -3063,7 +3063,7 @@ def _trace_torch_model(
     from .snoop._entry import resolve_echo_capture_options
 
     echo_options = resolve_echo_capture_options(
-        echo,
+        narrate,
         save=save,
         capture_options=capture_options,
         chunked=chunk_size is not MISSING and chunk_size is not None,

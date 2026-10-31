@@ -700,4 +700,4 @@ def test_recording_to_trace_backfills_random_seed() -> None:
 
     x = torch.randn(2, 4)
     cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), seed=4242).to_trace()
-    assert cooked.seed == 4242
+    assert cooked.random_seed == 4242

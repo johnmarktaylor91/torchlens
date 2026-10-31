@@ -306,7 +306,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     random.seed(555)
     first = tl.trace(_TinyNet(), torch.ones(2, 3))
     second = tl.trace(_TinyNet(), torch.ones(2, 3))
-    assert first.seed != second.seed, (
+    assert first.random_seed != second.random_seed, (
         "restore bracket swallowed the auto-seed draw; captures now reuse one seed"
     )
 

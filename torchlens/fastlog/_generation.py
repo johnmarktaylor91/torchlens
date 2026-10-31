@@ -486,7 +486,7 @@ def record_generation(
     settings = preflight_generation(
         model, input_args, prompt_kwargs, generate_kwargs, recorder_kwargs
     )
-    random_seed = recorder_kwargs.pop("random_seed", None)
+    random_seed = recorder_kwargs.pop("seed", None)
     if random_seed is not None:
         # Seed once for the whole generation; a per-forward reseed would change
         # which tokens a sampled generation produces.

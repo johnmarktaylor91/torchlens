@@ -219,7 +219,7 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=esc_spec,
-        capture=tl.options.CaptureOptions(seed=producer.seed),
+        capture=tl.options.CaptureOptions(seed=producer.random_seed),
     )
     ledger = episode_ledger_for(escalated)
     assert ledger is not None

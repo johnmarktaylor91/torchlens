@@ -250,7 +250,7 @@ def _intervention_report(
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
     *,
-    random_seed: int | None,
+    seed: int | None,
     verbose: bool,
     validate_metadata: bool,
     save_options: dict[str, Any] | None = None,
@@ -265,7 +265,7 @@ def _intervention_report(
         Positional model input.
     input_kwargs:
         Keyword model input.
-    random_seed:
+    seed:
         Optional random seed for forward validation.
     verbose:
         Whether the underlying validation should emit diagnostics.
@@ -288,7 +288,7 @@ def _intervention_report(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        seed=random_seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **(save_options or {}),

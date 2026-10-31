@@ -1780,7 +1780,7 @@ def escalation_spec(
     discharge (``tokens`` / ``diverged`` / ``none``).
 
     Re-run the escalation with the producer's recorded entry seed
-    (``producer.seed``) to satisfy E-A1's same-seed requirement.
+    (``producer.random_seed``) to satisfy E-A1's same-seed requirement.
 
     Raises
     ------

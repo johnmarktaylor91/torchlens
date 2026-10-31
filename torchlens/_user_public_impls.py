@@ -1303,7 +1303,7 @@ def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -1344,7 +1344,7 @@ def _validate_forward_pass_torch(
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
-    random_seed:
+    seed:
         Fixed RNG seed for reproducibility (auto-generated if None). Reseeds
         the process-global RNG engines without restoring them; see
         ``tl.trace``'s ``random_seed``.
@@ -1416,9 +1416,9 @@ def _validate_forward_pass_torch(
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).
-    if random_seed is None:
-        random_seed = random.randint(1, 4294967294)
-    set_random_seed(random_seed)
+    if seed is None:
+        seed = random.randint(1, 4294967294)
+    set_random_seed(seed)
     input_args = normalize_input_args(input_args, model)
     if not input_kwargs:
         input_kwargs = {}
@@ -1704,7 +1704,7 @@ def _validate_forward_pass_torch(
                     detach_saved_activations=False,
                     save_grads=False,
                     save_args=True,
-                    seed=random_seed,
+                    seed=seed,
                     save_rng=True,
                     output_device=output_device,
                     save_budget=save_budget,
@@ -1724,7 +1724,7 @@ def _validate_forward_pass_torch(
                 validation_model,
                 reproducibility_input_args,
                 reproducibility_input_kwargs,
-                random_seed,
+                seed,
             )
         else:
             from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic

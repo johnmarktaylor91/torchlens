@@ -49,7 +49,7 @@ class _LazyIOModel(nn.Module):
 def _build_log(
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
+    save_args: bool = False,
     save_rng_states: bool = False,
 ) -> Trace:
     """Build a deterministic ``Trace`` for lazy I/O tests.
@@ -58,7 +58,7 @@ def _build_log(
     ----------
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the log.
     save_rng_states:
         Whether RNG state tensors should be captured in the log.
@@ -77,7 +77,7 @@ def _build_log(
         inputs,
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
-            save_args=save_arg_values,
+            save_args=save_args,
             save_rng=save_rng_states,
             seed=seed,
         ),
@@ -88,7 +88,7 @@ def _save_bundle(
     tmp_path: Path,
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
+    save_args: bool = False,
     save_rng_states: bool = False,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
@@ -102,7 +102,7 @@ def _save_bundle(
         Temporary test directory.
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the source log.
     save_rng_states:
         Whether RNG state tensors should be captured in the source log.
@@ -121,7 +121,7 @@ def _save_bundle(
 
     trace = _build_log(
         seed=seed,
-        save_args=save_arg_values,
+        save_args=save_args,
         save_rng=save_rng_states,
     )
     bundle_path = tmp_path / path_name

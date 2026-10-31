@@ -397,7 +397,7 @@ def merge_recording_options(
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_grads: bool | MissingType = MISSING,
-    echo: Any | None | MissingType = MISSING,
+    narrate: Any | None | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
@@ -427,7 +427,7 @@ def merge_recording_options(
         "default_grad": default_grad,
         "grad_transform": grad_transform,
         "save_raw_grads": save_raw_grads,
-        "echo": echo,
+        "narrate": narrate,
         "detach_saved_activations": detach_saved_activations,
     }
     for field_name, value in incoming.items():

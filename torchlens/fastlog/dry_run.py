@@ -48,7 +48,7 @@ def dry_run(
         "include_source_events": include_source_events,
         "on_predicate_error": "fail-fast",
         "streaming": None,
-        "random_seed": seed,
+        "seed": seed,
     }
     recorder_cm = Recorder(
         model,

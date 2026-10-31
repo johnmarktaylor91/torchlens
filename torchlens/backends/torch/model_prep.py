@@ -1209,7 +1209,7 @@ def _record_module_entry_metadata(
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
         num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_source_context,
+        source_loading_enabled=trace.save_code_context,
         context_cache=code_context_cache,
     )
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[

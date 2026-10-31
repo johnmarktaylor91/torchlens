@@ -232,7 +232,7 @@ def _run_public_layer_grad_validation(
     *,
     atol: float,
     rtol: float,
-    random_seed: int,
+    seed: int,
 ) -> LayerGradReport:
     """Run the shipped backward path and return its captured layer-grad report.
 
@@ -250,7 +250,7 @@ def _run_public_layer_grad_validation(
         Absolute tolerance for parameter and layer gradients.
     rtol:
         Relative tolerance for parameter and layer gradients.
-    random_seed:
+    seed:
         Seed shared by stock and captured passes.
 
     Returns
@@ -277,7 +277,7 @@ def _run_public_layer_grad_validation(
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
-            seed=random_seed,
+            seed=seed,
             atol=atol,
             rtol=rtol,
             validate_metadata=True,

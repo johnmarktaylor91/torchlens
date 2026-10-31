@@ -679,7 +679,7 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_args:
+        if trace.save_arg_values:
             # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
             # used to clone every tensor argument first and charge after.
             from ._ops_retention import _copy_saved_arg_tree

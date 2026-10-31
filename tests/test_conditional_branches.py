@@ -980,7 +980,7 @@ def _log_model(
     model: nn.Module,
     x: torch.Tensor,
     *,
-    save_code_context: bool = True,
+    save_source_context: bool = True,
     layers_to_save: str | Sequence[str] | None = "all",
 ) -> Trace:
     """Capture a ``Trace`` for a small integration-test model.
@@ -991,7 +991,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_code_context:
+    save_source_context:
         Whether rich source loading is enabled during capture.
     layers_to_save:
         Activation-saving selection passed through to ``trace``.
@@ -1006,7 +1006,7 @@ def _log_model(
         x,
         capture=CaptureOptions(
             layers_to_save=layers_to_save,
-            save_source_context=save_code_context,
+            save_source_context=save_source_context,
         ),
     )
 

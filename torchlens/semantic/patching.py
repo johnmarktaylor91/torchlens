@@ -643,7 +643,7 @@ def _trace_kwargs(
     if "capture" in kwargs:
         kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
         return kwargs
-    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_args": True}
     if save_grads is not None:
         capture_fields["save_grads"] = save_grads
     kwargs["capture"] = CaptureOptions(**capture_fields)

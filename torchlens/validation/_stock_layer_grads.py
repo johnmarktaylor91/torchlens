@@ -336,7 +336,7 @@ def _stock_layer_grads(
     input_kwargs: Mapping[str, Any],
     *,
     loss_fn: Callable[[Any], torch.Tensor],
-    random_seed: int,
+    seed: int,
     state_dict_snapshot: Mapping[str, torch.Tensor],
 ) -> tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]:
     """Run a stock forward/backward pass and collect module-output grads.
@@ -351,7 +351,7 @@ def _stock_layer_grads(
         Keyword inputs.
     loss_fn:
         Loss function mapping model output to a scalar tensor.
-    random_seed:
+    seed:
         Seed used for deterministic stock execution.
     state_dict_snapshot:
         State dict restored after the stock pass.
@@ -368,7 +368,7 @@ def _stock_layer_grads(
     collector = _StockModuleGradCollector()
     collector.install(model)
     try:
-        set_random_seed(random_seed)
+        set_random_seed(seed)
         output = model(*input_args, **dict(input_kwargs))
         loss = loss_fn(output)
         loss.backward()

@@ -671,7 +671,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
 def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(save_args=True))
-    assert mh.save_args is True
+    assert mh.save_arg_values is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
@@ -684,7 +684,7 @@ def test_saved_args_populated(small_input):
 def test_saved_args_not_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert mh.save_args is False
+    assert mh.save_arg_values is False
 
 
 # =============================================================================

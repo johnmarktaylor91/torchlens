@@ -328,13 +328,13 @@ def _add_output_layers(
         new_output_node.flops_backward = None
         new_output_node.code_context = _get_code_context(
             self.num_context_lines,
-            source_loading_enabled=self.save_source_context,
+            source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
         )
         new_output_node.var_names = []
         new_output_node.func_duration = Duration(0)
         new_output_node.func_rng_states = (
-            log_current_rng_states(torch_only=True) if self.save_rng else {}
+            log_current_rng_states(torch_only=True) if self.save_rng_states else {}
         )
         new_output_node.arg_names = ()
         new_output_node.num_args_total = 0

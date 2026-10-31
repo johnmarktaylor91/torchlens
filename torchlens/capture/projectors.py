@@ -898,7 +898,7 @@ class RecordingProjection:
         trace.forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
         trace.forward_memory_backend = self.trace_facts["forward_memory_backend"]
         trace._source_model_ref = self.trace_facts["source_model_ref"]
-        trace.seed = self.trace_facts["random_seed"]
+        trace.random_seed = self.trace_facts["random_seed"]
         trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label

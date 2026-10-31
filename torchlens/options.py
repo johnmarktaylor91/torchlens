@@ -64,7 +64,7 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
-    "transform",
+    "input_transform",
     "save_raw_input",
     "batch_render",
     "output_transform",
@@ -184,7 +184,7 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
 )
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
-    "transform": "transform",
+    "input_transform": "input_transform",
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
     "output_transform": "output_transform",
@@ -231,7 +231,7 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_transform": "activation_transform",
     "grad_transform": "grad_transform",
     "save_raw_activations": "save_raw_activations",
-    "save_raw_gradients": "save_raw_gradients",
+    "save_raw_grads": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "view": "view",
@@ -421,263 +421,263 @@ def _merge_grouped_options(
 class CaptureOptions:
     """Grouped capture options for ``trace``.
 
-    Parameters
-    ----------
-    layers_to_save:
-        Activation layer selector to capture.
-    transform:
-        Optional callable applied once to the user input before ``model.forward``.
-    save_raw_input:
-        Raw user-input save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    batch_render:
-        Raw-input batch rendering policy for visualization. Supported values are
-        ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
-        ``"shape_only"``.
-    output_transform:
-        Optional callable applied once to the model output after ``model.forward``.
-    output_style:
-        Optional semantic output decode style.
-    output_head:
-        Optional live-output head to decode.
-    save_raw_output:
-        Raw model-output save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    layer_visualizers:
-        Optional mapping from site selectors to per-layer thumbnail callables.
-    save_visualizations:
-        Whether rendered visualizer image files should be copied into portable bundles.
-    keep_orphans:
-        Whether island ops (computations unreachable from both the model inputs and
-        outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
-        to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
-        enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
-    output_device:
-        Device placement for saved tensors.
-    save_arg_values:
-        Whether non-tensor function arguments are captured.
-    save_grads:
-        Backward gradient-retention policy. ``True`` captures all gradients,
-        ``False``/``None`` disables capture, and selectors restrict retention:
-        label strings/ordinal lists, ``tl.*`` selectors, and bare callables
-        are all honored (never collapsed to "all"). A bare callable is
-        evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
-        before any backward) and must return a strict ``bool``; only matching
-        ops receive gradient hooks.
-    save_code_context:
-        Whether source-text context is captured in addition to source identity.
-    save_rng_states:
-        Whether operation-level RNG states are captured.
-    random_seed:
-        Fixed seed used for deterministic capture. The capture snapshots the
-        global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
-        its RNG state is already live), reseeds every engine with this seed
-        for its own forward, and restores the snapshot on every exit path,
-        including a failed capture. Code after the capture therefore draws
-        the same numbers as it would without the capture. When ``None`` (the
-        default) the seed is drawn from a private entropy-seeded stream, not
-        the global ``random`` engine, so ``torch.manual_seed(k)`` before an
-        unseeded capture does NOT make the capture reproducible; pass
-        ``random_seed=`` explicitly for that. The seed used is recorded on
-        ``trace.seed``.
-    source_context_lines:
-        Number of source-context lines to store.
-    optimizer:
-        Optional optimizer used to annotate optimized parameters.
-    compute_input_output_distances:
-        Whether input/output graph distances are computed.
-    detach_saved_activations:
-        Whether saved tensors are detached from autograd. The default
-        ``False`` keeps saved activations graph-connected, which retains the
-        captured autograd graph alongside the payloads: measured ~1.48x the
-        saved-payload bytes live on a resnet18 capture, vs ~1.01x with
-        ``True``. Pass ``True`` for forward-only analysis when that
-        multiplier matters (R33).
-    recurrence_detection:
-        Whether repeated graph patterns are detected during postprocess.
-    intervention_ready:
-        Whether replay-template metadata is captured for intervention APIs.
-    capture_container_structure:
-        Whether to persist input and output container structure without
-        enabling intervention replay metadata.
-    hooks:
-        Optional live hook plan applied during capture.
-    unwrap_when_done:
-        Whether Torch functions are unwrapped after this call.
-    verbose:
-        Whether progress messages are printed.
-    backward_ready:
-        Whether capture keeps autograd-connected tensors for training workflows.
-    inference_only:
-        Whether capture wraps the user forward in ``torch.no_grad()``. When
-        omitted, a capture entered under ``torch.no_grad()`` or
-        ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
-        ``save_grads`` or ``intervention_ready`` asks for a backward; the
-        Trace reports the effective value. The implied value is cleared when
-        the forward re-enables grad (``torch.enable_grad()`` inside it) and an
-        output carries autograd history.
-    carry_state:
-        Whether the capture keeps the model state its forward changed
-        (forward-equivalent: norm running statistics, buffer writes, training
-        modes and plain attributes advance exactly as one direct ``model(x)``
-        would, the spelling ``trace.run(carry_state=True)`` uses; no capture
-        advances the caller's random streams under either setting). The default
-        ``False`` makes the capture a pure observer: buffers, random state,
-        training modes and plain instance attributes are restored afterwards,
-        on success and on failure. What the forward wrote to plain attributes
-        is recorded on the trace under either setting, so a value the forward
-        stashes on a module is read from
-        ``trace.modules[address].attribute_writes`` (``Module.attribute_writes``;
-        objects without a value snapshot are restored by identity only, see
-        the capture-state contract). A cache hit runs no forward, so nothing
-        advances (DOCUMENTED-UNSTABLE).
-    name:
-        Optional user-facing name for the returned log.
-    cache:
-        Whether to use the content-hash capture cache. The key covers model
-        tensor content (including per-tensor device and ``requires_grad``),
-        training flags, non-persistent buffers, module tree and ``forward``
-        code, plain instance attributes (bounded digest), user-registered
-        module hooks, inputs, and the capture configuration; closure cells,
-        globals referenced by ``forward``, and the interior state of opaque
-        attribute objects remain outside the key (documented boundary).
-        ``torchlens.clear_cache()`` empties the cache.
-    cache_dir:
-        Optional directory for content-hash cache entries.
-    module_filter:
-        Optional THIRD save gate composed (AND) with ``save=`` /
-        ``layers_to_save``: an op's payload is retained only when the
-        save selection picks it AND this predicate returns truthy. The
-        predicate receives an op-record namespace (the legacy-shaped
-        ``SimpleNamespace`` of captured op fields such as ``func_name``,
-        ``layer_label``, and ``modules``), NEVER an
-        ``nn.Module`` instance — a filter written against modules (e.g.
-        ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-        ZERO payloads. Returning ``False`` keeps metadata but skips payload
-        saving; a capture whose every selected payload was suppressed by
-        this gate emits a ``module_filter_zero_saved`` warning.
-    stop_after:
-        Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
-        spelling): capture halts immediately AFTER the named site is
-        captured, returning a partial halted trace that includes it. The
-        site compiles into the halt engine on emission identity: a string
-        halts at the first emission whose module address
-        (``"encoder.layer.4"``, at that module's exit boundary) or function
-        name (``"relu"``) matches, a live selector (``tl.func("relu")``,
-        ``tl.module(...)``) halts at its first match, and a callable
-        predicate halts when it returns True. Finalized postprocess labels
-        (``"relu_1_2"``) do not exist during capture and refuse typed
-        (``stop_after_site_not_live``). A selector-shaped site that never
-        fires refuses typed (``stop_after_never_fired``); a callable that
-        never fires warns. Cannot combine with ``halt=``
-        (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
-    jax_control_flow:
-        Declared JAX control-flow policy. Backends other than torch reject
-        explicit use until their implementation phase supports it.
-    jax_max_control_flow_unroll:
-        Declared maximum JAX control-flow unroll count.
-    module_identity_mode:
-        Declared backend module-mode selection passthrough.
-    payload_policy:
-        Declared payload materialization/codec policy passthrough.
-    save_preview:
-        Non-torch preview backends' declared flag reserving extended ``save=``
-        semantics; the shipped torch ``save=`` kwarg is independent of it.
-    emit_nvtx:
-        Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
-        ranges around each logged operation. Range names carry call identity
-        (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
-        are separated under ``torchlens::internal::`` so the Nsight timeline
-        shows model work, not capture plumbing. NVTX markers are visible in
-        NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
-        enabling it can add small per-op overhead. The option applies to full
-        ``tl.trace`` capture and is preserved through ``tl.record``-style
-        options, although sparse recording may only expose ranges for operations
-        it actually logs.
-    measure_python_peak_memory:
-        Whether the host-side forward-pass peak recorded in
-        ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
-        Python-allocation peak. On CPU it adds to the peak measured under
-        ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
-        ``None`` and this probe fills only the peak pair's ``live`` value. A
-        measured CPU peak of 0 (a model too small to move the coarse-grained
-        resident counters) is recorded as ``None`` with
-        ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
-        for the duration of the forward pass, which is precise for small models
-        but taxes every traced operation (measured at 1.7x-2.5x total capture
-        time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
-        report the true device peak and ignore this option.
-    distributed_witness:
-        Session-time witness level for collective boundary records captured
-        under the distributed opt-in. ``"none"`` (the default) records
-        structure and correlation only; ``"digest"`` additionally stores
-        byte-exact SHA-256 digests of each contribution at issue and each
-        destination at observed completion (redundant evidence that can only
-        DEMOTE a merge verdict, never rescue one -- and a synchronization cost
-        on accelerator captures). ``"payload"`` is reserved for the merge
-        artifact story and currently refuses. Like
-        ``measure_python_peak_memory`` this is a session-time knob: it changes
-        what capture pays for, not what a trace means, and load restores the
-        default. The per-boundary ``witness.policy_resolved`` field IS
-        portable evidence of what was captured.
-    save_budget:
-        Ceiling on the bytes of activation payload a single capture may retain,
-        enforced per device. ``"auto"`` (the default)
-        allows half of each device's *available* memory measured at that device's
-        first save; a float in ``(0, 1]`` sets a different fraction; an int sets
-        an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
-        budget stops capture with
-        :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
-        is admitted before allocation from source-tensor bytes and retained storage
-        is alias-aware. This is not a general OOM guarantee: the model forward,
-        transform-only deltas, and cross-device temporaries can allocate before they
-        are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
-        ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
-        Devices whose headroom cannot be measured are left unbudgeted and
-        emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
-        cap to enforce those devices.
-    raise_on_nan:
-        Whether capture should stop at the first NaN or Inf tensor.
-    track_nonfinite:
-        Whether torch capture records a per-op finiteness verdict
-        (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
-        ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
-        control flow, reads device flags in one post-forward batch. A
-        session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
-    track_device_memory:
-        Whether torch capture samples device allocator counters around each op call, served by
-        ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
-        opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
-        per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
-    structure_only:
-        Whether this capture runs under the structure-only contract
-        (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
-        no deprecation shim owed on rename). Structure-only capture records
-        the op graph, module hierarchy, parameter geometry, and per-op
-        shape/dtype as HYPOTHESES while every value-bearing claim is refused
-        typed or gated; value-dependent branches refuse with the user's
-        source line. Torch-only; the capability contract lives in
-        ``docs/reference/structure_only_capabilities.md``.
-    log_injections:
-        Whether computation inside intervention hooks is recorded as anchored
-        injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
-        (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
-    measure_host_peak_memory:
-        Whether CPU captures measure ``Trace.forward_peak_memory`` and
-        ``Trace.backward_peak_memory`` (a session-time knob).
-        Measuring needs a per-bracket reset of the process-wide resident high-water
-        mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
-        ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
-        ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
-        option. CUDA peaks and the MPS allocator delta ignore it.
+        Parameters
+        ----------
+        layers_to_save:
+            Activation layer selector to capture.
+        input_transform:
+    Optional callable applied once to the user input before ``model.forward``.
+        save_raw_input:
+            Raw user-input save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        batch_render:
+            Raw-input batch rendering policy for visualization. Supported values are
+            ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
+            ``"shape_only"``.
+        output_transform:
+            Optional callable applied once to the model output after ``model.forward``.
+        output_style:
+            Optional semantic output decode style.
+        output_head:
+            Optional live-output head to decode.
+        save_raw_output:
+            Raw model-output save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        layer_visualizers:
+            Optional mapping from site selectors to per-layer thumbnail callables.
+        save_visualizations:
+            Whether rendered visualizer image files should be copied into portable bundles.
+        keep_orphans:
+            Whether island ops (computations unreachable from both the model inputs and
+            outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
+            to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
+            enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
+        output_device:
+            Device placement for saved tensors.
+        save_arg_values:
+            Whether non-tensor function arguments are captured.
+        save_grads:
+            Backward gradient-retention policy. ``True`` captures all gradients,
+            ``False``/``None`` disables capture, and selectors restrict retention:
+            label strings/ordinal lists, ``tl.*`` selectors, and bare callables
+            are all honored (never collapsed to "all"). A bare callable is
+            evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
+            before any backward) and must return a strict ``bool``; only matching
+            ops receive gradient hooks.
+        save_code_context:
+            Whether source-text context is captured in addition to source identity.
+        save_rng_states:
+            Whether operation-level RNG states are captured.
+        random_seed:
+            Fixed seed used for deterministic capture. The capture snapshots the
+            global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
+            its RNG state is already live), reseeds every engine with this seed
+            for its own forward, and restores the snapshot on every exit path,
+            including a failed capture. Code after the capture therefore draws
+            the same numbers as it would without the capture. When ``None`` (the
+            default) the seed is drawn from a private entropy-seeded stream, not
+            the global ``random`` engine, so ``torch.manual_seed(k)`` before an
+            unseeded capture does NOT make the capture reproducible; pass
+            ``random_seed=`` explicitly for that. The seed used is recorded on
+            ``trace.seed``.
+        source_context_lines:
+            Number of source-context lines to store.
+        optimizer:
+            Optional optimizer used to annotate optimized parameters.
+        compute_input_output_distances:
+            Whether input/output graph distances are computed.
+        detach_saved_activations:
+            Whether saved tensors are detached from autograd. The default
+            ``False`` keeps saved activations graph-connected, which retains the
+            captured autograd graph alongside the payloads: measured ~1.48x the
+            saved-payload bytes live on a resnet18 capture, vs ~1.01x with
+            ``True``. Pass ``True`` for forward-only analysis when that
+            multiplier matters (R33).
+        recurrence_detection:
+            Whether repeated graph patterns are detected during postprocess.
+        intervention_ready:
+            Whether replay-template metadata is captured for intervention APIs.
+        capture_container_structure:
+            Whether to persist input and output container structure without
+            enabling intervention replay metadata.
+        hooks:
+            Optional live hook plan applied during capture.
+        unwrap_when_done:
+            Whether Torch functions are unwrapped after this call.
+        verbose:
+            Whether progress messages are printed.
+        backward_ready:
+            Whether capture keeps autograd-connected tensors for training workflows.
+        inference_only:
+            Whether capture wraps the user forward in ``torch.no_grad()``. When
+            omitted, a capture entered under ``torch.no_grad()`` or
+            ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
+            ``save_grads`` or ``intervention_ready`` asks for a backward; the
+            Trace reports the effective value. The implied value is cleared when
+            the forward re-enables grad (``torch.enable_grad()`` inside it) and an
+            output carries autograd history.
+        carry_state:
+            Whether the capture keeps the model state its forward changed
+            (forward-equivalent: norm running statistics, buffer writes, training
+            modes and plain attributes advance exactly as one direct ``model(x)``
+            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            advances the caller's random streams under either setting). The default
+            ``False`` makes the capture a pure observer: buffers, random state,
+            training modes and plain instance attributes are restored afterwards,
+            on success and on failure. What the forward wrote to plain attributes
+            is recorded on the trace under either setting, so a value the forward
+            stashes on a module is read from
+            ``trace.modules[address].attribute_writes`` (``Module.attribute_writes``;
+            objects without a value snapshot are restored by identity only, see
+            the capture-state contract). A cache hit runs no forward, so nothing
+            advances (DOCUMENTED-UNSTABLE).
+        name:
+            Optional user-facing name for the returned log.
+        cache:
+            Whether to use the content-hash capture cache. The key covers model
+            tensor content (including per-tensor device and ``requires_grad``),
+            training flags, non-persistent buffers, module tree and ``forward``
+            code, plain instance attributes (bounded digest), user-registered
+            module hooks, inputs, and the capture configuration; closure cells,
+            globals referenced by ``forward``, and the interior state of opaque
+            attribute objects remain outside the key (documented boundary).
+            ``torchlens.clear_cache()`` empties the cache.
+        cache_dir:
+            Optional directory for content-hash cache entries.
+        module_filter:
+            Optional THIRD save gate composed (AND) with ``save=`` /
+            ``layers_to_save``: an op's payload is retained only when the
+            save selection picks it AND this predicate returns truthy. The
+            predicate receives an op-record namespace (the legacy-shaped
+            ``SimpleNamespace`` of captured op fields such as ``func_name``,
+            ``layer_label``, and ``modules``), NEVER an
+            ``nn.Module`` instance — a filter written against modules (e.g.
+            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
+            ZERO payloads. Returning ``False`` keeps metadata but skips payload
+            saving; a capture whose every selected payload was suppressed by
+            this gate emits a ``module_filter_zero_saved`` warning.
+        stop_after:
+            Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
+            spelling): capture halts immediately AFTER the named site is
+            captured, returning a partial halted trace that includes it. The
+            site compiles into the halt engine on emission identity: a string
+            halts at the first emission whose module address
+            (``"encoder.layer.4"``, at that module's exit boundary) or function
+            name (``"relu"``) matches, a live selector (``tl.func("relu")``,
+            ``tl.module(...)``) halts at its first match, and a callable
+            predicate halts when it returns True. Finalized postprocess labels
+            (``"relu_1_2"``) do not exist during capture and refuse typed
+            (``stop_after_site_not_live``). A selector-shaped site that never
+            fires refuses typed (``stop_after_never_fired``); a callable that
+            never fires warns. Cannot combine with ``halt=``
+            (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
+        jax_control_flow:
+            Declared JAX control-flow policy. Backends other than torch reject
+            explicit use until their implementation phase supports it.
+        jax_max_control_flow_unroll:
+            Declared maximum JAX control-flow unroll count.
+        module_identity_mode:
+            Declared backend module-mode selection passthrough.
+        payload_policy:
+            Declared payload materialization/codec policy passthrough.
+        save_preview:
+            Non-torch preview backends' declared flag reserving extended ``save=``
+            semantics; the shipped torch ``save=`` kwarg is independent of it.
+        emit_nvtx:
+            Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
+            ranges around each logged operation. Range names carry call identity
+            (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
+            are separated under ``torchlens::internal::`` so the Nsight timeline
+            shows model work, not capture plumbing. NVTX markers are visible in
+            NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
+            enabling it can add small per-op overhead. The option applies to full
+            ``tl.trace`` capture and is preserved through ``tl.record``-style
+            options, although sparse recording may only expose ranges for operations
+            it actually logs.
+        measure_python_peak_memory:
+            Whether the host-side forward-pass peak recorded in
+            ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
+            Python-allocation peak. On CPU it adds to the peak measured under
+            ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
+            ``None`` and this probe fills only the peak pair's ``live`` value. A
+            measured CPU peak of 0 (a model too small to move the coarse-grained
+            resident counters) is recorded as ``None`` with
+            ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
+            for the duration of the forward pass, which is precise for small models
+            but taxes every traced operation (measured at 1.7x-2.5x total capture
+            time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
+            report the true device peak and ignore this option.
+        distributed_witness:
+            Session-time witness level for collective boundary records captured
+            under the distributed opt-in. ``"none"`` (the default) records
+            structure and correlation only; ``"digest"`` additionally stores
+            byte-exact SHA-256 digests of each contribution at issue and each
+            destination at observed completion (redundant evidence that can only
+            DEMOTE a merge verdict, never rescue one -- and a synchronization cost
+            on accelerator captures). ``"payload"`` is reserved for the merge
+            artifact story and currently refuses. Like
+            ``measure_python_peak_memory`` this is a session-time knob: it changes
+            what capture pays for, not what a trace means, and load restores the
+            default. The per-boundary ``witness.policy_resolved`` field IS
+            portable evidence of what was captured.
+        save_budget:
+            Ceiling on the bytes of activation payload a single capture may retain,
+            enforced per device. ``"auto"`` (the default)
+            allows half of each device's *available* memory measured at that device's
+            first save; a float in ``(0, 1]`` sets a different fraction; an int sets
+            an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
+            budget stops capture with
+            :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
+            is admitted before allocation from source-tensor bytes and retained storage
+            is alias-aware. This is not a general OOM guarantee: the model forward,
+            transform-only deltas, and cross-device temporaries can allocate before they
+            are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
+            ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
+            Devices whose headroom cannot be measured are left unbudgeted and
+            emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
+            cap to enforce those devices.
+        raise_on_nan:
+            Whether capture should stop at the first NaN or Inf tensor.
+        track_nonfinite:
+            Whether torch capture records a per-op finiteness verdict
+            (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
+            ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
+            control flow, reads device flags in one post-forward batch. A
+            session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
+        track_device_memory:
+            Whether torch capture samples device allocator counters around each op call, served by
+            ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+            opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
+            per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
+        structure_only:
+            Whether this capture runs under the structure-only contract
+            (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
+            no deprecation shim owed on rename). Structure-only capture records
+            the op graph, module hierarchy, parameter geometry, and per-op
+            shape/dtype as HYPOTHESES while every value-bearing claim is refused
+            typed or gated; value-dependent branches refuse with the user's
+            source line. Torch-only; the capability contract lives in
+            ``docs/reference/structure_only_capabilities.md``.
+        log_injections:
+            Whether computation inside intervention hooks is recorded as anchored
+            injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
+            (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+        measure_host_peak_memory:
+            Whether CPU captures measure ``Trace.forward_peak_memory`` and
+            ``Trace.backward_peak_memory`` (a session-time knob).
+            Measuring needs a per-bracket reset of the process-wide resident high-water
+            mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
+            ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
+            ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
+            option. CUDA peaks and the MPS allocator delta ignore it.
 
-    Examples
-    --------
-    >>> opts = CaptureOptions(layers_to_save=["fc1"], random_seed=0)
-    >>> opts.layers_to_save
-    ['fc1']
+        Examples
+        --------
+        >>> opts = CaptureOptions(layers_to_save=["fc1"], random_seed=0)
+        >>> opts.layers_to_save
+        ['fc1']
     """
 
     layers_to_save: str | list[Any] | None = "all"
@@ -795,8 +795,8 @@ class CaptureOptions:
             "layers_to_save": _resolve_option_value(
                 "layers_to_save", layers_to_save, "all", specified_fields
             ),
-            "transform": _resolve_option_value(
-                "transform", input_transform, None, specified_fields
+            "input_transform": _resolve_option_value(
+                "input_transform", input_transform, None, specified_fields
             ),
             "save_raw_input": _resolve_option_value(
                 "save_raw_input", save_raw_input, "small", specified_fields
@@ -813,8 +813,8 @@ class CaptureOptions:
             "output_head": _resolve_option_value(
                 "output_head", output_head, None, specified_fields
             ),
-            "save_raw_output": _resolve_option_value(
-                "save_raw_output", save_transformed_output, "small", specified_fields
+            "save_transformed_output": _resolve_option_value(
+                "save_transformed_output", save_transformed_output, "small", specified_fields
             ),
             "layer_visualizers": _resolve_option_value(
                 "layer_visualizers", layer_visualizers, None, specified_fields
@@ -828,9 +828,7 @@ class CaptureOptions:
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
             ),
-            "save_arg_values": _resolve_option_value(
-                "save_arg_values", save_args, False, specified_fields
-            ),
+            "save_args": _resolve_option_value("save_args", save_args, False, specified_fields),
             "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
             "capture_tensor_grad_hooks": _resolve_option_value(
                 "capture_tensor_grad_hooks",
@@ -838,13 +836,11 @@ class CaptureOptions:
                 True,
                 specified_fields,
             ),
-            "save_code_context": _resolve_option_value(
-                "save_code_context", save_source_context, False, specified_fields
+            "save_source_context": _resolve_option_value(
+                "save_source_context", save_source_context, False, specified_fields
             ),
-            "save_rng_states": _resolve_option_value(
-                "save_rng_states", save_rng, False, specified_fields
-            ),
-            "random_seed": _resolve_option_value("random_seed", seed, None, specified_fields),
+            "save_rng": _resolve_option_value("save_rng", save_rng, False, specified_fields),
+            "seed": _resolve_option_value("seed", seed, None, specified_fields),
             "source_context_lines": _resolve_option_value(
                 "source_context_lines", source_context_lines, 7, specified_fields
             ),

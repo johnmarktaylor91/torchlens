@@ -1840,7 +1840,7 @@ class Trace(
         self.output_id2label: dict[int, str] | None = None
         self.output_num_classes: int | None = None
         self._output_transform = output_transform
-        self.save_transformed_output = save_transformed_output
+        self.save_raw_output = save_transformed_output
         self.layer_visualizers = layer_visualizers
         self.save_visualizations = save_visualizations
         self._visualizer_dir: str | None = None
@@ -1862,7 +1862,7 @@ class Trace(
         self.param_hash_full: str | None = None
         self.input_object_id: int | None = None
         self.input_signature_hash: str | None = None
-        self.seed = None
+        self.random_seed = None
         self.output_device = output_device
         self.detach_saved_activations = detach_saved_activations
         self.backward_ready = backward_ready
@@ -1905,11 +1905,11 @@ class Trace(
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self._halt_returns_partial_trace = False
         self._replay_arg_version_data_complete = True
-        self.save_args = save_args
+        self.save_arg_values = save_args
         self.save_grads = "all" if save_grads is True else save_grads
         self.capture_tensor_grad_hooks = capture_tensor_grad_hooks
-        self.save_source_context = save_source_context
-        self.save_rng = save_rng
+        self.save_code_context = save_source_context
+        self.save_rng_states = save_rng
         self.recurrence_detection = recurrence_detection
         # L1 grouping surface: "structural" is the only entry-legal knob
         # value in wave 0 (others refuse typed at trace entry); the stamp is
@@ -3834,7 +3834,7 @@ class Trace(
             self._copy_append_last_chunk_fields(layer, new_layer)
             self._refresh_appended_tensor_metadata(layer)
         self.has_gradients = self.has_gradients or new_log.has_gradients
-        self.seed = new_log.seed
+        self.random_seed = new_log.random_seed
         self.input_object_id = new_log.input_object_id
         self.input_signature_hash = new_log.input_signature_hash
         self._rebind_fork_owner_refs()

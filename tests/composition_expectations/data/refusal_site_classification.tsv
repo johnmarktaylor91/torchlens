@@ -763,7 +763,7 @@ torchlens.intervention.population:reference:InvalidArgumentError::2	CONTRACTED	p
 torchlens.intervention.population:reference:InvalidArgumentError::3	CONTRACTED	population_heterogeneous	F02 D2 one homogeneous member stack
 torchlens.intervention.population:reference:InvalidArgumentError::4	CONTRACTED	population_source_invalid	F02 D2 unsupported source type
 torchlens.intervention.stochastic:_require_seed:InvalidArgumentError::1	CONTRACTED	sampling_seed_required	F02 D4 seed law: int or 'auto', None never reaches a hook
-torchlens.intervention.stochastic:_base_seed:InvalidArgumentError::1	CONTRACTED	sampling_trace_seed_unavailable	F02 D5 auto seed needs trace.seed in run_ctx
+torchlens.intervention.stochastic:_base_seed:InvalidArgumentError::1	CONTRACTED	sampling_trace_seed_unavailable	F02 D5 auto seed needs trace.random_seed in run_ctx
 torchlens.intervention.stochastic:_resolve_over_axes:InvalidArgumentError::1	CONTRACTED	axis_semantics_unknown	F02 D17/D25 named token without axis-role evidence
 torchlens.intervention.stochastic:_resolve_over_axes:InvalidArgumentError::2	CONTRACTED	intervention_over_invalid	F02 D17 closed over= vocabulary (existing code, new site)
 torchlens.intervention.stochastic:_normalize_over_axes:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 axis out of range for concrete rank

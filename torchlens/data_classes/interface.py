@@ -304,7 +304,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     # General info
 
-    s += f"\n\tRandom seed: {self.seed}"
+    s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
 
     # Overall model structure. An unverified capture (severed
@@ -428,7 +428,7 @@ def _str_during_pass(self: "Trace") -> str:
         String summarizing the model.
     """
     s = f"Log of {self.model_class_name} forward pass (pass still ongoing):"
-    s += f"\n\tRandom seed: {self.seed}"
+    s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"
     s += f"\n\tInternally initialized tensors: {self.internal_source_ops}"
