@@ -611,8 +611,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
 docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0
-docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0,
-docs-md	docs/agent-reference/current-2-x-surface.md	2.32.4
 docs-md	docs/agent-reference/current-2-x-surface.md	2.5
 docs-md	docs/agent-reference/current-2-x-surface.md	2.6
 docs-md	docs/agent-reference/current-2-x-surface.md	20
@@ -2212,8 +2210,6 @@ package-docstrings	torchlens/_io/forgery_validation.py	64
 package-docstrings	torchlens/_io/format_contract.py	17
 package-docstrings	torchlens/_io/format_contract.py	3.2
 package-docstrings	torchlens/_io/format_contract.py	3.3
-package-docstrings	torchlens/_io/format_errors.py	2.31.0
-package-docstrings	torchlens/_io/format_errors.py	3.1
 package-docstrings	torchlens/_io/format_errors.py	3.2
 package-docstrings	torchlens/_io/format_errors.py	3.3
 package-docstrings	torchlens/_io/injection_codec.py	2.3
@@ -2274,7 +2270,6 @@ package-docstrings	torchlens/_io/scrub.py	69
 package-docstrings	torchlens/_io/sidecar.py	14
 package-docstrings	torchlens/_io/sidecar.py	6.3
 package-docstrings	torchlens/_io/sidecar.py	6.4
-package-docstrings	torchlens/_io/state_contract.py	3.1
 package-docstrings	torchlens/_io/state_contract.py	3.3
 package-docstrings	torchlens/_io/state_contract.py	3.3,
 package-docstrings	torchlens/_io/state_keys.py	336
@@ -2299,7 +2294,6 @@ package-docstrings	torchlens/_io/writer_contract.py	2.34.1
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
-package-docstrings	torchlens/_io/writer_contract.py	3.4
 package-docstrings	torchlens/_model_wrappers.py	10
 package-docstrings	torchlens/_option_receipt.py	20
 package-docstrings	torchlens/_option_receipt.py	2026
