@@ -7,7 +7,7 @@ module exports its list and is joined here.
 from __future__ import annotations
 
 from ..generator import Axes, DeviceSpec, OptionsSpec
-from . import control_flow, dtypes_cpu, inputs
+from . import control_flow, dtypes_cpu, inputs, models
 
 DEVICES: tuple[DeviceSpec, ...] = (DeviceSpec("cpu", "cpu", "the CPU leg every cell runs on"),)
 
@@ -20,7 +20,13 @@ def default_axes() -> Axes:
     """Assemble the axis lists in row order."""
 
     return Axes(
-        models=(*control_flow.MODELS, *inputs.MODELS, *dtypes_cpu.MODELS),
+        models=(
+            *control_flow.MODELS,
+            *inputs.MODELS,
+            *dtypes_cpu.MODELS,
+            # wave-3 fills
+            *models.MODELS,
+        ),
         inputs=inputs.INPUTS,
         dtypes=dtypes_cpu.DTYPES,
         devices=DEVICES,
