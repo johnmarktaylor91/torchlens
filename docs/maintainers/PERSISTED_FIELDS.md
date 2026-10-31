@@ -8,7 +8,7 @@ are storage behind an accessor and have no public spelling.
 
 Reader floor: tlspec 11 (torchlens 3.0.0).
 
-Persisted fields in total: 791.
+Persisted fields in total: 779.
 
 ## `aten_op` (AtenOp, 32 persisted of 32 fields)
 
@@ -63,7 +63,7 @@ Persisted fields in total: 791.
 | `order_attribution_coverage` | keep | fact | `BackwardPass.order_attribution_coverage` (not in the glossary) |
 | `origin_backward_pass` | keep | fact | `BackwardPass.origin_backward_pass` (not in the glossary) |
 | `outer_context` | keep | fact | `BackwardPass.outer_context` (not in the glossary) |
-| `pass_index` | keep | fact | `BackwardPass.pass_index` |
+| `pass_number` | keep | fact | `BackwardPass.pass_number` |
 | `peak_memory` | keep | fact | `BackwardPass.peak_memory` (not in the glossary) |
 | `root_grad_arguments` | keep | fact | `BackwardPass.root_grad_arguments` (not in the glossary) |
 | `root_grad_fn_ids` | keep | fact | `BackwardPass.root_grad_fn_ids` (not in the glossary) |
@@ -196,8 +196,8 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | `backward_duration` | keep | fact | `GradFnCall.backward_duration` (not in the glossary) |
 | `backward_pass_index` | keep | fact | `GradFnCall.backward_pass_index` (not in the glossary) |
 | `call_index` | keep | fact | `GradFnCall.call_index` |
-| `call_label` | keep | fact | `GradFnCall.call_label` (not in the glossary) |
 | `fire_record` | keep | fact | `GradFnCall.fire_record` |
+| `grad_fn_label` | keep | fact | `GradFnCall.grad_fn_label` |
 | `grad_inputs` | blob_recursive | fact | `GradFnCall.grad_inputs` (not in the glossary) |
 | `grad_outputs` | blob_recursive | fact | `GradFnCall.grad_outputs` (not in the glossary) |
 | `is_saved` | keep | fact | `GradFnCall.is_saved` (not in the glossary) |
@@ -265,7 +265,6 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | `is_scalar_bool` | keep | fact | `Layer.is_scalar_bool` (not in the glossary) |
 | `is_terminal_bool` | keep | fact | `Layer.is_terminal_bool` (not in the glossary) |
 | `layer_label` | keep | fact | `Layer.layer_label` |
-| `layer_label_short` | keep | fact | `Layer.layer_label_short` (not in the glossary) |
 | `layer_type` | keep | fact | `Layer.layer_type` |
 | `module` | keep | fact | `Layer.module` |
 | `modules` | keep | fact | `Layer.modules` (not in the glossary) |
@@ -289,6 +288,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | `resolver_status` | keep | fact | `Layer.resolver_status` (not in the glossary) |
 | `save_grads` | keep | fact | `Layer.save_grads` |
 | `shape` | keep | fact | `Layer.shape` |
+| `short_layer_label` | keep | fact | `Layer.short_layer_label` |
 | `step_index` | keep | fact | `Layer.step_index` (not in the glossary) |
 | `terminal_bool_for` | keep | fact | `Layer.terminal_bool_for` (not in the glossary) |
 | `total_autograd_memory` | keep | fact | `Layer.total_autograd_memory` |
@@ -404,7 +404,6 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 | `backward_duration` | keep | fact | `ModuleCall.backward_duration` (not in the glossary) |
 | `call_children` | keep | fact | `ModuleCall.call_children` (not in the glossary) |
 | `call_index` | keep | fact | `ModuleCall.call_index` |
-| `call_label` | keep | fact | `ModuleCall.call_label` (not in the glossary) |
 | `call_parent` | keep | fact | `ModuleCall.call_parent` (not in the glossary) |
 | `class_name` | keep | fact | `ModuleCall.class_name` |
 | `class_qualname` | keep | fact | `ModuleCall.class_qualname` |
@@ -428,6 +427,7 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 | `inputs_before_pre_hooks` | keep | fact | `ModuleCall.inputs_before_pre_hooks` (not in the glossary) |
 | `internal_activation_memory` | keep | fact | `ModuleCall.internal_activation_memory` (not in the glossary) |
 | `internal_gradient_memory` | keep | fact | `ModuleCall.internal_gradient_memory` (not in the glossary) |
+| `label` | keep | fact | `ModuleCall.label` |
 | `max_descendant_depth` | keep | fact | `ModuleCall.max_descendant_depth` (not in the glossary) |
 | `module` | keep | fact | `ModuleCall.module` |
 | `module_call_stack` | keep | fact | `ModuleCall.module_call_stack` |
@@ -559,9 +559,7 @@ Session-only (`drop`): `_facets_cache`, `_forward_args_template`, `_forward_kwar
 | `is_terminal_conditional_bool` | keep | fact | `Op.is_terminal_conditional_bool` (not in the glossary) |
 | `is_transform` | keep | fact | `Op.is_transform` (not in the glossary) |
 | `label` | keep | fact | `Op.label` |
-| `label_short` | keep | derived | `Op.label_short` (not in the glossary) |
 | `layer_label` | keep | fact | `Op.layer_label` |
-| `layer_label_short` | keep | derived | `Op.layer_label_short` (not in the glossary) |
 | `lookup_keys` | keep | derived | `Op.lookup_keys` (not in the glossary) |
 | `max_distance_from_input` | keep | fact | `Op.max_distance_from_input` (not in the glossary) |
 | `max_distance_to_output` | keep | fact | `Op.max_distance_to_output` (not in the glossary) |
@@ -596,7 +594,7 @@ Session-only (`drop`): `_facets_cache`, `_forward_args_template`, `_forward_kwar
 | `parent_param_ops` | keep | fact | `Op.parent_param_ops` (not in the glossary) |
 | `parent_params` | keep | fact | `Op.parent_params` (not in the glossary) |
 | `parents` | keep | fact | `Op.parents` (not in the glossary) |
-| `pass_index` | keep | fact | `Op.pass_index` |
+| `pass_number` | keep | fact | `Op.pass_number` |
 | `raw_index` | keep | fact | `Op.raw_index` (not in the glossary) |
 | `recurrent_ops` | keep | fact | `Op.recurrent_ops` (not in the glossary) |
 | `resolver_status` | keep | fact | `Op.resolver_status` (not in the glossary) |
@@ -605,6 +603,8 @@ Session-only (`drop`): `_facets_cache`, `_forward_args_template`, `_forward_kwar
 | `saved_args` | blob_recursive | fact | `Op.saved_args` |
 | `saved_kwargs` | blob_recursive | fact | `Op.saved_kwargs` (not in the glossary) |
 | `shape` | keep | fact | `Op.shape` |
+| `short_label` | keep | derived | `Op.short_label` |
+| `short_layer_label` | keep | derived | `Op.short_layer_label` |
 | `site_key` | keep | fact | `Op.site_key` |
 | `step_index` | keep | fact | `Op.step_index` (not in the glossary) |
 | `terminal_bool_for` | keep | fact | `Op.terminal_bool_for` (not in the glossary) |
@@ -673,7 +673,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 
 Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_ref_released`, `_source_trace_ref`.
 
-## `trace` (Trace, 220 persisted of 392 fields)
+## `trace` (Trace, 183 persisted of 338 fields)
 
 | key | policy | tier | public spelling |
 | --- | --- | --- | --- |
@@ -682,6 +682,11 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `_annotation_blobs` | blob_recursive | fact | private |
 | `_append_history` | keep | fact | private |
 | `_append_sequence_id` | keep | fact | private |
+| `_autograd_backward_root_grad_fn_object_ids` | keep | fact | `Trace.autograd.backward_root_grad_fn_object_ids` |
+| `_autograd_derived_grads` | keep | fact | `Trace.autograd.derived_grads` |
+| `_autograd_grad_fn_order` | keep | fact | `Trace.autograd.grad_fn_order` |
+| `_autograd_has_backward_pass` | keep | fact | `Trace.autograd.has_backward_pass` |
+| `_autograd_has_grads` | keep | fact | `Trace.autograd.has_grads` |
 | `_backward_pass_logs` | keep | fact | private |
 | `_buffer_initial_values` | blob_recursive | fact | private |
 | `_buffer_num_calls` | keep | fact | private |
@@ -689,6 +694,20 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `_by_pass` | keep | fact | private |
 | `_capture_outcome` | keep | fact | private |
 | `_containers` | blob_recursive | fact | private |
+| `_cost_backward_durations` | keep | fact | `Trace.cost.backward_durations` |
+| `_cost_backward_peak_memory` | keep | fact | `Trace.cost.backward_peak_memory` |
+| `_cost_forward_duration` | keep | fact | `Trace.cost.forward_duration` |
+| `_cost_forward_peak_memory` | keep | fact | `Trace.cost.forward_peak_memory` |
+| `_cost_forward_peak_memory_reason` | keep | fact | `Trace.cost.forward_peak_memory_reason` |
+| `_cost_func_calls_duration` | keep | fact | `Trace.cost.func_calls_duration` |
+| `_cost_saved_activation_memory` | keep | fact | `Trace.cost.saved_activation_memory` |
+| `_cost_saved_grad_memory` | keep | fact | `Trace.cost.saved_grad_memory` |
+| `_cost_total_activation_memory` | keep | fact | `Trace.cost.total_activation_memory` |
+| `_cost_total_autograd_memory` | keep | fact | `Trace.cost.total_autograd_memory` |
+| `_cost_total_backward_memory` | keep | fact | `Trace.cost.total_backward_memory` |
+| `_cost_total_grad_memory` | keep | fact | `Trace.cost.total_grad_memory` |
+| `_cost_total_param_grad_memory` | keep | fact | `Trace.cost.total_param_grad_memory` |
+| `_cost_total_param_memory` | keep | fact | `Trace.cost.total_param_memory` |
 | `_decoded_output` | keep | fact | private |
 | `_final_to_raw_layer_labels` | keep | fact | private |
 | `_grad_fn_logs` | keep | fact | private |
@@ -720,6 +739,33 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `_num_ops` | keep | fact | private |
 | `_num_param_tensors` | keep | fact | private |
 | `_num_saved_ops` | keep | fact | private |
+| `_options_chunk_size` | keep | fact | `Trace.options.chunk_size` |
+| `_options_detach_saved_activations` | keep | fact | `Trace.options.detach_saved_activations` |
+| `_options_emit_nvtx` | keep | fact | `Trace.options.emit_nvtx` |
+| `_options_grouping` | keep | fact | `Trace.options.grouping` |
+| `_options_grouping_policy` | keep | fact | `Trace.options.grouping_policy` |
+| `_options_inference_only` | keep | fact | `Trace.options.inference_only` |
+| `_options_input_transform` | keep | fact | `Trace.options.input_transform` |
+| `_options_keep_orphans` | keep | fact | `Trace.options.keep_orphans` |
+| `_options_mark_layer_depths` | keep | fact | `Trace.options.mark_layer_depths` |
+| `_options_mode` | keep | fact | `Trace.options.mode` |
+| `_options_module_identity_mode` | keep | fact | `Trace.options.module_identity_mode` |
+| `_options_on_nonfinite` | keep | fact | `Trace.options.on_nonfinite` |
+| `_options_output_device` | keep | fact | `Trace.options.output_device` |
+| `_options_recurrence_detection` | keep | fact | `Trace.options.recurrence_detection` |
+| `_options_save_arg_templates` | keep | fact | `Trace.options.save_arg_templates` |
+| `_options_save_args` | keep | fact | `Trace.options.save_args` |
+| `_options_save_grads` | keep | fact | `Trace.options.save_grads` |
+| `_options_save_mode` | keep | fact | `Trace.options.save_mode` |
+| `_options_save_raw_activations` | keep | fact | `Trace.options.save_raw_activations` |
+| `_options_save_raw_grads` | keep | fact | `Trace.options.save_raw_grads` |
+| `_options_save_raw_input` | keep | fact | `Trace.options.save_raw_input` |
+| `_options_save_rng` | keep | fact | `Trace.options.save_rng` |
+| `_options_save_source_context` | keep | fact | `Trace.options.save_source_context` |
+| `_options_save_transformed_output` | keep | fact | `Trace.options.save_transformed_output` |
+| `_options_seed` | keep | fact | `Trace.options.seed` |
+| `_options_structure_only` | keep | fact | `Trace.options.structure_only` |
+| `_options_verbose` | keep | fact | `Trace.options.verbose` |
 | `_orphan_labels` | keep | fact | private |
 | `_orphan_logs` | keep | fact | private |
 | `_orphan_records` | blob_recursive | fact | private |
@@ -780,54 +826,14 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `_spec_revision` | keep | fact | private |
 | `_tracing_finished` | keep | fact | private |
 | `annotations` | keep | fact | `Trace.annotations` |
-| `backend` | keep | fact | `Trace.backend` |
-| `backend_runtime_config` | keep | fact | `Trace.backend_runtime_config` (not in the glossary) |
 | `backend_runtime_device_summary` | keep | fact | `Trace.backend_runtime_device_summary` (not in the glossary) |
-| `backend_runtime_version` | keep | fact | `Trace.backend_runtime_version` (not in the glossary) |
-| `backward_durations` | keep | fact | `Trace.backward_durations` |
-| `backward_memory_backend` | keep | fact | `Trace.backward_memory_backend` (not in the glossary) |
-| `backward_peak_memory` | keep | fact | `Trace.backward_peak_memory` |
 | `backward_peak_memory_reason` | keep | fact | `Trace.backward_peak_memory_reason` |
 | `batch_render` | keep | fact | `Trace.batch_render` (not in the glossary) |
 | `buffer_layers` | keep | fact | `Trace.buffer_layers` (not in the glossary) |
-| `capture_cache_hit` | keep | fact | `Trace.capture_cache_hit` (not in the glossary) |
-| `capture_cache_key` | keep | fact | `Trace.capture_cache_key` (not in the glossary) |
-| `capture_cache_path` | keep | fact | `Trace.capture_cache_path` (not in the glossary) |
-| `capture_end_time` | keep | fact | `Trace.capture_end_time` (not in the glossary) |
 | `capture_tensor_grad_hooks` | keep | fact | `Trace.capture_tensor_grad_hooks` (not in the glossary) |
 | `checkpoint_invocation_witness` | keep | fact | `Trace.checkpoint_invocation_witness` |
-| `conditional_arm_entry_edges` | keep | fact | `Trace.conditional_arm_entry_edges` (not in the glossary) |
-| `conditional_branch_edges` | keep | fact | `Trace.conditional_branch_edges` (not in the glossary) |
-| `conditional_edge_call_indices` | keep | fact | `Trace.conditional_edge_call_indices` (not in the glossary) |
-| `conditional_records` | keep | fact | `Trace.conditional_records` |
-| `conditionals` | keep | fact | `Trace.conditionals` |
-| `derived_grads` | keep | fact | `Trace.derived_grads` |
-| `detach_saved_activations` | keep | fact | `Trace.detach_saved_activations` (not in the glossary) |
-| `distributed_scope` | keep | fact | `Trace.distributed_scope` |
-| `forward_docstring` | keep | fact | `Trace.forward_docstring` (not in the glossary) |
-| `forward_duration` | keep | fact | `Trace.forward_duration` |
-| `forward_memory_backend` | keep | fact | `Trace.forward_memory_backend` (not in the glossary) |
-| `forward_peak_memory` | keep | fact | `Trace.forward_peak_memory` |
-| `forward_peak_memory_reason` | keep | fact | `Trace.forward_peak_memory_reason` (not in the glossary) |
-| `forward_signature` | keep | fact | `Trace.forward_signature` |
-| `forward_source_file` | keep | fact | `Trace.forward_source_file` (not in the glossary) |
-| `forward_source_line` | keep | fact | `Trace.forward_source_line` (not in the glossary) |
-| `func_calls_duration` | keep | fact | `Trace.func_calls_duration` |
-| `grad_fn_order` | keep | fact | `Trace.grad_fn_order` |
 | `grad_fn_timing_provenance` | keep | fact | `Trace.grad_fn_timing_provenance` |
-| `graph_shape_hash` | keep | fact | `Trace.graph_shape_hash` (not in the glossary) |
-| `grouping` | keep | fact | `Trace.grouping` |
-| `grouping_policy` | keep | fact | `Trace.grouping_policy` |
-| `halt_frontier` | keep | fact | `Trace.halt_frontier` (not in the glossary) |
-| `has_backward_pass` | keep | fact | `Trace.has_backward_pass` |
-| `has_gradients` | keep | fact | `Trace.has_gradients` (not in the glossary) |
-| `inference_only` | keep | fact | `Trace.inference_only` |
-| `init_docstring` | keep | fact | `Trace.init_docstring` (not in the glossary) |
-| `init_signature` | keep | fact | `Trace.init_signature` |
-| `init_source_file` | keep | fact | `Trace.init_source_file` (not in the glossary) |
-| `init_source_line` | keep | fact | `Trace.init_source_line` (not in the glossary) |
 | `input` | keep | fact | `Trace.input` |
-| `input_annotations` | keep | fact | `Trace.input_annotations` (not in the glossary) |
 | `input_layers` | keep | fact | `Trace.input_layers` (not in the glossary) |
 | `internal_sink_ops` | keep | fact | `Trace.internal_sink_ops` (not in the glossary) |
 | `internal_source_ops` | keep | fact | `Trace.internal_source_ops` (not in the glossary) |
@@ -835,7 +841,6 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `intervention_audit` | keep | fact | `Trace.intervention_audit` (not in the glossary) |
 | `is_replayable` | keep | fact | `Trace.is_replayable` |
 | `is_stopped` | keep | fact | `Trace.is_stopped` |
-| `keep_orphans` | keep | fact | `Trace.keep_orphans` (not in the glossary) |
 | `layer_labels` | keep | fact | `Trace.layer_labels` (not in the glossary) |
 | `layers_with_params` | keep | fact | `Trace.layers_with_params` (not in the glossary) |
 | `model_name` | keep | fact | `Trace.model_name` |
@@ -844,33 +849,16 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `num_params` | keep | fact | `Trace.num_params` (not in the glossary) |
 | `num_params_frozen` | keep | fact | `Trace.num_params_frozen` (not in the glossary) |
 | `num_params_trainable` | keep | fact | `Trace.num_params_trainable` (not in the glossary) |
-| `observer_spans` | keep | fact | `Trace.observer_spans` |
-| `op_equivalence_classes` | keep | fact | `Trace.op_equivalence_classes` |
 | `op_labels` | keep | fact | `Trace.op_labels` (not in the glossary) |
-| `output_device` | keep | fact | `Trace.output_device` |
 | `output_id2label` | keep | fact | `Trace.output_id2label` (not in the glossary) |
 | `output_layers` | keep | fact | `Trace.output_layers` (not in the glossary) |
 | `output_num_classes` | keep | fact | `Trace.output_num_classes` (not in the glossary) |
-| `output_postprocessor` | keep | fact | `Trace.output_postprocessor` (not in the glossary) |
-| `param_hash_full` | keep | fact | `Trace.param_hash_full` |
-| `param_hash_quick` | keep | fact | `Trace.param_hash_quick` |
-| `param_source` | keep | fact | `Trace.param_source` |
 | `profile_enabled` | keep | fact | `Trace.profile_enabled` (not in the glossary) |
-| `raise_on_nan` | keep | fact | `Trace.raise_on_nan` |
-| `random_seed` | keep | fact | `Trace.random_seed` (not in the glossary) |
-| `recording_kept` | keep | fact | `Trace.recording_kept` |
-| `recurrence_detection` | keep | fact | `Trace.recurrence_detection` (not in the glossary) |
-| `relationship_evidence` | keep | fact | `Trace.relationship_evidence` |
-| `root_entry_point` | keep | fact | `Trace.root_entry_point` |
-| `save_arg_templates` | keep | fact | `Trace.save_arg_templates` (not in the glossary) |
-| `save_arg_values` | keep | fact | `Trace.save_arg_values` (not in the glossary) |
 | `save_visualizations` | keep | fact | `Trace.save_visualizations` (not in the glossary) |
 | `state` | keep | fact | `Trace.state` |
 | `state_history` | keep | fact | `Trace.state_history` (not in the glossary) |
 | `stop_reason` | keep | fact | `Trace.stop_reason` |
 | `tlspec_version` | keep | fact | `Trace.tlspec_version` (not in the glossary) |
-| `transform_repr` | keep | fact | `Trace.transform_repr` (not in the glossary) |
 | `transformed_output` | keep | fact | `Trace.transformed_output` |
-| `verbose` | keep | fact | `Trace.verbose` |
 
-Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_filter`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_backward_ready`, `_options_grad_transform`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_head`, `_output_style`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `completeness_witness_accounted_count`, `completeness_witness_callback_ns`, `completeness_witness_event_count`, `completeness_witness_expected_opaque_count`, `completeness_witness_mode`, `completeness_witness_unaccounted_count`, `completeness_witness_verified`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `grad_transform`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `pinned_autograd_memory`, `save_budget`, `track_device_memory`, `track_nonfinite`.
+Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_cost_pinned_autograd_memory`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_filter`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_backward_ready`, `_options_grad_transform`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_head`, `_output_style`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `save_budget`, `track_device_memory`, `track_nonfinite`.

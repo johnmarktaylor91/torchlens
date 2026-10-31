@@ -1869,3 +1869,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
 recorded: 2026-10-31T18:45:58.484861+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:07.926495+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:13.773186+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:18.153729+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:23.235583+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:28.533495+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:34.773653+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:42.298539+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:48.909068+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:55:56.219801+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:02.735948+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:09.843741+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:16.231587+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:23.984194+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:32.264977+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:39.180171+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:46.229277+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:56:53.636252+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:01.029130+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:07.637876+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:12.327809+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:17.313141+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:22.400265+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:27.183102+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:32.039322+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:37.055419+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:42.763495+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:47.981708+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:54.070891+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:57:59.239429+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:58:04.055053+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:58:08.441551+00:00

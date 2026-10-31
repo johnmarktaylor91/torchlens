@@ -166,9 +166,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -286,6 +284,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -433,9 +433,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -517,6 +515,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -656,9 +656,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -763,6 +761,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -922,9 +922,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -1015,6 +1013,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -1061,11 +1061,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "conv:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -1113,6 +1112,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "conv:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -1215,11 +1215,10 @@
      "conv:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -1256,6 +1255,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -1369,7 +1369,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
@@ -1575,7 +1575,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
@@ -2025,13 +2025,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "lookup_keys": [
      -3,
      1,
@@ -2153,7 +2151,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "conv2d_1_2",
@@ -2176,6 +2174,8 @@
      4,
      4
     ],
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
     "source_trace": {
@@ -2383,13 +2383,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "lookup_keys": [
      -4,
      0,
@@ -2468,7 +2466,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -2491,6 +2489,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -2724,13 +2724,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "lookup_keys": [
      -1,
      3,
@@ -2809,7 +2807,7 @@
     "parents": [
      "relu_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "output_1",
@@ -2845,6 +2843,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -3096,13 +3096,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "lookup_keys": [
      -2,
      2,
@@ -3180,7 +3178,7 @@
     "parents": [
      "conv2d_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "relu_1_3",
@@ -3203,6 +3201,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -3415,6 +3415,12 @@
    "_annotation_blobs": null,
    "_append_history": [],
    "_append_sequence_id": 0,
+   "_autograd_backward_root_grad_fn_object_ids": "<measured>",
+   "_autograd_derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "_autograd_escape_detector_backward_coverage": "not_armed",
+   "_autograd_grad_fn_order": [],
+   "_autograd_has_backward_pass": false,
+   "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
@@ -3429,6 +3435,21 @@
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_cost_backward_durations": [],
+   "_cost_backward_peak_memory": "<measured>",
+   "_cost_forward_duration": "<measured>",
+   "_cost_forward_peak_memory": "<measured>",
+   "_cost_forward_peak_memory_reason": "<measured>",
+   "_cost_func_calls_duration": "<measured>",
+   "_cost_pinned_autograd_memory": "<measured>",
+   "_cost_saved_activation_memory": "<measured>",
+   "_cost_saved_grad_memory": "<measured>",
+   "_cost_total_activation_memory": "<measured>",
+   "_cost_total_autograd_memory": "<measured>",
+   "_cost_total_backward_memory": "<measured>",
+   "_cost_total_grad_memory": "<measured>",
+   "_cost_total_param_grad_memory": "<measured>",
+   "_cost_total_param_memory": "<measured>",
    "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
@@ -3441,7 +3462,55 @@
    "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
+   "_graph_conditional_arm_entry_edges": {},
+   "_graph_conditional_branch_edges": [],
+   "_graph_conditional_edge_call_indices": {},
+   "_graph_conditional_records": [],
+   "_graph_conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "_graph_manual_tensor_connections": [],
+   "_graph_op_equivalence_classes": {
+    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
+     "__set__": [
+      "\"conv2d_1_1:1\""
+     ]
+    },
+    "\"input_1_1_4_4_torch.float32\"": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "\"output_1_1_2_4_4_torch.float32\"": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "\"relu_43c01414e3d13308\"": {
+     "__set__": [
+      "\"relu_1_2:1\""
+     ]
+    }
+   },
+   "_graph_relationship_evidence": {
+    "\"graph\"": "unknown",
+    "\"input\"": "unknown",
+    "\"model\"": "unknown",
+    "\"weights\"": "unknown"
+   },
+   "_graph_stop_frontier": null,
+   "_graph_structure_evidence": null,
    "_has_direct_writes": false,
+   "_health_completeness_callback_ns": 0,
+   "_health_completeness_decompositions": [],
+   "_health_completeness_mode": "off",
+   "_health_completeness_verified": null,
+   "_health_escape_detector_callback_ns": 0,
+   "_health_escape_detector_mode": "off",
+   "_health_escape_detector_verified": null,
+   "_health_num_accounted_witness_events": 0,
+   "_health_num_escape_detector_events": 0,
+   "_health_num_expected_opaque_witness_events": 0,
+   "_health_num_unaccounted_witness_events": 0,
+   "_health_num_witness_events": 0,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
@@ -3719,6 +3788,45 @@
    "_num_ops": 2,
    "_num_param_tensors": 2,
    "_num_saved_ops": 4,
+   "_options_activation_transform": null,
+   "_options_backward_ready": false,
+   "_options_chunk_size": false,
+   "_options_detach_saved_activations": false,
+   "_options_emit_nvtx": false,
+   "_options_grad_transform": null,
+   "_options_grouping": "structural",
+   "_options_grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "_options_inference_only": false,
+   "_options_input_transform": null,
+   "_options_keep_orphans": false,
+   "_options_mark_layer_depths": true,
+   "_options_mode": "exhaustive",
+   "_options_module_identity_mode": "torch_module",
+   "_options_on_nonfinite": false,
+   "_options_output_device": "same",
+   "_options_recurrence_detection": true,
+   "_options_save_arg_templates": false,
+   "_options_save_args": false,
+   "_options_save_grads": null,
+   "_options_save_mode": "copy",
+   "_options_save_raw_activations": true,
+   "_options_save_raw_grads": true,
+   "_options_save_raw_input": "small",
+   "_options_save_rng": "<measured>",
+   "_options_save_source_context": false,
+   "_options_save_transformed_output": "small",
+   "_options_seed": 20260812,
+   "_options_structure_only": false,
+   "_options_verbose": false,
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
@@ -3730,6 +3838,41 @@
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
    "_phase_timings": "<measured>",
+   "_provenance_backend": "torch",
+   "_provenance_backend_config": null,
+   "_provenance_backend_version": null,
+   "_provenance_backward_memory_backend": "<measured>",
+   "_provenance_cache_hit": false,
+   "_provenance_cache_key": null,
+   "_provenance_cache_path": null,
+   "_provenance_cleanup_duration": "<measured>",
+   "_provenance_distributed_scope": null,
+   "_provenance_end_time": "<measured>",
+   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_forward_memory_backend": "<measured>",
+   "_provenance_input_annotations": {},
+   "_provenance_input_object_id": "<measured>",
+   "_provenance_input_preprocessor": null,
+   "_provenance_input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
+   "_provenance_input_structure": "<raises AttributeError>",
+   "_provenance_is_appended": false,
+   "_provenance_model_object_id": "<measured>",
+   "_provenance_observer_spans": [],
+   "_provenance_output_postprocessor": null,
+   "_provenance_owner_thread_id": "<measured>",
+   "_provenance_owner_thread_qualified": true,
+   "_provenance_param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_source": "native-module",
+   "_provenance_recording_kept": true,
+   "_provenance_root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
+   "_provenance_setup_duration": "<measured>",
+   "_provenance_start_time": "<measured>",
+   "_provenance_thread_activity_detected": false,
+   "_provenance_thread_count_end": 1,
+   "_provenance_thread_count_start": 1,
+   "_provenance_verification_reason": null,
+   "_provenance_verified": null,
    "_raw_to_final_layer_labels": {
     "\"conv2d_1_2_raw\"": "conv2d_1_1",
     "\"input_1_raw\"": "input_1",
@@ -3752,12 +3895,27 @@
    "_replay_frontier": {},
    "_rescue_rerun": null,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_class_docstring": "Small convolutional network for ordinary feed-forward capture.",
+   "_source_class_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_class_line": 56,
+   "_source_class_name": "PlainCNN",
+   "_source_class_qualname": "capture_oracle._models.PlainCNN",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
     "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n    super().__init__()\n    self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))"
    },
+   "_source_forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
+   "_source_forward_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_forward_line": 67,
+   "_source_forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "_source_frames": [],
+   "_source_init_docstring": "Initialize the convolution and side-effect counters.",
+   "_source_init_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_init_line": 59,
+   "_source_init_signature": "(self) -> 'None'",
    "_source_model_ref": "<callable ReferenceType>",
+   "_source_snapshots": [],
    "_spec_revision": 0,
    "_tracing_finished": true,
    "_transform": null,
@@ -3814,7 +3972,6 @@
      ]
     }
    },
-   "activation_transform": null,
    "annotations": {
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
@@ -3830,17 +3987,9 @@
    },
    "archived_activations": {},
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
    "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
    "buffer_layers": [],
    "buffer_read_ops": [],
@@ -3848,13 +3997,8 @@
    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
    "capture_guard_passes": [
     {
      "\"capture_mode\"": "exhaustive",
@@ -3862,32 +4006,8 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
    "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 56,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
    "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
    "compute_coverage": {
     "\"known\"": 2,
     "\"not_applicable\"": 2,
@@ -3895,83 +4015,32 @@
     "\"zero_by_rule\"": 0
    },
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 67,
-   "func_calls_duration": "<measured>",
-   "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_transform": null,
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "has_backward_pass": false,
    "has_frozen_params": false,
-   "has_gradients": false,
    "has_trainable_params": true,
+   "health": "<torchlens._data_classes._trace_groups.TraceHealth>",
    "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize the convolution and side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 59,
    "injected_ops": [],
    "input": null,
-   "input_annotations": {},
    "input_layers": [
     "input_1"
    ],
-   "input_object_id": "<measured>",
    "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
-   "input_structure": "<raises AttributeError>",
    "internal_sink_ops": [],
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "is_appended": false,
    "is_pristine": true,
    "is_replayable": false,
    "is_stopped": false,
-   "keep_orphans": false,
    "last_run": null,
    "layer_labels": [
     "input_1",
@@ -3981,7 +4050,6 @@
    ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
-   "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
      "conv2d_1_1"
@@ -3989,12 +4057,7 @@
    },
    "logged_values": {},
    "macs_unknown_split_ops": [],
-   "manual_tensor_connections": [],
-   "mark_layer_depths": true,
-   "model_class_name": "PlainCNN",
-   "model_class_qualname": "capture_oracle._models.PlainCNN",
    "model_name": "PlainCNN",
-   "model_object_id": "<measured>",
    "model_ops": [
     {
      "__ref__": "Op",
@@ -4025,7 +4088,6 @@
      "0.0"
     ]
    ],
-   "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "plaincnn_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
@@ -4040,29 +4102,6 @@
    "num_params_frozen": 0,
    "num_params_trainable": 20,
    "num_uncalled_modules": 0,
-   "observer_spans": [],
-   "op_equivalence_classes": {
-    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
-     "__set__": [
-      "\"conv2d_1_1:1\""
-     ]
-    },
-    "\"input_1_1_4_4_torch.float32\"": {
-     "__set__": [
-      "\"input_1:1\""
-     ]
-    },
-    "\"output_1_1_2_4_4_torch.float32\"": {
-     "__set__": [
-      "\"output_1:1\""
-     ]
-    },
-    "\"relu_43c01414e3d13308\"": {
-     "__set__": [
-      "\"relu_1_2:1\""
-     ]
-    }
-   },
    "op_events": [],
    "op_labels": [
     "input_1:1",
@@ -4072,37 +4111,22 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "options": "<torchlens._data_classes._trace_groups.TraceOptions>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
-   "output_device": "same",
    "output_id2label": null,
    "output_layers": [
     "output_1"
    ],
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "output_postprocessor": null,
-   "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_trace": {
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
-   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
-   "raise_on_nan": false,
-   "random_seed": 20260812,
+   "provenance": "<torchlens._data_classes._trace_groups.TraceProvenance>",
    "readiness": null,
-   "recording_kept": true,
-   "recurrence_detection": true,
-   "relationship_evidence": {
-    "\"graph\"": "unknown",
-    "\"input\"": "unknown",
-    "\"model\"": "unknown",
-    "\"weights\"": "unknown"
-   },
-   "root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -4111,49 +4135,25 @@
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
-   "save_arg_templates": false,
-   "save_arg_values": false,
-   "save_code_context": false,
-   "save_grads": null,
-   "save_mode": "copy",
-   "save_raw_activations": true,
-   "save_raw_gradients": true,
-   "save_raw_input": "small",
-   "save_raw_output": "small",
-   "save_rng_states": "<measured>",
    "save_visualizations": false,
-   "saved_activation_memory": "<measured>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "saved_gradient_memory": "<measured>",
    "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "setup_duration": "<measured>",
    "sibling_events": [],
    "source": "<torchlens._data_classes._trace_groups.TraceSource>",
-   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "structure_evidence": null,
-   "structure_only": false,
    "tlspec_version": 11,
-   "total_activation_memory": "<measured>",
-   "total_autograd_memory": "<measured>",
-   "total_backward_memory": "<measured>",
-   "total_gradient_memory": "<measured>",
-   "total_param_gradient_memory": "<measured>",
-   "total_param_memory": "<measured>",
-   "transform_repr": null,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
-   "verbose": false
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
   }
  },
  "live": {
@@ -4323,9 +4323,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -4443,6 +4441,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -4590,9 +4590,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -4674,6 +4672,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -4813,9 +4813,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -4920,6 +4918,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -5079,9 +5079,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -5172,6 +5170,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -5218,11 +5218,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "conv:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -5270,6 +5269,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "conv:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -5372,11 +5372,10 @@
      "conv:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -5413,6 +5412,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -5526,7 +5526,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
@@ -5732,7 +5732,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
@@ -6182,13 +6182,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "lookup_keys": [
      -3,
      1,
@@ -6310,7 +6308,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "conv2d_1_2",
@@ -6333,6 +6331,8 @@
      4,
      4
     ],
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
     "source_trace": {
@@ -6540,13 +6540,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "lookup_keys": [
      -4,
      0,
@@ -6625,7 +6623,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -6648,6 +6646,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -6881,13 +6881,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "lookup_keys": [
      -1,
      3,
@@ -6966,7 +6964,7 @@
     "parents": [
      "relu_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "output_1",
@@ -7002,6 +7000,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -7253,13 +7253,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "lookup_keys": [
      -2,
      2,
@@ -7337,7 +7335,7 @@
     "parents": [
      "conv2d_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "relu_1_3",
@@ -7360,6 +7358,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -7572,6 +7572,12 @@
    "_annotation_blobs": null,
    "_append_history": [],
    "_append_sequence_id": 0,
+   "_autograd_backward_root_grad_fn_object_ids": "<measured>",
+   "_autograd_derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "_autograd_escape_detector_backward_coverage": "not_armed",
+   "_autograd_grad_fn_order": [],
+   "_autograd_has_backward_pass": false,
+   "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
@@ -7586,6 +7592,21 @@
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_cost_backward_durations": [],
+   "_cost_backward_peak_memory": "<measured>",
+   "_cost_forward_duration": "<measured>",
+   "_cost_forward_peak_memory": "<measured>",
+   "_cost_forward_peak_memory_reason": "<measured>",
+   "_cost_func_calls_duration": "<measured>",
+   "_cost_pinned_autograd_memory": "<measured>",
+   "_cost_saved_activation_memory": "<measured>",
+   "_cost_saved_grad_memory": "<measured>",
+   "_cost_total_activation_memory": "<measured>",
+   "_cost_total_autograd_memory": "<measured>",
+   "_cost_total_backward_memory": "<measured>",
+   "_cost_total_grad_memory": "<measured>",
+   "_cost_total_param_grad_memory": "<measured>",
+   "_cost_total_param_memory": "<measured>",
    "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
@@ -7598,7 +7619,55 @@
    "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
+   "_graph_conditional_arm_entry_edges": {},
+   "_graph_conditional_branch_edges": [],
+   "_graph_conditional_edge_call_indices": {},
+   "_graph_conditional_records": [],
+   "_graph_conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "_graph_manual_tensor_connections": [],
+   "_graph_op_equivalence_classes": {
+    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
+     "__set__": [
+      "\"conv2d_1_1:1\""
+     ]
+    },
+    "\"input_1_1_4_4_torch.float32\"": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "\"output_1_1_2_4_4_torch.float32\"": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "\"relu_43c01414e3d13308\"": {
+     "__set__": [
+      "\"relu_1_2:1\""
+     ]
+    }
+   },
+   "_graph_relationship_evidence": {
+    "\"graph\"": "unknown",
+    "\"input\"": "unknown",
+    "\"model\"": "unknown",
+    "\"weights\"": "unknown"
+   },
+   "_graph_stop_frontier": null,
+   "_graph_structure_evidence": null,
    "_has_direct_writes": false,
+   "_health_completeness_callback_ns": 0,
+   "_health_completeness_decompositions": [],
+   "_health_completeness_mode": "off",
+   "_health_completeness_verified": null,
+   "_health_escape_detector_callback_ns": 0,
+   "_health_escape_detector_mode": "off",
+   "_health_escape_detector_verified": null,
+   "_health_num_accounted_witness_events": 0,
+   "_health_num_escape_detector_events": 0,
+   "_health_num_expected_opaque_witness_events": 0,
+   "_health_num_unaccounted_witness_events": 0,
+   "_health_num_witness_events": 0,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
@@ -7876,6 +7945,45 @@
    "_num_ops": 2,
    "_num_param_tensors": 2,
    "_num_saved_ops": 4,
+   "_options_activation_transform": null,
+   "_options_backward_ready": false,
+   "_options_chunk_size": false,
+   "_options_detach_saved_activations": false,
+   "_options_emit_nvtx": false,
+   "_options_grad_transform": null,
+   "_options_grouping": "structural",
+   "_options_grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "_options_inference_only": false,
+   "_options_input_transform": null,
+   "_options_keep_orphans": false,
+   "_options_mark_layer_depths": true,
+   "_options_mode": "exhaustive",
+   "_options_module_identity_mode": "torch_module",
+   "_options_on_nonfinite": false,
+   "_options_output_device": "same",
+   "_options_recurrence_detection": true,
+   "_options_save_arg_templates": false,
+   "_options_save_args": false,
+   "_options_save_grads": null,
+   "_options_save_mode": "copy",
+   "_options_save_raw_activations": true,
+   "_options_save_raw_grads": true,
+   "_options_save_raw_input": "small",
+   "_options_save_rng": "<measured>",
+   "_options_save_source_context": false,
+   "_options_save_transformed_output": "small",
+   "_options_seed": 20260812,
+   "_options_structure_only": false,
+   "_options_verbose": false,
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
@@ -7887,6 +7995,41 @@
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
    "_phase_timings": "<measured>",
+   "_provenance_backend": "torch",
+   "_provenance_backend_config": null,
+   "_provenance_backend_version": null,
+   "_provenance_backward_memory_backend": "<measured>",
+   "_provenance_cache_hit": false,
+   "_provenance_cache_key": null,
+   "_provenance_cache_path": null,
+   "_provenance_cleanup_duration": "<measured>",
+   "_provenance_distributed_scope": null,
+   "_provenance_end_time": "<measured>",
+   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_forward_memory_backend": "<measured>",
+   "_provenance_input_annotations": {},
+   "_provenance_input_object_id": "<measured>",
+   "_provenance_input_preprocessor": null,
+   "_provenance_input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
+   "_provenance_input_structure": "<raises AttributeError>",
+   "_provenance_is_appended": false,
+   "_provenance_model_object_id": "<measured>",
+   "_provenance_observer_spans": [],
+   "_provenance_output_postprocessor": null,
+   "_provenance_owner_thread_id": "<measured>",
+   "_provenance_owner_thread_qualified": true,
+   "_provenance_param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_source": "native-module",
+   "_provenance_recording_kept": true,
+   "_provenance_root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
+   "_provenance_setup_duration": "<measured>",
+   "_provenance_start_time": "<measured>",
+   "_provenance_thread_activity_detected": false,
+   "_provenance_thread_count_end": 1,
+   "_provenance_thread_count_start": 1,
+   "_provenance_verification_reason": null,
+   "_provenance_verified": null,
    "_raw_to_final_layer_labels": {
     "\"conv2d_1_2_raw\"": "conv2d_1_1",
     "\"input_1_raw\"": "input_1",
@@ -7909,12 +8052,27 @@
    "_replay_frontier": {},
    "_rescue_rerun": null,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_class_docstring": "Small convolutional network for ordinary feed-forward capture.",
+   "_source_class_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_class_line": 56,
+   "_source_class_name": "PlainCNN",
+   "_source_class_qualname": "capture_oracle._models.PlainCNN",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
     "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n    super().__init__()\n    self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))"
    },
+   "_source_forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
+   "_source_forward_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_forward_line": 67,
+   "_source_forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "_source_frames": [],
+   "_source_init_docstring": "Initialize the convolution and side-effect counters.",
+   "_source_init_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_init_line": 59,
+   "_source_init_signature": "(self) -> 'None'",
    "_source_model_ref": "<callable ReferenceType>",
+   "_source_snapshots": [],
    "_spec_revision": 0,
    "_tracing_finished": true,
    "_transform": null,
@@ -7971,21 +8129,12 @@
      ]
     }
    },
-   "activation_transform": null,
    "annotations": {},
    "archived_activations": {},
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
    "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
    "buffer_layers": [],
    "buffer_read_ops": [],
@@ -7993,13 +8142,8 @@
    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
    "capture_guard_passes": [
     {
      "\"capture_mode\"": "exhaustive",
@@ -8007,32 +8151,8 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
    "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 56,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
    "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
    "compute_coverage": {
     "\"known\"": 2,
     "\"not_applicable\"": 2,
@@ -8040,83 +8160,32 @@
     "\"zero_by_rule\"": 0
    },
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 67,
-   "func_calls_duration": "<measured>",
-   "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_transform": null,
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "has_backward_pass": false,
    "has_frozen_params": false,
-   "has_gradients": false,
    "has_trainable_params": true,
+   "health": "<torchlens._data_classes._trace_groups.TraceHealth>",
    "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize the convolution and side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 59,
    "injected_ops": [],
    "input": null,
-   "input_annotations": {},
    "input_layers": [
     "input_1"
    ],
-   "input_object_id": "<measured>",
    "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
-   "input_structure": "<raises AttributeError>",
    "internal_sink_ops": [],
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "is_appended": false,
    "is_pristine": true,
    "is_replayable": false,
    "is_stopped": false,
-   "keep_orphans": false,
    "last_run": null,
    "layer_labels": [
     "input_1",
@@ -8126,7 +8195,6 @@
    ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
-   "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
      "conv2d_1_1"
@@ -8134,12 +8202,7 @@
    },
    "logged_values": {},
    "macs_unknown_split_ops": [],
-   "manual_tensor_connections": [],
-   "mark_layer_depths": true,
-   "model_class_name": "PlainCNN",
-   "model_class_qualname": "capture_oracle._models.PlainCNN",
    "model_name": "PlainCNN",
-   "model_object_id": "<measured>",
    "model_ops": [
     {
      "__ref__": "Op",
@@ -8170,7 +8233,6 @@
      "0.0"
     ]
    ],
-   "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "plaincnn_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
@@ -8185,29 +8247,6 @@
    "num_params_frozen": 0,
    "num_params_trainable": 20,
    "num_uncalled_modules": 0,
-   "observer_spans": [],
-   "op_equivalence_classes": {
-    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
-     "__set__": [
-      "\"conv2d_1_1:1\""
-     ]
-    },
-    "\"input_1_1_4_4_torch.float32\"": {
-     "__set__": [
-      "\"input_1:1\""
-     ]
-    },
-    "\"output_1_1_2_4_4_torch.float32\"": {
-     "__set__": [
-      "\"output_1:1\""
-     ]
-    },
-    "\"relu_43c01414e3d13308\"": {
-     "__set__": [
-      "\"relu_1_2:1\""
-     ]
-    }
-   },
    "op_events": [
     "<torchlens._ir.op_record.OpRecord>",
     "<torchlens._ir.op_record.OpRecord>",
@@ -8221,60 +8260,32 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "options": "<torchlens._data_classes._trace_groups.TraceOptions>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
-   "output_device": "same",
    "output_id2label": null,
    "output_layers": [
     "output_1"
    ],
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "output_postprocessor": null,
-   "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_trace": null,
-   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
-   "raise_on_nan": false,
-   "random_seed": 20260812,
+   "provenance": "<torchlens._data_classes._trace_groups.TraceProvenance>",
    "readiness": null,
-   "recording_kept": true,
-   "recurrence_detection": true,
-   "relationship_evidence": {
-    "\"graph\"": "unknown",
-    "\"input\"": "unknown",
-    "\"model\"": "unknown",
-    "\"weights\"": "unknown"
-   },
-   "root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
    },
    "root_trace": null,
-   "save_arg_templates": false,
-   "save_arg_values": false,
-   "save_code_context": false,
-   "save_grads": null,
-   "save_mode": "copy",
-   "save_raw_activations": true,
-   "save_raw_gradients": true,
-   "save_raw_input": "small",
-   "save_raw_output": "small",
-   "save_rng_states": "<measured>",
    "save_visualizations": false,
-   "saved_activation_memory": "<measured>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "saved_gradient_memory": "<measured>",
    "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "setup_duration": "<measured>",
    "sibling_events": [
     "<torchlens._ir.events.ModulePrepEvent>",
     "<torchlens._ir.events.ModulePrepEvent>",
@@ -8282,26 +8293,15 @@
     "<torchlens._ir.events.ModuleExitEvent>"
    ],
    "source": "<torchlens._data_classes._trace_groups.TraceSource>",
-   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "structure_evidence": null,
-   "structure_only": false,
    "tlspec_version": 11,
-   "total_activation_memory": "<measured>",
-   "total_autograd_memory": "<measured>",
-   "total_backward_memory": "<measured>",
-   "total_gradient_memory": "<measured>",
-   "total_param_gradient_memory": "<measured>",
-   "total_param_memory": "<measured>",
-   "transform_repr": null,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
-   "verbose": false
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
   }
  },
  "pickle": {
@@ -8471,9 +8471,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -8591,6 +8589,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -8738,9 +8738,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -8822,6 +8820,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -8961,9 +8961,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -9068,6 +9066,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -9227,9 +9227,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -9320,6 +9318,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -9366,11 +9366,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "conv:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -9418,6 +9417,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "conv:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -9520,11 +9520,10 @@
      "conv:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -9561,6 +9560,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -9674,7 +9674,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
@@ -9880,7 +9880,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
@@ -10330,13 +10330,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "lookup_keys": [
      -3,
      1,
@@ -10458,7 +10456,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "conv2d_1_2",
@@ -10481,6 +10479,8 @@
      4,
      4
     ],
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
     "source_trace": {
@@ -10688,13 +10688,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "lookup_keys": [
      -4,
      0,
@@ -10773,7 +10771,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -10796,6 +10794,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -11029,13 +11029,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "lookup_keys": [
      -1,
      3,
@@ -11114,7 +11112,7 @@
     "parents": [
      "relu_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "output_1",
@@ -11150,6 +11148,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -11401,13 +11401,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "lookup_keys": [
      -2,
      2,
@@ -11485,7 +11483,7 @@
     "parents": [
      "conv2d_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "relu_1_3",
@@ -11508,6 +11506,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -11660,6 +11660,12 @@
    "_annotation_blobs": null,
    "_append_history": [],
    "_append_sequence_id": 0,
+   "_autograd_backward_root_grad_fn_object_ids": "<measured>",
+   "_autograd_derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "_autograd_escape_detector_backward_coverage": "not_armed",
+   "_autograd_grad_fn_order": [],
+   "_autograd_has_backward_pass": false,
+   "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
    "_buffer_persistence": {},
@@ -11674,6 +11680,21 @@
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_cost_backward_durations": [],
+   "_cost_backward_peak_memory": "<measured>",
+   "_cost_forward_duration": "<measured>",
+   "_cost_forward_peak_memory": "<measured>",
+   "_cost_forward_peak_memory_reason": "<measured>",
+   "_cost_func_calls_duration": "<measured>",
+   "_cost_pinned_autograd_memory": "<measured>",
+   "_cost_saved_activation_memory": "<measured>",
+   "_cost_saved_grad_memory": "<measured>",
+   "_cost_total_activation_memory": "<measured>",
+   "_cost_total_autograd_memory": "<measured>",
+   "_cost_total_backward_memory": "<measured>",
+   "_cost_total_grad_memory": "<measured>",
+   "_cost_total_param_grad_memory": "<measured>",
+   "_cost_total_param_memory": "<measured>",
    "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
@@ -11686,7 +11707,55 @@
    "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
+   "_graph_conditional_arm_entry_edges": {},
+   "_graph_conditional_branch_edges": [],
+   "_graph_conditional_edge_call_indices": {},
+   "_graph_conditional_records": [],
+   "_graph_conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "_graph_manual_tensor_connections": [],
+   "_graph_op_equivalence_classes": {
+    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
+     "__set__": [
+      "\"conv2d_1_1:1\""
+     ]
+    },
+    "\"input_1_1_4_4_torch.float32\"": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "\"output_1_1_2_4_4_torch.float32\"": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "\"relu_43c01414e3d13308\"": {
+     "__set__": [
+      "\"relu_1_2:1\""
+     ]
+    }
+   },
+   "_graph_relationship_evidence": {
+    "\"graph\"": "unknown",
+    "\"input\"": "unknown",
+    "\"model\"": "unknown",
+    "\"weights\"": "unknown"
+   },
+   "_graph_stop_frontier": null,
+   "_graph_structure_evidence": null,
    "_has_direct_writes": false,
+   "_health_completeness_callback_ns": 0,
+   "_health_completeness_decompositions": [],
+   "_health_completeness_mode": "off",
+   "_health_completeness_verified": null,
+   "_health_escape_detector_callback_ns": 0,
+   "_health_escape_detector_mode": "off",
+   "_health_escape_detector_verified": null,
+   "_health_num_accounted_witness_events": 0,
+   "_health_num_escape_detector_events": 0,
+   "_health_num_expected_opaque_witness_events": 0,
+   "_health_num_unaccounted_witness_events": 0,
+   "_health_num_witness_events": 0,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
@@ -11964,6 +12033,45 @@
    "_num_ops": 2,
    "_num_param_tensors": 2,
    "_num_saved_ops": 4,
+   "_options_activation_transform": null,
+   "_options_backward_ready": false,
+   "_options_chunk_size": false,
+   "_options_detach_saved_activations": false,
+   "_options_emit_nvtx": false,
+   "_options_grad_transform": null,
+   "_options_grouping": "structural",
+   "_options_grouping_policy": {
+    "\"detector\"": "unknown",
+    "\"effective\"": false,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "unknown",
+    "\"requested\"": "unknown",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": "grouping_stamp_legacy",
+    "\"site_join\"": "none"
+   },
+   "_options_inference_only": false,
+   "_options_input_transform": null,
+   "_options_keep_orphans": false,
+   "_options_mark_layer_depths": true,
+   "_options_mode": "exhaustive",
+   "_options_module_identity_mode": "torch_module",
+   "_options_on_nonfinite": false,
+   "_options_output_device": "same",
+   "_options_recurrence_detection": true,
+   "_options_save_arg_templates": false,
+   "_options_save_args": false,
+   "_options_save_grads": null,
+   "_options_save_mode": "copy",
+   "_options_save_raw_activations": true,
+   "_options_save_raw_grads": true,
+   "_options_save_raw_input": "small",
+   "_options_save_rng": "<measured>",
+   "_options_save_source_context": false,
+   "_options_save_transformed_output": "small",
+   "_options_seed": 20260812,
+   "_options_structure_only": false,
+   "_options_verbose": false,
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
@@ -11975,6 +12083,41 @@
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
    "_phase_timings": "<measured>",
+   "_provenance_backend": "torch",
+   "_provenance_backend_config": null,
+   "_provenance_backend_version": null,
+   "_provenance_backward_memory_backend": "<measured>",
+   "_provenance_cache_hit": false,
+   "_provenance_cache_key": null,
+   "_provenance_cache_path": null,
+   "_provenance_cleanup_duration": "<measured>",
+   "_provenance_distributed_scope": null,
+   "_provenance_end_time": "<measured>",
+   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_forward_memory_backend": "<measured>",
+   "_provenance_input_annotations": {},
+   "_provenance_input_object_id": "<measured>",
+   "_provenance_input_preprocessor": null,
+   "_provenance_input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
+   "_provenance_input_structure": null,
+   "_provenance_is_appended": false,
+   "_provenance_model_object_id": "<measured>",
+   "_provenance_observer_spans": [],
+   "_provenance_output_postprocessor": null,
+   "_provenance_owner_thread_id": "<measured>",
+   "_provenance_owner_thread_qualified": true,
+   "_provenance_param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_source": "native-module",
+   "_provenance_recording_kept": true,
+   "_provenance_root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
+   "_provenance_setup_duration": "<measured>",
+   "_provenance_start_time": "<measured>",
+   "_provenance_thread_activity_detected": false,
+   "_provenance_thread_count_end": 1,
+   "_provenance_thread_count_start": 1,
+   "_provenance_verification_reason": null,
+   "_provenance_verified": null,
    "_raw_to_final_layer_labels": {
     "\"conv2d_1_2_raw\"": "conv2d_1_1",
     "\"input_1_raw\"": "input_1",
@@ -11997,12 +12140,27 @@
    "_replay_frontier": {},
    "_rescue_rerun": null,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_class_docstring": "Small convolutional network for ordinary feed-forward capture.",
+   "_source_class_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_class_line": 56,
+   "_source_class_name": "PlainCNN",
+   "_source_class_qualname": "capture_oracle._models.PlainCNN",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
     "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n    super().__init__()\n    self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))"
    },
+   "_source_forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
+   "_source_forward_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_forward_line": 67,
+   "_source_forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "_source_frames": [],
+   "_source_init_docstring": "Initialize the convolution and side-effect counters.",
+   "_source_init_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_init_line": 59,
+   "_source_init_signature": "(self) -> 'None'",
    "_source_model_ref": null,
+   "_source_snapshots": [],
    "_spec_revision": 0,
    "_tracing_finished": true,
    "_transform": null,
@@ -12059,7 +12217,6 @@
      ]
     }
    },
-   "activation_transform": null,
    "annotations": {
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
@@ -12075,17 +12232,9 @@
    },
    "archived_activations": {},
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
    "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
    "buffer_layers": [],
    "buffer_read_ops": [],
@@ -12093,13 +12242,8 @@
    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
    "capture_guard_passes": [
     {
      "\"capture_mode\"": "exhaustive",
@@ -12107,32 +12251,8 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
    "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 56,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
    "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
    "compute_coverage": {
     "\"known\"": 2,
     "\"not_applicable\"": 2,
@@ -12140,83 +12260,32 @@
     "\"zero_by_rule\"": 0
    },
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_functions": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 67,
-   "func_calls_duration": "<measured>",
-   "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_transform": null,
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "has_backward_pass": false,
    "has_frozen_params": false,
-   "has_gradients": false,
    "has_trainable_params": true,
+   "health": "<torchlens._data_classes._trace_groups.TraceHealth>",
    "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize the convolution and side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 59,
    "injected_ops": [],
    "input": null,
-   "input_annotations": {},
    "input_layers": [
     "input_1"
    ],
-   "input_object_id": "<measured>",
    "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
-   "input_structure": null,
    "internal_sink_ops": [],
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "is_appended": false,
    "is_pristine": true,
    "is_replayable": false,
    "is_stopped": false,
-   "keep_orphans": false,
    "last_run": null,
    "layer_labels": [
     "input_1",
@@ -12226,7 +12295,6 @@
    ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
-   "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
      "conv2d_1_1"
@@ -12234,12 +12302,7 @@
    },
    "logged_values": {},
    "macs_unknown_split_ops": [],
-   "manual_tensor_connections": [],
-   "mark_layer_depths": true,
-   "model_class_name": "PlainCNN",
-   "model_class_qualname": "capture_oracle._models.PlainCNN",
    "model_name": "PlainCNN",
-   "model_object_id": "<measured>",
    "model_ops": [
     {
      "__ref__": "Op",
@@ -12270,7 +12333,6 @@
      "0.0"
     ]
    ],
-   "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "plaincnn_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
@@ -12285,29 +12347,6 @@
    "num_params_frozen": 0,
    "num_params_trainable": 20,
    "num_uncalled_modules": null,
-   "observer_spans": [],
-   "op_equivalence_classes": {
-    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
-     "__set__": [
-      "\"conv2d_1_1:1\""
-     ]
-    },
-    "\"input_1_1_4_4_torch.float32\"": {
-     "__set__": [
-      "\"input_1:1\""
-     ]
-    },
-    "\"output_1_1_2_4_4_torch.float32\"": {
-     "__set__": [
-      "\"output_1:1\""
-     ]
-    },
-    "\"relu_43c01414e3d13308\"": {
-     "__set__": [
-      "\"relu_1_2:1\""
-     ]
-    }
-   },
    "op_events": [],
    "op_labels": [
     "input_1:1",
@@ -12317,82 +12356,43 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "options": "<torchlens._data_classes._trace_groups.TraceOptions>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
-   "output_device": "same",
    "output_id2label": null,
    "output_layers": [
     "output_1"
    ],
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "output_postprocessor": null,
-   "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_trace": null,
-   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
-   "raise_on_nan": false,
-   "random_seed": 20260812,
+   "provenance": "<torchlens._data_classes._trace_groups.TraceProvenance>",
    "readiness": null,
-   "recording_kept": true,
-   "recurrence_detection": true,
-   "relationship_evidence": {
-    "\"graph\"": "unknown",
-    "\"input\"": "unknown",
-    "\"model\"": "unknown",
-    "\"weights\"": "unknown"
-   },
-   "root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
    },
    "root_trace": null,
-   "save_arg_templates": false,
-   "save_arg_values": false,
-   "save_code_context": false,
-   "save_grads": null,
-   "save_mode": "copy",
-   "save_raw_activations": true,
-   "save_raw_gradients": true,
-   "save_raw_input": "small",
-   "save_raw_output": "small",
-   "save_rng_states": "<measured>",
    "save_visualizations": false,
-   "saved_activation_memory": "<measured>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "saved_gradient_memory": "<measured>",
    "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "setup_duration": "<measured>",
    "sibling_events": [],
    "source": "<torchlens._data_classes._trace_groups.TraceSource>",
-   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "structure_evidence": null,
-   "structure_only": false,
    "tlspec_version": 11,
-   "total_activation_memory": "<measured>",
-   "total_autograd_memory": "<measured>",
-   "total_backward_memory": "<measured>",
-   "total_gradient_memory": "<measured>",
-   "total_param_gradient_memory": "<measured>",
-   "total_param_memory": "<measured>",
-   "transform_repr": null,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
-   "verbose": false
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
   }
  },
  "run": {
@@ -12562,9 +12562,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -12682,6 +12680,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -12829,9 +12829,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -12913,6 +12911,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -13052,9 +13052,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -13159,6 +13157,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -13318,9 +13318,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -13411,6 +13409,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -13457,11 +13457,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "conv:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -13509,6 +13508,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "conv:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -13611,11 +13611,10 @@
      "conv:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -13652,6 +13651,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -13765,7 +13765,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
@@ -13971,7 +13971,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
@@ -14421,13 +14421,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "lookup_keys": [
      -3,
      1,
@@ -14549,7 +14547,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "conv2d_1_2",
@@ -14572,6 +14570,8 @@
      4,
      4
     ],
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
     "source_trace": {
@@ -14779,13 +14779,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "lookup_keys": [
      -4,
      0,
@@ -14864,7 +14862,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -14887,6 +14885,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -15120,13 +15120,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "lookup_keys": [
      -1,
      3,
@@ -15205,7 +15203,7 @@
     "parents": [
      "relu_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "output_1",
@@ -15241,6 +15239,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -15492,13 +15492,11 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "lookup_keys": [
      -2,
      2,
@@ -15576,7 +15574,7 @@
     "parents": [
      "conv2d_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "relu_1_3",
@@ -15599,6 +15597,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -15811,6 +15811,12 @@
    "_annotation_blobs": null,
    "_append_history": [],
    "_append_sequence_id": 0,
+   "_autograd_backward_root_grad_fn_object_ids": "<measured>",
+   "_autograd_derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "_autograd_escape_detector_backward_coverage": "not_armed",
+   "_autograd_grad_fn_order": [],
+   "_autograd_has_backward_pass": false,
+   "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
@@ -15825,6 +15831,21 @@
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_cost_backward_durations": [],
+   "_cost_backward_peak_memory": "<measured>",
+   "_cost_forward_duration": "<measured>",
+   "_cost_forward_peak_memory": "<measured>",
+   "_cost_forward_peak_memory_reason": "<measured>",
+   "_cost_func_calls_duration": "<measured>",
+   "_cost_pinned_autograd_memory": "<measured>",
+   "_cost_saved_activation_memory": "<measured>",
+   "_cost_saved_grad_memory": "<measured>",
+   "_cost_total_activation_memory": "<measured>",
+   "_cost_total_autograd_memory": "<measured>",
+   "_cost_total_backward_memory": "<measured>",
+   "_cost_total_grad_memory": "<measured>",
+   "_cost_total_param_grad_memory": "<measured>",
+   "_cost_total_param_memory": "<measured>",
    "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
@@ -15837,7 +15858,55 @@
    "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": "all",
+   "_graph_conditional_arm_entry_edges": {},
+   "_graph_conditional_branch_edges": [],
+   "_graph_conditional_edge_call_indices": {},
+   "_graph_conditional_records": [],
+   "_graph_conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "_graph_manual_tensor_connections": [],
+   "_graph_op_equivalence_classes": {
+    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
+     "__set__": [
+      "\"conv2d_1_1:1\""
+     ]
+    },
+    "\"input_1_1_4_4_torch.float32\"": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "\"output_1_1_2_4_4_torch.float32\"": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "\"relu_43c01414e3d13308\"": {
+     "__set__": [
+      "\"relu_1_2:1\""
+     ]
+    }
+   },
+   "_graph_relationship_evidence": {
+    "\"graph\"": "unknown",
+    "\"input\"": "unknown",
+    "\"model\"": "unknown",
+    "\"weights\"": "unknown"
+   },
+   "_graph_stop_frontier": null,
+   "_graph_structure_evidence": null,
    "_has_direct_writes": false,
+   "_health_completeness_callback_ns": 0,
+   "_health_completeness_decompositions": [],
+   "_health_completeness_mode": "off",
+   "_health_completeness_verified": null,
+   "_health_escape_detector_callback_ns": 0,
+   "_health_escape_detector_mode": "off",
+   "_health_escape_detector_verified": null,
+   "_health_num_accounted_witness_events": 0,
+   "_health_num_escape_detector_events": 0,
+   "_health_num_expected_opaque_witness_events": 0,
+   "_health_num_unaccounted_witness_events": 0,
+   "_health_num_witness_events": 0,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
@@ -16115,6 +16184,45 @@
    "_num_ops": 2,
    "_num_param_tensors": 2,
    "_num_saved_ops": 4,
+   "_options_activation_transform": null,
+   "_options_backward_ready": false,
+   "_options_chunk_size": false,
+   "_options_detach_saved_activations": false,
+   "_options_emit_nvtx": false,
+   "_options_grad_transform": null,
+   "_options_grouping": "structural",
+   "_options_grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "_options_inference_only": false,
+   "_options_input_transform": null,
+   "_options_keep_orphans": false,
+   "_options_mark_layer_depths": true,
+   "_options_mode": "exhaustive",
+   "_options_module_identity_mode": "torch_module",
+   "_options_on_nonfinite": false,
+   "_options_output_device": "same",
+   "_options_recurrence_detection": true,
+   "_options_save_arg_templates": false,
+   "_options_save_args": false,
+   "_options_save_grads": null,
+   "_options_save_mode": "copy",
+   "_options_save_raw_activations": true,
+   "_options_save_raw_grads": true,
+   "_options_save_raw_input": "small",
+   "_options_save_rng": "<measured>",
+   "_options_save_source_context": false,
+   "_options_save_transformed_output": "small",
+   "_options_seed": 20260812,
+   "_options_structure_only": false,
+   "_options_verbose": false,
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
@@ -16126,6 +16234,41 @@
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
    "_phase_timings": "<measured>",
+   "_provenance_backend": "torch",
+   "_provenance_backend_config": null,
+   "_provenance_backend_version": null,
+   "_provenance_backward_memory_backend": "<measured>",
+   "_provenance_cache_hit": false,
+   "_provenance_cache_key": null,
+   "_provenance_cache_path": null,
+   "_provenance_cleanup_duration": "<measured>",
+   "_provenance_distributed_scope": null,
+   "_provenance_end_time": "<measured>",
+   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_forward_memory_backend": "<measured>",
+   "_provenance_input_annotations": {},
+   "_provenance_input_object_id": "<measured>",
+   "_provenance_input_preprocessor": null,
+   "_provenance_input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
+   "_provenance_input_structure": "<raises AttributeError>",
+   "_provenance_is_appended": false,
+   "_provenance_model_object_id": "<measured>",
+   "_provenance_observer_spans": [],
+   "_provenance_output_postprocessor": null,
+   "_provenance_owner_thread_id": "<measured>",
+   "_provenance_owner_thread_qualified": true,
+   "_provenance_param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_source": "native-module",
+   "_provenance_recording_kept": true,
+   "_provenance_root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
+   "_provenance_setup_duration": "<measured>",
+   "_provenance_start_time": "<measured>",
+   "_provenance_thread_activity_detected": false,
+   "_provenance_thread_count_end": 1,
+   "_provenance_thread_count_start": 1,
+   "_provenance_verification_reason": null,
+   "_provenance_verified": null,
    "_raw_to_final_layer_labels": {
     "\"conv2d_1_2_raw\"": "conv2d_1_1",
     "\"input_1_raw\"": "input_1",
@@ -16148,12 +16291,27 @@
    "_replay_frontier": {},
    "_rescue_rerun": null,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_class_docstring": "Small convolutional network for ordinary feed-forward capture.",
+   "_source_class_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_class_line": 56,
+   "_source_class_name": "PlainCNN",
+   "_source_class_qualname": "capture_oracle._models.PlainCNN",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
     "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n    super().__init__()\n    self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))"
    },
+   "_source_forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
+   "_source_forward_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_forward_line": 67,
+   "_source_forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "_source_frames": [],
+   "_source_init_docstring": "Initialize the convolution and side-effect counters.",
+   "_source_init_file": "<repo>/tests/capture_oracle/_models.py",
+   "_source_init_line": 59,
+   "_source_init_signature": "(self) -> 'None'",
    "_source_model_ref": "<callable ReferenceType>",
+   "_source_snapshots": [],
    "_spec_revision": 0,
    "_tracing_finished": true,
    "_transform": null,
@@ -16210,7 +16368,6 @@
      ]
     }
    },
-   "activation_transform": null,
    "annotations": {
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
@@ -16226,17 +16383,9 @@
    },
    "archived_activations": {},
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
    "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
    "buffer_layers": [],
    "buffer_read_ops": [],
@@ -16244,13 +16393,8 @@
    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
    "capture_guard_passes": [
     {
      "\"capture_mode\"": "exhaustive",
@@ -16258,32 +16402,8 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
    "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 56,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
    "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
    "compute_coverage": {
     "\"known\"": 2,
     "\"not_applicable\"": 2,
@@ -16291,83 +16411,32 @@
     "\"zero_by_rule\"": 0
    },
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 67,
-   "func_calls_duration": "<measured>",
-   "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_transform": null,
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "has_backward_pass": false,
    "has_frozen_params": false,
-   "has_gradients": false,
    "has_trainable_params": true,
+   "health": "<torchlens._data_classes._trace_groups.TraceHealth>",
    "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize the convolution and side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 59,
    "injected_ops": [],
    "input": null,
-   "input_annotations": {},
    "input_layers": [
     "input_1"
    ],
-   "input_object_id": "<measured>",
    "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
-   "input_structure": "<raises AttributeError>",
    "internal_sink_ops": [],
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "is_appended": false,
    "is_pristine": true,
    "is_replayable": false,
    "is_stopped": false,
-   "keep_orphans": false,
    "last_run": null,
    "layer_labels": [
     "input_1",
@@ -16377,7 +16446,6 @@
    ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
-   "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
      "conv2d_1_1"
@@ -16385,12 +16453,7 @@
    },
    "logged_values": {},
    "macs_unknown_split_ops": [],
-   "manual_tensor_connections": [],
-   "mark_layer_depths": true,
-   "model_class_name": "PlainCNN",
-   "model_class_qualname": "capture_oracle._models.PlainCNN",
    "model_name": "PlainCNN",
-   "model_object_id": "<measured>",
    "model_ops": [
     {
      "__ref__": "Op",
@@ -16421,7 +16484,6 @@
      "0.0"
     ]
    ],
-   "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "plaincnn_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
@@ -16436,29 +16498,6 @@
    "num_params_frozen": 0,
    "num_params_trainable": 20,
    "num_uncalled_modules": 0,
-   "observer_spans": [],
-   "op_equivalence_classes": {
-    "\"conv2d_dsU1LzZK_oDRCwlms\"": {
-     "__set__": [
-      "\"conv2d_1_1:1\""
-     ]
-    },
-    "\"input_1_1_4_4_torch.float32\"": {
-     "__set__": [
-      "\"input_1:1\""
-     ]
-    },
-    "\"output_1_1_2_4_4_torch.float32\"": {
-     "__set__": [
-      "\"output_1:1\""
-     ]
-    },
-    "\"relu_43c01414e3d13308\"": {
-     "__set__": [
-      "\"relu_1_2:1\""
-     ]
-    }
-   },
    "op_events": [],
    "op_labels": [
     "input_1:1",
@@ -16468,37 +16507,22 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "options": "<torchlens._data_classes._trace_groups.TraceOptions>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
-   "output_device": "same",
    "output_id2label": null,
    "output_layers": [
     "output_1"
    ],
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "output_postprocessor": null,
-   "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_trace": {
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
-   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
-   "raise_on_nan": false,
-   "random_seed": 20260812,
+   "provenance": "<torchlens._data_classes._trace_groups.TraceProvenance>",
    "readiness": null,
-   "recording_kept": true,
-   "recurrence_detection": true,
-   "relationship_evidence": {
-    "\"graph\"": "unknown",
-    "\"input\"": "unknown",
-    "\"model\"": "unknown",
-    "\"weights\"": "unknown"
-   },
-   "root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -16507,30 +16531,16 @@
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
-   "save_arg_templates": false,
-   "save_arg_values": false,
-   "save_code_context": false,
-   "save_grads": null,
-   "save_mode": "copy",
-   "save_raw_activations": true,
-   "save_raw_gradients": true,
-   "save_raw_input": "small",
-   "save_raw_output": "small",
-   "save_rng_states": "<measured>",
    "save_visualizations": false,
-   "saved_activation_memory": "<measured>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "saved_gradient_memory": "<measured>",
    "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "setup_duration": "<measured>",
    "sibling_events": [],
    "source": "<torchlens._data_classes._trace_groups.TraceSource>",
-   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [
     {
@@ -16542,22 +16552,12 @@
     }
    ],
    "stop_reason": null,
-   "structure_evidence": null,
-   "structure_only": false,
    "tlspec_version": 11,
-   "total_activation_memory": "<measured>",
-   "total_autograd_memory": "<measured>",
-   "total_backward_memory": "<measured>",
-   "total_gradient_memory": "<measured>",
-   "total_param_gradient_memory": "<measured>",
-   "total_param_memory": "<measured>",
-   "transform_repr": null,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
-   "verbose": false
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
   }
  },
  "tlspec": {
@@ -16727,9 +16727,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -16847,6 +16845,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -16994,9 +16994,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -17078,6 +17076,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -17217,9 +17217,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -17311,6 +17309,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -17470,9 +17470,7 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -17563,6 +17561,8 @@
      4
     ],
     "shape_summary": null,
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
     "source_trace": {
@@ -17609,11 +17609,10 @@
     "call_children": [],
     "call_children_labels": [],
     "call_index": 1,
-    "call_label": "conv:1",
     "call_parent": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "class_name": "",
     "class_qualname": "",
@@ -17661,6 +17660,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "conv:1",
     "max_descendant_depth": 0,
     "module": {
      "__ref__": "Module",
@@ -17763,11 +17763,10 @@
      "conv:1"
     ],
     "call_index": 1,
-    "call_label": "self:1",
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -17804,6 +17803,7 @@
     "internal_activation_memory": "<measured>",
     "internal_gradient_memory": "<measured>",
     "internal_param_memory": "<measured>",
+    "label": "self:1",
     "max_descendant_depth": 1,
     "module": {
      "__ref__": "Module",
@@ -17917,7 +17917,7 @@
     "call_parent": "self",
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "conv"
+     "label": "conv:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
@@ -18123,7 +18123,7 @@
     "call_parent": null,
     "call_tree": {
      "__ref__": "ModuleCall",
-     "label": "self"
+     "label": "self:1"
     },
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
@@ -18548,10 +18548,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
     "lookup_keys": [
      -3,
      1,
@@ -18673,7 +18671,7 @@
     "parents": [
      "input_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 2,
     "raw_label": "conv2d_1_2",
@@ -18696,6 +18694,8 @@
      4,
      4
     ],
+    "short_label": "conv2d_1:1",
+    "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
     "source_trace": {
@@ -18903,10 +18903,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
     "lookup_keys": [
      -4,
      0,
@@ -18985,7 +18983,7 @@
     "parent_param_ops": {},
     "parent_params": [],
     "parents": [],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 1,
     "raw_label": "input_1",
@@ -19008,6 +19006,8 @@
      4,
      4
     ],
+    "short_label": "input_1:1",
+    "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
     "source_trace": {
@@ -19224,10 +19224,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
     "lookup_keys": [
      -1,
      3,
@@ -19306,7 +19304,7 @@
     "parents": [
      "relu_1_2"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 4,
     "raw_label": "output_1",
@@ -19329,6 +19327,8 @@
      4,
      4
     ],
+    "short_label": "output_1:1",
+    "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
     "source_trace": {
@@ -19561,10 +19561,8 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
     "lookup_keys": [
      -2,
      2,
@@ -19642,7 +19640,7 @@
     "parents": [
      "conv2d_1_1"
     ],
-    "pass_index": 1,
+    "pass_number": 1,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "raw_index": 3,
     "raw_label": "relu_1_3",
@@ -19665,6 +19663,8 @@
      4,
      4
     ],
+    "short_label": "relu_1:1",
+    "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
     "source_trace": {
@@ -19817,6 +19817,12 @@
    "_annotation_blobs": null,
    "_append_history": [],
    "_append_sequence_id": 0,
+   "_autograd_backward_root_grad_fn_object_ids": "<measured>",
+   "_autograd_derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "_autograd_escape_detector_backward_coverage": null,
+   "_autograd_grad_fn_order": [],
+   "_autograd_has_backward_pass": false,
+   "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
    "_buffer_persistence": {},
@@ -19831,6 +19837,21 @@
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_cost_backward_durations": [],
+   "_cost_backward_peak_memory": "<measured>",
+   "_cost_forward_duration": "<measured>",
+   "_cost_forward_peak_memory": "<measured>",
+   "_cost_forward_peak_memory_reason": "<measured>",
+   "_cost_func_calls_duration": "<measured>",
+   "_cost_pinned_autograd_memory": "<measured>",
+   "_cost_saved_activation_memory": "<measured>",
+   "_cost_saved_grad_memory": "<measured>",
+   "_cost_total_activation_memory": "<measured>",
+   "_cost_total_autograd_memory": "<measured>",
+   "_cost_total_backward_memory": "<measured>",
+   "_cost_total_grad_memory": "<measured>",
+   "_cost_total_param_grad_memory": "<measured>",
+   "_cost_total_param_memory": "<measured>",
    "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
@@ -19843,7 +19864,55 @@
    "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
+   "_graph_conditional_arm_entry_edges": {},
+   "_graph_conditional_branch_edges": [],
+   "_graph_conditional_edge_call_indices": {},
+   "_graph_conditional_records": [],
+   "_graph_conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "_graph_manual_tensor_connections": [],
+   "_graph_op_equivalence_classes": {
+    "\"conv2d_param_000001_param_000002\"": {
+     "__set__": [
+      "\"conv2d_1_1:1\""
+     ]
+    },
+    "\"input_1_1_4_4_torch.float32\"": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "\"output_1_1_2_4_4_torch.float32\"": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "\"relu_43c01414e3d13308\"": {
+     "__set__": [
+      "\"relu_1_2:1\""
+     ]
+    }
+   },
+   "_graph_relationship_evidence": {
+    "\"graph\"": "unknown",
+    "\"input\"": "unknown",
+    "\"model\"": "unknown",
+    "\"weights\"": "unknown"
+   },
+   "_graph_stop_frontier": null,
+   "_graph_structure_evidence": null,
    "_has_direct_writes": false,
+   "_health_completeness_callback_ns": null,
+   "_health_completeness_decompositions": [],
+   "_health_completeness_mode": null,
+   "_health_completeness_verified": null,
+   "_health_escape_detector_callback_ns": null,
+   "_health_escape_detector_mode": null,
+   "_health_escape_detector_verified": null,
+   "_health_num_accounted_witness_events": null,
+   "_health_num_escape_detector_events": null,
+   "_health_num_expected_opaque_witness_events": null,
+   "_health_num_unaccounted_witness_events": null,
+   "_health_num_witness_events": null,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
@@ -20121,6 +20190,45 @@
    "_num_ops": 2,
    "_num_param_tensors": 2,
    "_num_saved_ops": 4,
+   "_options_activation_transform": null,
+   "_options_backward_ready": false,
+   "_options_chunk_size": false,
+   "_options_detach_saved_activations": false,
+   "_options_emit_nvtx": false,
+   "_options_grad_transform": null,
+   "_options_grouping": "structural",
+   "_options_grouping_policy": {
+    "\"detector\"": "unknown",
+    "\"effective\"": false,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "unknown",
+    "\"requested\"": "unknown",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": "grouping_stamp_legacy",
+    "\"site_join\"": "none"
+   },
+   "_options_inference_only": false,
+   "_options_input_transform": null,
+   "_options_keep_orphans": false,
+   "_options_mark_layer_depths": true,
+   "_options_mode": "exhaustive",
+   "_options_module_identity_mode": "torch_module",
+   "_options_on_nonfinite": false,
+   "_options_output_device": "same",
+   "_options_recurrence_detection": true,
+   "_options_save_arg_templates": false,
+   "_options_save_args": false,
+   "_options_save_grads": null,
+   "_options_save_mode": "copy",
+   "_options_save_raw_activations": true,
+   "_options_save_raw_grads": true,
+   "_options_save_raw_input": "small",
+   "_options_save_rng": "<measured>",
+   "_options_save_source_context": false,
+   "_options_save_transformed_output": "small",
+   "_options_seed": 20260812,
+   "_options_structure_only": false,
+   "_options_verbose": false,
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
@@ -20132,6 +20240,41 @@
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
    "_phase_timings": "<measured>",
+   "_provenance_backend": "torch",
+   "_provenance_backend_config": null,
+   "_provenance_backend_version": null,
+   "_provenance_backward_memory_backend": "<measured>",
+   "_provenance_cache_hit": false,
+   "_provenance_cache_key": null,
+   "_provenance_cache_path": null,
+   "_provenance_cleanup_duration": "<measured>",
+   "_provenance_distributed_scope": null,
+   "_provenance_end_time": "<measured>",
+   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_forward_memory_backend": "<measured>",
+   "_provenance_input_annotations": {},
+   "_provenance_input_object_id": "<measured>",
+   "_provenance_input_preprocessor": null,
+   "_provenance_input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
+   "_provenance_input_structure": null,
+   "_provenance_is_appended": false,
+   "_provenance_model_object_id": "<measured>",
+   "_provenance_observer_spans": [],
+   "_provenance_output_postprocessor": null,
+   "_provenance_owner_thread_id": "<measured>",
+   "_provenance_owner_thread_qualified": null,
+   "_provenance_param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
+   "_provenance_param_source": "native-module",
+   "_provenance_recording_kept": true,
+   "_provenance_root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
+   "_provenance_setup_duration": "<measured>",
+   "_provenance_start_time": "<measured>",
+   "_provenance_thread_activity_detected": null,
+   "_provenance_thread_count_end": null,
+   "_provenance_thread_count_start": null,
+   "_provenance_verification_reason": null,
+   "_provenance_verified": null,
    "_raw_to_final_layer_labels": {
     "\"conv2d_1_2_raw\"": "conv2d_1_1",
     "\"input_1_raw\"": "input_1",
@@ -20154,12 +20297,27 @@
    "_replay_frontier": {},
    "_rescue_rerun": null,
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_class_docstring": "Small convolutional network for ordinary feed-forward capture.",
+   "_source_class_file": "_models.py",
+   "_source_class_line": 56,
+   "_source_class_name": "PlainCNN",
+   "_source_class_qualname": "capture_oracle._models.PlainCNN",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
     "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n    super().__init__()\n    self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))"
    },
+   "_source_forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
+   "_source_forward_file": "_models.py",
+   "_source_forward_line": 67,
+   "_source_forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "_source_frames": [],
+   "_source_init_docstring": "Initialize the convolution and side-effect counters.",
+   "_source_init_file": "_models.py",
+   "_source_init_line": 59,
+   "_source_init_signature": "(self) -> 'None'",
    "_source_model_ref": null,
+   "_source_snapshots": [],
    "_spec_revision": 0,
    "_tracing_finished": true,
    "_transform": null,
@@ -20216,7 +20374,6 @@
      ]
     }
    },
-   "activation_transform": null,
    "annotations": {
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
@@ -20232,17 +20389,9 @@
    },
    "archived_activations": {},
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
    "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
    "buffer_layers": [],
    "buffer_read_ops": [],
@@ -20250,40 +20399,11 @@
    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "call_tree": {
     "__ref__": "ModuleCall",
-    "label": "self"
+    "label": "self:1"
    },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
    "capture_guard_passes": [],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": null,
-   "capture_start_time": "<measured>",
    "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": null,
-   "capture_thread_count_end": null,
-   "capture_thread_count_start": null,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
-   "class_source_file": "_models.py",
-   "class_source_line": 56,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
    "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": null,
-   "completeness_witness_callback_ns": null,
-   "completeness_witness_event_count": null,
-   "completeness_witness_expected_opaque_count": null,
-   "completeness_witness_mode": null,
-   "completeness_witness_unaccounted_count": null,
-   "completeness_witness_verified": null,
    "compute_coverage": {
     "\"known\"": 2,
     "\"not_applicable\"": 2,
@@ -20291,83 +20411,32 @@
     "\"zero_by_rule\"": 0
    },
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
-   "escape_detector_backward_coverage": null,
-   "escape_detector_callback_ns": null,
-   "escape_detector_event_count": null,
-   "escape_detector_mode": null,
-   "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_functions": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "_models.py",
-   "forward_source_line": 67,
-   "func_calls_duration": "<measured>",
-   "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_transform": null,
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "has_backward_pass": false,
    "has_frozen_params": false,
-   "has_gradients": false,
    "has_trainable_params": true,
+   "health": "<torchlens._data_classes._trace_groups.TraceHealth>",
    "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize the convolution and side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "_models.py",
-   "init_source_line": 59,
    "injected_ops": [],
    "input": null,
-   "input_annotations": {},
    "input_layers": [
     "input_1"
    ],
-   "input_object_id": "<measured>",
    "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
-   "input_structure": null,
    "internal_sink_ops": [],
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "is_appended": false,
    "is_pristine": true,
    "is_replayable": false,
    "is_stopped": false,
-   "keep_orphans": false,
    "last_run": null,
    "layer_labels": [
     "input_1",
@@ -20377,7 +20446,6 @@
    ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
-   "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
      "conv2d_1_1"
@@ -20385,12 +20453,7 @@
    },
    "logged_values": {},
    "macs_unknown_split_ops": [],
-   "manual_tensor_connections": [],
-   "mark_layer_depths": true,
-   "model_class_name": "PlainCNN",
-   "model_class_qualname": "capture_oracle._models.PlainCNN",
    "model_name": "PlainCNN",
-   "model_object_id": "<measured>",
    "model_ops": [
     {
      "__ref__": "Op",
@@ -20421,7 +20484,6 @@
      "0.0"
     ]
    ],
-   "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "plaincnn_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
@@ -20436,29 +20498,6 @@
    "num_params_frozen": 0,
    "num_params_trainable": 20,
    "num_uncalled_modules": null,
-   "observer_spans": [],
-   "op_equivalence_classes": {
-    "\"conv2d_param_000001_param_000002\"": {
-     "__set__": [
-      "\"conv2d_1_1:1\""
-     ]
-    },
-    "\"input_1_1_4_4_torch.float32\"": {
-     "__set__": [
-      "\"input_1:1\""
-     ]
-    },
-    "\"output_1_1_2_4_4_torch.float32\"": {
-     "__set__": [
-      "\"output_1:1\""
-     ]
-    },
-    "\"relu_43c01414e3d13308\"": {
-     "__set__": [
-      "\"relu_1_2:1\""
-     ]
-    }
-   },
    "op_events": [],
    "op_labels": [
     "input_1:1",
@@ -20468,82 +20507,43 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "options": "<torchlens._data_classes._trace_groups.TraceOptions>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
-   "output_device": "same",
    "output_id2label": null,
    "output_layers": [
     "output_1"
    ],
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "output_postprocessor": null,
-   "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_trace": null,
-   "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
-   "raise_on_nan": false,
-   "random_seed": 20260812,
+   "provenance": "<torchlens._data_classes._trace_groups.TraceProvenance>",
    "readiness": "<torchlens._runnable.ReadinessReport>",
-   "recording_kept": true,
-   "recurrence_detection": true,
-   "relationship_evidence": {
-    "\"graph\"": "unknown",
-    "\"input\"": "unknown",
-    "\"model\"": "unknown",
-    "\"weights\"": "unknown"
-   },
-   "root_entry_point": "module_call:capture_oracle._models.PlainCNN.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
    },
    "root_trace": null,
-   "save_arg_templates": false,
-   "save_arg_values": false,
-   "save_code_context": false,
-   "save_grads": null,
-   "save_mode": "copy",
-   "save_raw_activations": true,
-   "save_raw_gradients": true,
-   "save_raw_input": "small",
-   "save_raw_output": "small",
-   "save_rng_states": "<measured>",
    "save_visualizations": false,
-   "saved_activation_memory": "<measured>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "saved_gradient_memory": "<measured>",
    "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "setup_duration": "<measured>",
    "sibling_events": [],
    "source": "<torchlens._data_classes._trace_groups.TraceSource>",
-   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "structure_evidence": null,
-   "structure_only": false,
    "tlspec_version": 11,
-   "total_activation_memory": "<measured>",
-   "total_autograd_memory": "<measured>",
-   "total_backward_memory": "<measured>",
-   "total_gradient_memory": "<measured>",
-   "total_param_gradient_memory": "<measured>",
-   "total_param_memory": "<measured>",
-   "transform_repr": null,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
-   "verbose": false
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
   }
  }
 }

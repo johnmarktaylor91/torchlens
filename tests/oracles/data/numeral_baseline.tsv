@@ -588,10 +588,6 @@ docs-md	docs/agent-reference/critical-invariants.md	18.
 docs-md	docs/agent-reference/critical-invariants.md	19
 docs-md	docs/agent-reference/critical-invariants.md	19.
 docs-md	docs/agent-reference/critical-invariants.md	2.16
-docs-md	docs/agent-reference/critical-invariants.md	2.31.0
-docs-md	docs/agent-reference/critical-invariants.md	2.31.0,
-docs-md	docs/agent-reference/critical-invariants.md	2.32.4
-docs-md	docs/agent-reference/critical-invariants.md	2.33
 docs-md	docs/agent-reference/critical-invariants.md	256
 docs-md	docs/agent-reference/critical-invariants.md	26.3
 docs-md	docs/agent-reference/critical-invariants.md	260
@@ -637,10 +633,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	18
 docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
-docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0
-docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0,
-docs-md	docs/agent-reference/current-2-x-surface.md	2.32.4
-docs-md	docs/agent-reference/current-2-x-surface.md	2.33
 docs-md	docs/agent-reference/current-2-x-surface.md	2.33.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.34.1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.4.1,
@@ -2665,7 +2657,6 @@ docs-md	docs/stochastic_edits.md	2.0
 docs-md	docs/visibility.md	32
 error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/_data_substrate/digests.py	256
-error-strings	torchlens/_ecosystem/migrate.py	3.6
 error-strings	torchlens/_extraction/dtype_policy.py	16
 error-strings	torchlens/_extraction/engine.py	25.6
 error-strings	torchlens/_extraction/engine.py	41.6
@@ -2679,7 +2670,6 @@ error-strings	torchlens/_extraction/pool.py	20.66
 error-strings	torchlens/_extraction/reader.py	32
 error-strings	torchlens/_extraction/resume.py	14
 error-strings	torchlens/_extraction/resume.py	32
-error-strings	torchlens/_io/_pre3_module_paths.py	3.0.0
 error-strings	torchlens/_io/_safe_unpickle.py	2.6
 error-strings	torchlens/_io/_safe_unpickle.py	2.6.0
 error-strings	torchlens/_io/_safe_unpickle.py	2025
@@ -2928,7 +2918,6 @@ package-docstrings	torchlens/_data_classes/_trace_intervention.py	41
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	42
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	44
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	60
-package-docstrings	torchlens/_data_classes/_trace_legacy_state.py	3.3
 package-docstrings	torchlens/_data_classes/_trace_narrate.py	28,
 package-docstrings	torchlens/_data_classes/_trace_stats.py	1.0
 package-docstrings	torchlens/_data_classes/_trace_stats.py	1.1
@@ -3163,7 +3152,6 @@ package-docstrings	torchlens/_io/_load_validators.py	3.0
 package-docstrings	torchlens/_io/_load_validators.py	43
 package-docstrings	torchlens/_io/_portability_preflight.py	2.20
 package-docstrings	torchlens/_io/_portability_preflight.py	3.11
-package-docstrings	torchlens/_io/_pre3_module_paths.py	3.0.
 package-docstrings	torchlens/_io/_safe_unpickle.py	1,681
 package-docstrings	torchlens/_io/_safe_unpickle.py	1.7
 package-docstrings	torchlens/_io/_safe_unpickle.py	100
@@ -6817,7 +6805,6 @@ test-docstrings	tests/test_ecosystem_rt_ledger.py	2.17.0
 test-docstrings	tests/test_ecosystem_rt_ledger.py	2.31.0
 test-docstrings	tests/test_ecosystem_rt_ledger.py	2.32.4
 test-docstrings	tests/test_ecosystem_rt_ledger.py	3.0
-test-docstrings	tests/test_ecosystem_rt_migrate.py	3.0
 test-docstrings	tests/test_ecosystem_rt_plugins.py	256
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	17
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	18

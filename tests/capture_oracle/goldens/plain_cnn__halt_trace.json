@@ -423,7 +423,7 @@
       },
       "outcome": {
         "failed": false,
-        "halt_frontier": "relu_1_2",
+        "halt_frontier": null,
         "halted": true,
         "output_layers": [
           "output_1"
@@ -597,20 +597,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 528124,
+      "python_peak_memory_median_bytes": 526667,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 77.33135158196092
+      "wall_time_median_ms": 97.58690372109413
     }
   },
   "sha256_chunks": [
-    "ce54063e",
-    "a4b942e4",
-    "45b64f46",
-    "e3cfcca3",
-    "69a8a244",
-    "97f05339",
-    "e179e08c",
-    "833bed02"
+    "c0d9ae8d",
+    "07d36334",
+    "51617b65",
+    "0de789a8",
+    "787bac6f",
+    "a1cf69d1",
+    "cf1688f2",
+    "cd8e3cfb"
   ]
 }
