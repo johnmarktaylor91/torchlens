@@ -509,8 +509,8 @@ def _install_tensor_grad_hook(
     from .completeness_witness import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
-        if site is t:
-            handle = t.register_hook(log_grad_to_model_history)
+        if isinstance(site, torch.Tensor):
+            handle = site.register_hook(log_grad_to_model_history)
         else:
             from .backward import _register_slot_gradient_prehook
 
