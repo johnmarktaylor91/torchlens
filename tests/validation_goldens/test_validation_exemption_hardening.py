@@ -2434,6 +2434,7 @@ def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
                 num_passes=2,
             ),
         },
+        _layer_num_calls={},
     )
 
     with pytest.raises(MetadataInvariantError, match="pass_count_consistency"):
@@ -2476,7 +2477,7 @@ def test_non_torch_backward_inert_fires_on_nonzero_backward_pass_count() -> None
         grad_fn_order=None,
         _backward_pass_logs=None,
         backward_root_grad_fn_object_ids=None,
-        num_backward_passes=2,
+        _num_backward_passes=2,
     )
 
     with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
