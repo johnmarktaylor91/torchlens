@@ -116,7 +116,7 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
     assert "except StopSignal" in source, backend
-    assert re.search(r"trace\.halted\s*=\s*True", source), backend
+    assert re.search(r"trace\.is_stopped\s*=\s*True", source), backend
     stamp_lines = [
         index
         for index, line in enumerate(source.splitlines())
@@ -126,7 +126,7 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
     halt_line = next(
         index
         for index, line in enumerate(source.splitlines())
-        if re.search(r"trace\.halted\s*=\s*True", line)
+        if re.search(r"trace\.is_stopped\s*=\s*True", line)
     )
     assert halt_line < stamp_lines[0], backend
 

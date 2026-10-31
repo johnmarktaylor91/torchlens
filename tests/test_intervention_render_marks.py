@@ -106,7 +106,7 @@ def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
         FireRecord(target_label=label, helper=edit, timestamp=float(index))
         for index, edit in enumerate(edits)
     ]
-    return SimpleNamespace(label=label, layer_label=label, interventions=records)
+    return SimpleNamespace(label=label, layer_label=label, edits=records)
 
 
 def test_header_edit_line_forms() -> None:

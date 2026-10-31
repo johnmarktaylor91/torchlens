@@ -121,7 +121,7 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
 
     assert append_state["is_appended"] is True
     assert append_state["append_sequence_id"] == 1
-    assert append_state["_append_history"][0]["chunk_size"] == 1
+    assert append_state["append_history"][0]["chunk_size"] == 1
     assert append_state["state_history"][-1]["op"] == "append"
 
 

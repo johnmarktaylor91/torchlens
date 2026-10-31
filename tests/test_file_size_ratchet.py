@@ -317,7 +317,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/_data_classes/trace.py": 4050,
+    # 4050 -> 3950 (2026-10-31 v11-rest): the private-store rows shrank the file to 3903.
+    "torchlens/_data_classes/trace.py": 3950,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the

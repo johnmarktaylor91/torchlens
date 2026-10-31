@@ -2201,7 +2201,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "blocks.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line
@@ -2290,7 +2290,7 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "branches.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line

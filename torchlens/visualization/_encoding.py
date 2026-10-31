@@ -196,12 +196,10 @@ _NON_NUMERIC_FIELDS = frozenset(
         # Identity / naming strings.
         "layer_label",
         "layer_label_short",
-        # L1 grouping surface (site keys + across-pass shape summary): a
-        # percent-escaped position key, a live peer view, and a plain-data
-        # summary STRING ("2->4") — none is an encodable magnitude. The
-        # completeness pin went red the moment L1's merge added these; this
-        # row is the classification it demanded.
-        "site_key",
+        # L1 grouping surface (site peers + across-pass shape summary): a
+        # live peer view and a plain-data summary STRING ("2->4"), neither an
+        # encodable magnitude. The site key is per pass (``layer.ops[k]``),
+        # not a Layer name.
         "site_peers",
         "shape_summary",
         "layer_type",

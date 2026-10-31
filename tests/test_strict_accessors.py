@@ -190,8 +190,9 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactTooOldError, match="tlspec_version=6"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
         first.__setstate__(_legacy_param_state("left.weight"))
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_ambiguous_op_lookup_error_remains_value_error_compatible() -> None:

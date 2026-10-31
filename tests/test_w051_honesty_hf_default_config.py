@@ -22,6 +22,7 @@ import torch
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
+from torchlens._utils.collections import _path_component_key
 from torchlens.options import CaptureOptions
 
 pytest.importorskip("transformers")
@@ -85,7 +86,7 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
         live = model(input_ids)
     # The approximation is keyed by the typed ``HFKey`` path components, not plain str.
     logits = next(
-        value for key, value in result.output.items() if getattr(key, "key", key) == "logits"
+        value for key, value in result.output.items() if _path_component_key(key) == "logits"
     )
     assert torch.allclose(logits, live.logits, atol=1e-5)
 

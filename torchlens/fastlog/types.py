@@ -15,7 +15,6 @@ import torch
 
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
-from .._record_type import record_type
 from .._utils.tensor_utils import SaveMode
 from ..captured_run import TraceLike
 
@@ -75,7 +74,8 @@ def _backfill_cooked_ancestry(events: Any) -> None:
     by_raw_label = events.live_index.by_raw_label
     mutated = False
     for index, record in enumerate(folded):
-        layer_type = record_type(record, None)
+        # Journal op records (OpRecord / compat events) carry layer_type; never an Op.
+        layer_type = getattr(record, "layer_type", None)
         if layer_type in (None, "module_enter", "module_exit"):
             continue
         label_raw = record.label_raw

@@ -412,18 +412,18 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
     if getattr(trace, "has_backward_pass", False):
         raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
     if trace._grad_fn_logs:
-        raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_logs")
+        raise MetadataInvariantError(name, "non-torch traces must not populate _grad_fn_logs")
     if getattr(trace, "grad_fn_order", None):
         raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_order")
     if trace._backward_pass_logs:
-        raise MetadataInvariantError(name, "non-torch traces must not populate backward_pass_logs")
+        raise MetadataInvariantError(name, "non-torch traces must not populate _backward_pass_logs")
     if getattr(trace, "backward_root_grad_fn_object_ids", None):
         raise MetadataInvariantError(
             name,
             "non-torch traces must not populate backward_root_grad_fn_object_ids",
         )
     if trace._num_backward_passes != 0:
-        raise MetadataInvariantError(name, "non-torch traces must have num_backward_passes=0")
+        raise MetadataInvariantError(name, "non-torch traces must have _num_backward_passes=0")
 
 
 def _check_backend_neutral_accessor_refs(trace: Trace) -> None:

@@ -108,7 +108,7 @@ def test_fire_record_and_store_land_on_the_addressed_pass(loop) -> None:
     assert [r.edge_address for r in fires] == [address]
     assert fires[0].call_label == "relu_1_2:1"
     for other in (2, 3):
-        op = fork[f"relu_1_2:{other}"].ops[0]
+        op = fork[f"relu_1_2:{other}"]
         assert not (op.edge_substitutions or {})
         assert not [r for r in op.edits if r.edge_address is not None]
 

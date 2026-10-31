@@ -186,7 +186,7 @@ def test_render_side_effect_free(recurrent_log) -> None:
     """Pinned regression: rendering must not perturb the trace."""
 
     before = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )
@@ -194,7 +194,7 @@ def test_render_side_effect_free(recurrent_log) -> None:
     recurrent_log["relu_1_2:2"]._repr_html_()
     recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     after = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )

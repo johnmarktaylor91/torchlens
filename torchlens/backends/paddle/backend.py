@@ -586,10 +586,8 @@ class PaddleBackend:
                 trace.param_source = "native-module"
             else:
                 trace._param_logs = ParamAccessor({})
-                trace._num_param_tensors = 0
-                trace.num_params = 0
-                trace.num_params_trainable = 0
-                trace.num_params_frozen = 0
+                trace._num_param_tensors = trace.num_params = 0
+                trace.num_params_trainable = trace.num_params_frozen = 0
                 trace.param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
             apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")

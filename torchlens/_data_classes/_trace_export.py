@@ -15,6 +15,7 @@ else:
     _TraceMixinBase = object
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils.collections import _path_component_key
 from .interface import _format_conditional_branch_stack
 
 
@@ -35,11 +36,7 @@ def _output_role_from_container_path(path: Any) -> str | None:
     components = tuple(path or ())
     if not components:
         return None
-    component = components[-1]
-    for attr_name in ("index", "key", "name"):
-        if hasattr(component, attr_name):
-            return str(getattr(component, attr_name))
-    return str(component)
+    return str(_path_component_key(components[-1]))
 
 
 def _is_batch_topk_decoded(value: Any) -> bool:

@@ -35,10 +35,11 @@ def forget_event_stream(run: object) -> None:
 
 @runtime_checkable
 class _ActivationLookup(Protocol[ActivationT]):
-    """Protocol for raw-label/pass/address activation lookup consumers."""
+    """Protocol for raw-label/pass/address activation lookup consumers.
 
-    by_pass: dict[int, list[int]]
-    orphan_records: list[dict[str, Any]]
+    The pass index and orphan stores are each sibling's own storage
+    (``Trace._by_pass`` is private), so the protocol names only the lookups.
+    """
 
     def activation_by_raw_label(
         self, raw_label: str, *, pass_index: int | None = None

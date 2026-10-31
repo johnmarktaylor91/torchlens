@@ -353,7 +353,7 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
 def edit_marks_by_site(trace: Trace, sites: Sequence[Op]) -> dict[str, tuple[EditMark, ...]]:
     """Return each site's edit marks in firing order, keyed by pass-qualified label.
 
-    An op whose ``interventions`` (its ``FireRecord`` list) is non-empty is
+    An op whose ``edits`` (its ``FireRecord`` list) is non-empty is
     named from those records, ordered by their timestamps; a site that has not
     fired is named from the staged recipe entries that resolve to it. A site
     with neither is marked ``edit``.
