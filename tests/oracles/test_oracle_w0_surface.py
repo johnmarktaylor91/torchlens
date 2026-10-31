@@ -37,6 +37,7 @@ from ._surface import (
     MODULE_ASSIGNED,
     UNDECLARED,
     UNLICENSED,
+    classify_class_member,
     surface_counts,
     walk_class_surface,
     walk_class_surface_classified,
@@ -163,7 +164,11 @@ def test_class_member_license_channels_are_alive() -> None:
         for cls_name, member, lic in walk_class_surface_classified(torchlens)
     }
     assert rows[("Recording", "to_trace")] == CLASS_BODY
-    assert rows[("Trace", "_FIELD_FORK_POLICY")] == MODULE_ASSIGNED
+    # No public Trace member is module-assigned since the field-policy tables went
+    # private, so the module-assigned branch is pinned on the private table directly.
+    assert (
+        classify_class_member(torchlens.Trace, "_FIELD_FORK_POLICY", "torchlens") == MODULE_ASSIGNED
+    )
     assert rows[("Op", "gpu_kernels")] == INSTALLED_BY_PACKAGE
     assert rows[("Layer", "flops_forward")] == INSTALLED_BY_PACKAGE
     assert rows[("Flops", "bit_length")] == INHERITED_EXTERNAL

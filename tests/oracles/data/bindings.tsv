@@ -117,8 +117,6 @@ BND-Q-B1-012	OBL-Q-MAX-DISTANCE-FROM-INPUT	torchlens.Op.max_distance_from_input	
 BND-Q-B1-013	OBL-Q-MIN-DISTANCE-TO-OUTPUT	torchlens.Op.min_distance_to_output	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances
 BND-Q-B1-014	OBL-Q-MAX-DISTANCE-TO-OUTPUT	torchlens.Op.max_distance_to_output	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances
 BND-Q-B1-015	OBL-Q-MAX-LAYER-OP-COUNT	torchlens._data_classes._trace_groups.TraceGraph.max_ops_per_layer	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
-BND-Q-B1-016	OBL-Q-NUM-USES-BY-OPS	torchlens._data_classes.param.Param.num_uses_by_ops	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
-BND-Q-B1-017	OBL-Q-NUM-USES-BY-LAYERS	torchlens._data_classes.param.Param.num_uses_by_layers	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses
 BND-Q-B1-018	OBL-Q-NUM-POS-ARGS	torchlens.Layer.num_pos_args	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-019	OBL-Q-NUM-KWARGS	torchlens.Layer.num_kwargs	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-020	OBL-Q-NUM-ARGS-TOTAL	torchlens.Layer.num_args_total	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts

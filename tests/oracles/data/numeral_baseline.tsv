@@ -5974,7 +5974,7 @@ test-docstrings	tests/test_modelexplorer_real.py	40
 test-docstrings	tests/test_modelexplorer_real.py	50
 test-docstrings	tests/test_modelexplorer_real.py	75
 test-docstrings	tests/test_module_containment_equality.py	2.7.1
-test-docstrings	tests/test_module_containment_save_load.py	10
+test-docstrings	tests/test_module_containment_save_load.py	11
 test-docstrings	tests/test_module_focus.py	25
 test-docstrings	tests/test_module_import_isolation.py	470
 test-docstrings	tests/test_module_log.py	10
@@ -6199,8 +6199,8 @@ test-docstrings	tests/test_postprocess_enforcement.py	25
 test-docstrings	tests/test_postprocess_r14a_regressions.py	52
 test-docstrings	tests/test_postprocess_retention_epilogue.py	16
 test-docstrings	tests/test_postprocess_retention_epilogue.py	23
-test-docstrings	tests/test_prebump_roundtrip_acceptance.py	10
 test-docstrings	tests/test_prebump_roundtrip_acceptance.py	11
+test-docstrings	tests/test_prebump_roundtrip_acceptance.py	12
 test-docstrings	tests/test_prehook_provenance.py	10
 test-docstrings	tests/test_prehook_provenance.py	11
 test-docstrings	tests/test_prehook_provenance.py	12

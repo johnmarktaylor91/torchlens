@@ -3452,6 +3452,7 @@ The sections above describe each surface in depth.
 | `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
 | `FindNanReport.message` | Human-readable diagnostic summary |
 | `GqaInfo.num_query_heads` | Number of query heads |
+| `GradFnCall.fire_record` | The fire record of the edit that produced this grad-fn call, or `None` |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
@@ -3494,6 +3495,7 @@ The sections above describe each surface in depth.
 | `KernelProfileReport.device_time_table` | Per-op exact device time, descending; refuses when unjoined |
 | `KernelProfileReport.join` | The profiler join result that maps kernels to ops |
 | `KernelProfileReport.session_facts` | Facts about the profiler session |
+| `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
@@ -3511,6 +3513,7 @@ The sections above describe each surface in depth.
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
+| `Op.is_edited` | Whether a user edit replaced this op's output |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
 | `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
@@ -3557,6 +3560,7 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
@@ -3695,6 +3699,8 @@ Members of classes whose public home changed, one entry per class.
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
 | `degradations=` | field and constructor keyword of `MergeReport` |
+| `facet_functions=` | constructor keyword of `Trace`: the session facet functions; never saved |
+| `fire_record=` | field and constructor keyword of `GradFnCall` |
 | `flops_attributions=` | field and constructor keyword of `BackwardStatus` |
 | `has_carried_state=` | field and constructor keyword of `RunReport` |
 | `has_constancy_hint=` | field and constructor keyword of `ClipLedgerSnapshot` |

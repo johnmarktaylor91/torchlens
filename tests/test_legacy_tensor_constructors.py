@@ -374,7 +374,7 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
         SylvesterReparam().eval(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
+            replayable=True, capture_container_structure=True, cache=False
         ),
     )
     report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(trace))

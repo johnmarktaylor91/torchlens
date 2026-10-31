@@ -63,12 +63,13 @@ def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name
     report = migrate(path)
     assert report.status == "migrated"
     assert report.source_tlspec == 6
-    assert report.final_tlspec == 10
+    assert report.final_tlspec == 11
     assert [step.step_id for step in report.steps] == [
         "tlspec_6_to_7",
         "tlspec_7_to_8",
         "tlspec_8_to_9",
         "tlspec_9_to_10",
+        "tlspec_10_to_11",
     ]
     assert all(step.level == "manifest" for step in report.steps)
     assert report.backup_path is not None and report.backup_path.is_dir()

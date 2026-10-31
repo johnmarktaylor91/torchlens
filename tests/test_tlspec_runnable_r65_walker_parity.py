@@ -101,7 +101,7 @@ class _ProbeBox:
 class _FakeTrace:
     """Minimal weak-referenceable Trace stand-in for standalone walker runs."""
 
-    replayable = True
+    is_replayable = True
 
 
 def _w1_leaves(root: Any) -> tuple[tuple[object, tuple[Any, ...], Any], ...]:
