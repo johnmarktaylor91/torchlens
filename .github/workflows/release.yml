@@ -102,6 +102,19 @@ jobs:
           git config lfs.allowincompletepush true
           git config lfs.locksverify false
 
+      # MAJOR-VERSION HARD STOP. Computes the next version with no side
+      # effects (--noop --print: no commit, tag, push or API call; no token,
+      # so GH_TOKEN is deliberately not passed) and fails the job if its major
+      # exceeds the current major, unless the tracked file
+      # .github/MAJOR_RELEASE_APPROVED contains exactly that version. Only the
+      # maintainer's explicit command authorizes creating that file.
+      # Independent of the no-major commit parser: it also stops a parser
+      # change, a --force-level, or anything else that would compute X+1.0.0.
+      - name: Refuse an unapproved major version
+        run: |
+          next="$(semantic-release --noop version --print)"
+          python scripts/check_release_major.py --next "$next"
+
       - name: Semantic Release
         id: release
         env:

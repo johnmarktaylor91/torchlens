@@ -5,7 +5,8 @@
   gitignored and a `no-internal-notes` pre-commit hook hard-fails on them. Never `git add -f`
   to bypass. See AGENTS.md "Internal notes stay PRIVATE (LOCKED)".
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
-  non-release changes; never use major-bump markers casually.
+  non-release changes.
+- Major-version bumps happen only on the maintainer's explicit command; commit messages never carry `!` types or BREAKING CHANGE footers; `.github/MAJOR_RELEASE_APPROVED` is created only on that command.
 - TorchLens host-object metadata lives under `obj._tl`; sub-fields are snake_case and
   new metadata should extend a `TorchLensMeta` subclass rather than adding `tl_*` attrs.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state

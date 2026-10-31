@@ -4,18 +4,17 @@ Hard-reject commit messages or push payloads that contain semantic-release
 major-bump triggers (Conventional Commits ``!`` markers or ``BREAKING CHANGE:``
 footers).
 
-TorchLens stays on the 2.x family per the locked project release policy.
-The PyPI 1.0.0 and 2.0.0 slots have already been burned by accidental major
-bumps; the 3.0.0 slot was nearly burned a third time on 2026-05-01 (rescued
-only by an unrelated workflow bug). This script makes the failure mode
+Major-version bumps happen only on the maintainer's explicit command. The
+PyPI 1.0.0 and 2.0.0 slots have already been burned by accidental major
+bumps. This script makes the failure mode
 mechanically impossible by scanning every commit message at commit time
 (``commit-msg`` stage) and every outgoing commit at push time (``pre-push``
 stage), and exiting non-zero if any major-bump trigger is present.
 
-Override (use ONLY when the maintainer explicitly authorizes a major bump in this turn):
-
-    TORCHLENS_ALLOW_MAJOR_BUMP=1 git commit ...
-    TORCHLENS_ALLOW_MAJOR_BUMP=1 git push ...
+Approval: markers are allowed only while the tracked file
+``.github/MAJOR_RELEASE_APPROVED`` exists at the repository top level. Only the
+maintainer's explicit command authorizes creating it; there is no environment
+override, so no shell setting can authorize a major bump by accident.
 
 Usage::
 
@@ -60,14 +59,14 @@ FOOTER_RES = (
     re.compile(r"^BREAKING:", re.MULTILINE),
 )
 
-OVERRIDE_ENV = "TORCHLENS_ALLOW_MAJOR_BUMP"
+APPROVAL_RELPATH = Path(".github") / "MAJOR_RELEASE_APPROVED"
 
 ERROR_BANNER = """
 ==============================================================================
  BLOCKED: semantic-release major-bump trigger detected
 ==============================================================================
- TorchLens stays on the 2.x family per the locked policy. Accidentally
- publishing a major bump permanently burns a PyPI version slot.
+ Major-version bumps happen only on the maintainer's explicit command.
+ Accidentally publishing a major bump permanently burns a PyPI version slot.
 
  Triggers found:
 {triggers}
@@ -82,12 +81,8 @@ ERROR_BANNER = """
    - Document the breaking change in human-readable prose in the commit body
      instead. semantic-release will not bump major.
 
- If you ACTUALLY mean to cut a major release this turn (extremely rare;
- requires the maintainer's explicit, in-turn authorisation), re-run the same git command
- with the override:
-   {override}=1 <your git command>
-
- Background: see the project release-policy notes tracked by the maintainer.
+ Markers are allowed only while {approval} exists, and only the
+ maintainer's explicit command authorizes creating that file.
 ==============================================================================
 """.rstrip()
 
@@ -104,12 +99,25 @@ def _find_triggers(text: str) -> list[str]:
     return hits
 
 
-def _override_active() -> bool:
-    # Exact "1" only, matching the golden mutation-flag discipline (grind r5,
-    # b10 R86 probe): the former truthy parse authorized a major bump on
-    # OVERRIDE=FALSE, =no, or any templated junk — values a user sets to
-    # DISABLE the override — while the notice claimed "=1 active".
-    return os.environ.get(OVERRIDE_ENV, "").strip() == "1"
+def _repo_root() -> Path:
+    """Top level of the repository the hook runs in (git runs hooks there)."""
+
+    try:
+        top = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return Path.cwd()
+    return Path(top) if top else Path.cwd()
+
+
+def _approval_file() -> Path | None:
+    """The maintainer's major-release approval file, or None when absent."""
+
+    path = _repo_root() / APPROVAL_RELPATH
+    return path if path.is_file() else None
 
 
 def _emit_block(triggers: Iterable[str], location: str) -> None:
@@ -117,7 +125,7 @@ def _emit_block(triggers: Iterable[str], location: str) -> None:
         ERROR_BANNER.format(
             triggers="\n".join(triggers),
             location=location,
-            override=OVERRIDE_ENV,
+            approval=APPROVAL_RELPATH,
         ),
         file=sys.stderr,
     )
@@ -127,9 +135,10 @@ def _check_text(text: str, location: str) -> int:
     triggers = _find_triggers(text)
     if not triggers:
         return 0
-    if _override_active():
+    approval = _approval_file()
+    if approval is not None:
         print(
-            f"[check_no_breaking_markers] {OVERRIDE_ENV}=1 active; allowing "
+            f"[check_no_breaking_markers] {APPROVAL_RELPATH} present; allowing "
             f"major-bump trigger in {location}.",
             file=sys.stderr,
         )

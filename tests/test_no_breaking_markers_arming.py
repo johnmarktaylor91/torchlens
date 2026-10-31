@@ -37,11 +37,7 @@ _BREAKING_FOOTER = "BREAKING" + " CHANGE: everything"
 def _clean_env(cwd: Path) -> dict[str, str]:
     """Environment for git/script subprocesses: isolated and unarmed."""
 
-    env = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("PRE_COMMIT") and name != "TORCHLENS_ALLOW_MAJOR_BUMP"
-    }
+    env = {name: value for name, value in os.environ.items() if not name.startswith("PRE_COMMIT")}
     env["GIT_CONFIG_GLOBAL"] = os.devnull
     env["GIT_CONFIG_SYSTEM"] = os.devnull
     env["GIT_AUTHOR_NAME"] = env["GIT_COMMITTER_NAME"] = "arming-test"
@@ -226,29 +222,25 @@ def test_commit_msg_layer_blocks_bang_and_passes_clean(push_repo, tmp_path: Path
     assert clean.returncode == 0, clean.stderr
 
 
-def test_explicit_override_allows_with_loud_notice(push_repo) -> None:
-    """TORCHLENS_ALLOW_MAJOR_BUMP=1 (maintainer-authorized) permits but announces."""
+def test_approval_file_allows_with_loud_notice(push_repo) -> None:
+    """The maintainer's approval file permits a marker but announces it."""
 
     repo, env, base, _clean_tip, breaking_tip = push_repo
+    approval = repo / ".github" / "MAJOR_RELEASE_APPROVED"
+    approval.parent.mkdir()
+    approval.write_text("3.0.0\n", encoding="utf-8")
     result = _run_pre_push(
         repo,
         env,
         stdin=f"refs/heads/breaking-topic {breaking_tip} refs/heads/x {base}\n",
-        extra_env={"TORCHLENS_ALLOW_MAJOR_BUMP": "1"},
     )
     assert result.returncode == 0, result.stderr
-    assert "active; allowing" in result.stderr
+    assert "present; allowing" in result.stderr
 
 
-@pytest.mark.parametrize("value", ["FALSE", "no", "yes", "true", "2", " 0 "])
-def test_non_exact_override_values_still_block(push_repo, value: str) -> None:
-    """Only the exact string "1" authorizes a major marker.
-
-    The former truthy parse (`not in ("", "0", "false", "False")`) authorized
-    a breaking push on OVERRIDE=FALSE, =no, or any templated junk — values a
-    user sets to DISABLE the override — while the notice claimed "=1 active"
-    (grind r5, b10 R86 probe: FALSE -> rc=0).
-    """
+@pytest.mark.parametrize("value", ["1", "true"])
+def test_environment_cannot_authorize_a_marker(push_repo, value: str) -> None:
+    """No environment variable authorizes a major marker; only the approval file does."""
 
     repo, env, base, _clean_tip, breaking_tip = push_repo
     result = _run_pre_push(
@@ -257,6 +249,4 @@ def test_non_exact_override_values_still_block(push_repo, value: str) -> None:
         stdin=f"refs/heads/breaking-topic {breaking_tip} refs/heads/x {base}\n",
         extra_env={"TORCHLENS_ALLOW_MAJOR_BUMP": value},
     )
-    assert result.returncode == 1, (
-        f"OVERRIDE={value!r} must NOT authorize a major marker: {result.stderr}"
-    )
+    assert result.returncode == 1, result.stderr

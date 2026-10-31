@@ -62,6 +62,7 @@ Required reading for this area: [Current 2.x Surface](docs/agent-reference/curre
 - Do not put opaque callables in portable artifacts unless audit-only behavior is
   acceptable.
 - Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (tests/test_deprecation_inventory.py pins the package deprecation-free).
+- Major-version bumps happen only on the maintainer's explicit command; commit messages never carry `!` types or BREAKING CHANGE footers; `.github/MAJOR_RELEASE_APPROVED` is created only on that command.
 
 ## Validation Integrity (LOCKED PRINCIPLE — never violate)
 
