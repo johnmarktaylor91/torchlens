@@ -102,7 +102,7 @@ def test_vendor_parser_accepts_and_fully_lights_the_module_artifact(
     assert report["functionCallGraphAcyclic"] is True
     metadata = report["modelMetadata"]
     assert metadata["torchlens.granularity"] == "module"
-    assert metadata["torchlens.runnable"] == "false"
+    assert metadata["torchlens._runnable"] == "false"
 
 
 def test_vendor_parser_nested_drill_down_resolves(tmp_path: Path) -> None:

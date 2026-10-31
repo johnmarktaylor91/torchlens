@@ -26,16 +26,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.utils.rng import (
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._utils.rng import (
     _NotADigestableRng,
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
+from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True, capture_container_structure=True, cache=False, random_seed=1
+    intervention_ready=True, capture_container_structure=True, cache=False, seed=1
 )
 
 

@@ -26,7 +26,7 @@ from torchlens.capture._episode_ledger import (
     episode_ledger_for,
     escalation_spec,
 )
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -108,7 +108,7 @@ def test_session_vs_floor_full_surface_differential():
     session = tl.trace(
         GreedyRunner(model, N_STEPS),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     assert session.outcome.status.name == "COMPLETE"
     ledger = episode_ledger_for(session)
@@ -140,7 +140,7 @@ def test_session_vs_floor_full_surface_differential():
             next_token = model(current).argmax(-1, keepdim=True)
         driver_tokens.append(int(next_token))
         current = torch.cat([current, next_token], dim=1)
-    bundle = tl.Bundle(members, member_relations=relations)
+    bundle = tl.Bundle(members, relations=relations)
 
     # Token identity across all three sources of truth.
     assert session_tokens == native_tokens == driver_tokens
@@ -151,8 +151,8 @@ def test_session_vs_floor_full_surface_differential():
     # ledger-witnessed; without a re-supplied ledger the all-COMPLETE prefix
     # degrades fail-closed to episode_unknown — the disclosed pre-bump truth
     # loss). Supplying the ledger re-derives the full verdict.
-    assert bundle.derive_episode_status(ledger.header.episode_id).status == "episode_unknown"
-    fold = bundle.derive_episode_status(ledger.header.episode_id, ledger=ledger)
+    assert bundle.episode_status(ledger.header.episode_id).status == "episode_unknown"
+    fold = bundle.episode_status(ledger.header.episode_id, ledger=ledger)
     assert fold.status == "episode_complete"
     assert fold.provenance_tier == "exact"
 
@@ -186,7 +186,7 @@ def test_gap9_guarded_fast_rerun_token_identity():
         runner,
         inputs,
         save=tl.in_module("model") | tl.func("cat"),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     ledger = episode_ledger_for(session)
     assert ledger is not None
@@ -207,8 +207,8 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
     fidelity discharged at write time."""
 
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=N_STEPS)
-    capture = tl.options.CaptureOptions(random_seed=777)
+    spec = EpisodeOptions(stepped_module=model, num_steps=N_STEPS)
+    capture = tl.options.CaptureOptions(seed=777)
     producer = tl.trace(SampledRunner(model, N_STEPS), _prompt(), episode=spec, capture=capture)
     producer_ledger = episode_ledger_for(producer)
     assert producer_ledger is not None
@@ -219,7 +219,7 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=esc_spec,
-        capture=tl.options.CaptureOptions(random_seed=producer.random_seed),
+        capture=tl.options.CaptureOptions(seed=producer.random_seed),
     )
     ledger = episode_ledger_for(escalated)
     assert ledger is not None
@@ -239,19 +239,19 @@ def test_escalation_divergence_is_disclosed_never_settled():
     authority (COMPLETE capture of what it actually ran)."""
 
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=N_STEPS)
+    spec = EpisodeOptions(stepped_module=model, num_steps=N_STEPS)
     producer = tl.trace(
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=spec,
-        capture=tl.options.CaptureOptions(random_seed=777),
+        capture=tl.options.CaptureOptions(seed=777),
     )
     esc_spec = escalation_spec(producer, stepped_module=model, reason="divergence")
     escalated = tl.trace(
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=esc_spec,
-        capture=tl.options.CaptureOptions(random_seed=778),  # different stream
+        capture=tl.options.CaptureOptions(seed=778),  # different stream
     )
     ledger = episode_ledger_for(escalated)
     assert ledger is not None

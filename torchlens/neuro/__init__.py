@@ -8,7 +8,7 @@ sections:
 
 1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
    save=...)`` or write a disk artifact with ``tl.extract_dataset(...,
-   output_dir=...)`` and read it back with ``tl.load_extraction``. The
+   path=...)`` and read it back with ``tl.load``. The
    manifest records stimulus ids, ordering, dtypes, and preprocessing
    provenance -- everything downstream descriptors are built from.
 2. GEOMETRY (needs no extra): RDMs and friends live in their canonical
@@ -47,11 +47,11 @@ sections:
    analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
    and scores every site against one target with RSA, a cross-validated
    ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
-   intervals with ``n_resamples=``); ``.disagreement()`` reports where the
+   intervals with ``num_resamples=``); ``.disagreement()`` reports where the
    analyses rank sites differently.
 6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals
-   are tl.repgeom.rdm_compare_interval / cka_interval), encoding-model
+   are tl.repgeom.compare_rdms_interval / cka_interval), encoding-model
    inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, and brain data itself are deliberately NOT
    here. Each attempted name raises a teaching refusal naming the owning
@@ -68,7 +68,7 @@ import-time dependency check would run that foreign code with no trust
 opt-in.
 
 Attribute access resolves through the shared five-step facade order (neuro
-memo D15; ``torchlens.utils.facade``). Dependency checks are PER-NAME,
+memo D15; ``torchlens._utils.facade``). Dependency checks are PER-NAME,
 probed with ``importlib.util.find_spec`` so answering never executes
 foreign code, and every typed refusal subclasses ``AttributeError`` so
 ``hasattr``/IPython canary probes degrade instead of erroring. The facade
@@ -82,7 +82,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec as _find_spec
 
-from ..utils.facade import DependencyGate as _DependencyGate
+from .._utils.facade import DependencyGate as _DependencyGate
 
 _INSTALL_NEURO = 'pip install "torchlens[neuro]"'
 _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
@@ -94,7 +94,7 @@ _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
 #: answers ``False`` for it. Access to an unadvertised gated name still
 #: teaches the exact install command (facade step 4 re-probes per access).
 __all__ = (
-    ["compare"]
+    ["ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"]
     + (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else [])
     + (
         ["activations_extractor", "get_activations_fn"]
@@ -108,6 +108,11 @@ __all__.sort()
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     # Ungated: numpy-only, so it needs no extra.
     "compare": ("torchlens.neuro._compare", "compare"),
+    # The extraction planner and the npz handoff (needs no extra).
+    "ExtractionPlan": ("torchlens.neuro._brainpipe", "ExtractionPlan"),
+    "PlanSite": ("torchlens.neuro._brainpipe", "PlanSite"),
+    "export_npz": ("torchlens.neuro._brainpipe", "export_npz"),
+    "plan_extraction": ("torchlens.neuro._brainpipe", "plan_extraction"),
     "datasets": ("torchlens.neuro._datasets", "datasets"),
     "rdms": ("torchlens.neuro._rdms", "rdms"),
     "activations_extractor": ("torchlens.bridge.brain_score", "activations_extractor"),
@@ -137,7 +142,7 @@ _REDIRECTS: dict[str, str] = {
     "effective_dimensionality": ("use tl.repgeom.effective_dimensionality (needs no extra)"),
     "procrustes_align": "use tl.repgeom.procrustes_align (needs no extra)",
     "extract_dataset": "use tl.extract_dataset (needs no extra)",
-    "load_extraction": "use tl.load_extraction (needs no extra)",
+    "load_extraction": "use tl.load (needs no extra)",
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "
@@ -164,7 +169,7 @@ _REFUSALS: dict[str, str] = {
         "bootstrap inference over stimuli/subjects belongs to "
         "rsatoolbox.inference; torchlens hands it descriptor-complete RDMs "
         "via neuro.rdms(). For a DESCRIPTIVE stimulus-bootstrap interval on "
-        "torchlens's own scores, use tl.repgeom.rdm_compare_interval or "
+        "torchlens's own scores, use tl.repgeom.compare_rdms_interval or "
         "tl.repgeom.cka_interval (needs no extra)"
     ),
     "permutation_test": (
@@ -178,7 +183,7 @@ _REFUSALS: dict[str, str] = {
         "tools own it. CAUTION: rsatoolbox's mahalanobis with no noise "
         "argument SILENTLY returns scaled euclidean (measured, 0.1.5 and "
         "0.3.2). The legitimate model-side recipe: a genuinely stochastic "
-        "model under tl.noise / trace.do has real repeats "
+        "model under tl.add_noise / trace.do has real repeats "
         "(Khaligh-Razavi 2014's noise-matching step)"
     ),
     "mahalanobis": (
@@ -186,7 +191,7 @@ _REFUSALS: dict[str, str] = {
         "distance/noise tools own it. CAUTION: rsatoolbox's mahalanobis "
         "with no noise argument SILENTLY returns scaled euclidean "
         "(measured, 0.1.5 and 0.3.2). For a stochastic model under "
-        "tl.noise / trace.do, real repeats exist and the recipe applies"
+        "tl.add_noise / trace.do, real repeats exist and the recipe applies"
     ),
     "searchlight": (
         "searchlight needs brain-volume neighborhoods (rsatoolbox plus "
@@ -292,7 +297,7 @@ def __getattr__(name: str) -> object:
         for gated names whose dependency is absent.
     """
 
-    from ..utils.facade import resolve_facade_attr
+    from .._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -316,7 +321,7 @@ def __dir__() -> list[str]:
         implementation imports are not advertised.
     """
 
-    from ..utils.facade import facade_dir
+    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), __all__)
 

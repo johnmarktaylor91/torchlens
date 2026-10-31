@@ -9,13 +9,13 @@ import pytest
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.tf import GradOptions
 from torchlens.backends.tf.backend import TFBackend
 from torchlens.backends.tf.derived_grads import (
     TFIntermediateSignature,
     _tf_trace_intermediate_signatures,
 )
+from torchlens.errors import BackendUnsupportedError
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -163,7 +163,7 @@ def test_tf_derived_grads_do_not_create_backward_logs() -> None:
     assert not trace.backward_pass_logs
     assert not trace.grad_fn_logs
     with pytest.raises(ValueError, match="derived_grads"):
-        trace.backward_passes
+        trace.autograd.backward_passes
 
 
 def test_tf_intermediate_grads_match_direct_oracle_and_skip_disconnected() -> None:
@@ -184,7 +184,7 @@ def test_tf_intermediate_grads_match_direct_oracle_and_skip_disconnected() -> No
         grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16),
     )
 
-    records = trace.intermediate_derived_grads
+    records = trace.autograd.intermediate_derived_grads
     relu_op = next(op for op in trace.layer_list if op.func_name == "Relu")
     _assert_close(records[relu_op.label].grad, np.ones((2, 2), dtype="float32"))
     stop_gradient_op = next(op for op in trace.layer_list if op.func_name == "StopGradient")
@@ -212,11 +212,11 @@ def test_tf_same_shape_relus_are_disambiguated_by_stream_position() -> None:
     relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
     assert len(relu_ops) == 2
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[0].label].grad,
+        trace.autograd.intermediate_derived_grads[relu_ops[0].label].grad,
         np.full((2, 2), 2.0, dtype="float32"),
     )
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[1].label].grad,
+        trace.autograd.intermediate_derived_grads[relu_ops[1].label].grad,
         np.full((2, 2), 3.0, dtype="float32"),
     )
 

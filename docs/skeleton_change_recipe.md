@@ -96,13 +96,13 @@ lives at `transformer.h.1.inner.<child>`, and a brand-new
 ## Step 1: author the recipe with structural addresses, save it
 
 Trace the original model and attach your analysis recipe with a **structural
-selector** -- `tl.intervention.site(...)` addresses by module path, op type,
+selector** -- `tl.site(...)` addresses by module path, op type,
 and occurrence, never by recorded numbering. Then save the recipe to disk.
 
 ```python
 import torchlens as tl
 
-recipe = tl.when(tl.intervention.site(module_path="lm_head"), tl.scale(0.5))
+recipe = tl.when(tl.site(module_path="lm_head"), tl.scale(0.5))
 original_log = tl.trace(model, input_ids)
 original_log.attach_hooks(recipe, confirm_mutation=True)
 tl.io.save_intervention(original_log, "recipe.tlspec")
@@ -110,7 +110,7 @@ tl.io.save_intervention(original_log, "recipe.tlspec")
 
 Two authoring choices matter for later alignment:
 
-- **Address structurally.** `tl.intervention.site(module_path="lm_head")` is a
+- **Address structurally.** `tl.site(module_path="lm_head")` is a
   structural address, valid on any capture of any model that has that site.
   A label selector like `"linear_1_121"` is a recorded address -- it names
   this capture's numbering and cannot survive renumbering.
@@ -135,7 +135,7 @@ checker whether the recipe still targets this graph.
 ```python
 edited_log = tl.trace(edited, input_ids)
 spec = tl.io.load_intervention_spec("recipe.tlspec")
-compat = tl.validation.check_spec_compat(spec, edited_log)
+compat = tl.intervention.check_spec_compat(spec, edited_log)
 print(compat.outcome)
 print(compat.site_diff)
 ```
@@ -175,7 +175,7 @@ does not.) `label_drift_only` rows are disclosure, not incompatibility: the
 checker confirmed every saved structural target on the new capture. Confirm
 the drift and reuse the recipe on the edited capture.
 
-Had your selector been broader -- say a type-wide `site(op_type="linear")` --
+Had your selector been broader -- say a type-wide `site(func="linear")` --
 the diff would instead show `+ new` lines naming the adapter's own linear,
 because the recipe now matches a site it never saw at save time. That is the
 same honesty in the other direction: confirm before you reuse.
@@ -188,7 +188,7 @@ recipe.
 
 ```python
 inner_rule = tl.when(
-    tl.intervention.site(module_path="transformer.h.1.mlp.c_proj", op_type="addmm"),
+    tl.site(module_path="transformer.h.1.mlp.c_proj", func="addmm"),
     tl.zero_ablate(),
 )
 original_log.attach_hooks(inner_rule, confirm_mutation=True)
@@ -197,8 +197,8 @@ spec = tl.io.load_intervention_spec("recipe.tlspec")
 
 refusal = None
 try:
-    tl.validation.check_spec_compat(spec, edited_log)
-except tl.intervention.GraphShapeMismatchError as exc:
+    tl.intervention.check_spec_compat(spec, edited_log)
+except tl.errors.GraphShapeMismatchError as exc:
     refusal = exc
 print("refused:", refusal)
 ```
@@ -258,21 +258,21 @@ the same capture it was saved from comes back `EXACT`.
 ```python
 print(
     edited_log.find_sites(
-        tl.intervention.site(
-            module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+        tl.site(
+            module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
         )
     )
 )
 recipe_v2 = tl.when(
-    tl.intervention.site(
-        module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+    tl.site(
+        module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
     ),
     tl.zero_ablate(),
 )
 edited_log.attach_hooks(recipe_v2, confirm_mutation=True)
 tl.io.save_intervention(edited_log, "recipe_v2.tlspec")
 spec_v2 = tl.io.load_intervention_spec("recipe_v2.tlspec")
-compat_v2 = tl.validation.check_spec_compat(spec_v2, edited_log)
+compat_v2 = tl.intervention.check_spec_compat(spec_v2, edited_log)
 print(compat_v2.outcome)
 ```
 
@@ -294,7 +294,7 @@ EXACT
   intervention workflow; see [intervention_api.md](intervention_api.md) and
   the save-level table in
   [intervention_explainers.md](intervention_explainers.md).
-- **Spelling stability.** `op.site_key`, `tl.intervention.site(...)`, and the
+- **Spelling stability.** `op.site_key`, `tl.site(...)`, and the
   compatibility checker's field spellings are DOCUMENTED-UNSTABLE pending
   naming-session ratification; the workflow itself is the supported path.
 - **This page is executable.** The realism test

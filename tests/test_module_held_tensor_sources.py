@@ -683,7 +683,7 @@ def test_missed_held_tensor_is_disclosed_and_fails_forward_validation(
         warnings.simplefilter("ignore")
         assert tl.validate(copy.deepcopy(model), x, scope="forward") is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.op_label is not None and failure.op_label.startswith("add")
     assert failure.extra["reasons"] == ["held_tensor_scan_truncated", "unattributed_tensor_args"]
     assert cut_note in failure.message

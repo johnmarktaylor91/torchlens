@@ -9,8 +9,8 @@ from torch import nn
 
 import torchlens
 import torchlens as tl
-from torchlens.data_classes import FuncCallLocation
-from torchlens.utils import introspection
+from torchlens._data_classes import FuncCallLocation
+from torchlens._utils import introspection
 
 
 class RecursiveStackModel(nn.Module):
@@ -312,7 +312,7 @@ def test_trace_module_code_context_uses_capture_cache(monkeypatch: pytest.Monkey
     trace = torchlens.trace(
         RepeatedCaller(),
         torch.ones(1),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     child_contexts = [
         module_call.code_context

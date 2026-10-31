@@ -80,7 +80,7 @@ def test_capture_phase_durations_are_bounded_by_an_outside_clock(timed_trace) ->
     func_calls = float(trace.func_calls_duration)
     # The planted sleep is not a function call: the op total excludes it.
     assert 0 < func_calls <= forward - SLEEP
-    assert SLEEP <= float(trace.overhead_duration) <= wall
+    assert SLEEP <= float(trace.cost.overhead_duration) <= wall
 
 
 def test_module_and_call_durations_are_bounded(timed_trace) -> None:
@@ -129,8 +129,8 @@ def test_backward_durations_are_bounded_by_an_outside_clock() -> None:
             started = time.perf_counter()
             trace.backward(out.sum(), retain_graph=retain)
             walls.append(time.perf_counter() - started)
-        last = float(trace.last_backward_duration)
-        total = float(trace.total_backward_duration)
+        last = float(trace.cost.last_backward_duration)
+        total = float(trace.cost.total_backward_duration)
         assert BACKWARD_SLEEP <= last <= walls[1]
         assert 2 * BACKWARD_SLEEP <= total <= sum(walls)
     finally:

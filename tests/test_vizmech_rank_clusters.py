@@ -48,8 +48,8 @@ def _rank_dot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     trace.draw(
         vis_node_placement="rank",
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_leaf_clusters"),
+        file_format="svg",
+        path=str(tmp_path / "rank_leaf_clusters"),
         show_containers=False,
     )
     return captured["source"]

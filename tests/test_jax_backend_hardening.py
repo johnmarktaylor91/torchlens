@@ -17,12 +17,8 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-    get_backend_spec,
-)
 from torchlens.backends.jax import capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -619,7 +615,9 @@ def test_jax_sharded_array_explicit_sharding_hint_restores_requested_sharding(
     trace.save(path, level="portable")
     loaded = tl.load(
         path,
-        payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(sharding=sharded.sharding)),
+        payload_hints=tl._io.PayloadLoadHints(
+            jax=tl._io.JaxPayloadLoadHint(sharding=sharded.sharding)
+        ),
     )
     loaded_array = _first_saved_op(loaded).out
 
@@ -641,8 +639,8 @@ def test_jax_sharded_array_reconstruct_hint_uses_saved_metadata(
     trace.save(path, level="portable")
     loaded = tl.load(
         path,
-        payload_hints=tl.PayloadLoadHints(
-            jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+        payload_hints=tl._io.PayloadLoadHints(
+            jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
         ),
     )
     loaded_array = _first_saved_op(loaded).out
@@ -660,7 +658,9 @@ def test_jax_sharded_array_lazy_and_op_materialize_accept_payload_hints(
     sharded, expected, device_count = _named_sharded_array(platform="cpu")
     trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
     path = tmp_path / "jax_sharded_lazy_hint.tlspec"
-    hint = tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu"))
+    hint = tl._io.PayloadLoadHints(
+        jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+    )
 
     trace.save(path, level="portable")
     lazy_loaded = tl.load(path, lazy=True, payload_hints=hint)
@@ -692,8 +692,8 @@ def test_jax_sharded_array_unsatisfiable_hint_fails_closed(tmp_path: Path) -> No
     with pytest.raises(BackendRuntimeCompatibilityError, match="mesh axis names"):
         tl.load(
             path,
-            payload_hints=tl.PayloadLoadHints(
-                jax=tl.JaxPayloadLoadHint(
+            payload_hints=tl._io.PayloadLoadHints(
+                jax=tl._io.JaxPayloadLoadHint(
                     reconstruct_sharding=True,
                     mesh_axis_names=("wrong",),
                 )
@@ -721,7 +721,9 @@ def test_jax_sharding_reconstruction_rejects_unaddressable_metadata() -> None:
             np.asarray([1.0], dtype=np.float32),
             {"logical_dtype": "float32", "codec_metadata": metadata},
             map_location=None,
-            payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True)),
+            payload_hints=tl._io.PayloadLoadHints(
+                jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True)
+            ),
             strict_runtime=True,
         )
 
@@ -1182,10 +1184,10 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.has_backward_pass is False
     assert trace.num_backward_passes == 0
-    assert trace.num_backward_edges is None
+    assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
-    dot = trace.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="dot")
+    dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
     assert isinstance(dot, str)
 
     audit_path = tmp_path / "jax_audit.tlspec"
@@ -1210,7 +1212,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     loaded_status = loaded_portable.validate_forward_pass([])
     assert loaded_status is loaded_portable.validation_replay_status
     assert loaded_status.state == "unavailable"
-    assert loaded_status.available is False
+    assert loaded_status.is_available is False
     assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
@@ -1218,7 +1220,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
         trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace[0].grads
 
@@ -1226,10 +1228,10 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
 def test_jax_capability_flags_match_preview_contract() -> None:
     """JAX capability exports should match the M1 preview surface."""
 
-    spec = get_backend_spec("jax")
+    spec = tl.backends.spec("jax")
 
     assert spec.capabilities.backward_capture is False
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
@@ -1282,7 +1284,7 @@ def test_jax_builtin_output_pytree_container_reconstructs() -> None:
     trace = tl.trace(cast(Any, model), ({}, x), backend="jax")
     container = trace.ops[trace.output_layers[0]].container
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.reconstructable is True
     rebuilt = container.reconstruct()
     assert set(rebuilt) == {"a", "b"}
@@ -1298,7 +1300,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
     import jax.numpy as jnp
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
     def model(x: Any) -> Any:
         """Return a tanh-projected input.
@@ -1316,7 +1318,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
         return jnp.tanh(x @ jnp.ones((4, 3)))
 
-    spec = get_backend_spec("jax")
+    spec = tl.backends.spec("jax")
     object.__setattr__(spec.capabilities, "interventions", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):

@@ -16,9 +16,11 @@ import torch
 
 pytest.importorskip("matplotlib")
 
-import torchlens.tviz as tviz  # noqa: E402
+import torchlens
+import torchlens.errors
+import torchlens.transformer as tviz  # noqa: E402
 from torchlens.mechinterp import PatchGrid  # noqa: E402
-from torchlens.tviz import _receipts  # noqa: E402
+from torchlens.transformer import _receipts  # noqa: E402
 
 BASELINE = 0.75
 
@@ -58,7 +60,7 @@ def test_cell_equal_to_the_baseline_is_exactly_zero_and_prints_zero(tmp_path: Pa
     receipt = _receipt(grid, joint_effect=0.1)
     assert receipt.effects == (0.0, 0.5, -0.25)
     assert receipt.baseline_metric == BASELINE
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "zero.svg", svg_fonttype="none")
+    artifact = torchlens.viz.ablation_grid(receipt, tmp_path / "zero.svg", svg_fonttype="none")
     svg = artifact.paths[0].read_text()
     for cell in ("+0.00", "+0.50", "-0.25"):
         assert f">{cell}<" in svg, cell
@@ -76,7 +78,7 @@ def test_small_effects_get_enough_decimals_to_read_nonzero(tmp_path: Path) -> No
 
     values = torch.tensor([[0.002, -0.019, 0.0]], dtype=torch.float32)
     receipt = _receipt(_grid(values, corrupted_metric=0.0), joint_effect=0.0)
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "small.svg", svg_fonttype="none")
+    artifact = torchlens.viz.ablation_grid(receipt, tmp_path / "small.svg", svg_fonttype="none")
     svg = artifact.paths[0].read_text()
     for cell in ("+0.002", "-0.019", "+0.000"):
         assert f">{cell}<" in svg, cell
@@ -96,7 +98,7 @@ def test_known_patched_value_gives_the_known_difference() -> None:
 def test_grid_without_a_baseline_refuses_with_a_remedy() -> None:
     """Raw patched values never pass as effects."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(torchlens.errors.RenderError) as caught:
         _receipt(_grid(torch.zeros(1, 2)))
     assert caught.value.fields["code"] == "tv_receipt_invalid"
     assert "corrupted_metric" in caught.value.fields["remedy"]
@@ -110,7 +112,7 @@ def test_default_wording_says_what_a_patch_grid_does() -> None:
     assert _receipt(grid).intervention == (
         "clean activation of one head patched into the corrupted run"
     )
-    gqa = tviz.GqaInfo(n_query_heads=4, n_kv_heads=2)
+    gqa = tviz.GqaInfo(num_query_heads=4, n_kv_heads=2)
     assert _receipt(grid, kv_groups=gqa).intervention == (
         "clean activation of one kv group patched into the corrupted run"
     )
@@ -122,7 +124,7 @@ def test_row_fires_are_the_row_cells_when_the_ledger_shows_one_per_cell(tmp_path
     grid = _grid(torch.zeros(3, 4), corrupted_metric=0.0)
     rows = [_receipt(grid, layer=f"blk.{i}.attn") for i in range(3)]
     assert [row.fires for row in rows] == [4, 4, 4]
-    artifact = tviz.render_receipt_grid(rows, tmp_path / "fires.png", joint_effect=0.0)
+    artifact = torchlens.viz.ablation_grid(rows, tmp_path / "fires.png", joint_effect=0.0)
     assert any(line.endswith("fires: 12") for line in artifact.disclosure_lines)
     uneven = _grid(torch.zeros(1, 4), corrupted_metric=0.0, fires=9)
     assert _receipt(uneven).fires == 9
@@ -133,8 +135,8 @@ def test_rows_from_different_baselines_refuse(tmp_path: Path) -> None:
 
     first = _receipt(_grid(torch.zeros(1, 2), corrupted_metric=0.0))
     second = _receipt(_grid(torch.zeros(1, 2), corrupted_metric=1.0))
-    with pytest.raises(tviz.TvizError) as caught:
-        tviz.render_receipt_grid([first, second], tmp_path / "mixed.png", joint_effect=0.0)
+    with pytest.raises(torchlens.errors.RenderError) as caught:
+        torchlens.viz.ablation_grid([first, second], tmp_path / "mixed.png", joint_effect=0.0)
     assert caught.value.fields["code"] == "tv_receipt_invalid"
 
 
@@ -160,7 +162,7 @@ def test_receipt_without_a_baseline_says_so() -> None:
 
 
 def test_non_finite_baseline_refuses() -> None:
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(torchlens.errors.RenderError) as caught:
         _receipt(_grid(torch.zeros(1, 2), corrupted_metric=float("nan")))
     assert caught.value.fields["code"] == "tv_receipt_invalid"
 
@@ -187,12 +189,12 @@ def test_footer_never_overlaps_matrix_ticks_or_colorbar_label(
     """The footer's window extent misses the axes, every tick label and the bar label."""
 
     figures = _capture_figure(monkeypatch)
-    gqa = tviz.GqaInfo(n_query_heads=8, n_kv_heads=4) if kv else None
+    gqa = tviz.GqaInfo(num_query_heads=8, n_kv_heads=4) if kv else None
     n_heads = 4
     values = torch.linspace(-1.0, 1.0, n_rows * n_heads).reshape(n_rows, n_heads)
     grid = _grid(values, corrupted_metric=0.0)
     rows = [_receipt(grid, layer=f"blk.{i}.attn", kv_groups=gqa) for i in range(n_rows)]
-    artifact = tviz.render_receipt_grid(rows, tmp_path / "footer.png", joint_effect=0.5)
+    artifact = torchlens.viz.ablation_grid(rows, tmp_path / "footer.png", joint_effect=0.5)
     assert len(artifact.disclosure_lines) >= 6
 
     (fig,) = figures

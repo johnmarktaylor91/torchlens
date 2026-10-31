@@ -266,7 +266,7 @@ def test_ambient_context_without_surgery_refuses_typed(
     a build without mode-stack surgery refuses typed
     (structure_only_ambient_device_context) with the exit-context remedy."""
 
-    import torchlens.utils._torch_compat as torch_compat
+    import torchlens._utils._torch_compat as torch_compat
     from torchlens._errors import WeightsfreeIntegrityError
 
     monkeypatch.setattr(torch_compat, "HAS_TORCH_FUNCTION_STACK_SURGERY", False)

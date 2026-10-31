@@ -40,13 +40,13 @@ import torch
 from torch.overrides import TorchFunctionMode
 
 from ... import _state
-from ..._errors import OutputAttributionError, TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning, OutputAttributionError
+from ..._utils.display import user_stacklevel
+from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ...errors._base import TorchLensWarning
-from ...utils.display import user_stacklevel
-from ...utils.rng import log_current_rng_states, set_rng_from_saved_states
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "CaptureAttemptFailedWarning",
@@ -587,7 +587,7 @@ def _warn_rescue_success(trigger: str) -> None:
         "forward() double-applied. Remedy: fix the stale torch reference "
         "(bind/import torch functions after TorchLens has wrapped torch) to "
         "avoid the second forward.",
-        TorchLensCaptureGapWarning,
+        CaptureGapWarning,
         stacklevel=user_stacklevel(),
     )
 
@@ -678,7 +678,7 @@ def capture_with_rescue(
                 # disclosures, never bare UserWarning -- users filtering or
                 # promoting torchlens advisories via TorchLensWarning must
                 # see it (R66 / grind-r5 b8 fixwave-4 drift instance).
-                TorchLensCaptureGapWarning,
+                CaptureGapWarning,
                 stacklevel=user_stacklevel(),
             )
             _mark(

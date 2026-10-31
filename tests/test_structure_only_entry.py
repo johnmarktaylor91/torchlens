@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
@@ -22,7 +23,6 @@ from torchlens._errors import (
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
 from torchlens.backends.registry import get_backend_spec
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -169,9 +169,9 @@ def test_value_free_structured_halt_stays_legal() -> None:
         ("save predicate", {"save": tl.func("relu")}, {}),
         ("explicit layers_to_save", {}, {"layers_to_save": "all"}),
         ("save_grads", {}, {"save_grads": True}),
-        ("save_arg_values", {}, {"save_arg_values": True}),
+        ("save_args", {}, {"save_args": True}),
         ("save_raw_input", {}, {"save_raw_input": True}),
-        ("save_raw_output", {}, {"save_raw_output": True}),
+        ("save_transformed_output", {}, {"save_transformed_output": True}),
         ("output_style", {}, {"output_style": "classification"}),
         ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
     ],
@@ -219,6 +219,6 @@ def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     the marker persists, and nothing still gates it.
     """
 
-    assert Trace.PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
     inventory = registered_prerelease_fields()
     assert "structure_only" not in inventory.get("Trace", ())

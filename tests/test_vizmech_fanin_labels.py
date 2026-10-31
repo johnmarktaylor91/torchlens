@@ -92,8 +92,8 @@ def _render_and_parse(
     trace = tl.trace(model, x)
     dot = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
         **kwargs,
     )
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)

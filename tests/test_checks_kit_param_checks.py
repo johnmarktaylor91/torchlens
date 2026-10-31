@@ -17,6 +17,8 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
+import torchlens.errors
+from torchlens.checks import _adapters
 
 
 class _DeadNet(nn.Module):
@@ -70,9 +72,9 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
         session.detach()
 
     no_grad_names = {
-        finding.names[0]
+        finding.param_names[0]
         for finding in report.findings
-        if finding.check == "param_received_no_gradient"
+        if finding.check_name == "param_received_no_gradient"
     }
     expected_cone = {"dead.weight", "dead.bias"}
     if mechanism == "graph_cut":
@@ -83,7 +85,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
     warn_codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "param_received_no_gradient" in warn_codes
 
-    change_facts = [f for f in report.findings if f.check == "params_changed_fact"]
+    change_facts = [f for f in report.findings if f.check_name == "params_changed_fact"]
     assert change_facts, "the corroborating change fact must be recorded"
     if mechanism == "graph_preserving":
         # THE VACUITY LOCK (memo D2, measured): a zero GRADIENT still gets
@@ -103,8 +105,8 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
         assert "learning" not in finding.message
         assert '"dead"' not in finding.message
     # The cone finding points at the frontier follow-up (D3, load-bearing).
-    sample = next(f for f in report.findings if f.check == "param_received_no_gradient")
-    assert "gradient_flow_audit" in sample.follow_up
+    sample = next(f for f in report.findings if f.check_name == "param_received_no_gradient")
+    assert "grad_health" in sample.follow_up
 
 
 def test_no_grad_findings_distinguish_none_from_zero() -> None:
@@ -125,9 +127,9 @@ def test_no_grad_findings_distinguish_none_from_zero() -> None:
         session.detach()
 
     kinds = {
-        finding.names[0]: finding.message
+        finding.param_names[0]: finding.message
         for finding in report.findings
-        if finding.check == "param_received_no_gradient"
+        if finding.check_name == "param_received_no_gradient"
     }
     # graph_cut detaches the branch: those params never get a grad AT ALL.
     assert "grad is None" in kinds["dead.weight"]
@@ -162,7 +164,7 @@ def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     try:
         optimizer.zero_grad()
         model(torch.randn(2, 4)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -195,14 +197,14 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
             model(torch.randn(2, 4)).sum().backward()
             optimizer.step()
         report = session.report()
-        assert not [f for f in report.findings if f.check == "frozen_param_changed"]
+        assert not [f for f in report.findings if f.check_name == "frozen_param_changed"]
 
         # Now violate out-of-band; the digest difference PROVES change.
         with torch.no_grad():
             frozen_param[0, 0] += 1.0
         optimizer.zero_grad()
         model(torch.randn(2, 4)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
         assert exc.value.fields["finding"]["evidence"] == "digest"
         assert "probabilistic" in exc.value.fields["finding"]["message"]
@@ -231,7 +233,7 @@ def test_update_ratio_raw_and_lr_normalized_with_zero_baseline() -> None:
 
     zero_baseline = [f for f in report.findings if f.code == "update_ratio_zero_baseline"]
     assert zero_baseline and zero_baseline[0].zero_baseline is True
-    assert zero_baseline[0].names == ("bias",)
+    assert zero_baseline[0].param_names == ("bias",)
     # inf is reported as a None value slot (values carry floats-or-None),
     # with the flag carrying the semantics -- never an epsilon-clamped fake.
     assert zero_baseline[0].values["update_ratio"] is None
@@ -288,7 +290,9 @@ def test_membership_and_train_eval_disclosures() -> None:
     assert "1" in train_eval["eval_mode_modules"]
     # The frozen param is NEVER named by the no-gradient detector: without
     # the membership disclosure it would name every frozen param (D4).
-    no_grad_names = {f.names[0] for f in report.findings if f.check == "param_received_no_gradient"}
+    no_grad_names = {
+        f.param_names[0] for f in report.findings if f.check_name == "param_received_no_gradient"
+    }
     assert "0.weight" not in no_grad_names
 
 
@@ -302,8 +306,8 @@ def test_unknown_optimizer_band_unavailable_with_reason() -> None:
 
     model = nn.Linear(4, 2)
     optimizer = ExoticOptimizer(model.parameters(), lr=0.1)
-    facts = tc.optimizer_facts(optimizer)
-    assert not facts.known
+    facts = _adapters.optimizer_facts(optimizer)
+    assert not facts.is_known
     assert "no adapter" in (facts.band_reason or "")
 
     session = tc.ChecksSession(model, optimizer)
@@ -343,7 +347,7 @@ def test_decay_band_movement_fact_carries_betas() -> None:
     finally:
         session.detach()
 
-    decay_facts = [f for f in report.findings if f.check == "param_movement_decay_band"]
+    decay_facts = [f for f in report.findings if f.check_name == "param_movement_decay_band"]
     if decay_facts:  # momentum bleed-out timing is model-sized; fact shape is the pin
         fact = decay_facts[0]
         assert fact.severity == "info" and fact.action == "collect"
@@ -358,18 +362,18 @@ def test_registration_refusals_are_typed() -> None:
     model = nn.Linear(4, 2)
     session = tc.ChecksSession(model, torch.optim.SGD(model.parameters(), lr=0.1))
 
-    with pytest.raises(tc.CheckConfigError) as name_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as name_exc:
         session.register_frozen_check(["ghost"])
     assert name_exc.value.fields["code"] == "check_within_unknown_name"
 
-    with pytest.raises(tc.CheckConfigError) as window_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as window_exc:
         session.register_change_check(window=(9, 2))
     assert window_exc.value.fields["code"] == "check_window_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as action_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as action_exc:
         session.register_change_check(action="explode")
     assert action_exc.value.fields["code"] == "check_vocab_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as evidence_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as evidence_exc:
         session.register_frozen_check(["weight"], evidence="vibes")
     assert evidence_exc.value.fields["code"] == "check_vocab_invalid"

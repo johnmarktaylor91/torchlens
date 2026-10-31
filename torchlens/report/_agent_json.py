@@ -3,7 +3,7 @@
 DOCUMENTED-UNSTABLE spelling (naming ratification deferred to the UI/naming
 sprint). The dump describes the SAME public surface a human drives -- it is a
 navigation aid, never a parallel API: every record points back at the live
-spelling (``trace[label]``, ``tl.func(...)``, ``tl.report.explain(...)``) an
+spelling (``trace[label]``, ``tl.func(...)``, ``trace.explain()``) an
 agent should call next.
 
 Honesty contract (report/AGENTS.md): capture outcome/verification facts are
@@ -100,8 +100,8 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
 
     steps: dict[str, str] = {
         "summary": "trace.summary()",
-        "plain_language_report": "tl.report.explain(trace)",
-        "budgeted_report": "tl.report.explain(trace, max_tokens=500)",
+        "plain_language_report": "trace.explain()",
+        "budgeted_report": "trace.explain(max_tokens=500)",
         "health_audit": "trace.audit()",
         "resource_profile": "trace.profile(level='module')",
         "inventory": "trace.bill_of_materials()",
@@ -115,13 +115,13 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
     if _pandas_available():
         steps["op_table"] = "trace.to_pandas()"
         if _first_op_site_key(log) is not None:
-            steps["sites_table"] = "trace.sites_table()"
+            steps["sites_table"] = "trace.sites()"
         if getattr(log, "decoded_output", None) is not None:
-            steps["output_table"] = "trace.output_table(top_n=5)"
+            steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
         steps["logged_values"] = "trace.logged_values"
-    steps["environment_diagnosis"] = "tl.utils.doctor()"
+    steps["environment_diagnosis"] = "tl.report.doctor()"
     return steps
 
 
@@ -227,11 +227,11 @@ def _memory_scopes(log: Any) -> dict[str, Any]:
 
     memory = _memory(log)
     return {
-        "at_capture_bytes": memory.at_capture_bytes,
-        "at_capture_saved_ops": memory.at_capture_saved_ops,
-        "retained_now_bytes": memory.retained_now_bytes,
-        "retained_now_present_ops": memory.retained_now_present_ops,
-        "retained_now_lazy_ops": memory.retained_now_lazy_ops,
+        "at_capture_bytes": memory.captured_bytes,
+        "at_capture_saved_ops": memory.captured_saved_ops,
+        "retained_now_bytes": memory.retained_bytes,
+        "retained_now_present_ops": memory.retained_present_ops,
+        "retained_now_lazy_ops": memory.retained_lazy_ops,
         "scope_note": memory.scope_note,
     }
 
@@ -252,7 +252,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         return {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
             "operations": int(getattr(log, "num_ops", 0) or 0),
-            "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
+            "tensors_total": len(log) if hasattr(log, "__len__") else 0,
             "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
@@ -262,8 +262,8 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         "operations": core.counts.tracked_tensor_rows,
         "compute_ops": core.counts.compute_ops,
         "alias_rows": core.counts.alias_rows,
-        "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
-        "tensors_saved": core.memory.at_capture_saved_ops,
+        "tensors_total": len(log) if hasattr(log, "__len__") else 0,
+        "tensors_saved": core.memory.captured_saved_ops,
         "parameters": core.params.total or 0,
         "modules": module_row_count,
     }
@@ -274,7 +274,7 @@ def _health_summary(log: Any) -> dict[str, Any]:
 
     D4 (F09 item 13): a machine dump never implicitly pays for a payload
     scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
-    (the explicit scan spelling is ``tl.report.health_facts(trace)``).
+    (the explicit scan spelling is ``trace.health_facts``).
     """
 
     from ._health import health_facts
@@ -283,11 +283,11 @@ def _health_summary(log: Any) -> dict[str, Any]:
     return {
         "verdict": facts.verdict,
         "basis": facts.basis,
-        "checked": facts.checked,
+        "checked": facts.num_checked_ops,
         "nonfinite_labels": list(facts.nonfinite_labels),
         "alias_nonfinite_labels": list(facts.alias_nonfinite_labels),
-        "unexamined": facts.unexamined,
-        "unchecked": facts.unchecked,
+        "unexamined": facts.num_unexamined_ops,
+        "unchecked": facts.num_unchecked_ops,
     }
 
 

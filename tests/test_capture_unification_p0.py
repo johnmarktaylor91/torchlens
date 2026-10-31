@@ -10,8 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess._materialize as materialize_mod
-from torchlens.ir import DeviceRef, DtypeRef
+import torchlens._postprocess._materialize as materialize_mod
+from torchlens._ir import DeviceRef, DtypeRef
 
 
 @dataclass(slots=True)
@@ -130,7 +130,7 @@ def test_phase0_op_event_fields_are_populated(monkeypatch: pytest.MonkeyPatch) -
     # does not exist on decomposed OpRecords (strict-protocol default None).
     index_handle = snapshot.grad_fn_handles_by_label_raw.get(add_event.label_raw)
     assert index_handle is not None
-    from torchlens.ir.events import OpEvent as _OpEvent
+    from torchlens._ir.events import OpEvent as _OpEvent
 
     if isinstance(add_event, _OpEvent):
         assert add_event.grad_fn_handle is index_handle

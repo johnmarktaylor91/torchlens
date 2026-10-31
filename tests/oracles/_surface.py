@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import inspect
 import pkgutil
 import textwrap
@@ -64,7 +65,8 @@ MODULE_SURFACE_COUNTED_SET = (
 #: Counted-set identity for the class-layer denominator.
 CLASS_SURFACE_COUNTED_SET = (
     "non-underscore members (dir()) of every class object reachable as a "
-    "module-level torchlens attribute, keyed by reachable name, with every "
+    "module-level torchlens attribute or as a public class of the "
+    "CLASS_WALK_NAMESPACES (tl.types, tl.errors), keyed by reachable name, with every "
     "public top-level filesystem submodule imported first (import-state "
     "normalization: opt-in installers like kernel_telemetry always counted); "
     "each member carries a source-witnessed license from the closed 5-way "
@@ -172,11 +174,20 @@ def walk_module_surface(
     return tuple(entries)
 
 
+#: Private submodules that install documented members on public classes at
+#: import time. They are not in the public filesystem submodule set, but the
+#: save path imports them (``torchlens._io.field_registry`` lists
+#: ``torchlens._kernel_telemetry`` among its component-spec modules), so a
+#: session's ``dir(cls)`` depends on whether a save ran first. Importing them
+#: here keeps the walk at the same canonical maximal state.
+_PRIVATE_MEMBER_INSTALLERS: tuple[str, ...] = ("_kernel_telemetry",)
+
+
 def _normalize_import_state(namespace: types.ModuleType) -> None:
     """Import every public top-level submodule so ``dir(cls)`` is stable.
 
     Opt-in submodules may install documented members on public classes at
-    import time (``torchlens.kernel_telemetry`` installs ``gpu_kernels`` on
+    import time (``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on
     ``Op``/``AtenOp``), so a raw ``dir(cls)`` walk counts differently
     depending on which tests ran first -- green alone, red in a session.
     Importing the deterministic filesystem submodule set pins the walk to
@@ -195,6 +206,44 @@ def _normalize_import_state(namespace: types.ModuleType) -> None:
         return
     for submodule in sorted(_filesystem_submodules(namespace)):
         importlib.import_module(f"{package_name}.{submodule}")
+    for installer in _PRIVATE_MEMBER_INSTALLERS:
+        if importlib.util.find_spec(f"{package_name}.{installer}") is not None:
+            importlib.import_module(f"{package_name}.{installer}")
+
+
+#: Public namespaces whose classes join the root's in the class walk: the
+#: decided surface homes value and error types there instead of at the root.
+CLASS_WALK_NAMESPACES = ("types", "errors")
+
+
+def _reachable_classes(namespace: types.ModuleType) -> dict[str, type]:
+    """Return the public classes the class walk covers, keyed by reachable name.
+
+    Parameters
+    ----------
+    namespace:
+        The module object whose module-level classes are walked; when it
+        carries the :data:`CLASS_WALK_NAMESPACES` submodules, their public
+        classes join (a root-level name wins a collision).
+
+    Returns
+    -------
+    dict[str, type]
+        Reachable class name to class object.
+    """
+
+    classes: dict[str, type] = {}
+    sources = [namespace]
+    for sub_name in CLASS_WALK_NAMESPACES:
+        sub = getattr(namespace, sub_name, None)
+        if isinstance(sub, types.ModuleType):
+            sources.append(sub)
+    for source in sources:
+        for name in sorted(n for n in dir(source) if not n.startswith("_")):
+            value = getattr(source, name)
+            if inspect.isclass(value):
+                classes.setdefault(name, value)
+    return classes
 
 
 def walk_class_surface(namespace: types.ModuleType) -> tuple[tuple[str, str], ...]:
@@ -219,10 +268,7 @@ def walk_class_surface(namespace: types.ModuleType) -> tuple[tuple[str, str], ..
 
     _normalize_import_state(namespace)
     rows: list[tuple[str, str]] = []
-    for name in sorted(n for n in dir(namespace) if not n.startswith("_")):
-        value = getattr(namespace, name)
-        if not inspect.isclass(value):
-            continue
+    for name, value in _reachable_classes(namespace).items():
         for member in dir(value):
             if not member.startswith("_"):
                 rows.append((name, member))
@@ -427,9 +473,11 @@ def walk_class_surface_classified(
     """
 
     package = getattr(namespace, "__name__", "") or ""
+    rows = walk_class_surface(namespace)
+    classes = _reachable_classes(namespace)
     return tuple(
-        (name, member, classify_class_member(getattr(namespace, name), member, package))
-        for name, member in walk_class_surface(namespace)
+        (name, member, classify_class_member(classes[name], member, package))
+        for name, member in rows
     )
 
 

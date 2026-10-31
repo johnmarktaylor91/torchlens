@@ -1,4 +1,4 @@
-"""Graphviz construction helpers for ``tl.show_bundle_graph``.
+"""Graphviz construction helpers for ``tl.visualization.show_bundle_graph``.
 
 These walk a bundle's forward supergraph (and, when present, its backward
 graph) and add nodes, module clusters and edges to a Graphviz digraph. The
@@ -262,7 +262,7 @@ def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
     for member_name, member in bundle.members.items():
         with dot.subgraph(name=f"cluster_backward_{member_name}") as subgraph:
             subgraph.attr(label=f"{member_name} backward", color="#7A3E9D")
-            grad_fns = list(getattr(member, "grad_fns", []))
+            grad_fns = list(getattr(getattr(member, "autograd", None), "grad_fns", []))
             if not grad_fns:
                 subgraph.node(
                     f"bwd_{member_name}_empty",
@@ -304,7 +304,7 @@ def _member_row_notes(bundle: Any) -> dict[str, list[str]]:
     from ..bundle._relations import MemberRelationRow
 
     notes: dict[str, list[str]] = {}
-    for row in bundle.member_relations:
+    for row in bundle.relations:
         if isinstance(row, MemberRelationRow) and row.member is not None:
             params = row.params
             notes.setdefault(str(row.member), []).append(
@@ -381,7 +381,7 @@ def _add_bundle_member_graph(
         attrs = merge_node_style(base_node, node_styles, name, member)
         dot.node(node_ids[name], label="\n".join(line for line in lines if line), **attrs)
     opaque = 0
-    for row in bundle.member_relations:
+    for row in bundle.relations:
         if not isinstance(row, MemberRelationRow):
             opaque += 1
             continue
@@ -440,7 +440,7 @@ def bundle_header_label(
 
 @dataclass(frozen=True)
 class BundlePictureOptions:
-    """The checked ``tl.show_bundle_graph`` arguments the bundle picture needs."""
+    """The checked ``tl.visualization.show_bundle_graph`` arguments the bundle picture needs."""
 
     outpath: str
     vis_mode: str
@@ -457,9 +457,9 @@ class BundlePictureOptions:
 
 
 def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | None:
-    """Build and render the bundle picture behind ``tl.show_bundle_graph``.
+    """Build and render the bundle picture behind ``tl.visualization.show_bundle_graph``.
 
-    Arguments are documented on :func:`torchlens.show_bundle_graph`, which
+    Arguments are documented on :func:`torchlens.visualization.show_bundle_graph`, which
     checks them first.
 
     Returns

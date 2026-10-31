@@ -20,14 +20,14 @@ activation is one explicit call naming the distribution.
 ```python
 import torch
 import torchlens as tl
-from torchlens.ecosystem import plugins
-from torchlens.export import resolve_export_target
+from torchlens._ecosystem import plugins
+from torchlens.export import resolve_target
 
 rows = plugins.discover("torchlens.export_targets")  # metadata only, nothing imported
 plugins.activate("torchlens-example-provider")       # imports the module, registers the target
 
 trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(3, 2), torch.nn.ReLU()), torch.randn(1, 3))
-summary = resolve_export_target("example_provider_summary")(trace)
+summary = resolve_target("example_provider_summary")(trace)
 print(summary["num_layers"], summary["layer_labels"])
 ```
 

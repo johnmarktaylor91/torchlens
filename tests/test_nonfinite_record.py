@@ -14,11 +14,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import StructureOnlyOptionConflictError
-from torchlens.data_classes._nonfinite import (
+from torchlens._data_classes._nonfinite import (
     _CAPTURE_STORE_ATTR,
     drain_pending_nonfinite,
 )
+from torchlens._errors import StructureOnlyOptionConflictError
 
 
 class _NanModel(nn.Module):
@@ -292,7 +292,7 @@ def test_loaded_trace_restores_default_and_serves_saved_basis(tmp_path) -> None:
     )
     assert log.nonfinite_coverage.basis == "capture"
     path = tmp_path / "nonfinite.tlspec"
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
     assert loaded.track_nonfinite is False
     assert loaded.nonfinite_coverage.basis == "saved_payloads"

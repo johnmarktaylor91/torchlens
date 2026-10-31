@@ -9,7 +9,7 @@ from typing import Any
 import torch
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 
 
 def _first_var_names(trace: Trace, func_name: str) -> list[str]:
@@ -65,7 +65,7 @@ def _trace(model: torch.nn.Module) -> Trace:
     """
 
     return tl.trace(
-        model, torch.randn(4), capture=tl.options.CaptureOptions(save_code_context=True)
+        model, torch.randn(4), capture=tl.options.CaptureOptions(save_source_context=True)
     )
 
 
@@ -283,7 +283,7 @@ def test_var_names_save_code_context_false() -> None:
     trace = tl.trace(
         _SingleAssign(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(save_code_context=False),
+        capture=tl.options.CaptureOptions(save_source_context=False),
     )
     assert _first_var_names(trace, "relu") == []
 

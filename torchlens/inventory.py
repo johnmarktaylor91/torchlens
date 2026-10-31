@@ -443,7 +443,6 @@ def list_sites(
 
 __all__ = [
     "SiteInventory",
-    "SiteInventoryError",
     "SiteRow",
     "list_sites",
     "sites_of_trace",

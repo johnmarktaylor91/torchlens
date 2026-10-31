@@ -49,7 +49,7 @@ from tests.support.census_harness import (  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -58,16 +58,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Applied to the classes/tests that arm (directly or through a shared
 # helper) before exercising their row; TestRowGreenGate, TestDualChannelBareLeg,
 # and the handful of other tests named below never arm and must keep running
 # everywhere.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -432,7 +432,7 @@ class TestZeroInterferenceSuiteAndPerf:
         summaries["capture_core"] = _trace_shape_summary(log)
 
         save_path = tmp_path / f"zi2-{tag}.tlspec"
-        tl.save(log, save_path)
+        log.save(save_path)
         loaded = tl.load(save_path)
         summaries["save_load_roundtrip"] = _trace_shape_summary(loaded)
 
@@ -929,7 +929,7 @@ class TestGroupCRefusalParity:
         the marker-keyed merge-scope refusal is asserted on BOTH derive_merge
         entry paths in tests/test_distributed_shard_local_marker.py."""
 
-        from torchlens.constants import MODEL_LOG_FIELD_ORDER
+        from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
         assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
         log = tl.trace(_dense_model(), _dense_input())

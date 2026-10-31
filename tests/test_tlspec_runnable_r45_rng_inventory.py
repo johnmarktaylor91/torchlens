@@ -37,14 +37,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tuple[tl.Trace, tl.RunResult]:

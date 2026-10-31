@@ -41,7 +41,7 @@ def test_normalize_capture_decision_bool_and_none_rules() -> None:
     default = CaptureSpec(
         save_out=True,
         save_metadata=False,
-        keep_grad=True,
+        save_grad=True,
         save_mode="reference",
     )
 
@@ -52,7 +52,7 @@ def test_normalize_capture_decision_bool_and_none_rules() -> None:
     assert keep == CaptureSpec(
         save_out=True,
         save_metadata=True,
-        keep_grad=True,
+        save_grad=True,
         save_mode="reference",
     )
     assert skip == CaptureSpec(save_out=False, save_metadata=False)

@@ -13,7 +13,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    RunProvider,
+    RunResult,
+    StateSource,
+    WitnessCompleteness,
+)
 from torchlens._runnable_execution import _fresh_bare_tensor_root
 from torchlens._runnable_state import prepare_runnable_state
 from torchlens.errors import (
@@ -23,15 +31,6 @@ from torchlens.errors import (
     RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-    RunProvider,
-    RunResult,
-    StateSource,
-    WitnessCompleteness,
-)
 
 
 def test_fresh_bare_tensor_root_fails_closed_for_duck_trace() -> None:
@@ -381,7 +380,7 @@ def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactio
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert result.report.contract_checks
     assert all(check.passed for check in result.report.contract_checks)
 
@@ -478,7 +477,7 @@ def test_loaded_sparse_fast_run_reseeds_rng_after_verify_once(tmp_path: Path) ->
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=31,
+            seed=31,
         ),
     )
     path = tmp_path / "random-fast.tlspec"
@@ -940,7 +939,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
     if expected_type is tuple:
         poisoned = loaded.run(
             inputs=torch.ones(4),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
         assert poisoned.report.path_faithfulness is PathFaithfulness.DIVERGED
         assert poisoned.output[1] == 3.0
@@ -1078,7 +1077,7 @@ def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
     _, model, trace = runnable_execution_artifact
     inputs = torch.tensor([[0.25, 0.5, -1.0], [3.0, -2.0, 1.0]])
     expected = trace.fork(name="expected-save-new-outs")
-    expected.save_new_outs(model, inputs, random_seed=37)
+    expected.save_new_outs(model, inputs, seed=37)
     source_outs = _clone_outs(trace)
 
     result = trace.run(inputs=inputs, seed=37)
@@ -1158,12 +1157,12 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
     result = loaded.run(
         inputs=torch.ones(3),
         seed=23,
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert result.output.shape == (3,)
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.first_mismatch is not None
     assert result.report.first_mismatch.code.value == "input_shape_mismatch"
     assert result.trace._runnable.poisoned is True
@@ -1177,7 +1176,7 @@ def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     """Rollback registry state when a wrong-shape divergent input is inexecutable.
 
     r39 corr2_4: an admitted-but-INEXECUTABLE divergent input (wrong FEATURE shape that fails
-    the native call) under ``return_diverged`` surfaces as ``PathDivergenceError`` carrying the
+    the native call) under ``on_divergence="return"`` surfaces as ``PathDivergenceError`` carrying the
     already-failed ``input_shape`` contract check -- NOT ``RuntimeSignatureDriftError`` (which is
     reserved for genuine resolved-callable/torch-version drift with all input checks passing).
     The transactional fork is still rolled back either way (no leaked log).
@@ -1191,7 +1190,7 @@ def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     with pytest.raises(PathDivergenceError) as caught:
         loaded.run(
             inputs=torch.ones(2, 4),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
 
     assert caught.value.fields["path_faithfulness"] is PathFaithfulness.DIVERGED
@@ -1210,7 +1209,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
         tl.load(honesty_artifact)
         .run(
             inputs=torch.zeros(2),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
         .trace
     )
@@ -1240,7 +1239,7 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     and refuses typed at run preparation (the floor re-assert belt).
     """
 
-    from torchlens.runnable import (
+    from torchlens._runnable import (
         WITNESS_GAP_REGISTRY,
         WitnessCoverageGap,
         WitnessGapKind,
@@ -1266,7 +1265,7 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.first_mismatch is None
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert result.trace._runnable.poisoned is True
 
@@ -1286,18 +1285,18 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
 
     first = tl.load(honesty_artifact).run(
         inputs=torch.zeros(2),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     first_mismatch = first.report.first_mismatch
 
     second = first.trace.run(
         inputs=torch.ones(2),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert second.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert second.report.first_mismatch == first_mismatch
-    assert second.report.poisoned
+    assert second.report.is_poisoned
     with pytest.raises(PathDivergenceError):
         first.trace.run(inputs=torch.ones(2))
 
@@ -1405,7 +1404,7 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
         )
 
     if aliased_capture:
-        with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+        with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
             trace = capture_call()
         assert trace.capture_verified is False
         assert trace.capture_verification_reason == "input_boundary_unverifiable"
@@ -1425,7 +1424,7 @@ def test_h3_same_object_aliased_input_with_inplace_fails_closed(tmp_path: Path) 
     assert result.output.tolist() == [4.0, 6.0]
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_h3_view_aliased_distinct_objects_with_inplace_fails_closed(tmp_path: Path) -> None:
@@ -1462,7 +1461,7 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
             return a + b
 
     z = torch.tensor([3.0, 4.0])
-    with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+    with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
         trace = tl.trace(
             _ReadOnly(),
             [z, z],

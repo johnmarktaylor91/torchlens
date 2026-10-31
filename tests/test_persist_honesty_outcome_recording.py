@@ -104,7 +104,7 @@ def aborted_bundle(tmp_path):
         storage=tl.to_disk(str(tmp_path / "bundle")),
         on_forward_error="return_partial",
     )
-    assert rec.failed and rec.bundle_path is not None
+    assert rec.is_failed and rec.bundle_path is not None
     assert (rec.bundle_path / "PARTIAL").exists()
     return rec.bundle_path
 
@@ -112,11 +112,11 @@ def aborted_bundle(tmp_path):
 @pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.fastlog.recover(aborted_bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is True
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is True
     assert "aborted" in (recovered.error_repr or "")
     assert recovered.outcome.status is CaptureStatus.FAILED
-    assert recovered.outcome.recovered is True
+    assert recovered.outcome.is_recovered is True
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
@@ -135,8 +135,8 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     # remains, with no PARTIAL/REASON abort debris.
     (bundle / "manifest.json").unlink()
     recovered = tl.fastlog.recover(bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is False
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is False
     assert recovered.outcome.status is CaptureStatus.UNKNOWN
 
 
@@ -147,23 +147,23 @@ def test_loaded_log_backward_refuses_before_mutation(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     live_loss = model(x.requires_grad_(True)).sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.log_backward(live_loss)
-    assert len(getattr(loaded, "backward_passes", []) or []) == 0
-    assert len(loaded.grad_fns) == 0
+    assert len(loaded.autograd.backward_passes or []) == 0
+    assert len(loaded.autograd.grad_fns) == 0
 
 
 def test_loaded_recording_backward_refuses(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x)
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.recording_backward()
+        loaded.capture_backward()
 
 
 def test_live_log_backward_still_works():
@@ -172,4 +172,4 @@ def test_live_log_backward_still_works():
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
     loss = trace["relu_1_2"].out.sum()
     trace.log_backward(loss)
-    assert len(trace.backward_passes) == 1
+    assert len(trace.autograd.backward_passes) == 1

@@ -32,8 +32,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 
 __all__ = [
     "CAIRO_RASTER_PIXEL_CEILING",

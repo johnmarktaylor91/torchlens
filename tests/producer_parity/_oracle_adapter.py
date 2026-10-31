@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from torchlens.ir.events import OpEvent
-from torchlens.ir.op_record import OpRecord
+from torchlens._ir.events import OpEvent
+from torchlens._ir.op_record import OpRecord
 
 
 def op_event_from_record(record: Any, *, grad_fn_handle: Any = None) -> OpEvent:

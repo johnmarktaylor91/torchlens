@@ -26,13 +26,13 @@ import torch
 
 from torchlens.intervention import (
     compose,
-    mean_fill,
     permute_batch,
-    reference,
+    population,
     resample_rows_from,
     sample_from,
     set_direction_mean,
 )
+from torchlens.intervention.stochastic import mean_fill
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -103,22 +103,22 @@ def test_tf_curated_chain_admits_no_new_family_name() -> None:
 def test_construction_and_identity_are_backend_free() -> None:
     """D36: construction, repr, equality, and pickle identity need no backend."""
 
-    donors = reference(torch.randn(3, 4), origin="matrix")
-    site_shaped = reference(torch.randn(3, 5, 4), origin="site-shaped matrix")
+    donors = population(torch.randn(3, 4), origin="matrix")
+    site_shaped = population(torch.randn(3, 5, 4), origin="site-shaped matrix")
     plan = sample_from(donors, seed=1)
     specs = [
         permute_batch(seed=1, axis=0),
         resample_rows_from(donors, seed=1, axis=0),
-        mean_fill(over="all"),
-        set_direction_mean(torch.ones(4), site_shaped, feature_axis=1),
-        compose(mean_fill(over="all")),
+        mean_fill(dim="all"),
+        set_direction_mean(torch.ones(4), site_shaped, dim=1),
+        compose(mean_fill(dim="all")),
     ]
     del plan
     for spec in specs:
         assert repr(spec)
         assert spec == spec
     # Builtin-portability members round-trip identity through pickle.
-    for spec in (permute_batch(seed=1, axis=0), mean_fill(over="all")):
+    for spec in (permute_batch(seed=1, axis=0), mean_fill(dim="all")):
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 

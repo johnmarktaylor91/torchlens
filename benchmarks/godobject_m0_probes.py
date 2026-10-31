@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.op import Op
 
 _SEED = 20260812
 
@@ -142,7 +142,7 @@ def probe_scale(target_ops: int) -> None:
         f"-> ratio {journal_bytes / max(op_bytes, 1):.2f}x"
     )
 
-    from torchlens.ir.predicate import RecordContext
+    from torchlens._ir.predicate import RecordContext
 
     gc.collect()
     contexts = sum(1 for obj in gc.get_objects() if isinstance(obj, RecordContext))

@@ -223,7 +223,7 @@ def _validated_steps(n_steps: int, n_features: int, method: str) -> list[int]:
     if isinstance(n_steps, bool) or not isinstance(n_steps, int) or n_steps <= 0:
         raise AttributionError(
             f"{method} n_steps must be a positive integer; got {n_steps!r}. Remedy: "
-            f"tl.attribution.{method}(model, x, target=0, attribution=result, n_steps=20). "
+            f"tl.attribution.{method}(model, x, target=0, attribution=result, num_steps=20). "
             f"{_DOCS_POINTER}",
             code="attribution_eval_setting_invalid",
         )

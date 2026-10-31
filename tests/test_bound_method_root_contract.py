@@ -146,7 +146,7 @@ def test_episode_stepped_module_defaults_to_owner() -> None:
     log = tl.trace(
         model.generate,
         _ids(),
-        episode=tl.options.EpisodeSpec(n_steps=3),
+        episode=tl.options.EpisodeOptions(num_steps=3),
     )
     episode = log.annotations["episode"]
     assert episode["header"]["stepped_module"] == "owner"
@@ -159,7 +159,7 @@ def test_episode_stepped_module_none_refuses_on_module_roots() -> None:
 
     model = _ToyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
-        tl.trace(model, _ids(), episode=tl.options.EpisodeSpec(n_steps=1))
+        tl.trace(model, _ids(), episode=tl.options.EpisodeOptions(num_steps=1))
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "bound-method root" in str(excinfo.value)
 
@@ -202,7 +202,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
     target = tmp_path / "bound.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert loaded.root_entry_point == log.root_entry_point
     out_op = loaded[loaded.output_layers[0]].ops[0]

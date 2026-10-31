@@ -11,14 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends import (
-    BackendCapabilities,
-    BackendSpec,
-    BackendUnsupportedError,
-    register_backend_spec,
-    unregister_backend_spec,
-)
-from torchlens.intervention.errors import BatchChunkInputAmbiguityError, ChunkedForwardConfigError
+from torchlens.backends import BackendCapabilities, BackendSpec
+from torchlens.errors import BackendUnsupportedError
+from torchlens.intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
 
 
 class DeterministicToy(nn.Module):
@@ -76,7 +71,7 @@ def _manual_chunk_trace(model: nn.Module, x: torch.Tensor, chunk_size: int) -> t
     chunks = list(torch.split(x, chunk_size, dim=0))
     trace = tl.trace(model, chunks[0], capture=tl.options.CaptureOptions(layers_to_save="all"))
     for chunk in chunks[1:]:
-        trace.run(model, chunk, transform=False, replay=tl.options.ReplayOptions(append=True))
+        trace.run(model, chunk, input_transform=False, replay=tl.options.ReplayOptions(append=True))
     return trace
 
 
@@ -257,13 +252,13 @@ def test_explicit_path_keeps_shared_matrix_unsplit() -> None:
     expected.run(
         model,
         (x[4:8], mask),
-        transform=False,
+        input_transform=False,
         replay=tl.options.ReplayOptions(append=True),
     )
     expected.run(
         model,
         (x[8:], mask),
-        transform=False,
+        input_transform=False,
         replay=tl.options.ReplayOptions(append=True),
     )
 
@@ -278,7 +273,7 @@ def test_auto_mode_rejects_multiple_batched_tensor_leaves() -> None:
     x = torch.ones(6, 3)
     y = torch.ones(6, 3)
 
-    with pytest.raises(BatchChunkInputAmbiguityError, match="0.*1"):
+    with pytest.raises(AmbiguousBatchInputError, match="0.*1"):
         tl.trace(model, (x, y), chunk_size=2)
 
 
@@ -385,7 +380,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
         del args, kwargs
         return True
 
-    register_backend_spec(
+    tl.backends.register(
         BackendSpec(
             name="chunk_fake",
             can_handle=can_handle,
@@ -394,19 +389,19 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
             validate_trace=validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=False,
+                has_validation_replay=False,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
                 payload_materialization=False,
-                streaming=False,
+                has_streaming=False,
             ),
         )
     )
     try:
         trace = tl.trace(FakeChunkModel(), object(), backend="chunk_fake")
     finally:
-        unregister_backend_spec("chunk_fake")
+        tl.backends.unregister("chunk_fake")
 
     assert trace.backend == "chunk_fake"
 
@@ -428,10 +423,10 @@ def test_rerun_chunk_size_matches_manual_append_loop() -> None:
     actual = tl.trace(model, x[:4], capture=tl.options.CaptureOptions(layers_to_save="all"))
     expected = tl.trace(model, x[:4], capture=tl.options.CaptureOptions(layers_to_save="all"))
 
-    actual.run(model, x, transform=False, replay=tl.options.ReplayOptions(chunk_size=4))
-    expected.run(model, x[:4], transform=False)
-    expected.run(model, x[4:8], transform=False, replay=tl.options.ReplayOptions(append=True))
-    expected.run(model, x[8:], transform=False, replay=tl.options.ReplayOptions(append=True))
+    actual.run(model, x, input_transform=False, replay=tl.options.ReplayOptions(chunk_size=4))
+    expected.run(model, x[:4], input_transform=False)
+    expected.run(model, x[4:8], input_transform=False, replay=tl.options.ReplayOptions(append=True))
+    expected.run(model, x[8:], input_transform=False, replay=tl.options.ReplayOptions(append=True))
 
     _assert_equivalent_chunked_trace(actual, expected)
     assert [row["chunk_size"] for row in actual.append_history] == [4, 4, 2]
@@ -445,8 +440,8 @@ def test_chunked_forward_marker_survives_tlspec(tmp_path: Path) -> None:
     chunked_path = tmp_path / "chunked.tlspec"
     plain_path = tmp_path / "plain.tlspec"
 
-    tl.save(chunked, chunked_path)
-    tl.save(plain, plain_path)
+    chunked.save(chunked_path)
+    plain.save(plain_path)
 
     assert tl.load(chunked_path).chunked_forward is True
     assert tl.load(plain_path).chunked_forward is False

@@ -19,13 +19,13 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport
-from ..utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
+from .._debug_report import Report
+from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 __all__ = ["DeterminismReport", "check_determinism"]
 
@@ -36,7 +36,7 @@ VERDICTS = ("repeatable_under_test", "nondeterminism_observed", "inconclusive")
 
 
 @dataclass(frozen=True)
-class DeterminismReport(DebugReport):
+class DeterminismReport(Report):
     """Typed result of :func:`check_determinism`.
 
     Parameters
@@ -137,7 +137,7 @@ class DeterminismReport(DebugReport):
         return findings
 
     @property
-    def first_bad_thing(self) -> FirstBadThing:
+    def first_problem(self) -> FirstBadThing:
         """Project the first divergence into the shared vocabulary."""
 
         row = self.first_divergence

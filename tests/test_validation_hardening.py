@@ -224,7 +224,7 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     replaced_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -273,7 +273,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
         )
     finally:
         handle.remove()
@@ -518,7 +518,7 @@ def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPa
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=CaptureOptions(layers_to_save="all", save_args=True),
         )
     assert "relu_1_1" in trace.layer_labels and len(trace.layer_labels) == 3
 
@@ -545,14 +545,14 @@ def test_w34_census_unverified_outcome_is_recorded_not_discarded() -> None:
 
     # Bind the model: replay reads parameters through TorchLens' weak model
     # reference, so a temporary model can be collected mid-test and turn the
-    # replay into PostTraceParamUnavailable.
+    # replay into ParamReleasedError.
     model = _Tiny()
     trace, ground_truth = _capture(model, torch.randn(3, 4))
     status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
     assert status.state == "passed"
     diagnostics = get_validation_diagnostics(trace)
     assert any(
-        diagnostic.check == "completeness_census_unverified"
+        diagnostic.check_name == "completeness_census_unverified"
         and diagnostic.extra.get("reason") == "dispatch_op_count_not_collected"
         for diagnostic in diagnostics
     )
@@ -605,7 +605,7 @@ def test_w34_outside_tensor_consumer_with_traced_parent_fails_source_provenance(
 
     assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is False
     failure = tl.validation.last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
 
 
 def test_w34_unused_input_model_still_validates() -> None:
@@ -1686,7 +1686,7 @@ def test_saturated_softmax_validates_for_the_unlucky_ci_seed() -> None:
     model, x = _saturated_softmax_case()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert validate_forward_pass(model, x, random_seed=2165740343) is True
+        assert validate_forward_pass(model, x, seed=2165740343) is True
 
 
 def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
@@ -1795,7 +1795,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
     forged plain-capture case (previous test) still fails.
     """
 
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.events import InterventionAppliedEvent
     from torchlens.validation.invariants import check_metadata_invariants
 
     model = _Tiny()
@@ -1851,8 +1851,8 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
 
     import dataclasses
 
-    from torchlens.ir.capture_events import SealedJournalAppendError
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import SealedJournalAppendError
+    from torchlens._ir.events import InterventionAppliedEvent
 
     trace, ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
@@ -1913,7 +1913,7 @@ def test_cross_run_replayed_edit_does_not_bless_placeholder() -> None:
 
     import dataclasses
 
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.events import InterventionAppliedEvent
 
     # Run A: a genuine raw-hook replacement mints a BOUND edit record.
     model_a = _Tiny()

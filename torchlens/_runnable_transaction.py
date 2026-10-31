@@ -9,26 +9,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck, ReadinessReport
+
 from . import _state
-from ._runnable_state import (
-    PreparedRunnableState,
-    RunResourceCeiling,
-    runnable_tensor_byte_digest,
-)
-from .errors import (
-    PathDivergenceError,
-    RunCapabilityUnavailableError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
-from .runnable import (
+from ._runnable import (
     ActivationPayloadLayerDescriptor,
-    ContractCheck,
     DivergencePolicy,
     InputAttestationFingerprint,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
     ReadinessStatus,
     RunnableCallDescriptor,
     RunnableErrorCode,
@@ -39,10 +28,21 @@ from .runnable import (
     TensorSlotRole,
     _RunUntilPlan,
 )
-from .utils.rng import (
+from ._runnable_state import (
+    PreparedRunnableState,
+    RunResourceCeiling,
+    runnable_tensor_byte_digest,
+)
+from ._utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
 )
+from .errors import (
+    PathDivergenceError,
+    RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
+)
+from .intervention.replay import _CallConeNode, _walk_call_cone
 
 if TYPE_CHECKING:
     from ._runnable_execution import (
@@ -729,7 +729,7 @@ def _run_truncation_record(plan: _RunUntilPlan, regime: str, cause: str | None =
 
     from hashlib import sha256
 
-    from .runnable import RunTruncation
+    from ._runnable import RunTruncation
 
     digest = sha256("\n".join(plan.skipped_raw_labels).encode("utf-8")).hexdigest()[:16]
     return RunTruncation(
@@ -806,7 +806,7 @@ def _attempt_live_forward(
                 model,
                 input_args,
                 input_kwargs=input_kwargs,
-                random_seed=ctx.seed,
+                seed=ctx.seed,
                 _run_until_plan=until_plan,
             )
     except Exception as exc:  # not BaseException: KeyboardInterrupt/SystemExit stay raw
@@ -1206,9 +1206,9 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     alias groups restored before the failure, and chains the restore exception.
     """
 
+    from ._runnable import mark_trace_path_status
     from ._runnable_state_live import LiveStateRestoreFailure, restore_live_declared_state
     from .errors import StateBindingError
-    from .runnable import mark_trace_path_status
 
     try:
         restore_live_declared_state(snapshot, trace=fork)
@@ -1245,7 +1245,7 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
     caller then skips classification entirely (never masks the native error).
     """
 
-    from .utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
+    from ._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     try:
         if isinstance(input_args, (list, tuple)):

@@ -36,7 +36,7 @@ _AUDIT_NAMED_SHIMS = (
 _DOTTED = re.compile(r"use (torchlens(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 #: Rows naming a torchlens subpackage (forks ruling names.4: teaching rows for
-#: mechinterp, semantic and tviz instead of root module rows). Importing a
+#: mechinterp, semantic and transformer instead of root module rows). Importing a
 #: subpackage binds it on the package, and attribute lookup then never reaches
 #: ``__getattr__``, so these rows teach only until the subpackage is imported.
 #: In-process state depends on what ran before, so they are pinned in a fresh
@@ -109,9 +109,9 @@ print("ok")
 
 
 def test_subpackage_rows_are_the_ruled_three() -> None:
-    """names.4: exactly mechinterp, semantic and tviz teach at the root."""
+    """names.4: exactly mechinterp, semantic and transformer teach at the root."""
 
-    assert _SUBPACKAGE_ROWS == ["mechinterp", "semantic", "tviz"]
+    assert _SUBPACKAGE_ROWS == ["mechinterp", "semantic", "transformer"]
     assert not set(_SUBPACKAGE_ROWS) & (set(tl._LAZY_ATTRS) | set(tl.__all__))
 
 
@@ -138,9 +138,27 @@ def test_each_redirect_target_resolves(name: str) -> None:
 
     match = _DOTTED.search(tl._REDIRECTS[name])
     assert match, f"remedy for {name!r} names no torchlens dotted path"
-    module_path, _, attr = match.group(1).rpartition(".")
-    module = importlib.import_module(module_path)
-    assert hasattr(module, attr), f"{match.group(1)} does not resolve"
+    assert _resolve_dotted(match.group(1)), f"{match.group(1)} does not resolve"
+
+
+def _resolve_dotted(dotted: str) -> bool:
+    """Import the longest module prefix of ``dotted``, then walk the rest as attributes."""
+
+    parts = dotted.split(".")
+    for split in range(len(parts), 0, -1):
+        module_path = ".".join(parts[:split])
+        try:
+            if importlib.util.find_spec(module_path) is None:
+                continue
+        except ModuleNotFoundError:  # a parent of module_path is a class, not a package
+            continue
+        target: object = importlib.import_module(module_path)
+        for attr in parts[split:]:
+            if not hasattr(target, attr):
+                return False
+            target = getattr(target, attr)
+        return True
+    return False
 
 
 def test_refusal_rows_if_any_are_typed() -> None:

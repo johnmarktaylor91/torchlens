@@ -480,7 +480,7 @@ def record_attention(model: Any, *, check_sdpa: bool = False) -> Iterator[Attent
             f"the model's attention implementation is {selected!r}, not {BACKEND_KEY!r}, "
             "so nothing would be recorded",
             code="hf_attention_backend_not_selected",
-            remedy="call tl.bridge.hf.register_attention(model) first",
+            remedy="call tl.bridge.transformers.register_attention(model) first",
         )
     names = {id(module): name for name, module in model.named_modules()}
     recording = AttentionRecording(check_sdpa=check_sdpa, _names=names)

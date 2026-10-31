@@ -11,16 +11,16 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
-from ..errors._base import CompatibilityError
-from ..utils import _torch_compat
-from ..utils._dynamo_explain_shapes import (
+from .._utils import _torch_compat
+from .._utils._dynamo_explain_shapes import (
     _DynamoExplainOutputError,
     normalize_dynamo_explain_output,
 )
-from ..utils.arg_handling import normalize_input_args
+from .._utils.arg_handling import normalize_input_args
+from ..errors._base import CompatibilityError
 
 
 class GraphBreaksUnavailableError(_ActionableErrorMixin, CompatibilityError, RuntimeError):
@@ -133,7 +133,7 @@ class GraphBreak:
 
 
 @dataclass(frozen=True)
-class GraphBreakReport(DebugReport):
+class GraphBreakReport(Report):
     """Structured Dynamo graph-break correlation result.
 
     Attributes
@@ -197,7 +197,7 @@ def _snapshot_model_state(model: nn.Module) -> tuple[dict[str, torch.Tensor], An
     cpu_rng = torch.get_rng_state()
     # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
     # gate allocated a CUDA context per visible device on CPU-only runs.
-    from ..utils.rng import _snapshot_cuda_rng_states
+    from .._utils.rng import _snapshot_cuda_rng_states
 
     cuda_rng = _snapshot_cuda_rng_states() or None
     return params, cpu_rng, cuda_rng
@@ -374,7 +374,7 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
     neither the probe nor the eager correlation trace mutates the caller's
     model. Both runs observe identical state, so a stateful branching model
     takes the same path in the probe and the correlation trace. The Dynamo
-    result is normalized through ``torchlens.utils._dynamo_explain_shapes`` without
+    result is normalized through ``torchlens._utils._dynamo_explain_shapes`` without
     torch-version parsing. Correlation uses recorded :class:`FuncCallLocation`
     file/line evidence; empty matches state why no correlation was possible.
 

@@ -20,9 +20,9 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as pp
+import torchlens._postprocess as pp
 from torchlens.fastlog import Recorder
-from torchlens.fastlog._halt import HaltSignal
+from torchlens.fastlog._halt import StopSignal
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -72,7 +72,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
     new region through the settlement authority.
     """
 
-    # The sanctioned writers: postprocess/finalization.py::_set_tracing_finished
+    # The sanctioned writers: _postprocess/finalization.py::_set_tracing_finished
     # (torch step 17 + the no-layers early return), the shared preview finalize
     # (both finish_before_module_logs arms), and JAX's own finalize path.
     writer_files: dict[str, int] = {}
@@ -88,7 +88,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
         if hits:
             writer_files[str(path.relative_to(TORCHLENS_DIR))] = len(hits)
     assert writer_files == {
-        "postprocess/finalization.py": 1,
+        "_postprocess/finalization.py": 1,
         "backends/_finalize.py": 2,
         "backends/jax/backend.py": 1,
     }, (
@@ -114,7 +114,7 @@ def test_planted_step1_failure_survives_with_partial_log(monkeypatch) -> None:
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     assert hasattr(exc_info.value, "partial_log")
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert partial.trace.__dict__.get("_tracing_finished") is False
 
 
@@ -140,12 +140,12 @@ def test_planted_freeze_failure_propagates_original(monkeypatch) -> None:
 def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
     """FLIPPED (F5): a step-20 failure propagates the original error."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     def _boom(self: object, **kwargs: object) -> None:
         raise ValueError("planted step20")
 
-    monkeypatch.setattr(Trace, "release_param_refs", _boom)
+    monkeypatch.setattr(Trace, "_release_param_refs", _boom)
     with pytest.raises(ValueError, match="planted step20"):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
 
@@ -156,7 +156,7 @@ def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
 
 
 def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) -> None:
-    """A halted-postprocess failure keeps the original error and HaltSignal chain."""
+    """A halted-postprocess failure keeps the original error and StopSignal chain."""
 
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted halted-pp")
@@ -164,7 +164,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
     monkeypatch.setattr(pp, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
 
 
 @pytest.mark.smoke
@@ -183,7 +183,7 @@ def test_halted_finalize_failure_propagates_with_halt_context(monkeypatch) -> No
     monkeypatch.setattr(TorchBackend, "cleanup_model_session", _boom)
     with pytest.raises(ValueError, match="planted halted-cleanup") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +204,8 @@ def test_halted_trace_has_no_transient_attribution_leak() -> None:
     """FLIPPED (P2): the halted finalizer pops the transient attribution list.
 
     The P0 characterization pinned the leak (an unpopped
-    ``_output_attribution_input_tensors`` refused every halted ``tl.save``
-    via PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
+    ``_output_attribution_input_tensors`` refused every halted ``Trace.save``
+    via _PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
     finalizer mirrors the completed paths. The positive save round-trip
     lives in test_capture_settlement.py.
     """
@@ -260,14 +260,14 @@ def test_halted_trace_runnable_save_refuses_typed() -> None:
     conversion, surfacing through the runnable error vocabulary.
     """
 
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.errors import RunnablePreflightError
-    from torchlens.runnable import RunnableErrorCode
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
     trace = tl.trace(model, x, halt=halt_on_relu)
     with pytest.raises(RunnablePreflightError) as exc_info:
-        tl.save(trace, "/tmp/tl_p0_halted_runnable.tlspec", level="runnable", overwrite=True)
+        trace.save("/tmp/tl_p0_halted_runnable.tlspec", level="runnable", overwrite=True)
     assert exc_info.value.fields.get("code") == RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value
 
 
@@ -326,7 +326,7 @@ def test_recorder_keyboard_interrupt_leaves_no_product() -> None:
 
     recorder = Recorder(FailingForwardModel(KeyboardInterrupt()), save=lambda ctx: True)
     with pytest.raises(KeyboardInterrupt), recorder as active:
-        active.log(torch.ones(1, 3))
+        active(torch.ones(1, 3))
     with pytest.raises(RecorderStateError):
         _ = recorder.recording
 
@@ -354,14 +354,14 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
     with Recorder(
         TwoOpModel(), save=lambda ctx: ctx.kind == "op", halt=_halt_second_pass
     ) as recorder:
-        first_output = recorder.log(x)
-        second_output = recorder.log(x)
+        first_output = recorder(x)
+        second_output = recorder(x)
     recording = recorder.recording
     assert first_output is not None
     assert second_output is None
     assert recording.status == "halted"
-    assert recording.halted is True
-    assert set(recording.halts_by_pass) == {2}
+    assert recording.is_stopped is True
+    assert set(recording.stops_by_pass) == {2}
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +386,7 @@ def test_failed_partial_pickle_loads_coreless() -> None:
                 torch.ones(1, 3),
             )
     except RuntimeError as exc:
-        partial = tl.partial.from_failed_capture(exc)
+        partial = tl._partial.from_failed_capture(exc)
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False
     clone = pickle.loads(pickle.dumps(source))

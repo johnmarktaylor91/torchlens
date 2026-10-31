@@ -27,7 +27,7 @@ from torchlens.bundle._fed_by import (
 )
 from torchlens.bundle._relations import MemberRelationRow
 from torchlens.errors.episode import BundleRelationError
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.io import attach_sidecar
 
 _VOCAB = 32
@@ -151,7 +151,7 @@ def test_fed_by_param_values_are_closed(params: dict[str, object]) -> None:
 def test_positional_relate_reads_as_the_sentence(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", label="critique")
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert (row.kind, row.from_member, row.to_member) == ("fed_by", "critique", "draft")
     assert row.params == {"label": "critique"}, "no spans: nothing to bind or verify"
     assert bundle.upstream("critique") == ("draft",)
@@ -160,7 +160,7 @@ def test_positional_relate_reads_as_the_sentence(model: _TinyLM) -> None:
 
 def test_fed_by_orders_members_for_the_comparison_gate(model: _TinyLM) -> None:
     bundle = _harness(model).relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
@@ -180,13 +180,13 @@ def test_positional_relate_refusals(model: _TinyLM) -> None:
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate("fed_by", "critique", "nobody")
     assert _code(excinfo) == "bundle_relation_member_missing"
-    assert bundle.member_relations == (), "every refusal left the table unchanged"
+    assert bundle.relations == (), "every refusal left the table unchanged"
 
 
 def test_positional_relate_names_one_member_for_member_kinds(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("episode_member", "draft", episode_id="ep", at_step=0, role="prefill")
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert row.member == "draft"
 
 
@@ -198,7 +198,7 @@ def test_positional_relate_names_one_member_for_member_kinds(model: _TinyLM) -> 
 def test_default_bindings_without_a_completion_range_stay_declared(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert row.params["basis"] == "declared", "matching ids alone do not show the output fed in"
     assert member_binding(bundle["draft"]) == {
         "stream": "input",
@@ -212,7 +212,7 @@ def test_default_bindings_without_a_completion_range_stay_declared(model: _TinyL
 def test_bound_completion_verifies_and_fills_the_measured_keys(model: _TinyLM) -> None:
     bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert row.params["basis"] == "verified"
     assert row.params["coverage"] == 1.0
     binding = member_binding(bundle["draft"])
@@ -225,7 +225,7 @@ def test_prompt_overlap_outside_the_completion_does_not_verify(model: _TinyLM) -
     completion = {"stream": "input", "batch_row": 0, "completion": [3, 4]}
     attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, completion)
     bundle.relate("fed_by", "critique", "draft", token_spans=[[0, 2, 0, 2]])
-    assert bundle.member_relations[0].params["basis"] == "declared"
+    assert bundle.relations[0].params["basis"] == "declared"
 
 
 def test_coverage_counts_the_eligible_completion_tokens(model: _TinyLM) -> None:
@@ -244,7 +244,7 @@ def test_coverage_counts_the_eligible_completion_tokens(model: _TinyLM) -> None:
         },
     )
     bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 5, 3, 5]])
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert row.params["basis"] == "verified"
     # eligible = positions 3..6 minus the excluded id 10 at position 6 -> 3 tokens, 2 covered.
     assert row.params["coverage"] == pytest.approx(2 / 3)
@@ -253,7 +253,7 @@ def test_coverage_counts_the_eligible_completion_tokens(model: _TinyLM) -> None:
 def test_mismatched_spans_stay_declared(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[[0, 3, 0, 3]], coverage=0.9)
-    (row,) = bundle.member_relations
+    (row,) = bundle.relations
     assert row.params["basis"] == "declared", "retokenized or paraphrased text is a declaration"
     assert row.params["coverage"] == 0.9
 
@@ -261,26 +261,24 @@ def test_mismatched_spans_stay_declared(model: _TinyLM) -> None:
 def test_explicit_declared_basis_skips_binding(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], basis="declared")
-    assert bundle.member_relations[0].params["basis"] == "declared"
+    assert bundle.relations[0].params["basis"] == "declared"
     assert member_binding(bundle["draft"]) is None
 
 
 def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
     bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])  # binds both
-    fresh = Bundle(
-        dict(bundle.members), member_relations=[_fed_by(token_spans=[_SPAN], basis="verified")]
-    )
-    assert fresh.member_relations[0].params["basis"] == "verified"
+    fresh = Bundle(dict(bundle.members), relations=[_fed_by(token_spans=[_SPAN], basis="verified")])
+    assert fresh.relations[0].params["basis"] == "verified"
     matched = Bundle(
-        dict(bundle.members), member_relations=[_fed_by(token_spans=[_SPAN], basis="matched")]
+        dict(bundle.members), relations=[_fed_by(token_spans=[_SPAN], basis="matched")]
     )
     # The matcher, re-run on the members, re-derives exactly these spans.
-    assert matched.member_relations[0].params["basis"] == "matched"
+    assert matched.relations[0].params["basis"] == "matched"
     with pytest.raises(BundleRelationError) as excinfo:
         Bundle(
             dict(bundle.members),
-            member_relations=[_fed_by(token_spans=[[0, 3, 0, 3]], basis="verified")],
+            relations=[_fed_by(token_spans=[[0, 3, 0, 3]], basis="verified")],
         )
     assert _code(excinfo) == "bundle_relation_span_unverified"
 
@@ -289,13 +287,13 @@ def test_fork_carries_verified_rows(model: _TinyLM) -> None:
     bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
     child = bundle.fork()
-    assert child.member_relations[0].params["basis"] == "verified"
+    assert child.relations[0].params["basis"] == "verified"
 
 
 def test_unverifiable_claim_clamps_to_declared(model: _TinyLM) -> None:
     bundle = _harness(model)  # no bindings attached
     bundle.relate(_fed_by(token_spans=[_SPAN], basis="verified"))
-    assert bundle.member_relations[0].params["basis"] == "declared"
+    assert bundle.relations[0].params["basis"] == "declared"
 
 
 def test_forged_binding_digest_contradicts(model: _TinyLM) -> None:
@@ -309,7 +307,7 @@ def test_forged_binding_digest_contradicts(model: _TinyLM) -> None:
     }
     attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, forged)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
-    assert bundle.member_relations[0].params["basis"] == "declared"
+    assert bundle.relations[0].params["basis"] == "declared"
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate(_fed_by(token_spans=[_SPAN], basis="verified"))
     assert _code(excinfo) == "bundle_relation_span_unverified"
@@ -336,7 +334,7 @@ def test_empty_bundle_reads_refuse_typed_or_return_empty() -> None:
     from torchlens.intervention.errors import BaselineUndeterminedError
 
     empty = tl.Bundle()
-    assert empty.shared_op_labels == [] and empty.divergent_op_labels == []
+    assert empty.ops.shared == [] and empty.ops.divergent == []
     with pytest.raises(BaselineUndeterminedError):
         empty.delta_map("relative_l2")
 
@@ -348,10 +346,10 @@ def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) 
         baseline="clean",
     )
     dot = bundle.show_diff(
-        left="clean", right="patched", vis_outpath=str(tmp_path / "d"), vis_save_only=True
+        left="clean", right="patched", path=str(tmp_path / "d"), vis_save_only=True
     )
     assert "clean vs patched" in dot
-    with pytest.raises(BundleRelationshipError):
+    with pytest.raises(BundleComparisonError):
         bundle.delta_map("relative_l2")
 
 
@@ -408,7 +406,7 @@ def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
         {"a": _trace(model, ids), "b": _trace(model, ids), "router": _trace(_Other(), ids)}
     )
     site = tl.func("relu")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.node(site)
     assert _code(excinfo) == "bundle_gate_model_axis_unmet"
     view = bundle.node(site, members=["a", "b"])
@@ -435,7 +433,7 @@ def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
         {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7, 8])},
         baseline="draft",
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         read(bundle)
     assert _code(excinfo) == "bundle_gate_input_values_differ"
 
@@ -445,7 +443,7 @@ def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None
     bundle = Bundle({"draft": _trace(model, ids), "critique": _trace(model, ids)}, baseline="draft")
     assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
@@ -492,8 +490,8 @@ def test_v10_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> No
     manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
     assert manifest["tlspec_version"] == 10
     loaded = tl.load(tmp_path / "harness.tlspec")
-    assert loaded.member_relations == bundle.member_relations
-    assert loaded.member_relations[0].params["basis"] == "verified", "re-verified at load"
+    assert loaded.relations == bundle.relations
+    assert loaded.relations[0].params["basis"] == "verified", "re-verified at load"
     assert member_binding(loaded["draft"]) == member_binding(bundle["draft"])
     assert loaded.upstream("critique") == ("draft",)
 
@@ -523,7 +521,7 @@ def test_v9_stamped_bundle_still_loads(tmp_path: Path, model: _TinyLM) -> None:
     manifest["tlspec_version"] = 9
     manifest_path.write_text(json.dumps(manifest))
     loaded = tl.load(path)
-    assert loaded.member_relations == bundle.member_relations
+    assert loaded.relations == bundle.relations
 
 
 def test_writer_contract_records_the_relation_vocabulary() -> None:

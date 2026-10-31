@@ -25,9 +25,10 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection import Selection, Selector
 from torchlens.attribution._core import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _call_model,
@@ -36,8 +37,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.intervention import mean_ablate, zero_ablate
-from torchlens.selection import ResolvedSelection, Selection
+from torchlens.intervention.helpers import mean_ablate, zero_ablate
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms
@@ -142,7 +142,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     raise AttributionError("baseline must be 'zeros', 'mean', or 'blur'")
 
 
-def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
+def _resolve_selection(trace: Any, selection: Any) -> Selection:
     """Resolve a Selection or region producer against ``trace``.
 
     Parameters
@@ -164,14 +164,14 @@ def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
     """
 
     lifted = selection
-    if not isinstance(lifted, (Selection, ResolvedSelection)):
+    if not isinstance(lifted, (Selector, Selection)):
         converter = getattr(lifted, "__selection__", None)
         if not callable(converter):
             raise AttributionError("occlusion selection must implement __selection__()")
         lifted = converter()
-    if isinstance(lifted, ResolvedSelection):
-        return lifted if lifted._trace is trace else lifted.align_to(trace)
     if isinstance(lifted, Selection):
+        return lifted if lifted._trace is trace else lifted.align_to(trace)
+    if isinstance(lifted, Selector):
         return lifted.resolve(trace)
     raise AttributionError("occlusion selection did not produce a Selection")
 
@@ -183,7 +183,7 @@ def occlusion(
     score: _OcclusionScore,
     baseline: _OcclusionBaseline = "zeros",
     blur_kernel_size: int = 3,
-) -> AttributionResult:
+) -> Attribution:
     """Score the effect of explicitly occluding one resolved activation region.
 
     The result is ``score(original) - score(occluded)``. ``baseline`` is
@@ -227,7 +227,7 @@ def occlusion(
     resolved = _resolve_selection(trace, selection)
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
-    if resolved.empty:
+    if resolved.is_empty:
         # occluding nothing scores exactly zero, which reads as a
         # confident "no effect"; the resolved selection already knows it.
         raise AttributionError(
@@ -249,7 +249,7 @@ def occlusion(
     finally:
         fork.cleanup()
     delta = original_score - occluded_score
-    return AttributionResult(
+    return Attribution(
         method="occlusion",
         values=delta,
         target_repr="trace score",
@@ -258,7 +258,7 @@ def occlusion(
             "blur_kernel_size": blur_kernel_size if baseline == "blur" else None,
             "original_score": original_score,
             "occluded_score": occluded_score,
-            "selection_digest": resolved.resolve_digest,
+            "selection_digest": resolved.digest,
         },
     )
 
@@ -501,7 +501,7 @@ def occlusion_map(
     overlap: Literal["average", "sum"] = "average",
     occlude_leaf: int = 0,
     max_passes: int = _DIRECT_MAX_PASSES,
-) -> AttributionResult:
+) -> Attribution:
     """Sweep an occlusion window over one input leaf and map the score deltas.
 
     The direct engine: eval/no-grad forwards, one per window, on copies of the
@@ -641,7 +641,7 @@ def occlusion_map(
             coverage[full_region] += 1
         total_seconds = time.perf_counter() - start
     values = accumulator / coverage.clamp(min=1) if overlap == "average" else accumulator
-    return AttributionResult(
+    return Attribution(
         method="occlusion_map",
         values=values,
         target_repr=_target_repr(target),

@@ -30,14 +30,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._merged._artifact import canonical_json_bytes, load_merged, tree_hash
+from torchlens._merged._enums import MergedErrorCode
+from torchlens._merged._errors import MergedArtifactError
 from torchlens.distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
-from torchlens.merged._artifact import canonical_json_bytes, load_merged, tree_hash
-from torchlens.merged._enums import MergedErrorCode
-from torchlens.merged._errors import MergedArtifactError
 
 WORLD = membership_digest_for_ranks([0, 1])
 _CC = hashlib.sha256(b"cc").hexdigest()
@@ -175,7 +175,7 @@ def test_non_rank_core_member_refuses_not_laundered(tmp_path: Path) -> None:
     torch.manual_seed(0)
     plain = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
     shutil.rmtree(art / "members" / "rank_0001.tlspec")
-    tl.save(plain, art / "members" / "rank_0001.tlspec")
+    plain.save(art / "members" / "rank_0001.tlspec")
     _rehash(art)
     with pytest.raises(MergedArtifactError) as excinfo:
         load_merged(art)
@@ -272,7 +272,7 @@ def test_honest_two_rank_round_trip_still_loads(tmp_path: Path) -> None:
     assert loaded.alignment.value == "aligned"
     assert loaded.value_status.value == "attested_complete"
     assert loaded.rank_ids == (0, 1)
-    assert loaded.load_degradations == ()
+    assert loaded.degradations == ()
 
 
 @pytest.mark.parametrize("resource_exc", [MemoryError, OSError])
@@ -286,7 +286,7 @@ def test_member_load_resource_failure_surfaces_not_laundered(
     actively misleading description of an I/O failure -- and it silently capped
     the merge at ``partial`` off the remaining members. A ``MemoryError`` or
     ``OSError`` escaping the member bundle load must propagate raw as the
-    environment error it is, never enter ``load_degradations``.
+    environment error it is, never enter ``degradations``.
     """
 
     art = _saved_two_rank(tmp_path)

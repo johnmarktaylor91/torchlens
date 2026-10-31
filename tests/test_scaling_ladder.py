@@ -56,7 +56,7 @@ class _ParallelStreams(nn.Module):
 def test_op_count_disclosure_fires_once_at_threshold(monkeypatch) -> None:
     """Crossing the op-record threshold warns exactly once, capture continues."""
 
-    from torchlens.ir import capture_events as ce
+    from torchlens._ir import capture_events as ce
 
     monkeypatch.setattr(ce, "OP_COUNT_DISCLOSURE_THRESHOLD", 10)
     with warnings.catch_warnings(record=True) as caught:
@@ -90,7 +90,7 @@ def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
 def test_dense_mask_batch_declines_above_node_ceiling(monkeypatch) -> None:
     """Above the node ceiling the whole-graph mask DP is skipped (R60-3)."""
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_DENSE_BATCH_MAX_NODES", 1)
     log = tl.trace(_Chain(steps=20), torch.randn(2))
@@ -107,7 +107,7 @@ def test_cohort_pair_probe_ceiling_discloses(monkeypatch) -> None:
     legacy fixture.
     """
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_PF_COHORT_PAIR_PROBE_CEILING", 1)
     with warnings.catch_warnings(record=True) as caught:
@@ -123,7 +123,7 @@ def test_cohort_pair_probe_ceiling_discloses(monkeypatch) -> None:
 def test_fixpoint_work_budget_degrades_to_singletons(monkeypatch) -> None:
     """Budget exhaustion dissolves candidate classes, never over-groups (R60-5)."""
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_PF_FIXPOINT_WORK_BUDGET", 0)
     with warnings.catch_warnings(record=True) as caught:

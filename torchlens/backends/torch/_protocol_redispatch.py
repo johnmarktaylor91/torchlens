@@ -46,7 +46,7 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils import _torch_compat
+from ..._utils import _torch_compat
 
 __all__ = [
     "STILL_DECLINED",

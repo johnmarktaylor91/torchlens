@@ -9,7 +9,7 @@ signature compare); :mod:`model_identity` computes the D6 identity record
 whose resume comparison kills the random-init T-MODELSWAP hazard.
 
 Private substrate: the public doors are :func:`torchlens.extract_dataset` /
-:func:`torchlens.load_extraction`. Every spelling is DOCUMENTED-UNSTABLE
+:func:`torchlens.load`. Every spelling is DOCUMENTED-UNSTABLE
 pending the naming sprint.
 """
 

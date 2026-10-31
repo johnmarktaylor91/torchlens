@@ -7,7 +7,7 @@ product. Declare it on the ordinary capture entry:
 ```python
 import torch
 import torchlens as tl
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 class GreedyRunner(torch.nn.Module):
     def __init__(self, model, n_steps):
@@ -26,7 +26,7 @@ class GreedyRunner(torch.nn.Module):
 
 log = tl.trace(
     GreedyRunner(model, 20), prompt_ids,
-    episode=EpisodeSpec(stepped_module=model, n_steps=20),
+    episode=EpisodeOptions(stepped_module=model, num_steps=20),
 )
 ledger_payload = log.annotations["episode"]     # header + per-step rows
 ```
@@ -58,10 +58,10 @@ episode ledger to a travel note and clears the per-op `episode_step` stamps
 capture.
 
 **The declared-step cost ceiling.** A declaration beyond
-`EPISODE_DECLARED_STEP_CEILING` (100 steps, counting `n_steps` or the
+`EPISODE_DECLARED_STEP_CEILING` (100 steps, counting `num_steps` or the
 `forced_tokens` length) refuses typed (`episode_step_ceiling_exceeded`) at
 declaration time, before the forward runs.
-`EpisodeSpec(acknowledge_step_cost=True)` is the explicit override: a
+`EpisodeOptions(acknowledge_step_cost=True)` is the explicit override: a
 hundreds-of-steps wrapped capture is a decision, never an accident.
 
 **The declaration's own cost, priced.** Declaring `episode=` changes NOTHING
@@ -79,11 +79,11 @@ episode-declared and undeclared runs of the same seeded fixture.
 
 ## The declaration
 
-`EpisodeSpec(stepped_module=...)` declares the STEPPED MODULE — the
+`EpisodeOptions(stepped_module=...)` declares the STEPPED MODULE — the
 `nn.Module` whose successive top-level calls define step boundaries. It must
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
 (F41, the ruled root contract: `tl.trace(model.generate, ids,
-episode=EpisodeSpec(n_steps=N))` — the owner resolves via
+episode=EpisodeOptions(n_steps=N))` — the owner resolves via
 `method.__self__` and registers as a submodule of the TL-authored wrapper
 root) `stepped_module` DEFAULTS to the owner; on a module root it is
 required, and `None` refuses typed (`episode_declaration_invalid`) — wrap
@@ -138,7 +138,7 @@ listed. The resolved source disclosure is written to the ledger header
 (`"output"` for the single-output default).
 
 Per-step positions are TAIL-ALIGNED along the declared `step_axis` by
-default: the LAST `n_steps` positions are the per-step emissions (one
+default: the LAST `num_steps` positions are the per-step emissions (one
 appended position per step). A root returning what real `generate()` returns
 — prompt+completion — keeps its prompt prefix out of the evidence column, an
 emitted-only root is the equal-size special case of the same rule, and a
@@ -156,8 +156,8 @@ tail-aligned.
 presumes ONE appended position per step. On a token-shaped episode
 (`step_output_kind="tokens"`, or any kind whose step-0 entry was a
 token-id-shaped integer tensor) the derivation is licensed only when the
-source width is exactly `n_steps` (emitted-only root) or exactly the
-MEASURED step-0 entry width plus `n_steps` (prompt+completion); any other
+source width is exactly `num_steps` (emitted-only root) or exactly the
+MEASURED step-0 entry width plus `num_steps` (prompt+completion); any other
 width -- multi-token decoding (speculative/Medusa/MTP), draft+verify loops, a
 stepped module called more than once per iteration -- refuses typed
 (`episode_declaration_invalid`) with the licensed widths named, instead of
@@ -167,7 +167,7 @@ declared-crossing chain arm (W051 FIX2): when the root returns the FULL fed
 id sequence -- every step's MEASURED entry is a prefix of it, row for row --
 each step's emission is the position right after its own entry, and
 positions a tool call injected between steps are admitted exactly when the
-receiving step is declared in `EpisodeSpec(crossings=(k, ...))`; the column
+receiving step is declared in `EpisodeOptions(crossings=(k, ...))`; the column
 derives at the measured chain positions (disclosed in
 `step_output_positions`) and the join into the crossing grades `declared`.
 An UNDECLARED surplus stays refused, with the crossings remedy named:
@@ -177,7 +177,7 @@ a root-shape guess -- decides. A `digest` column over a float
 carried state (fixed-point / diffusion loops, where no token width exists)
 is a disclosed positional slice convention keyed by the header's
 `step_output_from` / `step_axis` -- recomputable by any reader, consumed by
-no join re-grade -- and keeps the `>= n_steps` admission.
+no join re-grade -- and keeps the `>= num_steps` admission.
 
 The header's `capture_digest` binds the ledger to ITS product: minted at
 settlement (`mint_capture_digest`, schema tag `episode_capture_digest_v2`)
@@ -214,7 +214,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
   positive "this ledger belongs to this product" claim. A mismatch refuses
   typed (`episode_coupling_unbound`); a pre-binding artifact refuses
   `episode_coupling_unmintable`.
-- **Step-qualified selectors.** `torchlens.intervention.at_step(*steps)`
+- **Step-qualified selectors.** `torchlens.at_step(*steps)`
   matches ops recorded inside the named 0-based episode steps — live (the
   armed join session's step position) and post hoc (the persisted
   `Op.episode_step` stamps, written at settlement on every episode
@@ -260,15 +260,15 @@ the travel policy dropped, below). `trace.episode` is the public step
 access: the parsed ledger with `header`, ordered per-step `rows`,
 `steps_completed`, and `truncated_at_step` — `None` for plain captures and
 quarantined/dropped payloads. Both spellings are DOCUMENTED-UNSTABLE pending
-the naming session. The declaration class is `tl.options.EpisodeSpec` (the
-root `tl.EpisodeSpec` spelling awaits the surface-table amendment).
+the naming session. The declaration class is `tl.options.EpisodeOptions` (the
+root `tl.EpisodeOptions` spelling awaits the surface-table amendment).
 
 ## Settlement refusals keep the product
 
 A settlement refusal (`episode_ledger_incoherent`, the declaration-mismatch
 derivation refusals) fires AFTER the capture ran and postprocessed, so the exception
 carries the settled product on `exc.partial_log` — recover it with
-`tl.partial.from_failed_capture(exc)` instead of paying the forward again.
+`tl._partial.from_failed_capture(exc)` instead of paying the forward again.
 
 ## Evidence never rides a fresh execution (the travel policy)
 
@@ -302,7 +302,7 @@ Per-row grades (closed vocabulary; the join INTO step k, grades[0] is null):
   the prior entry plus the evidence-column emission (append, last-token
   KV-cache, and sliding-window feeds are all one rule), or the entry is
   byte-identical to the prior step's output (`digest_direct` basis).
-- `forced` — a teacher-forced join (`EpisodeSpec(forced_tokens=...)`): the
+- `forced` — a teacher-forced join (`EpisodeOptions(forced_tokens=...)`): the
   entry continues the prior entry plus the DECLARED forced token for that
   step (`forced_tokens` basis). Graded against the declaration, never the
   evidence column — a forced root may return the model's predictions, which
@@ -314,7 +314,7 @@ Per-row grades (closed vocabulary; the join INTO step k, grades[0] is null):
   ops observed inside the capture (the pass-qualified graph witness; the
   scheduler/diffusion shape).
 - `declared` — the entry crosses a boundary declared in
-  `EpisodeSpec(crossings=(k, ...))` (the tool-call shape): disclosed, never
+  `EpisodeOptions(crossings=(k, ...))` (the tool-call shape): disclosed, never
   silently continuous — the run is chain-shaped by declaration.
 - `exogenous` — a MEASURED undeclared break: content entered the loop from
   outside the capture (the envelope counts the exogenous positions on the
@@ -369,7 +369,7 @@ shape):
 The claim stays PER-ARTIFACT: a ledger without the envelope (a
 pre-measurement artifact, or a failed live measurement) reads
 `step_join=unmeasured` on every surface, its series claims refuse
-`episode_join_unmeasured`, and `tl.report.explain` prints the disclosure
+`episode_join_unmeasured`, and `trace.explain` prints the disclosure
 line — an unmeasured join can never read as a measured one, whatever the
 build measures. Loads validate the envelope FAIL-CLOSED against the rows
 (schema, closed grades, prefill null, break-step coherence); any violation
@@ -407,7 +407,7 @@ row, absent tail) and are write-once at settlement. The ledger is a
 DISCLOSURE, never a settlement authority: the episode product settles through
 the one existing `CaptureOutcome` authority with its vocabulary unchanged,
 and every capability gate (N1–N5) applies verbatim. Truncation stays a
-run/report term: an episode halted at a step boundary settles HALTED with a
+run/report term: an episode halted at a step boundary settles STOPPED with a
 clean prefix and the truncation disclosed on the ledger
 (`steps_completed`, `truncated_at_step`) — nothing rounds up.
 
@@ -471,7 +471,7 @@ of a corrupted genuine artifact must stay loadable).
 
 ## Teacher forcing (disclosed, non-verifying)
 
-`EpisodeSpec(forced_tokens=...)` declares a teacher-forced feed: the driver
+`EpisodeOptions(forced_tokens=...)` declares a teacher-forced feed: the driver
 feeds the declared tokens instead of the model's emissions. The ledger header
 records `token_feed="forced"` and `fidelity_basis="forced"` — an explicitly
 NON-VERIFYING disclosed mode; token-fidelity obligations never verify a
@@ -485,10 +485,10 @@ open across forced joins.
 ## The managed RNG recipe
 
 Episode captures use the managed seeding discipline: the capture's effective
-`random_seed` (drawn or passed, exactly as for any capture) is recorded as
+`seed` (drawn or passed, exactly as for any capture) is recorded as
 the ledger `entry_seed`. Re-running the same declaration with the same seed
 reproduces a sampled episode bit-identically; pass
-`capture=CaptureOptions(random_seed=...)` explicitly for cross-run
+`capture=CaptureOptions(seed=...)` explicitly for cross-run
 reproduction.
 
 ## Escalation (session semantics)
@@ -512,7 +512,7 @@ size evidence only) is N per-step captures composed in a `Bundle` with S6
 `episode_member` relation rows, under OBSERVER DISCIPLINE: the driver's
 native forward owns the live carried state; each capture observes an isolated
 copy; a capture product is never the source of carried episode state.
-`Bundle.derive_episode_status(episode_id, ledger=...)` folds member outcomes
+`Bundle.episode_status(episode_id, ledger=...)` folds member outcomes
 into a DERIVED episode status (`episode_complete` /
 `episode_halted_at_step` / `episode_aborted_at_step` /
 `episode_failed_at_step` / `episode_unknown`) — a total, fail-closed

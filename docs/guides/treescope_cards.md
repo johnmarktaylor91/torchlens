@@ -135,4 +135,4 @@ code, faceted array visualization conventions, truncation budgets with edge
 items, diverging-around-zero defaults, and pattern-coded exceptional values.
 Named code borrow: `infer_balanced_truncation` (including `doubling_bonus`)
 and the two-stage slice-then-convert truncation protocol, ported with license
-notice in `torchlens/notebook/_truncation.py`.
+notice in `torchlens/_notebook/_truncation.py`.

@@ -15,7 +15,7 @@ Two obligations the merged test plan names that no shipped suite proves:
   legal missing-provider behavior.
 
 The positive arm keeps both negatives honest: explicit activation through
-:func:`torchlens.ecosystem.plugins.activate` imports the provider and the
+:func:`torchlens._ecosystem.plugins.activate` imports the provider and the
 sentinel appears. Everything runs in ONE fresh subprocess (warm sweeps lie;
 the in-process suite for discovery/activation mechanics is
 tests/test_ecosystem_rt_plugins.py).
@@ -71,13 +71,13 @@ assert not sentinel.exists(), "provider imported during hasattr/dir sweep"
 model = torch.nn.Sequential(torch.nn.Linear(4, 3), torch.nn.ReLU())
 trace = torchlens.trace(model, torch.randn(2, 4))
 artifact = pathlib.Path(os.environ["F35_ARTIFACT"])
-torchlens.save(trace, str(artifact))
+trace.save(str(artifact))
 loaded = torchlens.load(str(artifact))
 assert loaded is not None
 assert not sentinel.exists(), "provider imported during capture or artifact load"
 
 # Phase 3 (the positive arm): explicit activation imports the provider.
-from torchlens.ecosystem import plugins
+from torchlens._ecosystem import plugins
 
 plugins.activate("f35-sentinel", strict=False)
 assert sentinel.exists(), "explicit activation failed to import the provider"

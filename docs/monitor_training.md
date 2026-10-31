@@ -17,7 +17,7 @@ the figure.
 
 ```python
 import torch
-from torchlens.observability import HistoryCollector, StepTruth
+from torchlens._observability import HistoryCollector, StepTruth
 
 collector = HistoryCollector(model, streams=("activation", "param", "param_delta"))
 collector.discover(x)              # one REAL forward; returns your output
@@ -43,10 +43,11 @@ element budget of the whole rest of the model). Cadence is per-stream.
 ## 2. Read the contact sheet
 
 ```python
-from torchlens.observability import HistoryView, render_contact_sheet
+from torchlens.viz import contact_sheet
+from torchlens.trackers import HistoryView
 
 view = HistoryView.from_collector(collector)
-svg = render_contact_sheet(view)          # page 0
+svg = contact_sheet(view)          # page 0
 ```
 
 Tiles are ranked by the named score `nonfinite_first_drift_v1`: sites with
@@ -58,11 +59,11 @@ hidden top-N truncation. The first real gpt2 sheet this repo produced is
 ## 3. Drill into a site
 
 ```python
-from torchlens.observability import render_fan, render_waterfall, render_detail
+from torchlens.viz import histogram_waterfall, quantile_fan, site_detail
 
-fan = render_fan(view, site_id)        # the default per-site view
-wf = render_waterfall(view, site_id)   # step x signed-log2-bin density
-sheet = render_detail(view, site_id)   # every stream on one step axis
+fan = quantile_fan(view, site_id)        # the default per-site view
+wf = histogram_waterfall(view, site_id)   # step x signed-log2-bin density
+sheet = site_detail(view, site_id)   # every stream on one step axis
 ```
 
 The fan's median and p25-75/p5-95 bands are DERIVED from the sketch
@@ -97,7 +98,7 @@ naming one refuses (`watch_phase_ambiguous`).
 
 ```python
 import torchlens as tl
-from torchlens.observability import OpTierCollector, split_heads
+from torchlens._observability import OpTierCollector, split_heads
 
 collector = OpTierCollector(model, save=tl.func("softmax"))
 collector.discover(x)                      # metadata-only pass; prices the plan
@@ -109,7 +110,7 @@ with collector.step(step):
 Route B rides fastlog: every selected OP becomes a site (567 on gpt2 vs
 ~125 leaf modules), reduced at the save point by a declared summary
 transform. The plumbing that makes this affordable is public:
-`torchlens.observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer
+`torchlens._observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer
 (integer outputs legal even under `backward_ready=True`), and with
 `save_raw_activations=False` the raw clone is skipped entirely -- reduce,
 never copy. `facets={label: split_heads(n, dim=...)}` gives per-head series
@@ -117,7 +118,7 @@ with stable identity. A reducer failure on one site records
 `capture_failed` for that site and your training step survives.
 
 Inside an ordinary loop, `watch(model, to=sink, signals=("activations",),
-grain="op", select=..., example_input=x, allow_forward_wrap=True)` drives
+grain="op", select=..., inputs=x, allow_forward_wrap=True)` drives
 the same collector without changing your `model(x)` call: it wraps the root
 forward (with your consent), calibrates and discloses that cost at attach,
 and removes the wrap at `close()` (see the trackers reference, tier O).
@@ -125,7 +126,7 @@ and removes the wrap at `close()` (see the trackers reference, tier O).
 ## 7. Export: dashboards, pandas, resume
 
 ```python
-from torchlens.observability import histogram_payload
+from torchlens._observability import histogram_payload
 
 payload = histogram_payload(observation)   # add_histogram_raw's fields,
                                            # canonical bucket_limits/counts
@@ -154,7 +155,7 @@ peak memory) run on a dedicated GPU via the C-EXPLORER row and no GPU claim
 is made until they pass.
 
 `torchlens.stats` note: the spine and Histogram kernels implement the
-`StreamingStat` protocol, so `tl.aggregate` gets dataset-mode histograms
+`StreamingStat` protocol, so `tl.stats.aggregate` gets dataset-mode histograms
 with the same grid for free -- `aggregate` is the dataset-mode sibling of
 the watch (it drives its own dataloader once; the watch rides your live
 training loop).

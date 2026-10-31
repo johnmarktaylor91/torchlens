@@ -48,8 +48,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -65,7 +65,7 @@ def _save(model: nn.Module, capture_input: torch.Tensor, path: Path, **save_kwar
 
 
 def _run(path: Path, x: torch.Tensor):
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def _fresh_output(model_factory, state_dict, x: torch.Tensor) -> torch.Tensor:

@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
+from torchlens._postprocess import _check_postprocess_contract
 from torchlens._trace_core.op_store import StepAuditResult
-from torchlens.postprocess import _check_postprocess_contract
 
 pytestmark = pytest.mark.requires_assertions
 
@@ -125,8 +125,8 @@ def test_open_window_past_step_20_is_rejected() -> None:
 
     from types import SimpleNamespace
 
+    from torchlens._postprocess import _assert_no_open_window
     from torchlens._trace_core.op_store import _AUDIT_COLLECTORS
-    from torchlens.postprocess import _assert_no_open_window
 
     store = object()
     fake_trace = SimpleNamespace()
@@ -152,7 +152,7 @@ def test_step0_prologue_seam_checks_the_contract(monkeypatch: pytest.MonkeyPatch
 
     from types import SimpleNamespace
 
-    import torchlens.postprocess as postprocess
+    import torchlens._postprocess as postprocess
 
     monkeypatch.setattr(postprocess, "_postprocess_assertions_enabled", lambda: True)
     fake_trace = SimpleNamespace()
@@ -178,8 +178,8 @@ def test_step_13_clears_cuda_cache_exactly_once_when_armed(
     from torch import nn
 
     import torchlens as tl
-    import torchlens.postprocess as pp
-    from torchlens.utils import tensor_utils
+    import torchlens._postprocess as pp
+    from torchlens._utils import tensor_utils
 
     calls: list[bool] = []
     monkeypatch.setattr(pp, "_is_cuda_available", lambda: True)
@@ -214,8 +214,8 @@ def test_step_13_never_flushes_the_allocator_ungated(
     from torch import nn
 
     import torchlens as tl
-    import torchlens.postprocess as pp
-    from torchlens.utils import tensor_utils
+    import torchlens._postprocess as pp
+    from torchlens._utils import tensor_utils
 
     calls: list[bool] = []
     monkeypatch.setattr(pp, "_is_cuda_available", lambda: cuda_available)
@@ -234,7 +234,7 @@ def test_step_20_releases_every_live_param_ref() -> None:
 
     r7 R74 (opus): the ``executor#_run_step_20`` return-None mutant's only
     killer was an incidental failure-propagation test — nothing PURPOSEFULLY
-    asserted the step's contract. Step 20 runs ``release_param_refs``, so a
+    asserted the step's contract. Step 20 runs ``_release_param_refs``, so a
     finished capture must hold ``_param_ref is None`` (released) on every
     ParamLog; keeping live refs pins the model's parameters against GC.
     """

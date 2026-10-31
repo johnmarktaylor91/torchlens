@@ -2582,7 +2582,7 @@ recorded: 2026-10-15T05:48:05.323782+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: SAE-STATS-2: tl.aggregate cache key reads nn.Module.modules() to refuse training mode (ambiguous receiver, not a Trace field)
+reason: SAE-STATS-2: tl.stats.aggregate cache key reads nn.Module.modules() to refuse training mode (ambiguous receiver, not a Trace field)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5bbda3532c1be1a6c972f40f82ad6471e405c20e (dirty)
@@ -2931,3 +2931,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 72b8140ae019ac73c372ec2627bf5b81fc04c6f5 (dirty)
 recorded: 2026-10-30T02:29:52.922011+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:38.481739+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:44.699825+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rename codemod integration: ten area lanes merged; debugging tools in tl.debug; private packages; removed root names
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0016e94e0baac17ed568f1ef454c1156a02accc2 (dirty)
+recorded: 2026-10-31T06:37:01.036519+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rename codemod integration: ten area lanes merged; debugging tools in tl.debug; private packages; removed root names
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0016e94e0baac17ed568f1ef454c1156a02accc2 (dirty)
+recorded: 2026-10-31T06:37:08.048892+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: 3.0 rename: owning-tool refresh after the module renames
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b9c2dedbdc19ae0e4ae78b5f9a5667cb70660619 (dirty)
+recorded: 2026-10-31T11:38:51.251178+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: 3.0 rename: owning-tool refresh after the module renames
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b9c2dedbdc19ae0e4ae78b5f9a5667cb70660619 (dirty)
+recorded: 2026-10-31T11:38:57.428769+00:00

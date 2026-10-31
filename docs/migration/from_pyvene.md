@@ -16,9 +16,9 @@ page.
 | `IntervenableConfig(representations=[{"layer": L, "component": C}])` | a selector: `tl.module(...)`, `tl.func(...)`, or a facet such as `tl.head(i, "q")` for one head's query |
 | `ZeroIntervention` | `tl.zero_ablate()` |
 | `VanillaIntervention` (interchange from a source run) | `tl.patch_from(source_trace, source_site=..., positions=...)` |
-| `AdditionIntervention`, steering vectors | `tl.steer(direction, magnitude=..., feature_axis=...)` |
-| Generation under an intervention | `torchlens.intervention.steer_generate(model, ids, spec, ...)` |
-| Fixed-direction subspace edits | `tl.project_off(direction, ...)`, `tl.project_onto(direction, ...)` |
+| `AdditionIntervention`, steering vectors | `tl.steer(direction, strength=..., dim=...)` |
+| Generation under an intervention | `spec.bind(model).generate(ids, ...)` |
+| Fixed-direction subspace edits | `tl.project_out(direction, ...)`, `tl.project_onto(direction, ...)` |
 | `CollectIntervention` | a `save=` selector on `tl.trace` or `tl.record` |
 | SAE features as the intervention basis | `torchlens.bridge.sae.splice(..., latents_edit=...)` |
 | Trainable interventions (`RotatedSpaceIntervention`, DAS, pyreft) | your own training loop over a bound spec; TorchLens ships no trainer |
@@ -159,7 +159,6 @@ RESULT = torch.allclose(logits, reference, atol=1e-6)
 # migration-test: tool=torchlens expected=True
 import torch
 import torchlens as tl
-from torchlens.intervention import steer_generate
 from transformers import LlamaConfig, LlamaForCausalLM
 
 torch.manual_seed(0)
@@ -176,20 +175,21 @@ lm = LlamaForCausalLM(
 ids = torch.randint(0, 128, (1, 6))
 spec = tl.when(
     tl.module("model.layers.0.mlp"),
-    tl.steer(torch.randn(32), magnitude=8.0, feature_axis=-1),
+    tl.steer(torch.randn(32), strength=8.0, dim=-1),
 )
-result = steer_generate(lm, ids, spec, max_new_tokens=4, do_sample=False, pad_token_id=0)
-RESULT = result.outputs.shape[-1] == ids.shape[-1] + 4
+bound = spec.bind(lm)
+outputs = bound.generate(ids, max_new_tokens=4, do_sample=False, pad_token_id=0)
+RESULT = outputs.shape[-1] == ids.shape[-1] + 4 and bound.last_report is not None
 ```
 
-`steer_generate` holds the edit across every decoding step, KV cache included; the
+A bound `generate` holds the edit across every decoding step, KV cache included; the
 [KV-cache recipe](../guides/kv_cache.md) covers what that costs and how it differs from editing
 the cache itself.
 
 ## Fixed-direction subspace edits
 
 Pyvene's subspace interventions act on a learned or given basis. For a fixed direction,
-`tl.project_off` removes the component along it and `tl.project_onto` keeps only that component.
+`tl.project_out` removes the component along it and `tl.project_onto` keeps only that component.
 A `tl.subspace(...)` selection is the selection-side spelling of the same idea:
 `do(tl.subspace(site, basis, origin=...), edit)` edits the component in the span of the basis, and
 `tl.patch_from(source)` there is the basis interchange (see
@@ -207,7 +207,7 @@ x = torch.randn(2, 4)
 direction = torch.tensor([0.0, 1.0, 0.0, 0.0])
 site = tl.module("0")
 edited = tl.trace(
-    model, x, save=site, intervene=tl.when(site, tl.project_off(direction, feature_axis=-1))
+    model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
 )
 RESULT = bool((edited.find_sites(site).first().out[:, 1] == 0).all())
 ```
@@ -310,7 +310,7 @@ with `R`, `W` and `b` as saved, the layer and component pyreft names, and the pr
 file's sha256, each tensor's dtype, and the `repo=` and `revision=` you pass. It imports neither
 pyreft nor pyvene. LoReFT's `h + R (W h + b - R^T h)` is then
 `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`: a `tl.subspace` over `R.T`
-restricted to pyreft's `unit_locations`, with `tl.intervention.affine_source(W, bias=b)`. pyreft
+restricted to pyreft's `unit_locations`, with `tl.intervention.set_affine_coordinates(W, bias=b)`. pyreft
 trains `R` in float32, orthonormal to about `1e-7`, so the subspace orthonormalises it once in
 float64 and the saved edit records both the digest of `R` as read and that of the rows applied. The
 edit saves at `level="portable"`. A directory that is not one LoReFT intervention refuses

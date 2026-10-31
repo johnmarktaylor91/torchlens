@@ -133,7 +133,9 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
         ]
         assert second_pass_records
         assert all(record.grad is None for record in second_pass_records)
-        assert [pass_record.save_grads_policy for pass_record in trace.backward_passes] == [
+        assert [
+            pass_record.save_grads_policy for pass_record in trace.autograd.backward_passes
+        ] == [
             "True",
             "None",
         ]
@@ -206,7 +208,7 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
         x,
         grad_transform=lambda grad: grad.mean(),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
-        save=tl.options.SaveOptions(save_raw_gradients=False),
+        save=tl.options.SaveOptions(save_raw_grads=False),
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -251,9 +253,9 @@ def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        grad_fns_frame = trace.grad_fns.to_pandas()
-        grad_fn_calls_frame = trace.grad_fn_calls.to_pandas()
-        backward_passes_frame = trace.backward_passes.to_pandas()
+        grad_fns_frame = trace.autograd.grad_fns.to_pandas()
+        grad_fn_calls_frame = trace.autograd.grad_fn_calls.to_pandas()
+        backward_passes_frame = trace.autograd.backward_passes.to_pandas()
         assert not grad_fns_frame.empty
         assert not grad_fn_calls_frame.empty
         assert not backward_passes_frame.empty
@@ -273,7 +275,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         expected_label = op.label
         expected_grads = [record.grad.detach().clone() for record in op.grads]
-        tl.save(trace, bundle_path)
+        trace.save(bundle_path)
     finally:
         trace.cleanup()
 

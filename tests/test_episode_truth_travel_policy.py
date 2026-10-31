@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.capture._annotations_travel import (
     TRAVEL_CAPTURE_EVIDENCE,
     register_travel_policy,
@@ -34,8 +35,7 @@ from torchlens.capture._episode_ledger import (
     episode_ledger_for,
     validate_loaded_episode_annotations,
 )
-from torchlens.options import EpisodeSpec
-from torchlens.runnable import PathFaithfulness
+from torchlens.options import EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -81,7 +81,7 @@ def _episode_trace(model: _Greedy, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
         **extra,
     )
 

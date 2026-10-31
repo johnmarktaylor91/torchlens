@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors.episode import BundleExperimentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["head_ablation_candidates"]
 
@@ -114,7 +114,7 @@ def head_ablation_candidates(
             "facet with your own oracle.",
             code="head_ablation_equivalence_undeclared",
             module=module,
-            n_q_heads=n_q,
+            num_q_heads=n_q,
             n_kv_heads=n_kv,
         )
     indices = list(range(heads)) if isinstance(heads, int) else [int(i) for i in heads]
@@ -129,6 +129,6 @@ def head_ablation_candidates(
             f"head indices {out_of_range} are outside this module's {n_q}-head geometry",
             code="head_ablation_heads_invalid",
             module=module,
-            n_q_heads=n_q,
+            num_q_heads=n_q,
         )
     return {f"h{i}": head_selector(i, facet).in_module(module) for i in indices}

@@ -41,7 +41,7 @@ from torchlens.semantic.patching import PatchApplicationError
 # heavy tier per the marker lint's 5 s smoke budget.
 pytestmark = pytest.mark.real_model
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
 
 
 @pytest.fixture(scope="module")
@@ -105,7 +105,7 @@ def test_logit_lens_default_route_settles_typed_or_validated(gpt2_log: Any) -> N
         assert "final_norm_kind" in str(exc)
         assert "lens=" in str(exc)  # the teaching remedy is named
     else:
-        assert result.validated
+        assert result.is_validated
         assert result.entries and result.entries[-1].logits.shape[-1] == 512
 
 
@@ -118,7 +118,7 @@ def test_logit_lens_user_lens_route_projects_real_numbers(gpt2: Any, gpt2_log: A
     """
 
     result = logit_lens(gpt2_log, lens=_user_lens(gpt2))
-    assert result.lens_source == "user" and not result.validated
+    assert result.lens_source == "user" and not result.is_validated
     assert [entry.address for entry in result.entries] == [
         "transformer.h.0",
         "transformer.h.1",
@@ -209,7 +209,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
       ``PatchApplicationError`` (the measured DIGEST mechanism).
     * ``resid_post`` homes on the recurrence-grouped residual adds; the
       hook path addresses them by bare layer label and refuses
-      ``SiteAmbiguityError`` (pass-qualified addressing, lane A04).
+      ``AmbiguousSiteError`` (pass-qualified addressing, lane A04).
 
     When the sibling lanes land their re-homing/addressing repairs, a table
     comes out instead -- then at least one cell must move (clean and
@@ -217,7 +217,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
     all-identical values. A silent baseline-equal table fails in every world.
     """
 
-    from torchlens.intervention.errors import SiteAmbiguityError
+    from torchlens.intervention.errors import AmbiguousSiteError
 
     clean, corrupted = gpt2_inputs
     helper = getattr(tl.facets.patching, helper_name)
@@ -228,7 +228,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
         except PatchApplicationError as exc:
             assert "replaced=False" in str(exc) or "never fired" in str(exc)
             return
-        except SiteAmbiguityError as exc:
+        except AmbiguousSiteError as exc:
             assert "pass-qualified" in str(exc)
             return
     baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)

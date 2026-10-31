@@ -253,7 +253,7 @@ def _norm_input_spec(norm: Any) -> FacetSpec | AbsenceReason:
             f"norm input op {getattr(op, 'label', '<unknown>')!r} was not saved",
             f"save=... including {getattr(op, 'label', 'the norm input')!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id="language_model_head")
+    return FacetSpec.from_home(op, home_kind="op", function_id="language_model_head")
 
 
 def _external_parents(trace: Any, norm: Any) -> dict[str, Any] | AbsenceReason:

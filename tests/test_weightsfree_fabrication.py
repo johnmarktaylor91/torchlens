@@ -115,7 +115,7 @@ def test_train_mode_bn_meta_twin_parity() -> None:
     assert sorted((k, f) for k, f, _ in _write_rows(tr_meta)) == sorted(
         (k, f) for k, f, _ in _write_rows(tr_real)
     )
-    assert tl.hash.trace(tr_real) == tl.hash.trace(tr_meta)
+    assert tl.fingerprint.trace(tr_real) == tl.fingerprint.trace(tr_meta)
 
 
 def test_no_witness_flag_rests_on_unknown() -> None:

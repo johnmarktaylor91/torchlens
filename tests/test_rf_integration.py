@@ -176,7 +176,7 @@ def test_lazy_namespace_and_public_surface_work_end_to_end() -> None:
         "node_spec",
         "ReceptiveField",
         "ReceptiveFieldBox",
-        "GradientReceptiveField",
+        "GradReceptiveField",
         "ReceptiveFieldView",
         "ReceptiveFieldValidation",
         "ReceptiveFieldProfile",
@@ -282,7 +282,7 @@ def test_geometric_hulls_equal_independent_gradient_support(model: nn.Module) ->
         height, width = target.shape[-2:]
         for row in range(height):
             for column in range(width):
-                box = target.receptive_field.at((row, column), input=input_op)
+                box = target.receptive_field.at((row, column), input_op=input_op)
                 geometric = tuple(
                     (int(axis.clipped_start), int(axis.clipped_stop)) for axis in box.axes[-2:]
                 )
@@ -334,5 +334,5 @@ def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
 
     assert descriptor.status is tl.receptive_field.ReceptiveFieldStatus.EXACT
     assert descriptor.layout.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
         target.receptive_field.gradient((0,))

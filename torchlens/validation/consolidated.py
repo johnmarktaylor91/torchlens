@@ -10,12 +10,14 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
-from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .._utils.display import user_stacklevel
+from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
-from ..utils.display import user_stacklevel
 from .backward import validate_backward_pass
 
 if TYPE_CHECKING:
@@ -48,26 +50,38 @@ class InterventionValidationReport:
 
     Parameters
     ----------
-    invariance:
+    is_invariant:
         Whether a baseline forward validation succeeds.
-    specificity:
+    is_specific:
         Whether hook targets can be represented without ambiguity.
-    completeness:
+    is_complete:
         Whether the validation exercised all requested axes.
-    consistency:
+    is_consistent:
         Whether repeated validation decisions agree.
-    locality:
+    is_local:
         Whether intervention checks stay local to the requested model/input.
     details:
         Human-readable axis details.
     """
 
-    invariance: bool
-    specificity: bool
-    completeness: bool
-    consistency: bool
-    locality: bool
+    is_invariant: bool
+    is_specific: bool
+    is_complete: bool
+    is_consistent: bool
+    is_local: bool
     details: dict[str, Any]
+
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the five verdicts lead, ``details`` is counted."""
+
+        verdicts = ", ".join(
+            f"{name}={getattr(self, name)}"
+            for name in ("is_invariant", "is_specific", "is_complete", "is_consistent", "is_local")
+        )
+        return (
+            f"InterventionValidationReport(passed={self.passed}, {verdicts}; "
+            f"{len(self.details)} detail key(s) in .details)"
+        )
 
     @property
     def passed(self) -> bool:
@@ -81,11 +95,11 @@ class InterventionValidationReport:
 
         return all(
             (
-                self.invariance,
-                self.specificity,
-                self.completeness,
-                self.consistency,
-                self.locality,
+                self.is_invariant,
+                self.is_specific,
+                self.is_complete,
+                self.is_consistent,
+                self.is_local,
             )
         )
 
@@ -250,7 +264,7 @@ def _intervention_report(
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
     *,
-    random_seed: int | None,
+    seed: int | None,
     verbose: bool,
     validate_metadata: bool,
     save_options: dict[str, Any] | None = None,
@@ -265,7 +279,7 @@ def _intervention_report(
         Positional model input.
     input_kwargs:
         Keyword model input.
-    random_seed:
+    seed:
         Optional random seed for forward validation.
     verbose:
         Whether the underlying validation should emit diagnostics.
@@ -288,17 +302,17 @@ def _intervention_report(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        random_seed=random_seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **(save_options or {}),
     )
     return InterventionValidationReport(
-        invariance=forward_ok,
-        specificity=False,
-        completeness=False,
-        consistency=False,
-        locality=False,
+        is_invariant=forward_ok,
+        is_specific=False,
+        is_complete=False,
+        is_consistent=False,
+        is_local=False,
         details={
             "invariance": "forward validation passed"
             if forward_ok
@@ -349,7 +363,7 @@ def _validate_receptive_field_scope(
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
     *,
-    random_seed: int | None,
+    seed: int | None,
     validate_metadata: bool,
     backend: BackendName | None,
 ) -> list[ReceptiveFieldValidation]:
@@ -361,7 +375,7 @@ def _validate_receptive_field_scope(
         Model to capture.
     input_args, input_kwargs:
         Model inputs.
-    random_seed:
+    seed:
         Optional deterministic capture seed.
     validate_metadata:
         Whether always-on metadata contracts should run on the captured trace.
@@ -388,7 +402,7 @@ def _validate_receptive_field_scope(
         capture=CaptureOptions(
             layers_to_save="all",
             backward_ready=True,
-            random_seed=random_seed,
+            seed=seed,
         ),
         backend=backend,
     )
@@ -405,7 +419,7 @@ def validate(
     input_kwargs: dict[str, Any] | None = None,
     *,
     scope: str,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
@@ -434,7 +448,7 @@ def validate(
         captures with ``save_mode="reference"``, so a model whose forward
         writes its own buffers in place (a train-mode BatchNorm's running
         statistics) raises ``MutatedReferenceError``; validate it in eval mode.
-    random_seed:
+    seed:
         Optional random seed for forward-like validation.
     verbose:
         Whether validators should emit diagnostics.
@@ -531,7 +545,7 @@ def validate(
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
             validate_metadata=validate_metadata,
-            random_seed=random_seed,
+            seed=seed,
             atol=atol,
             rtol=rtol,
             validate_layer_grads=(True if validate_layer_grads is None else validate_layer_grads),
@@ -548,7 +562,7 @@ def validate(
             model,
             input_args,
             input_kwargs,
-            random_seed=random_seed,
+            seed=seed,
             validate_metadata=validate_metadata,
             backend=backend,
         )
@@ -566,7 +580,7 @@ def validate(
         # setups and none of it feeds the verdict, so default validate calls
         # pay nothing. last_validation_peak_memory() already returns None for
         # the empty off-state.
-        from ..utils.env_flags import closed_bool_env
+        from .._utils.env_flags import closed_bool_env
         from .diagnostics import _LAST_RUN_PEAKS
 
         peaks_enabled = closed_bool_env("TORCHLENS_VALIDATE_PEAK_MEMORY")
@@ -587,7 +601,7 @@ def validate(
                     model,
                     input_args,
                     input_kwargs=input_kwargs,
-                    random_seed=random_seed,
+                    seed=seed,
                     verbose=verbose,
                     validate_metadata=validate_metadata,
                     backend=backend,
@@ -618,7 +632,7 @@ def validate(
             # allocator-free pages, ~1 ms next to a multi-second validate),
             # and after the peak reads above, which are high-water maxima the
             # trim cannot lower.
-            from ..data_classes.cleanup import _trim_host_allocator
+            from .._data_classes.cleanup import _trim_host_allocator
 
             _trim_host_allocator()
         if passed is False:
@@ -642,7 +656,7 @@ def validate(
         model,
         input_args,
         input_kwargs,
-        random_seed=random_seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         save_options=save_options,
@@ -664,7 +678,7 @@ def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None
     record_validation_failure(
         None,
         ValidationFailure(
-            check=CHECK_METADATA_INVARIANT,
+            check_name=CHECK_METADATA_INVARIANT,
             message=f"{type(invariant_error).__name__}: {invariant_error}",
         ),
     )

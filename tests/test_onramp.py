@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import utils
+from torchlens import _utils as utils
 from torchlens.experimental import attribute_walk
 
 
@@ -155,7 +155,7 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
         stimuli,
         [label],
         batch_size=x.shape[0],
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert len(container_paths) == 2

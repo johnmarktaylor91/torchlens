@@ -10,7 +10,7 @@
   `Op` is a two-word `(_core, _row)` facade over the per-trace `OpRowStore`
   (`op_store.py`) held at `trace._trace_core` (declared `FieldPolicy.DROP`); rows are
   row-major lists while building and seal after the final step, key 20 (columnar transpose with
-  numeric packing at >=512 rows). `Op.copy()`, pickle restore, fork shells, and
+  numeric packing at >=512 rows). `Op._copy_with_shallow_fields()`, pickle restore, fork shells, and
   preview backends use detached single-row stores. M6 relations are LIVE
   (`relation_views.py`): on FINISHED traces the relation accessors return IMMUTABLE
   views — `tuple` for label sequences (`parents`, `children`, `modules`,
@@ -98,7 +98,7 @@
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
 - `merged/` - cross-rank merging (C1): `tl.merge_ranks`/`tl.merge_report`, the
   `MergedTrace` presenter, frozen merge vocabularies, and the merged-directory
-  artifact (routes 2 of the 116 `__all__` names; own AGENTS.md).
+  artifact (routes 2 of the 87 `__all__` names; own AGENTS.md).
 - `distributed/` - explicit-collective capture support: `tl.distributed.arm()`,
   group-lifecycle ledger, membership-lineage audit (own AGENTS.md).
 - `bundle/` - the intervention `Bundle` product and its aligned Super* views.
@@ -109,7 +109,7 @@
 - `export/`, `report/`, `stats/`, `debug/` - export bridges, human reports,
   summary stats, power-user diagnostics (lazy; `debug` deliberately not in
   `__all__`).
-- `partial/` - failed-capture recovery (`tl.partial.from_failed_capture`).
+- `partial/` - failed-capture recovery (`tl._partial.from_failed_capture`).
 - `accessors/`, `semantic/`, `observers`, `io/` - accessor protocols, facet
   recipes, public observers, and the `torchlens.io` save/load facade.
 - `bridge/`, `compat/`, `callbacks/` - optional integrations and migration facades.

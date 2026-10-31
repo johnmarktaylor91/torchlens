@@ -16,7 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import site_sweep
+from torchlens.experiment import sweep_sites
 from torchlens.options import CaptureOptions, InterventionOptions
 
 
@@ -56,7 +56,7 @@ _UNITS = {"u0": (0,), "u1": (1,), "u23": (2, 3)}
 def test_distinct_units_at_one_site_are_distinct_candidates(engine: str) -> None:
     model, x, baseline, label = _setup()
     candidates = {name: tl.units(label, _unit_mask(units)) for name, units in _UNITS.items()}
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=candidates,
         edit=tl.zero_ablate(),
@@ -89,7 +89,7 @@ def test_distinct_units_at_one_site_are_distinct_candidates(engine: str) -> None
 def test_identical_units_still_refuse_as_duplicates() -> None:
     model, x, baseline, label = _setup()
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates={
                 "a": tl.units(label, _unit_mask((1,))),
@@ -109,7 +109,7 @@ def test_same_units_spelled_two_ways_are_one_candidate() -> None:
     for units in ((1,), tuple(range(6))):
         coordinates = [(row, unit) for row in range(2) for unit in units]
         with pytest.raises(BundleExperimentError) as excinfo:
-            site_sweep(
+            sweep_sites(
                 baseline,
                 candidates={
                     "mask": tl.units(label, _unit_mask(units)),

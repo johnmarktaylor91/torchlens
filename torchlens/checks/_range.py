@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..observability._chassis import EventStream, ObserverEvent
+from .._observability._chassis import EventStream, ObserverEvent
 from ._errors import CheckConfigError
 from ._records import CheckFinding, severity_sorted
 
@@ -32,7 +32,7 @@ __tl_layer__ = "L5"
 def _fired_label(hook_ctx: Any, fallback: str) -> str:
     """Read the fired site's label from the public hook context."""
 
-    layer_log = getattr(hook_ctx, "layer_log", None)
+    layer_log = getattr(hook_ctx, "op", None)
     if isinstance(layer_log, Mapping):
         for key in ("layer_label", "label", "layer_label_w_pass"):
             value = layer_log.get(key)
@@ -50,7 +50,7 @@ class RangeProbe:
         Site target -> ``(low, high)`` declared semantic bounds (either
         side ``None``). Site targets are anything the public ``hooks=``
         door accepts (labels, selectors); bounds are the USER'S semantics,
-        never a dtype fact -- dtype headroom is ``dtype_range_audit``'s
+        never a dtype fact -- dtype headroom is ``dtype_range``'s
         different, already-covered question.
     event_stream:
         Optional stream to publish per-fire verdict events into.
@@ -138,7 +138,7 @@ class RangeProbe:
             return
         self._findings.append(
             CheckFinding(
-                check="activation_range",
+                check_name="activation_range",
                 code="activation_range_violated",
                 severity="warning",
                 action="collect",
@@ -147,7 +147,7 @@ class RangeProbe:
                     f"{n_below} element(s) below, {n_above} above, of "
                     f"{out_numel}."
                 ),
-                names=(label,),
+                param_names=(label,),
                 evidence="capture_hook",
                 values={"n_below": float(n_below), "n_above": float(n_above)},
                 remedy="Bounds are the caller's semantic declaration; inspect the named site",

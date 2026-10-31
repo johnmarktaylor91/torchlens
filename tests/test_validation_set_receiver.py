@@ -142,7 +142,7 @@ def test_dead_set_source_edge_still_fails_perturbation() -> None:
         assert status.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == "perturbation"
+        assert failure.check_name == "perturbation"
         assert failure.op_label is not None and failure.op_label.startswith("set_")
         assert source_label in failure.extra["perturbed_parents"]
     finally:

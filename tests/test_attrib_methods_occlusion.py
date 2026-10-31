@@ -13,8 +13,8 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
 from torchlens.attribution._occlusion import _axis_origins, _window_slices
+from torchlens.errors import AttributionError
 
 
 class _PatchSum(nn.Module):

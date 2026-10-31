@@ -14,10 +14,10 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file as load_safetensors_file
 
 from .._io import (
+    ArtifactError,
     ArtifactRuntimeIncompatibleError,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
-    TorchLensIOError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
 )
 from .._io._json import _MAX_JSON_BYTES, loads_bounded, read_bounded
 from .._io.manifest import Manifest, enforce_version_policy
@@ -40,8 +40,8 @@ _MAX_RECOVERY_WARNINGS = 200
 #: bundle as ``recovered=True`` defeats the version window. recover() keeps
 #: salvaging CORRUPTION -- that is its job; only governed refusals pass through.
 _GOVERNED_COMPATIBILITY_REFUSALS = (
-    ArtifactVersionBelowFloorError,
-    ArtifactVersionAboveRuntimeError,
+    ArtifactTooOldError,
+    ArtifactTooNewError,
     ArtifactRuntimeIncompatibleError,
 )
 
@@ -95,7 +95,7 @@ def load(path: str | Path) -> Recording:
     ------
     BundleNotFinalizedError
         If the bundle has no valid manifest.
-    TorchLensIOError
+    ArtifactError
         If the finalized bundle is malformed.
     """
 
@@ -105,7 +105,7 @@ def load(path: str | Path) -> Recording:
         raise BundleNotFinalizedError("fastlog bundle is partial; use tl.fastlog.recover()")
     try:
         manifest = Manifest.read(manifest_path)
-    except TorchLensIOError as exc:
+    except ArtifactError as exc:
         raise BundleNotFinalizedError(
             "fastlog bundle manifest is invalid; use tl.fastlog.recover()"
         ) from exc
@@ -149,7 +149,7 @@ def recover(path: str | Path) -> Recording:
             # letting the bare-pass salvage below resurrect it as
             # recovered=True defeated the governed refusal entirely.
             raise
-        except TorchLensIOError:
+        except ArtifactError:
             pass
         else:
             return _load_from_index(
@@ -206,7 +206,7 @@ def _load_from_index(
             continue
         try:
             record = record_from_json(data)
-        except (KeyError, TypeError, ValueError, AttributeError, TorchLensIOError):
+        except (KeyError, TypeError, ValueError, AttributeError, ArtifactError):
             # Structurally valid JSON that is not a well-formed record (e.g. a
             # missing "ctx" key) is recovery debris, not a crash: skip and warn,
             # matching the malformed-line contract. The strict finalized-load
@@ -229,7 +229,7 @@ def _load_from_index(
         records.append(rehydrated_record)
     final_warnings = warnings_out.finalized()
     if strict_integrity and final_warnings:
-        raise TorchLensIOError(_format_strict_integrity_error(final_warnings))
+        raise ArtifactError(_format_strict_integrity_error(final_warnings))
     recording = _recording_from_records(
         records,
         bundle_path=bundle_path,
@@ -312,7 +312,7 @@ def _read_index_lines(path: Path) -> list[str]:
             # that grew after the stat.
             stat_size = os.fstat(handle.fileno()).st_size
             if stat_size > _INDEX_MAX_BYTES:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"Fastlog index at {path} exceeds the {_INDEX_MAX_BYTES}-byte ceiling.",
                     code="fastlog_index_too_large",
                 )
@@ -325,7 +325,7 @@ def _read_index_lines(path: Path) -> list[str]:
     except OSError as exc:
         raise RecoveryError("no recoverable index") from exc
     if len(data) > stat_size:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Fastlog index at {path} grew between its size check and read.",
             code="fastlog_index_too_large",
         )
@@ -390,7 +390,7 @@ def _validate_blob_metadata(
         return False, None
     try:
         blob_path = resolve_bundle_blob_path(bundle_path, str(relative_path))
-    except TorchLensIOError:
+    except ArtifactError:
         recovery_warnings.append(f"malformed blob path {blob_id}")
         return False, None
     if not blob_path.exists():
@@ -398,7 +398,7 @@ def _validate_blob_metadata(
         return False, None
     try:
         payload = _load_verified_blob_tensor(blob_path, str(expected_sha256))
-    except TorchLensIOError:
+    except ArtifactError:
         recovery_warnings.append(f"hash mismatch {blob_id}")
         return False, None
     return True, payload
@@ -428,15 +428,15 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
         pre_hash_identity = _file_identity(blob_path.stat())
         observed_sha256 = sha256_of_file(blob_path)
     except OSError as exc:
-        raise TorchLensIOError(f"Failed to read fastlog blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if observed_sha256 != expected_sha256:
-        raise TorchLensIOError(f"Checksum mismatch for fastlog blob at {blob_path}.")
+        raise ArtifactError(f"Checksum mismatch for fastlog blob at {blob_path}.")
     try:
         pre_load_identity = _file_identity(blob_path.stat())
     except OSError as exc:
-        raise TorchLensIOError(f"Failed to read fastlog blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if pre_load_identity != pre_hash_identity:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Fastlog blob at {blob_path} changed between integrity check and load."
         )
     return _load_blob_tensor_from_file(blob_path)
@@ -453,7 +453,7 @@ def _load_blob_tensor_from_file(blob_path: Path) -> Any:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the blob is missing, unreadable, or does not contain exactly one
         tensor.
     """
@@ -461,14 +461,14 @@ def _load_blob_tensor_from_file(blob_path: Path) -> Any:
     try:
         tensor_map = load_safetensors_file(str(blob_path))
     except ImportError as exc:
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Fastlog bundle payload materialization requires the safetensors "
             "backend. Install safetensors>=0.4."
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
-        raise TorchLensIOError(f"Failed to materialize fastlog blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to materialize fastlog blob at {blob_path}.") from exc
     if len(tensor_map) != 1:
-        raise TorchLensIOError(f"Expected a single tensor in fastlog blob file {blob_path}.")
+        raise ArtifactError(f"Expected a single tensor in fastlog blob file {blob_path}.")
     return next(iter(tensor_map.values()))
 
 
@@ -533,25 +533,25 @@ def _recording_from_records(
         by_label={},
         by_address={},
         orphan_records=list(metadata.get("orphan_records", [])),
-        bundle_path=bundle_path,
-        n_ops=int(metadata.get("n_passes", metadata.get("n_ops", 1))),
+        path=bundle_path,
+        num_ops=int(metadata.get("n_passes", metadata.get("n_ops", 1))),
         start_times=list(metadata.get("start_times", [])),
         end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],
-        predicate_failure_overflow_count=int(metadata.get("predicate_failure_overflow_count", 0)),
-        halted=halted,
-        halt_reason=metadata.get("halt_reason"),
-        halts_by_pass={
+        num_predicate_failure_overflows=int(metadata.get("predicate_failure_overflow_count", 0)),
+        is_stopped=halted,
+        stop_reason=metadata.get("halt_reason"),
+        stops_by_pass={
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()
         },
         keep_op_repr=metadata.get("keep_op_repr"),
         history_size=int(metadata.get("history_size", 0)),
         _activation_transform_repr=metadata.get("_activation_transform_repr"),
-        recovered=recovered,
+        is_recovered=recovered,
         status=status,
         recovery_warnings=recovery_warnings,
-        failed=abort_reason is not None,
+        is_failed=abort_reason is not None,
         error_repr=(None if abort_reason is None else f"recovered aborted bundle: {abort_reason}"),
     )
 
@@ -586,7 +586,7 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
 
     enforce_version_policy(manifest, bundle_path=bundle_path)
     if manifest.bundle_format != "fastlog-directory":
-        raise TorchLensIOError("Expected fastlog-directory bundle format.")
+        raise ArtifactError("Expected fastlog-directory bundle format.")
     required = (
         "manifest.json",
         "fastlog_index.jsonl",
@@ -598,6 +598,6 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
     for name in required:
         candidate = bundle_path / name
         if not candidate.exists():
-            raise TorchLensIOError(f"Fastlog bundle is missing {name}.")
+            raise ArtifactError(f"Fastlog bundle is missing {name}.")
     if not (bundle_path / "blobs").is_dir():
-        raise TorchLensIOError("Fastlog bundle blobs path is not a directory.")
+        raise ArtifactError("Fastlog bundle blobs path is not a directory.")

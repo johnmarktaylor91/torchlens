@@ -78,9 +78,7 @@ def _manifest_schema_ids() -> dict[str, str]:
 def _component_schema_versions() -> dict[str, Any]:
     """Versioned component-grammar constants riding inside bundles."""
 
-    from ..bundle._fed_by import TOKEN_BOUNDARY_SCHEMA_ID
-    from ..bundle._relations import MEMBER_ROW_KINDS, PAIR_ROW_KINDS
-    from ..runnable import (
+    from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
         RUNNABLE_CALL_RECIPE_VERSION,
@@ -89,6 +87,8 @@ def _component_schema_versions() -> dict[str, Any]:
         RUNNABLE_TLSPEC_SCHEMA_VERSION,
         WITNESS_FAMILY_REGISTRY_VERSION,
     )
+    from ..bundle._fed_by import TOKEN_BOUNDARY_SCHEMA_ID
+    from ..bundle._relations import MEMBER_ROW_KINDS, PAIR_ROW_KINDS
 
     return {
         "runnable_descriptor": RUNNABLE_TLSPEC_SCHEMA_VERSION,

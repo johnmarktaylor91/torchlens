@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 _R = TypeVar("_R")
 

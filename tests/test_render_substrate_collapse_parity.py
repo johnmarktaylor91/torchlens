@@ -235,9 +235,9 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     assert result.visible_count >= 100  # nearly all 141 units visible
     with pytest.warns(TorchLensWarning, match="nearly the uncollapsed graph"):
         log.draw(
-            vis_outpath=str(tmp_path / "fan"),
+            path=str(tmp_path / "fan"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             collapse="auto",
         )
 
@@ -258,9 +258,9 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     assert result.reason is not None and "module= focus" in result.reason
     with pytest.warns(TorchLensWarning, match="floor plan"):
         source = log.draw(
-            vis_outpath=str(tmp_path / "cliff"),
+            path=str(tmp_path / "cliff"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             collapse="auto",
         )
     # Visible notice on the render (never only a warning).

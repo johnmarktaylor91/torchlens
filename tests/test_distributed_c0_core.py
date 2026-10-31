@@ -17,17 +17,18 @@ pytestmark = pytest.mark.skipif(
 )
 
 from torchlens.distributed import (  # noqa: E402
-    AmbiguousGroupLifetimeError,
+    _lifecycle as lifecycle,
+    _recognizer as recognizer_mod,
+    is_vetted_build,
+    verify_membership_lineages,
+)
+from torchlens.distributed._ledger import (  # noqa: E402
     GroupLifecycleEvent,
     GroupLifecycleLedger,
-    UncapturedCollectiveOpError,
-    _lifecycle as lifecycle,  # noqa: E402
-    _recognizer as recognizer_mod,  # noqa: E402
-    audit_membership_lineages,
-    derive_collective_recognizer,
-    has_vetted_snapshot,
     membership_digest_for_ranks,
 )
+from torchlens.distributed._recognizer import derive_collective_recognizer  # noqa: E402
+from torchlens.errors import AmbiguousGroupLifetimeError, UncapturedCollectiveOpError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # ledger helpers
@@ -64,9 +65,9 @@ M2 = membership_digest_for_ranks([0, 1, 2, 3])
 # TestCollectiveRecognizer.test_derivation_refuses_typed_when_not_vetted and
 # tests/test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming).
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -229,7 +230,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         verdict = verdicts[M]
         assert verdict.is_conflict
         assert verdict.kind == "group_lifetime_evidence_conflict"
@@ -241,7 +242,7 @@ class TestPreJoinLineageAudit:
     def test_seed_discharges_against_one_generation_complete_witness(self):
         rank0 = _ledger([("create", M, 0, "wrapped", "armed_before_any_group")])
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].status == "compatible"
         assert verdicts[M].complete_witness_ranks == (0,)
 
@@ -254,7 +255,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
         assert verdicts[M].kind == "group_lifetime_evidence_conflict"
 
@@ -264,12 +265,12 @@ class TestPreJoinLineageAudit:
             ("destroy", M, 0, "wrapped", "armed_before_any_group"),
             ("create", M, 1, "wrapped", "armed_before_any_group"),
         ]
-        verdicts = audit_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
+        verdicts = verify_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
         assert verdicts[M].status == "compatible"
 
     def test_spmd_lazy_symmetric_seeding_joins(self):
         entries = [("seed", M, 0, "seeded", "seeded")]
-        verdicts = audit_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
+        verdicts = verify_membership_lineages({0: _ledger(entries), 1: _ledger(entries)})
         assert verdicts[M].status == "compatible"
 
     def test_complete_witness_disagreement_is_evidence_corruption(self):
@@ -281,7 +282,7 @@ class TestPreJoinLineageAudit:
                 ("create", M, 1, "wrapped", "armed_before_any_group"),
             ]
         )
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
         assert "corruption" in verdicts[M].detail
 
@@ -293,11 +294,11 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
 
     def test_single_rank_membership_not_audited(self):
-        verdicts = audit_membership_lineages(
+        verdicts = verify_membership_lineages(
             {0: _ledger([("create", M, 0, "wrapped", "armed_before_any_group")])}
         )
         assert M not in verdicts
@@ -311,7 +312,7 @@ class TestPreJoinLineageAudit:
             ]
         )
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
-        verdicts = audit_membership_lineages({0: rank0, 1: rank1})
+        verdicts = verify_membership_lineages({0: rank0, 1: rank1})
         assert verdicts[M].is_conflict
 
 
@@ -327,7 +328,7 @@ class TestCollectiveRecognizer:
         assert recognizer.classify("aten::mm") is None
 
     @pytest.mark.skipif(
-        has_vetted_snapshot(),
+        is_vetted_build(),
         reason="the unvetted-torch refusal is only observable without a census match",
     )
     def test_derivation_refuses_typed_when_not_vetted(self):
@@ -337,7 +338,7 @@ class TestCollectiveRecognizer:
         # arming an uncensused dispatcher. This is the correct product
         # behavior, proven here against the REAL (untampered) runtime census,
         # not a synthetic mismatch.
-        assert not has_vetted_snapshot()
+        assert not is_vetted_build()
         with pytest.raises(UncapturedCollectiveOpError) as excinfo:
             derive_collective_recognizer()
         assert excinfo.value.fields["kind"] == "uncaptured_collective_op"
@@ -612,8 +613,8 @@ class TestC10dGroupSeqCompatRouting:
     """
 
     def test_missing_capability_short_circuits_to_none(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(
             tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": False}
@@ -630,8 +631,8 @@ class TestC10dGroupSeqCompatRouting:
         assert Recording.called is False
 
     def test_present_capability_reads_the_private_counter(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": True})
 
@@ -653,8 +654,8 @@ class TestC10dGroupSeqCompatRouting:
 
         import warnings as warnings_module
 
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "HAS_C10D_GROUP_SEQ", True)
         monkeypatch.setattr(tc, "_C10D_GROUP_SEQ_PROBED", True)

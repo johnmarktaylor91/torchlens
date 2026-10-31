@@ -5,7 +5,7 @@ public spelling on this page may rename without a deprecation shim until its
 naming-session ratification. The SEMANTICS below are the frozen S4 seam
 contract; consumers build against them now.
 
-Module: `torchlens.ir.predicate_registry`. Public surface: exactly
+Module: `torchlens._ir.predicate_registry`. Public surface: exactly
 `PredicateProtocol`, `coerce_predicate`, `register_predicate`. There is NO
 public bare-name resolver: the only way to obtain a callable from the
 registry is `coerce_predicate(name, slot=...)`, which returns the enforcing

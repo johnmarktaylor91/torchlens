@@ -46,7 +46,7 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
     log = trace_fn(
         _TwoLinearChain(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
@@ -69,12 +69,12 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
     (ii) must refuse.
     """
 
-    from torchlens.postprocess import _call_site_contract as contract
+    from torchlens._postprocess import _call_site_contract as contract
 
     log = trace_fn(
         _TwoLinearChain(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         assert log.grouping_policy["detector"] == "callsite_v1"

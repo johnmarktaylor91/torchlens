@@ -246,7 +246,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
         *(getattr(capture_spec, "target_value_specs", None) or ()),
         *(getattr(capture_spec, "hook_specs", None) or ()),
     ]
-    from ..ir.selector_eval import looks_like_finalized_label
+    from .._ir.selector_eval import looks_like_finalized_label
 
     for entry in entries:
         target = entry.site_target
@@ -269,7 +269,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
             "Remedy: re-stage the edit with a selector a live forward can match, "
             "for example trace.set(tl.module('fc2'), value) or "
             "trace.attach_hooks(tl.func('relu'), helper), or propagate the edit on "
-            "the captured input with tl.push",
+            "the captured input with Trace.push",
             code="rerun_staged_label_unmatchable",
             staged_selector=f"{target.selector_kind}:{value}",
         )

@@ -259,11 +259,11 @@ def test_lazy_import_ref_resaves_as_import_ref() -> None:
 
     Fail-before: ``_serialize_callable`` had no ``LazyImportRef`` branch, read
     ``__module__``/``__qualname__`` the instance does not expose, got ``None``,
-    and raised ``OpaqueCallableInExecutableSaveError`` on a spec that
+    and raised ``OpaqueCallableError`` on a spec that
     legitimately saved executable -- without ever needing to import anything.
     """
 
-    from torchlens.intervention.errors import OpaqueCallableInExecutableSaveError
+    from torchlens.intervention.errors import OpaqueCallableError
     from torchlens.intervention.save import SaveLevel, _serialize_callable
 
     ref = LazyImportRef("my_trusted_module:my_fn")
@@ -272,5 +272,5 @@ def test_lazy_import_ref_resaves_as_import_ref() -> None:
     assert payload["import_path"] == "my_trusted_module:my_fn"
     assert "my_trusted_module" not in __import__("sys").modules  # no import happened
 
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         _serialize_callable(ref, SaveLevel.PORTABLE)

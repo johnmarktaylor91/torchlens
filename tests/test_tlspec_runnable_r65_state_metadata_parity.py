@@ -38,6 +38,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import runnable as io_runnable, runnable_load
+from torchlens._runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
 from torchlens._runnable_state import (
     _ORACLE_POLICY_CLASSES,
     _STATE_METADATA_BIND_SCOPE,
@@ -71,7 +72,6 @@ from torchlens.backends.torch.completeness_witness import (
 )
 from torchlens.errors import RunCapabilityUnavailableError, RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -1114,7 +1114,7 @@ def _r69_mutate(path: Path, fn) -> None:
 
 
 def _r69_assert_refused(path: Path) -> None:
-    from torchlens.runnable import ReadinessStatus
+    from torchlens._runnable import ReadinessStatus
 
     loaded = tl.load(path)
     readiness = loaded._runnable.readiness

@@ -53,9 +53,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -279,7 +279,7 @@ def test_non_registered_constant_never_replays_a_silent_wrong_verified(
 
     max_diff = (result.output - oracle).abs().max().item()
     if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
         assert max_diff < 1e-6, f"FALSE VERIFIED: replay disagrees with oracle 1 by {max_diff}"
 
 
@@ -350,4 +350,4 @@ def test_convbn_still_replays_verified(tmp_path: Path, train: bool) -> None:
     result = _replay_or_refuse(model, x, tmp_path / f"convbn_{train}.tlspec")
     assert result is not None, "ConvBN must not start refusing at save"
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned

@@ -42,7 +42,7 @@ from _stale_holders import forward_runs
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
@@ -522,7 +522,7 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
 
     model = IqlLike(raw.tanh)
     wrap_torch()
-    with pytest.warns(TorchLensCaptureGapWarning, match="output_attribution_failed"):
+    with pytest.warns(CaptureGapWarning, match="output_attribution_failed"):
         trace = tl.trace(model, torch.randn(2, 4))
 
     assert "tanh" in [op.func_name for op in trace.ops]
@@ -654,7 +654,7 @@ def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(
     with pytest.warns(UserWarning, match=_PROVENANCE):
         assert tl.validate(model, x, scope="forward") is False
     failure = tl.validation.last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 

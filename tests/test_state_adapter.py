@@ -7,10 +7,10 @@ from typing import ClassVar
 import pytest
 import torch
 
-from torchlens._io import FieldPolicy, TorchLensIOError
+from torchlens._data_classes._state_adapter import state_items, state_new, state_restore
+from torchlens._io import ArtifactError, FieldPolicy
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
-from torchlens.data_classes._state_adapter import state_items, state_new, state_restore
 from torchlens.errors.runnable import SparseCorePayloadError
 
 
@@ -59,7 +59,7 @@ class _MixedState:
 class _IncompletePortableState:
     """Portable-state object with an intentionally missing field policy."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"covered": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"covered": FieldPolicy.KEEP}
 
     def __init__(self) -> None:
         """Populate a missing field to exercise the scrub tripwire."""
@@ -145,7 +145,7 @@ def test_scrub_completeness_tripwire_uses_adapter_enumeration() -> None:
         include_rng_states=True,
     )
 
-    with pytest.raises(TorchLensIOError, match="missing from PORTABLE_STATE_SPEC"):
+    with pytest.raises(ArtifactError, match="missing from _PORTABLE_STATE_SPEC"):
         _scrub_value(
             _IncompletePortableState(),
             options,
@@ -221,12 +221,12 @@ def test_field_order_state_coverage_on_live_records() -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens import constants as tl_constants
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.module import Module, ModuleCall
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.param import Param
-    from torchlens.data_classes.trace import Trace
+    from torchlens import _constants as tl_constants
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.module import Module, ModuleCall
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.param import Param
+    from torchlens._data_classes.trace import Trace
 
     class _CouplingModel(nn.Module):
         def __init__(self) -> None:
@@ -308,15 +308,15 @@ def test_every_record_class_owns_its_explicit_state_protocol() -> None:
     the state-adapter blindness the M2 protocol closed.
     """
 
-    from torchlens.data_classes.backward_pass import BackwardPass
-    from torchlens.data_classes.buffer import Buffer
-    from torchlens.data_classes.func_call_location import FuncCallLocation
-    from torchlens.data_classes.grad_fn import GradFn
-    from torchlens.data_classes.grad_fn_call import GradFnCall
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.module import Module, ModuleCall
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.param import Param
+    from torchlens._data_classes.backward_pass import BackwardPass
+    from torchlens._data_classes.buffer import Buffer
+    from torchlens._data_classes.func_call_location import FuncCallLocation
+    from torchlens._data_classes.grad_fn import GradFn
+    from torchlens._data_classes.grad_fn_call import GradFnCall
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.module import Module, ModuleCall
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.param import Param
 
     record_classes = (
         Op,

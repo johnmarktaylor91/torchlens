@@ -21,12 +21,12 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
-from torchlens._io import TorchLensIOError  # noqa: E402
+from torchlens._io import ArtifactError  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
-from torchlens.merged import (  # noqa: E402
+from torchlens.errors import (  # noqa: E402
     MergeConflictError,
     MergedArtifactError,
     MergedSurfaceUnsupportedError,
@@ -46,12 +46,12 @@ pytestmark = [
         reason="torch.distributed gloo unavailable",
     ),
     pytest.mark.skipif(
-        not has_vetted_snapshot(),
+        not is_vetted_build(),
         reason="merge-ranks live captures require a census-vetted torch build "
-        "(torchlens.distributed.has_vetted_snapshot() is False here)",
+        "(torchlens.distributed.is_vetted_build() is False here)",
     ),
 ]
-from torchlens.merged._artifact import canonical_json_bytes  # noqa: E402
+from torchlens._merged._artifact import canonical_json_bytes  # noqa: E402
 
 
 @pytest.fixture()
@@ -108,7 +108,7 @@ class TestLiveMerge:
         log = _capture()
         report = tl.merge_report([log])
         assert report.alignment.value == "aligned"
-        assert report.n_joins == 1
+        assert report.num_joins == 1
         assert report.to_markdown().startswith("# Cross-rank merge report")
 
     def test_join_ops_resolve_to_boundary_nodes(self, gloo_world):
@@ -121,7 +121,7 @@ class TestLiveMerge:
         merged = tl.merge_ranks([_capture()])
         label = merged.join_ops(merged.joins[0])[0][0].label
         assert merged[f"r0/{label}"].label == label
-        assert set(merged.super_op(label)) == {0}
+        assert set(merged.at(label)) == {0}
 
     def test_selector_getitem_refuses_typed(self, gloo_world):
         merged = tl.merge_ranks([_capture()])
@@ -182,7 +182,7 @@ class TestArtifact:
         assert loaded.alignment.value == "aligned"
         assert loaded.value_status.value == "attested_complete"
         assert len(loaded.joins) == 1
-        assert loaded.load_degradations == ()
+        assert loaded.degradations == ()
         # Rank cores are ordinary bundles inside members/, fully loadable.
         assert loaded.ranks[0]["linear_1_1"] is not None
 
@@ -330,7 +330,7 @@ class TestTamperMatrix:
         # this test's NAME is only actually tested when the refusal type is pinned.
         # A foreign bundle_format never enters the merged branch, so the trace-bundle
         # loader refuses it as an unrecognized directory artifact.
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.load(art)
 
 
@@ -338,11 +338,11 @@ def _append_unparseable_member(art: Path) -> Path:
     """Add a hash-valid but bundle-unparseable rank-1 member to a saved artifact.
 
     The member's tree hashes are CORRECT in both records, so it passes
-    integrity and enters ``load_degradations`` at bundle-load time -- the
+    integrity and enters ``degradations`` at bundle-load time -- the
     degraded-environment branch, where exact cache equality is skipped.
     """
 
-    from torchlens.merged._artifact import tree_hash
+    from torchlens._merged._artifact import tree_hash
 
     fake = art / "members" / "rank_0001.tlspec"
     fake.mkdir()
@@ -387,7 +387,7 @@ class TestDegradedLoadCoherence:
         """Fail-before: value_status presented ATTESTED_COMPLETE under degradation."""
 
         loaded = tl.load(self._degraded(tmp_path))
-        assert loaded.load_degradations
+        assert loaded.degradations
         assert loaded.stored_value_status.value == "attested_complete"
         assert loaded.value_status.value == "attested_partial"
         assert loaded.alignment.value == "partial"
@@ -478,7 +478,7 @@ class TestDegradedLoadCoherence:
         """The coherence checks refuse forgery, never the honest degraded load."""
 
         loaded = tl.load(self._degraded_unwitnessed(tmp_path))
-        assert loaded.load_degradations
+        assert loaded.degradations
         assert loaded.stored_value_status.value == "unwitnessed"
         assert loaded.alignment.value == "partial"
 
@@ -500,8 +500,8 @@ class TestDegradedLoadCoherence:
 
         from dataclasses import replace
 
-        import torchlens.merged._artifact as artifact_mod
-        from torchlens.merged._enums import MergeValueStatus
+        import torchlens._merged._artifact as artifact_mod
+        from torchlens._merged._enums import MergeValueStatus
 
         art = self._degraded(tmp_path)
         real_derive = artifact_mod.derive_merge
@@ -522,8 +522,8 @@ class TestDegradedLoadCoherence:
 
         from dataclasses import replace
 
-        import torchlens.merged._artifact as artifact_mod
-        from torchlens.merged._errors import MergedFinding
+        import torchlens._merged._artifact as artifact_mod
+        from torchlens._merged._errors import MergedFinding
 
         art = self._degraded(tmp_path)
         real_derive = artifact_mod.derive_merge
@@ -639,7 +639,7 @@ def _tp_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> None
     torch.manual_seed(77)
     x = torch.randn(2, 4)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(distributed_witness="digest"))
-    tl.save(log, os.path.join(out_dir, f"rank{rank}.tlspec"))
+    log.save(os.path.join(out_dir, f"rank{rank}.tlspec"))
     dist.destroy_process_group()
 
 
@@ -673,7 +673,7 @@ def _asymmetric_worker(
     model = HandRolledTP()
     torch.manual_seed(77)
     log = tl.trace(model, torch.randn(2, 4))
-    tl.save(log, os.path.join(out_dir, f"rank{rank}.tlspec"))
+    log.save(os.path.join(out_dir, f"rank{rank}.tlspec"))
     dist.destroy_process_group()
 
 

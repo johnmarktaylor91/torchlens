@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from ._tl import get_tensor_label, set_tensor_label
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> None:
@@ -43,6 +43,7 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         whose parent is the op the edit replaced.
     """
 
+    from ..._ir.predicate import RetroactiveCaptureDecision
     from ...capture.predicates import _evaluate_keep_op, build_op_record_context
     from ...capture.projections import append_projected_event
     from ...fastlog.types import CaptureSpec
@@ -50,7 +51,6 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
     )
-    from ...ir.predicate import RetroactiveCaptureDecision
     from ._ops_predicates import _record_predicate_output
     from .model_prep import _live_intervention_machinery_armed, _note_replacement_event
     from .ops import _walk_output_tensors_with_paths

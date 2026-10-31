@@ -139,7 +139,7 @@ class Session:
     """
 
     model: nn.Module
-    logs: list[Any] = field(default_factory=list)
+    traces: list[Any] = field(default_factory=list)
     invocations: list[dict[str, Any]] = field(default_factory=list)
 
     def invoke(self, input_args: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
@@ -160,7 +160,7 @@ class Session:
 
         import torchlens
 
-        index = len(self.logs)
+        index = len(self.traces)
         trace_fn = cast(Callable[..., Any], torchlens.trace)
         log = trace_fn(
             self.model,
@@ -173,14 +173,14 @@ class Session:
         )
         metadata = {"index": index, "name": log.trace_label}
         setattr(log, "session_invocation", metadata)
-        self.logs.append(log)
+        self.traces.append(log)
         self.invocations.append(metadata)
-        for stored_log in self.logs:
+        for stored_log in self.traces:
             setattr(stored_log, "session_invocations", self.invocations)
-            setattr(stored_log, "session_logs", self.logs)
+            setattr(stored_log, "session_logs", self.traces)
         return log
 
-    def bundle(self) -> Any:
+    def to_bundle(self) -> Any:
         """Return a bundle containing all captured invocation logs.
 
         Returns
@@ -189,11 +189,10 @@ class Session:
             ``torchlens.Bundle`` keyed by invocation name.
         """
 
-        import torchlens
+        from ..bundle import Bundle
 
-        bundle_fn = torchlens.bundle
-        return bundle_fn(
-            {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.logs)}
+        return Bundle(
+            {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}
         )
 
 
@@ -270,7 +269,7 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
         If ``TORCHLENS_AUTO=1`` is set.
     """
 
-    from ..utils.env_flags import closed_bool_env
+    from .._utils.env_flags import closed_bool_env
 
     if closed_bool_env("TORCHLENS_AUTO"):
         raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")
@@ -323,6 +322,5 @@ __all__ = [
     "dagua",
     "freeze_module",
     "node_styles",
-    "session",
     "stop_after",
 ]

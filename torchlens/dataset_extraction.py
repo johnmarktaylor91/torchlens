@@ -2,7 +2,7 @@
 
 This module is the public face of the extraction v2 runtime (extract memo
 items 4-19; the engine lives in :mod:`torchlens._extraction`). In disk mode
-(``output_dir=``) the artifact directory is the v2 layout (extract D1): a
+(``path=``) the artifact directory is the v2 layout (extract D1): a
 BOUNDED ``manifest.json`` (written at creation, once when batch zero freezes
 the plan, and at terminal status — never per shard), an APPEND-ONLY fsynced
 ``ledger.jsonl`` with one line per committed shard, a write-once ordered
@@ -42,7 +42,6 @@ from torch import nn
 
 from ._data_substrate import (
     MANIFEST_SCHEMA_V1,
-    MANIFEST_SCHEMA_V2,
     migrate_v1_artifact,
     shard_filename as _shard_filename,  # noqa: F401 - engine-internal alias
     stimulus_ids_digest,
@@ -51,16 +50,13 @@ from ._errors import InvalidArgumentError
 from ._extraction import (
     BatchEnvelope,
     RaggedBatch,
-    as_torch_dataset,
     export_extraction,
-    feature_matrix,
     hf_collate,
     is_selector_request,
     open_extraction,
     register_pure_module,
     resolve_dtype_policy,
     resolve_pool_policy,
-    shuffled_batches,
     validate_output_keys,
     validate_ragged_mode,
     validate_shard_format,
@@ -89,29 +85,21 @@ from ._extraction.token_store import (
     validate_store_input_ids,
 )
 from ._extraction_provenance import (
-    INPUT_PREPROCESSING_SCHEMA,
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
-from .transforms import (
-    TransformPipeline,
-    coerce_transform,
-    coerce_transform_mapping,
-    pipeline_record as _pipeline_record,
-)
+from .transforms import TransformPipeline
+from .transforms._coerce import coerce_transform, coerce_transform_mapping
+from .transforms._pipeline import pipeline_record as _pipeline_record
 
 #: Legacy v1 manifest schema id (still readable forever; superseded on write).
 MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1
-
-#: Native shard format recorded for legacy ``.pt`` artifacts (a manifest
-#: FIELD, so a later format change is a value change, not a layout break).
-NATIVE_FORMAT = "pt_shards_v1"
 
 
 def _coerce_transform_slot(
     transform: Any, layer_plan: dict[str, str]
 ) -> tuple[dict[str, TransformPipeline | None], Any]:
-    """Route the ``transform=`` slot through the one coercion door (memo B1).
+    """Route the ``output_transform=`` slot through the one coercion door (memo B1).
 
     Parameters
     ----------
@@ -146,7 +134,7 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
     ----------
     kwargs_in_memory:
         ``{option_name: offending_value}`` of the non-default disk-only
-        options the caller passed without ``output_dir``.
+        options the caller passed without ``path``.
 
     Raises
     ------
@@ -158,11 +146,11 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
         return
     raise InvalidArgumentError(
         f"Options {sorted(kwargs_in_memory)} affect only the disk artifact "
-        "(shards, ledger, resume signature); without output_dir= they could "
+        "(shards, ledger, resume signature); without path= they could "
         "neither affect nor accompany the in-memory result — a false "
         "affordance.",
         code="extraction_disk_only_option",
-        remedy="pass output_dir= (disk mode), or drop these options",
+        remedy="pass path= (disk mode), or drop these options",
         options={key: repr(value) for key, value in kwargs_in_memory.items()},
     )
 
@@ -244,20 +232,19 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
         raise ValueError("batch_size must be positive.")
     if resume and output_dir is None:
         raise InvalidArgumentError(
-            "resume=True requires output_dir: only disk-mode extraction leaves "
+            "resume=True requires path: only disk-mode extraction leaves "
             "a shard ledger to resume from.",
             code="extraction_resume_requires_output_dir",
-            remedy="pass output_dir= (disk mode) or drop resume=True",
+            remedy="pass path= (disk mode) or drop resume=True",
         )
     if stimulus_ids is not None and output_dir is None:
         raise InvalidArgumentError(
-            "stimulus_ids= requires output_dir: in-memory extraction returns "
+            "stimulus_ids= requires path= (disk mode): in-memory extraction returns "
             "bare tensors with no manifest, so validated identifiers could "
             "neither affect nor accompany the result (a false affordance).",
             code="extraction_stimulus_ids_in_memory_unsupported",
             remedy=(
-                "pass output_dir= to record stimulus identity in the manifest, "
-                "or drop stimulus_ids="
+                "pass path= to record stimulus identity in the manifest, or drop stimulus_ids="
             ),
         )
     ragged_mode = validate_ragged_mode(ragged)
@@ -299,8 +286,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     layers: Any,
     batch_size: int = 32,
     device: torch.device | str | None = None,
-    output_dir: str | Path | None = None,
-    transform: Any = None,
+    path: str | Path | None = None,
+    output_transform: Any = None,
     progress: bool = True,
     *,
     resume: bool = False,
@@ -344,10 +331,10 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         Number of stimuli per forward pass.
     device:
         Optional device for model and stimuli.
-    output_dir:
+    path:
         Optional directory. When supplied, each batch is committed as an
         immutable shard under the v2 protocol and paths are returned.
-    transform:
+    output_transform:
         Transform slot, through the ONE :func:`torchlens.transforms.
         coerce_transform` door (DOCUMENTED-UNSTABLE). Selector-valued
         ``layers=`` accepts ``None`` or one global chain (per-site
@@ -372,7 +359,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         opt-out), or an assertion Mapping for unmeasurable models.
     input_transform:
         The unambiguous INPUT-preprocessing path (tvscope B5,
-        DOCUMENTED-UNSTABLE spelling), distinct from ``transform=`` which
+        DOCUMENTED-UNSTABLE spelling), distinct from ``output_transform=`` which
         transforms OUTPUTS before storage. Pass a
         :class:`torchlens.preprocessing.Resolution` (the golden path: the
         authority's own callable and its provenance travel together, the
@@ -385,7 +372,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     input_provenance:
         Provenance-only stamp (tvscope B4, DOCUMENTED-UNSTABLE spelling) for
         stimuli preprocessed OUTSIDE this run: a
-        :class:`torchlens.preprocessing.PreprocessingAudit` (its verdict
+        :class:`torchlens.preprocessing.PreprocessingComparison` (its verdict
         rides the manifest block), a ``Resolution``, or a
         ``ResolvedPreprocessing`` record (authority-only; verdict stays
         ``unknown`` with ``applied_not_audited`` disclosed). Disk mode only:
@@ -466,8 +453,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         left-padding that cannot be corrected, row-count drift, ragged
         refusals, pool/dtype geometry refusals, and id validation.
     DatasetExtractionResumeError
-        When the artifact in ``output_dir`` cannot be safely continued.
-    torchlens.transforms.TransformContractError
+        When the artifact in ``path`` cannot be safely continued.
+    torchlens.errors.TransformContractError
         When the transform slot cannot be coerced or violates its plan.
 
     Notes
@@ -479,7 +466,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
 
     ragged_mode, checksums_level = _validate_run_options(
         batch_size=batch_size,
-        output_dir=output_dir,
+        output_dir=path,
         resume=resume,
         stimulus_ids=stimulus_ids,
         collate=collate,
@@ -489,15 +476,15 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         pipeline_id=pipeline_id,
         acknowledge_v1_prefix=acknowledge_v1_prefix,
     )
-    if input_provenance is not None and output_dir is None:
+    if input_provenance is not None and path is None:
         raise InvalidArgumentError(
-            "input_provenance= requires output_dir: in-memory extraction "
+            "input_provenance= requires path= (disk mode): in-memory extraction "
             "returns bare tensors with no manifest, so a provenance stamp "
             "could neither affect nor accompany the result (a false "
             "affordance; tvscope B4).",
             code="extraction_input_provenance_in_memory_unsupported",
             remedy=(
-                "pass output_dir= to record input-preprocessing provenance in "
+                "pass path= to record input-preprocessing provenance in "
                 "the manifest, or drop input_provenance="
             ),
         )
@@ -519,12 +506,12 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
             code="extraction_stimulus_ids_cardinality",
             remedy="pass exactly one identifier per stimulus row, in order",
             n_ids=len(ids),
-            n_stimuli=int(stimuli.shape[0]),
+            num_stimuli=int(stimuli.shape[0]),
         )
 
     selector_pipeline: TransformPipeline | None = None
     if is_selector_request(layers):
-        if isinstance(transform, Mapping):
+        if isinstance(output_transform, Mapping):
             raise InvalidArgumentError(
                 "Selector-valued layers= cannot take a per-site transform "
                 "Mapping: the plan's output keys (including namespaced "
@@ -538,7 +525,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         layers_kind = "selector"
         layer_plan: dict[str, str] = {}
         pipelines: dict[str, TransformPipeline | None] = {}
-        selector_pipeline = coerce_transform(transform)
+        selector_pipeline = coerce_transform(output_transform)
         transform_record = _pipeline_record(selector_pipeline)
         if isinstance(layers, Mapping):
             validate_output_keys(layers.keys())
@@ -551,7 +538,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
             validate_output_keys(layers.keys())
         layer_plan = _tl._normalize_extract_layers(layers)
         layers_kind = "mapping" if isinstance(layers, Mapping) else "sequence"
-        pipelines, transform_record = _coerce_transform_slot(transform, layer_plan)
+        pipelines, transform_record = _coerce_transform_slot(output_transform, layer_plan)
 
     if input_identity is not None:
         # The input-transform identity joins the resume signature as a
@@ -583,7 +570,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         checksums=checksums_level,
         pipeline_id=pipeline_id,
         acknowledge_v1_prefix=acknowledge_v1_prefix,
-        transform_raw=transform,
+        transform_raw=output_transform,
         selector_pipeline=selector_pipeline,
         input_transform=input_callable,
         input_block=input_block,
@@ -591,9 +578,9 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         intervention=intervention,
         store_input_ids=keep_input_ids,
     )
-    if output_dir is None:
+    if path is None:
         return run_in_memory(plan)
-    return run_to_disk(plan, Path(output_dir), resume)
+    return run_to_disk(plan, Path(path), resume)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -633,7 +620,7 @@ class LoadedExtraction:
 
 
 def load_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     layers: Iterable[str] | None = None,
     *,
     max_bytes: int | None = None,
@@ -646,7 +633,7 @@ def load_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Directory previously written by disk-mode :func:`extract_dataset`.
     layers:
         Optional subset of output keys to load; defaults to every key.
@@ -669,7 +656,7 @@ def load_extraction(
         override); ``extraction_reader_key_unknown`` for unknown keys.
     """
 
-    container_path = Path(output_dir)
+    container_path = Path(path)
     manifest = _load_manifest(container_path / MANIFEST_FILENAME)
     if manifest.get("schema") == MANIFEST_SCHEMA_V1:
         return _load_v1_extraction(container_path, manifest, layers)
@@ -759,7 +746,7 @@ def _load_v1_extraction(
     return LoadedExtraction(manifest=manifest, activations=activations, batch_paths=batch_paths)
 
 
-def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
+def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
     """Relabel a COMPLETE artifact's stimulus ids (the audited verb, D2).
 
     Relabeling is deliberately OUT of resume — the sidecar is write-once
@@ -771,7 +758,7 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
 
     Parameters
     ----------
-    output_dir:
+    path:
         Artifact directory.
     new_ids:
         Replacement identifiers, one per stimulus row, in row order.
@@ -789,7 +776,7 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
         ``extraction_stimulus_ids_invalid`` for malformed identifiers.
     """
 
-    container_path = Path(output_dir)
+    container_path = Path(path)
     manifest = _load_manifest(container_path / MANIFEST_FILENAME)
     if manifest.get("schema") == MANIFEST_SCHEMA_V1:
         manifest, _rows = migrate_v1_artifact(container_path, manifest)
@@ -811,7 +798,7 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
             code="extraction_relabel_invalid",
             remedy="pass exactly one identifier per stimulus row, in order",
             n_ids=len(ids),
-            n_stimuli=totals["n_stimuli"],
+            num_stimuli=totals["n_stimuli"],
         )
     import json
     import os
@@ -849,25 +836,13 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
 
 
 __all__ = [
-    "INPUT_PREPROCESSING_SCHEMA",
-    "MANIFEST_FILENAME",
-    "MANIFEST_SCHEMA",
-    "MANIFEST_SCHEMA_V2",
-    "NATIVE_FORMAT",
     "BatchEnvelope",
-    "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
     "TokenRows",
-    "as_torch_dataset",
     "export_extraction",
-    "extract_dataset",
-    "feature_matrix",
     "hf_collate",
-    "input_preprocessing_of",
-    "load_extraction",
     "open_extraction",
     "register_pure_module",
     "relabel_extraction",
-    "shuffled_batches",
 ]

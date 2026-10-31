@@ -9,9 +9,21 @@ import torch
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import TorchLensPostfuncError
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
+    Op,
+)
+from ..._errors import UserTransformError
+from ..._ir.events import (
+    FunctionCallRef,
+)
+from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
+from ..._utils.display import _timed_phase
+from ..._utils.introspection import (
+    _get_tensors_and_params_from_obj,
+)
 from ...capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
@@ -35,22 +47,10 @@ from ...capture.projections import (
 )
 from ...capture.session import capture_session_for
 from ...capture.stop import evaluate_halt_stop
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
-    Op,
-)
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import (
     CaptureSpec,
-)
-from ...ir.events import (
-    FunctionCallRef,
-)
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...utils.display import _timed_phase
-from ...utils.introspection import (
-    _get_tensors_and_params_from_obj,
 )
 from ._tl import (
     get_label_list,
@@ -66,7 +66,7 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -219,9 +219,9 @@ def _emit_predicate_operation_events(
                 container_path=container_path,
             )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
-        except HaltSignal:
+        except StopSignal:
             raise
-        except (TorchLensPostfuncError, TrainingModeConfigError):
+        except (UserTransformError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through
             # the predicate-failure pipeline. The orchestrator's outer

@@ -83,7 +83,7 @@ def test_event_rows_survive_save_load_validation(tmp_path) -> None:
     _write_event(fork)
     _write_event(fork, status="error")
     path = str(tmp_path / "f03_events.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     events = event_audit_rows(loaded)
     assert len(events) == 2
@@ -127,12 +127,12 @@ def test_sweep_default_keeps_cardinality_and_discloses() -> None:
     model = _Tiny()
     x = torch.randn(2, 3)
     with pytest.warns(TorchLensWarning, match="NO pristine baseline") as caught:
-        bundle = tl.sweep(model, x, at="relu", values=[0.0, 1.0])
+        bundle = tl.sweep(model, x, site="relu", values=[0.0, 1.0])
     assert caught[0].message.fields["code"] == "sweep_baseline_absent"
     assert bundle.names == ["sweep_0", "sweep_1"]
     assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
-        bundle.most_changed()
+        bundle.rank_changes()
 
 
 @pytest.mark.smoke
@@ -140,12 +140,12 @@ def test_sweep_include_baseline_mints_pristine_first() -> None:
     torch.manual_seed(0)
     model = _Tiny()
     x = torch.randn(2, 3)
-    bundle = tl.sweep(model, x, at="relu", values=[0.0, 1.0], include_baseline=True)
+    bundle = tl.sweep(model, x, site="relu", values=[0.0, 1.0], include_baseline=True)
     assert bundle.names == ["baseline", "sweep_0", "sweep_1"]
     assert bundle.baseline_name == "baseline"
     # The pristine member is un-intervened; swept members are intervened.
     assert bundle["baseline"].intervention_audit == []
-    ranked = bundle.most_changed()
+    ranked = bundle.rank_changes()
     assert ranked, "most_changed must run on a baselined sweep"
     # Lineage: anchors + chronology row.
     assert bundle._member_construction["sweep_0"]["origin"] == "swept"
@@ -164,7 +164,7 @@ def test_sweep_baseline_name_collision_refuses_typed() -> None:
         tl.sweep(
             model,
             x,
-            at="relu",
+            site="relu",
             values=[0.0],
             names=["baseline"],
             include_baseline=True,
@@ -179,7 +179,7 @@ def test_swept_members_are_distinguishable_by_value() -> None:
     model = _Tiny()
     x = torch.randn(2, 3)
     with pytest.warns(TorchLensWarning):
-        bundle = tl.sweep(model, x, at="relu", values=[0.25, 0.75])
+        bundle = tl.sweep(model, x, site="relu", values=[0.25, 0.75])
 
     def _envelope(member: tl.Trace) -> dict:
         rows = [

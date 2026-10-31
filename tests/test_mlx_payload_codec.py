@@ -9,7 +9,7 @@ import pytest
 
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.tensor_policy import FailReason, Ok
-from torchlens.backends import BackendRuntimeCompatibilityError
+from torchlens.errors import BackendRuntimeCompatibilityError
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402

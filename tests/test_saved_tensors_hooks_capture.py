@@ -29,7 +29,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils._torch_compat import HAS_SAVED_TENSORS_HOOKS_PATCHABLE
+from torchlens._utils._torch_compat import HAS_SAVED_TENSORS_HOOKS_PATCHABLE
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 

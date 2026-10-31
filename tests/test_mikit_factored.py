@@ -56,7 +56,7 @@ def test_factored_matrix_algebra_matches_dense(factors):
     _dense_close((fm * 2.5).AB, dense * 2.5)
     _dense_close((2.5 * fm).AB, dense * 2.5)
     assert fm.pair[0] is fm.A and fm.pair[1] is fm.B
-    _dense_close(fm.get_corner(2), dense[:2, :2, :2])
+    _dense_close(fm.corner(2), dense[:2, :2, :2])
 
 
 def test_factored_svd_norm_eigen_match_dense(factors):

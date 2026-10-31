@@ -12,9 +12,9 @@ from torch import nn
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
-from ...ir import BufferWriteEvent
-from ...utils._torch_compat import tensor_version_or_none
-from ...utils.tensor_utils import safe_copy
+from ..._ir import BufferWriteEvent
+from ..._utils._torch_compat import tensor_version_or_none
+from ..._utils.tensor_utils import safe_copy
 from ._identity_cache import IdentityCache, identity_cached
 from ._tl import (
     clear_tensor_label,
@@ -25,8 +25,8 @@ from ._tl import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
-    from ...ir.workspaces import RawGraphWorkspace
+    from ..._data_classes.trace import Trace
+    from ..._ir.workspaces import RawGraphWorkspace
 
 
 _FUSED_MUTATOR_NAMES = {

@@ -28,12 +28,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils.rng import (
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils.rng import (
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
+from torchlens.options import CaptureOptions
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 
@@ -228,7 +228,7 @@ def preexisting_worker() -> Any:
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tl.RunResult:
-    trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     path = tmp / "r47cont.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)

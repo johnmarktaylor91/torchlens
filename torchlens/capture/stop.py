@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..errors import CaptureError
-from ..fastlog._halt import HaltSignal
+from ..fastlog._halt import StopSignal
 from ..fastlog.exceptions import PredicateError
 
 if TYPE_CHECKING:
@@ -172,7 +172,7 @@ class StopDirective:
                     boundary_kind=getattr(ctx, "kind", None),
                     boundary_label=boundary_label,
                 )
-            raise HaltSignal(
+            raise StopSignal(
                 ctx.label,
                 frontier_output=frontier_output,
                 boundary_kind=getattr(ctx, "kind", None),
@@ -351,7 +351,7 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
     import torch
 
     from .. import _state
-    from ..utils.introspection import get_vars_of_type_from_obj
+    from .._utils.introspection import get_vars_of_type_from_obj
 
     with _state.pause_logging():
         tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)

@@ -46,7 +46,7 @@ optional dependency.
   dtypes, float64 param sha256s). No extra and no peer import: files are read with
   `torch.load(weights_only=True)`; the weight file is `intkey_<key>.bin` under the dotted
   or underscored key. Apply with `fork.do(artifact.subspace(site, positions=mask),
-  artifact.edit)` (`tl.subspace` over `R.T` plus `tl.intervention.affine_source`); the
+  artifact.edit)` (`tl.subspace` over `R.T` plus `tl.intervention.set_affine_coordinates`); the
   float32 R is orthonormalised by the subspace step, not here. `site` is a label or the
   site from a trace (`trace[label]`); a site's shape is checked in `_checked_site` (the
   edit acts on the trailing axis, so it must be `d` wide). Refusals
@@ -169,7 +169,7 @@ optional dependency.
 - `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
 - Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
   the direction math lives in `torchlens/intervention/_directions.py`
-  (`torchlens.intervention.direction_from_pairs` returning a `Direction`).
+  (`torchlens.intervention.fit_direction` returning a `Direction`).
   - `steering_vectors.py`: `from_direction(direction, *, layer=None,
     layer_type="decoder_block")` (extra `torchlens[steering]`) returns a real
     `SteeringVector` holding `direction.vector`; `Direction.to_steering_vectors()`
@@ -230,7 +230,7 @@ optional dependency.
   `AttributeError` on access.
 - Bridges that execute the model (`captum`, `shap`, `gradcam`, ...) need the
   source model alive (the steering converters read no model:
-  `direction_from_pairs` records its `config.model_type`); `tl.release_model()`
+  `fit_direction` records its `config.model_type`); `tl.release_model()`
   or a dropped reference makes `source_model()` raise.
 - Site arguments must carry saved tensor outs; `out_at()` raises `ValueError`
   otherwise. Keep error messages actionable (name the site and the extra).

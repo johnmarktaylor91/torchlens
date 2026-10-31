@@ -44,11 +44,11 @@ from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._errors import InvalidArgumentError
+from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
-from ..utils.display import atomic_write_text
 from ._common import _static_graph_data
 
-__all__ = ["ReportOptions", "write_report"]
+__all__ = ["HtmlReportOptions", "write_report"]
 
 #: Report artifact schema identity (manifest field).
 REPORT_SCHEMA = "torchlens.report_html.v1"
@@ -66,7 +66,7 @@ _HOME = os.path.expanduser("~")
 
 
 @dataclass(frozen=True)
-class ReportOptions:
+class HtmlReportOptions:
     """Emission plumbing for the offline HTML report (C06 house pattern).
 
     The content doors (``arrays=`` / ``graph=``) stay flat keywords on
@@ -81,7 +81,7 @@ class ReportOptions:
     #: Suppress the manifest timestamp (byte-exact regeneration).
     deterministic: bool = False
     #: Optional graph-depth knob, forwarded to ``draw`` and disclosed.
-    vis_call_depth: int | None = None
+    depth: int | None = None
     #: Thumbnail site budget, enforced before payloads are written.
     max_array_sites: int = MAX_ARRAY_SITES_DEFAULT
     #: Thumbnail byte budget, enforced before payloads are written.
@@ -173,16 +173,16 @@ def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
     """Resolve an ``arrays=<Selection>`` value to op labels (row X15)."""
 
     resolved = selection.resolve(log)
-    # SiteEntry rows live on ``_entries`` today (the public spelling is an
+    # Site rows live on ``_entries`` today (the public spelling is an
     # L6 naming-session item); prefer a public ``entries`` once it exists.
     entries = getattr(resolved, "entries", None) or getattr(resolved, "_entries", ()) or ()
-    site_keys = {entry.site_key for entry in entries}
+    site_keys = {entry.key for entry in entries}
     sites: list[tuple[str, str]] = []
     for label in _op_labels(log):
         op = _op_or_none(log, label)
         if op is None:
             continue
-        # SiteEntry keys are (layer_label, pass_index) pairs today; ops also
+        # Site keys are (layer_label, pass_index) pairs today; ops also
         # carry the L1 structural string -- match either spelling.
         base, _, pass_text = label.rpartition(":")
         pair = (base, int(pass_text)) if base and pass_text.isdigit() else None
@@ -209,7 +209,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ``report_arrays_invalid`` for an unrecognized ``arrays=`` value.
     """
 
-    from ..notebook.frontier import nonfinite_frontier
+    from .._notebook.frontier import nonfinite_frontier
 
     frontier = nonfinite_frontier(log) if not _is_partial(log) else None
     flagged_total = frontier.flagged_total if frontier else 0
@@ -233,7 +233,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
     raise InvalidArgumentError(
         f"arrays= must be 'frontier', 'flagged', 'none', or a Selection; received {arrays!r}",
         code="report_arrays_invalid",
-        remedy="pass one of the documented presets or a tl.Selection instance",
+        remedy="pass one of the documented presets or a tl.Selector instance",
     )
 
 
@@ -293,11 +293,12 @@ def _site_tensor(log: Any, label: str) -> Any | None:
 def _site_render(tensor: Any) -> tuple[str | None, str | None]:
     """Stats line + thumbnail grid for one payload, degrade-safe."""
 
-    from ..notebook._grid import GridBudgets, array_grid_html
+    from .._notebook._grid import GridBudgets, array_grid_html
 
     line: str | None = None
     try:
-        from ..stats import render_core_line, tensor_stats
+        from ..stats import tensor_stats
+        from ..stats._stats_render import render_core_line
 
         line = render_core_line(tensor_stats(tensor))
     except Exception:  # noqa: BLE001 - the grid may still render
@@ -379,8 +380,8 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
                 "vis_save_only": True,
-                "vis_outpath": outpath,
-                "vis_fileformat": "svg",
+                "path": outpath,
+                "file_format": "svg",
             }
             if vis_call_depth is not None:
                 kwargs["vis_call_depth"] = vis_call_depth
@@ -558,7 +559,7 @@ def write_report(
     *,
     arrays: Any = "frontier",
     graph: str = "collapsed",
-    options: ReportOptions | None = None,
+    options: HtmlReportOptions | None = None,
 ) -> Path:
     """Write the single-file offline HTML report for one capture.
 
@@ -572,12 +573,12 @@ def write_report(
         Destination ``.html`` path.
     arrays:
         ``"frontier"`` (default) / ``"flagged"`` / ``"none"`` / a
-        ``tl.Selection``.
+        ``tl.Selector``.
     graph:
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.
     options:
-        Emission plumbing (``ReportOptions``): redaction, byte-stability,
+        Emission plumbing (``HtmlReportOptions``): redaction, byte-stability,
         renderer depth, thumbnail budgets.
 
     Returns
@@ -586,10 +587,10 @@ def write_report(
         The written report path.
     """
 
-    opts = options if options is not None else ReportOptions()
+    opts = options if options is not None else HtmlReportOptions()
     share_safe = opts.share_safe
     deterministic = opts.deterministic
-    vis_call_depth = opts.vis_call_depth
+    vis_call_depth = opts.depth
     max_array_sites = opts.max_array_sites
     max_array_bytes = opts.max_array_bytes
     destination = Path(path)
@@ -655,8 +656,8 @@ def write_report(
 def _partial_body(log: Any) -> str:
     """Failure-first body for a PartialTrace report."""
 
-    from ..notebook.cards import partial_trace_card
-    from ..notebook.cardtree import render_card_html
+    from .._notebook.cards import partial_trace_card
+    from .._notebook.cardtree import render_card_html
 
     try:
         card = render_card_html(partial_trace_card(log), include_css=True)

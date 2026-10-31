@@ -36,12 +36,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from torchlens._utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
 from torchlens.semantic._norm_reconstruction import (
     NormReconstructionError,
     reconstruct_norm,
 )
 from torchlens.semantic.tolerances import within_reconstruction_tolerance
-from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
 
 _requires_cpu_half_kernels = pytest.mark.skipif(
     not get_cpu_half_kernels_support(),

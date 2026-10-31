@@ -139,7 +139,7 @@ def test_soft_wpmi_matches_the_reference_transcription() -> None:
     target_feats = torch.rand(60, 7, generator=generator, dtype=torch.float64)
     top = tl.stats.TopK(k=15, unit_axis=1)
     top.update(target_feats)
-    ids = top.result().example_ids
+    ids = top.compute().example_ids
     assert torch.equal(ids, torch.topk(target_feats, dim=0, k=15).indices.T)
     page = namespace["soft_wpmi"](clip_feats, ids)
     reference = _reference_soft_wpmi(clip_feats, target_feats, 15)

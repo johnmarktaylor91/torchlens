@@ -118,7 +118,7 @@ def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
 def test_fork_memo_rollback_discards_partial_entries() -> None:
     """A field copy that raises must not leave half-built objects in the memo."""
 
-    from torchlens.data_classes._trace_intervention import _ForkMemo, _memoized_deep_copy
+    from torchlens._data_classes._trace_intervention import _ForkMemo, _memoized_deep_copy
 
     class _Boom:
         """Object whose deep copy always fails after the memo is seeded."""

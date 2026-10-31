@@ -49,7 +49,7 @@ def test_to_pandas_attrs_carry_honesty(export_trace: tl.Trace) -> None:
 
 @pytest.mark.smoke
 def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> None:
-    """TraceProfile.to_pandas and accessor to_pandas carry the facts."""
+    """ProfileReport.to_pandas and accessor to_pandas carry the facts."""
 
     profile_facts = export_trace.profile().to_pandas().attrs["torchlens_capture_honesty"]
     assert profile_facts["capture_status"] == "complete"
@@ -61,7 +61,7 @@ def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> No
 def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     """The debug DataFrame family attaches the shared fact block."""
 
-    from torchlens import debug
+    from torchlens import debug as debug
 
     assert _facts_of(debug.hot_path(export_trace).to_pandas())["capture_status"] == "complete"
     assert (
@@ -268,7 +268,7 @@ def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
 def test_poisoned_trace_export_preamble_discloses(tmp_path: Path) -> None:
     """A poisoned capture's exports carry the poison, never a clean preamble."""
 
-    from torchlens.runnable import PathFaithfulness
+    from torchlens._runnable import PathFaithfulness
 
     trace = tl.trace(nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3))
     trace._runnable.poisoned = True

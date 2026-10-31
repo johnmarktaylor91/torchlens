@@ -15,7 +15,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from ...utils.introspection import get_vars_of_type_from_obj
+from ..._utils.introspection import get_vars_of_type_from_obj
 from ._module_arg_stubs import first_stub_shape
 
 _QUANTIZED_MODULE_PREFIXES = (

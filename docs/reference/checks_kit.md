@@ -2,7 +2,7 @@
 
 > Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
 > ratification. The import spelling is `import torchlens.checks`; the one-shot
-> parameter audit is also served as `tl.debug.audit_params`. The kit is
+> parameter audit is also served as `tl.debug.param_health`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.
 
@@ -26,7 +26,7 @@ semantics (see "What the measurements broke" below).
 | `add_module_unchanging_check(module)` | `session.register_frozen_check([...parameter names])` | Declared-frozen parameters; the default evidence keeps exact snapshots and shows the delta. |
 | `add_tensor_unchanging_check(tensor)` | `session.register_frozen_check(["name"])` | |
 | `add_module_output_range_check(module, output_range=(low, high))` | `checks.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
-| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_gradient_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
+| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
 | `add_module_inf_check(module)` | The same three checks | They cover NaN and Inf together. |
 | `add_tensor_nan_check(tensor)` | `session.register_nonfinite_param_check()` | Scans every parameter and, by default, every buffer. |
 | `add_tensor_inf_check(tensor)` | `session.register_nonfinite_param_check()` | |
@@ -55,7 +55,7 @@ optimizer = torch.optim.AdamW(model.parameters())
 
 session = checks.ChecksSession(model, optimizer, scaler=None)
 session.register_change_check()            # gradient-fact detector, M-of-N warn
-session.register_nonfinite_gradient_check()  # collect at S-A, raise at S-B pre-write
+session.register_nonfinite_grad_check()  # collect at S-A, raise at S-B pre-write
 session.register_update_ratio_check()      # raw + lr-normalized columns, collect
 
 with session:                               # attach() installs the hooks; detach() on exit
@@ -106,7 +106,7 @@ returns a typed `unavailable` entry in the report, never a silent pass.
   latency, and no finding ever says "learning" or "dead".
 - **The finding names a cone; the frontier names the culprit.** A dead layer
   zeroes the gradient of everything upstream, so the detector names many
-  parameters; each finding's `follow_up` points at `gradient_flow_audit`'s
+  parameters; each finding's `follow_up` points at `grad_health`'s
   module / `is_frontier` column, which resolves the exact dead layer.
 - **Nonfinite policy is site-conditional (the AMP hole, closed both ways).**
   At S-A nonfinite gradients are COLLECTED, never raised -- under fp16 +
@@ -158,17 +158,18 @@ Boundary mode adds what hook-only mode honestly cannot know: caller
 accepted/skipped attribution per attempt. Both modes are first-class; unknown
 or inferred evidence never produces an exact pass.
 
-## One-shot parameter auditing: `audit_params`
+## One-shot parameter auditing: `param_health`
 
 ```python
+import torchlens as tl
 import torchlens.checks as checks
 
-audit = checks.audit_params(model)          # also: tl.debug.audit_params(model)
+audit = tl.debug.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
 
-`audit_params` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
+`param_health` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
 `state_dict`, flattened optimizer state, EMA shadow weights, a loaded
 checkpoint: same door, same batched scan kernel the session's scheduled scan
 uses. Findings cover signed nonfinite counts, caller-declared bounds, dtype
@@ -188,7 +189,7 @@ optimizer_state = {
     if isinstance(value, torch.Tensor)
 }
 if optimizer_state:
-    print(checks.audit_params(optimizer_state))
+    print(tl.debug.param_health(optimizer_state))
 ```
 
 ```python
@@ -196,7 +197,7 @@ if optimizer_state:
 optimizer.zero_grad()
 model(torch.randn(4, 8)).square().mean().backward()
 grads = {f"grad.{n}": p.grad for n, p in model.named_parameters() if p.grad is not None}
-grad_audit = checks.audit_params(grads)
+grad_audit = tl.debug.param_health(grads)
 print(f"{len(grad_audit.rows)} gradient tensors scanned, {len(grad_audit.findings)} findings")
 optimizer.zero_grad()
 ```

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from .selectors import BaseSelector, contains, func, module, where
+from .selectors import BaseSelector, func, label_contains, module, where
 
 
 def _as_tuple(value: Any | Iterable[Any] | None) -> tuple[Any, ...]:
@@ -146,7 +146,7 @@ def _selector_for(layer_pattern: Any, op: Any) -> Any:
     elif isinstance(layer_pattern, str) and "." in layer_pattern:
         selector = module(layer_pattern)
     elif isinstance(layer_pattern, str):
-        selector = contains(layer_pattern)
+        selector = label_contains(layer_pattern)
     else:
         selector = where(layer_pattern)
     if op is None:

@@ -255,7 +255,7 @@ def test_buffer_write_descendant_ancestry_survives_the_validation_path() -> None
     """The full replay+metadata path (depths off) must agree with the edges."""
 
     assert tl.validation.validate_forward_pass(
-        _WriteThenRead(), torch.ones(2), random_seed=123, validate_metadata=True
+        _WriteThenRead(), torch.ones(2), seed=123, validate_metadata=True
     )
 
 

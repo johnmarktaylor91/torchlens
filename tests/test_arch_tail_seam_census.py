@@ -44,7 +44,7 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
         "metadata-only inventory + explicit activation (semantic/recipes; the "
         "autoloader defect class is dead, gate G2)",
     ),
-    "autoroute": ("MET", "torchlens.autoroute._registry direction-specific doors"),
+    "autoroute": ("MET", "torchlens._autoroute._registry direction-specific doors"),
     "receptive_field_rules": ("MET", "register_rf_rule + epoch-backed invalidation"),
     "sidecar_families": ("MET", "L1 namespaced typed sidecar door (test_arch_spine_sidecar)"),
     "user_callable_identity_contract": (
@@ -58,7 +58,7 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
     "transform_providers": ("MET", "torchlens.transforms._registry (transforms memo owns)"),
     "lens_skin_door": ("MET", "visualization.theme_registry + lenses roster (themes N12)"),
     "preprocessing_authorities": ("MET", "torchlens.preprocessing.register_authority_adapter"),
-    "entry_point_activation": ("MET", "torchlens.ecosystem.plugins five-group consent law"),
+    "entry_point_activation": ("MET", "torchlens._ecosystem.plugins five-group consent law"),
     "edit_spec_providers": (
         "OPEN",
         "sequenced AFTER InterventionSpec per the memo; no provider door yet -- "
@@ -111,12 +111,12 @@ def test_met_doors_are_importable_through_their_public_spellings() -> None:
     probes: dict[str, tuple[str, str]] = {
         "backend_specs": ("torchlens.backends", "BackendSpec"),
         "facet_recipes": ("torchlens.semantic.recipes", "installed_recipe_providers"),
-        "autoroute": ("torchlens.autoroute._registry", ""),
+        "autoroute": ("torchlens._autoroute._registry", ""),
         "receptive_field_rules": ("torchlens.receptive_field._rules", "register_rf_rule"),
         "transform_providers": ("torchlens.transforms._registry", ""),
         "lens_skin_door": ("torchlens.visualization.theme_registry", ""),
         "preprocessing_authorities": ("torchlens.preprocessing", "register_authority_adapter"),
-        "entry_point_activation": ("torchlens.ecosystem.plugins", "activate"),
+        "entry_point_activation": ("torchlens._ecosystem.plugins", "activate"),
     }
     failures = []
     for seam, (module_path, attr) in sorted(probes.items()):
@@ -133,7 +133,7 @@ def test_met_doors_are_importable_through_their_public_spellings() -> None:
 def test_open_row_term_resolvers_trigger() -> None:
     """Armed flip trigger: the resolver list is still a bare append target."""
 
-    from torchlens import selection
+    from torchlens import _selection as selection
 
     resolvers = selection._TERM_RESOLVERS
     assert type(resolvers) is list, (
@@ -146,8 +146,8 @@ def test_open_row_term_resolvers_trigger() -> None:
 def test_open_row_facet_settlement_triggers() -> None:
     """Armed flip triggers for the two facet-settlement OPEN rows."""
 
-    module_source = (PACKAGE_ROOT / "data_classes/module.py").read_text()
-    assert "from ..semantic import FacetView" in module_source, (
+    module_source = (PACKAGE_ROOT / "_data_classes/module.py").read_text()
+    assert "from ..semantic.facets import FacetView" in module_source, (
         "Module.facets no longer defers into semantic/ -- settlement part 1 "
         "(vocabulary relocation) or the deletability contract landed; flip the "
         "facet census rows and add the typed-empty engine-absent probe here"

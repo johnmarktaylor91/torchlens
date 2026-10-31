@@ -47,6 +47,6 @@ def test_init_empty_weights_onramp() -> None:
     meta_trace = tl.trace(
         meta, torch.empty_like(x, device="meta"), capture=CaptureOptions(structure_only=True)
     )
-    assert tl.hash.trace(real_trace) == tl.hash.trace(meta_trace)
+    assert tl.fingerprint.trace(real_trace) == tl.fingerprint.trace(meta_trace)
     assert meta_trace.discharge_against(real_trace).verdict.value == "corroborated"
     assert meta_trace.structure_evidence["substrate"] == "meta"

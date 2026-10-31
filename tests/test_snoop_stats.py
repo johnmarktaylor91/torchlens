@@ -18,9 +18,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
-from torchlens.snoop import EchoStatsError
-from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
+from torchlens._snoop._stats import exact_stats, reuse_stats, sampled_stats
+from torchlens.errors import NarrationStatsError
+from torchlens.options import NarrationOptions
 
 
 def test_sampled_blindness_regression_t_a() -> None:
@@ -43,7 +43,7 @@ def test_sampled_blindness_regression_t_a() -> None:
 def test_sampled_budget_is_bounded_and_marked() -> None:
     """The sampled rung strides to a fixed budget with mandatory evidence."""
 
-    from torchlens.snoop import SAMPLED_BUDGET
+    from torchlens._snoop import SAMPLED_BUDGET
 
     tensor = torch.randn(64, 1024)
     record = sampled_stats(tensor, identity="budget")
@@ -56,12 +56,12 @@ def test_sampled_budget_is_bounded_and_marked() -> None:
 def test_exact_rung_refuses_above_numel_budget() -> None:
     """Memo test 13: exact-above-budget refuses typed, remedy names sampled."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 8
     try:
-        with pytest.raises(EchoStatsError) as excinfo:
+        with pytest.raises(NarrationStatsError) as excinfo:
             exact_stats(torch.randn(4, 4), identity="budget_refusal")
         assert excinfo.value.fields["code"] == "echo_stats_numel_budget"
         assert "sampled" in excinfo.value.fields["remedy"]
@@ -72,18 +72,18 @@ def test_exact_rung_refuses_above_numel_budget() -> None:
 def test_exact_budget_refusal_fails_the_capture_typed() -> None:
     """The mid-forward exact refusal propagates typed, never degrades."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 4
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with pytest.raises(EchoStatsError):
+            with pytest.raises(NarrationStatsError):
                 tl.trace(
                     nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
                     torch.randn(2, 4),
-                    echo=EchoOptions(select=True, sink=io.StringIO(), stats="exact"),
+                    narrate=NarrationOptions(select=True, sink=io.StringIO(), stats="exact"),
                 )
     finally:
         stats_module.EXACT_NUMEL_BUDGET = original
@@ -97,14 +97,14 @@ def test_reuse_rung_prints_only_paid_for_facts() -> None:
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="reuse"),
+        narrate=NarrationOptions(select=True, sink=sink, stats="reuse"),
     )
     assert "|" not in sink.getvalue()
     sink_armed = io.StringIO()
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink_armed, stats="reuse"),
+        narrate=NarrationOptions(select=True, sink=sink_armed, stats="reuse"),
         capture=tl.options.CaptureOptions(track_nonfinite=True),
     )
     armed_lines = [line for line in sink_armed.getvalue().split("\n") if "relu" in line]
@@ -224,7 +224,7 @@ def test_metadata_echo_reads_no_payload() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="off"),
+        narrate=NarrationOptions(select=True, sink=sink, stats="off"),
     )
     del log, reads, SpyTensor
     transcript = sink.getvalue()

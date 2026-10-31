@@ -117,7 +117,7 @@ structural site key as a SEPARATE field. Table provenance carries the
 population counts, excluded-status counts, alias disclosure, the batching
 plan with its reason, exact `autograd_calls`, timing, and bytes.
 
-Operations: `to_pandas(values='omit'|'object'|'explode')`, `for_target`,
+Operations: `to_pandas(values='omit'|'object'|'explode')`, `target`,
 `column`, `aggregate_targets(reducer)` (no implicit mean/max/sum anywhere),
 `collapse_alias_groups()` (explicit opt-in; per-address rows are the
 default). Scalar tables persist as standalone `read_table_v1` JSON
@@ -129,7 +129,7 @@ tables refuse `read_table_not_portable` until sidecars exist.
 `tl.top_k`, `tl.top_fraction`, and `tl.threshold` accept a single-target
 `ReadTable`: site-grain tables rank SITES (`k` counts sites; a win selects
 the complete site mask), element-grain tables rank elements against exactly-
-matching index spaces. Multi-target tables refuse (narrow with `for_target`
+matching index spaces. Multi-target tables refuse (narrow with `target`
 or fold with `aggregate_targets`); foreign and stale tables refuse; NaN is
 unrankable; ties break canonical site order then flat index. Selection
 provenance carries the schema, method, reduction, target, frozen digest, and

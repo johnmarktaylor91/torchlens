@@ -40,15 +40,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import RunnablePreflightError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     ReadinessStatus,
     RunnableErrorCode,
 )
-from torchlens.utils import rng as rng_utils
+from torchlens._utils import rng as rng_utils
+from torchlens.errors import RunnablePreflightError
+from torchlens.options import CaptureOptions
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 
@@ -56,7 +56,7 @@ _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache"
 def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=seed, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=seed, **_CAP))
 
 
 def _roundtrip(
@@ -570,7 +570,7 @@ def test_benign_background_thread_does_not_ceiling_capture(tmp_path: Path) -> No
     threat: the monitor stays certain and a deterministic model stays VERIFIED.
     """
 
-    from torchlens.utils.rng import host_nondeterminism_monitor
+    from torchlens._utils.rng import host_nondeterminism_monitor
 
     stop = threading.Event()
 
@@ -601,7 +601,7 @@ def test_model_held_generator_draw_is_witnessed_by_digest() -> None:
     thread by the before/after digest, so no realistic model-held RNG use is lost.
     """
 
-    from torchlens.utils.rng import host_nondeterminism_monitor
+    from torchlens._utils.rng import host_nondeterminism_monitor
 
     class _HeldGen:
         def __init__(self) -> None:
@@ -677,7 +677,7 @@ def test_back_to_back_captures_are_isolated(tmp_path: Path) -> None:
 def test_rng_registry_has_no_numpy_draw_method_enumeration() -> None:
     """No numpy draw-method NAME list may exist: receiver typing + digests cover them."""
 
-    import torchlens.utils.rng as rng_mod
+    import torchlens._utils.rng as rng_mod
 
     banned = {"standard_normal", "random_sample", "integers", "random_raw"}
     source = Path(rng_mod.__file__).read_text()
@@ -688,7 +688,7 @@ def test_rng_registry_has_no_numpy_draw_method_enumeration() -> None:
 def test_rng_clock_namespace_fully_classified() -> None:
     """Every frozen clock reader is classified; a stray unclassified reader fails CI."""
 
-    from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY
+    from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY
 
     families = {row.family for row in HOST_NONDETERMINISM_REGISTRY}
     assert "clock" in families
@@ -701,7 +701,7 @@ def test_rng_clock_namespace_fully_classified() -> None:
 def test_rng_registry_every_row_has_strategy_and_thread_policy() -> None:
     """Registry rows are self-describing (strategy + thread policy) -- no prose gap."""
 
-    from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY
+    from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY
 
     valid_strategies = {
         "module_patch",
@@ -930,10 +930,10 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
         # the UNVERIFIABLE+poison verdict, not the warning; tolerate it (the project errors on
         # torchlens UserWarnings) without weakening the verdict assertion.
         warnings.simplefilter("ignore")
-        live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
-    result = live.run(inputs=x, on_divergence="return_diverged")
+        live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
+    result = live.run(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_live_bare_tensor_output_stays_verified() -> None:
@@ -941,10 +941,10 @@ def test_live_bare_tensor_output_stays_verified() -> None:
 
     x = torch.randn(2, 4)
     model = _BareTensorOut()
-    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
 
 
 def test_live_dict_output_stays_verified() -> None:
@@ -960,7 +960,7 @@ def test_live_dict_output_stays_verified() -> None:
 
     x = torch.randn(2, 4)
     model = _DictOut()
-    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
@@ -1039,7 +1039,7 @@ def test_inexecutable_divergent_input_raises_path_divergence(tmp_path: Path) -> 
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as exc:
-        loaded.run(inputs=torch.randn(3, 5), on_divergence="return_diverged")
+        loaded.run(inputs=torch.randn(3, 5), on_divergence="return")
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")
@@ -1054,9 +1054,9 @@ def test_executable_divergent_input_returns_diverged(tmp_path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
-    result = loaded.run(inputs=torch.randn(5, 4), on_divergence="return_diverged")
+    result = loaded.run(inputs=torch.randn(5, 4), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 # ---- CLASS B structural immunizer: provider finalizer ownership -----------------------
@@ -1171,7 +1171,7 @@ def test_structseq_trust_gate_rejects_spoofed_module() -> None:
     import sys
     import types
 
-    from torchlens.ir.container import ContainerSpec, _is_trusted_structseq_type
+    from torchlens._ir.container import ContainerSpec, _is_trusted_structseq_type
 
     evil_mod = types.ModuleType("evil_lib_r39")
     executed: dict[str, bool] = {}
@@ -1202,7 +1202,7 @@ def test_structseq_trust_gate_rejects_spoofed_module() -> None:
 def test_genuine_structseq_trust_gate_accepts_torch_return_type() -> None:
     """secB_1 control: a genuine torch structseq passes the spec-aware trust gate."""
 
-    from torchlens.ir.container import ContainerSpec, _is_trusted_structseq_type
+    from torchlens._ir.container import ContainerSpec, _is_trusted_structseq_type
 
     result_type = type(torch.sort(torch.randn(4)))
     spec = ContainerSpec(
@@ -1220,7 +1220,7 @@ def test_genuine_structseq_trust_gate_accepts_torch_return_type() -> None:
 def test_dense_interval_overcap_overlap_proves_diverged() -> None:
     """corr2_6: two dense over-cap overlapping views prove overlap (not unknown)."""
 
-    from torchlens.utils.alias_footprint import touched_bytes_relation
+    from torchlens._utils.alias_footprint import touched_bytes_relation
 
     base = torch.zeros(200_000)
     assert touched_bytes_relation(base[:150_000], base[100_000:]) == "overlap"
@@ -1229,7 +1229,7 @@ def test_dense_interval_overcap_overlap_proves_diverged() -> None:
 def test_dense_interval_permuted_overlap_proves_overlap() -> None:
     """corr2_6: permuted (transposed) dense over-cap overlapping views prove overlap."""
 
-    from torchlens.utils.alias_footprint import touched_bytes_relation
+    from torchlens._utils.alias_footprint import touched_bytes_relation
 
     base = torch.zeros(400, 400)
     left = base.t()  # permuted dense, 160000 elements > cap
@@ -1240,7 +1240,7 @@ def test_dense_interval_permuted_overlap_proves_overlap() -> None:
 def test_dense_interval_adjacent_proves_disjoint() -> None:
     """corr2_6 control: adjacent dense over-cap views are disjoint."""
 
-    from torchlens.utils.alias_footprint import touched_bytes_relation
+    from torchlens._utils.alias_footprint import touched_bytes_relation
 
     base = torch.zeros(200_000)
     assert touched_bytes_relation(base[:100_000], base[100_000:]) == "disjoint"
@@ -1249,7 +1249,7 @@ def test_dense_interval_adjacent_proves_disjoint() -> None:
 def test_sparse_overcap_stays_unknown() -> None:
     """corr2_6 control: a genuinely sparse over-cap geometry stays ``unknown``."""
 
-    from torchlens.utils.alias_footprint import touched_bytes_relation
+    from torchlens._utils.alias_footprint import touched_bytes_relation
 
     base = torch.zeros(400_000)
     left = base[::2][:100_000]  # stride-2, over cap, not dense
@@ -1272,7 +1272,7 @@ def test_dense_interval_proof_independent_byte_oracle_fuzz() -> None:
     import itertools
     import random as _random
 
-    from torchlens.utils.alias_footprint import (
+    from torchlens._utils.alias_footprint import (
         _footprint_is_dense_interval,
         footprint_touched_element_addresses,
         tensor_byte_footprint,
@@ -1591,7 +1591,7 @@ def test_module_namespace_walk_eligibility_rules() -> None:
 _NESTED_HOLDER_PROBE = """
 import sys
 import numpy as np
-from torchlens.utils import rng as rng_utils
+from torchlens._utils import rng as rng_utils
 
 if not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
     print("PROBE_SKIP: numpy build emits c_call for RNG draw methods")

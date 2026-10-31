@@ -20,7 +20,7 @@ from typing import Any
 from scripts.visual_language.slides import Panel, Slide
 
 #: Only what every sentinel render needs to be written as an SVG file and not opened.
-OUTPUT: Mapping[str, Any] = {"vis_fileformat": "svg", "vis_save_only": True}
+OUTPUT: Mapping[str, Any] = {"file_format": "svg", "vis_save_only": True}
 SKINS = ("torchlens", "paper", "dark", "colorblind", "high_contrast")
 
 
@@ -50,7 +50,7 @@ class Sentinel:
 
 
 _GRAD = {"save_grads": "all"}
-_EDIT = {"intervention_ready": True, "save_arg_values": True}
+_EDIT = {"intervention_ready": True, "save_args": True}
 
 SENTINELS: tuple[Sentinel, ...] = (
     Sentinel(
@@ -227,7 +227,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "a",
                 "ImageNet",
                 "show_input_transform_summary=True",
-                capture={"transform": "@to_tensor", "output_transform": "@decode"},
+                capture={"input_transform": "@to_tensor", "output_transform": "@decode"},
                 kwargs={"show_input_transform_summary": True},
             ),
         ),
@@ -249,7 +249,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         "The first picture a new user sees: the one-call facade, default collapse auto.",
         (_panel("a", "BranchConv", "quickstart.render(model, x)", call="quickstart_render"),),
         note="pending name: tl.render (naming sprint, defaults.8); renders "
-        "torchlens.quickstart.render today",
+        "torchlens._quickstart.render today",
     ),
     Sentinel(
         "SN14",
@@ -293,7 +293,7 @@ def sentinel_slides() -> tuple[Slide, ...]:
                         p.name,
                         p.fixture,
                         call=p.call,
-                        kwargs={**p.kwargs, "vis_theme": skin},
+                        kwargs={**p.kwargs, "theme": skin},
                         label=f"{p.label}, {skin}",
                         conventions=False,
                     )

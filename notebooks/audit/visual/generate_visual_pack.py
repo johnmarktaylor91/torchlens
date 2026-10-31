@@ -141,7 +141,7 @@ def _raw_input_first_trace(model_key: str):
             m,
             x,
             capture=tl.options.CaptureOptions(
-                transform=lambda z: (z - 0.5) / 0.5, batch_render="first"
+                input_transform=lambda z: (z - 0.5) / 0.5, batch_render="first"
             ),
         )
 
@@ -177,7 +177,7 @@ def _ablation_bundle(model_key: str):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             fork.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-        return tl.bundle({"clean": trace, "ablated": fork}, baseline="clean")
+        return tl.Bundle({"clean": trace, "ablated": fork}, baseline="clean")
 
     return _build
 
@@ -203,7 +203,7 @@ def _preprocessed_trace(model_key: str):
     """
 
     def _build():
-        from torchlens.data_classes.trace import ResolvedPreprocessing
+        from torchlens._data_classes.trace import ResolvedPreprocessing
 
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
@@ -226,7 +226,7 @@ def _raw_input_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         return tl.trace(
-            m, x, capture=tl.options.CaptureOptions(transform=lambda z: (z - 0.5) / 0.5)
+            m, x, capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5)
         )
 
     return _build
@@ -506,9 +506,7 @@ def _guard_render_value(guard: VacuousDemoGuard, side: str, kwargs: dict[str, An
     trace = get_trace(guard.model_key, trace_variant, trace_builder)
     stem = _PAGES_DIR / "_vacuous_demo_guards" / f"{guard.axis}_{side}"
     fileformat = "png" if guard.file_bytes else "dot"
-    source = trace.draw(
-        vis_outpath=str(stem), vis_fileformat=fileformat, vis_save_only=True, **kwargs
-    )
+    source = trace.draw(path=str(stem), file_format=fileformat, vis_save_only=True, **kwargs)
     if guard.file_bytes:
         rendered = pathlib.Path(f"{stem}.png")
         if not rendered.exists():
@@ -614,15 +612,15 @@ AXES: dict[str, str] = {
     "node_mode:profiling": "node_mode='profiling' (time/memory rows)",
     "node_spec_fn:vision": "node_spec_fn=vision_node_mode (conv-oriented rows)",
     "node_spec_fn:attention": "node_spec_fn=attention_node_mode (attention-oriented rows)",
-    "theme:torchlens": "vis_theme='torchlens' (default)",
-    "theme:paper": "vis_theme='paper'",
-    "theme:dark": "vis_theme='dark'",
-    "theme:colorblind": "vis_theme='colorblind'",
-    "theme:high_contrast": "vis_theme='high_contrast'",
+    "theme:torchlens": "theme='torchlens' (default)",
+    "theme:paper": "theme='paper'",
+    "theme:dark": "theme='dark'",
+    "theme:colorblind": "theme='colorblind'",
+    "theme:high_contrast": "theme='high_contrast'",
     "show_legend": "show_legend=True legend box",
-    "buffers:never": "show_buffer_layers='never'",
-    "buffers:meaningful": "show_buffer_layers='meaningful' (default)",
-    "buffers:always": "show_buffer_layers='always'",
+    "buffers:never": "show_buffers='never'",
+    "buffers:meaningful": "show_buffers='meaningful' (default)",
+    "buffers:always": "show_buffers='always'",
     "containers:labels": "show_containers='labels'",
     "containers:cluster": "show_containers='cluster' (single-owner required; falls back to labels)",
     "containers:collapsed": "show_containers='collapsed' homogeneous-container merge",
@@ -741,7 +739,7 @@ NA_AXES: dict[str, str] = {
     "plumbing": "vis_outpath / vis_fileformat / vis_save_only / return_graph / "
     "vis_graph_overrides and the draw() short-form params (view, depth, renderer, "
     "layout, node_style) have no visual identity of their own.",
-    "show:dispatcher": "Trace.show(method='graph'/'repr') dispatches to draw()/repr(). "
+    "show:dispatcher": "Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). "
     "method='html' returns Trace._repr_html_() -- see the html_repr entry.",
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
@@ -804,7 +802,7 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "demo_model -- show_buffer_layers='always'",
+                        "demo_model -- show_buffers='always'",
                         "demo_model",
                         kwargs={"show_buffer_layers": "always"},
                     )
@@ -840,17 +838,17 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "show_buffer_layers='never'",
+                        "show_buffers='never'",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "never"},
                     ),
                     Panel(
-                        "show_buffer_layers='meaningful' (default)",
+                        "show_buffers='meaningful' (default)",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "meaningful"},
                     ),
                     Panel(
-                        "show_buffer_layers='always'",
+                        "show_buffers='always'",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "always"},
                     ),
@@ -2447,7 +2445,7 @@ def _render_panel(page: Page, panel: Panel, idx: int) -> tuple[str, pathlib.Path
             fn = functools.partial(tl.viz.bundle_diff, trace)
         else:
             fn = getattr(trace, panel.method)
-        fn(vis_outpath=str(stem), vis_fileformat="png", vis_save_only=True, **kwargs)
+        fn(path=str(stem), file_format="png", vis_save_only=True, **kwargs)
         png = pathlib.Path(str(stem) + ".png")
         if not png.exists():
             raise FileNotFoundError(f"expected {png}")

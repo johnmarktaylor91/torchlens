@@ -193,7 +193,7 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
                 replacement_verdict=verdict,
             )
         )
-    from .. import hash as tl_hash
+    from .. import fingerprint as tl_hash
 
     return PlanCheckReport(
         sites=tuple(checks),
@@ -265,9 +265,9 @@ def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
 def _is_static_selector(selector: Any) -> bool:
     """Whether a callable selector is a provably value-free structural one."""
 
+    from .._ir.selector_eval import first_selector_kind_outside
+    from .._postprocess._selective_save import _STATIC_SELECTOR_KINDS
     from ..intervention.selectors import BaseSelector
-    from ..ir.selector_eval import first_selector_kind_outside
-    from ..postprocess._selective_save import _STATIC_SELECTOR_KINDS
 
     if not isinstance(selector, BaseSelector):
         return False

@@ -21,7 +21,7 @@ from torch import nn
 from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.types import (
     CapturedArgTemplate,
@@ -207,7 +207,7 @@ def test_param_edit_through_a_refreshed_fork_writes_nothing_shared() -> None:
     before = weight.detach().clone()
     version = weight._version
     edited = fork.fork()
-    edited.do(tl.params("fc2.weight"), tl.scale(0.0))
+    edited.do(tl.param("fc2.weight"), tl.scale(0.0))
     assert weight._version == version
     assert weight.detach().view(torch.uint8).equal(before.view(torch.uint8))
     assert _same_recorded(trace, recorded)

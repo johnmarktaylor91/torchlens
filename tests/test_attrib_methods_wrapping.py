@@ -16,7 +16,7 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 
 class _TwoLeafModel(nn.Module):
@@ -108,7 +108,7 @@ def test_noise_tunnel_zero_noise_is_degenerate_exact() -> None:
     x = torch.tensor([[0.4, -0.1, 0.7]], dtype=torch.float64)
     direct = attribution.saliency(model, x, target=1)
     tunneled = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=1, n_samples=3, stdevs=0.0
+        x, method=attribution.saliency, model=model, target=1, num_samples=3, stdevs=0.0
     )
     torch.testing.assert_close(tunneled.values, direct.values, rtol=0, atol=0)
     assert tunneled.method == "noise_tunnel"
@@ -125,10 +125,10 @@ def test_noise_tunnel_seeded_determinism_and_aggregations() -> None:
     model = _LinearOne()
     x = torch.tensor([[0.2, 0.6, -0.3]], dtype=torch.float64)
     first = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=0, n_samples=4, stdevs=0.2, seed=7
+        x, method=attribution.saliency, model=model, target=0, num_samples=4, stdevs=0.2, seed=7
     )
     second = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=0, n_samples=4, stdevs=0.2, seed=7
+        x, method=attribution.saliency, model=model, target=0, num_samples=4, stdevs=0.2, seed=7
     )
     torch.testing.assert_close(first.values, second.values, rtol=0, atol=0)
 
@@ -146,9 +146,9 @@ def test_noise_tunnel_seeded_determinism_and_aggregations() -> None:
             method=attribution.saliency,
             model=model,
             target=0,
-            n_samples=4,
+            num_samples=4,
             stdevs=0.2,
-            aggregation=aggregation,
+            reduce=aggregation,
             noise_bank=bank,
         )
         torch.testing.assert_close(result.values, expected, rtol=1e-12, atol=1e-12)
@@ -164,7 +164,7 @@ def test_noise_tunnel_repeated_reference_and_integer_mask() -> None:
 
     seen: list[tuple[bool, Tensor]] = []
 
-    def probe(inputs: tuple, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def probe(inputs: tuple, input_kwargs: dict | None) -> attribution.Attribution:
         """Record identity/mask facts, then run input_x_grad."""
 
         noised_a, noised_b, noised_mask = inputs
@@ -172,7 +172,7 @@ def test_noise_tunnel_repeated_reference_and_integer_mask() -> None:
         return attribution.input_x_grad(model, inputs, input_kwargs, target=0)
 
     result = attribution.noise_tunnel(
-        (a, a, mask), attribute=probe, n_samples=2, stdevs=0.1, seed=3
+        (a, a, mask), attribute=probe, num_samples=2, stdevs=0.1, seed=3
     )
     assert result.extra["child_method"] == "<closed callable>"
     for same_object, noised_mask in seen:
@@ -203,7 +203,7 @@ def test_noise_tunnel_child_failure_names_zero_based_sample() -> None:
 
     calls = {"count": 0}
 
-    def flaky(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def flaky(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Fail on the second sample."""
 
         if calls["count"] == 1:
@@ -215,7 +215,7 @@ def test_noise_tunnel_child_failure_names_zero_based_sample() -> None:
         attribution.noise_tunnel(
             torch.zeros(1, 3, dtype=torch.float64),
             attribute=flaky,
-            n_samples=3,
+            num_samples=3,
             stdevs=0.1,
             seed=0,
         )
@@ -229,13 +229,13 @@ def test_noise_tunnel_invariance_refusal() -> None:
 
     calls = {"count": 0}
 
-    def shifty(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def shifty(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Return a differently shaped values tree on the second sample."""
 
         del input_kwargs
         calls["count"] += 1
         shape = (1, 3) if calls["count"] == 1 else (1, 4)
-        return attribution.AttributionResult(
+        return attribution.Attribution(
             method="probe",
             values=torch.zeros(shape, dtype=torch.float64),
             target_repr="index=0",
@@ -246,7 +246,7 @@ def test_noise_tunnel_invariance_refusal() -> None:
         attribution.noise_tunnel(
             torch.zeros(1, 3, dtype=torch.float64),
             attribute=shifty,
-            n_samples=2,
+            num_samples=2,
             stdevs=0.1,
             seed=0,
         )
@@ -265,13 +265,13 @@ def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
         method=attribution.gradient_shap,
         model=model,
         target=0,
-        method_kwargs={"baselines": pool, "n_samples": 3},
-        n_samples=2,
+        method_kwargs={"baselines": pool, "num_samples": 3},
+        num_samples=2,
         stdevs=0.05,
         seed=11,
     )
     assert result.extra["child_method"] == "gradient_shap"
-    assert result.extra["method_kwargs"]["n_samples"] == 3
+    assert result.extra["method_kwargs"]["num_samples"] == 3
     assert len(result.extra["child_seeds"]) == 2
     assert len(set(result.extra["child_seeds"])) == 2
     assert result.extra["child_n_samples"] == 3
@@ -282,8 +282,8 @@ def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
         method=attribution.gradient_shap,
         model=model,
         target=0,
-        method_kwargs={"baselines": pool, "n_samples": 3},
-        n_samples=2,
+        method_kwargs={"baselines": pool, "num_samples": 3},
+        num_samples=2,
         stdevs=0.05,
         seed=11,
     )
@@ -299,16 +299,16 @@ def test_smoothgrad_is_the_thin_alias_with_absolute_before_mean() -> None:
 
     model = _LinearOne()
     x = torch.tensor([[0.3, 0.9, -0.4]], dtype=torch.float64)
-    legacy = attribution.smoothgrad(model, x, target=0, n_samples=25, noise_level=0.1, seed=123)
+    legacy = attribution.smoothgrad(model, x, target=0, num_samples=25, noise_level=0.1, seed=123)
     tunneled = attribution.noise_tunnel(
         x,
         method=attribution.saliency,
         model=model,
         target=0,
-        n_samples=25,
+        num_samples=25,
         stdevs=0.1,
         seed=123,
-        aggregation="mean",
+        reduce="mean",
     )
     torch.testing.assert_close(legacy.values, tunneled.values, rtol=0, atol=0)
     assert legacy.method == "smoothgrad"
@@ -334,7 +334,7 @@ def test_gradient_shap_stored_draw_oracle_pins_the_estimator() -> None:
         x,
         target=1,
         baselines=pool,
-        n_samples=2,
+        num_samples=2,
         stdevs=0.0,
         draw_bank={"alphas": alphas, "pool_indices": indices},
         store_draws=True,
@@ -361,8 +361,8 @@ def test_gradient_shap_converges_to_ig_single_baseline_zero_noise() -> None:
     model = _SmoothTanh()
     x = torch.tensor([[0.6, -0.4, 0.2]], dtype=torch.float64)
     baseline = torch.tensor([[0.0, 0.0, 0.0]], dtype=torch.float64)
-    ig = attribution.integrated_gradients(model, x, target=0, n_steps=512, baseline=baseline)
-    gs = attribution.gradient_shap(model, x, target=0, baselines=baseline, n_samples=512, seed=5)
+    ig = attribution.integrated_gradients(model, x, target=0, num_steps=512, baseline=baseline)
+    gs = attribution.gradient_shap(model, x, target=0, baselines=baseline, num_samples=512, seed=5)
     torch.testing.assert_close(gs.values, ig.values, rtol=0.05, atol=1e-4)
 
 
@@ -409,7 +409,7 @@ def test_gradient_shap_pool_refusals() -> None:
             x,
             target=0,
             baselines=torch.zeros(2, 3, dtype=torch.float64),
-            n_samples=2,
+            num_samples=2,
             draw_bank={"alphas": torch.zeros(2, 1), "pool_indices": torch.zeros(1, 1).long()},
         )
     assert bad_bank.value.fields["code"] == "gradient_shap_draw_bank_invalid"
@@ -423,14 +423,16 @@ def test_closed_callable_route_matches_sugar_route_disclosure() -> None:
     x = torch.tensor([[0.1, 0.2, 0.3]], dtype=torch.float64)
     closed = functools.partial(attribution.saliency, model, target=0)
 
-    def adapter(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def adapter(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Adapt partial(...) to the closed (inputs, input_kwargs) shape."""
 
         return closed(inputs, input_kwargs)
 
-    via_attribute = attribution.noise_tunnel(x, attribute=adapter, n_samples=2, stdevs=0.1, seed=9)
+    via_attribute = attribution.noise_tunnel(
+        x, attribute=adapter, num_samples=2, stdevs=0.1, seed=9
+    )
     via_method = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=0, n_samples=2, stdevs=0.1, seed=9
+        x, method=attribution.saliency, model=model, target=0, num_samples=2, stdevs=0.1, seed=9
     )
     torch.testing.assert_close(via_attribute.values, via_method.values, rtol=0, atol=0)
     # The sugar route adds model identity because it SAW the model; the

@@ -20,13 +20,13 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._utils import _torch_compat
+from torchlens._utils.arg_handling import copy_arg_tree
+from torchlens._utils.display import _non_torch_array_summary
 from torchlens.options import (
     CaptureOptions,
     suppress_mutate_warnings,
 )
-from torchlens.utils import _torch_compat
-from torchlens.utils.arg_handling import copy_arg_tree
-from torchlens.utils.display import _non_torch_array_summary
 
 # --------------------------------------------------------------------------- #
 # M15 -- runnable torch alias target-existence probe

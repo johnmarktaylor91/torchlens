@@ -12,8 +12,8 @@ from typing import Any, Literal
 from weakref import ref
 
 from .. import _state
-from ..ir.events import OpEvent
-from ..utils.tensor_utils import safe_copy
+from .._ir.events import OpEvent
+from .._utils.tensor_utils import safe_copy
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
 
@@ -374,7 +374,7 @@ class CaptureSession:
         addresses = profile.activation_module_exit_addresses
         if addresses is None or profile.activation_kind is not RetentionKind.ACTIVATION:
             return False
-        from ..ir.selector_eval import module_address_matches
+        from .._ir.selector_eval import module_address_matches
 
         return any(module_address_matches(module_call_label, address) for address in addresses)
 
@@ -603,8 +603,8 @@ class CaptureSession:
                 for parent_label in output_op.parents:
                     parent = trace.layer_dict_all_keys[parent_label]
                     live_output_by_raw_index[parent.raw_index] = output_tensor
+            from .._ir.selector_eval import selector_contains_kind
             from ..intervention.selectors import BaseSelector
-            from ..ir.selector_eval import selector_contains_kind
 
             selected: list[int] | str
             if isinstance(activation_selector, BaseSelector):
@@ -703,8 +703,8 @@ class CaptureSession:
                     getattr(trace, "activation_transform", None),
                 )
             if detached_spills:
+                from .._utils.display import user_stacklevel
                 from ..errors import TorchLensWarning
-                from ..utils.display import user_stacklevel
 
                 warnings.warn(
                     TorchLensWarning(
@@ -720,7 +720,7 @@ class CaptureSession:
                     ),
                     stacklevel=user_stacklevel(),
                 )
-            from ..postprocess import _refresh_fast_saved_summary
+            from .._postprocess import _refresh_fast_saved_summary
 
             _refresh_fast_saved_summary(trace)
             trace._layer_nums_to_save = sorted(selected_nums)
@@ -863,7 +863,7 @@ class CaptureSession:
         self.projection_facts.update(
             {
                 "capture_events": (
-                    None if capture_events is None else capture_events.copy_for_replay()
+                    None if capture_events is None else capture_events._copy_for_replay()
                 ),
                 "records": records,
                 "output_tensors": tuple(output_tensors or ()),
@@ -986,7 +986,7 @@ def compile_legacy_capture_plan(
     backend_name: str,
     layers_to_save: Any,
     grad_layers_to_save: Any,
-    random_seed: int | None,
+    seed: int | None,
     postprocess: bool,
 ) -> CapturePlan:
     """Compile a no-behavior-change plan from legacy trace configuration.
@@ -1001,7 +1001,7 @@ def compile_legacy_capture_plan(
         Existing activation selector argument.
     grad_layers_to_save
         Existing gradient selector argument.
-    random_seed
+    seed
         Existing forward RNG seed.
     postprocess
         Whether legacy orchestration will materialize a ``Trace`` now.
@@ -1039,7 +1039,7 @@ def compile_legacy_capture_plan(
         activation_window = None
     if _selector_requires_unwindowed_escrow(grad_layers_to_save):
         gradient_window = None
-    from ..ir.selector_eval import module_exit_bound_addresses
+    from .._ir.selector_eval import module_exit_bound_addresses
     from .preflight import _escrow_remedy
 
     # A selector whose matches all lie among module-pass outputs (``tl.module``
@@ -1089,7 +1089,7 @@ def compile_legacy_capture_plan(
             "save_gradients": getattr(trace, "save_gradients", False),
         },
         execution_context={
-            "random_seed": random_seed,
+            "random_seed": seed,
             "inference_only": getattr(trace, "inference_only", False),
         },
         stop_policy=getattr(trace, "_stop_directive", None),
@@ -1162,7 +1162,7 @@ def attach_legacy_capture_session(
     backend_name: str,
     layers_to_save: Any,
     grad_layers_to_save: Any,
-    random_seed: int | None,
+    seed: int | None,
     postprocess: bool,
 ) -> CaptureSession:
     """Attach a new run-owned session behind the legacy trace adapter.
@@ -1175,7 +1175,7 @@ def attach_legacy_capture_session(
         Opaque selected backend adapter.
     backend_name
         Selected backend name.
-    layers_to_save, grad_layers_to_save, random_seed, postprocess
+    layers_to_save, grad_layers_to_save, seed, postprocess
         Existing orchestration arguments mirrored into the plan.
 
     Returns
@@ -1190,7 +1190,7 @@ def attach_legacy_capture_session(
             backend_name=backend_name,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=seed,
             postprocess=postprocess,
         ),
         backend_token=backend_token,

@@ -16,7 +16,7 @@ import torch
 from ._render_leaf import _first_tensor_in_obj, _module_key_for_forward_op
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
+    from .._data_classes.grad_fn import GradFn
 
 __all__ = ["BackwardRowOptions", "backward_opt_in_rows", "backward_rows_for"]
 

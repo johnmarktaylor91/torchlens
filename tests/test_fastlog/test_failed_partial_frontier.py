@@ -43,7 +43,7 @@ class _FrontierModel(nn.Module):
         return self.b(x)
 
 
-def _failed_partial() -> tl.fastlog.Recording:
+def _failed_partial() -> tl.Recording:
     """Capture the failed partial recording for the frontier model."""
 
     with pytest.warns(RuntimeWarning, match="capture attempt failed"):
@@ -61,7 +61,7 @@ def test_failed_partial_last_event_points_at_failure_frontier() -> None:
 
     recording = _failed_partial()
 
-    assert recording.failed is True
+    assert recording.is_failed is True
     assert recording.status == "partial_error"
     # The failing submodule was ENTERED but never completed: that entry is the
     # frontier. The unwind's trailing module-exit events (boom:exit:1,
@@ -86,4 +86,4 @@ def test_failed_partial_keeps_string_only_metadata() -> None:
     ):
         value = getattr(recording, field_name)
         assert value is None or isinstance(value, str)
-    assert isinstance(recording.n_ops_completed, int)
+    assert isinstance(recording.num_committed_ops, int)

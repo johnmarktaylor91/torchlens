@@ -95,7 +95,7 @@ def test_validation_passes_with_weight_norm_captured(model_cls: type[nn.Module])
         RuntimeWarning, match="could not deepcopy the model|model could not be copied"
     ):
         passed = _validate_forward_pass_torch(
-            model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+            model_cls(), [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
         )
     assert passed, tl.validation.last_validation_failure()
 
@@ -121,7 +121,7 @@ def test_unwrap_restores_the_weight_norm_module_alias():
 def test_shadowed_namespace_resolution_is_narrow():
     """Only a non-module walk result with an imported same-named submodule is redirected."""
 
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     # The shadowed case: the package attribute is the function, the roster means the module.
     assert callable(torch.nn.utils.weight_norm)

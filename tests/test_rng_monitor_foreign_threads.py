@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng import host_nondeterminism_monitor
 
 
 class _LinearNoBias(nn.Module):
@@ -131,7 +131,7 @@ def test_gate_pollution_pattern_capture_replays_verified(tmp_path: Path) -> None
         assert not tuple(seam.host_rng_channels or ())
         assert not seam.rng_monitor_uncertain
         bundle = tmp_path / "pollution.tlspec"
-        tl.save(trace, str(bundle), level="runnable", include_weights=True)
+        trace.save(str(bundle), level="runnable", include_weights=True)
         loaded = tl.load(str(bundle))
         result = loaded.run(inputs=x.clone())
         assert result.report.path_faithfulness.value == "verified"

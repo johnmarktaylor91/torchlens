@@ -515,11 +515,11 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
 def test_escape_detector_diagnostic_triggers_rescue(raw_cos: Any) -> None:
     """The opt-in shadow detector's diagnostics are a rescue trigger too."""
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
 
     try:
         wrap_torch(escape_detector="shadow")
-        with pytest.warns(TorchLensCaptureGapWarning):
+        with pytest.warns(CaptureGapWarning):
             trace = tl.trace(_stale_closure_model(raw_cos), torch.tensor([0.25, 0.5]))
         info = trace.rescue_rerun
         assert info is not None and info["recovered"] is True
@@ -950,7 +950,7 @@ def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
     warnings while the user's forward had executed twice.
     """
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
     from torchlens.backends.torch.rescue import capture_with_rescue
 
     runs: list[str] = []
@@ -961,7 +961,7 @@ def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
         runs.append("run")
         return primary if len(runs) == 1 else rescued
 
-    with pytest.warns(TorchLensCaptureGapWarning, match="executed TWICE"):
+    with pytest.warns(CaptureGapWarning, match="executed TWICE"):
         result = capture_with_rescue(run_capture)
     assert result is rescued
 

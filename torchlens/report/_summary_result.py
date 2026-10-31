@@ -22,7 +22,7 @@ from ._summary_ladder import ResolvedView, ViewRow, resolve_view
 from ._summary_render import SummaryFacts, render_summary_pair
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._summary_report import SummaryReport
 
 
@@ -74,7 +74,7 @@ def collect_summary_facts(
     # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
-    from ..observe._peaks import pass_peak_facts
+    from .._observe._peaks import pass_peak_facts
 
     peak_facts = pass_peak_facts(trace, "forward")
     unexecuted_names: tuple[str, ...] = tuple(
@@ -111,7 +111,7 @@ def collect_summary_facts(
         params_unexecuted=core.params.unexecuted,
         unexecuted_names=unexecuted_names,
         tied_groups=core.params.tied_groups,
-        param_bytes=core.params.bytes,
+        param_bytes=core.params.nbytes,
         buffer_count=buffer_count,
         flops_forward_fma2=int(core.compute.partition_total),
         macs_forward=int(core.compute.macs_total),
@@ -121,8 +121,8 @@ def collect_summary_facts(
         unknown_op_names=unknown_names,
         peak_value_bytes=peak_facts.value_bytes,
         peak_meaning=peak_facts.meaning,
-        at_capture_bytes=core.memory.at_capture_bytes,
-        retained_now_bytes=core.memory.retained_now_bytes,
+        at_capture_bytes=core.memory.captured_bytes,
+        retained_now_bytes=core.memory.retained_bytes,
         compute_ops=core.counts.compute_ops,
         tracked_tensor_rows=core.counts.tracked_tensor_rows,
         passes_max=passes_max,
@@ -358,8 +358,8 @@ def result_details(report: SummaryReport) -> str:
         f"  backend: {capture.backend}",
         f"  model: {capture.model_class_name}",
         f"  outcome: {capture.outcome_status}",
-        f"  verified: {capture.capture_verified}",
-        f"  structure_only: {capture.structure_only}",
+        f"  verified: {capture.is_verified}",
+        f"  structure_only: {capture.is_structure_only}",
         f"  health: {capture.health_verdict}",
         f"  fingerprint: {capture.capture_fingerprint}",
         f"  advisories: {capture.advisories}",

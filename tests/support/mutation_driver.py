@@ -95,11 +95,11 @@ MUTANTS: dict[str, tuple[str, str]] = {
     # files. Killed directly by tests/test_postprocess_contract_arming.py and
     # through real armed captures by the test_postprocess_dag enforcement
     # plants below.
-    "M14": ("torchlens/postprocess/__init__.py", "_check_postprocess_contract"),
+    "M14": ("torchlens/_postprocess/__init__.py", "_check_postprocess_contract"),
     # The b9-sol round-5 enrollment gap (R74-2): the direct roster covered
     # exactly one validation comparator and one postprocess checker while
     # validation/core.py carries five more raise-on-violation entry points
-    # and postprocess/__init__.py two assert seams, all previously
+    # and _postprocess/__init__.py two assert seams, all previously
     # margin-unmeasured. tests/test_mutation_driver_governance.py now
     # censuses the check-shaped functions in both files against this roster,
     # so the next entry point cannot ship unenrolled.
@@ -111,8 +111,8 @@ MUTANTS: dict[str, tuple[str, str]] = {
         "torchlens/validation/core.py",
         "_check_whether_func_on_saved_parents_yields_saved_tensor",
     ),
-    "M20": ("torchlens/postprocess/__init__.py", "_assert_no_open_window"),
-    "M21": ("torchlens/postprocess/__init__.py", "_assert_postprocess_contract"),
+    "M20": ("torchlens/_postprocess/__init__.py", "_assert_no_open_window"),
+    "M21": ("torchlens/_postprocess/__init__.py", "_assert_postprocess_contract"),
 }
 
 #: mutant id -> (relative file, core-validation checker). The checkers of
@@ -261,7 +261,7 @@ SUITE = [
     # r7 R74 (opus, PROVEN suite-composition artifacts): 2 of 4 sampled
     # executor survivors were killed by tests OUTSIDE this suite --
     # _run_step_16_5 (graph_shape_hash) by six surface-oracle byte params,
-    # _run_step_20 (release_param_refs) by the outcome-characterization
+    # _run_step_20 (_release_param_refs) by the outcome-characterization
     # planted-propagation test. The weekly executor leg was structurally red
     # on non-defects; score the real killers instead of writing duplicates.
     "tests/surface_oracle/test_surface_oracle.py",
@@ -573,7 +573,7 @@ def derive_executor_mutants(sandbox: Path) -> dict[str, tuple[str, str, str]]:
     Import/collection errors stay ERROR verdicts, never kills.
     """
 
-    rel = "torchlens/postprocess/_executor.py"
+    rel = "torchlens/_postprocess/_executor.py"
     tree = ast.parse((sandbox / rel).read_text(encoding="utf-8"))
     mutants: dict[str, tuple[str, str, str]] = {}
     for node in tree.body:

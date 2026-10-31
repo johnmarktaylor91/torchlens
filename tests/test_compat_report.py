@@ -11,12 +11,12 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_torch_capability_snapshot
+from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_states
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.compat import CompatReport, _report as compat_report_module, report
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import get_torch_capability_snapshot
-from torchlens.utils.rng import log_current_rng_states, set_rng_from_saved_states
-from torchlens.utils.tensor_utils import tensor_nanequal
 
 EXPECTED_COMPAT_ROW_KEYS = {
     "accelerate_cpu_disk_offload",
@@ -297,12 +297,12 @@ def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -
 
     assert len(reports) == 5
     assert all(isinstance(item, CompatReport) for item in reports)
-    assert all({row.key for row in item.rows} == EXPECTED_COMPAT_ROW_KEYS for item in reports)
-    assert reports[1].row("hf_transformers").detected is True
-    assert reports[1].row("torch_capabilities").status in {"pass", "not_tested"}
-    assert reports[2].row("quantized_tensor").status == "known_broken"
-    assert reports[3].row("multi_gpu_rng").detected is True
-    assert reports[4].row("fsdp").status == "scope"
+    assert all({row.key for row in item.checks} == EXPECTED_COMPAT_ROW_KEYS for item in reports)
+    assert reports[1].check("hf_transformers").is_detected is True
+    assert reports[1].check("torch_capabilities").status in {"pass", "not_tested"}
+    assert reports[2].check("quantized_tensor").status == "known_broken"
+    assert reports[3].check("multi_gpu_rng").is_detected is True
+    assert reports[4].check("fsdp").status == "scope"
 
 
 def test_report_renderers_include_truth_table_rows() -> None:
@@ -330,9 +330,9 @@ def test_torch_compile_row_uses_feature_detection_not_class_name(
         lambda: None,
     )
 
-    row = report(FalsePositiveOptimizedModule(), torch.randn(1)).row("torch_compile")
+    row = report(FalsePositiveOptimizedModule(), torch.randn(1)).check("torch_compile")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
 
 
@@ -340,7 +340,7 @@ def test_report_surfaces_every_runtime_capability() -> None:
     """Compatibility report capability row stays lockstep with defined flags."""
 
     compat_report = report(SmallCnn(), torch.randn(2, 1, 4, 4))
-    row = compat_report.row("torch_capabilities")
+    row = compat_report.check("torch_capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
     # The row cell carries the grouped absences-first summary; the FULL dump
     # moved to the detail accessor (sumfam wave-0 item 2), which is where the
@@ -364,10 +364,10 @@ def test_report_detects_known_scope_and_broken_rows() -> None:
     fsdp_report = report(FullyShardedDataParallel(), torch.randn(2, 4))
     tied_report = report(TiedEmbeddingModel(), torch.tensor([1, 2, 3]))
 
-    assert data_parallel_report.row("data_parallel").status == "pass"
-    assert fsdp_report.row("fsdp").status == "scope"
-    assert tied_report.row("tied_parameters").detected is True
-    assert tied_report.row("tied_parameters").status == "pass"
+    assert data_parallel_report.check("data_parallel").status == "pass"
+    assert fsdp_report.check("fsdp").status == "scope"
+    assert tied_report.check("tied_parameters").is_detected is True
+    assert tied_report.check("tied_parameters").status == "pass"
 
 
 def test_quantized_tensor_nanequal_no_longer_crashes() -> None:
@@ -398,7 +398,7 @@ def test_report_quantized_row_uses_shared_cycle_safe_tensor_walker() -> None:
 
     compat_report = report(QuantizedInputModel(), payload)
 
-    assert compat_report.row("quantized_tensor").status == "known_broken"
+    assert compat_report.check("quantized_tensor").status == "known_broken"
 
 
 def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -407,14 +407,14 @@ def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> 
     ``is_initialized`` is part of the fiction: the snapshot deliberately skips
     CUDA entirely until this process has actually initialized it, so that a
     CPU-only capture never force-initializes a visible device (see
-    ``torchlens/utils/rng.py::_snapshot_cuda_rng_states``).
+    ``torchlens/_utils/rng.py::_snapshot_cuda_rng_states``).
     """
 
     calls: list[str] = []
     fake_states = [torch.tensor([1], dtype=torch.uint8), torch.tensor([2], dtype=torch.uint8)]
 
-    monkeypatch.setattr("torchlens.utils.tensor_utils._cuda_available", True)
-    monkeypatch.setattr("torchlens.utils.rng._is_cuda_available", lambda: True)
+    monkeypatch.setattr("torchlens._utils.tensor_utils._cuda_available", True)
+    monkeypatch.setattr("torchlens._utils.rng._is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", lambda: fake_states)
 
@@ -459,13 +459,13 @@ def test_torch_compile_row_discloses_mid_forward_creation_exception() -> None:
     inline torch.compile interior absent while the row read pass/logged).
     """
 
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     if not _torch_compat.HAS_SET_STANCE:
         pytest.skip("set_stance unavailable on this torch")
 
-    row = report(SmallCnn(), torch.randn(2, 1, 4, 4)).row("torch_compile")
+    row = report(SmallCnn(), torch.randn(2, 1, 4, 4)).check("torch_compile")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert "created inside the forward" in row.details.lower()
     assert "dynamo_region_not_logged" in row.details

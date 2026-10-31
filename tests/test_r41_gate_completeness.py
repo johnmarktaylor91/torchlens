@@ -20,7 +20,7 @@ runnable-``.tlspec`` purity gate ``is_pure_forward_callable`` still returned ``T
   ``public_api``), ``torch.nn.functional.triplet_margin_with_distance_loss`` (its
   ``distance_function``), and ``torch._check_with`` (its ``message``).
 
-The fix (``torchlens/utils/_callable_safety.py``) closes each CLASS structurally so a
+The fix (``torchlens/_utils/_callable_safety.py``) closes each CLASS structurally so a
 FUTURE sibling is denied by SHAPE even if never enumerated:
 
 * callable-INVOKE by SIGNATURE -- ``_signature_invokes_callable`` denies any op whose
@@ -54,10 +54,10 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 # Install the torch wrappers so resolved descriptors mirror the live (wrapped) state:
 # the gate must unwrap ``torchlens.backends.torch.wrappers`` before deciding.

@@ -19,18 +19,17 @@ import random
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     TensorSpec,
     TransformContext,
-    TransformContractError,
     chain,
-    coerce_transform,
-    pipeline_from_record,
-    pipeline_record,
     srp,
     srp_realized_facts,
     srp_verify_matrix,
 )
+from torchlens.transforms._coerce import coerce_transform
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 from torchlens.transforms._srp import (
     _matrix_entry,
     _MatrixCache,

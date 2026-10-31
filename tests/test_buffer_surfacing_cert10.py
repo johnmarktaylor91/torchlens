@@ -116,7 +116,7 @@ def test_loaded_buffer_initial_value_is_real_tensor_not_blobref() -> None:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         bundle_path = Path(tmpdir) / "bundle"
-        tl.save(log, str(bundle_path))
+        log.save(str(bundle_path))
         loaded = tl.load(str(bundle_path))
 
         loaded_mean_buffer = loaded.buffers["bn.running_mean"]
@@ -147,7 +147,7 @@ def test_loaded_buffer_initial_value_is_real_tensor_not_blobref() -> None:
         # Re-save + reload must round-trip clean (no dangling cross-generation
         # blob_id baked in from the unresolved first load).
         bundle_path_2 = Path(tmpdir) / "bundle2"
-        tl.save(loaded, str(bundle_path_2))
+        loaded.save(str(bundle_path_2))
         reloaded = tl.load(str(bundle_path_2))
         reloaded_mean_buffer = reloaded.buffers["bn.running_mean"]
         assert type(reloaded_mean_buffer.initial_value) is torch.Tensor
@@ -175,7 +175,7 @@ def test_record_does_not_crash_on_registered_buffer_output() -> None:
     # extraction itself, regardless of what the predicate saves.
     recording = tl.record(model, x, default_op=True)
     assert recording is not None
-    assert recording.failed is False
+    assert recording.is_failed is False
 
     trace = recording.to_trace()
     try:

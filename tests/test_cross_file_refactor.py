@@ -4,7 +4,7 @@ import ast
 import inspect
 from types import ModuleType
 
-import torchlens.data_classes.trace as trace_module
+import torchlens._data_classes.trace as trace_module
 
 EXPECTED_MODELLOG_METHODS = {
     "draw",
@@ -18,7 +18,7 @@ EXPECTED_MODELLOG_METHODS = {
     "validate_forward_pass",
     "check_metadata_invariants",
     "cleanup",
-    "release_param_refs",
+    "_release_param_refs",
     "_postprocess",
     "_run_and_log_inputs_through_model",
     "_remove_log_entry",
@@ -90,8 +90,8 @@ def _is_trace_surface_module(cls: type) -> bool:
     """
 
     module_name = cls.__module__
-    return module_name == "torchlens.data_classes.trace" or module_name.startswith(
-        "torchlens.data_classes._trace_"
+    return module_name == "torchlens._data_classes.trace" or module_name.startswith(
+        "torchlens._data_classes._trace_"
     )
 
 

@@ -62,7 +62,7 @@ def test_default_rdm_sweep_skips_buffer_sites_with_one_disclosure() -> None:
     assert buffer_labels, "fixture lost its buffer sites; rebuild with BatchNorm"
 
     with pytest.warns(TorchLensWarning, match="not stimulus-indexed") as record:
-        matrices = repgeom.rdm_evolution(trace, min_n=2)
+        matrices = repgeom.rdm_evolution(trace, min_stimuli=2)
 
     skip_warnings = [entry for entry in record if "not stimulus-indexed" in str(entry.message)]
     assert len(skip_warnings) == 1, "the skip disclosure must be ONE summarized warning"
@@ -86,7 +86,7 @@ def test_explicit_buffer_site_selection_refuses_actionably() -> None:
     trace = _bn_trace()
     buffer_label = next(layer.layer_label for layer in trace.layers if bool(layer.is_buffer_source))
     with pytest.raises(ValueError, match="buffer overwrite") as excinfo:
-        repgeom.rdm_evolution(trace, save=tl.label(buffer_label), min_n=2)
+        repgeom.rdm_evolution(trace, save=tl.label(buffer_label), min_stimuli=2)
     message = str(excinfo.value)
     assert "rdm_evolution" in message
     assert buffer_label in message
@@ -106,19 +106,19 @@ def test_forced_late_failure_leaves_zero_annotations() -> None:
     )
 
     with pytest.raises(ValueError, match="zero-norm"):
-        repgeom.rdm_evolution(trace, metric="cosine", min_n=2)
+        repgeom.rdm_evolution(trace, metric="cosine", min_stimuli=2)
     assert trace._annotation_blobs is None or not any(
         key.startswith("rdm:") for key in trace._annotation_blobs
     ), "a failed sweep left partial annotations behind"
 
     with pytest.raises(ValueError, match="zero-norm"):
-        repgeom.scree_evolution(trace, metric="cosine", min_n=3)
+        repgeom.scree_evolution(trace, metric="cosine", min_stimuli=3)
     assert trace._annotation_blobs is None or not any(
         key.startswith("scree:") for key in trace._annotation_blobs
     )
 
     with pytest.raises(ValueError, match="zero-norm"):
-        repgeom.mds_evolution(trace, metric="cosine", min_n=3)
+        repgeom.mds_evolution(trace, metric="cosine", min_stimuli=3)
     assert trace._annotation_blobs is None or not any(
         key.startswith("mds:") for key in trace._annotation_blobs
     )
@@ -134,7 +134,7 @@ def test_zero_norm_error_names_site_and_stimulus_rows() -> None:
     )
     with pytest.raises(ValueError, match="cosine distance is undefined for zero-norm stimuli"):
         try:
-            repgeom.rdm_evolution(trace, metric="cosine", min_n=2)
+            repgeom.rdm_evolution(trace, metric="cosine", min_stimuli=2)
         except ValueError as exc:
             message = str(exc)
             assert "failed for site" in message
@@ -150,7 +150,7 @@ def test_shared_helper_errors_name_the_calling_verb() -> None:
     trace = tl.trace(model, torch.randn(6, 3), save=tl.func("tanh"))
 
     with pytest.raises(ValueError) as rdm_excinfo:
-        repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=2)
+        repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=2)
     assert "rdm_evolution" in str(rdm_excinfo.value)
     assert "mds_evolution" not in str(rdm_excinfo.value)
 
@@ -178,7 +178,7 @@ def test_shape_mismatch_site_refuses_on_explicit_selection() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     with pytest.raises(ValueError, match="leading axis") as excinfo:
-        repgeom.rdm_evolution(trace, save=tl.func("transpose"), min_n=2)
+        repgeom.rdm_evolution(trace, save=tl.func("transpose"), min_stimuli=2)
     message = str(excinfo.value)
     assert "6 stimuli" in message
     assert "rdm_evolution" in message
@@ -194,9 +194,9 @@ def test_successful_sweep_still_annotates_and_returns() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
-        matrices = repgeom.rdm_evolution(trace, min_n=2)
-        spectra = repgeom.scree_evolution(trace, min_n=3)
-        coords = repgeom.mds_evolution(trace, min_n=8)
+        matrices = repgeom.rdm_evolution(trace, min_stimuli=2)
+        spectra = repgeom.scree_evolution(trace, min_stimuli=3)
+        coords = repgeom.mds_evolution(trace, min_stimuli=8)
 
     assert trace._annotation_blobs is not None
     for key, matrix in matrices.items():
@@ -228,7 +228,7 @@ def test_resnet18_class_rdm_sweep_fabricates_zero_buffer_pseudo_rdms() -> None:
     assert buffer_labels, "resnet18 trace lost its buffer sites"
 
     with pytest.warns(TorchLensWarning, match="not stimulus-indexed"):
-        matrices = repgeom.rdm_evolution(trace, min_n=2)
+        matrices = repgeom.rdm_evolution(trace, min_stimuli=2)
 
     assert matrices, "no stimulus-indexed sites survived the gate"
     for key, matrix in matrices.items():

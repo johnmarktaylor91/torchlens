@@ -24,12 +24,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import SelectionError
 from torchlens.intervention.edge_substitution import (
     _reexecute_child_with_substitution,
     require_depth1_arg_path,
 )
 from torchlens.intervention.replay import _splice_param_substitutions
-from torchlens.selection import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 
@@ -51,7 +51,7 @@ def capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -60,7 +60,7 @@ def capture():
 
 
 def _identity_edge_fork(trace: tl.Trace) -> tl.Trace:
-    edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
     fork.do(edge.__selection__(), tl.scale(1.0))
     return fork

@@ -83,9 +83,9 @@ def test_backward_and_combined_graphs_declare_the_theme_font(tmp_path: Path, ent
     trace = _traced_with_grads()
     try:
         dot = getattr(trace, entry)(
-            vis_outpath=str(tmp_path / entry),
+            path=str(tmp_path / entry),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     finally:
         trace.cleanup()
@@ -105,9 +105,9 @@ def test_paper_skin_renders_with_a_legend_without_graphviz_warnings(tmp_path: Pa
         warnings.simplefilter("always")
         dot = trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "paper"),
-            vis_theme="paper",
+            file_format="svg",
+            path=str(tmp_path / "paper"),
+            theme="paper",
             show_legend=True,
         )
     assert "colorscheme" not in dot

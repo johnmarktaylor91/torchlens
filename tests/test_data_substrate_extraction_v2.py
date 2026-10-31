@@ -21,17 +21,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError
+from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import (
-    MANIFEST_SCHEMA_V2,
-    DatasetExtractionResumeError,
-    load_extraction,
-)
+from torchlens.dataset_extraction import load_extraction
+from torchlens.errors import DatasetExtractionResumeError, TransformContractError
 from torchlens.transforms import (
     DEFAULT,
     PlannedStep,
     TransformContext,
-    TransformContractError,
     TransformDefinition,
     chain,
     register_transform,
@@ -133,9 +130,7 @@ def test_resume_identity_random_init_refuses_t_modelswap(tmp_path: Path) -> None
     # Both variants constructed before the first capture in this process.
     original = _Model(seed=0).eval()
     random_init = _Model(seed=999).eval()
-    tl.extract_dataset(
-        original, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(original, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
@@ -143,7 +138,7 @@ def test_resume_identity_random_init_refuses_t_modelswap(tmp_path: Path) -> None
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -158,12 +153,10 @@ def test_resume_identity_same_state_resumes_and_completes(tmp_path: Path) -> Non
     """The matching model resumes the prefix and lands terminal totals."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False, resume=True
+        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
     )
     assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(3)]
     loaded = load_extraction(tmp_path)
@@ -177,9 +170,7 @@ def test_resume_identity_in_place_weight_edit_refuses(tmp_path: Path) -> None:
     """The LoRA-merge/lesion class: an in-place weight edit changes identity."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with torch.no_grad():
         model.fc.weight[0, 0] += 1.0
@@ -189,7 +180,7 @@ def test_resume_identity_in_place_weight_edit_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -200,9 +191,7 @@ def test_resume_identity_cross_level_refuses(tmp_path: Path) -> None:
     """An artifact recorded at 'measured' never compares against 'none'."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
@@ -210,7 +199,7 @@ def test_resume_identity_cross_level_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             model_identity="none",
@@ -227,7 +216,7 @@ def test_resume_identity_none_optout_is_recorded_and_resumable(tmp_path: Path) -
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         model_identity="none",
     )
@@ -237,7 +226,7 @@ def test_resume_identity_none_optout_is_recorded_and_resumable(tmp_path: Path) -
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         model_identity="none",
@@ -257,7 +246,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         model_identity=claim,
     )
@@ -268,7 +257,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             model_identity={"checkpoint": "org/model", "revision": "OTHER"},
@@ -279,7 +268,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         model_identity=dict(claim),
@@ -296,7 +285,7 @@ def test_model_identity_kwarg_refuses_outside_the_vocabulary(tmp_path: Path) -> 
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             model_identity="sampled",
         )
@@ -355,7 +344,7 @@ def test_completed_v1_resume_migrates_without_a_forward(tmp_path: Path) -> None:
     _write_v1_artifact(tmp_path, model, "complete")
     calls_before = model.n_forward_calls
     paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False, resume=True
+        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
     )
     assert model.n_forward_calls == calls_before, "migration never runs a forward"
     assert len(paths) == 3
@@ -379,7 +368,7 @@ def test_in_progress_v1_resume_refuses_naming_unprovable_fields(tmp_path: Path) 
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -404,9 +393,9 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=torch.abs,
+        output_transform=torch.abs,
     )
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
@@ -414,16 +403,16 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
-        transform=torch.abs,
+        output_transform=torch.abs,
     )
     assert len(paths) == 3
     loaded = load_extraction(tmp_path)
     assert loaded.manifest["status"] == "complete"
     clean = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=torch.abs
+        model, _stimuli(), _LAYERS, batch_size=4, progress=False, output_transform=torch.abs
     )
     for key, tensor in clean.items():
         assert torch.equal(loaded.activations[key], tensor)
@@ -450,9 +439,9 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -461,10 +450,10 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
-            transform=opaque_step,
+            output_transform=opaque_step,
         )
     assert excinfo.value.fields["code"] == "extraction_resume_opaque_transform"
     assert any("set_unordered" in ref for ref in excinfo.value.fields["opaque_references"])
@@ -493,9 +482,9 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
         pipeline_id="exp-7",
     )
     _interrupt_after(tmp_path, 1)
@@ -504,10 +493,10 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
-        transform=opaque_step,
+        output_transform=opaque_step,
         pipeline_id="exp-7",
     )
     assert len(paths) == 3
@@ -532,9 +521,9 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=opaque_step,
+        output_transform=opaque_step,
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -543,10 +532,10 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
-            transform=opaque_step,
+            output_transform=opaque_step,
             pipeline_id="invented-later",
         )
     assert excinfo.value.fields["code"] == "extraction_resume_pipeline_id_invalid"
@@ -562,9 +551,9 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=spec_chain,
+        output_transform=spec_chain,
     )
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
@@ -572,10 +561,10 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
-        transform=spec_chain,
+        output_transform=spec_chain,
     )
     assert len(paths) == 3
     assert load_extraction(tmp_path).activations["relu"].dtype == torch.float16
@@ -590,9 +579,9 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=chain(tl.transforms.cast(torch.float16)),
+        output_transform=chain(tl.transforms.cast(torch.float16)),
     )
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -601,10 +590,10 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
-            transform=chain(tl.transforms.cast(torch.float32)),
+            output_transform=chain(tl.transforms.cast(torch.float32)),
         )
     assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
     assert "transform_pipeline" in excinfo.value.fields["mismatched_fields"]
@@ -622,7 +611,7 @@ def test_c_implemented_transform_torch_abs_dispatches_unary() -> None:
 
     model = _Model(seed=0).eval()
     out = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=torch.abs
+        model, _stimuli(), _LAYERS, batch_size=4, progress=False, output_transform=torch.abs
     )
     reference = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
     assert torch.equal(out["logits"], reference["logits"].abs())
@@ -639,7 +628,12 @@ def test_declared_ctx_transform_receives_site_label() -> None:
 
     model = _Model(seed=0).eval()
     tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=with_context(probe)
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        progress=False,
+        output_transform=with_context(probe),
     )
     assert set(seen) == {"relu", "logits"}
 
@@ -655,7 +649,7 @@ def test_t_c2_row_axis_guard_refuses_launderers() -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform=lambda tensor: tensor.mean(dim=0),
+            output_transform=lambda tensor: tensor.mean(dim=0),
         )
     assert excinfo.value.fields["code"] == "transform_row_axis_violated"
     with pytest.raises(TransformContractError) as excinfo:
@@ -665,7 +659,7 @@ def test_t_c2_row_axis_guard_refuses_launderers() -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform=lambda tensor: "not a tensor",
+            output_transform=lambda tensor: "not a tensor",
         )
     assert excinfo.value.fields["code"] == "transform_output_invalid"
 
@@ -701,9 +695,9 @@ def test_t_c6_frozen_plan_refuses_lying_transform_before_publication(tmp_path: P
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
-            transform=TransformSpec(name=name, version=1),
+            output_transform=TransformSpec(name=name, version=1),
         )
     assert excinfo.value.fields["code"] == "transform_plan_violated"
     assert not list(tmp_path.glob("batch_*.pt")), "refused BEFORE publication"
@@ -721,7 +715,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
         _LAYERS,
         batch_size=4,
         progress=False,
-        transform={"relu": "magnitude", DEFAULT: chain(tl.transforms.cast(torch.float16))},
+        output_transform={"relu": "magnitude", DEFAULT: chain(tl.transforms.cast(torch.float16))},
     )
     assert out["relu"].dtype == torch.float32 and torch.all(out["relu"] >= 0)
     assert out["logits"].dtype == torch.float16
@@ -732,7 +726,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
             _LAYERS,
             batch_size=4,
             progress=False,
-            transform={"typo": "magnitude"},
+            output_transform={"typo": "magnitude"},
         )
     assert excinfo.value.fields["code"] == "transform_mapping_key_unknown"
     # Disk mode records the per-site records in the signature.
@@ -741,9 +735,9 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform={"relu": "magnitude", DEFAULT: None},
+        output_transform={"relu": "magnitude", DEFAULT: None},
     )
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     per_site: dict[str, Any] = manifest["signature"]["transform_pipeline"]["per_site"]
@@ -764,7 +758,7 @@ def test_stimulus_ids_cardinality_refusals(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path / "a",
+            path=tmp_path / "a",
             progress=False,
             stimulus_ids=["only", "two"],
         )
@@ -778,7 +772,7 @@ def test_stimulus_ids_cardinality_refusals(tmp_path: Path) -> None:
             rows,
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path / "b",
+            path=tmp_path / "b",
             progress=False,
             stimulus_ids=[f"s{i}" for i in range(5)],
         )
@@ -797,7 +791,7 @@ def test_ledger_rows_carry_id_range_digests(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=ids,
     )

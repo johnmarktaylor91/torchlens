@@ -4,7 +4,7 @@ Two independent bug classes were found and fixed in the field-order-sync sprint
 (cert3/cert4/cert5), and both must be gated so neither can silently reappear:
 
 1. **FIELD_ORDER incompleteness** -- a field is genuinely set at construction and
-   marked ``FieldPolicy.KEEP`` in a record class's own ``PORTABLE_STATE_SPEC``,
+   marked ``FieldPolicy.KEEP`` in a record class's own ``_PORTABLE_STATE_SPEC``,
    yet the class's public ``*_FIELD_ORDER`` constant in ``constants.py`` never
    picked it up (e.g. ``Layer.is_in_conditional_body``, ``Buffer.module_address``
    before this fix). ``build_record_field_policy_table`` marks any such field
@@ -34,7 +34,7 @@ self-consistency check that can never catch a field missing from
 the same blind spot. ``Buffer`` had also never been added to
 ``test_field_order_has_no_keep_field_desync``'s parametrize list below (the
 one check in this file that DOES compare against the ground-truth
-``PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
+``_PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
 docstring here previously claiming it already had "equivalent coverage".
 
 ``Trace`` is ALSO covered here (cert8 BLOCKER-1): ``Trace._grad_fn_param_refs``
@@ -88,26 +88,26 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 from torchlens import trace as trace_fn  # noqa: E402
-from torchlens._io import FieldPolicy  # noqa: E402
-from torchlens.constants import (  # noqa: E402
+from torchlens._constants import (  # noqa: E402
     BACKWARD_PASS_FIELD_ORDER,
     BUFFER_LOG_FIELD_ORDER,
     LAYER_LOG_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
     MODULE_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.backward_pass import (  # noqa: E402
+from torchlens._data_classes.backward_pass import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS,
     BackwardPass,
 )
-from torchlens.data_classes.buffer import (  # noqa: E402
+from torchlens._data_classes.buffer import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
     Buffer,
 )
-from torchlens.data_classes.layer import Layer  # noqa: E402
-from torchlens.data_classes.module import _TO_PANDAS_EXCLUDED_MODULE_FIELDS, Module  # noqa: E402
-from torchlens.data_classes.op import Op  # noqa: E402
-from torchlens.data_classes.trace import Trace  # noqa: E402
+from torchlens._data_classes.layer import Layer  # noqa: E402
+from torchlens._data_classes.module import _TO_PANDAS_EXCLUDED_MODULE_FIELDS, Module  # noqa: E402
+from torchlens._data_classes.op import Op  # noqa: E402
+from torchlens._data_classes.trace import Trace  # noqa: E402
+from torchlens._io import FieldPolicy  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
 
 # Per-class documented exclusions for `test_field_order_has_no_keep_field_desync`.
@@ -118,10 +118,10 @@ from torchlens.options import CaptureOptions  # noqa: E402
 _KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
     Trace: frozenset(
         {
-            # Computed @property (data_classes/_trace_stats.py); never stored
+            # Computed @property (_data_classes/_trace_stats.py); never stored
             # in self.__dict__, so there is no state for FIELD_ORDER to lose.
             # Its sibling `num_ops_with_params` (also computed) correctly has
-            # no PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
+            # no _PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
             # confirmed-vestigial, not a live desync (cert7/cert8 MINOR-2).
             "ops_with_params",
             # tlspec v8 bump: three unordered runtime rows made portable BY
@@ -185,7 +185,7 @@ def coverage_trace() -> Any:
     torch.manual_seed(0)
     model = _FieldCoverageModel()
     x = torch.ones(2, 2, requires_grad=True)  # forces mean() > 0 -> the relu (then) arm
-    trace = trace_fn(model, x, capture=CaptureOptions(save_code_context=True, save_grads="all"))
+    trace = trace_fn(model, x, capture=CaptureOptions(save_source_context=True, save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out)
     try:
         yield trace
@@ -238,13 +238,13 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
 
     Regression gate for the cert3/cert4/cert6/cert8 desync class: a field is
     set at construction and marked ``FieldPolicy.KEEP`` in the class's
-    PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
+    _PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
     never picked it up, so it silently vanished from every ``to_pandas()``
     export built on that constant (e.g. ``Layer.is_in_conditional_body``,
     ``Buffer.module_address``, ``Buffer.initial_value`` -- all fixed by this
     same change). ``Buffer`` is included here specifically because it was
     the cert6/cert7 MAJOR-1 gap: the class was never added to this
-    parametrize list even though its own ``PORTABLE_STATE_SPEC`` had a real
+    parametrize list even though its own ``_PORTABLE_STATE_SPEC`` had a real
     KEEP-and-missing field (``_initial_value``) the whole time.
 
     ``Trace`` is included here for the cert8 BLOCKER-1 gap: unlike the other
@@ -389,7 +389,7 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
     ``save_grads_policy``.
     """
 
-    bp = coverage_trace.backward_passes[0]
+    bp = coverage_trace.autograd.backward_passes[0]
     df = bp.to_pandas()
     columns = list(df.columns)
 
@@ -409,9 +409,9 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
     assert isinstance(df.loc[0, "engine_flags"], dict)
     assert df.loc[0, "save_grads_policy"] is not None
 
-    # trace.backward_passes.to_pandas() delegates through the base Accessor,
+    # trace.autograd.backward_passes.to_pandas() delegates through the base Accessor,
     # which concats each item's to_pandas() -- so it inherits the same fix.
-    accessor_df = coverage_trace.backward_passes.to_pandas()
+    accessor_df = coverage_trace.autograd.backward_passes.to_pandas()
     assert list(accessor_df.columns) == columns
 
 

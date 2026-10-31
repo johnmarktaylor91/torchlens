@@ -93,7 +93,7 @@ def test_rg10_extraction_memory_and_disk_agree_and_reload(
         torch.stack(stimuli),
         [EXTRACT_SITE],
         batch_size=2,
-        output_dir=str(output_dir),
+        path=str(output_dir),
         progress=False,
         stimulus_ids=stimulus_ids,
     )
@@ -175,7 +175,7 @@ def test_rg12_runnable_save_load_rerun_verified(
     trace = tl.trace(resnet, batch, capture=tl.options.CaptureOptions(intervention_ready=True))
     try:
         path = tmp_path / "resnet-runnable.tlspec"
-        tl.save(trace, str(path), level="runnable", include_weights=True)
+        trace.save(str(path), level="runnable", include_weights=True)
         loaded = tl.load(str(path))
         result = loaded.run(inputs=batch)
         assert result.report.path_faithfulness.name == "VERIFIED"
@@ -197,7 +197,7 @@ def test_rg13_render_floors_track_the_captured_graph(
     batch, _ = natural_image_batch
     trace = tl.trace(resnet, batch)
     try:
-        graph = trace.draw(vis_outpath=str(tmp_path / "resnet-graph"), return_graph=True)
+        graph = trace.draw(path=str(tmp_path / "resnet-graph"), return_graph=True)
         dot_source = graph.source if hasattr(graph, "source") else str(graph)
         node_count = dot_source.count("label=")
         assert node_count >= 50, (
@@ -307,7 +307,7 @@ def test_rg20_receptive_field_geometric_matches_empirical(
             f" {verdict.status} ({verdict.message}) at {early_conv} --"
             " geometric and empirical fields disagree on a flagship surface"
         )
-        assert verdict.n_violations == 0
+        assert verdict.num_violations == 0
     finally:
         armed.cleanup()
         tl.release_model(model)

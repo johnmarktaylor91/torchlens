@@ -145,7 +145,7 @@ def test_edge_patch_runs_on_gpt2_small(r1_loader) -> None:
         graph, corrupt_graph = mi.component_graph(clean), mi.component_graph(corrupt)
         baseline = logit_diff(clean)
         for name in ("a9.h9->logits", "m0->a9.h9<q>"):
-            patched = mi.patch_edges(clean, [graph.edges[name]], corrupt=corrupt_graph)
+            patched = mi.patch_edges(clean, [graph.edges[name]], corrupted_graph=corrupt_graph)
             effect = logit_diff(patched) - baseline
             print(
                 f"CIRC1-PATCH model=gpt2 edge={name} clean_logit_diff={baseline:.4f} "

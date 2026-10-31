@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import (
+from torchlens._constants import (
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
     GRAD_FN_PASS_LOG_FIELD_ORDER,
@@ -55,20 +55,20 @@ def _trace_memory_model() -> tl.Trace:
 def test_bytes_formatting_and_numeric_behavior() -> None:
     """Bytes formats human-readably while preserving numeric operations."""
 
-    value = tl.Bytes(1_234_567)
+    value = tl.types.Bytes(1_234_567)
 
-    assert isinstance(value, tl.Quantity)
+    assert isinstance(value, tl.types.Quantity)
     assert isinstance(value, int)
     assert str(value) == "1.2 MB"
-    assert repr(tl.Bytes(32)) == "Bytes('32 B')"
+    assert repr(tl.types.Bytes(32)) == "Bytes('32 B')"
     assert f"{value:raw}" == "1234567"
     assert f"{value:.2f MB}" == "1.18 MB"
-    assert value + 1 == tl.Bytes(1_234_568)
-    assert 1 + value == tl.Bytes(1_234_568)
-    assert value - 567 == tl.Bytes(1_234_000)
-    assert value * 2 == tl.Bytes(2_469_134)
-    assert value / 2 == tl.Bytes(617_283)
-    assert value / tl.Bytes(1_234_567) == 1.0
+    assert value + 1 == tl.types.Bytes(1_234_568)
+    assert 1 + value == tl.types.Bytes(1_234_568)
+    assert value - 567 == tl.types.Bytes(1_234_000)
+    assert value * 2 == tl.types.Bytes(2_469_134)
+    assert value / 2 == tl.types.Bytes(617_283)
+    assert value / tl.types.Bytes(1_234_567) == 1.0
     assert value > 1_000_000
 
 
@@ -76,16 +76,16 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
 def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     """Duration, Flops, and Macs format directly while staying numeric."""
 
-    duration = tl.Duration(0.0012)
-    flops = tl.Flops(1_234_000_000)
-    macs = tl.Macs(3_400_000)
+    duration = tl.types.Duration(0.0012)
+    flops = tl.types.Flops(1_234_000_000)
+    macs = tl.types.Macs(3_400_000)
 
     assert isinstance(duration, float)
     assert isinstance(flops, int)
     assert isinstance(macs, int)
     assert str(duration) == "1.2 ms"
     assert repr(duration) == "Duration('1.2 ms')"
-    assert str(tl.Duration(3.4)) == "3.4 s"
+    assert str(tl.types.Duration(3.4)) == "3.4 s"
     assert f"{duration:raw}" == "0.0012"
     assert f"{duration:.2f ms}" == "1.20 ms"
     assert str(flops) == "1.23 GFLOPs"
@@ -95,9 +95,9 @@ def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     assert str(macs) == "3.4 MMACs"
     assert repr(macs) == "Macs('3.4 MMACs')"
     assert f"{macs:.1f MMACs}" == "3.4 MMACs"
-    assert duration + tl.Duration(0.001) == pytest.approx(tl.Duration(0.0022))
-    assert flops + 1 == tl.Flops(1_234_000_001)
-    assert macs / 2 == tl.Macs(1_700_000)
+    assert duration + tl.types.Duration(0.001) == pytest.approx(tl.types.Duration(0.0022))
+    assert flops + 1 == tl.types.Flops(1_234_000_001)
+    assert macs / 2 == tl.types.Macs(1_700_000)
 
 
 def test_memory_fields_are_bytes_and_format_directly() -> None:
@@ -127,7 +127,7 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
         buffer.activation_memory,
     ]
 
-    assert all(isinstance(field, tl.Bytes) for field in fields)
+    assert all(isinstance(field, tl.types.Bytes) for field in fields)
     assert re.fullmatch(r"-?\d+(?:\.\d+)? [KMGTPE]?B", str(op.activation_memory))
     assert op.activation_memory + 1 > op.activation_memory
 
@@ -162,27 +162,27 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         op.flops_total,
         layer.flops_forward,
         layer.total_flops_forward,
-        trace.total_flops_forward,
-        trace.total_flops,
+        trace.cost.total_flops_forward,
+        trace.cost.total_flops,
         module.total_flops_forward,
         module.total_flops,
-        trace.flops_by_op_type()[op.layer_type]["forward"],
+        trace.cost.flops_by_op_type()[op.layer_type]["forward"],
     ]
     macs_fields = [
         op.macs_forward,
         op.macs_total,
         layer.macs_forward,
         layer.total_macs_forward,
-        trace.total_macs_forward,
-        trace.total_macs,
+        trace.cost.total_macs_forward,
+        trace.cost.total_macs,
         module.total_macs_forward,
         module.total_macs,
-        trace.macs_by_op_type()[op.layer_type]["forward"],
+        trace.cost.macs_by_kind()[op.layer_type]["forward"],
     ]
 
-    assert all(isinstance(field, tl.Duration) for field in duration_fields)
-    assert all(isinstance(field, tl.Flops) for field in flops_fields if field is not None)
-    assert all(isinstance(field, tl.Macs) for field in macs_fields if field is not None)
+    assert all(isinstance(field, tl.types.Duration) for field in duration_fields)
+    assert all(isinstance(field, tl.types.Flops) for field in flops_fields if field is not None)
+    assert all(isinstance(field, tl.types.Macs) for field in macs_fields if field is not None)
 
 
 def test_memory_str_and_bare_memory_fields_are_not_public() -> None:

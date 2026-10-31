@@ -157,8 +157,8 @@ def test_rank_path_emits_theme_family(tmp_path: Path, monkeypatch: pytest.Monkey
     trace.draw(
         vis_node_placement="rank",
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_typography"),
+        file_format="svg",
+        path=str(tmp_path / "rank_typography"),
         show_containers=False,
     )
     source = captured["source"]

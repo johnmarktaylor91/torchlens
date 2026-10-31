@@ -36,8 +36,8 @@ _CLIP_CONSTANCY_WINDOW = 6
 class ScaleLedgerSnapshot:
     """Frozen skip/scale ledger facts for reports and events."""
 
-    scaler_present: bool
-    enabled: bool
+    has_scaler: bool
+    is_enabled: bool
     backward_reads: int
     current_scale: float | None
     initial_scale: float | None
@@ -52,8 +52,8 @@ class ScaleLedgerSnapshot:
         """Return the JSON-serializable ledger payload."""
 
         return {
-            "scaler_present": self.scaler_present,
-            "enabled": self.enabled,
+            "scaler_present": self.has_scaler,
+            "enabled": self.is_enabled,
             "backward_reads": self.backward_reads,
             "current_scale": self.current_scale,
             "initial_scale": self.initial_scale,
@@ -86,12 +86,12 @@ class ScaleLedger:
         self._dynamic_k_disclosed = False
 
     @property
-    def enabled(self) -> bool:
+    def is_enabled(self) -> bool:
         """Whether a live, enabled GradScaler is attached."""
 
         return self._scaler is not None and bool(getattr(self._scaler, "is_enabled", bool)())
 
-    def read(self) -> None:
+    def observe_backward(self) -> None:
         """Record one backward's scale reading; count decrements exactly."""
 
         self.backward_reads += 1
@@ -107,7 +107,7 @@ class ScaleLedger:
         """
 
         scaler = self._scaler
-        if not self.enabled or scaler is None:
+        if not self.is_enabled or scaler is None:
             return
         scale = float(scaler.get_scale())
         if self._initial_scale is None:
@@ -123,7 +123,7 @@ class ScaleLedger:
             growth = float(getattr(self._scaler, "get_growth_factor", lambda: 2.0)())
             self.growth_events += _exact_event_count(scale, last, growth)
 
-    def accepted(self) -> None:
+    def observe_accepted_step(self) -> None:
         """Record one accepted optimizer step."""
 
         self.accepted_steps += 1
@@ -147,8 +147,8 @@ class ScaleLedger:
                 "boundary for exact attempt grouping"
             )
         return ScaleLedgerSnapshot(
-            scaler_present=self._scaler is not None,
-            enabled=self.enabled,
+            has_scaler=self._scaler is not None,
+            is_enabled=self.is_enabled,
             backward_reads=self.backward_reads,
             current_scale=self._last_scale,
             initial_scale=self._initial_scale,
@@ -181,7 +181,7 @@ class WatchdogSnapshot:
 
     backwards_since_accepted: int
     threshold: int
-    tripped: bool
+    is_tripped: bool
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serializable watchdog payload."""
@@ -189,7 +189,7 @@ class WatchdogSnapshot:
         return {
             "backwards_since_accepted": self.backwards_since_accepted,
             "threshold": self.threshold,
-            "tripped": self.tripped,
+            "tripped": self.is_tripped,
         }
 
 
@@ -234,7 +234,7 @@ class Watchdog:
         return WatchdogSnapshot(
             backwards_since_accepted=self.backwards_since_accepted,
             threshold=self.threshold,
-            tripped=self._warned,
+            is_tripped=self._warned,
         )
 
 
@@ -248,7 +248,7 @@ class ClipLedgerSnapshot:
     saturated_steps: int
     saturation_rate: float | None
     applied_clip_factors: tuple[float, ...]
-    constancy_hint: bool
+    has_constancy_hint: bool
     constant_total: float | None
     nonfinite_totals: int
 
@@ -262,7 +262,7 @@ class ClipLedgerSnapshot:
             "saturated_steps": self.saturated_steps,
             "saturation_rate": self.saturation_rate,
             "applied_clip_factors": list(self.applied_clip_factors),
-            "constancy_hint": self.constancy_hint,
+            "constancy_hint": self.has_constancy_hint,
             "constant_total": self.constant_total,
             "nonfinite_totals": self.nonfinite_totals,
         }
@@ -335,7 +335,7 @@ class ClipLedger:
                 self.saturated_steps / observed if self.clip_norm is not None and observed else None
             ),
             applied_clip_factors=tuple(self._factors),
-            constancy_hint=constancy_hint,
+            has_constancy_hint=constancy_hint,
             constant_total=constant_total,
             nonfinite_totals=self.nonfinite_totals,
         )

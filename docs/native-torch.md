@@ -13,11 +13,11 @@ instead of paraphrasing it. This page is that map.
 
 | Question | Authority | What TorchLens adds / does instead |
 |---|---|---|
-| Device kernel timing | `torch.profiler` (Kineto/CUPTI) | The correlation-ID join lands kernel time on *your named ops and module calls* (`torchlens.observability.native_profile`); every device number still comes from Kineto's instrumentation |
+| Device kernel timing | `torch.profiler` (Kineto/CUPTI) | The correlation-ID join lands kernel time on *your named ops and module calls* (`torchlens.report.kernel_profile`); every device number still comes from Kineto's instrumentation |
 | Clean micro-benchmarks | `torch.utils.benchmark.Timer` | We locate the hotspot (`tl.debug.hot_path`); torch times it clean — whole-model recipe below |
 | OOM autopsy / allocator forensics | `torch.cuda.memory._dump_snapshot` + memory_viz | Tested recipe in [memory_debugging.md](memory_debugging.md); TorchLens never parses the snapshot |
-| Backward-born NaNs, custom-autograd exceptions | `torch.autograd.set_detect_anomaly` | `tl.debug.nan_report` names the forward ORIGIN op free on an existing capture, and prints the detect_anomaly recipe verbatim for the cases it does not cover |
-| Analytic FLOPs by dispatched overload | `torch.utils.flop_counter.FlopCounterMode` | `tl.debug.flops_vs_dispatch` runs both registries detached and reports them side by side — never blended, never called "measured" |
+| Backward-born NaNs, custom-autograd exceptions | `torch.autograd.set_detect_anomaly` | `tl.debug.nonfinite_origin` names the forward ORIGIN op free on an existing capture, and prints the detect_anomaly recipe verbatim for the cases it does not cover |
+| Analytic FLOPs by dispatched overload | `torch.utils.flop_counter.FlopCounterMode` | `tl.report.flops_vs_dispatch` runs both registries detached and reports them side by side — never blended, never called "measured" |
 | Module containment (unordered FQN set) | `torch.utils.module_tracker.ModuleTracker` | Strictly weaker than TorchLens module records (no call order, instance map, or reuse identity), but a free independent CI witness |
 | Reference-cycle tensor leaks | `torch.utils.viz._cycles.warn_tensor_cycles` | Named in the memory-debugging recipe page |
 | Kernel-level timeline analysis | Perfetto / Chrome tracing / HTA | TorchLens preserves the NATIVE chrome trace (Kineto's clock) with an exact-ID mapping sidecar; our own chrome exports are host-clock semantic views and say so |
@@ -75,7 +75,7 @@ callable).
 ## Overhead numbers
 
 Every TorchLens overhead figure goes through the paired-ratio harness
-(`torchlens.observability.measure_overhead`): alternating arm order, a
+(`torchlens._observability.measure_overhead`): alternating arm order, a
 refusal predicate declared before the run, an execution-scope witness on
 both arms, and one-sided floors where point estimates are refused. Capture
 overhead ships only as a (model, shape, tier) matrix — measured floors on

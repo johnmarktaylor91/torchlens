@@ -30,8 +30,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 from . import _boundary_bundle as _bundle
 from ._collapse_disclosures import _warn_budget_fallback
 from ._collapse_frontier import (
@@ -109,8 +109,8 @@ from .collapse_plan import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from .auto_collapse import ChildCondensedFlowGraph
     from .source_graph import SourceGraph
 

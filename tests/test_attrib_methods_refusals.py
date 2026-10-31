@@ -13,7 +13,7 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 
 class _DictOut(nn.Module):
@@ -77,7 +77,7 @@ def test_attribution_target_not_differentiable_provoked() -> None:
             _DetachedOut(),
             torch.ones(1, 3, dtype=torch.float64),
             target=0,
-            n_steps=4,
+            num_steps=4,
             step_batch_size=2,
             step_audit="off",
         )
@@ -107,7 +107,7 @@ def test_noise_aggregation_invalid_provoked() -> None:
             model=nn.Linear(3, 2, dtype=torch.float64),
             target=0,
             stdevs=0.1,
-            aggregation="median",
+            reduce="median",
         )
     assert excinfo.value.fields["code"] == "noise_aggregation_invalid"
 
@@ -122,7 +122,7 @@ def test_noise_bank_invalid_provoked() -> None:
             model=nn.Linear(3, 2, dtype=torch.float64),
             target=0,
             stdevs=0.1,
-            n_samples=3,
+            num_samples=3,
             noise_bank=[[torch.zeros(1, 3, dtype=torch.float64)]],  # covers 1 of 3
         )
     assert excinfo.value.fields["code"] == "noise_bank_invalid"
@@ -155,7 +155,7 @@ def test_step_batch_layer_firings_inconsistent_provoked() -> None:
             torch.ones(1, 6, dtype=torch.float64),
             target=0,
             layer="eater",
-            n_steps=4,
+            num_steps=4,
             step_batch_size=2,
             step_audit="off",
         )
@@ -202,7 +202,7 @@ def test_text_model_unsupported_provoked() -> None:
             return [str(i) for i in ids]
 
     with pytest.raises(AttributionError) as excinfo:
-        attribution.text(_NoLogits(), _Tok(), "a b c", n_steps=2)
+        attribution.text(_NoLogits(), _Tok(), "a b c", num_steps=2)
     assert excinfo.value.fields["code"] == "text_model_unsupported"
 
 
@@ -237,7 +237,7 @@ def test_layer_path_gradient_missing_provoked(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(layer_module, "_capture_layer_activation_for_leaves", _gradless)
     with pytest.raises(AttributionError) as excinfo:
         attribution.layer_integrated_gradients(
-            _TinyHead(), torch.ones(1, 3, dtype=torch.float64), target=0, layer="lin", n_steps=2
+            _TinyHead(), torch.ones(1, 3, dtype=torch.float64), target=0, layer="lin", num_steps=2
         )
     assert excinfo.value.fields["code"] == "layer_path_gradient_missing"
 
@@ -257,7 +257,7 @@ def test_layer_conductance_edge_missing_provoked(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(layer_module, "_layer_path_run", _edgeless)
     with pytest.raises(AttributionError) as excinfo:
         attribution.layer_conductance(
-            _TinyHead(), torch.ones(1, 3, dtype=torch.float64), target=0, layer="lin", n_steps=2
+            _TinyHead(), torch.ones(1, 3, dtype=torch.float64), target=0, layer="lin", num_steps=2
         )
     assert excinfo.value.fields["code"] == "layer_conductance_edge_missing"
 
@@ -280,7 +280,7 @@ def test_noise_tunnel_route_unbound_provoked(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(_noise_tunnel, "_bind_method", _unbound)
     with pytest.raises(AttributionError) as excinfo:
-        attribution.noise_tunnel(torch.ones(1, 2, dtype=torch.float64), n_samples=1, stdevs=0.1)
+        attribution.noise_tunnel(torch.ones(1, 2, dtype=torch.float64), num_samples=1, stdevs=0.1)
     assert excinfo.value.fields["code"] == "noise_tunnel_route_unbound"
 
 
@@ -345,5 +345,5 @@ def test_text_auto_ladder_empty_provoked(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(text_module, "_AUTO_LADDER", ())
     with pytest.raises(AttributionError) as excinfo:
-        attribution.text(_MiniForCausalLM(), _MiniTokenizer(), "the cat sat", n_steps="auto")
+        attribution.text(_MiniForCausalLM(), _MiniTokenizer(), "the cat sat", num_steps="auto")
     assert excinfo.value.fields["code"] == "text_auto_ladder_empty"

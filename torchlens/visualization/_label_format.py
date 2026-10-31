@@ -6,10 +6,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
 from .._errors import InvalidArgumentError
+from .._quantities import Duration
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils.display import human_readable_size
 from ..capture.flops import append_attention_note
-from ..quantities import Duration
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ..utils.display import human_readable_size
 
 PARAM_SEPARATOR: Final[str] = " · "
 
@@ -400,7 +400,8 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
-    if getattr(params, "num_param_tensors", None) == 0:
+    barcodes = getattr(params, "_param_barcodes", None)
+    if barcodes is not None and len(barcodes) == 0:
         return []
 
     param_logs = getattr(params, "_param_logs", None)

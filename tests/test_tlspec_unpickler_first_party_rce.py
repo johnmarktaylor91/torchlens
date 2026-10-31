@@ -2,7 +2,7 @@
 
 Before r21 the bundle ``metadata.pkl`` unpickler admitted the ENTIRE ``torchlens.*``
 callable namespace as a pickle REDUCE target (``callable(obj) and
-_is_torchlens_owned(obj)``). Because ``torchlens.utils._module_is_installed`` does
+_is_torchlens_owned(obj)``). Because ``torchlens._utils._module_is_installed`` does
 ``importlib.import_module(<arg>)``, a crafted ``metadata.pkl`` whose REDUCE named it
 ran an arbitrary import -- attacker top-level code -- on a plain ``tl.load(path)``,
 BEFORE ``.run()`` and before any downstream callable-safety gate could fire (a
@@ -10,7 +10,7 @@ confirmed load-time RCE).
 
 The fix narrows first-party CALLABLE admission to a deterministic, registry-state-
 INDEPENDENT set of vetted-INERT callables (public + side-effect-free), via
-``torchlens.utils._callable_safety.is_inert_first_party_callable``. TYPES are still
+``torchlens._utils._callable_safety.is_inert_first_party_callable``. TYPES are still
 admitted (reconstruction path, never invoked with attacker args). The private
 import gadget is denied; genuine public facet recipes / transforms / helpers still
 resolve. The same narrowing is applied defense-in-depth to the intervention
@@ -34,13 +34,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.utils as tlutils
-from torchlens._io import TorchLensIOError
+import torchlens._utils as tlutils
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._utils._callable_safety import is_inert_first_party_callable
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import _resolve_import_ref
 from torchlens.options import CaptureOptions
-from torchlens.utils._callable_safety import is_inert_first_party_callable
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -62,7 +62,7 @@ def _load_ref(module: str, name: str) -> object:
 
 
 class _ModuleInstalledGadget:
-    """``__reduce__`` -> ``torchlens.utils._module_is_installed('<attacker>')``.
+    """``__reduce__`` -> ``torchlens._utils._module_is_installed('<attacker>')``.
 
     On a vulnerable tree the unpickler admits the private helper and pickle INVOKES
     it, importing the attacker module (whose top-level code writes a sentinel).
@@ -117,7 +117,7 @@ def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path
         raised: BaseException | None = None
         try:
             tl.load(victim)
-        except (TorchLensIOError, pickle.UnpicklingError) as exc:
+        except (ArtifactError, pickle.UnpicklingError) as exc:
             raised = exc
 
         assert raised is not None, "load-time import gadget was not blocked"
@@ -133,7 +133,7 @@ def test_module_is_installed_denied_by_direct_unpickler() -> None:
     """The restricted unpickler refuses the private import gadget as a bare GLOBAL."""
 
     with pytest.raises(pickle.UnpicklingError):
-        _load_ref("torchlens.utils", "_module_is_installed")
+        _load_ref("torchlens._utils", "_module_is_installed")
 
 
 # --------------------------------------------------------------------------- #
@@ -152,9 +152,9 @@ def test_vetted_facet_recipe_admitted() -> None:
 def test_vetted_transform_helper_admitted() -> None:
     """A public first-party transform (identity) still resolves (prior r4 contract)."""
 
-    from torchlens.utils.display import identity
+    from torchlens._utils.display import identity
 
-    assert _load_ref("torchlens.utils.display", "identity") is identity
+    assert _load_ref("torchlens._utils.display", "identity") is identity
 
 
 def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
@@ -176,16 +176,16 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
     try:
         facets_mod.reset()
         snapshot = facets_mod.snapshot()
-        assert snapshot.recipes, "expected built-in recipes in the registry snapshot"
-        recipe_names = {r.public.recipe_name for r in snapshot.recipes}
+        assert snapshot.functions, "expected built-in recipes in the registry snapshot"
+        recipe_names = {r.public.name for r in snapshot.functions}
         assert "transformer_residuals" in recipe_names, "residual recipe (private predicate)"
 
         blob = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)
         restored = SafeBundleUnpickler(io.BytesIO(blob)).load()
 
         assert isinstance(restored, facets_mod.FacetRegistrySnapshot)
-        assert len(restored.recipes) == len(snapshot.recipes)
-        for orig, roundtripped in zip(snapshot.recipes, restored.recipes):
+        assert len(restored.functions) == len(snapshot.functions)
+        for orig, roundtripped in zip(snapshot.functions, restored.functions):
             assert roundtripped.func is orig.func
             assert roundtripped.predicate is orig.predicate
     finally:
@@ -200,10 +200,10 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
 def test_inert_first_party_gate_discriminates() -> None:
     """The gate admits public inert helpers and denies private / side-effecting ones."""
 
+    from torchlens._utils import _module_is_installed
+    from torchlens._utils.display import identity
     from torchlens.intervention.helpers import clamp, zero_ablate
     from torchlens.semantic.recipes.norm import layer_norm
-    from torchlens.utils import _module_is_installed
-    from torchlens.utils.display import identity
 
     assert is_inert_first_party_callable(identity)
     assert is_inert_first_party_callable(layer_norm)
@@ -213,7 +213,7 @@ def test_inert_first_party_gate_discriminates() -> None:
     assert not is_inert_first_party_callable(_module_is_installed)
     # A public torchlens callable whose name marks file/serialization I/O is denied.
     assert not is_inert_first_party_callable(tl.load)
-    assert not is_inert_first_party_callable(tl.save)
+    assert not is_inert_first_party_callable(tl.Trace.save)
 
 
 # --------------------------------------------------------------------------- #
@@ -249,7 +249,7 @@ def test_resolver_denies_first_party_import_gadget_but_resolves_helper() -> None
 
     assert _resolve_import_ref("torchlens.intervention.helpers:zero_ablate") is zero_ablate
     with pytest.raises((UntrustedCallableError, Exception)) as excinfo:
-        _resolve_import_ref("torchlens.utils:_module_is_installed")
+        _resolve_import_ref("torchlens._utils:_module_is_installed")
     # The refusal must originate from the untrusted-callable gate.
     chain: list[BaseException] = []
     exc: BaseException | None = excinfo.value
@@ -305,7 +305,7 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     raised: BaseException | None = None
     try:
         tl.load(bundle)
-    except (TorchLensIOError, pickle.UnpicklingError) as exc:
+    except (ArtifactError, pickle.UnpicklingError) as exc:
         raised = exc
 
     assert raised is not None, "fs-mutation gadget was not blocked"
@@ -317,14 +317,14 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
 def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     """A REDUCE flipping a global HAS_* capability flag must leave the flag unchanged."""
 
-    import torchlens.utils._torch_compat as tc
+    import torchlens._utils._torch_compat as tc
 
     cap = next(iter(tc._CAPABILITY_ATTRS))
     before = getattr(tc, cap)
 
     class _StateGadget:
         def __reduce__(self):  # type: ignore[no-untyped-def]
-            from torchlens.utils._torch_compat import mark_torch_capability_missing
+            from torchlens._utils._torch_compat import mark_torch_capability_missing
 
             return (mark_torch_capability_missing, (cap, "poisoned-by-untrusted-bundle"))
 
@@ -337,7 +337,7 @@ def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
 
     try:
         tl.load(bundle)
-    except (TorchLensIOError, pickle.UnpicklingError):
+    except (ArtifactError, pickle.UnpicklingError):
         pass
     assert getattr(tc, cap) == before, "untrusted bundle flipped a global capability flag"
 
@@ -345,25 +345,25 @@ def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
 def test_public_side_effecting_first_party_callables_denied() -> None:
     """The public-name fallthrough is GONE: fs / state mutators fail the gate + door."""
 
+    from torchlens._utils._torch_compat import mark_torch_capability_missing
     from torchlens.fastlog.cleanup import cleanup_partial
-    from torchlens.utils._torch_compat import mark_torch_capability_missing
 
     assert not is_inert_first_party_callable(cleanup_partial)
     assert not is_inert_first_party_callable(mark_torch_capability_missing)
     with pytest.raises(pickle.UnpicklingError):
         _load_ref("torchlens.fastlog.cleanup", "cleanup_partial")
     with pytest.raises(pickle.UnpicklingError):
-        _load_ref("torchlens.utils._torch_compat", "mark_torch_capability_missing")
+        _load_ref("torchlens._utils._torch_compat", "mark_torch_capability_missing")
 
 
 def test_vetted_inert_helper_set_admitted() -> None:
     """Every frozen vetted-inert helper factory + identity still admits + resolves."""
 
-    from torchlens.utils._callable_safety import _VETTED_INERT_FIRST_PARTY
-    from torchlens.utils.display import identity
+    from torchlens._utils._callable_safety import _VETTED_INERT_FIRST_PARTY
+    from torchlens._utils.display import identity
 
     # identity resolves through the door.
-    assert _load_ref("torchlens.utils.display", "identity") is identity
+    assert _load_ref("torchlens._utils.display", "identity") is identity
     # Every enumerated helper factory is admitted by the gate AND resolves by ref.
     for module, qualname in _VETTED_INERT_FIRST_PARTY:
         obj = _load_ref(module, qualname)
@@ -391,7 +391,7 @@ def test_untrusted_callable_refusals_carry_code_and_subject() -> None:
     assert not_listed.value.fields["code"] == "custom_callable_module_not_allowlisted"
 
     with pytest.raises(UntrustedCallableError) as private:
-        resolve_import_ref("torchlens.utils:_module_is_installed")
+        resolve_import_ref("torchlens._utils:_module_is_installed")
     assert private.value.fields["code"] == "custom_callable_private_first_party"
 
     with pytest.raises(UntrustedCallableError) as impure:

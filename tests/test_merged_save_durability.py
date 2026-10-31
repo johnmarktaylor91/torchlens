@@ -16,9 +16,9 @@ import torchlens as tl
 
 # Reuse the rank-core builder from the load-identity module.
 from tests.test_merged_load_identity import _rank_trace
-from torchlens.merged._artifact import load_merged, save_merged
-from torchlens.merged._enums import MergedErrorCode
-from torchlens.merged._errors import MergedArtifactError
+from torchlens._merged._artifact import load_merged, save_merged
+from torchlens._merged._enums import MergedErrorCode
+from torchlens._merged._errors import MergedArtifactError
 
 
 def _merged():
@@ -79,7 +79,7 @@ def test_publish_time_overwrite_recheck_refuses(tmp_path: Path, monkeypatch) -> 
     art = tmp_path / "merged.tlspec"
     merged = _merged()
 
-    import torchlens.merged._artifact as artifact_mod
+    import torchlens._merged._artifact as artifact_mod
 
     real_tree_hash = artifact_mod.tree_hash
     created = {"done": False}
@@ -123,8 +123,8 @@ def test_save_does_not_dereference_symlinks_into_the_artifact(tmp_path: Path) ->
 
     core0 = tmp_path / "rank0.tlspec"
     core1 = tmp_path / "rank1.tlspec"
-    tl.save(_rank_trace(0), core0)
-    tl.save(_rank_trace(1), core1)
+    _rank_trace(0).save(core0)
+    _rank_trace(1).save(core1)
     # Plant a symlink inside rank 0's core pointing at the private file.
     (core0 / "leak.link").symlink_to(secret)
 

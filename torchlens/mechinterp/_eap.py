@@ -320,7 +320,9 @@ def _point_gradients(
             unreached.append(name)
             continue
         if read.spec is not None:
-            grad = read.spec.scatter_update(torch.zeros_like(grad), read.spec.apply(grad))
+            grad = read.spec.scatter_update(
+                torch.zeros_like(grad), read.spec.apply_transforms(grad)
+            )
         key = (read.input_label, read.seed_label)
         grouped.setdefault(key, []).append((read.seed_label, grad))
         names.setdefault(key, []).append(name)
@@ -386,7 +388,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
     model: Any,
     inputs: Any,
     *,
-    corrupted: Any,
+    corrupted_input: Any,
     metric: Callable[[torch.Tensor], torch.Tensor],
     method: str = "eap_ig",
     steps: int | None = None,
@@ -401,7 +403,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
         :func:`component_graph` accepts; eager attention).
     inputs:
         The clean inputs (token ids ``[batch, pos]``).
-    corrupted:
+    corrupted_input:
         Keyword-only. The corrupted inputs, the same shape as ``inputs``.
     metric:
         Keyword-only. ``logits -> values``: the metric ``M`` from the
@@ -434,7 +436,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
     clean_trace = _capture(model, inputs)
     clean = component_graph(clean_trace)
     _refuse_shared_norms(clean)
-    corrupt = component_graph(_capture(model, corrupted))
+    corrupt = component_graph(_capture(model, corrupted_input))
     deltas = _node_deltas(clean, corrupt)
     total: dict[str, torch.Tensor | None] = {}
     if method == "eap":

@@ -9,13 +9,13 @@ predicate (plus `default_op=`/`default_module=` defaults).
 ## Public Surface
 - `record()` - one-shot sparse recording.
 - `Recorder` - context manager for repeated rollouts.
-- `Recording` / `ActivationRecord` / `RecordingTrace` - returned data structures.
+- `Recording` / `ActivationRecord` / `DryRun` - returned data structures.
 - `CaptureSpec` - per-predicate keep/save/metadata decision.
 - `RecordingOptions` - grouped fastlog options.
 - `dry_run()` - predicate trace without payload retention.
 - `preview()` - visualization overlay from `visualization.fastlog_preview`.
 - `load()`, `recover()`, `cleanup_partial()` - disk bundle management.
-- `halt()` / `HaltSignal` - user-invoked early-stop from inside a predicate
+- `halt()` / `StopSignal` - user-invoked early-stop from inside a predicate
   (defined in `_halt.py`, surfaced top-level as `tl.halt`).
 
 ## Files
@@ -27,7 +27,7 @@ predicate (plus `default_op=`/`default_module=` defaults).
 | `_record_one_shot.py` | Public `record()` implementation |
 | `_recorder.py` | Public `Recorder` context manager and repeated rollout orchestration |
 | `_storage_resolver.py` | Tensor copy/detach/RAM/disk routing |
-| `_halt.py` | The public `halt()` entry point + `HaltSignal`, plus halt outcome helpers shared by one-shot and repeated recording |
+| `_halt.py` | The public `halt()` entry point + `StopSignal`, plus halt outcome helpers shared by one-shot and repeated recording |
 | `_indexes.py` | Recording index helpers |
 | `_validation.py` | Option validation |
 | `storage_ram.py` | In-memory backend |
@@ -45,26 +45,26 @@ torch operations do not recursively log events.
 Storage is resolved from streaming/recording options:
 - RAM-only when no bundle path is supplied.
 - RAM plus disk mirror when `retain_in_memory=True`.
-- Disk-only when `retain_in_memory=False`, rejecting `keep_grad=True`.
+- Disk-only when `retain_in_memory=False`, rejecting `save_grad=True`.
 
 Forward exceptions are opt-in partials. The default is the historical
 `on_forward_error="raise"` path. `on_forward_error="attach_partial"` attaches a failed
 `Recording` to `exc.partial_recording` and re-raises the original exception.
 `on_forward_error="return_partial"` swallows the forward exception and returns the failed
-partial; with `return_output=True` the output slot is `None`, and manual `Recorder.log()`
+partial; with `return_output=True` the output slot is `None`, and manual `Recorder(...)`
 returns `None` while `recorder.recording` holds the partial. Failed partials set
 `status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
-`n_ops_completed`, `last_successful_op_label`, and best-effort `last_event_*` fields.
+`num_committed_ops`, `last_successful_op_label`, and best-effort `last_event_*` fields.
 user-op failures exclude the failing call; TL-side capture failures may include a
-skipped/partial current-call event. `Recording.to_trace()` and `Recording.log_backward()`
+skipped/partial current-call event. `Recording.to_trace()` and `Recording.backward()`
 reject failed partials because the topology is incomplete.
 
 Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exceptions carry
-`exc.partial_log`, which can be retrieved with `tl.partial.from_failed_capture(exc)`.
+`exc.partial_log`, which can be retrieved with `tl._partial.from_failed_capture(exc)`.
 
 ## Training Semantics
 `backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit
-defaults still win, but incompatible `keep_grad=False` or disk-only settings raise
+defaults still win, but incompatible `save_grad=False` or disk-only settings raise
 configuration errors. Disk mirrors are detached inspection copies; trainable payloads are RAM
 copies.
 

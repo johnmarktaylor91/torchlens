@@ -237,7 +237,7 @@ def test_forged_autograd_grad_func_fails_replay() -> None:
     with _tampered_validation(forge):
         assert _validate(_TwoLosses(), torch.randn(2, 3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "forward_replay"
+    assert failure is not None and failure.check_name == "forward_replay"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
 
 
@@ -289,6 +289,6 @@ def test_unrecorded_tensor_beside_a_recorded_grad_still_fails_source_provenance(
     torch.manual_seed(0)
     assert _validate(_GradWithGlobal(), torch.randn(3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert list(failure.extra.get("reasons", [])) == ["unattributed_tensor_args"]
     assert failure.op_label is not None and failure.op_label.startswith("add")

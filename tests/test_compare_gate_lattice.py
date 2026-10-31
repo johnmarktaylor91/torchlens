@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
@@ -109,12 +109,12 @@ def test_leg1_identity_shortcircuit_same_shape_different_values_refuses() -> Non
 
     left = _capture(model, x1)
     right = _capture(model, x2)
-    bundle = tl.bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right})
 
     # Path-1 shape: the relationship itself is identity-ranked.
-    assert bundle.relationship("a", "b") is Relationship.SAME_OBJECT
+    assert bundle.comparability("a", "b") is Relationship.SAME_OBJECT
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
     assert excinfo.value.fields["operation"] == "compare_at"
@@ -137,9 +137,9 @@ def test_leg2_different_shape_refuses_at_the_gate_not_downstream() -> None:
     torch.manual_seed(1)
     left = _capture(model, torch.randn(2, 4))
     right = _capture(model, torch.randn(3, 4))
-    bundle = tl.bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right})
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
     # The right-reason assertion: nothing about element counts or metrics.
@@ -165,12 +165,12 @@ def test_leg3_value_blind_hash_path_distinct_objects_refuses() -> None:
 
     left = _capture(model_a, x1)
     right = _capture(model_b, x2)
-    bundle = tl.bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right})
 
     # The value-blind rank IS derived (shape-level vocabulary unchanged) ...
-    assert bundle.relationship("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
+    assert bundle.comparability("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
     # ... and is still not accepted as proof of input equality.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
@@ -183,7 +183,7 @@ def test_leg4_distinct_objects_identical_input_succeeds() -> None:
     torch.manual_seed(3)
     x = torch.randn(2, 4)
 
-    bundle = tl.bundle({"a": _capture(model_a, x), "b": _capture(model_b, x)})
+    bundle = tl.Bundle({"a": _capture(model_a, x), "b": _capture(model_b, x)})
 
     matrix = bundle.compare_at(tl.func("relu"))
     assert matrix.shape == (2, 2)
@@ -197,7 +197,7 @@ def test_same_value_different_tensor_objects_succeeds() -> None:
     torch.manual_seed(4)
     x = torch.randn(2, 4)
 
-    bundle = tl.bundle({"a": _capture(model, x), "b": _capture(model, x.clone())})
+    bundle = tl.Bundle({"a": _capture(model, x), "b": _capture(model, x.clone())})
 
     matrix = bundle.compare_at(tl.func("relu"))
     assert matrix.shape == (2, 2)
@@ -213,13 +213,13 @@ def test_node_keeps_model_floor_and_carries_no_input_requirement() -> None:
     x2 = torch.randn(2, 4)
 
     # Different input VALUES: node is a view read, not a comparison — allowed.
-    cross_input = tl.bundle({"a": _capture(model, x1), "b": _capture(model, x2)})
+    cross_input = tl.Bundle({"a": _capture(model, x1), "b": _capture(model, x2)})
     view = cross_input.node(tl.func("relu"))
     assert set(view.members) == {"a", "b"}
 
     # Different model class entirely: the model-axis floor refuses.
-    cross_model = tl.bundle({"a": _capture(model, x1), "b": _capture(tanh_model, x1)})
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    cross_model = tl.Bundle({"a": _capture(model, x1), "b": _capture(tanh_model, x1)})
+    with pytest.raises(BundleComparisonError) as excinfo:
         cross_model.node(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
     assert excinfo.value.fields["operation"] == "node"
@@ -241,9 +241,9 @@ def test_unproven_input_identity_refuses_fail_closed() -> None:
 
     left = tl.trace(model, x, save=tl.func("relu"))
     right = tl.trace(model, x, save=tl.func("relu"))
-    bundle = tl.bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right})
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
     assert excinfo.value.fields["unproven_members"] == ["a", "b"]
@@ -262,7 +262,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     x = torch.randn(2, 4)
     z = torch.randn(2, 4)
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {
             "a": _capture(model, x),
             "b": _capture(model, x),
@@ -276,7 +276,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     assert isinstance(rows, list)
 
     # compare_at consumes ALL pairs, so the foreign member still refuses it.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
     assert "foreign" in {
@@ -285,8 +285,8 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     }
 
     # most_changed compares baseline vs others: 'foreign' IS an operand there.
-    with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.most_changed()
+    with pytest.raises(BundleComparisonError) as excinfo:
+        bundle.rank_changes()
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
 
@@ -304,26 +304,26 @@ def test_ordering_topology_refusal_direct_and_transitive() -> None:
     turn1 = _capture(model, x)
     turn2 = _capture(model, x)
     turn3 = _capture(model, x)
-    bundle = tl.bundle({"turn1": turn1, "turn2": turn2, "turn3": turn3})
+    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2, "turn3": turn3})
     bundle.relate(
         {"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}},
         {"kind": "successor_of", "from": "turn3", "to": "turn2", "params": {}},
     )
 
     # Direct edge.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
     # Transitive directed path turn3 -> turn2 -> turn1.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn3")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of", "successor_of"]
 
     # Control: an identical bundle WITHOUT ordering rows passes the same read.
-    control = tl.bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
+    control = tl.Bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
     assert isinstance(control.diff_pair("turn1", "turn2"), list)
 
 
@@ -334,7 +334,7 @@ def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
     torch.manual_seed(9)
     x = torch.randn(2, 4)
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {
             "turn1": _capture(model, x),
             "turn2a": _capture(model, x),
@@ -353,7 +353,7 @@ def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
     assert isinstance(rows, list)
 
     # The ordered pairs still refuse.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn2a")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
@@ -365,10 +365,10 @@ def test_topology_refusal_precedes_input_evidence() -> None:
     torch.manual_seed(10)
     turn1 = _capture(model, torch.randn(2, 4))
     turn2 = _capture(model, torch.randn(3, 4))
-    bundle = tl.bundle({"turn1": turn1, "turn2": turn2})
+    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2})
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
@@ -385,8 +385,8 @@ def test_fork_comparison_workflow_stays_open() -> None:
     ablated.attach_hooks(tl.func("relu"), tl.zero_ablate())
     ablated.push()
 
-    bundle = tl.bundle({"clean": clean, "ablated": ablated}, baseline="clean")
+    bundle = tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
     matrix = bundle.compare_at(tl.func("relu"))
     assert matrix.shape == (2, 2)
-    rows = bundle.most_changed()
+    rows = bundle.rank_changes()
     assert rows

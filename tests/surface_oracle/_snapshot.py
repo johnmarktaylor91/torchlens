@@ -12,17 +12,17 @@ from typing import Any
 import torch
 
 import torchlens as tl
-from torchlens import constants as tl_constants
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens import _constants as tl_constants
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 
 SNAPSHOT_VERSION = 1
 
@@ -318,8 +318,8 @@ def snapshot_trace_surface(trace: Trace) -> dict[str, Any]:
         "module_calls": trace.module_calls,
         "params": trace.params,
         "buffers": trace.buffers,
-        "grad_fns": trace.grad_fns,
-        "backward_passes": trace.backward_passes,
+        "grad_fns": trace.autograd.grad_fns,
+        "backward_passes": trace.autograd.backward_passes,
     }
     for family_name, accessor in families.items():
         if accessor is None:

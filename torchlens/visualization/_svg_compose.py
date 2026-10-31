@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 
-from ..utils.display import atomic_write_text
+from .._utils.display import atomic_write_text
 from . import _render_utils
 from ._edit_highlighter import HighlighterStyle, highlight_svg
 from ._render_common import (

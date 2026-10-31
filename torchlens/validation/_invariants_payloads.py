@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _dtype_values_match,

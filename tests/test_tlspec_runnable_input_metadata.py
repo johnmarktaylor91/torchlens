@@ -20,13 +20,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 class ContiguityBranch(nn.Module):
@@ -111,12 +110,10 @@ def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Pat
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=_layout_twin(x))
 
-    diverged = tl.load(path).run(
-        inputs=_layout_twin(x), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=_layout_twin(x), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the twin takes the OTHER arm; the replayed arm is wrong.
     fresh = ContiguityBranch()(_layout_twin(x))
     assert torch.equal(fresh, x - 100)
@@ -146,9 +143,7 @@ def test_h2_stride_read_diverges_on_layout_change(tmp_path: Path) -> None:
 
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=_layout_twin(x))
-    diverged = tl.load(path).run(
-        inputs=_layout_twin(x), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=_layout_twin(x), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -165,10 +160,10 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
     grad_input = x.clone().requires_grad_(True)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=grad_input)
-    diverged = tl.load(path).run(inputs=grad_input, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    diverged = tl.load(path).run(inputs=grad_input, on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the grad input takes the OTHER arm; the replayed arm is wrong.
     fresh = RequiresGradBranch()(x.clone().requires_grad_(True))
     torch.testing.assert_close(fresh.detach(), x * 2)

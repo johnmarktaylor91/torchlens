@@ -47,7 +47,7 @@ class RosterModel:
         ``"pretrained"`` (pinned checkpoint with digest evidence) or
         ``"config_built"`` (random weights). Only pretrained rows can earn
         a claim -- toys earn nothing, not even suffixed.
-    build:
+    builder:
         Zero-arg factory returning ``(model, example_input)``.
     checkpoint_evidence:
         Pinned checkpoint revision/digest for pretrained rows, else ``""``.
@@ -60,7 +60,7 @@ class RosterModel:
 
     family: str
     realism: str
-    build: Callable[[], tuple[Any, Any]]
+    builder: Callable[[], tuple[Any, Any]]
     checkpoint_evidence: str = ""
     expected_op_kinds: tuple[str, ...] | None = None
 
@@ -92,9 +92,7 @@ class TorchReferenceAdapter:
     def save(self, trace: Any, path: Path) -> None:
         """Persist one captured trace as a portable artifact."""
 
-        import torchlens as tl
-
-        tl.save(trace, path)
+        trace.save(path)
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
@@ -240,7 +238,7 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
         f"Unknown conformance backend {backend!r}; the runner resolves 'torch' "
         "(the reference), 'fake' (the reserved plant substrate) and the preview "
         f"backends {sorted(PREVIEW_ADAPTER_FACTORIES)}. External providers are "
-        "exercised after explicit activation through torchlens.ecosystem.plugins. "
+        "exercised after explicit activation through torchlens._ecosystem.plugins. "
         "Remedy: pass 'torch', 'fake' or a preview backend name.",
         code="conformance_backend_unknown",
         remedy="pass 'torch', 'fake' or a preview backend name",
@@ -278,6 +276,6 @@ def default_roster() -> tuple[RosterModel, ...]:
         return model, torch.randn(2, 16)
 
     return (
-        RosterModel(family="resnet", realism="config_built", build=_build_resnet),
-        RosterModel(family="mlp", realism="config_built", build=_build_mlp),
+        RosterModel(family="resnet", realism="config_built", builder=_build_resnet),
+        RosterModel(family="mlp", realism="config_built", builder=_build_mlp),
     )

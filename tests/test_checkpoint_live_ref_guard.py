@@ -31,8 +31,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.param import Param, ParamValueBasis
-from torchlens.errors import CheckpointSeriesLiveParamsError
+from torchlens._data_classes.param import Param, ParamValueBasis
+from torchlens.errors import ParamEvidenceMissingError
 
 _CODE = "checkpoint_series_live_params"
 _WEIGHT = "0.weight"
@@ -87,7 +87,7 @@ def stepped_pair() -> Any:
 
 @pytest.fixture()
 def ckpt_bundle(stepped_pair: dict[str, Any]) -> Any:
-    return tl.bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
+    return tl.Bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
 
 
 def _assert_checkpoint_refusal(excinfo: pytest.ExceptionInfo[Any], *members: str) -> None:
@@ -170,7 +170,7 @@ def test_loaded_basis_is_absent_not_persisted_never_bare_none(tmp_path: Any) -> 
     model = _toy_model()
     trace = tl.trace(model, _toy_input())
     path = tmp_path / "one.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     param = loaded.params[_WEIGHT]
     assert param.value is None  # documented live-handle contract, unchanged
@@ -189,15 +189,15 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
 
     path0 = tmp_path / "ck0.tlspec"
     path1 = tmp_path / "ck64.tlspec"
-    tl.save(stepped_pair["trace_before"], path0)
-    tl.save(stepped_pair["trace_after"], path1)
-    loaded = tl.bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
+    stepped_pair["trace_before"].save(path0)
+    stepped_pair["trace_after"].save(path1)
+    loaded = tl.Bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
     view = loaded.params[_WEIGHT]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
-    with pytest.raises(CheckpointSeriesLiveParamsError):
-        view.diff_pair()
+    with pytest.raises(ParamEvidenceMissingError):
+        view.compare()
     # The absent leg names the degradation shape the refusal replaces.
     assert "nothing to compare" in str(excinfo.value)
 
@@ -208,7 +208,7 @@ def test_refusal_survives_bundle_save_load(ckpt_bundle: Any, tmp_path: Any) -> N
     path = tmp_path / "series.tlspec"
     ckpt_bundle.save(path)
     loaded = tl.load(path)
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         loaded.params[_WEIGHT].aggregate("std")
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
 
@@ -224,11 +224,11 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
 
     model = _toy_model()
     x = _toy_input()
-    bundle = tl.bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
+    bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
     matrix = bundle.compare_at("relu_1_2")
     assert tuple(matrix.shape) == (2, 2)
     view = bundle.node("relu_1_2")
-    assert tuple(view.diff_pair().shape) == (2, 2)
+    assert tuple(view.compare().shape) == (2, 2)
     assert view.aggregate("mean").shape == view.members["a"].out.shape
     assert bundle.diff_pair("a", "b")
 
@@ -239,12 +239,12 @@ def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
     related = ckpt_bundle.relate(
         {"kind": "successor_of", "from": "ck64", "to": "ck0", "params": {}}
     )
-    rows = related.member_relations
+    rows = related.relations
     assert len(rows) == 1
     assert rows[0].kind == "successor_of"
     assert rows[0].named_members() == ("ck64", "ck0")
     # The ordering claim stands; the parameter value claim still refuses.
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = related.params[_WEIGHT].weight_norm_diff
 
 
@@ -254,7 +254,7 @@ def test_single_member_param_view_keeps_live_handle_contract(
 ) -> None:
     """One resolved member is not a cross-member claim: the live read stands."""
 
-    bundle = tl.bundle({"only": stepped_pair["trace_before"]})
+    bundle = tl.Bundle({"only": stepped_pair["trace_before"]})
     view = bundle.params[_WEIGHT]
     out = view.out
     assert isinstance(out, torch.Tensor)
@@ -277,8 +277,8 @@ def test_direct_param_value_read_contract_untouched(stepped_pair: dict[str, Any]
     "read",
     [
         pytest.param(lambda view: view.weight_norm_diff, id="weight_norm_diff"),
-        pytest.param(lambda view: view.diff_pair(), id="diff_pair"),
-        pytest.param(lambda view: view.diff_pair(other="ck0"), id="diff_pair_row"),
+        pytest.param(lambda view: view.compare(), id="diff_pair"),
+        pytest.param(lambda view: view.compare(other="ck0"), id="diff_pair_row"),
         pytest.param(lambda view: view.aggregate("mean"), id="aggregate_mean"),
         pytest.param(lambda view: view.aggregate("std"), id="aggregate_std"),
         pytest.param(lambda view: view.out, id="out"),
@@ -290,7 +290,7 @@ def test_bypass_matrix_every_read_hits_the_guard(ckpt_bundle: Any, read: Any) ->
     """direct SuperParam read, diff_pair, aggregate, out/grad: one guard, one code."""
 
     view = ckpt_bundle.params[_WEIGHT]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         read(view)
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
     assert excinfo.value.fields["param_address"] == _WEIGHT
@@ -301,7 +301,7 @@ def test_bundle_at_routes_to_the_same_guard(ckpt_bundle: Any) -> None:
     """Bundle.at(param label) reads funnel through the identical refusal."""
 
     view = ckpt_bundle.at(_WEIGHT)
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.out
     assert excinfo.value.fields["code"] == _CODE
 
@@ -315,7 +315,7 @@ def test_refusal_fires_before_tensor_lookup(ckpt_bundle: Any, monkeypatch: Any) 
         "_get_tensor",
         lambda self, member, field: pytest.fail("tensor lookup ran before the guard"),
     )
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = view.out
 
 
@@ -330,9 +330,9 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
     model = stepped_pair["model"]
     x = stepped_pair["x"]
     halted = tl.trace(model, x, halt=tl.func("relu"))
-    assert halted.outcome.status.name == "HALTED"
-    bundle = tl.bundle({"h": halted, "c": stepped_pair["trace_before"]})
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    assert halted.outcome.status.name == "STOPPED"
+    bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = bundle.params[_WEIGHT].weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "h", "c")
 
@@ -344,7 +344,7 @@ def test_n_gate_precedence_unchanged_on_halted_member(
 
     halted = tl.trace(stepped_pair["model"], stepped_pair["x"], halt=tl.func("relu"))
     with pytest.raises(Exception) as excinfo:
-        tl.save(halted, tmp_path / "halted.tlspec", level="runnable")
+        halted.save(tmp_path / "halted.tlspec", level="runnable")
     fields = getattr(excinfo.value, "fields", {})
     assert fields.get("code") != _CODE
 
@@ -371,9 +371,9 @@ def test_until_r8b_the_public_read_still_refuses(ckpt_bundle: Any) -> None:
     related = ckpt_bundle.relate(
         {"kind": "forked_from", "from": "ck64", "to": "ck0", "params": {"at_step": 64}}
     )
-    row_payload = related.member_relations[0].to_payload()
+    row_payload = related.relations[0].to_payload()
     assert set(row_payload) == {"kind", "from", "to", "params"}  # no evidence key minted here
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = related.params[_WEIGHT].out
 
 
@@ -397,5 +397,5 @@ def test_weight_norm_diff_docstring_no_longer_promises_diffs(ckpt_bundle: Any) -
 
     view = ckpt_bundle.params[_WEIGHT]
     for attribute in ("weight_norm_diff", "out", "grad"):
-        with pytest.raises(CheckpointSeriesLiveParamsError):
+        with pytest.raises(ParamEvidenceMissingError):
             getattr(view, attribute)

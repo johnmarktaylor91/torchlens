@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 from torchlens.intervention.errors import MultiMatchWarning
 
 
@@ -222,8 +222,8 @@ def test_annotation_image_sets_nodespec_image_hook(tmp_path: Path) -> None:
     trace.annotate(tl.func("relu"), image=image_path)
     dot = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
     )
 
     assert str(image_path) in dot

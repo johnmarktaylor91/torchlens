@@ -6,20 +6,20 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..._io import BlobRef
-from ..._state import pause_logging
-from ...data_classes.op import (
+from ..._data_classes.op import (
     Op,
 )
-from ...ir.events import (
+from ..._io import BlobRef
+from ..._ir.events import (
     FunctionCallRef,
     ModuleFrame,
     OutputRef,
     ParentEdge,
 )
-from ...ir.refs import ParamRef, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...utils._torch_compat import (
+from ..._ir.refs import ParamRef, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._state import pause_logging
+from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
@@ -33,7 +33,7 @@ from ._tl import (
 from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 from .ops import (
     CaptureProducerMode,

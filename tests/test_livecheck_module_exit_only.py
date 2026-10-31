@@ -28,12 +28,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.backends.torch import _ops_interventions, ops as torch_ops
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.hooks import NormalizedHookEntry
 from torchlens.intervention.selectors import CompositeSelector
-from torchlens.intervention.spec import InterventionSpec
-from torchlens.utils._torch_compat import TorchCapabilityWarning
+from torchlens.intervention.spec import Recipe
 
 _MAGNITUDE = 2.0
 _VOLATILE_KEYS = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", "id(")
@@ -97,7 +97,7 @@ def _direction() -> torch.Tensor:
 def _steer() -> Any:
     """Return the steering helper used across the tests."""
 
-    return tl.steer(_direction(), magnitude=_MAGNITUDE, feature_axis=-1)
+    return tl.steer(_direction(), strength=_MAGNITUDE, dim=-1)
 
 
 # spec name -> (spec factory, whether the per-op check is skipped, whether the spec fires).
@@ -285,7 +285,7 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
             (str(r.ctx.label), str(r.ctx.layer_type), _thash(r.ram_payload))
             for r in recording.records
         ],
-        "n_ops": recording.n_ops,
+        "n_ops": recording.num_ops,
         "status": recording.status,
         "fires": fires,
         "output": _thash(output),
@@ -362,7 +362,7 @@ def test_module_exit_only_selector_classification(selector: Any, exit_only: bool
             True,
             id="module_and_func_rule",
         ),
-        pytest.param(InterventionSpec(rules=()), True, id="empty_rules"),
+        pytest.param(Recipe(rules=()), True, id="empty_rules"),
         pytest.param(lambda ctx: None, True, id="opaque_callable"),
     ],
 )
@@ -389,7 +389,7 @@ def _entry(
     )
 
 
-_INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input": "in"})
+_INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input_route": "in"})
 
 
 @pytest.mark.parametrize(

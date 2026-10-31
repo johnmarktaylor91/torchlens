@@ -24,7 +24,7 @@ Phase 1 (Python, your process): create and annotate evidence.
 
     import torchlens as tl
     log = tl.trace(model, x, save=tl.func("relu"))
-    tl.save(log, "run.tlspec")
+    log.save("run.tlspec")
 
 Record prompt ids, experiment labels, and share-safe token strings BEFORE
 saving (tl.observers.log_value) -- never make a reader infer them from a
@@ -89,7 +89,7 @@ instead. An agent that can run a model already has Python:
 
     import torchlens as tl
     log = tl.load("run.tlspec")
-    print(tl.report.explain(log, max_tokens=500))
+    print(log.explain(max_tokens=500))
 """
 
 

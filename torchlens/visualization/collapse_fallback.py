@@ -36,8 +36,8 @@ from .auto_collapse import (
 from .collapse_plan import CollapsePlan, count
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
     from .source_graph import SourceGraph
 
@@ -68,7 +68,7 @@ def _top_level_fallback_addresses(trace: Trace) -> tuple[str, ...]:
         parent = getattr(module, "address_parent", None)
         if parent not in {"", "self", None}:
             continue
-        if int(getattr(module, "num_layers", 0) or 0) <= 1:
+        if len(getattr(module, "layer_labels", ()) or ()) <= 1:
             continue
         addresses.append(address)
     return tuple(sorted(dict.fromkeys(addresses)))
@@ -137,7 +137,7 @@ def _outermost_multi_op_addresses(trace: Trace) -> frozenset[str]:
             str(getattr(module, "address", ""))
             for module in trace.modules
             if str(getattr(module, "address", "")) not in {"", "self"}
-            and int(getattr(module, "num_layers", 0) or 0) > 1
+            and len(getattr(module, "layer_labels", ()) or ()) > 1
         ),
         key=lambda address: (address.count("."), address),
     )

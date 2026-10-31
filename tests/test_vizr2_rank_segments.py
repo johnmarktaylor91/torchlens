@@ -25,9 +25,7 @@ _SEGMENT_NODE = re.compile(r'^\s*"?(\S+__segment__[^"\s\[]+)"?\s*\[[^\]]*label='
 
 def _source(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     return str(
-        trace.draw(
-            vis_outpath=str(tmp_path / name), vis_save_only=True, vis_fileformat="svg", **kwargs
-        )
+        trace.draw(path=str(tmp_path / name), vis_save_only=True, file_format="svg", **kwargs)
     )
 
 
@@ -81,7 +79,7 @@ def test_buffer_nodes_render_under_rank(tmp_path: Path, train: bool, buffers: st
     torch.manual_seed(0)
     trace = tl.trace(_BatchNormNet().train(train), torch.randn(2, 3, 8, 8))
     try:
-        _source(trace, tmp_path, "bn", vis_node_placement="rank", show_buffer_layers=buffers)
+        _source(trace, tmp_path, "bn", vis_node_placement="rank", show_buffers=buffers)
     finally:
         trace.cleanup()
     assert (tmp_path / "bn.svg").stat().st_size > 0

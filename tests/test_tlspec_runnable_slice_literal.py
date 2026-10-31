@@ -26,9 +26,9 @@ from torchlens._io.runnable import (
     _UnsupportedLiteralError,
     build_sparse_run_descriptor,
 )
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 
 class OpenEndedSlice(nn.Module):
@@ -421,7 +421,7 @@ def test_r71b_composite_component_policy_covers_every_edge() -> None:
     node kind; a new composite without a declared component policy REDs here."""
 
     from torchlens._input_walk import COMPOSITE_LITERAL_COMPONENT_POLICY
-    from torchlens.runnable import (
+    from torchlens._runnable import (
         LiteralAtom,
         LiteralMapping,
         LiteralSequence,

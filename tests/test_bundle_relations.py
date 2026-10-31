@@ -106,9 +106,9 @@ def test_ctor_refuses_row_naming_absent_member(tiny_trace: Any) -> None:
     """Constructing a Bundle with a relation naming a non-member refuses typed."""
 
     with pytest.raises(BundleRelationError) as excinfo:
-        tl.bundle(
+        tl.Bundle(
             {"a": tiny_trace, "b": tiny_trace},
-            member_relations=[_pair_row(dst="ghost")],
+            relations=[_pair_row(dst="ghost")],
         )
     assert excinfo.value.fields["code"] == "bundle_relation_member_missing"
     assert excinfo.value.fields["missing_member"] == "ghost"
@@ -117,11 +117,11 @@ def test_ctor_refuses_row_naming_absent_member(tiny_trace: Any) -> None:
 def test_relate_refuses_absent_member_and_keeps_table(tiny_trace: Any) -> None:
     """relate() with a dangling row refuses typed and leaves the table unchanged."""
 
-    bundle = tl.bundle({"a": tiny_trace, "b": tiny_trace})
+    bundle = tl.Bundle({"a": tiny_trace, "b": tiny_trace})
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate(_pair_row(kind="successor_of", dst="ghost"))
     assert excinfo.value.fields["code"] == "bundle_relation_member_missing"
-    assert bundle.member_relations == ()
+    assert bundle.relations == ()
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ def test_off_schema_rows_refuse(tiny_trace: Any, payload: dict) -> None:
     with pytest.raises(ValueError):
         MemberRelationRow.from_payload(payload)
     with pytest.raises(BundleRelationError) as excinfo:
-        tl.bundle({"a": tiny_trace, "b": tiny_trace}, member_relations=[payload])
+        tl.Bundle({"a": tiny_trace, "b": tiny_trace}, relations=[payload])
     assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
 
 
@@ -164,18 +164,18 @@ def test_episode_member_invariants(tiny_trace: Any) -> None:
     """Duplicate at_step / missing prefill-at-0 refuse as schema-invalid (R3)."""
 
     with pytest.raises(BundleRelationError) as excinfo:
-        tl.bundle(
+        tl.Bundle(
             {"a": tiny_trace, "b": tiny_trace},
-            member_relations=[
+            relations=[
                 _episode_row("a", 0, "prefill"),
                 _episode_row("b", 0, "decode"),
             ],
         )
     assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
     with pytest.raises(BundleRelationError) as excinfo:
-        tl.bundle(
+        tl.Bundle(
             {"a": tiny_trace, "b": tiny_trace},
-            member_relations=[_episode_row("a", 1, "decode")],
+            relations=[_episode_row("a", 1, "decode")],
         )
     assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
 
@@ -188,18 +188,18 @@ def test_episode_member_invariants(tiny_trace: Any) -> None:
 def test_view_identity_stability_and_new_version(tiny_trace: Any) -> None:
     """member_relations is the SAME tuple across reads; relate() swaps it."""
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"a": tiny_trace, "b": tiny_trace},
-        member_relations=[_pair_row()],
+        relations=[_pair_row()],
     )
-    first_view = bundle.member_relations
+    first_view = bundle.relations
     assert isinstance(first_view, tuple)
-    assert bundle.member_relations is first_view
+    assert bundle.relations is first_view
     bundle.relate(_pair_row(kind="successor_of", src="b", dst="a"))
-    second_view = bundle.member_relations
+    second_view = bundle.relations
     assert second_view is not first_view
     assert len(second_view) == 2
-    assert bundle.member_relations is second_view
+    assert bundle.relations is second_view
 
 
 # ---------------------------------------------------------------------------
@@ -211,19 +211,19 @@ def test_view_identity_stability_and_new_version(tiny_trace: Any) -> None:
 def test_remove_refuses_then_cascades_exactly(tiny_trace: Any) -> None:
     """remove() refuses typed BEFORE removal; cascade drops only rows naming it."""
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"a": tiny_trace, "b": tiny_trace, "c": tiny_trace},
-        member_relations=[_pair_row(), _episode_row("c", 0, "prefill")],
+        relations=[_pair_row(), _episode_row("c", 0, "prefill")],
     )
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.remove("b")
     assert excinfo.value.fields["code"] == "bundle_member_has_relations"
     assert "b" in bundle.names
-    assert len(bundle.member_relations) == 2
+    assert len(bundle.relations) == 2
 
     bundle.remove("b", cascade_relations=True)
     assert "b" not in bundle.names
-    remaining = bundle.member_relations
+    remaining = bundle.relations
     assert len(remaining) == 1
     assert remaining[0].kind == "episode_member"
     assert remaining[0].member == "c"
@@ -234,10 +234,10 @@ def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     """clear()/remove_except() refuse typed, then cascade rows of removed members."""
 
     def build() -> Any:
-        return tl.bundle(
+        return tl.Bundle(
             {"a": tiny_trace, "b": tiny_trace, "c": tiny_trace},
             baseline="a",
-            member_relations=[_pair_row(src="b", dst="c")],
+            relations=[_pair_row(src="b", dst="c")],
         )
 
     bundle = build()
@@ -247,7 +247,7 @@ def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     assert bundle.names == ["a", "b", "c"]
     bundle.clear(cascade_relations=True)
     assert bundle.names == ["a"]
-    assert bundle.member_relations == ()
+    assert bundle.relations == ()
 
     bundle = build()
     with pytest.raises(BundleRelationError) as excinfo:
@@ -256,17 +256,17 @@ def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     assert bundle.names == ["a", "b", "c"]
     bundle.remove_except(["a", "b"], cascade_relations=True)
     assert bundle.names == ["a", "b"]
-    assert bundle.member_relations == ()
+    assert bundle.relations == ()
 
 
 @pytest.mark.smoke
 def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
     """LRU eviction of a related member refuses typed, never silently orphans."""
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"a": tiny_trace, "b": tiny_trace, "c": tiny_trace},
         baseline="a",
-        member_relations=[_pair_row(src="b", dst="c")],
+        relations=[_pair_row(src="b", dst="c")],
     )
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.set_capacity(2)
@@ -284,28 +284,28 @@ def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
 def test_fold_arm2_episode_complete_via_bundle_ledger(tiny_trace: Any) -> None:
     """All-COMPLETE members matching the ledger-declared N fold complete."""
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"m0": tiny_trace, "m1": tiny_trace},
-        member_relations=[
+        relations=[
             _episode_row("m0", 0, "prefill"),
             _episode_row("m1", 1, "decode"),
         ],
     )
-    result = bundle.derive_episode_status("ep", ledger=_episode_ledger(2, 2))
+    result = bundle.episode_status("ep", ledger=_episode_ledger(2, 2))
     assert result.status == "episode_complete"
     # Without the ledger, arm 2 cannot fire: fail-closed to unknown.
-    assert bundle.derive_episode_status("ep").status == "episode_unknown"
+    assert bundle.episode_status("ep").status == "episode_unknown"
 
 
 def test_fold_arm3_halted_member() -> None:
     """A trailing HALTED member folds to episode_halted_at_step k."""
 
     result = derive_episode_status(
-        [("complete", None), ("halted", None)], n_declared=None, ledger=None
+        [("complete", None), ("stopped", None)], n_declared=None, ledger=None
     )
     assert result.status == "episode_halted_at_step"
     assert result.at_step == 1
-    assert result.member_status == "HALTED"
+    assert result.member_status == "STOPPED"
 
 
 def test_fold_arm5_aborted_nonfinite_verbatim() -> None:
@@ -359,9 +359,9 @@ def test_fold_arm1_unattested_member() -> None:
 def test_fold_escalates_exclusion_via_bundle(tiny_trace: Any) -> None:
     """E-B5: escalation members leave the fold domain before evaluation."""
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"m0": tiny_trace, "m1": tiny_trace, "esc": tiny_trace},
-        member_relations=[
+        relations=[
             _episode_row("m0", 0, "prefill"),
             _episode_row("m1", 1, "decode"),
             _episode_row("esc", 2, "decode"),
@@ -370,7 +370,7 @@ def test_fold_escalates_exclusion_via_bundle(tiny_trace: Any) -> None:
     )
     # With esc excluded the domain is 2 COMPLETE members == n_declared=2;
     # without the exclusion the count would be 3 and the fold unknown.
-    result = bundle.derive_episode_status("ep", ledger=_episode_ledger(2, 2))
+    result = bundle.episode_status("ep", ledger=_episode_ledger(2, 2))
     assert result.status == "episode_complete"
 
 
@@ -396,18 +396,18 @@ def test_fold_integration_real_failed_partial_member(tiny_trace: Any) -> None:
     x = torch.randn(2, 3)
     with pytest.raises(Exception) as excinfo:
         tl.trace(bomb, x)
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     outcome = partial.outcome
     assert outcome is not None and outcome.status.value == "failed"
 
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {"m0": tiny_trace, "m1": partial},
-        member_relations=[
+        relations=[
             _episode_row("m0", 0, "prefill"),
             _episode_row("m1", 1, "decode"),
         ],
     )
-    result = bundle.derive_episode_status("ep")
+    result = bundle.episode_status("ep")
     assert result.status == "episode_failed_at_step"
     assert result.at_step == 1
     assert result.member_status == "FAILED"
@@ -420,10 +420,10 @@ def test_fold_integration_real_failed_partial_member(tiny_trace: Any) -> None:
 
 
 def _relation_bundle(tiny_trace: Any) -> Any:
-    return tl.bundle(
+    return tl.Bundle(
         {"a": tiny_trace, "b": tiny_trace},
         baseline="a",
-        member_relations=[
+        relations=[
             _pair_row(),
             _episode_row("a", 0, "prefill"),
         ],
@@ -443,7 +443,7 @@ def test_persistence_empty_table_omits_the_key(tiny_trace: Any, tmp_path: Path) 
     assert "member_relations" not in metadata
     assert "_tlspec_prerelease" not in metadata
     loaded = tl.load(target)
-    assert loaded.member_relations == ()
+    assert loaded.relations == ()
 
 
 def test_persistence_plain_round_trip_byte_faithful(tiny_trace: Any, tmp_path: Path) -> None:
@@ -455,10 +455,10 @@ def test_persistence_plain_round_trip_byte_faithful(tiny_trace: Any, tmp_path: P
     bundle.save(target)
     metadata = json.loads((target / "bundle.json").read_text(encoding="utf-8"))
     assert "_tlspec_prerelease" not in metadata
-    expected_payload = MemberRelationTable(bundle.member_relations).to_payload()
+    expected_payload = MemberRelationTable(bundle.relations).to_payload()
     assert metadata["member_relations"] == expected_payload
     loaded = tl.load(target)
-    assert [row.to_payload() for row in loaded.member_relations] == expected_payload
+    assert [row.to_payload() for row in loaded.relations] == expected_payload
 
 
 def test_persistence_stale_marker_refuses_typed(tiny_trace: Any, tmp_path: Path) -> None:
@@ -471,7 +471,7 @@ def test_persistence_stale_marker_refuses_typed(tiny_trace: Any, tmp_path: Path)
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["_tlspec_prerelease"] = {
         "marker": PRERELEASE_MARKER,
-        "fields": ["Bundle.member_relations"],
+        "fields": ["Bundle.relations"],
     }
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
     with pytest.raises(PreReleaseArtifactError):

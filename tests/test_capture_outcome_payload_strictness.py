@@ -80,7 +80,7 @@ def test_failed_only_fields_refuse_on_a_complete_status() -> None:
 
 
 @pytest.mark.parametrize("field_name,value", [("phase", "forward"), ("origin", "torchlens")])
-@pytest.mark.parametrize("status", ["complete", "halted", "aborted_nonfinite", "unknown"])
+@pytest.mark.parametrize("status", ["complete", "stopped", "aborted_nonfinite", "unknown"])
 def test_failed_only_fields_refuse_on_every_non_failed_status(
     status: str, field_name: str, value: str
 ) -> None:
@@ -90,7 +90,7 @@ def test_failed_only_fields_refuse_on_every_non_failed_status(
     if status == "unattested":
         payload["derived"] = True
     outcome = parse_outcome_payload(payload)
-    halted = status == "halted"
+    halted = status == "stopped"
     assert attestation_coherent(outcome, halted=halted, finished=True) is False
 
 
@@ -114,7 +114,7 @@ def test_boundary_evidence_refuses_on_complete_but_not_on_halted() -> None:
 
     complete = parse_outcome_payload({"status": "complete", "boundary_label": "relu_1_1"})
     assert attestation_coherent(complete, halted=False, finished=True) is False
-    halted = parse_outcome_payload({"status": "halted", "boundary_label": "relu_1_1"})
+    halted = parse_outcome_payload({"status": "stopped", "boundary_label": "relu_1_1"})
     assert attestation_coherent(halted, halted=True, finished=True) is True
 
 
@@ -174,7 +174,7 @@ def test_every_settleable_status_round_trips_through_the_strict_codec() -> None:
         is_failed = status is CaptureStatus.FAILED
         outcome = CaptureOutcome(
             status=status,
-            derived=status is CaptureStatus.UNATTESTED,
+            is_derived=status is CaptureStatus.UNATTESTED,
             phase=CapturePhase.FORWARD if is_failed else None,
             origin=FailureOrigin.USER_OP if is_failed else None,
         )
@@ -182,7 +182,7 @@ def test_every_settleable_status_round_trips_through_the_strict_codec() -> None:
         assert parsed.status is status
         assert attestation_coherent(
             parsed,
-            halted=status is CaptureStatus.HALTED,
+            halted=status is CaptureStatus.STOPPED,
             finished=True,
         ), status
 
@@ -208,9 +208,9 @@ def test_contradictory_payload_degrades_to_unknown_with_one_warning() -> None:
     with pytest.warns(RuntimeWarning, match="internally contradictory") as records:
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert resolved.derived is True
-    assert "attestation_incoherent" in (resolved.settlement_note or "")
-    assert "FAILED-only field" in (resolved.settlement_note or "")
+    assert resolved.is_derived is True
+    assert "attestation_incoherent" in (resolved.note or "")
+    assert "FAILED-only field" in (resolved.note or "")
     assert not any("structural evidence" in str(record.message) for record in records)
 
 
@@ -225,8 +225,8 @@ def test_unknown_key_payload_degrades_to_unknown_with_one_warning() -> None:
     with pytest.warns(RuntimeWarning, match="could not parse"):
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert resolved.derived is True
-    assert "attestation_parse_failed" in (resolved.settlement_note or "")
+    assert resolved.is_derived is True
+    assert "attestation_parse_failed" in (resolved.note or "")
 
 
 def test_tampered_artifact_on_disk_degrades_and_then_refuses_export(tmp_path) -> None:
@@ -239,7 +239,7 @@ def test_tampered_artifact_on_disk_degrades_and_then_refuses_export(tmp_path) ->
 
     trace = tl.trace(_Small().eval(), torch.ones(1, 3))
     path = tmp_path / "tampered.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.COMPLETE
@@ -299,13 +299,13 @@ def test_forged_derived_flag_refuses_on_settle_only_statuses(status: str) -> Non
     assert attestation_coherent(outcome, halted=halted, finished=finished) is False
 
 
-@pytest.mark.parametrize("status", ["halted", "unattested", "unknown"])
+@pytest.mark.parametrize("status", ["stopped", "unattested", "unknown"])
 def test_legitimate_derived_statuses_stay_coherent(status: str) -> None:
     """The lattice's own derived statuses still parse and adopt."""
 
     outcome = parse_outcome_payload({"status": status, "derived": True})
-    halted = status == "halted"
-    finished = status in ("halted", "unattested")
+    halted = status == "stopped"
+    finished = status in ("stopped", "unattested")
     assert attestation_coherent(outcome, halted=halted, finished=finished) is True
 
 

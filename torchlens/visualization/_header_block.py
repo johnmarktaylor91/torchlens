@@ -35,7 +35,7 @@ from ._label_format import format_memory
 from ._render_utils import html_escape
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._legend import LegendSection
     from .node_universe import NodeUniverse
     from .request import ResolvedRenderRequest

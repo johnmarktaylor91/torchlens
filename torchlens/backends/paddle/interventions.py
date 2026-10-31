@@ -20,12 +20,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from ... import _state
+from ..._ir.intervention import FireResult
+from ..._ir.predicate import RecordContext
 from ...fastlog.exceptions import PredicateError
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
-from ...ir.intervention import FireResult
-from ...ir.predicate import RecordContext
 from ..registry import BackendUnsupportedError
 
 _PADDLE_SUPPORTED_HELPER_NAMES = ("add", "replace_with", "scale", "zero_ablate")

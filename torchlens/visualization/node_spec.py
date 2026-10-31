@@ -14,6 +14,7 @@ from contextvars import ContextVar
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
+from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_CONE_COLOR,
     INTERVENTION_HOOK_BORDER_COLOR,
@@ -25,12 +26,11 @@ from .._vocab.node_spec import (  # noqa: F401
     NodeSpec,
     NodeSpecFn,
 )
-from ..utils._multipass_access import get_multipass_attr
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.layer import Layer
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .themes import VisualizationTheme
 
 __tl_layer__ = "L7"
@@ -246,8 +246,8 @@ def _forward_site(site: Any) -> Any:
     site) or themselves.
     """
 
-    from ..data_classes.grad_fn import GradFn
-    from ..ir.selector_eval import _grad_fn_forward_op
+    from .._data_classes.grad_fn import GradFn
+    from .._ir.selector_eval import _grad_fn_forward_op
 
     if isinstance(site, GradFn):
         return _grad_fn_forward_op(site)

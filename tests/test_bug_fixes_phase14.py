@@ -13,13 +13,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._utils.hashing import make_short_barcode_from_input
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
-from torchlens.data_classes.func_call_location import FuncCallLocation
+from torchlens.errors import MetadataInvariantError
 from torchlens.options import SaveOptions
-from torchlens.utils.hashing import make_short_barcode_from_input
-from torchlens.utils.tensor_utils import tensor_nanequal
 from torchlens.validation import (
-    MetadataInvariantError,
     check_metadata_invariants,
     validate_forward_pass,
 )
@@ -339,9 +339,7 @@ def test_functional_parameter_view_does_not_inflate_param_counts() -> None:
     """Differentiable tensor views are not counted as separate parameters."""
 
     model = _FunctionalParameterViewModel()
-    trace = tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    trace = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(save_args=True))
 
     assert trace.num_params == model.weight.numel()
     assert trace.num_params_trainable == model.weight.numel()
@@ -392,7 +390,7 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_code_context=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
     )
     conditional_id = trace.conditional_records[0].id
     parent_layer = next(
@@ -414,7 +412,7 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_code_context=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
     )
     parent_layer = next(
         layer for layer in trace.layer_logs.values() if layer.conditional_then_children
@@ -563,7 +561,7 @@ def test_interpolate_exemption_uses_scale_factor_position_not_content() -> None:
 def test_validate_forward_pass_handles_identity_output_layer() -> None:
     """Validation perturbs through synthetic output identity nodes."""
 
-    assert validate_forward_pass(_IdentityOutputModel(), torch.randn(2, 3), random_seed=1)
+    assert validate_forward_pass(_IdentityOutputModel(), torch.randn(2, 3), seed=1)
 
 
 def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
@@ -577,8 +575,8 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
     trace[trace.output_layers[0]].out.backward()
     dot = trace.draw(
         vis_mode="rolled",
-        vis_outpath=str(tmp_path / "rolled_grad"),
-        vis_fileformat="dot",
+        path=str(tmp_path / "rolled_grad"),
+        file_format="dot",
         vis_save_only=True,
     )
 

@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import (
+from torchlens._constants import (
     BACKWARD_PASS_FIELD_ORDER,
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
@@ -24,22 +24,22 @@ from torchlens.constants import (
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.field_policy import (
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.field_policy import (
     field_order_from_policy,
     fork_policy_from_policy,
     portable_state_spec_from_policy,
 )
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
+from torchlens._runnable import PathFaithfulness, ReadinessStatus
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
 
 @dataclass(frozen=True)
@@ -166,16 +166,16 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
     elif cls is Buffer:
         yield next(iter(trace.buffers))
     elif cls is GradFn:
-        yield next(iter(trace.grad_fns))
+        yield next(iter(trace.autograd.grad_fns))
     elif cls is GradFnCall:
-        grad_fn = next(record for record in trace.grad_fns if record.calls)
+        grad_fn = next(record for record in trace.autograd.grad_fns if record.calls)
         yield next(iter(grad_fn.calls.values()))
     elif cls is ModuleCall:
         yield next(iter(trace.module_calls))
     elif cls is Module:
         yield next(iter(trace.modules))
     elif cls is BackwardPass:
-        yield next(iter(trace.backward_passes))
+        yield next(iter(trace.autograd.backward_passes))
 
 
 def test_layer_field_order_includes_live_aggregate_fields() -> None:
@@ -208,7 +208,7 @@ def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
 def test_record_portable_spec_is_generated_from_policy(case: RecordCase) -> None:
     """Class portable specs are generated views over FIELD_POLICY."""
 
-    assert portable_state_spec_from_policy(case.cls.FIELD_POLICY) == case.cls.PORTABLE_STATE_SPEC
+    assert portable_state_spec_from_policy(case.cls.FIELD_POLICY) == case.cls._PORTABLE_STATE_SPEC
 
 
 def test_trace_and_op_generated_policy_views_match_old_names() -> None:
@@ -335,7 +335,7 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
     """Step 11.5's var_names writes pass enforcement under save_code_context.
 
     Design-ppdag-v3 defect 3: step 11.5 declared an EMPTY write set, silently
-    wrong under ``save_code_context=True`` (it assigns ``op.var_names`` on
+    wrong under ``save_source_context=True`` (it assigns ``op.var_names`` on
     every op). No recorded enforcement axis enabled the flag, so the audit
     never tripped. This axis pins the repaired declaration.
     """
@@ -354,7 +354,7 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
     trace = tl.trace(
         _AssigningModel().eval(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True, save_grads=False),
+        capture=tl.options.CaptureOptions(save_source_context=True, save_grads=False),
     )
     try:
         assert any(op.var_names for op in trace.layer_list if op.type != "output")
@@ -427,8 +427,8 @@ def test_postprocess_write_audit_covers_orphan_keep_axis(
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
     try:
-        assert trace.orphans, "the island must be retained as orphans"
-        assert all(op.is_orphan for op in trace.orphans)
+        assert trace.graph.orphans, "the island must be retained as orphans"
+        assert all(op.is_orphan for op in trace.graph.orphans)
     finally:
         trace.cleanup()
 
@@ -460,7 +460,7 @@ def test_postprocess_write_audit_trips_on_undeclared_column(
 ) -> None:
     """An undeclared op-store column write fails the step-contract tripwire."""
 
-    from torchlens.postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
+    from torchlens._postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["4"]
     assert original.writes, "step 4 must declare a non-empty write set"
@@ -494,7 +494,7 @@ def test_postprocess_write_audit_catches_in_place_container_mutation(
     (step 10). The content-fingerprint diff now surfaces it.
     """
 
-    import torchlens.postprocess as postprocess_mod
+    import torchlens._postprocess as postprocess_mod
 
     real_rename = postprocess_mod._rename_model_history_layer_names
 
@@ -544,7 +544,7 @@ def test_postprocess_write_audit_trips_on_unsanctioned_row_removal(
 ) -> None:
     """Removing rows in a step without a removes_rows sanction still trips."""
 
-    from torchlens.postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
+    from torchlens._postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["3"]
     assert "deletes" in original.row_effects, "step 3 must sanction orphan-row removal"

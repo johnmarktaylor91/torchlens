@@ -25,7 +25,7 @@ from typing import Any
 from ._errors import refuse
 from ._walk import walk_spine
 
-__all__ = ["RetentionPlan", "retention_plan"]
+__all__ = ["SavePlan", "retention_plan"]
 
 _ANALYSES = (
     "accumulation",
@@ -66,7 +66,7 @@ class PlanSite:
 
 
 @dataclass(frozen=True)
-class RetentionPlan:
+class SavePlan:
     """A priced, composable retention plan (mikit D15).
 
     ``predicate`` composes with ordinary ``save=``; ``module_subtrees`` are
@@ -213,7 +213,7 @@ def _input_sites(trace: Any, analysis: str) -> list[PlanSite]:
     ]
 
 
-def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> RetentionPlan:
+def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> SavePlan:
     """Build the retention plan for the named analyses (mikit D15).
 
     Parameters
@@ -255,7 +255,7 @@ def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> Rete
     for site in sites:
         deduped.setdefault(site.op_label, site)
     pairs = frozenset((site.func_name, site.module_address or "") for site in deduped.values())
-    return RetentionPlan(
+    return SavePlan(
         analyses=tuple(wanted),
         sites=tuple(deduped.values()),
         module_subtrees=tuple(dict.fromkeys(subtrees)),

@@ -13,12 +13,12 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._ir.intervention import FireResult
 from .._state import pause_logging
+from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
 from ..capture.arg_positions import _normalize_func_name
-from ..data_classes._site_key import call_instance_id, render_site_key, site_axis
-from ..ir.intervention import FireResult
-from ..utils.arg_handling import copy_arg_tree
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -173,7 +173,7 @@ def _execute_hook(
     out: torch.Tensor,
     hook_context: HookContext,
     *,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> torch.Tensor:
     """Run and validate one hook callable under ``pause_logging()``.
 
@@ -185,7 +185,7 @@ def _execute_hook(
         Current out tensor at the hook site.
     hook_context:
         Metadata snapshot passed as the keyword-only ``hook`` argument.
-    force_shape_change:
+    allow_shape_change:
         Escape hatch allowing dtype, device, and shape changes.
 
     Returns
@@ -222,7 +222,7 @@ def _execute_hook(
         # by construction (the misfire test pins both halves).
         from .injection import InjectionAnchor, injection_recorder, next_firing_index
 
-        site = hook_context.layer_log
+        site = hook_context.op
         site_get = site.get if hasattr(site, "get") else lambda key, d=None: getattr(site, key, d)
         rule_id = (getattr(injection_trace, "_tl_injection_state", None) or {}).get(
             "current_rule"
@@ -246,7 +246,7 @@ def _execute_hook(
         result,
         out,
         hook_context=hook_context,
-        force_shape_change=force_shape_change,
+        allow_shape_change=allow_shape_change,
     )
 
 
@@ -261,7 +261,7 @@ _GRADIENT_CALLBACK_PARAMETERS = frozenset(
 def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
-    A backward edit (``tl.grad_zero()``, ``tl.bwd_hook(fn)``, ...) is normalized
+    A backward edit (``tl.zero_grad()``, ``tl.hook_grad(fn)``, ...) is normalized
     to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
     ``call_index`` and ``run_ctx`` arguments a forward value can never supply
     (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
@@ -285,7 +285,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
     from .._errors import InvalidArgumentError
 
     site = _site_name(hook_context)
-    address = hook_context.layer_log.get("address")
+    address = hook_context.op.get("address")
     module = str(address) if isinstance(address, str) and address else "<module>"
     verb = hook_context.name
     engine = hook_context.run_ctx.get("engine") or "forward"
@@ -314,7 +314,7 @@ def validate_hook_output(
     out: torch.Tensor,
     *,
     hook_context: HookContext | None = None,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> torch.Tensor:
     """Validate a hook return value against the input out metadata.
 
@@ -326,7 +326,7 @@ def validate_hook_output(
         Original out tensor.
     hook_context:
         Optional context for error messages.
-    force_shape_change:
+    allow_shape_change:
         If true, allow dtype, device, and shape changes.
 
     Returns
@@ -367,7 +367,7 @@ def validate_hook_output(
         raise _payload_refusal("returned None", "torch.Tensor", None)
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
-    if force_shape_change:
+    if allow_shape_change:
         result = _copy_reused_live_hook_result(out, result)
         _copy_tl_replacement_attrs(out, result)
         return result
@@ -488,7 +488,7 @@ def _apply_live_hooks(
             if _is_plain_module_selector(normalized_entry.site_target):
                 continue
             raise HookValueError(
-                "splice_module(input='in') with a module-scoped op selector is ambiguous. "
+                "splice_module(input_route='in') with a module-scoped op selector is ambiguous. "
                 "Use tl.module(...)/tl.in_module(...) alone for one module-call splice, or use "
                 "an op selector without tl.in_module(...) for op-level splicing."
             )
@@ -509,8 +509,8 @@ def _apply_live_hooks(
             name=_hook_display_name(normalized_entry),
             timing="post",
             direction="forward",
-            layer_log=site,
-            run_ctx=_live_run_ctx(),
+            op=site,
+            run_context=_live_run_ctx(),
             args=hook_args or (current_out,),
             kwargs=hook_kwargs,
         )
@@ -532,7 +532,7 @@ def _apply_live_hooks(
                 normalized_entry.normalized_callable,
                 current_out,
                 hook_context,
-                force_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
+                allow_shape_change=bool(normalized_entry.metadata.get("allow_shape_change", False)),
             )
         result, replaced = _apply_inplace_replacement_to_mutated_storage(
             result,
@@ -1053,13 +1053,13 @@ def _helper_routes_inputs(helper: Any | None) -> bool:
     Returns
     -------
     bool
-        Whether the helper is ``splice_module(input='in')``.
+        Whether the helper is ``splice_module(input_route='in')``.
     """
 
     if helper is None or getattr(helper, "name", None) != "splice_module":
         return False
     metadata = dict(getattr(helper, "metadata", ()))
-    return metadata.get("input") == "in"
+    return metadata.get("input_route") == "in"
 
 
 def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
@@ -1132,7 +1132,7 @@ def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> 
     if helper is None or helper.name != "splice_module":
         return None
     helper_metadata = dict(helper.metadata)
-    if helper_metadata.get("input") != "in":
+    if helper_metadata.get("input_route") != "in":
         return None
     return _module_scope_address(site_target)
 
@@ -1170,7 +1170,7 @@ def _module_scope_address(site_target: Any) -> str | None:
 def _whole_call_site_view(site: Any) -> Any:
     """Return ``site`` as a whole-module-call site for input-splice matching.
 
-    ``splice_module(input="in")`` replaces a module call as a whole, so its
+    ``splice_module(input_route="in")`` replaces a module call as a whole, so its
     ``tl.in_module`` target fires at the boundary even when an op inside the
     call produced the output; drop the boundary's inner-alias mark (which
     otherwise keeps ``tl.in_module`` from re-firing there) for that match.
@@ -1472,7 +1472,7 @@ class _LiveSiteMinter:
     door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
     minter will assign: consume every op already journaled on the capture's
     ``capture_events.op_events`` in execution order under the same cohort rule as
-    :class:`~torchlens.data_classes._site_key.SiteKeyMinter` (pass-qualified
+    :class:`~torchlens._data_classes._site_key.SiteKeyMinter` (pass-qualified
     innermost call instance, pass-free module site, layer type, output
     slot), then report ``seen + 1`` for the firing op without consuming it
     (it is consumed when its own record lands). Both doors therefore derive
@@ -1797,7 +1797,7 @@ def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
         Active one-based backward pass index, when available.
     """
 
-    trace = getattr(grad_fn_handle, "source_trace", None)
+    trace = getattr(grad_fn_handle, "trace", None)
     if trace is None:
         return None
     value = getattr(trace, "_active_backward_pass_index", None)
@@ -1850,18 +1850,18 @@ def _site_name(hook_context: HookContext | None) -> str:
 
     if hook_context is None:
         return "<unknown site>"
-    layer_label = hook_context.layer_log.get("layer_label")
+    layer_label = hook_context.op.get("layer_label")
     if layer_label is None:
         return "<unknown site>"
     return str(layer_label)
 
 
-def do(log: Any, *args: Any, **kwargs: Any) -> Any:
+def do(trace: Any, *args: Any, **kwargs: Any) -> Any:
     """Apply a one-shot intervention operation to a model log.
 
     Parameters
     ----------
-    log:
+    trace:
         Trace-like object that will eventually receive the operation.
     *args:
         Positional arguments forwarded to ``log.do``.
@@ -1874,7 +1874,7 @@ def do(log: Any, *args: Any, **kwargs: Any) -> Any:
         Operation result from ``log.do``.
     """
 
-    return log.do(*args, **kwargs)
+    return trace.do(*args, **kwargs)
 
 
 __all__ = [

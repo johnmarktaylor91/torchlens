@@ -69,7 +69,7 @@ def test_lowered_matches_across_implementations(matrix_models, family, kind):
     corrupt = torch.randint(0, 500, (1, 6))
     results = {}
     for impl in ("eager", "sdpa"):
-        results[impl] = mi.lowered_counterfactual(
+        results[impl] = mi.patch_head(
             matrix_models[(family, impl)],
             clean,
             corrupt,
@@ -165,7 +165,7 @@ def _strict_lowered(model, clean, corrupt, **kwargs):
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", ControlFlowDivergenceWarning)
-        return mi.lowered_counterfactual(model, clean, corrupt, **kwargs)
+        return mi.patch_head(model, clean, corrupt, **kwargs)
 
 
 def test_llama_rotary_forms_agree(llama_rotary_models):
@@ -231,7 +231,7 @@ def test_llama_direct_eager_edit_matches_lowered(llama_rotary_models):
     )
     with warnings.catch_warnings():
         warnings.simplefilter("error", ControlFlowDivergenceWarning)
-        direct = mi.grid(
+        direct = mi.patch_grid(
             model,
             clean,
             corrupt,
@@ -289,10 +289,10 @@ def test_direct_eager_edit_matches_lowered(matrix_models):
     corrupt = torch.randint(0, 500, (1, 6))
     model = matrix_models[("gpt2", "eager")]
 
-    lowered = mi.lowered_counterfactual(
+    lowered = mi.patch_head(
         model, clean, corrupt, layer=0, head=1, kind="head", metric=_final_logits
     )
-    direct = mi.grid(
+    direct = mi.patch_grid(
         model,
         clean,
         corrupt,
@@ -315,16 +315,14 @@ def test_lowered_refusal_rows(matrix_models):
     model = matrix_models[("gpt2", "sdpa")]
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.lowered_counterfactual(model, clean, corrupt, layer=0, head=0, kind="q")
+        mi.patch_head(model, clean, corrupt, layer=0, head=0, kind="q")
     assert excinfo.value.fields["code"] == "mi_lowered_site_not_lowerable"
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.lowered_counterfactual(
-            model, clean, torch.randint(0, 500, (1, 9)), layer=0, head=0, kind="head"
-        )
+        mi.patch_head(model, clean, torch.randint(0, 500, (1, 9)), layer=0, head=0, kind="head")
     assert excinfo.value.fields["code"] == "mi_lowered_length_mismatch"
 
-    result = mi.lowered_counterfactual(
+    result = mi.patch_head(
         model, clean, corrupt, layer=0, head=0, kind="head", metric=_final_logits
     )
     with pytest.raises(MechInterpError) as excinfo:
@@ -336,7 +334,7 @@ def test_lowered_refusal_rows(matrix_models):
     model.train()
     try:
         with pytest.raises(MechInterpError) as excinfo:
-            mi.lowered_counterfactual(model, clean, corrupt, layer=0, head=0, kind="head")
+            mi.patch_head(model, clean, corrupt, layer=0, head=0, kind="head")
         assert excinfo.value.fields["code"] == "mi_lowered_dropout_active"
     finally:
         model.eval()

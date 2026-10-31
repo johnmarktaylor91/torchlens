@@ -27,21 +27,21 @@ from torchlens.backends.torch.collectives import (  # noqa: E402
     remove_collective_wraps,
 )
 from torchlens.distributed import (  # noqa: E402
-    UncapturedCollectiveOpError,
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
+from torchlens.errors import UncapturedCollectiveOpError  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError,
 # which is the correct product behavior and is asserted directly by
 # TestUnvettedTorchRefusesArming below instead.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -430,7 +430,7 @@ class TestReplayRefusals:
         model = HandRolledTP()  # held alive: the refusal under test is the
         log = tl.trace(model, torch.randn(2, 4))  # boundary one, not GC state
         with pytest.raises(RunnablePreflightError) as excinfo:
-            tl.save(log, str(tmp_path / "boundary.tlspec"), level="runnable")
+            log.save(str(tmp_path / "boundary.tlspec"), level="runnable")
         codes = {d.code for d in excinfo.value.fields["diagnostics"]}
         assert "collective_boundary_runnable_unsupported" in codes
 
@@ -455,7 +455,7 @@ class TestReplayRefusals:
         # FieldPolicy.DROP rows, so validate-then-save round-trips too. Pinned
         # in tests/test_capture_outcome_validation_side_channel.py; the order
         # here is kept only to leave this test's history untouched.)
-        tl.save(log, str(tmp_path / "plain.tlspec"), level="runnable")
+        log.save(str(tmp_path / "plain.tlspec"), level="runnable")
         status = log.validate_forward_pass([expected])
         assert status is not None
 
@@ -473,11 +473,11 @@ class TestUnvettedTorchRefusesArming:
     """
 
     @pytest.mark.skipif(
-        has_vetted_snapshot(),
+        is_vetted_build(),
         reason="the unvetted-torch refusal is only observable without a census match",
     )
     def test_arm_refuses_typed_on_unvetted_torch(self, gloo_world):
-        assert not has_vetted_snapshot()
+        assert not is_vetted_build()
         with pytest.raises(UncapturedCollectiveOpError) as excinfo:
             lifecycle.arm()
         assert excinfo.value.fields["kind"] == "uncaptured_collective_op"

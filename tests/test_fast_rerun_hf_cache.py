@@ -108,7 +108,7 @@ def _steered_trace(
 ) -> Any:
     """Capture the stock forward (cache returned) with the steering spec staged."""
 
-    spec = tl.when(tl.module(site), tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1))
+    spec = tl.when(tl.module(site), tl.steer(direction, strength=_MAGNITUDE, dim=-1))
     return tl.trace(model, ids, save=tl.module(site) | tl.module(head), intervene=spec)
 
 

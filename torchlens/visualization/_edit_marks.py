@@ -29,14 +29,14 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
-from ..utils._multipass_access import get_multipass_attr
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..intervention.types import Edit, FireRecord
     from .themes import VisualizationTheme
 
@@ -79,7 +79,7 @@ _MAX_HEADER_EDITS = 3
 #: Longest string argument written in; longer ones are cut with an ellipsis.
 _MAX_LITERAL_CHARS = 16
 #: Keyword arguments that never appear in the edit text.
-_SILENT_KWARGS = frozenset({"force_shape_change"})
+_SILENT_KWARGS = frozenset({"allow_shape_change"})
 #: Hook names the value-replacement door gives its generated hooks.
 _SET_HOOK_MARKERS = ("_set_value_hook", "_value_hook")
 

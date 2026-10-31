@@ -15,8 +15,8 @@ time:
 
 ```python
 trace = tl.trace(model, x)
-trace.output_table(top_n=5)
-trace.decode_output(top_n=3)
+trace.output_table(k=5)
+trace.decode_output(k=3)
 ```
 
 Use `output_style=` and `output_head=` when auto-detection should be
@@ -62,17 +62,17 @@ The default `trace.to_pandas()` schema is unchanged.
 
 ## Custom Output Detectors
 
-Register custom output detectors through `tl.autoroute.output.register(...)`.
+Register custom output detectors through `tl._autoroute.output.register(...)`.
 The detector receives the live model output object plus TorchLens metadata and
 returns a `ResolvedPostprocessing` record or `None`.
 
 ```python
 from typing import Any
 
-from torchlens.data_classes.trace import ResolvedPostprocessing
+from torchlens._data_classes.trace import ResolvedPostprocessing
 
 
-@tl.autoroute.output.register(name="my_labels", priority=5)
+@tl._autoroute.output.register(name="my_labels", priority=5)
 def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
     """Resolve a local label bank for output_style='my_labels'."""
 
@@ -97,7 +97,7 @@ trace = tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="my_la
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
 and unregister a temporary detector with
-`tl.autoroute.output.unregister("my_labels")`.
+`tl._autoroute.output.unregister("my_labels")`.
 
 ## Original Input Display
 
@@ -111,7 +111,7 @@ trace = tl.trace(
     model,
     "0.1,0.2,2.0,1.0",
     capture=tl.options.CaptureOptions(
-        transform=text_to_tensor,
+        input_transform=text_to_tensor,
         save_raw_input="small",
     ),
 )
@@ -123,7 +123,7 @@ known preprocessing pipeline. For local transforms, attach the same provenance
 record shape when documenting the transform in a demo or integration:
 
 ```python
-from torchlens.data_classes.trace import ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 trace.input_preprocessor = ResolvedPreprocessing(
     source="project.transform",
@@ -167,7 +167,7 @@ trace = tl.trace(
     model,
     image_list,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         output_style="classification",
         save_raw_input=True,
     ),
@@ -196,16 +196,16 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),
 )
-coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
+coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
 ```
 
 The selected activations must be saved by the original capture; this is why
-the demo uses a curated `save=` subset instead of exhaustive saving. `min_n`
+the demo uses a curated `save=` subset instead of exhaustive saving. `min_stimuli`
 defaults to 8 because the scatter is a visual summary over a stimulus batch,
 not a statistical inference routine. Recurrent aggregate layers are rejected;
 select a pass-qualified op when a reused module should be visualized.
@@ -214,7 +214,7 @@ Render MDS thumbnails with the draw-time node hook:
 
 ```python
 trace.draw(
-    node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8),
+    node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
 )
 ```
 
@@ -232,15 +232,15 @@ review-day signoff.
 The low-level primitives live under `tl.viz`:
 
 ```python
-heatmap_image = tl.viz.render_heatmap(array)
-lineplot_image = tl.viz.render_lineplot(series)
-scatter_image = tl.viz.render_image_scatter(coords, images=image_list)
+heatmap_image = tl.viz.heatmap(array)
+lineplot_image = tl.viz.lineplot(series)
+scatter_image = tl.viz.image_scatter(coords, images=image_list)
 ```
 
 They return bounded `PIL.Image.Image` objects directly. Matplotlib is
 intentionally not used, so graph drawing can compose compact deterministic
 images without adding a plotting dependency. These are separate from the older
-`tl.viz.heatmap(max_size=...)` visualizer factory, which returns a callable for
+`tl.viz.nodes.heatmap(max_size=...)` visualizer factory, which returns a callable for
 tensor payload display.
 
 RDM annotations use the representation-geometry helpers:
@@ -248,7 +248,7 @@ RDM annotations use the representation-geometry helpers:
 ```python
 rdm_matrix = tl.repgeom.rdm(activations)
 rdms_by_layer = tl.repgeom.rdm_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
+trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
 ```
 
 `rdm_evolution(...)` stores an `N x N` representational dissimilarity matrix
@@ -260,11 +260,11 @@ Feature and activation map annotations live under `tl.viz` because they are
 activation displays, not representation-geometry numerics:
 
 ```python
-feature_maps = tl.viz.feature_map_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
+feature_maps = tl.viz.feature_maps(trace, save=mds_layers)
+trace.draw(node_spec_fn=tl.viz.nodes.feature_map())
 ```
 
-`feature_map_evolution(...)` requires saved spatial activations with shape
+`feature_maps(...)` requires saved spatial activations with shape
 `[N, C, H, W]`; capture the convolutional layers you want to inspect before
 calling it. Non-spatial sites are skipped, and the call raises only when no
 selected site has spatial activations. By default, `feature_map_node_spec()`
@@ -279,7 +279,7 @@ Scree annotations expose the layerwise eigenspectrum:
 eigenvalues = tl.repgeom.scree(activations)
 dim_info = tl.repgeom.effective_dimensionality(activations)
 scree_by_layer = tl.repgeom.scree_evolution(trace, save=mds_layers)
-trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+trace.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 `effective_dimensionality(...)` returns variance-explained and dimensionality
@@ -304,16 +304,16 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),
 )
 
 trace.model_profile
-trace.output_table(top_n=5)
-tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
-trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
+trace.output_table(k=5)
+tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
+trace.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
 trace.draw(show_input_transform_summary=True)
 ```
 
@@ -329,7 +329,7 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- `output_style=` override and `tl.autoroute.output.register(...)`;
+- `output_style=` override and `tl._autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.raw_input` and `trace.input_preprocessor` provenance.
 
@@ -340,14 +340,14 @@ core flow runs without downloading external model weights.
 ## Provisional Public Names
 
 - `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
-- `Trace.output_table(top_n=5, batch_items=None)`
-- `Trace.decode_output(top_n=None)`
+- `Trace.output_table(k=5, batch_items=None)`
+- `Trace.decode_output(k=None)`
 - `Trace.output_postprocessor`
-- `tl.autoroute.output.register(...)`
-- `tl.autoroute.output.unregister(...)`
-- `tl.autoroute.output.list()`
-- `tl.autoroute.output.info(...)`
-- `tl.trace(..., capture=CaptureOptions(transform=..., save_raw_input=..., batch_render=...))`
+- `tl._autoroute.output.register(...)`
+- `tl._autoroute.output.unregister(...)`
+- `tl._autoroute.output.list()`
+- `tl._autoroute.output.info(...)`
+- `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
 - `Trace.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`
@@ -359,6 +359,6 @@ core flow runs without downloading external model weights.
 - `tl.repgeom.procrustes_align(...)`
 - `tl.repgeom.activation_distance_matrix(...)`
 - `tl.repgeom.mds_evolution(...)`
-- `tl.repgeom.mds_scatter_node_spec(...)`
+- `tl.viz.nodes.mds_scatter(...)`
 - `Trace.draw(node_spec_fn=...)`
 - `Trace._annotation_blobs`

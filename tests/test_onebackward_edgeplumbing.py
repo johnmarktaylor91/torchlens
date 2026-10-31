@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.utils._torch_compat import get_gradient_edge_support
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -152,13 +152,13 @@ class TestDeferredSiblingSeams:
             retention=None,
             capture_status=None,
             resolution="exact",
-            frozen_requested=False,
-            frozen_resolved=False,
+            is_frozen_requested=False,
+            is_frozen_resolved=False,
             frozen_reached=None,
             policy_digest=None,
-            detached=True,
+            is_detached=True,
             sample_id=None,
-            rescorable=True,
+            is_rescorable=True,
         )
         assert row.key == ("t0", "EDGE", (7, "positional", (0,)))
 

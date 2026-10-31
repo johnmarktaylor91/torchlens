@@ -23,9 +23,9 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._ir.intervention import FireResult
 from .._state import pause_logging
 from ..backends.torch._tl import clear_tensor_label, get_tensor_label
-from ..ir.intervention import FireResult
 from .hooks import make_live_site_proxy
 
 
@@ -71,7 +71,7 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
     predicate_selector = getattr(predicate_intervene, "selector", None)
     if predicate_selector is None:
         return None
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
     from .selectors import BaseSelector
 
     if not isinstance(predicate_selector, BaseSelector):
@@ -109,7 +109,7 @@ def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str,
     label = get_tensor_label(out)
     if label is None:
         return False
-    from ..ir.live_index import LiveIndexWindowError
+    from .._ir.live_index import LiveIndexWindowError
 
     try:
         event = trace.capture_events.live_index.require_event(label)

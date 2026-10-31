@@ -38,9 +38,7 @@ TINY = 1e-30
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     torch.manual_seed(0)
-    return tl.trace(
-        model, x, capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0)
-    )
+    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0))
 
 
 def _op(trace: Any, *func_names: str) -> Any:
@@ -80,7 +78,7 @@ def _assert_dead_edge_fails(trace: Any, op: Any, slot: Any) -> None:
 def _validates(model: nn.Module, x: torch.Tensor) -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(validate_forward_pass(model, x, random_seed=0))
+        return bool(validate_forward_pass(model, x, seed=0))
 
 
 # ------------------------------------------------------------------ proofs.1: sdpa, value zero

@@ -25,13 +25,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import RecordBindingError
+from torchlens._merged import MergedErrorCode
+from torchlens._merged._errors import MergeConflictError
 from torchlens.distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
-from torchlens.merged import MergedErrorCode
-from torchlens.merged._errors import MergeConflictError
 
 
 class _TwoLayer(nn.Module):

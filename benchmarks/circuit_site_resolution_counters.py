@@ -62,8 +62,8 @@ _CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=Tr
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {
     "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
-    "selector_eval_evaluate": ("torchlens/ir/selector_eval.py", "evaluate"),
-    "op_getattribute": ("torchlens/data_classes/op.py", "__getattribute__"),
+    "selector_eval_evaluate": ("torchlens/_ir/selector_eval.py", "evaluate"),
+    "op_getattribute": ("torchlens/_data_classes/op.py", "__getattribute__"),
     "op_store_cell_get": ("torchlens/_trace_core/op_store.py", "cell_get"),
     "replays": ("torchlens/intervention/replay.py", "_run_replay"),
     "graph_builds": ("torchlens/mechinterp/_edges.py", "component_graph"),
@@ -182,7 +182,7 @@ TIMED: dict[str, tuple[str, str]] = {
     "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
     "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
     "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
-    "build_selection_do_plan": ("torchlens/selection.py", "build_selection_do_plan"),
+    "build_selection_do_plan": ("torchlens/_selection.py", "build_selection_do_plan"),
     "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
 }
 
@@ -214,7 +214,7 @@ def _counts(stats: pstats.Stats) -> dict[str, int]:
         for key, (suffix, name) in COUNTED.items():
             if func == name and posix.endswith(suffix):
                 counts[key] += ncalls
-        if func == "fork" and "torchlens/data_classes/" in posix:
+        if func == "fork" and "torchlens/_data_classes/" in posix:
             counts["forks"] += ncalls
     counts["python_function_calls"] = python_calls
     counts["total_calls"] = int(stats.total_calls)  # type: ignore[attr-defined]
@@ -261,7 +261,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
         edges = case["edges"](graph)
         profiler = cProfile.Profile()
         profiler.enable()
-        patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+        patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
         profiler.disable()
         report: dict[str, Any] = {
             "case": case_name,
@@ -278,7 +278,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
             kinds: Counter[str] = Counter()
             with _counting_selector_kinds(kinds):
                 started = time.perf_counter()
-                mi.patch_edges(clean, edges, corrupt=corrupt)
+                mi.patch_edges(clean, edges, corrupted_graph=corrupt)
                 report["wall_s_unprofiled"] = round(time.perf_counter() - started, 2)
             report["resolved_selector_kinds"] = dict(sorted(kinds.items()))
     finally:

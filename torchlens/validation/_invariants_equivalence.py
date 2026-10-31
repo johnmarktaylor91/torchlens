@@ -7,8 +7,8 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         _EQUIVALENT_OPS_UNAVAILABLE,
         _RAW_LABEL_BEARING_DICT_FIELDS,
@@ -562,7 +562,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
     for lpl in [] if call_site_grouped else ml.layer_list:
-        if lpl.uses_params and lpl._param_barcodes:
+        if lpl.has_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
 
@@ -680,7 +680,7 @@ def _check_call_site_contract_post_hoc(
     ``call_site_contract_unchecked`` instead of passing silently.
     """
 
-    from ..postprocess._call_site_contract import (
+    from .._postprocess._call_site_contract import (
         CallSiteEntry,
         call_site_classes_for,
         call_site_contract_violation,
@@ -694,7 +694,7 @@ def _check_call_site_contract_post_hoc(
         record_validation_diagnostic(
             trace,
             ValidationDiagnostic(
-                check="call_site_contract_unchecked",
+                check_name="call_site_contract_unchecked",
                 message=(
                     "Call-site grouping contract (i) to (iii) not checked: this trace "
                     "carries no call-site side table (the key is never persisted; step 7 "

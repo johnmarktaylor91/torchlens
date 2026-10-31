@@ -32,7 +32,7 @@ from tests.test_hf_attention_backend import (  # noqa: E402
     _keep_mask,
     _Spy,
 )
-from torchlens.bridge import hf as tl_hf  # noqa: E402
+from torchlens.bridge import transformers as tl_hf  # noqa: E402
 from torchlens.bridge.hf_attention import BACKEND_KEY  # noqa: E402
 
 DISK_MAP = {

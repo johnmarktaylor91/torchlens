@@ -15,13 +15,13 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from ..utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import is_multipass_layer
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 
 ProfileLevel = Literal["op", "module", "call"]
@@ -75,7 +75,7 @@ def _weakest_evidence(labels: list[str]) -> str:
 
 
 @dataclass(frozen=True)
-class TraceProfile:
+class ProfileReport:
     """A printable, tabular resource profile assembled from one trace.
 
     Parameters
@@ -103,10 +103,10 @@ class TraceProfile:
     # contract requires a rescued/ceilinged capture to stay visible in profile
     # output, so these are stamped from the source trace at build time.
     capture_status: str = "unknown"
-    capture_verified: bool | None = None
+    is_capture_verified: bool | None = None
     capture_verification_reason: str | None = None
-    rescue_rerun: bool = False
-    structure_only: bool = False
+    has_rescue_rerun: bool = False
+    is_structure_only: bool = False
     # F09 (costreport D4/D6): the whole-capture KNOWN forward partition
     # total -- the invariant percent denominator -- plus the unknown EVENT
     # count disclosed beside it (never a FLOP percentage).
@@ -162,10 +162,10 @@ class TraceProfile:
         frame.attrs["torchlens_capture_honesty"] = {
             "schema": "torchlens.capture_honesty.v1",
             "capture_status": self.capture_status,
-            "capture_verified": self.capture_verified,
+            "capture_verified": self.is_capture_verified,
             "capture_verification_reason": self.capture_verification_reason,
-            "rescue_rerun": self.rescue_rerun,
-            "structure_only": self.structure_only,
+            "rescue_rerun": self.has_rescue_rerun,
+            "structure_only": self.is_structure_only,
         }
         frame.attrs["column_additivity"] = dict(self.column_additivity)
         frame.attrs["partition_total"] = self.partition_total
@@ -243,20 +243,20 @@ class TraceProfile:
         notes = []
         # L7a G3 render honesty: hypothesis shapes must never present as
         # measurements (memo sec 3.4).
-        if self.structure_only:
+        if self.is_structure_only:
             notes.append("structure-only capture -- shapes/dtypes are HYPOTHESES, not measurements")
         if self.capture_status not in ("complete", "unknown"):
             notes.append(f"capture outcome: {self.capture_status}")
-        if self.capture_verified is False:
+        if self.is_capture_verified is False:
             reason = self.capture_verification_reason or "unrecorded reason"
             notes.append(f"capture UNVERIFIED ({reason})")
-        if self.rescue_rerun:
+        if self.has_rescue_rerun:
             notes.append("rescue re-run result (mode_rescue_rerun)")
         if not notes:
             return ""
         return "! " + "; ".join(notes) + " -- rows below may undercount what ran"
 
-    def honesty(self, *, as_summary: bool = False) -> pd.DataFrame | str:
+    def evidence_labels(self, *, as_summary: bool = False) -> pd.DataFrame | str:
         """Return per-cell evidence labels for resource quantities (D2/D9).
 
         A projection of cell facts, never a null check: FLOP labels come
@@ -872,15 +872,15 @@ def _assemble_level_rows(
     return rows, row_evidence
 
 
-def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
+def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
     trace: Trace,
     *,
     level: ProfileLevel = "op",
     sort_by: ProfileSort = "time",
     ascending: bool = False,
-    top_k: int | None = None,
+    k: int | None = None,
     group_by: ProfileGroupBy | None = None,
-) -> TraceProfile:
+) -> ProfileReport:
     """Build a unified op, module, or invocation resource profile.
 
     Parameters
@@ -894,7 +894,7 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         Column used for sorting. ``"time"`` sorts descending by default.
     ascending:
         Whether to reverse the default descending order.
-    top_k:
+    k:
         Number of sorted bottleneck rows to retain. ``None`` retains all rows.
         Percent denominators are UNAFFECTED (D6: a view never changes the
         partition total).
@@ -908,8 +908,8 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
 
     Returns
     -------
-    TraceProfile
-        Printable profile object exposing :meth:`TraceProfile.to_pandas`.
+    ProfileReport
+        Printable profile object exposing :meth:`ProfileReport.to_pandas`.
 
     Notes
     -----
@@ -921,7 +921,7 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
     column additivity stamped on every export (D5).
     """
 
-    _validate_profile_args(level, sort_by, top_k, group_by)
+    _validate_profile_args(level, sort_by, k, group_by)
 
     from ._compute_truth import compute_aggregation
 
@@ -971,8 +971,8 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         row["_profile_row_index"] = index
     frame["_profile_row_index"] = list(range(len(frame)))
     frame = frame.sort_values(sort_by, ascending=ascending, na_position="last", kind="stable")
-    if top_k is not None:
-        frame = frame.head(top_k)
+    if k is not None:
+        frame = frame.head(k)
     sorted_row_indices = frame["_profile_row_index"].tolist()
     frame = frame.drop(columns=["_profile_row_index"])
     frame = frame.reset_index(drop=True)
@@ -989,8 +989,8 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         honesty_rows,
         columns=["name", "time", "flops", "activation_memory", "param_count"],
     )
-    if top_k is not None:
-        frame.attrs["top_k"] = top_k
+    if k is not None:
+        frame.attrs["top_k"] = k
     outcome = getattr(trace, "outcome", None)
     status_value = getattr(getattr(outcome, "status", None), "value", None)
     capture_status = str(status_value) if status_value is not None else "unknown"
@@ -1015,16 +1015,16 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         # Inclusive rollups: the ``flops`` column is the subtree family
         # there and must never be summed (D5).
         additivity["flops"] = False
-    return TraceProfile(
+    return ProfileReport(
         frame=frame,
         level=level,
         _honesty_frame=honesty_frame,
         _tree_text=_build_call_tree(trace),
         capture_status=capture_status,
-        capture_verified=capture_verified,
+        is_capture_verified=capture_verified,
         capture_verification_reason=capture_verification_reason,
-        rescue_rerun=rescue_rerun,
-        structure_only=structure_only,
+        has_rescue_rerun=rescue_rerun,
+        is_structure_only=structure_only,
         partition_total=partition_total,
         unknown_events=aggregation.coverage.unknown,
         attention_full_square_ops=counted_attention_ops(aggregation),

@@ -17,7 +17,7 @@ from ._base import ConfigurationError, TorchLensError, ValidationError
 
 __all__ = [
     "BundleRelationError",
-    "CheckpointSeriesLiveParamsError",
+    "ParamEvidenceMissingError",
     "EpisodeCaptureError",
     "EpisodeDeclarationError",
     "EpisodeErrorCode",
@@ -184,7 +184,7 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
     ``fields["break_step"]`` names the broken join's step where one exists.
     Strict-arm instances raised mid-capture carry the settled partial
     product on ``exc.partial_log`` (recover with
-    ``tl.partial.from_failed_capture(exc)``).
+    ``tl._partial.from_failed_capture(exc)``).
     """
 
 
@@ -219,7 +219,7 @@ class BundleExperimentError(ValidationError, RuntimeError):
     """
 
 
-class CheckpointSeriesLiveParamsError(ValidationError, RuntimeError):
+class ParamEvidenceMissingError(ValidationError, RuntimeError):
     """Cross-member parameter read refused: no immutable capture-time evidence.
 
     TorchLens records which parameter a run used, not its bytes, so a

@@ -73,7 +73,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # SIM102 40 -> 39.
     "SIM108": 86,
     # 2026-08-16 fixwave-7 settle: 92 -> 93. The one new deferral is the
-    # post-fork pre-exec PDEATHSIG guard in utils/_subprocess.py, where
+    # post-fork pre-exec PDEATHSIG guard in _utils/_subprocess.py, where
     # contextlib.suppress would ALLOCATE in the no-allocation fork window
     # its own comment forbids; the wave's other new site (reaper test
     # cleanup) was converted to suppress instead of ledgered.
@@ -219,7 +219,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # pattern) -- tl.report.mfu's three D16/D17 disclosure knobs bundle into
     # the frozen MfuProvenance dataclass (validation unchanged at the mfu()
     # door, so the typed refusals still fire), and the D9 evidence= knob
-    # moved from build_profile to TraceProfile.to_pandas(evidence=) -- the
+    # moved from build_profile to ProfileReport.to_pandas(evidence=) -- the
     # export door -- so build_profile keeps its historical five-argument
     # view surface. The lane's PRIVATE offenders (_remainder,
     # _assemble_level_rows, _rollup_row) were refactored in-lane. F09 adds
@@ -270,7 +270,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # below the ceiling instead (C06 house pattern): the content doors
     # arrays=/graph= stay flat keywords and the emission plumbing
     # (share_safe/deterministic/vis_call_depth + thumbnail budgets) bundles
-    # into the frozen tl.export.ReportOptions dataclass. Measured 442 at the
+    # into the frozen tl.options.HtmlReportOptions dataclass. Measured 442 at the
     # merged tree (pinned ruff, isolated mode, torchlens/ scope).
     # 2026-08-29 F10 T71d re-reconcile: the union's +1 (envelope_line's
     # 8-arg affix surface in stats/_envelope.py) is PAID DOWN, not held --
@@ -318,7 +318,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # the docs lane for notebook-side cleanup; SHRINK-ONLY from here.
     # 2026-08-16 fixwave-7 settle: BLE001 523 -> 528, S110 41 -> 43. The
     # new sites are the wave's deliberate best-effort handlers: the
-    # subprocess group-reaper / PDEATHSIG guards (utils/_subprocess.py --
+    # subprocess group-reaper / PDEATHSIG guards (_utils/_subprocess.py --
     # post-fork and teardown paths that must never raise), the minted-helper
     # rebuild gate (test_intervention_spec_pickle.py, name-resolution proof
     # that tolerates constructor rejection by design), and belt/rescue
@@ -345,11 +345,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # PAID DOWN, not held. F10's 27 lovely-surface fail-open guards (repr/
     # card dunders, honesty-token probes, echo guard, degrade-to-None
     # lookups) now route through the ONE audited blind-except chokepoint
-    # `torchlens.utils.fail_open` -- callers keep their exact degraded
+    # `torchlens._utils.fail_open` -- callers keep their exact degraded
     # forms, enumerable interior failures still surface through the outer
     # funnel, and the ratchet ledgers one site instead of 27. The helper's
     # +1 is offset by folding the pre-existing _copy_rerun_value deepcopy
-    # fallback (data_classes/trace.py) into the same chokepoint. Ceiling
+    # fallback (_data_classes/trace.py) into the same chokepoint. Ceiling
     # stays the landed train's 541; BLE001 stays on the debt-burn list.
     "BLE001": 541,
     # 43->44 (same L8 settle): _record_plane_p's swallow-and-continue is the
@@ -378,7 +378,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # NEXT ignore entry from entering unmeasured.
     # 120 -> 122 (2026-10-01 ratchet2 ci-fix re-true): no single attributable
     # new site -- a per-file recount against main shows the branch's module
-    # splits (torchlens/__init__.py losing 3 sites; data_classes/op.py's
+    # splits (torchlens/__init__.py losing 3 sites; _data_classes/op.py's
     # _op_dedup.py split picking up 2; repgeom/__init__.py's _trace_views.py /
     # _annotation_gate.py split picking up net +1; new modules
     # _option_receipt.py, backends/torch/identity_shims.py,

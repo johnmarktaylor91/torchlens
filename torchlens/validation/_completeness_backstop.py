@@ -11,7 +11,7 @@ census seam (R43 file-size ratchet); the logic is unchanged.
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 _MODULE_FORWARD_OWNER_PREFIX = "module_forward:"
 

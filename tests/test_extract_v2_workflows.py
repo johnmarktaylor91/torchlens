@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 import torch
 
+from torchlens import extract_dataset
 from torchlens.dataset_extraction import (
     BatchEnvelope,
     export_extraction,
-    extract_dataset,
     load_extraction,
     open_extraction,
 )
@@ -49,7 +49,7 @@ def test_rg10_shape_resnet18_memory_disk_reload_export_agree(tmp_path: Path) -> 
         images,
         layers,
         batch_size=2,
-        output_dir=out,
+        path=out,
         progress=False,
         stimulus_ids=ids,
     )
@@ -98,7 +98,7 @@ def test_rg14_shape_clip_processor_kwargs_envelope(tmp_path: Path) -> None:
         return BatchEnvelope(
             args=(),
             kwargs=dict(kwargs),
-            row_count=n_rows,
+            num_rows=n_rows,
             mask=None,
             disclosure={"kind": "processor_kwargs"},
         )
@@ -125,10 +125,10 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
 
     from torchlens._data_substrate import MANIFEST_SCHEMA_V1
     from torchlens.dataset_extraction import (
-        DatasetExtractionResumeError,
         _shard_filename,
         _stimuli_signature,
     )
+    from torchlens.errors import DatasetExtractionResumeError
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
@@ -165,7 +165,7 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
             stimuli,
             {"relu": "relu"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -176,7 +176,7 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
         stimuli,
         {"relu": "relu"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         acknowledge_v1_prefix=True,

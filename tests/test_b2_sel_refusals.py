@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import errors
-from torchlens.accessors import _appliances
+from torchlens.appliances import _appliances
 
 
 class _Net(nn.Module):
@@ -111,7 +111,7 @@ def empty_registry() -> Any:
     for name in set(_appliances._APPLIANCES.list_ids()):
         _appliances._APPLIANCES.unregister(name)
     for name, entry in hidden.items():
-        tl.accessors.register_appliance(name, entry.factory, summary=entry.summary)
+        tl.appliances.register(name, entry.factory, summary=entry.summary)
 
 
 class _OutsideAppliance:
@@ -127,12 +127,12 @@ class _OutsideAppliance:
 def test_using_returns_registered_appliances(net, empty_registry) -> None:
     model, x = net
     trace = tl.trace(model, x)
-    tl.accessors.register_appliance("outside", _OutsideAppliance, summary="op counter")
-    tl.accessors.register_appliance("lazy", "builtins:id")
+    tl.appliances.register("outside", _OutsideAppliance, summary="op counter")
+    tl.appliances.register("lazy", "builtins:id")
     assert trace.using("outside").op_count() == len(trace.layer_list)
     assert trace.using("outside").trace is trace
     assert trace.using("lazy") == id(trace)
-    assert tl.accessors.registered_appliances() == {"lazy": "", "outside": "op counter"}
+    assert tl.appliances.names() == {"lazy": "", "outside": "op counter"}
 
 
 def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -> None:
@@ -141,8 +141,8 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
     with pytest.raises(errors.InvalidArgumentError) as empty_info:
         trace.using("mi")
     assert empty_info.value.fields["code"] == "appliance_unknown"
-    assert "register_appliance(name, factory)" in empty_info.value.fields["remedy"]
-    tl.accessors.register_appliance("outside", _OutsideAppliance)
+    assert "register(name, factory)" in empty_info.value.fields["remedy"]
+    tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         trace.using("mi")
     assert exc_info.value.fields["registered"] == ("outside",)
@@ -152,11 +152,11 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
 
 
 def test_register_appliance_refusals(empty_registry) -> None:
-    tl.accessors.register_appliance("outside", _OutsideAppliance)
+    tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.ArgumentConflictError) as taken:
-        tl.accessors.register_appliance("outside", _OutsideAppliance)
+        tl.appliances.register("outside", _OutsideAppliance)
     assert taken.value.fields["code"] == "appliance_name_taken"
-    tl.accessors.register_appliance("outside", _OutsideAppliance, replace=True)
+    tl.appliances.register("outside", _OutsideAppliance, replace=True)
     for name, factory, error_type in [
         (3, _OutsideAppliance, errors.ArgumentTypeError),
         ("9lives", _OutsideAppliance, errors.InvalidArgumentError),
@@ -164,7 +164,7 @@ def test_register_appliance_refusals(empty_registry) -> None:
         ("ok", "no_colon_path", errors.InvalidArgumentError),
     ]:
         with pytest.raises(error_type) as exc_info:
-            tl.accessors.register_appliance(name, factory)  # type: ignore[arg-type]
+            tl.appliances.register(name, factory)  # type: ignore[arg-type]
         assert exc_info.value.fields["code"] == "appliance_registration_invalid"
 
 
@@ -188,7 +188,7 @@ def _head_slices(trace: Any, head: int) -> list[torch.Tensor]:
 @pytest.mark.heavy
 def test_unscoped_head_reports_the_sites_it_writes() -> None:
     model, ids = _gpt2()
-    capture = tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+    capture = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     clean = tl.trace(model, ids, capture=capture)
     edited = clean.fork("ablated")
     with warnings.catch_warnings(record=True) as caught:
@@ -246,7 +246,7 @@ class _AttnHost(nn.Module):
 def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
     """U36.1: both facet doors refuse with MissingFacetError, never a bare KeyError."""
 
-    from torchlens.semantic import MissingFacetError
+    from torchlens.errors import MissingFacetError
 
     trace = tl.trace(_AttnHost().eval(), torch.randn(1, 4, 8))
     for view in (trace.modules["attn"].facets, trace.module_calls["attn:1"].facets):
@@ -254,6 +254,6 @@ def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
             view["q"]
         assert type(exc_info.value) is not KeyError
         assert "_UnregisteredAttention" in str(exc_info.value)
-        assert "torchlens.semantic.register" in str(exc_info.value)
+        assert "torchlens.facets.register" in str(exc_info.value)
         assert view.get("q") is None
         assert not hasattr(view, "q")

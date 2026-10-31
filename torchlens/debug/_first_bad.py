@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from .._debug_report import FoundReport
 
-__all__ = ["FirstBadThing", "amp_scaled_gradients_hint"]
+__all__ = ["FirstBadThing", "amp_scaled_grads_hint"]
 
 #: Closed coverage vocabulary: "complete" (every relevant payload checked),
 #: "found_first_among_checked" (earlier unchecked payloads exist -- the claim
@@ -103,7 +103,7 @@ class FirstBadThing(FoundReport):
         return findings
 
 
-def amp_scaled_gradients_hint(*, all_nonfinite: bool = False) -> str:
+def amp_scaled_grads_hint(*, all_nonfinite: bool = False) -> str:
     """Return the shared AMP/GradScaler disclosure text (item 6 / R20).
 
     Parameters

@@ -6,7 +6,7 @@ non-pass-qualified ``layer_label`` while ``layer.parents`` references
 multi-pass parents by their pass-qualified ``label`` (``linear_1_1:2``), so the
 membership guard never matched. Structurally different recurrent graphs hashed
 identically (false match), defeating the operand-order guarantee and the public
-``tl.hash.assert_unchanged`` structural pin.
+``tl.fingerprint.assert_unchanged`` structural pin.
 
 MED-2: the RF staleness fingerprint ``_graph_revision`` omitted the geometry
 arguments RF rules consume (kernel/stride/padding/dilation read via
@@ -25,8 +25,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens.receptive_field import _engine
-from torchlens.utils.hashing import compute_graph_shape_hash
 
 
 class CrossPassReaderA(nn.Module):
@@ -145,7 +145,7 @@ def test_recurrent_cross_pass_reader_pair_hashes_distinct() -> None:
 
     assert compute_graph_shape_hash(trace_a) != compute_graph_shape_hash(trace_b)
     # Address-free public spelling must distinguish them too.
-    assert tl.hash.trace(trace_a) != tl.hash.trace(trace_b)
+    assert tl.fingerprint.trace(trace_a) != tl.fingerprint.trace(trace_b)
 
 
 def test_recurrent_swapped_operand_pair_hashes_distinct() -> None:
@@ -156,7 +156,7 @@ def test_recurrent_swapped_operand_pair_hashes_distinct() -> None:
     trace_a, trace_b = _trace_pair(SwappedOperandA(), SwappedOperandB(), x)
 
     assert compute_graph_shape_hash(trace_a) != compute_graph_shape_hash(trace_b)
-    assert tl.hash.trace(trace_a) != tl.hash.trace(trace_b)
+    assert tl.fingerprint.trace(trace_a) != tl.fingerprint.trace(trace_b)
 
 
 def test_every_parent_edge_contributes_to_hash_input() -> None:
@@ -215,8 +215,8 @@ def test_unchanged_recurrent_model_still_hashes_same() -> None:
 
     # Structural hash is weight-blind: two fresh instances of one architecture pin
     # identically, so an existing CI pin keeps passing after the fix lands.
-    pinned = tl.hash.model(CrossPassReaderA(), x)
-    assert tl.hash.assert_unchanged(CrossPassReaderA(), x, pinned) == pinned
+    pinned = tl.fingerprint.model(CrossPassReaderA(), x)
+    assert tl.fingerprint.assert_unchanged(CrossPassReaderA(), x, pinned) == pinned
 
     trace_1 = tl.trace(CrossPassReaderA(), x)
     trace_2 = tl.trace(CrossPassReaderA(), x)

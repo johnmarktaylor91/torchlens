@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 
 class _TinyModel(nn.Module):
@@ -84,7 +84,7 @@ def test_input_transform_summary_render_is_opt_in() -> None:
         _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
     log.raw_input = "hello world"
-    default_dot = log.draw(vis_save_only=True, vis_fileformat="dot")
+    default_dot = log.draw(vis_save_only=True, file_format="dot")
     log.input_preprocessor = ResolvedPreprocessing(
         source="unit_test",
         identifier="tiny",
@@ -93,10 +93,10 @@ def test_input_transform_summary_render_is_opt_in() -> None:
         description="unit-test transform",
     )
 
-    off_dot = log.draw(vis_save_only=True, vis_fileformat="dot")
+    off_dot = log.draw(vis_save_only=True, file_format="dot")
     on_dot = log.draw(
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
         show_input_transform_summary=True,
     )
 

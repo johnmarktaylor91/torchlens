@@ -54,7 +54,7 @@ class Comparison:
         ``scores[analysis][site]`` point score.
     intervals:
         ``intervals[analysis][site]`` stimulus-bootstrap
-        :class:`~torchlens.repgeom.ScoreInterval` when ``n_resamples`` was
+        :class:`~torchlens.repgeom.ScoreInterval` when ``num_resamples`` was
         set; empty otherwise.
     settings:
         The settings that produced the scores (metric, methods, penalties,
@@ -356,11 +356,11 @@ def _analysis_runners(
     """Build one scorer per analysis over a site matrix (target work done once)."""
 
     from ..repgeom import rdm
-    from ..repgeom._geometry import rdm_compare
+    from ..repgeom._geometry import compare_rdms
     from ..repgeom._uncertainty import (
         _gram_cka,
         bootstrap_interval,
-        rdm_compare_interval,
+        compare_rdms_interval,
     )
 
     target_rdm = rdm(target, settings["rdm_metric"])
@@ -371,12 +371,12 @@ def _analysis_runners(
 
         site_rdm = rdm(matrix, settings["rdm_metric"])
         if bootstrap is None:
-            return rdm_compare(site_rdm, target_rdm, method=settings["rsa_method"]), None
-        return rdm_compare_interval(
+            return compare_rdms(site_rdm, target_rdm, method=settings["rsa_method"]), None
+        return compare_rdms_interval(
             site_rdm,
             target_rdm,
             settings["rsa_method"],
-            n_resamples=bootstrap.n_resamples,
+            num_resamples=bootstrap.num_resamples,
             seed=bootstrap.seed,
             confidence=bootstrap.confidence,
         ), None
@@ -441,8 +441,8 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     rdm_metric: str = "correlation",
     rsa_method: str = "spearman",
     ridge_alphas: Sequence[float] = DEFAULT_RIDGE_ALPHAS,
-    n_folds: int = 5,
-    n_resamples: int | None = None,
+    num_folds: int = 5,
+    num_resamples: int | None = None,
     seed: int = 0,
     confidence: float = 0.95,
 ) -> Comparison:
@@ -453,10 +453,10 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     the model is never re-run. All scores are descriptive similarities on
     these stimuli, not tests.
 
-    - ``"rsa"``: ``tl.repgeom.rdm_compare(rdm(site, rdm_metric),
+    - ``"rsa"``: ``tl.repgeom.compare_rdms(rdm(site, rdm_metric),
       rdm(target, rdm_metric), rsa_method)``.
     - ``"ridge"``: the cross-validated ridge score of the module docstring
-      (seeded ``n_folds`` split, penalty per fold by exact leave-one-out on
+      (seeded ``num_folds`` split, penalty per fold by exact leave-one-out on
       the training fold, mean Pearson r over target columns of the
       out-of-fold predictions).
     - ``"cka"``: linear CKA with the biased Gretton HSIC (the variant
@@ -484,10 +484,10 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
         ``"spearman"``, ``"pearson"`` or ``"kendall"`` (tau-a).
     ridge_alphas:
         Penalty grid (absolute, on centred features).
-    n_folds:
+    num_folds:
         Cross-validation folds for ridge (each training fold needs at least
         3 stimuli).
-    n_resamples:
+    num_resamples:
         When set, every score gets a stimulus-bootstrap
         :class:`~torchlens.repgeom.ScoreInterval` (the ridge interval
         resamples the evaluation of the out-of-fold predictions; it does
@@ -514,17 +514,17 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
 
     analyses = tuple(analyses)
     alphas = tuple(float(a) for a in ridge_alphas)
-    _check_settings(analyses, rsa_method, alphas, n_folds)
+    _check_settings(analyses, rsa_method, alphas, num_folds)
     bootstrap = (
         None
-        if n_resamples is None
-        else BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
+        if num_resamples is None
+        else BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)
     )
     target_matrix = _as_rows(target, "target")
     n_stimuli = target_matrix.shape[0]
-    if n_stimuli < max(3, n_folds + 2):
+    if n_stimuli < max(3, num_folds + 2):
         raise ValueError(
-            f"neuro.compare needs at least max(3, n_folds + 2) = {max(3, n_folds + 2)} "
+            f"neuro.compare needs at least max(3, num_folds + 2) = {max(3, num_folds + 2)} "
             f"stimuli; the target has {n_stimuli}."
         )
     matrices = _site_matrices(source, sites)
@@ -538,9 +538,9 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
         "rdm_metric": rdm_metric,
         "rsa_method": rsa_method,
         "ridge_alphas": alphas,
-        "n_folds": n_folds,
+        "n_folds": num_folds,
         "seed": int(seed),
-        "n_resamples": n_resamples,
+        "num_resamples": num_resamples,
         "confidence": float(confidence),
         "n_stimuli": n_stimuli,
         "target_shape": tuple(target_matrix.shape),

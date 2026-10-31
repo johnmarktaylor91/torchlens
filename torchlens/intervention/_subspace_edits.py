@@ -106,10 +106,10 @@ def _validate_feature_axis(feature_axis: Any, helper_name: str) -> int:
 
     if isinstance(feature_axis, bool) or not isinstance(feature_axis, int):
         raise InvalidArgumentError(
-            f"{helper_name} feature_axis= must be an int axis index; got {feature_axis!r}",
+            f"{helper_name} dim= must be an int axis index; got {feature_axis!r}",
             code="subspace_basis_invalid",
-            remedy="name the axis the basis indexes, e.g. feature_axis=-1",
-            argument="feature_axis",
+            remedy="name the axis the basis indexes, e.g. dim=-1",
+            argument="dim",
         )
     return int(feature_axis)
 
@@ -118,7 +118,7 @@ def subspace_ablate(
     basis: torch.Tensor,
     *,
     mode: str = "zero",
-    feature_axis: int = -1,
+    dim: int = -1,
     mean: torch.Tensor | None = None,
     seed: int | None = None,
 ) -> Edit:
@@ -132,7 +132,7 @@ def subspace_ablate(
         ``"zero"`` removes the component; ``"mean"`` replaces it with the
         component of ``mean``; ``"resample"`` replaces it with another batch
         row's component under a seeded permutation.
-    feature_axis:
+    dim:
         Axis of the site value the basis indexes (default the trailing axis).
     mean:
         Mean activation (broadcastable to the site value) for ``mode="mean"``.
@@ -153,7 +153,7 @@ def subspace_ablate(
     """
 
     rows = _orthonormal_rows(basis, "subspace_ablate")
-    axis = _validate_feature_axis(feature_axis, "subspace_ablate")
+    axis = _validate_feature_axis(dim, "subspace_ablate")
     if mode not in _MODES:
         raise InvalidArgumentError(
             f"subspace_ablate mode= must be one of {', '.join(_MODES)}; received {mode!r}",
@@ -199,7 +199,7 @@ def subspace_ablate(
     return _helper_spec(
         "subspace_ablate",
         args=(basis,),
-        kwargs={"mode": mode, "feature_axis": axis, "mean": mean, "seed": seed},
+        kwargs={"mode": mode, "dim": axis, "mean": mean, "seed": seed},
         factory=factory,
         portability="opaque_audit",
         batch_independent=mode != "resample",
@@ -210,13 +210,13 @@ def subspace_interchange(
     basis: torch.Tensor,
     source: Any,
     *,
-    feature_axis: int = -1,
+    dim: int = -1,
 ) -> Edit:
     """Create an edit writing the source trace's in-subspace component over the target's.
 
     The target keeps its component orthogonal to the span; the in-span
     component comes from ``source`` at the same site (same-site donor
-    resolution as :func:`torchlens.intervention.patch_from`), which is the
+    resolution as :func:`torchlens.patch_from`), which is the
     k-dimensional basis interchange used by distributed alignment search
     with a learned rotation the user trained elsewhere.
 
@@ -226,7 +226,7 @@ def subspace_interchange(
         ``[k, d]`` rows spanning the subspace.
     source:
         Source trace supplying the donor value at each edited site.
-    feature_axis:
+    dim:
         Axis of the site value the basis indexes.
 
     Returns
@@ -236,7 +236,7 @@ def subspace_interchange(
     """
 
     rows = _orthonormal_rows(basis, "subspace_interchange")
-    axis = _validate_feature_axis(feature_axis, "subspace_interchange")
+    axis = _validate_feature_axis(dim, "subspace_interchange")
     from .helpers import _helper_spec, patch_from
 
     donor_spec = patch_from(source)
@@ -257,7 +257,7 @@ def subspace_interchange(
     return _helper_spec(
         "subspace_interchange",
         args=(basis,),
-        kwargs={**dict(donor_spec.kwargs), "feature_axis": axis},
+        kwargs={**dict(donor_spec.kwargs), "dim": axis},
         factory=factory,
         portability="opaque_audit",
         batch_independent=True,

@@ -23,13 +23,13 @@ from .._io.manifest import TensorEntry, sha256_of_file
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
-    DirectWriteInExecutableSaveError,
+    DirectWriteSaveError,
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     SiteResolutionError,
     UnserializableDictKeyError,
@@ -183,7 +183,7 @@ class LazyImportRef:
 
 
 def save_intervention(
-    log: Any,
+    trace: Any,
     path: str | Path,
     *,
     level: str | SaveLevel = SaveLevel.EXECUTABLE_WITH_CALLABLES,
@@ -195,7 +195,7 @@ def save_intervention(
 
     Parameters
     ----------
-    log:
+    trace:
         Trace-like object whose ``_intervention_spec`` should be persisted.
     path:
         Destination ``.tlspec`` directory path.
@@ -214,17 +214,17 @@ def save_intervention(
     # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-
     # outcome gate, so a FAILED/aborted/unknown capture could export its spec
     # (fire records, target manifest) as if nothing happened. Same N1 authority
-    # and ordering as tl.save(): outcome gate first, then the poison gate.
+    # and ordering as trace.save(): outcome gate first, then the poison gate.
     from ..capture.outcome import require_capture_capability
 
-    require_capture_capability(log, "save_analysis")
-    from ..runnable import refuse_poisoned_trace
+    require_capture_capability(trace, "save_analysis")
+    from .._runnable import refuse_poisoned_trace
 
-    refuse_poisoned_trace(log, "intervention export")
+    refuse_poisoned_trace(trace, "intervention export")
     save_level = _coerce_save_level(level)
-    _enforce_direct_write_policy(log, save_level, allow_direct_writes=allow_direct_writes)
+    _enforce_direct_write_policy(trace, save_level, allow_direct_writes=allow_direct_writes)
     # The recipe must be the one that produced the trace, not a later in-place edit.
-    refuse_changed_staged_helpers(log._intervention_spec, door="save_intervention")
+    refuse_changed_staged_helpers(trace._intervention_spec, door="save_intervention")
     target_path = Path(path)
     _reject_symlink_path(target_path, context="intervention spec target")
     tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
@@ -238,11 +238,11 @@ def save_intervention(
         tmp_path.mkdir(parents=True)
         (tmp_path / _TENSOR_DIR).mkdir()
 
-        spec = getattr(log, "_intervention_spec", None) or InterventionSpec()
-        _sync_spec_records_from_log(spec, log)
+        spec = getattr(trace, "_intervention_spec", None) or InterventionSpec()
+        _sync_spec_records_from_log(spec, trace)
         serialized_spec = _serialize_intervention_spec(spec, save_level, state)
-        function_keys = _serialize_function_registry_keys(log)
-        target_manifest = _build_target_manifest(log, spec, save_level)
+        function_keys = _serialize_function_registry_keys(trace)
+        target_manifest = _build_target_manifest(trace, spec, save_level)
         _write_tensor_sidecars(
             tmp_path,
             state.tensor_refs,
@@ -269,7 +269,7 @@ def save_intervention(
             "helper_registry_version": HELPER_REGISTRY_VERSION,
             "save_level": save_level.value,
             "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(serialized_spec),
-            "append_state": _append_state_for_json(log),
+            "append_state": _append_state_for_json(trace),
             "target_manifest": target_manifest,
             "helpers": _collect_helpers(serialized_spec),
             "intervention_spec": serialized_spec,
@@ -279,7 +279,7 @@ def save_intervention(
         _write_json_file(tmp_path / _SPEC_FILE, spec_json)
         _TlSpecWriter.write_intervention_manifest(
             path=tmp_path / _MANIFEST_FILE,
-            log=log,
+            log=trace,
             spec_json=spec_json,
             tensor_entries=tensor_entries,
             legacy_format_version=TLSPEC_FORMAT_VERSION,
@@ -612,7 +612,7 @@ def _enforce_direct_write_policy(
         )
         return
     if not allow_direct_writes:
-        raise DirectWriteInExecutableSaveError(
+        raise DirectWriteSaveError(
             "Direct out writes cannot be saved as executable interventions. "
             "Pass allow_direct_writes=True only if the recipe semantics are intentional."
         )
@@ -884,7 +884,7 @@ def _serialize_hook_spec(
         # instead of the selected facet slice. Refuse rather than persist a spec whose
         # replay semantics silently differ from what was attached.
         facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Cannot save a facet-slice hook (facet {facet_name!r}) at "
             f"save_level={save_level.value!r}: the slice-scatter wrapper is bound to the "
             "captured trace and cannot round-trip through a spec file. Save at "
@@ -1099,11 +1099,11 @@ def _serialize_helper(
 
     portability = helper.portability
     if save_level == SaveLevel.PORTABLE and portability != "builtin":
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Portable intervention specs cannot save {portability} helper {helper.name!r}."
         )
     if save_level == SaveLevel.EXECUTABLE_WITH_CALLABLES and portability == "opaque_audit":
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Executable intervention specs cannot save opaque helper {helper.name!r}."
         )
     if portability == "import_ref":
@@ -1158,7 +1158,7 @@ def _serialize_callable(value: Callable[..., Any], save_level: SaveLevel) -> dic
         # resolving it here would perform the import the laziness exists to
         # avoid.
         if save_level == SaveLevel.PORTABLE:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Portable intervention specs cannot save import-ref callable {value.import_path}."
             )
         return {
@@ -1169,12 +1169,12 @@ def _serialize_callable(value: Callable[..., Any], save_level: SaveLevel) -> dic
     import_path = _import_path_for_callable(value)
     if import_path is not None and _callable_round_trips(value, import_path):
         if save_level == SaveLevel.PORTABLE:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Portable intervention specs cannot save import-ref callable {import_path}."
             )
         return {"portability": "import_ref", "import_path": import_path, "repr": repr(value)}
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Callable {value!r} is opaque and can only be saved at audit level."
         )
     return {"portability": "opaque_audit", "repr": repr(value)}
@@ -1197,7 +1197,7 @@ def _serialize_opaque(value: Any, save_level: SaveLevel) -> dict[str, Any]:
     """
 
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Value {value!r} is not portable and can only be saved at audit level."
         )
     return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
@@ -1628,13 +1628,13 @@ def _selector_value_to_json(value: Any, save_level: SaveLevel) -> Any:
         return value
     if callable(value):
         if save_level != SaveLevel.AUDIT:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Callable selector payload {value!r} is non-portable and can only be saved "
                 "at audit level."
             )
         return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Selector payload {value!r} is non-portable and can only be saved at audit level."
         )
     return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}

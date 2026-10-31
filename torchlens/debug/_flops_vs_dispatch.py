@@ -27,12 +27,12 @@ from typing import Any
 
 import torch
 
-from .._debug_report import DebugReport
+from .._debug_report import Report
 from ..errors import CaptureError
 
 
 @dataclass(frozen=True)
-class FlopsCrossCheck(DebugReport):
+class FlopsCrossCheck(Report):
     """Side-by-side dispatch-formula evidence (never an oracle).
 
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic
@@ -51,6 +51,15 @@ class FlopsCrossCheck(DebugReport):
     witness: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     coverage_notes: tuple[str, ...] = ()
+
+    def __repr__(self) -> str:
+        """One bounded line: the two totals, the delta and the verdict."""
+
+        return (
+            f"FlopsCrossCheck(native_total={self.native_total}, "
+            f"torchlens_total={self.torchlens_total}, delta={self.delta}, "
+            f"status={self._report_status()})"
+        )
 
     def _report_subject(self) -> str:
         """What this report examined (the card's subject)."""

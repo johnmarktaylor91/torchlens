@@ -81,16 +81,16 @@ __all__ = [
 #: paths; absent optional types are skipped at register() and disclosed in
 #: :func:`status`.
 BRIDGE_LEDGER: dict[str, str] = {
-    "torchlens.data_classes.trace.Trace": "rich",
-    "torchlens.partial.PartialTrace": "rich",
-    "torchlens.data_classes.layer.Layer": "rich",
-    "torchlens.data_classes.op.Op": "rich",
-    "torchlens.data_classes.module.Module": "one_line",
-    "torchlens.data_classes.module.ModuleCall": "one_line",
+    "torchlens._data_classes.trace.Trace": "rich",
+    "torchlens._partial.PartialTrace": "rich",
+    "torchlens._data_classes.layer.Layer": "rich",
+    "torchlens._data_classes.op.Op": "rich",
+    "torchlens._data_classes.module.Module": "one_line",
+    "torchlens._data_classes.module.ModuleCall": "one_line",
     "torchlens.fastlog.types.Recording": "one_line",
-    "torchlens.runnable.RunResult": "one_line",
-    "torchlens.data_classes.grad_fn.GradFn": "one_line",
-    "torchlens.data_classes.grad_fn.GradFnCall": "one_line",
+    "torchlens._runnable.RunResult": "one_line",
+    "torchlens._data_classes.grad_fn.GradFn": "one_line",
+    "torchlens._data_classes.grad_fn.GradFnCall": "one_line",
 }
 
 #: Budget for the foldable key index a bridged Trace emits (strings only).
@@ -591,7 +591,7 @@ def display(obj: Any) -> None:
     renders through treescope's automatic array visualizer with OUR
     truncation budgets.
 
-    Spelling is [UI-SPRINT]; ``layer.show(method="treescope")`` is the
+    Spelling is [UI-SPRINT]; ``layer.show(kind="treescope")`` is the
     candidate method form.
     """
 
@@ -609,7 +609,7 @@ def display(obj: Any) -> None:
             tensor = None
     supported, _reason = probe_tensor_support()
     if tensor is not None and supported:
-        from ..notebook._truncation import (
+        from .._notebook._truncation import (
             CELL_BUDGET_DEFAULT,
             EDGE_ITEMS_DEFAULT,
             PER_AXIS_BUDGET_DEFAULT,

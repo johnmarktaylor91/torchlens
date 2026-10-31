@@ -185,7 +185,7 @@ class AuditFinding:
 
 
 @dataclass(frozen=True)
-class PreprocessingAudit:
+class PreprocessingComparison:
     """The field-level audit report (tvscope memo D4, record two of three).
 
     Attributes
@@ -230,7 +230,7 @@ class PreprocessingAudit:
     def to_json(self) -> dict[str, Any]:
         """Serialize the full report (the manifest-block payload shape)."""
 
-        record = self.authority.record
+        record = self.authority.preprocessing
         return {
             "schema": "tl_preprocessing_audit_v1",
             "authority": {
@@ -417,12 +417,12 @@ def _overall_verdict(findings: tuple[AuditFinding, ...], authority_status: str) 
     return VERDICT_VERIFIED
 
 
-def audit(
+def compare(
     authority: Any,
     applied: Any = None,
     *,
     strict: bool = False,
-) -> PreprocessingAudit:
+) -> PreprocessingComparison:
     """Audit an applied preprocessing pipeline against an authority (B3).
 
     The comparison is field-by-field over the closed comparable vocabulary
@@ -451,7 +451,7 @@ def audit(
 
     Returns
     -------
-    PreprocessingAudit
+    PreprocessingComparison
         The field-level report (JSON-serializable via ``to_json()``).
 
     Raises
@@ -464,7 +464,7 @@ def audit(
     from ._authorities import resolve as _resolve
 
     resolution = authority if isinstance(authority, Resolution) else _resolve(authority)
-    authority_status = status_of(resolution.record)
+    authority_status = status_of(resolution.preprocessing)
     authority_fields = (
         resolution.declared.comparable_fields()
         if resolution.declared is not None
@@ -489,7 +489,7 @@ def audit(
         reason = f"authority_status_{authority_status}"
         if reason not in unknown_reasons:
             unknown_reasons.append(reason)
-    report = PreprocessingAudit(
+    report = PreprocessingComparison(
         authority=resolution,
         applied_source=applied_source,
         findings=findings,
@@ -502,7 +502,7 @@ def audit(
     return report
 
 
-def _strict_refuse(report: PreprocessingAudit) -> None:
+def _strict_refuse(report: PreprocessingComparison) -> None:
     """Raise the strict-mode refusal for non-verified reports.
 
     Parameters

@@ -166,7 +166,7 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
     for module in trace.modules:
         try:
             view = module.facets
-            menu = view.menu()
+            menu = view.declared()
         except InvalidArgumentError as exc:
             # A reused (multi-call) module refuses the single-call facets
             # accessor typed; the audit discloses the row instead of dying.
@@ -181,7 +181,7 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
                 )
             )
             continue
-        recipe_source = view.recipe_source
+        recipe_source = view.function_source
         if recipe_source is None:
             recipes: tuple[str, ...] = ()
         elif isinstance(recipe_source, str):

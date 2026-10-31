@@ -212,7 +212,7 @@ def _plan_logit_audit(request: _AuditRequest, trace: Any) -> _SitesPlan:
     name, edits = _site_edits(
         request.ablation,
         sites,
-        remedy=f"tl.attribution.causal_audit(model, x, claim={_dla_spelling(claim)}, ablation=0.0)",
+        remedy=f"tl.attribution.causal_audit(model, x, claim={_dla_spelling(claim)}, edit=0.0)",
     )
 
     def _score(run: Any) -> float:

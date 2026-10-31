@@ -19,7 +19,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
+from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import (
     SCRIPT_FUNCTION_FUNC_NAME,
     SCRIPT_FUNCTION_TRANSFORM_KIND,
@@ -29,7 +30,6 @@ from torchlens.backends.torch._script_boundary import (
 from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TorchLensWarning
-from torchlens.utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.validation import last_validation_failure, validate_forward_pass
 from torchlens.validation.diagnostics import CHECK_COMPLETENESS
 
@@ -178,7 +178,7 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
     assert last_validation_failure() is None
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def _assert_fails_completeness(model: nn.Module, x: torch.Tensor) -> None:
@@ -188,7 +188,7 @@ def _assert_fails_completeness(model: nn.Module, x: torch.Tensor) -> None:
         warnings.simplefilter("ignore")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_COMPLETENESS
+    assert failure is not None and failure.check_name == CHECK_COMPLETENESS
 
 
 def test_scripted_helper_is_one_boundary_op_and_validates() -> None:

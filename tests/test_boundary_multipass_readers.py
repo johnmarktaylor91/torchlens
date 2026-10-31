@@ -29,10 +29,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._fast_live_steer import fast_live_input_admission
+from torchlens._runnable import RunnableErrorCode
 from torchlens._runnable_execution import _first_failed_live_input_check
 from torchlens.capture.structure_only import StructureOnlyCapabilityError, _input_geometry
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ContractCheck, RunnableErrorCode
+from torchlens.types import ContractCheck
 
 # This suite drives the structural grouper (grouper_v1), which serves captures
 # without call-site evidence; torch captures group by call site
