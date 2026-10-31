@@ -610,7 +610,7 @@ class Recording(TraceLike):
         Returns
         -------
         int
-            Number of explicit ``record()`` or ``Recorder.log()`` forward passes.
+            Number of explicit ``record()`` or ``Recorder(...)`` forward passes.
         """
 
         return self.num_ops
@@ -1145,7 +1145,7 @@ class Recording(TraceLike):
         if self.num_passes > 1:
             raise CaptureContextError(
                 "Recording.to_trace() does not support multi-pass Recordings because "
-                "replaying multiple Recorder.log() passes into one Trace is not yet "
+                "replaying multiple Recorder(...) passes into one Trace is not yet "
                 "structurally defined",
                 code="recording_multipass_not_convertible",
                 remedy="record one pass per Recording before converting",

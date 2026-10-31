@@ -65,7 +65,7 @@ Fastlog forward exceptions default to the historical `on_forward_error="raise"` 
 Use `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise the
 original exception, or `on_forward_error="return_partial"` to return a failed partial
 `Recording`. With `return_output=True`, return-partial mode returns `(None, partial)` because
-there is no valid model output; manual `Recorder.log()` returns `None` and exposes the partial
+there is no valid model output; manual `Recorder(...)` returns `None` and exposes the partial
 on `recorder.recording`. Failed partials set `status="partial_error"`, `failed=True`,
 `error_repr`, `error_traceback`, `num_committed_ops`, `last_successful_op_label`, and best-effort
 `last_event_*` fields. user-op failures exclude the failing call; TL-side capture failures may

@@ -582,8 +582,8 @@ def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
             return torch.relu(x + 1)
 
     with tl.fastlog.Recorder(RepeatRelu(), save=lambda ctx: ctx.kind == "op") as recorder:
-        recorder.log(torch.ones(1, 3))
-        recorder.log(torch.ones(1, 3) * 2)
+        recorder(torch.ones(1, 3))
+        recorder(torch.ones(1, 3) * 2)
 
     recording = recorder.recording
     assert recording.num_passes == 2

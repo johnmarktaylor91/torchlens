@@ -354,8 +354,8 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
     with Recorder(
         TwoOpModel(), save=lambda ctx: ctx.kind == "op", halt=_halt_second_pass
     ) as recorder:
-        first_output = recorder.log(x)
-        second_output = recorder.log(x)
+        first_output = recorder(x)
+        second_output = recorder(x)
     recording = recorder.recording
     assert first_output is not None
     assert second_output is None

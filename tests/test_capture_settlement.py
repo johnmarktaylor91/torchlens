@@ -49,7 +49,7 @@ def test_recorder_scratch_pass_settles_complete() -> None:
     """Path 2: the postprocess=False scratch trace settles COMPLETE."""
 
     with Recorder(ThreeStageModel(), save=lambda ctx: ctx.kind == "op") as recorder:
-        recorder.log(torch.ones(1, 3))
+        recorder(torch.ones(1, 3))
         scratch = recorder._state.runtime_trace
     assert scratch is not None
     assert scratch.outcome is not None
@@ -111,7 +111,7 @@ def test_recorder_halt_pass_settles_attested_halted_unfinished(monkeypatch) -> N
     with Recorder(
         ThreeStageModel(), save=lambda ctx: ctx.kind == "op", halt=halt_on_relu
     ) as recorder:
-        output = recorder.log(torch.ones(1, 3))
+        output = recorder(torch.ones(1, 3))
     assert output is None
     assert recorder.recording.is_stopped is True
     assert scratch_traces

@@ -33,7 +33,7 @@ def _record_passes(save, **recorder_kwargs) -> tl.Recording:
     model = _model()
     with Recorder(model, save=save, **recorder_kwargs) as recorder:
         for x in _inputs():
-            recorder.log((x,))
+            recorder((x,))
     return recorder.recording
 
 

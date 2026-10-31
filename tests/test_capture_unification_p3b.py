@@ -176,8 +176,8 @@ def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None
     """Pass-qualified substrings save only the matching model-call pass."""
 
     with tl.fastlog.Recorder(TinyLinear(), save=lambda ctx: ctx.kind == "op") as recorder:
-        recorder.log(torch.randn(2, 4))
-        recorder.log(torch.randn(2, 4))
+        recorder(torch.randn(2, 4))
+        recorder(torch.randn(2, 4))
     contexts = [
         record.ctx for record in recorder.recording.records if record.ctx.layer_type == "linear"
     ]

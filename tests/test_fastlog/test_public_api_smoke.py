@@ -128,7 +128,7 @@ def test_recorder_context_records_multiple_forwards() -> None:
 
     with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
         for _ in range(5):
-            recorder.log(torch.ones(1, 3))
+            recorder(torch.ones(1, 3))
 
     assert recorder.recording.num_ops == 5
     assert recorder.recording.num_passes == 5
@@ -138,8 +138,8 @@ def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:
     """Repeated raw labels retain every pass payload instead of overwriting."""
 
     with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
-        recorder.log(torch.ones(1, 3))
-        recorder.log(torch.ones(1, 3) * 2)
+        recorder(torch.ones(1, 3))
+        recorder(torch.ones(1, 3) * 2)
 
     recording = recorder.recording
     raw_label = recording.records[0].ctx.raw_label
@@ -150,11 +150,11 @@ def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:
 
 
 def test_direct_model_call_inside_recorder_block_does_not_capture() -> None:
-    """Only Recorder.log opens the capture scope."""
+    """Only Recorder.__call__ opens the capture scope."""
 
     model = SimpleMlp()
     with tl.fastlog.Recorder(model, save=_keep_all_ops) as recorder:
-        recorder.log(torch.ones(1, 3))
+        recorder(torch.ones(1, 3))
         before = len(recorder._state.recording.records)  # noqa: SLF001
         model(torch.ones(1, 3))
         after = len(recorder._state.recording.records)  # noqa: SLF001

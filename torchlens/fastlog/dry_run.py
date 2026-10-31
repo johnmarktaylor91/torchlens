@@ -61,7 +61,7 @@ def dry_run(
         if recorder._capture_events is None:  # noqa: SLF001
             raise RuntimeError("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
-        recorder.log(input_args, input_kwargs)
+        recorder(input_args, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
         decisions = tuple(
             bool(getattr(event, "predicate_matched", False))

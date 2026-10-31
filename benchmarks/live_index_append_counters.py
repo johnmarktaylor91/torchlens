@@ -380,7 +380,7 @@ def _run_recorder(model: nn.Module, n: int) -> Any:
 def _run_failed_partial() -> Any:
     with Recorder(_Chain(), save=_save_ops, on_forward_error="return_partial") as recorder:
         for _ in range(3):
-            recorder.log(torch.ones(4))
+            recorder(torch.ones(4))
         return recorder.recording
 
 

@@ -287,7 +287,7 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
         return walk(*args, **kwargs)
 
     per_pass: list[int] = []
-    log = Recorder.log
+    log = Recorder.__call__
 
     def counting_log(self, *args, **kwargs):
         before = visits[0]
@@ -297,7 +297,7 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
             per_pass.append(visits[0] - before)
 
     monkeypatch.setattr(model_prep, "_clear_session_tensor_metadata", counting_walk)
-    monkeypatch.setattr(Recorder, "log", counting_log)
+    monkeypatch.setattr(Recorder, "__call__", counting_log)
     model = build_distilgpt2("eager")
     tl.record(model, PROMPT, save=tl.module("transformer.ln_f"), generate_kwargs=_greedy(16))
 

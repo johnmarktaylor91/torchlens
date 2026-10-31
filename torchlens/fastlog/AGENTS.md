@@ -51,7 +51,7 @@ Forward exceptions are opt-in partials. The default is the historical
 `on_forward_error="raise"` path. `on_forward_error="attach_partial"` attaches a failed
 `Recording` to `exc.partial_recording` and re-raises the original exception.
 `on_forward_error="return_partial"` swallows the forward exception and returns the failed
-partial; with `return_output=True` the output slot is `None`, and manual `Recorder.log()`
+partial; with `return_output=True` the output slot is `None`, and manual `Recorder(...)`
 returns `None` while `recorder.recording` holds the partial. Failed partials set
 `status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
 `num_committed_ops`, `last_successful_op_label`, and best-effort `last_event_*` fields.

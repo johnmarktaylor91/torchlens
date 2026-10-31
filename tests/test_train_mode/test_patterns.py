@@ -324,7 +324,7 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     with tl.fastlog.Recorder(two_layer_mlp, backward_ready=True) as recorder:
         for _step in range(4):
             optimizer.zero_grad(set_to_none=True)
-            output = recorder.log(torch.randn(3, 4, requires_grad=True))
+            output = recorder(torch.randn(3, 4, requires_grad=True))
             loss = output.square().mean()
             loss.backward()
             optimizer.step()

@@ -385,7 +385,7 @@ class _ForwardRoute:
         self.windows.append((self.recorder._next_pass_index, _step_window(kwargs, step)))
         self.depth += 1
         try:
-            return self.recorder.log(args, kwargs)
+            return self.recorder(args, kwargs)
         finally:
             self.depth -= 1
 
@@ -394,7 +394,7 @@ class _ForwardRoute:
 def _forwards_through(
     model: nn.Module, recorder: Recorder, windows: list[tuple[int, range]]
 ) -> Iterator[None]:
-    """Route each outermost ``model.forward`` call through ``recorder.log``."""
+    """Route each outermost ``model.forward`` call through the recorder call."""
 
     had_instance_forward = "forward" in model.__dict__
     saved_forward = model.__dict__.get("forward")

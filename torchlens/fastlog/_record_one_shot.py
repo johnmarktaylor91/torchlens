@@ -259,7 +259,7 @@ def record(
         narrate=narrate,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder.log(input_args, input_kwargs)
+        output = recorder(input_args, input_kwargs)
     recording = recorder.recording
     if postprocess != "none":
         recording = recording.enrich(postprocess)

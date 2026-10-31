@@ -148,7 +148,7 @@ def test_recorder_log_backward_without_opt_in_refuses() -> None:
 
     model, x = _model_and_input()
     with Recorder(model, save=_keep_relu) as recorder:
-        out = recorder.log(x)
+        out = recorder(x)
         with pytest.raises(RecorderStateError) as exc_info:
             recorder.backward(out.sum())
     assert exc_info.value.fields["code"] == "recording_backward_not_requested"

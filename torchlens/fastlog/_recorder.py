@@ -456,7 +456,7 @@ class Recorder:
             # in-log() crash tail (if any) already fired.
             self._echo_session.on_interrupt()
 
-    def log(
+    def __call__(
         self,
         input_args: Any,
         input_kwargs: dict[str, Any] | None = None,
@@ -481,7 +481,7 @@ class Recorder:
         """
 
         if not self._entered or self._exited or self._state is None:
-            raise RecorderStateError("Recorder.log() requires an active with-block")
+            raise RecorderStateError("calling a Recorder requires an active with-block")
         if self._failed:
             raise RecorderStateError(
                 "Recorder is in a failed state after a forward exception; "
@@ -501,7 +501,7 @@ class Recorder:
         """Run one unified predicate capture pass and retain CaptureEvents."""
 
         if self._state is None or self._capture_events is None:
-            raise RecorderStateError("Recorder.log() requires an active with-block")
+            raise RecorderStateError("calling a Recorder requires an active with-block")
         # Deferred: _training_validation sits above fastlog in the layer map.
         from .._training_validation import autograd_disabled_at_entry
 
@@ -678,7 +678,7 @@ class Recorder:
         """Persist halt state for the given pass."""
 
         if self._state is None:
-            raise RecorderStateError("Recorder.log() requires an active with-block")
+            raise RecorderStateError("calling a Recorder requires an active with-block")
         _mark_recording_halted(self._state.recording, pass_index, halt_exc.reason)
         from ..capture.outcome import CaptureOutcome, CaptureStatus, stamp_recording_outcome
 
@@ -713,7 +713,7 @@ class Recorder:
         """
 
         if self._state is None or self._capture_events is None:
-            raise RecorderStateError("Recorder.log() requires an active with-block")
+            raise RecorderStateError("calling a Recorder requires an active with-block")
         self._state.abort_storage(safe_exception_str(exc))
         failed_events = getattr(trace, "_failed_fastlog_capture_events", None)
         if failed_events is None:
@@ -853,7 +853,7 @@ class Recorder:
         """Reset per-pass predicate state while preserving accumulated events."""
 
         if self._state is None:
-            raise RecorderStateError("Recorder.log() requires an active with-block")
+            raise RecorderStateError("calling a Recorder requires an active with-block")
         self._state.history.clear()
         self._state.op_counts.clear()
         self._state.module_stack.clear()

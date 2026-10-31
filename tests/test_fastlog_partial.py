@@ -200,18 +200,18 @@ def test_return_partial_with_return_output_returns_none_output() -> None:
 
 
 def test_manual_recorder_log_return_partial_sets_recording() -> None:
-    """Manual Recorder.log() returns None and rejects later re-entry."""
+    """Manual Recorder(...) returns None and rejects later re-entry."""
 
     with Recorder(
         FailingAfterOps(),
         save=_save_ops,
         on_forward_error="return_partial",
     ) as recorder:
-        output = recorder.log(torch.tensor(1.0))
+        output = recorder(torch.tensor(1.0))
         partial = recorder.recording
         assert partial.failed is True
         with pytest.raises(RecorderStateError, match="Recorder is in a failed state"):
-            recorder.log(torch.tensor(1.0))
+            recorder(torch.tensor(1.0))
 
     assert output is None
     _assert_failed_partial(partial)
@@ -420,9 +420,9 @@ def test_third_pass_failure_in_reused_recorder_returns_partial() -> None:
             return torch.relu(y)
 
     with Recorder(FailsOnThird(), save=_save_ops, on_forward_error="return_partial") as recorder:
-        assert recorder.log(torch.tensor(1.0)) is not None
-        assert recorder.log(torch.tensor(1.0)) is not None
-        assert recorder.log(torch.tensor(1.0)) is None
+        assert recorder(torch.tensor(1.0)) is not None
+        assert recorder(torch.tensor(1.0)) is not None
+        assert recorder(torch.tensor(1.0)) is None
         partial = recorder.recording
 
     _assert_failed_partial(partial)

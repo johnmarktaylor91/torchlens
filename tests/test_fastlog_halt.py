@@ -335,8 +335,8 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
         return ctx.kind == "op"
 
     with tl.fastlog.Recorder(FiveOpModel(), save=keep_op) as recorder:
-        recorder.log(torch.tensor(1.0))
-        recorder.log(torch.tensor(1.0))
+        recorder(torch.tensor(1.0))
+        recorder(torch.tensor(1.0))
 
     assert recorder.recording.is_stopped is True
     assert recorder.recording.stop_reason == "halt 1"

@@ -118,11 +118,11 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
         save=lambda ctx: ctx.label == "relu_1",
         save_grads=True,
     ) as recorder:
-        out_1 = recorder.log(_input())
+        out_1 = recorder(_input())
         recorder.backward(out_1.sum())
         for _ in range(128):
             torch.empty(8)
-        out_2 = recorder.log(_input())
+        out_2 = recorder(_input())
         recorder.backward(out_2.sum())
         labels = [record.ctx.layer_label for record in recorder._state.recording.grad_records]
 
