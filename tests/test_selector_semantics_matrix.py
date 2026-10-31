@@ -284,7 +284,7 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
                 {
                     name: value
                     for name, value in base_capture.as_dict().items()
-                    if base_capture.is_field_explicit(name)
+                    if base_capture._is_field_explicit(name)
                 }
             )
         with warnings.catch_warnings():

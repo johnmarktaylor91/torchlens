@@ -16,7 +16,7 @@ from torchlens.backends.torch.model_prep import (
     _prepare_model_session,
 )
 from torchlens.backends.torch.sources import log_source_tensor
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording.options import _RecordingConfig
 from torchlens.recording.types import CaptureSpec, Recording
 
 
@@ -57,7 +57,7 @@ def _empty_recording(history_size: int) -> Recording:
 def _run_dispatcher_smoke(
     model: nn.Module,
     x: torch.Tensor,
-    options: RecordingOptions,
+    options: _RecordingConfig,
 ) -> Recording:
     """Run a minimal predicate pass through existing dispatchers."""
 
@@ -91,7 +91,7 @@ def test_predicate_dispatchers_fire_and_store_ram_payloads() -> None:
     recording = _run_dispatcher_smoke(
         TinyMlp(),
         torch.ones(1, 3),
-        RecordingOptions(
+        _RecordingConfig(
             keep_op=keep_op,
             default_op=False,
             default_module=True,

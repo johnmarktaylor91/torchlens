@@ -190,7 +190,7 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
     return cast(
         "CaptureOptions",
-        type(capture_options)().from_values(values, _explicit_fields(capture_options)),
+        type(capture_options)._from_values(values, _explicit_fields(capture_options)),
     )
 
 

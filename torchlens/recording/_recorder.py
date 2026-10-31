@@ -27,7 +27,7 @@ from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._capture.trace import _extract_and_mark_outputs
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError
+from .._errors import CaptureNotActiveError
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
@@ -43,7 +43,8 @@ from .options import (
     LookbackPayloadPolicy,
     PredicateErrorMode,
     PredicateFn,
-    merge_recording_options,
+    _RecordingConfig,
+    _resolve_recording_config,
 )
 from .types import CaptureSpec, Recording, _mark_recording_halted
 
@@ -219,7 +220,6 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
         storage: StorageOptions | None | MissingType = MISSING,
-        streaming: StorageOptions | None | MissingType = MISSING,
         seed: int | None | MissingType = MISSING,
         activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
@@ -239,7 +239,7 @@ class Recorder:
             PyTorch module to record.
         save, default_op, default_module, history_size,
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
-        on_predicate_error, storage, streaming, seed:
+        on_predicate_error, storage, seed:
             Fastlog recording options.
         on_forward_error:
             Controls failed-forward handling. ``"raise"`` preserves the
@@ -289,16 +289,7 @@ class Recorder:
                 detach_saved_activations if isinstance(detach_saved_activations, bool) else None
             ),
         )
-        storage_supplied = storage is not MISSING and storage is not None
-        streaming_supplied = streaming is not MISSING and streaming is not None
-        if storage_supplied and streaming_supplied:
-            raise KeywordConflictError(
-                "Do not pass both `storage` and `streaming`",
-                code="storage_argument_conflict",
-                remedy="prefer storage=, or remove one of the two arguments",
-            )
-        resolved_streaming = storage if storage_supplied else streaming
-        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, resolved_streaming)
+        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, storage)
         default_op = _resolve_train_mode_default(
             field_name="default_op",
             value=default_op,
@@ -325,8 +316,7 @@ class Recorder:
             from .._snoop import normalize_echo
 
             echo_normalized = normalize_echo(narrate)
-        self.options = merge_recording_options(
-            recording=None,
+        self.options: _RecordingConfig = _resolve_recording_config(
             keep_op=save,
             default_op=default_op,
             default_module=default_module,
@@ -347,7 +337,7 @@ class Recorder:
             default_grad=default_grad,
             grad_transform=grad_transform,
             save_raw_grads=save_raw_grads,
-            narrate=echo_normalized if echo_normalized is not None else MISSING,
+            echo=echo_normalized,
             detach_saved_activations=detach_saved_activations,
         )
         validate_recording_options(self.options)

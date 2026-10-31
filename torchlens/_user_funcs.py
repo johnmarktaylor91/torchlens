@@ -93,7 +93,6 @@ from ._errors import (
     ArgumentTypeError,
     CaptureNotActiveError,
     InvalidArgumentError,
-    KeywordConflictError,
     UserTransformError,
 )
 from ._input_coerce import (
@@ -186,7 +185,7 @@ from .options import (
     merge_streaming_options,
 )
 from .recording.exceptions import PredicateError
-from .recording.options import HaltPredicateFn, PredicateFn, RecordingOptions
+from .recording.options import HaltPredicateFn, PredicateFn, _RecordingConfig
 from .recording.types import CaptureSpec
 from .types import _ActivationPostfunc, _GradientPostfunc
 
@@ -968,14 +967,12 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "lookback": kwargs["lookback"],
             "lookback_payload_policy": kwargs["lookback_payload_policy"],
             "storage": kwargs["storage"],
-            "streaming": kwargs["streaming"],
             "inference_only": kwargs.get("inference_only", MISSING),
             "cache": kwargs.get("cache", MISSING),
             "stop_after": kwargs.get("stop_after", MISSING),
             "on_nonfinite": (
                 kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
             ),
-            "profile": kwargs.get("profile", MISSING),
             "payload_policy": kwargs.get("payload_policy", MISSING),
             "save_preview": kwargs.get("save_preview", MISSING),
             "chunk_size": kwargs.get("chunk_size", MISSING),
@@ -2047,7 +2044,7 @@ def _run_model_and_save_specified_outs(
                     save_metadata=default_save,
                     save_grad=True,
                 )
-            trace._predicate_save_options = RecordingOptions(
+            trace._predicate_save_options = _RecordingConfig(
                 keep_op=save_predicate,
                 intervene=intervene_predicate,
                 halt=halt_predicate,
@@ -2318,7 +2315,7 @@ def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]
         return True
     capture_options = public_trace_kwargs.get("capture")
     if isinstance(capture_options, CaptureOptions) and hasattr(capture_options, option_name):
-        return capture_options.is_field_explicit(option_name)
+        return capture_options._is_field_explicit(option_name)
     return False
 
 
@@ -2450,7 +2447,7 @@ def _enforce_capability_option_gates(
             not requested
             and isinstance(capture_value, CaptureOptions)
             and hasattr(capture_value, option_name)
-            and capture_value.is_field_explicit(option_name)
+            and capture_value._is_field_explicit(option_name)
         ):
             requested = _capability_option_requested(getattr(capture_value, option_name))
         if requested:
@@ -2477,22 +2474,22 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
         Returns when all explicit values are supported or default-equivalent.
     """
 
-    if capture_options.is_field_explicit("module_identity_mode") and (
+    if capture_options._is_field_explicit("module_identity_mode") and (
         capture_options.module_identity_mode not in {None, "torch_module"}
     ):
         raise BackendUnsupportedError(
             "backend='torch' supports module_identity_mode=None or 'torch_module' only."
         )
-    if capture_options.is_field_explicit("payload_policy") and (
+    if capture_options._is_field_explicit("payload_policy") and (
         capture_options.payload_policy not in {None, "full"}
     ):
         raise BackendUnsupportedError(
             "backend='torch' supports payload_policy=None or 'full' only."
         )
-    if capture_options.is_field_explicit("save_preview") and capture_options.save_preview:
+    if capture_options._is_field_explicit("save_preview") and capture_options.save_preview:
         raise BackendUnsupportedError("backend='torch' does not support save_preview=True.")
     for option_name in ("jax_control_flow", "jax_max_control_flow_unroll"):
-        if capture_options.is_field_explicit(option_name):
+        if capture_options._is_field_explicit(option_name):
             raise BackendUnsupportedError(
                 f"backend='torch' does not support explicit {option_name}; "
                 "JAX control-flow options are only meaningful with backend='jax'."
@@ -2715,15 +2712,13 @@ def trace(
         flat_capture_values = _unfold_door_capture_fields(capture)
         public_trace_kwargs.update(flat_capture_values)
         public_trace_kwargs["halt"] = None
-        public_trace_kwargs["streaming"] = None
-        public_trace_kwargs["profile"] = MISSING
         chunk_size = flat_capture_values["chunk_size"]
         # grouping (UNSTABLE; L1 wave 0): closed-vocabulary knob. Only
         # "structural" (today's grouping, the default) is entry-legal;
         # "strict_shapes" waits on its own reviewed design and "fold_sites" on
         # an affirmative D1 ruling (the flip PR) / the episode capture kind.
         public_trace_kwargs.pop("grouping")
-        if capture is not None and capture.is_field_explicit("grouping"):
+        if capture is not None and capture._is_field_explicit("grouping"):
             from ._postprocess._grouping_stamp import validate_grouping_knob
 
             validate_grouping_knob(capture.grouping)
@@ -2752,7 +2747,7 @@ def trace(
         if (
             backend is None
             and chunk_size in (MISSING, None)
-            and (capture is None or not capture.is_field_explicit("input_transform"))
+            and (capture is None or not capture._is_field_explicit("input_transform"))
         ):
             from . import _autoroute as autoroute
 
@@ -2859,7 +2854,7 @@ def _unfold_door_capture_fields(capture: CaptureOptions | None) -> dict[str, Any
 
     unfolded: dict[str, Any] = {}
     for field_name, flat_default in _DOOR_CAPTURE_FLAT_DEFAULTS.items():
-        if capture is not None and capture.is_field_explicit(field_name):
+        if capture is not None and capture._is_field_explicit(field_name):
             unfolded[field_name] = getattr(capture, field_name)
         else:
             unfolded[field_name] = flat_default
@@ -2951,7 +2946,6 @@ def _trace_torch_model(
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
     storage: StorageOptions | None = None,
-    streaming: StorageOptions | None = None,
     backward_ready: bool | MissingType = MISSING,
     inference_only: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -2960,7 +2954,6 @@ def _trace_torch_model(
     module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
     stop_after: Any | None | MissingType = MISSING,
     structure_only: bool | MissingType = MISSING,
-    profile: bool | MissingType = MISSING,
     jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
     jax_max_control_flow_unroll: int | MissingType = MISSING,
     module_identity_mode: str | None | MissingType = MISSING,
@@ -3103,7 +3096,6 @@ def _trace_torch_model(
         capture_options=capture_options,
         chunked=chunk_size is not MISSING and chunk_size is not None,
     )
-    profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
     input_transform = capture_options.input_transform
     if input_transform is not None:
@@ -3250,16 +3242,7 @@ def _trace_torch_model(
             save_raw_grads=save_raw_grads,
         )
     )
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Both storage and streaming options were supplied",
-            code="storage_argument_conflict",
-            remedy="remove streaming and pass only storage, or remove storage",
-            arguments=("storage", "streaming"),
-        )
-    streaming_options = merge_streaming_options(
-        streaming=storage if storage is not None else streaming,
-    )
+    streaming_options = merge_streaming_options(streaming=storage)
     chunk_size_value = None if isinstance(chunk_size, MissingType) else chunk_size
     chunk_paths_value = None if isinstance(chunk_paths, MissingType) else chunk_paths
     normalized_chunk_size = normalize_chunk_size(chunk_size_value)
@@ -3410,17 +3393,17 @@ def _trace_torch_model(
         )
         save_raw_input_policy = False
         save_raw_output_policy = False
-    train_mode_explicit = capture_options.is_field_explicit("backward_ready")
+    train_mode_explicit = capture_options._is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
     inference_only_conflicts: list[str] = []
-    if capture_options.is_field_explicit("backward_ready") and train_mode_value is True:
+    if capture_options._is_field_explicit("backward_ready") and train_mode_value is True:
         inference_only_conflicts.append("backward_ready")
-    if capture_options.is_field_explicit("save_grads") and should_save_grads:
+    if capture_options._is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if capture_options.is_field_explicit("intervention_ready") and intervention_ready is True:
+    if capture_options._is_field_explicit("intervention_ready") and intervention_ready is True:
         inference_only_conflicts.append("intervention_ready")
     backward_opted_in = (
-        capture_options.is_field_explicit("save_grads")
+        capture_options._is_field_explicit("save_grads")
         and should_save_grads
         and save_grads_policy is not True
     )
@@ -3599,7 +3582,6 @@ def _trace_torch_model(
             "module_identity_mode": capture_options.module_identity_mode,
             "payload_policy": capture_options.payload_policy,
             "save_preview": capture_options.save_preview,
-            "profile": profile_enabled,
         }
         # The inversion sweep: every CaptureOptions field not hand-curated
         # above and not declared session-neutral enters the key here --
@@ -3657,12 +3639,12 @@ def _trace_torch_model(
         chunks = iter_chunked_inputs(input_args, chunk_plan)
         recursive_jax_control_flow = (
             capture_options.jax_control_flow
-            if capture_options.is_field_explicit("jax_control_flow")
+            if capture_options._is_field_explicit("jax_control_flow")
             else MISSING
         )
         recursive_jax_max_control_flow_unroll = (
             capture_options.jax_max_control_flow_unroll
-            if capture_options.is_field_explicit("jax_max_control_flow_unroll")
+            if capture_options._is_field_explicit("jax_max_control_flow_unroll")
             else MISSING
         )
         recursive_capture_options = CaptureOptions(
@@ -3802,7 +3784,6 @@ def _trace_torch_model(
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
             storage=None,
-            streaming=None,
             backward_ready=MISSING,
             inference_only=MISSING,
             name=MISSING,
@@ -3810,7 +3791,6 @@ def _trace_torch_model(
             cache_dir=MISSING,
             module_filter=MISSING,
             stop_after=MISSING,
-            profile=profile_enabled,
             jax_control_flow=MISSING,
             jax_max_control_flow_unroll=MISSING,
             module_identity_mode=MISSING,
@@ -3886,7 +3866,6 @@ def _trace_torch_model(
                 lookback=lookback,
                 lookback_payload_policy=lookback_payload_policy,
                 storage=None,
-                streaming=None,
                 backward_ready=MISSING,
                 inference_only=MISSING,
                 name=MISSING,
@@ -3894,7 +3873,6 @@ def _trace_torch_model(
                 cache_dir=MISSING,
                 module_filter=MISSING,
                 stop_after=MISSING,
-                profile=profile_enabled,
                 jax_control_flow=MISSING,
                 jax_max_control_flow_unroll=MISSING,
                 module_identity_mode=MISSING,
@@ -3928,7 +3906,6 @@ def _trace_torch_model(
         trace.last_run = dict(trace.last_run or {})
         trace.last_run["chunk_size"] = normalized_chunk_size
         trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths_value)
-        trace.profile_enabled = profile_enabled
         if uses_selective_layers_to_save:
             trace._layer_nums_to_save = [
                 op.raw_index
@@ -3996,7 +3973,7 @@ def _trace_torch_model(
         backward_ready=train_mode_value,
         inference_only=inference_only_value,
         inference_only_implied=(
-            inference_only_value and not capture_options.is_field_explicit("inference_only")
+            inference_only_value and not capture_options._is_field_explicit("inference_only")
         ),
         name=log_name,
         module_filter=capture_options.module_filter,
@@ -4175,7 +4152,6 @@ def _trace_torch_model(
         )
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
-    trace.profile_enabled = profile_enabled
     trace.save_grads = save_grads_policy
     if uses_selective_layers_to_save:
         trace._layer_nums_to_save = [

@@ -364,7 +364,18 @@ def _merge_grouped_options(
             )
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
-    return option_factory().from_values(values, specified_fields)
+    return _build_option(option_factory, values, specified_fields)
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)
 
 
 @dataclass(frozen=True, init=False)
@@ -971,16 +982,16 @@ class CaptureOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _CAPTURE_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
+    def _from_values(
         cls, values: Mapping[str, Any], specified_fields: frozenset[str]
     ) -> CaptureOptions:
-        """Build an instance from already-resolved field values.
+        """Build an instance from already-resolved field values (private).
 
         Applies the same invariants as ``__init__`` (via
         :func:`_validate_capture_values`) so this construction path -- used by

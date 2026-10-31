@@ -63,7 +63,7 @@ def test_grouped_structure_only_reaches_the_field() -> None:
 
     merged = CaptureOptions(structure_only=True)
     assert merged.structure_only is True
-    assert merged.is_field_explicit("structure_only")
+    assert merged._is_field_explicit("structure_only")
 
 
 def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:

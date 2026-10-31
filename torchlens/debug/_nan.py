@@ -429,7 +429,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
         explicit_values = {
             field_name: value
             for field_name, value in capture.as_dict().items()
-            if capture.is_field_explicit(field_name) and field_name != "on_nonfinite"
+            if capture._is_field_explicit(field_name) and field_name != "on_nonfinite"
         }
         trace_kwargs["capture"] = CaptureOptions(**explicit_values, on_nonfinite="raise")
     else:

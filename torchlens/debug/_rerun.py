@@ -204,11 +204,11 @@ def isolated_capture(
     capture_options = run_trace_kwargs.get("capture")
     if capture_options is None:
         run_trace_kwargs["capture"] = CaptureOptions(seed=seed)
-    elif not capture_options.is_field_explicit("seed"):
+    elif not capture_options._is_field_explicit("seed"):
         explicit_values = {
             field_name: value
             for field_name, value in capture_options.as_dict().items()
-            if capture_options.is_field_explicit(field_name)
+            if capture_options._is_field_explicit(field_name)
         }
         explicit_values["seed"] = seed
         run_trace_kwargs["capture"] = CaptureOptions(**explicit_values)

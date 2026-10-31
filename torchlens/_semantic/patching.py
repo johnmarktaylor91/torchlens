@@ -679,7 +679,7 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
     conflicts = [
         field_name
         for field_name, required_value in required.items()
-        if capture.is_field_explicit(field_name) and getattr(capture, field_name) != required_value
+        if capture._is_field_explicit(field_name) and getattr(capture, field_name) != required_value
     ]
     if conflicts:
         raise ValueError(
@@ -694,15 +694,15 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
     fills = {
         field_name: required_value
         for field_name, required_value in required.items()
-        if not capture.is_field_explicit(field_name)
+        if not capture._is_field_explicit(field_name)
     }
-    if save_grads is not None and not capture.is_field_explicit("save_grads"):
+    if save_grads is not None and not capture._is_field_explicit("save_grads"):
         fills["save_grads"] = save_grads
     if not fills:
         return capture
     values = capture.as_dict()
     values.update(fills)
-    return CaptureOptions.from_values(
+    return CaptureOptions._from_values(
         values, frozenset(capture._specified_fields) | frozenset(fills)
     )
 

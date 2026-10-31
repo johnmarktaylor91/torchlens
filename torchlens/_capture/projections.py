@@ -43,7 +43,7 @@ from ..recording.types import (
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .._ir.op_record import OpRecord
-    from ..recording.options import RecordingOptions
+    from ..recording.options import _RecordingConfig
 
 _active_recording_state: RecordingState | None = None
 
@@ -109,7 +109,7 @@ class _StorageBackend(Protocol):
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None,
         kind: str = "activation",
     ) -> tuple[
@@ -127,7 +127,7 @@ class _StorageBackend(Protocol):
         """Abort storage."""
 
 
-def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
+def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
     """Resolve storage destinations from StorageOptions."""
 
     if options.streaming is None or options.streaming.path is None:
@@ -138,7 +138,7 @@ def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
     )
 
 
-def _empty_recording(options: RecordingOptions) -> Recording:
+def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
     return Recording(
@@ -176,7 +176,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
 class RecordingState:
     """Mutable state for one active predicate recording pass."""
 
-    options: RecordingOptions
+    options: _RecordingConfig
     recording: Recording
     history: deque[RecordContext] = field(default_factory=deque)
     op_counts: dict[str, int] = field(default_factory=dict)

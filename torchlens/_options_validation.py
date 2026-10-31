@@ -273,8 +273,8 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
     """Validate resolved capture field values.
 
     Single source of truth for the invariants enforced on
-    :class:`CaptureOptions`, shared by ``__init__`` and ``from_values`` so the
-    flat-kwarg / ``from_values`` construction path can never accept values the
+    :class:`CaptureOptions`, shared by ``__init__`` and ``_from_values`` so the
+    flat-kwarg / ``_from_values`` construction path can never accept values the
     grouped constructor rejects (the asymmetry that let bad ``jax_control_flow``
     and non-positive ``jax_max_control_flow_unroll`` slip through).
 

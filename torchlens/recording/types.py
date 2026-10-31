@@ -1152,7 +1152,7 @@ class Recording(TraceLike):
             )
         from .._capture.projectors import RecordingProjector
         from .._data_classes.trace import Trace
-        from .options import RecordingOptions
+        from .options import _RecordingConfig
 
         projection = RecordingProjector().project(self._captured_run_cores)
         if projection.capture_events is None:
@@ -1165,7 +1165,7 @@ class Recording(TraceLike):
         # than captured live.
         trace.capture_mode = "exhaustive"
         trace._cooked_from = "recording"
-        trace._predicate_save_options = RecordingOptions()
+        trace._predicate_save_options = _RecordingConfig()
         trace._replay_arg_version_data_complete = False
         # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own
         # `_capture_events`. Later graph traversal replaces operation events in

@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import ArgumentTypeError, KeywordConflictError
+from .._errors import ArgumentTypeError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -100,10 +100,10 @@ def _unfold_record_options(
                 argument="capture",
             )
     for name in _RECORDING_DOOR_FIELDS:
-        explicit = recording is not None and recording.is_field_explicit(name)
+        explicit = recording is not None and recording._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(recording, name) if explicit else MISSING
     for name in _CAPTURE_DOOR_FIELDS:
-        explicit = capture is not None and capture.is_field_explicit(name)
+        explicit = capture is not None and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
     # The door's former flat defaults, resolved here so the generation path
@@ -207,7 +207,7 @@ def record(
         position of every forward, the token sequences, the settings that
         decide the tokens). Beam search, more than one return sequence, batched
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
-        ``intervene=``, ``halt=`` and partial forward-error modes refuse with
+        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
     return_output:
         Whether to return ``(model_output, recording)``; with
@@ -256,7 +256,6 @@ def record(
     max_predicate_failures = flat["max_predicate_failures"]
     on_predicate_error = flat["on_predicate_error"]
     on_forward_error = flat["on_forward_error"]
-    streaming = None
     seed = flat["seed"]
     activation_transform = flat["activation_transform"]
     save_raw_activations = flat["save_raw_activations"]
@@ -267,12 +266,6 @@ def record(
     backward_ready = flat["backward_ready"]
     detach_saved_activations = flat["detach_saved_activations"]
     postprocess = flat["postprocess"]
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
     validate_postprocess(postprocess)
     input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -300,7 +293,6 @@ def record(
                 "on_predicate_error": on_predicate_error,
                 "on_forward_error": on_forward_error,
                 "storage": storage,
-                "streaming": streaming,
                 "seed": seed,
                 "activation_transform": activation_transform,
                 "save_raw_activations": save_raw_activations,
@@ -332,7 +324,6 @@ def record(
         on_predicate_error=on_predicate_error,
         on_forward_error=on_forward_error,
         storage=storage,
-        streaming=streaming,
         seed=seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,

@@ -592,7 +592,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     if flat_value is not None:
         return flat_value
-    if capture is not None and capture.is_field_explicit(field_name):
+    if capture is not None and capture._is_field_explicit(field_name):
         return getattr(capture, field_name)
     return None
 

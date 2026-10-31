@@ -27,7 +27,7 @@ from .._ir.refs import DeviceRef, DtypeRef
 from ._indexes import write_label_index, write_pass_index
 from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .storage_ram import RamStorageBackend
 from .types import (
     ActivationRecord,
@@ -96,7 +96,7 @@ def _tighten_bundle_tree(root: Path) -> None:
 class DiskStorageBackend:
     """Persist fastlog records to a sync directory bundle."""
 
-    def __init__(self, options: RecordingOptions, recording: Recording) -> None:
+    def __init__(self, options: _RecordingConfig, recording: Recording) -> None:
         """Initialize a disk-backed fastlog storage backend.
 
         Parameters
@@ -194,7 +194,7 @@ class DiskStorageBackend:
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None = None,
         kind: str = "activation",
     ) -> tuple[
@@ -541,7 +541,7 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
     return cast(torch.dtype, dtype_obj)
 
 
-def _write_metadata(path: Path, recording: Recording, options: RecordingOptions) -> None:
+def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig) -> None:
     """Write fastlog JSON metadata."""
 
     metadata = {
