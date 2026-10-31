@@ -838,7 +838,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
             ----------
             out:
                 Activation at the matched site.
-            hook:
+            ctx:
                 Hook context supplied by TorchLens.
             replacement:
                 Replacement tensor or callable captured by default argument.
@@ -978,7 +978,7 @@ def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
             ----------
             out:
                 Activation being replaced.
-            hook:
+            ctx:
                 Hook context supplied by TorchLens.
 
             Returns
@@ -1533,7 +1533,7 @@ def _facet_scatter_hook(
         ----------
         out:
             Full home-op output tensor.
-        hook:
+        ctx:
             Hook context supplied by TorchLens.
 
         Returns
