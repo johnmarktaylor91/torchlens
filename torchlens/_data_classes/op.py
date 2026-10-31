@@ -3055,18 +3055,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return bool(self.has_grad)
 
     @property
-    def ops(self) -> tuple["Op", ...]:
-        """Tuple containing this pass for aggregate-compatible iteration.
-
-        Returns
-        -------
-        tuple[Op, ...]
-            Single-entry tuple containing this pass log.
-        """
-
-        return (self,)
-
-    @property
     def _streaming_label(self) -> str:
         """Best available label for sink/writer callbacks during or after postprocess.
 

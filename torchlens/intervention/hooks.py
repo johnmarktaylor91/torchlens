@@ -317,12 +317,14 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         site_target, "layer_label"
     ):
         return None
-    ops = getattr(site_target, "ops", None)
+    from .._data_classes.op import Op
+
+    # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an
+    # ``Op`` addresses itself.
+    ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)
     if ops is None or isinstance(ops, (str, bytes)):
         return None
     try:
-        # ``Layer.ops`` is an accessor (iterable, not a builtin sequence);
-        # ``Op.ops`` is the one-tuple of the record itself.
         op_records = list(ops)
     except TypeError:
         return None

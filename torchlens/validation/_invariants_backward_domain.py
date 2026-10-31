@@ -204,7 +204,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
     ops_by_label: dict[str, list[Any]] = {}
     visited_labels: set[str] = set()
     for trace_layer in getattr(trace, "layer_list", ()) or ():
-        for op in getattr(trace_layer, "ops", ()) or ():
+        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
             spellings = [
                 spelling
                 for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
@@ -221,7 +221,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
 
     start_labels = [
         op_label
-        for op in getattr(layer, "ops", ()) or ()
+        for op in getattr(layer, "ops", None) or (layer,)
         if isinstance(op_label := getattr(op, "label", None), str)
     ]
     if not start_labels:
