@@ -77,6 +77,14 @@ ROWS: tuple[MemberRow | ParamRow, ...] = (
     MemberRow(("SrpSizing",), "n_components", "num_components"),
     MemberRow(("SrpSizing",), "n_samples", "num_samples"),
     MemberRow(("TensorSpec",), "of", "from_tensor", keyword=False),
+    # Round 2 (lane r2-ambiguous-2): the CostTreeRow and Resolution rows carry lane B's
+    # kept constructor keywords (``CostTreeRow(n_ops=)``, ``Resolution(transform=)``).
+    MemberRow(("CostTreeRow",), "n_ops", "num_ops"),
+    MemberRow(("StorageOptions",), "bundle_path", "path"),
+    MemberRow(("NarrationOptions",), "select", "sites"),
+    # Completes lane CF's ``Recording.bundle_path`` to ``path``: the stored field moved but
+    # reads and two ``object.__setattr__(recording, "bundle_path", ...)`` writes did not.
+    MemberRow(("Recording",), "bundle_path", "path"),
 )
 
 # Filled by the row table below (keyword rows); kept separate for readability.
@@ -1693,6 +1701,302 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "x",
         0,
     ): "skip",
+    # Lane r2-ambiguous-2 (bundle_path -> path, select -> sites): decisions and reasons in
+    # that lane's RESULT.md; the string-key entries are hand-listed sites.
+    (
+        "torchlens/semantic/patching.py",
+        "target = patched.select(normalized_axis, position)",
+        "select",
+        -1,
+    ): "skip",
+    (
+        "docs/reference/deprecations.md",
+        "| `save_outs_to` | `streaming.bundle_path` | removed |",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "`streaming.bundle_path` + `streaming.on_save`) were historically raw",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog/test_ddp_unwrap.py",
+        'assert recording.bundle_path == tmp_path / "rank_00" / "bundle.tlfast"',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_bundle_perms.py",
+        "final = Path(recording.bundle_path)",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_partial.py",
+        "assert recording.bundle_path == partials[0]",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_partial.py",
+        "assert recording.bundle_path is not None",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_partial.py",
+        'assert recording.bundle_path.name.startswith("recoverable.tlfast.tmp.")',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_partial.py",
+        'assert (recording.bundle_path / "fastlog_index.jsonl").exists()',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_fastlog_partial.py",
+        "recovered = tl.fastlog.recover(recording.bundle_path)",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_persist_honesty_outcome_recording.py",
+        "assert rec.is_failed and rec.bundle_path is not None",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_persist_honesty_outcome_recording.py",
+        'assert (rec.bundle_path / "PARTIAL").exists()',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_persist_honesty_outcome_recording.py",
+        "return rec.bundle_path",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "tests/test_persist_honesty_outcome_recording.py",
+        "bundle = rec.bundle_path",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/_training_validation.py",
+        'streaming_bundle_path = getattr(streaming, "bundle_path", None)',
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "torchlens/backends/torch/_ops_retention.py",
+        "in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/backends/torch/_ops_retention.py",
+        "on_disk=streaming is not None and streaming.bundle_path is not None,",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/backends/torch/backend.py",
+        "in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/backends/torch/backend.py",
+        "on_disk=streaming is not None and streaming.bundle_path is not None,",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/fastlog/_recorder.py",
+        "if isinstance(streaming, MissingType) or streaming is None or streaming.bundle_path is None:",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/fastlog/_recorder.py",
+        "bundle_path = Path(streaming.bundle_path)",
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/fastlog/storage_disk.py",
+        'raise RecordingConfigError("DiskStorageBackend requires streaming.bundle_path")',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "torchlens/user_funcs.py",
+        '"streaming.bundle_path) or streaming.on_save"',
+        "bundle_path",
+        -1,
+    ): "apply",
+    (
+        "docs/migration/v2.0_api_changes.md",
+        "| `trace` | `save_activations_to`, `activation_sink` | `streaming=StorageOptions(bundle_path=..., on_save=...)` |",
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "docs/reference/glossary.md",
+        "streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),",
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "notebooks/fastlog_tutorial.ipynb",
+        "`StorageOptions(bundle_path=..., retain_in_memory=False)` writes a synchronous fastlog bundle and keeps tensor payloads off RAM. Load finalized bundles with `tl.load(...)`.",
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "tests/test_fastlog/test_storage_resolution.py",
+        '"""StorageOptions(bundle_path=None) resolves to RAM-only storage."""',
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "torchlens/options.py",
+        '>>> opts = StorageOptions(bundle_path="run.tlspec", retain_in_memory=False)',
+        "bundle_path",
+        0,
+    ): "apply",
+    ("torchlens/options.py", '"bundle_path": _resolve_option_value(', "bundle_path", 0): "apply",
+    (
+        "docs/agent-reference/current-2-x-surface.md",
+        'grain="op", select=<prefixes or selector>, inputs=x,',
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `watch_budget_exceeded` | A hard preflight cap (sites/bytes/elements per step) is exceeded by the resolved plan FACTS; nothing was emitted and no loop time was spent (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Narrow `select=`, reduce requested signals, or raise the budget deliberately |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `watch_selector_matched_no_sites` | The tier-P selection matched no parameters on the model (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Pass `select=` entries prefix-matching `named_parameters()` keys, or `select=None` for every parameter |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `watch_selector_matched_no_sites` | The tier-P selection matched no parameters on the model (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Pass `select=` entries prefix-matching `named_parameters()` keys, or `select=None` for every parameter |",
+        "select",
+        1,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `watch_sparse_grad_unsupported` | Gradient watching was requested over parameters of modules constructed with `sparse=True`; the gradient reduction needs dense grads and would crash inside `optimizer.step()`, aborting the update (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Exclude those parameters via `select=`, or construct the module with `sparse=False` |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `watch_op_grain_cost_disclosed` | WARNING (S-18 contract, not a refusal): an op-grain watch attached with the consented root-forward wrap; the attach-time calibration's median ratio of a sampled step's forward against the plain forward is disclosed | Raise `every=` to sample fewer steps, or narrow `select=`; `session.plan_report()` has the full calibration |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `echo_argument_invalid` | `narrate=` (or `NarrationOptions.select`/`NarrationOptions.stats`) received an unsupported spelling -- strings other than `'modules'`, lists, non-callable objects, or an unknown stats rung; label/substring selections resolve against final labels that do not exist during a live forward | Pass `True`, `'modules'`, a live selector/callable, or `tl.options.NarrationOptions`; use `trace.narrate(select=...)` post-hoc for final-label selections |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/error_refusal_contract.md",
+        "| `echo_selector_not_live` | An `narrate=` selector needs finalized graph facts (`output`/`identity` kinds) that do not exist during a live forward; TorchLens will not silently run a second pass and narrate the replay as though it were live | Narrate post-hoc via `trace.narrate(select=...)`, or scope live echo with `tl.func`/`tl.in_module` |",
+        "select",
+        0,
+    ): "skip",
+    (
+        "docs/reference/glossary.md",
+        "`select=` (module path prefixes or a selector-algebra object) and",
+        "select",
+        0,
+    ): "skip",
+    (
+        "torchlens/_option_receipt.py",
+        '>>> opts = NarrationOptions(select=True, stats="off", tail_on_error=20)',
+        "select",
+        0,
+    ): "apply",
+    (
+        "torchlens/_option_receipt.py",
+        '"select": _resolve_option_value("select", select, True, specified_fields),',
+        "select",
+        0,
+    ): "apply",
+    (
+        "torchlens/_snoop/_normalize.py",
+        '"tl.in_module(...), or narrate post-hoc via trace.narrate(select=...).",',
+        "select",
+        0,
+    ): "skip",
+    (
+        "torchlens/_snoop/_normalize.py",
+        '"trace.narrate(select=...), or scope live echo with tl.func/tl.in_module.",',
+        "select",
+        0,
+    ): "skip",
+    (
+        "torchlens/_snoop/_normalize.py",
+        'remedy="use trace.narrate(select=...) post-hoc, or a live selector",',
+        "select",
+        0,
+    ): "skip",
+    (
+        "torchlens/capture/_structure_only_entry.py",
+        "if streaming_options.bundle_path is not None or streaming_options.on_save is not None:",
+        "bundle_path",
+        -1,
+    ): "apply",
+    ("torchlens/options.py", '"bundle_path",', "bundle_path", 0): "apply",
+    ("torchlens/options.py", '"bundle_path": "bundle_path",', "bundle_path", 0): "apply",
+    ("torchlens/options.py", '"bundle_path": "bundle_path",', "bundle_path", 1): "apply",
+    (
+        "torchlens/options.py",
+        '"bundle_path", bundle_path, None, specified_fields',
+        "bundle_path",
+        0,
+    ): "apply",
+    ("torchlens/user_funcs.py", 'arguments=("bundle_path", "on_save"),', "bundle_path", 0): "apply",
+    (
+        "torchlens/fastlog/_recorder.py",
+        'object.__setattr__(recording, "bundle_path", recoverable_path)',
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "torchlens/fastlog/storage_disk.py",
+        'object.__setattr__(self.recording, "bundle_path", self.writer.final_path)',
+        "bundle_path",
+        0,
+    ): "apply",
+    (
+        "tests/test_api_renames.py",
+        '("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),',
+        "bundle_path",
+        0,
+    ): "apply",
+    ("torchlens/_option_receipt.py", '"select",', "select", 0): "apply",
+    (
+        "torchlens/_option_receipt.py",
+        '"select": _resolve_option_value("select", select, True, specified_fields),',
+        "select",
+        1,
+    ): "apply",
 }
 
 WORD = r"(?<![\w.]){}(?!\w)"
@@ -2673,6 +2977,9 @@ PARAM_ROWS = (
     ),
     ParamRow(("AttentionView.crop_to",), "queries", "query_slice"),
     ParamRow(("ReceptiveFieldView.show", "show", "node_spec"), "gradient", "grad"),
+    # Round 2: the option groups' hand-written constructors (the member rows rename the field).
+    ParamRow(("StorageOptions.__init__",), "bundle_path", "path"),
+    ParamRow(("NarrationOptions.__init__",), "select", "sites"),
 )
 
 
@@ -2840,7 +3147,9 @@ def classify(
             site.verdict, site.why = "other", f"no producer of the owner in file ({site.why})"
     final = []
     for site in unique.values():
-        decided = OVERRIDES.get(site.key()) if site.verdict == "undecided" else None
+        # A hand decision also wins over the reachability guess ("no producer ... in file").
+        guessed = site.verdict == "undecided" or site.why.startswith("no producer")
+        decided = OVERRIDES.get(site.key()) if guessed else None
         if decided is not None:
             site.verdict, site.why = decided, f"override ({site.why})"
         final.append(site)
