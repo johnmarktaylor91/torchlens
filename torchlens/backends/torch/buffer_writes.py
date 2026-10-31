@@ -29,6 +29,17 @@ if TYPE_CHECKING:
     from ..._ir.workspaces import RawGraphWorkspace
 
 
+_RECEIVER_REBIND_NAMES = frozenset({"set_", "share_memory_"})
+"""Calls that rebind the receiver's storage and are recorded as one storage rebind.
+
+``Tensor.set_`` points the receiver at another storage. ``Tensor.share_memory_``
+moves the receiver's storage to shared memory in place: the storage object
+stays, its data pointer changes, and every tensor on that storage moves with it,
+so the rebind covers each registered buffer sharing the receiver's storage. The
+move happens once (a shared storage is left where it is), so the record never
+depends on whether the storage had been shared before the forward.
+"""
+
 _RECEIVER_RESIZE_NAMES = frozenset({"resize_", "resize_as_"})
 """In-place resizes whose receiver keeps its identity and element prefix.
 
@@ -61,8 +72,9 @@ class BufferSnapshot:
     because neither is bottom-level once the decomposition runs below them).
 
     ``rebinds_storage`` marks the registered buffer itself as the receiver of
-    ``Tensor.set_``: the call rebinds its storage, so it is recorded as a
-    storage rebind, never journaled as an in-place write.
+    ``Tensor.set_`` or ``Tensor.share_memory_`` (or, for ``share_memory_``, a
+    buffer sharing the receiver's storage): the call rebinds its storage, so it
+    is recorded as a storage rebind, never journaled as an in-place write.
 
     ``resizes_in_place`` marks the registered buffer itself as the receiver of
     ``Tensor.resize_`` / ``Tensor.resize_as_``: the call keeps the object and
@@ -703,9 +715,10 @@ class BufferWriteTracker:
         # record the count at pre-call time so an OUTER wrapped mutator can
         # tell a nested call already journaled the address in its window.
         self.address_write_counts: dict[str, int] = {}
-        # Addresses whose registered buffer was the receiver of ``Tensor.set_`` in
-        # this forward. ``reconcile`` records each as a ``data_reassign`` rebind,
-        # whether or not the call changed the storage key.
+        # Addresses whose registered buffer was the receiver of ``Tensor.set_`` or
+        # ``Tensor.share_memory_`` (or shared the storage ``share_memory_`` moved)
+        # in this forward. ``reconcile`` records each as a ``data_reassign``
+        # rebind, whether or not the call changed the storage key.
         self.storage_rebound_addresses: set[str] = set()
         # Weakref-validated: an id reused within a window never inherits a dead entry.
         self._storage_key_cache: IdentityCache[tuple[Any, ...] | None] = {}
@@ -1072,7 +1085,7 @@ class BufferWriteTracker:
         self._reconcile_journaled_buffer(snapshot, current_value)
 
     def _record_storage_rebind(self, snapshot: BufferSnapshot, current: torch.Tensor) -> None:
-        """Defer a ``set_`` on a registered buffer to the end-of-forward rebind record.
+        """Defer a ``set_`` / ``share_memory_`` on a buffer to the end-of-forward rebind record.
 
         Whether ``set_`` changes the buffer's storage key depends only on the
         entry state: emptying an already empty buffer, or re-applying a view of
@@ -1318,14 +1331,18 @@ class BufferWriteTracker:
         *,
         receiver_rebinds_storage: bool = False,
         receiver_resizes: bool = False,
+        rebind_moves_whole_storage: bool = False,
     ) -> list[BufferSnapshot]:
         """Return pre-call snapshots for tensor args backed by registered buffers.
 
-        ``receiver_rebinds_storage`` is set for ``Tensor.set_``: when its
-        receiver (the first tensor argument) is a registered buffer itself, that
-        snapshot is marked ``rebinds_storage``. ``receiver_resizes`` is set for
-        ``Tensor.resize_`` / ``Tensor.resize_as_`` and marks the receiver's
-        snapshot ``resizes_in_place`` the same way.
+        ``receiver_rebinds_storage`` is set for ``Tensor.set_`` and
+        ``Tensor.share_memory_``: when the receiver (the first tensor argument)
+        is a registered buffer itself, that snapshot is marked
+        ``rebinds_storage``. ``rebind_moves_whole_storage`` (``share_memory_``)
+        adds a rebind snapshot for every other registered buffer on the
+        receiver's storage, which the call moves with it. ``receiver_resizes``
+        is set for ``Tensor.resize_`` / ``Tensor.resize_as_`` and marks the
+        receiver's snapshot ``resizes_in_place`` the same way.
         """
 
         self.clear_storage_metadata_cache()
@@ -1338,20 +1355,49 @@ class BufferWriteTracker:
             if address is None:
                 continue
             registered = self.address_to_tensor[address]
+            is_receiver = tensor is receiver is registered
             snapshots.append(
-                BufferSnapshot(
-                    address=address,
-                    tensor=registered,
-                    object_id=id(registered),
-                    storage_key=self.storage_key(registered),
-                    version=_tensor_version(registered),
-                    value=_copy_tensor_value(registered),
-                    writes_at_snapshot=self.address_write_counts.get(address, 0),
-                    rebinds_storage=receiver_rebinds_storage and tensor is receiver is registered,
-                    resizes_in_place=receiver_resizes and tensor is receiver is registered,
+                self._snapshot_address(
+                    address,
+                    rebinds_storage=receiver_rebinds_storage and is_receiver,
+                    resizes_in_place=receiver_resizes and is_receiver,
                 )
             )
+            if receiver_rebinds_storage and rebind_moves_whole_storage and is_receiver:
+                snapshots.extend(self._co_resident_rebind_snapshots(address, registered))
         return snapshots
+
+    def _snapshot_address(
+        self, address: str, *, rebinds_storage: bool = False, resizes_in_place: bool = False
+    ) -> BufferSnapshot:
+        """Return the pre-call snapshot of one registered buffer address."""
+
+        registered = self.address_to_tensor[address]
+        return BufferSnapshot(
+            address=address,
+            tensor=registered,
+            object_id=id(registered),
+            storage_key=self.storage_key(registered),
+            version=_tensor_version(registered),
+            value=_copy_tensor_value(registered),
+            writes_at_snapshot=self.address_write_counts.get(address, 0),
+            rebinds_storage=rebinds_storage,
+            resizes_in_place=resizes_in_place,
+        )
+
+    def _co_resident_rebind_snapshots(
+        self, receiver_address: str, receiver: torch.Tensor
+    ) -> list[BufferSnapshot]:
+        """Return rebind snapshots for the other registered buffers on the receiver's storage."""
+
+        key = self.storage_key(receiver)
+        if key is None:
+            return []
+        return [
+            self._snapshot_address(address, rebinds_storage=True)
+            for address in self.addresses_for_storage_key(key)
+            if address != receiver_address and address in self.address_to_tensor
+        ]
 
     def _record_write(
         self,
@@ -1667,8 +1713,9 @@ def snapshot_buffer_args(
         return []
     return tracker.snapshot_buffer_args(
         tensors,
-        receiver_rebinds_storage=func_name == "set_",
+        receiver_rebinds_storage=func_name in _RECEIVER_REBIND_NAMES,
         receiver_resizes=func_name in _RECEIVER_RESIZE_NAMES,
+        rebind_moves_whole_storage=func_name == "share_memory_",
     )
 
 
