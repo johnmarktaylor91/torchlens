@@ -71,6 +71,7 @@ from ._replay_device import (
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._replay_warnings import replay_warnings_ignored
+from ._script_metadata_proof import SCRIPT_METADATA_ONLY_REASON, script_metadata_only_proof
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
 from ._source_provenance import check_source_provenance
 from .exemptions import (
@@ -2485,8 +2486,7 @@ def _check_perturbation_exemptions(
        the ``out=`` keyword slot, a storage target the op fully overwrites by
        torch API contract, so its prior values never influence the result.
     3. Structural arg positions (``STRUCTURAL_ARG_POSITIONS``) -- the perturbed
-       layer occupies a position that controls structure, not values (e.g.,
-       index tensors for ``embedding``, ``index_select``).
+       layer fills a slot read for shape, type or storage only (arg 1 of ``view_as``).
     4. Custom exemption functions (``CUSTOM_EXEMPTION_CHECKS``) -- op-specific
        logic for complex cases like ``__getitem__``, ``lstm``, etc.
 
@@ -3185,6 +3185,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
         return ValidationCheckResult.exempted("pre_perturbation_exemption")
+    if perturb and (script_proof := script_metadata_only_proof(layer, layers_to_perturb)):
+        return ValidationCheckResult.exempted(SCRIPT_METADATA_ONLY_REASON, script_proof)
 
     input_args, unverified_reason = _prepare_input_args_for_validating_layer(
         self, layer, layers_to_perturb
