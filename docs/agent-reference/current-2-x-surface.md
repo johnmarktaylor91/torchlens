@@ -1760,7 +1760,7 @@ object's docstring):
 - `tl.errors.MergedArtifactError`: Merged artifact save/load failure: schema, integrity, or tamper.
 - `tl.errors.MergedSurfaceUnsupportedError`: A refused surface on a merged trace (run/export/validate/selectors).
 - `tl.errors.MergedTraceError`: Base class for merged-trace errors; `fields["code"]` is frozen.
-- `tl.errors.NarrationConfigError`: Raised for `echo=` configuration refusals at capture entry.
+- `tl.errors.NarrationConfigError`: Raised for `narrate=` configuration refusals at capture entry.
 - `tl.errors.NarrationStatsError`: Raised when an armed echo stats rung refuses a value computation.
 - `tl.errors.NoInfluencePathError`: Raised when two graph points have no directed influence path.
 - `tl.errors.OpaqueCallableError`: Raised when an executable intervention save would require opaque code.
