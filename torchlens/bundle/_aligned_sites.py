@@ -1,6 +1,6 @@
 """Cross-member site pairing for Bundle site reads.
 
-Bundle site reads (``rank_changes``, ``diff_pair``) pair each reference op with
+Bundle site reads (``rank_changes``, ``compare``) pair each reference op with
 its counterpart in every member through the supergraph's structural alignment,
 never by literal label: a capture-time module edit inserts an
 ``interventionreplacement`` op and renumbers every later op, so a label join

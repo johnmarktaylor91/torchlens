@@ -2,7 +2,7 @@
 
 Leg 2 (zero-network): torchvision resnet18 + the real IMAGENET1K_V1 checkpoint
 plus one deterministic SGD step between two captures -- the exact measured
-repro of the defect (weight_norm_diff false zero, diff_pair "identical",
+repro of the defect (weight_norm_diff false zero, compare "identical",
 aggregate('std') all zeros, out/grad serving today's bytes). Runs offline
 today against the cached checkpoint; proves the class is not
 transformer-specific.

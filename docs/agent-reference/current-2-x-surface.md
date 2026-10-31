@@ -360,16 +360,16 @@
   vocabulary, lint-never-block), ONE material step per top-level operation,
   quarantine-not-raise on post-material write failure (the material result
   returns unharmed; `on_record_error="raise"` opts out), and read-only
-  serving via `ledger_overview`/`ledger_entry`/`ledger_evidence` (MCP:
-  `torchlens_ledger_*`) over the mid-experiment-fresh artifact.
+  reading via `tl.experiment.read_ledger(path)` (`.overview`, `.entry(id)`,
+  `.evidence(id, index)`; MCP: `torchlens_ledger_*`) over the mid-experiment-fresh artifact.
 - CHECKPOINT LIVE-REF GUARD (A-CKPT; spellings DOCUMENTED-UNSTABLE): parameter reads resolve
   through LIVE model handles (or nothing after deserialization), never capture-time bytes, so
   EVERY cross-member parameter value/difference/trajectory read on a Bundle (`SuperParam` views
-  with >= 2 members: `weight_norm_diff`, `diff_pair`, `aggregate`, `out`/`grad`) refuses BEFORE
+  with >= 2 members: `weight_norm_diff`, `compare`, `aggregate`, `out`/`grad`) refuses BEFORE
   tensor lookup with stable code `checkpoint_series_live_params` — keyed on the CLAIM, never
   Python object identity (save/load manufactures relationship-rank upgrades); fires at the ONE
   `_TensorBearing._tensor_dict` funnel and survives save/load, replacing the historical silent
-  degradation (false-zero `weight_norm_diff`, "identical" `diff_pair`, all-zero `aggregate`
+  degradation (false-zero `weight_norm_diff`, "identical" `compare`, all-zero `aggregate`
   live; NaN/empty/None post-load). Beside it, `Param.value_basis` is a derived read-time
   persisted-nowhere disclosure: `live_ref` / `absent(not_persisted)` (typed replacement for the
   bare post-load `None`); `snapshot` arrives only with R8(b) capture-time snapshots and is the

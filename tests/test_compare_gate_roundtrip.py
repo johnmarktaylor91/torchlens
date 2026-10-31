@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.bundle._compare_gate import _MODEL_AXIS_RANK
 from torchlens.intervention.errors import BundleComparisonError
-from torchlens.intervention.types import Relationship
+from torchlens.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
 
@@ -231,7 +231,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
     path = tmp_path / "chain.tlspec"
@@ -239,7 +239,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     loaded = tl.load(str(path))
 
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.diff_pair("turn1", "turn2")
+        loaded.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
@@ -264,8 +264,8 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    rows = loaded.diff_pair("a", "b")
+    rows = loaded.compare("a", "b")
     assert isinstance(rows, list)
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.diff_pair("b", "next")
+        loaded.compare("b", "next")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"

@@ -6,7 +6,7 @@ import re
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
@@ -46,7 +46,6 @@ from ._compare_gate import require_comparable
 # historical module-level surface of the pre-split file.
 from ._deltas import (
     _bundle_aligned_pairs as _bundle_aligned_pairs,
-    _bundle_compare as _bundle_compare,
     _bundle_delta_map as _bundle_delta_map,
     _bundle_norm_delta as _bundle_norm_delta,
     _bundle_output_delta as _bundle_output_delta,
@@ -1735,31 +1734,45 @@ class Bundle:
         scored.sort(key=lambda row: row[1], reverse=True)
         return scored[:k]
 
-    def diff_pair(self, a: Any, b: Any) -> Any:
-        """Return out differences between two members or at one site.
+    def compare(
+        self,
+        a: str,
+        b: str,
+        *,
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+        on: Literal["out", "grad"] = "out",
+    ) -> list[tuple[str, float]]:
+        """Return per-site differences between two members.
+
+        The receiver sets the comparison axis: ``bundle.compare(a, b)`` reads
+        one member pair across every shared site; ``bundle.at(site).compare()``
+        is the member-by-member matrix at one site. The pair goes through the
+        comparison gate first (operand scoping: the two-member form reads
+        exactly one pair, so a foreign or ordered third member never disables
+        it) and refuses typed when the members cannot be aligned. The grade of
+        the pair is :meth:`comparability`.
 
         Parameters
         ----------
         a:
-            Site query or first member name.
+            First member name.
         b:
-            Optional second member name when ``a`` is a site.
+            Second member name.
+        metric:
+            Metric name or callable over ``(left, right)`` tensors; scalar-like
+            sites always use ``relative_l1``.
+        on:
+            Tensor field to compare: ``"out"`` or ``"grad"``.
 
         Returns
         -------
-        Any
-            Site-score rows for member pairs, or a SuperOp diff matrix.
+        list[tuple[str, float]]
+            ``(site_label, distance)`` rows for sites both members have,
+            paired through the structural alignment (:attr:`supergraph`).
         """
 
-        if isinstance(a, str) and a in self._members and isinstance(b, str) and b in self._members:
-            # Operand scoping (A-GATE item 3): the two-member form reads
-            # exactly one pair, so a foreign or ordered third member never
-            # disables it.
-            self._require_comparable("diff", pairs=[(a, b)])
-            return self._diff_members(a, b)
-        self._require_comparable("diff")
-        view = self.node(a)
-        return view.compare(other=b if isinstance(b, str) else None)
+        self._require_comparable("diff", pairs=[(a, b)])
+        return self._diff_members(a, b, metric=metric, on=on)
 
     def cluster(self, *args: Any, **kwargs: Any) -> None:
         """Placeholder for future bundle clustering.
@@ -1813,15 +1826,26 @@ class Bundle:
 
         return self._relationship_between(self._members[a], self._members[b])
 
-    def _diff_members(self, left_name: str, right_name: str) -> list[tuple[str, float]]:
-        """Return per-site out differences between two members.
+    def _diff_members(
+        self,
+        left_name: str,
+        right_name: str,
+        *,
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+        on: Literal["out", "grad"] = "out",
+    ) -> list[tuple[str, float]]:
+        """Return per-site differences between two members.
 
         Parameters
         ----------
         left_name:
-            Reference member name.
+            First member name.
         right_name:
             Compared member name.
+        metric:
+            Metric name or callable (scalar-like sites use ``relative_l1``).
+        on:
+            Tensor field read at each site.
 
         Returns
         -------
@@ -1837,7 +1861,7 @@ class Bundle:
         # fallback fires ONLY when both operands are scalar-like; multi-element
         # activations route through a real vector metric. Without this guard
         # relative_l1 silently truncates each site to its first element.
-        metric_fn = resolve_metric("cosine")
+        metric_fn = resolve_metric(metric)
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
         for left_site in getattr(left_log, "layer_list", []):
@@ -1847,8 +1871,8 @@ class Bundle:
                 right_site = resolve_sites(right_log, right_label, max_fanout=1).first()
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
-            left_out = getattr(left_site, "out", None)
-            right_out = getattr(right_site, "out", None)
+            left_out = getattr(left_site, on, None)
+            right_out = getattr(right_site, on, None)
             if not isinstance(left_out, torch.Tensor) or not isinstance(
                 right_out,
                 torch.Tensor,

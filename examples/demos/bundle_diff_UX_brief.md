@@ -15,7 +15,7 @@ demo contract.
 
 - Render as two columns: clean on the left, intervention on the right.
 - Align rows vertically with `bundle.show_diff(layout="paired")`.
-- Use `bundle.compare(...)["nodes"]` for per-node color values.
+- Use `bundle.delta_map(...)` for per-node color values.
 - Unmatched nodes receive a gray border on the side where their pair is missing.
 
 ## Color Scale
