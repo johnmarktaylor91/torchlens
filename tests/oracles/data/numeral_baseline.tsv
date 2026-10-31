@@ -6275,7 +6275,6 @@ test-docstrings	tests/test_r58_capture_cache_rce.py	0775
 test-docstrings	tests/test_r58_capture_cache_rce.py	5.2
 test-docstrings	tests/test_r58_merged_distributed_rce.py	5000
 test-docstrings	tests/test_r58_merged_distributed_rce.py	58
-test-docstrings	tests/test_r6_state_mutator_rce.py	43
 test-docstrings	tests/test_r7_torch_type_io_rce.py	49
 test-docstrings	tests/test_r8_operator_gate_rce.py	32
 test-docstrings	tests/test_r8_operator_gate_rce.py	41
@@ -7416,7 +7415,6 @@ test-names	tests/test_r39_callable_invoke_denylist.py	39_
 test-names	tests/test_r41_gate_completeness.py	40_
 test-names	tests/test_r45_property_classification.py	45_
 test-names	tests/test_r45_torch_symbol_decode.py	49_
-test-names	tests/test_r6_state_mutator_rce.py	43
 test-names	tests/test_r8_operator_gate_rce.py	32_
 test-names	tests/test_real_world_models.py	100
 test-names	tests/test_real_world_models.py	101
@@ -7524,7 +7522,6 @@ test-names	tests/test_tlspec_runnable_r75_param_identity.py	75_
 test-names	tests/test_tlspec_runnable_r77_buffer_universe.py	77_
 test-names	tests/test_tlspec_runnable_r77_fact_components.py	77_
 test-names	tests/test_tlspec_runnable_r77_param_provenance.py	77_
-test-names	tests/test_tlspec_runnable_r77_seed_typing.py	77_
 test-names	tests/test_tlspec_runnable_r79_empty_name_param.py	79_
 test-names	tests/test_tlspec_runnable_r79_seed_typing.py	79_
 test-names	tests/test_tlspec_runnable_r79_session_leak.py	79_
