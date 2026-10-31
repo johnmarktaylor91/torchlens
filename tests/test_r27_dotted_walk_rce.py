@@ -20,11 +20,12 @@ E2 (HIGH, trust-gated but violating the "denied even under trust" contract) -- b
     gate on the RESOLVED object's real module (plus the ``is_pure_forward_callable`` gate
     for anything that walked back into the torch namespace).
 
-A-1 (HIGH; CRITICAL on torch <= 2.5.1) -- CVE-2025-32434: the embedded-tensor
-    reconstruction wrapper forwards attacker bytes into ``torch.load(BytesIO,
-    weights_only=True)``, which is itself a working RCE on torch <= 2.5.1. The fix adds
-    a named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability flag (feature-detected, surfaced in
-    the compat snapshot / doctor) and makes the wrapper fail closed on an affected runtime.
+A-1 (HIGH; CRITICAL on torch <= 2.5.1) -- CVE-2025-32434: ``torch.load(BytesIO,
+    weights_only=True)`` is itself a working RCE on torch <= 2.5.1. The loader no longer
+    hands file bytes to ``torch.load`` at all (``torch.storage._load_from_bytes`` is
+    refused by name; see ``test_io_embedded_tensor_route_refused.py``); the named
+    ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability flag stays surfaced in the compat snapshot /
+    doctor as a fact about the running torch.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens._io._safe_unpickle import SafeBundleUnpickler, _safe_load_from_bytes
+from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import _resolve_import_ref
@@ -276,37 +277,8 @@ def test_unpickler_legit_trusted_callable_still_resolves(_trusted_os_module: str
 
 
 # ---------------------------------------------------------------------------
-# A-1 -- CVE-2025-32434 embedded-tensor load gate.
+# A-1 -- CVE-2025-32434 capability flag stays reported.
 # ---------------------------------------------------------------------------
-
-
-def _embedded_tensor_bytes() -> bytes:
-    """Bytes accepted by ``torch.storage._load_from_bytes`` (a ``torch.save`` payload)."""
-
-    buf = io.BytesIO()
-    torch.save(torch.tensor([1.0, 2.0, 3.0]), buf)
-    return buf.getvalue()
-
-
-def test_embedded_load_refused_on_cve_vulnerable_torch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When the CVE-2025-32434 fix is absent, the embedded load fails closed."""
-
-    monkeypatch.setattr(
-        "torchlens._utils._torch_compat.HAS_SAFE_WEIGHTS_ONLY_LOAD", False, raising=True
-    )
-    with pytest.raises(pickle.UnpicklingError, match="CVE-2025-32434"):
-        _safe_load_from_bytes(_embedded_tensor_bytes())
-
-
-def test_embedded_load_roundtrips_on_fixed_torch() -> None:
-    """On a CVE-fixed torch (>= 2.6), a benign embedded tensor still round-trips."""
-
-    from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
-
-    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:  # pragma: no cover - depends on runtime torch
-        pytest.skip("running torch predates the CVE-2025-32434 fix")
-    result = _safe_load_from_bytes(_embedded_tensor_bytes())
-    assert torch.equal(result, torch.tensor([1.0, 2.0, 3.0]))
 
 
 @pytest.mark.heavy  # doctor/snapshot walk crossed the 7s smoke budget at T55 (7.4s cpu)

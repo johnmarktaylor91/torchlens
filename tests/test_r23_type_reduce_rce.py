@@ -168,9 +168,10 @@ def test_r21_and_import_sink_gadgets_still_denied() -> None:
     assert hasattr(tlutils, "_module_is_installed")
     with pytest.raises(pickle.UnpicklingError):
         unpickler.find_class("torchlens._utils", "_module_is_installed")
-    # os.system reached off a torchlens module path is still denied (real module posix).
+    # A stdlib module reached off a torchlens module path is still denied (real module
+    # pickle, not torchlens-owned).
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens._io._safe_unpickle", "io")
+        unpickler.find_class("torchlens._io._safe_unpickle", "pickle")
 
 
 # --------------------------------------------------------------------------- #
