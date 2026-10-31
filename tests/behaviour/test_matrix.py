@@ -31,7 +31,7 @@ MATRIX_PATH = Path(__file__).resolve().parents[1] / "interaction_matrix.json"
 
 #: Pairs every case runs: one per door the net must keep honest (selective
 #: capture with lookup, rerun with export, a capture edit with a post-hoc edit,
-#: disk payloads with rendering, the sparse recorder with an explicit backend,
+#: disk payloads with rendering, the sparse recorder with capture-time reporting,
 #: bundles with saved-scope validation). Each composes or is independent in
 #: the interaction matrix.
 CORE_PAIRS: tuple[tuple[str, str], ...] = (
@@ -39,7 +39,7 @@ CORE_PAIRS: tuple[tuple[str, str], ...] = (
     ("rerun", "export"),
     ("intervene", "fork_do"),
     ("storage", "draw"),
-    ("record", "backend"),
+    ("record", "reporting"),
     ("bundle", "validate"),
 )
 
@@ -72,8 +72,11 @@ def _sweep_cells() -> Iterator[Cell]:
 
 
 def _param(cell: Cell, *marks: pytest.MarkDecorator) -> object:
+    """One cell as a pytest param: its id, its tier marks and its xdist group."""
+
     case, pair = cell
-    return pytest.param(cell, id=cell_id(case, pair), marks=list(marks))
+    name = cell_id(case, pair)
+    return pytest.param(cell, id=name, marks=[*marks, pytest.mark.xdist_group(name=name)])
 
 
 def _universe() -> list[object]:

@@ -15,9 +15,10 @@ report *why* validation failed; the verdict itself is ``tl.validate``.
 
 from __future__ import annotations
 
+import copy
 import inspect
 import warnings
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,7 @@ from torchlens.types import CaptureStatus
 from torchlens.validation import last_validation_failure
 
 BASE_ORACLES: tuple[str, ...] = ("trace", "validate", "save", "load", "equality", "forward_match")
+_SCALARS = (int, float, bool, str, bytes, type(None))
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,7 @@ class Cell:
     capture_fields: dict[str, Any] = field(default_factory=dict)
     trace: Any = None
     loaded: Any = None
+    plain_output: list[Any] = field(default_factory=list)
     outcomes: dict[str, Outcome] = field(default_factory=dict)
 
     def changes(self, oracle: str) -> bool:
@@ -109,20 +112,33 @@ class Cell:
         if not condition:
             raise OracleFailure(detail)
 
-    def positional_inputs(self) -> list[Any]:
+    def fresh_inputs(self) -> Any:
+        """Return a deep copy of the inputs (a forward may write into them in place)."""
+
+        return copy.deepcopy(self.inputs)
+
+    def positional_inputs(self, inputs: Any = None) -> list[Any]:
         """Return the inputs as the positional arguments ``model(*args)`` takes."""
 
-        return positional_arguments(self.inputs, self.model)
+        return positional_arguments(self.inputs if inputs is None else inputs, self.model)
 
     def leaves(self, output: Any) -> Iterator[Any]:
         """Flatten a model output into its leaves."""
 
         return flatten_leaves(output)
 
-    def snapshot_output(self, trace: Any) -> list[Any]:
-        """Return detached clones of a trace's output leaves."""
+    def output_leaves(self, trace: Any) -> list[Any]:
+        """Return detached copies of a trace's output leaves.
 
-        return [_detached(leaf) for leaf in flatten_leaves(trace.reconstruct_output())]
+        Disk-streamed payloads are not materialized implicitly, so under a
+        feature that moves payloads off memory the output ops are read through
+        ``materialize_out``.
+        """
+
+        leaves = [_detached(leaf) for leaf in flatten_leaves(trace.reconstruct_output())]
+        if self.changes("payloads") and any(leaf is None for leaf in leaves):
+            leaves = [_detached(op.materialize_out()) for op in trace.output_ops]
+        return leaves
 
     def expect_same_leaves(self, want: Sequence[Any], got: Sequence[Any], what: str) -> None:
         """Expect two leaf sequences to match exactly (NaN equal to NaN)."""
@@ -257,9 +273,24 @@ def _module_calls(trace: Any) -> Counter[str]:
     return calls
 
 
-def case_facts(case: Case, model: nn.Module, inputs: Any) -> CaseFacts:
-    """Capture the case plainly once and derive the sites features need."""
+_FACTS: OrderedDict[str, CaseFacts] = OrderedDict()
+_FACTS_KEEP = 2
 
+
+def case_facts(case: Case, model: nn.Module, inputs: Any) -> CaseFacts:
+    """Capture the case plainly once and derive the sites features need (cached per case)."""
+
+    cached = _FACTS.get(case.name)
+    if cached is not None:
+        return cached
+    facts = _compute_facts(model, copy.deepcopy(inputs))
+    _FACTS[case.name] = facts
+    while len(_FACTS) > _FACTS_KEEP:
+        _FACTS.popitem(last=False)
+    return facts
+
+
+def _compute_facts(model: nn.Module, inputs: Any) -> CaseFacts:
     torch.manual_seed(SEED)
     plain = tl.trace(model, inputs)
     ops = list(plain.ops)
@@ -332,7 +363,7 @@ def _trace(cell: Cell) -> None:
     if cell.capture_fields:
         kwargs["capture"] = tl.options.CaptureOptions(**cell.capture_fields)
     torch.manual_seed(SEED)
-    trace = tl.trace(cell.model, cell.inputs, **kwargs)
+    trace = tl.trace(cell.model, cell.fresh_inputs(), **kwargs)
     cell.expect(len(trace.ops) > 0, "empty trace")
     want = CaptureStatus.HALTED if cell.changes("outcome") else CaptureStatus.COMPLETE
     cell.expect(trace.outcome.status is want, f"outcome {trace.outcome.status!r}, wanted {want!r}")
@@ -342,31 +373,42 @@ def _trace(cell: Cell) -> None:
 def _plain_forward(cell: Cell) -> list[Any]:
     torch.manual_seed(SEED)
     with torch.no_grad():
-        output = cell.model(*cell.positional_inputs())
+        output = cell.model(*cell.positional_inputs(cell.fresh_inputs()))
     return [_detached(leaf) for leaf in flatten_leaves(output)]
 
 
-def _forward_match(cell: Cell, plain: list[Any]) -> None:
+def _forward_match(cell: Cell) -> None:
     trace = cell.require_trace()
     if cell.changes("outcome"):
         raise NotApplicable(
             "a halted capture has no final output; the halt feature checks the prefix"
         )
     if cell.changes("forward_match"):
-        before = cell.snapshot_output(trace)
+        before = cell.output_leaves(trace)
         torch.manual_seed(SEED)
-        trace.run(cell.model, cell.inputs)
-        cell.expect_same_leaves(before, cell.snapshot_output(trace), "replay output")
+        trace.run(cell.model, cell.fresh_inputs())
+        cell.expect_same_leaves(before, cell.output_leaves(trace), "replay output")
         return
-    diff = first_leaf_difference(plain, cell.snapshot_output(trace))
+    foreign = [type(leaf).__name__ for leaf in cell.plain_output if not _comparable(leaf)]
+    if foreign:
+        raise NotApplicable(f"the output holds non-tensor objects {sorted(set(foreign))}")
+    diff = first_leaf_difference(cell.plain_output, cell.output_leaves(trace))
     if diff is not None and cell.case.has("stochastic"):
         raise NotApplicable(f"the forward draws random numbers; {diff}")
+    if diff is not None and first_leaf_difference(cell.plain_output, _plain_forward(cell)):
+        raise NotApplicable(
+            f"two plain forwards differ, so the forward is not deterministic; {diff}"
+        )
     cell.expect(diff is None, f"plain forward output: {diff}")
+
+
+def _comparable(leaf: Any) -> bool:
+    return isinstance(leaf, (torch.Tensor, *_SCALARS))
 
 
 def _validate(cell: Cell) -> None:
     verdict = tl.validate(
-        cell.model, cell.inputs, scope="forward", random_seed=SEED, validate_metadata=True
+        cell.model, cell.fresh_inputs(), scope="forward", random_seed=SEED, validate_metadata=True
     )
     cell.expect(bool(verdict), f"forward validation failed: {cell.validation_failure_summary()}")
 
@@ -406,10 +448,16 @@ def _equality(cell: Cell) -> None:
     cell.expect(
         set(live.modules.keys()) == set(loaded.modules.keys()), "module addresses differ after load"
     )
+    live_saved = {op.label for op in live.saved_ops}
+    loaded_saved = {op.label for op in loaded.saved_ops}
+    cell.expect(
+        live_saved == loaded_saved,
+        f"saved op sets differ after load: {sorted(live_saved ^ loaded_saved)[:8]}",
+    )
     if cell.changes("payloads"):
         return
     for a, b in zip(live_ops, loaded_ops, strict=True):
-        if a.is_saved and b.is_saved:
+        if a.label in live_saved:
             cell.expect(_same_leaf(a.out, b.out), f"op {a.label}: saved payload differs after load")
 
 
@@ -459,8 +507,8 @@ def _run_cell(case: Case, features: tuple[Feature, ...], tmp: Path) -> CellResul
         return _finish(cell)
     if not _guard(cell, "trace", lambda: _trace(cell)):
         return _finish(cell)
-    plain = _plain_forward(cell)
-    _guard(cell, "forward_match", lambda: _forward_match(cell, plain))
+    cell.plain_output = _plain_forward(cell)
+    _guard(cell, "forward_match", lambda: _forward_match(cell))
     _guard(cell, "validate", lambda: _validate(cell))
     if _guard(cell, "save", lambda: _save(cell)) and _guard(cell, "load", lambda: _load(cell)):
         _guard(cell, "equality", lambda: _equality(cell))

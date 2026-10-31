@@ -14,8 +14,7 @@ The feature axis is pinned to ``tests/interaction_matrix.json`` by
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -70,7 +69,6 @@ class Feature:
     requires: frozenset[str] = frozenset()
     prepare: Hook | None = None
     after: Hook | None = None
-    extra_tags: frozenset[str] = field(default_factory=frozenset)
 
     def applies(self, tags: frozenset[str]) -> str | None:
         """Return why the feature does not apply to a case with ``tags``, or ``None``."""
@@ -96,12 +94,18 @@ def _prepare_save(cell: Cell) -> None:
 
 
 def _after_save(cell: Cell) -> None:
+    """The selected ops are saved; anything else saved is an output or a buffer source."""
+
     want = {op.label for op in cell.facts.plain.ops if op.func_name == cell.facts.common_func}
     for name, trace in (("live", cell.trace), ("loaded", cell.loaded)):
         if trace is None:
             continue
         got = {op.label for op in trace.saved_ops}
-        cell.expect(got == want, f"{name} saved ops {sorted(got)[:6]} != {sorted(want)[:6]}")
+        allowed = {op.label for op in trace.output_ops}
+        allowed |= {op.label for op in trace.ops if op.is_buffer_source}
+        missing, extra = sorted(want - got), sorted(got - want - allowed)
+        cell.expect(not missing, f"{name}: selected ops not saved: {missing[:8]}")
+        cell.expect(not extra, f"{name}: unselected ops saved: {extra[:8]}")
 
 
 def _prepare_intervene(cell: Cell) -> None:
@@ -113,9 +117,13 @@ def _prepare_intervene(cell: Cell) -> None:
 
 
 def _after_intervene(cell: Cell) -> None:
+    """The edit fired (``on_zero_fire="error"`` guards that) and changed the output."""
+
+    from tests.behaviour.harness import first_leaf_difference
+
     trace = cell.require_trace()
-    fired = [op.label for op in trace.ops if getattr(op, "intervention_fired", False)]
-    cell.expect(bool(fired), "no op records a fired intervention")
+    diff = first_leaf_difference(cell.plain_output, cell.output_leaves(trace))
+    cell.expect(diff is not None, "scaling every selected op left the output unchanged")
 
 
 def _prepare_halt(cell: Cell) -> None:
@@ -167,7 +175,7 @@ def _after_backward(cell: Cell) -> None:
     trace = cell.require_trace()
     trace.backward(_loss_of(trace.reconstruct_output()))
     verdict = tl.validate(
-        cell.model, cell.inputs, scope="backward", random_seed=SEED, loss_fn=_loss_of
+        cell.model, cell.fresh_inputs(), scope="backward", random_seed=SEED, loss_fn=_loss_of
     )
     cell.expect(bool(verdict), cell.validation_failure_summary())
 
@@ -223,19 +231,19 @@ def _after_draw(cell: Cell) -> None:
 def _after_rerun(cell: Cell) -> None:
     _no_stochastic(cell)
     trace = cell.require_trace()
-    before = cell.snapshot_output(trace)
+    before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    trace.run(cell.model, cell.inputs)
-    cell.expect_same_leaves(before, cell.snapshot_output(trace), "rerun output")
+    trace.run(cell.model, cell.fresh_inputs())
+    cell.expect_same_leaves(before, cell.output_leaves(trace), "rerun output")
 
 
 def _after_fast_run(cell: Cell) -> None:
     _no_stochastic(cell)
     trace = cell.require_trace()
-    before = cell.snapshot_output(trace)
+    before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    trace.run(inputs=cell.inputs, fast=True)
-    cell.expect_same_leaves(before, cell.snapshot_output(trace), "fast run output")
+    trace.run(inputs=cell.fresh_inputs(), fast=True)
+    cell.expect_same_leaves(before, cell.output_leaves(trace), "fast run output")
 
 
 def _prepare_fork_do(cell: Cell) -> None:
@@ -278,10 +286,17 @@ def _after_multipass(cell: Cell) -> None:
 def _after_record(cell: Cell) -> None:
     _no_stochastic(cell)
     torch.manual_seed(SEED)
-    recording = tl.record(cell.model, cell.inputs, default_op=True)
+    recording = tl.record(cell.model, cell.fresh_inputs(), default_op=True)
     cooked = recording.to_trace()
-    got = [op.func_name for op in cooked.ops]
-    cell.expect(got == cell.facts.func_names, "record.to_trace() op sequence differs from trace")
+    got = tuple(op.func_name for op in cooked.ops)
+    want = cell.facts.func_names
+    first = next((i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b), None)
+    cell.expect(
+        got == want,
+        f"record.to_trace() gives {len(got)} ops against {len(want)} traced; first difference at "
+        f"{first}: {got[first] if first is not None and first < len(got) else None!r} vs "
+        f"{want[first] if first is not None and first < len(want) else None!r}",
+    )
 
 
 def _single_call_module(cell: Cell) -> str:
@@ -298,7 +313,7 @@ def _after_extract(cell: Cell) -> None:
     address = _single_call_module(cell)
     trace = cell.require_trace()
     torch.manual_seed(SEED)
-    features = tl.extract(cell.model, cell.inputs, [address])
+    features = tl.extract(cell.model, cell.fresh_inputs(), [address])
     cell.expect_same_leaves([trace[address].out], [features[address]], f"extract({address!r})")
 
 
@@ -309,11 +324,11 @@ def _after_bind(cell: Cell) -> None:
     bound = spec.bind(cell.model)
     torch.manual_seed(SEED)
     with torch.no_grad():
-        bound_out = bound(*cell.positional_inputs())
+        bound_out = bound(*cell.positional_inputs(cell.fresh_inputs()))
     torch.manual_seed(SEED)
-    steered = tl.trace(cell.model, cell.inputs, intervene=spec, on_zero_fire="error")
+    steered = tl.trace(cell.model, cell.fresh_inputs(), intervene=spec, on_zero_fire="error")
     cell.expect_same_leaves(
-        cell.snapshot_output(steered), list(cell.leaves(bound_out)), "bound executor output"
+        cell.output_leaves(steered), list(cell.leaves(bound_out)), "bound executor output"
     )
 
 
@@ -325,7 +340,7 @@ def _after_bundle(cell: Cell) -> None:
 
 
 def _after_validate(cell: Cell) -> None:
-    verdict = tl.validate(cell.model, cell.inputs, scope="saved", random_seed=SEED)
+    verdict = tl.validate(cell.model, cell.fresh_inputs(), scope="saved", random_seed=SEED)
     cell.expect(bool(verdict), cell.validation_failure_summary())
 
 
@@ -334,7 +349,9 @@ def _after_export(cell: Cell) -> None:
         if trace is None:
             continue
         frame = trace.to_pandas()
-        cell.expect(len(frame) == len(trace.ops), f"{name} to_pandas has {len(frame)} rows")
+        cell.expect(
+            len(frame) == len(trace), f"{name} to_pandas has {len(frame)} rows for {len(trace)} ops"
+        )
 
 
 FEATURES: tuple[Feature, ...] = (
@@ -440,11 +457,3 @@ def feature(name: str) -> Feature:
     """Return the feature called ``name``."""
 
     return FEATURES_BY_NAME[name]
-
-
-def artifact_dir(cell: Cell, name: str) -> Path:
-    """Return a fresh directory under the cell's temp dir."""
-
-    path = cell.tmp / name
-    path.mkdir(parents=True, exist_ok=True)
-    return path

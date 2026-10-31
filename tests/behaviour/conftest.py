@@ -1,9 +1,9 @@
 """Fixtures local to the behaviour net.
 
 One cell's work (trace, validate, save, load, compare, feature checks) runs
-once and its outcomes serve every oracle test of that cell. Under xdist the
-cell's tests are grouped (``xdist_group``) so ``--dist loadgroup`` keeps them
-on one worker; without it each worker recomputes the cells it draws.
+once and its outcomes serve every oracle test of that cell. Each cell's tests
+carry an ``xdist_group`` mark so ``--dist loadgroup`` keeps them on one
+worker; without it each worker recomputes the cells it draws.
 """
 
 from __future__ import annotations
@@ -39,16 +39,3 @@ def cell_result(
         while len(_RESULTS) > _KEEP:
             _RESULTS.popitem(last=False)
     return cached
-
-
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Group one cell's oracle tests under one xdist group."""
-
-    if not config.pluginmanager.hasplugin("xdist"):
-        return
-    for item in items:
-        callspec = getattr(item, "callspec", None)
-        if callspec is None or "cell_result" not in callspec.params:
-            continue
-        case, features = callspec.params["cell_result"]
-        item.add_marker(pytest.mark.xdist_group(name=cell_id(case, features)))
