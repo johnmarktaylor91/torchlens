@@ -372,8 +372,12 @@ _LINEAGE_PROBE_BUILTINS: tuple[type[BaseException], ...] = (
 )
 
 BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
+    "AmbiguousCallError": ("ValueError",),
     "AmbiguousGroupLifetimeError": ("RuntimeError",),
+    "AmbiguousLabelError": ("KeyError",),
     "AmbiguousOpLookupError": ("ValueError",),
+    "AmbiguousPassError": ("ValueError",),
+    "AmbiguousTargetError": ("ValueError",),
     "AppendBatchDependenceError": ("ValueError",),
     "AppendMismatchError": ("ValueError",),
     "AppendStateValidationWarning": ("Warning",),
@@ -413,6 +417,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ConfigurationError": (),
     "ControlFlowDivergenceError": ("RuntimeError",),
     "ControlFlowDivergenceWarning": ("Warning",),
+    "DatasetExtractionResumeError": ("RuntimeError",),
     "DeadParentError": ("ValueError",),
     "DiagnosticSeverityError": ("ValueError",),
     "DirectActivationWriteWarning": ("Warning",),
@@ -435,11 +440,24 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "InvalidArgumentError": ("ValueError",),
     "InvalidStorageError": ("ValueError",),
     "KeywordConflictError": ("TypeError",),
+    "LiveIndexWindowError": ("KeyError",),
     "LiveModeLabelError": ("ValueError",),
+    "MLXValueUnavailableError": ("RuntimeError",),
+    "MergeConflictError": ("RuntimeError",),
+    "MergeInputError": ("ValueError",),
+    "MergedArtifactError": (),
+    "MergedSurfaceUnsupportedError": ("RuntimeError",),
+    "MergedTraceError": (),
     "MetadataInvariantError": ("ValueError",),
     "ModelMismatchError": ("RuntimeError",),
     "MultiMatchWarning": ("Warning",),
     "MultiOutputModuleError": ("ValueError",),
+    "NoInfluencePathError": ("ValueError",),
+    "ReceptiveFieldConfigurationError": ("ValueError",),
+    "ReceptiveFieldError": (),
+    "ReceptiveFieldUnavailableError": ("RuntimeError",),
+    "ReceptiveFieldValidationError": ("AssertionError",),
+    "SidecarError": (),
     "TraceMutationWarning": ("Warning",),
     "MutatedReferenceError": ("RuntimeError",),
     "NoParentError": ("ValueError",),
@@ -498,6 +516,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ArtifactError": ("RuntimeError",),
     "TorchLensInterventionError": ("RuntimeError",),
     "InterventionWarning": ("Warning",),
+    "TransformContractError": ("RuntimeError",),
     "UserTransformError": ("RuntimeError",),
     "TorchLensWarning": ("Warning",),
     "TraceNotReproducibleWarning": ("Warning",),
@@ -1283,11 +1302,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "with __module__ preserved as torchlens._io; surfaced through "
         "torchlens.errors at that runtime home"
     ),
-    "torchlens._io.sidecar.SidecarError": (
-        "C01 sidecar-seam internal typed refusal (fail-closed sidecar "
-        "read/write); errors-namespace registration deferred to the naming "
-        "sprint with the sidecar spellings"
-    ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "
         "domain-door errors, never caught by kernel class in user code — "
@@ -1296,11 +1310,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # -- C04 data substrates (DOCUMENTED-UNSTABLE pending the naming sprint;
     # registration rides the naming ratification with the tl.transforms /
     # extraction-v2 spellings) --
-    "torchlens.transforms._errors.TransformContractError": (
-        "C04 transforms-contract teaching refusal (ConfigurationError "
-        "subclass); errors-namespace registration deferred to the naming "
-        "sprint with the tl.transforms spellings"
-    ),
     "torchlens._data_substrate.artifact.ExtractionArtifactError": (
         "C04 extraction artifact-v2 typed refusal (ConfigurationError "
         "subclass); errors-namespace registration deferred to the naming "
@@ -1365,9 +1374,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # ``ContainerReconstructionError`` left this allowlist (r3 b1-opus R64-3):
     # it escapes users from the public ``Op.multi_output_type`` property, so it
     # is registered on ``torchlens.errors`` with code ``container_spec_inadmissible``.
-    "torchlens.ir.live_index.LiveIndexWindowError": (
-        "internal lookback-window KeyError; caught by the windowed-save machinery"
-    ),
     # -- Errors governed by other contract docs / documented submodule homes --
     "torchlens._io.runnable_load.ContextFieldInvalidError": (
         "runnable contract-doc vocabulary (context_field_invalid); surfaced through "
@@ -1380,47 +1386,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "taxonomy member (TorchLensError); internal state-key codec error surfaced "
         "through the strict state binder"
     ),
-    "torchlens.merged._errors.MergedTraceError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md); "
-        "taxonomy member via TorchLensError"
-    ),
-    "torchlens.merged._errors.MergeConflictError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergeInputError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergedArtifactError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergedSurfaceUnsupportedError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldError": (
-        "public home is the lazy tl.receptive_field submodule; taxonomy member via TorchLensError"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousCallError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
     "torchlens.receptive_field._errors.AmbiguousInputError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousPassError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousTargetError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.NoInfluencePathError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldConfigurationError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldUnavailableError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldValidationError": (
         "public home is the lazy tl.receptive_field submodule"
     ),
     "torchlens.attribution._result.AttributionError": (
@@ -1432,10 +1398,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.attribution._result.AttributionWarning": (
         "public home is the torchlens.attribution surface; a TorchLensWarning "
         "subclass carrying the S-18 coded metric/text disclosures (F06)"
-    ),
-    "torchlens.errors.AmbiguousLabelError": (
-        "public home is torchlens.bundle/torchlens.intervention.bundle __all__; plain "
-        "KeyError outside the taxonomy — rebase/registration is that surface's decision"
     ),
     "torchlens.semantic.facets.MissingFacetError": (
         "public home is torchlens.semantic.__all__ (provisional surface); plain KeyError "
@@ -1452,9 +1414,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.backends.tf.interventions.TFInterventionSiteUnreachableError": (
         "TF preview refusal catchable via its registered parent BackendUnsupportedError"
     ),
-    "torchlens.ir.predicate.MLXValueUnavailableError": (
-        "MLX preview value-access refusal; preview-backend surface, not yet in the stable registry"
-    ),
     # -- Post-tour sprint (2026-08-19). All five ARE user-facing refusals from
     # newly shipped features, so registering them on torchlens.errors is the
     # right end state -- but that publishes five names, and the naming slate is
@@ -1464,12 +1423,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.streaming_async.AsyncWriteFailedError": (
         "raised by to_disk(async_writes=True) when a background write fails; "
         "errors-namespace registration deferred to the UI/API naming slate"
-    ),
-    "torchlens._extraction.resume.DatasetExtractionResumeError": (
-        "raised by extract_dataset(resume=True) on a signature/manifest mismatch "
-        "(extraction_resume_* / extraction_manifest_invalid); defined in the F18 "
-        "resume module, re-exported by torchlens.dataset_extraction; registration "
-        "deferred to the UI/API naming slate"
     ),
     "torchlens.semantic.logit_lens.LogitLensError": (
         "logit_lens refusal (it refuses rather than mislabel a non-standard final "

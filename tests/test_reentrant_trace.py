@@ -36,10 +36,11 @@ def test_nested_trace_raises_typed_error_with_active_model_name() -> None:
 
 
 def test_reentrant_trace_error_is_exported() -> None:
-    """The re-entrancy exception should be part of the top-level public surface."""
+    """The re-entrancy exception is public at its torchlens.errors home."""
 
     assert tl.errors.ReentrantTraceError.__name__ == "ReentrantTraceError"
-    assert "ReentrantTraceError" in tl.__all__
+    assert "ReentrantTraceError" in tl.errors.__all__
+    assert "ReentrantTraceError" not in tl.__all__
 
 
 def test_reentrant_trace_error_joins_the_taxonomy_and_keeps_runtime_error() -> None:

@@ -314,7 +314,7 @@ def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:
     second = tl.trace(model, _x())
     assert second.pristine is True
     read = second.run(inputs=_x(1)).report
-    card = ("path_faithfulness", "first_mismatch", "poisoned", "numeric_attestation")
+    card = ("path_faithfulness", "first_mismatch", "is_poisoned", "numeric_attestation")
     assert [getattr(read, name) for name in card] == [getattr(unread, name) for name in card]
     assert read.path_faithfulness is PathFaithfulness.VERIFIED
     assert tl.validate(model, _x(), scope="forward") is True
