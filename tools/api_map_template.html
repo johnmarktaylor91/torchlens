@@ -169,6 +169,7 @@ li.node.open > .row .doc1 code, .details pre code { background: var(--surface); 
 .main > * { min-width: 0; max-width: 100%; }
 .more { border: 1px solid var(--grid); background: var(--surface-2); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; min-height: 22px; cursor: pointer; margin-left: 2px; }
 .more:hover { border-color: var(--muted); }
+.more-demo { border: 1px solid var(--grid); background: var(--surface); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; line-height: 18px; }
 .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; }
 .tag.all { border-style: dashed; }
@@ -252,7 +253,7 @@ footer code { font-size: 12px; }
     </div>
     <button class="btn" type="button" id="internals" aria-pressed="false" title="Also list private modules and underscore names">Internals</button>
     <button class="btn" type="button" id="theme" aria-label="Theme: automatic" title="Switch between automatic, light and dark">Theme: auto</button>
-    <button class="btn" type="button" id="helpbtn" aria-label="Keys and clicks" aria-expanded="false" title="Keyboard keys and what clicks do">Keys</button>
+    <button class="btn" type="button" id="helpbtn" aria-label="Keyboard shortcuts and what clicks do" aria-expanded="false" title="Keyboard shortcuts and what clicks do">Shortcuts</button>
   </div>
 </header>
 
@@ -261,13 +262,15 @@ footer code { font-size: 12px; }
   <div class="legend-items">
     <p class="item"><span class="badge k-package">package</span> <span class="badge k-class">class</span> <span class="badge k-function">function</span> <span class="badge k-property">property</span> <span class="badge k-field">field</span> Kind of the row: package (a directory with <code>__init__.py</code>), module (one file), class, function or method, property (read like an attribute), dataclass field, attribute, constant, enum member.</p>
     <p class="item"><span class="tag">L4 core</span> Implementation layer from <code>torchlens/_architecture.py</code>: the number is the layer (L0 is the foundation; a higher layer may import a lower one, never the reverse), the word its tier: <b>core</b> (L0 to L5, the capture engine and its data), <b>appliance</b> (L6, tools on the core), <b>present</b> (L7, rendering and reports), <b>bridge</b> (L8, adapters to external tools), <b>recipe</b> (L9, workflows over the rest). Not a deprecation mark.</p>
-    <p class="item"><span class="tag">facade</span> A thin lazy namespace module (<code>torchlens</code> itself, <code>torchlens.io</code>) that re-exports things defined deeper; not a layer. Such root rows say "same as" and link the real home.</p>
+    <p class="item"><span class="tag">facade</span> A thin lazy namespace module (<code>torchlens</code> itself, <code>torchlens.io</code>) that re-exports things defined deeper; a role, not a layer. A root row shows the layer of the implementation it stands for and adds "facade" when the name is reached through such a module; in the package tree the facade module itself carries only "facade".</p>
+    <p class="item"><span class="mark">same as</span> An alias row: the name re-exports a definition that lives elsewhere. The badges and tags sit on the real home, which the "same as" link opens.</p>
     <p class="item"><span class="tag">legacy root</span> A root <code>tl.NAME</code> implemented at L6 or above. Supported and kept at the top level until the next major release; the deeper module is the long-term spelling.</p>
     <p class="item"><span class="tag all">__all__</span> Dashed: declared in <code>torchlens.__all__</code>. Root names without it are public too (they are in the frozen surface table) but <code>from torchlens import *</code> skips them.</p>
     <p class="item"><span class="tag">dataclass</span> Python detail tags: frozen, enum, settable (property with a setter), classmethod, staticmethod, contextmanager, async.</p>
     <p class="item"><span class="mark">+N internal</span> N non-public members (underscore names, private modules), hidden until <b>Internals</b> is on.</p>
     <p class="item"><span class="mark">=MISSING</span> An argument you may leave out: <code>MISSING</code> is the TorchLens sentinel for "not passed", so the option's own default applies and an omitted argument is told apart from one passed explicitly.</p>
-    <p class="item"><span class="mark">rows</span> Rows list argument names with short defaults (underscore-prefixed parameters left out); click a row for the full typed signature, docstring and defining file; the caret opens its children.</p>
+    <p class="item"><span class="mark">rows</span> Rows list argument names with short defaults (underscore-prefixed parameters left out); a blue <span class="more-demo">N more)</span> chip folds the rest of a long signature and opens on click. Click a row for the full typed signature, docstring and defining file; the caret opens its children.</p>
+    <p class="item"><span class="mark">summaries</span> The one-line summary and the full docstring are the source's own text, shown verbatim. Codes in them such as "F20", "C01 item 18" or "L6 stage 1" are the project's internal plan references, not the layer tags on this page; "out" and "outs" mean a layer's captured output.</p>
   </div>
 </details>
 
