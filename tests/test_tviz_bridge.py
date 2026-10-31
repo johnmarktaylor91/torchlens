@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import torch
 
+import torchlens
 import torchlens.tviz as tviz
 
 
@@ -88,7 +89,7 @@ def test_missing_bridge_dependency_refuses_typed() -> None:
 def test_native_path_unaffected_by_bridge_state(tmp_path: Path) -> None:
     """Composition row 14: static rendering never depends on the bridge."""
 
-    artifact = tviz.render_attention(_views()[0], tmp_path / "native.svg")
+    artifact = torchlens.viz.attention(_views()[0], tmp_path / "native.svg")
     assert artifact.paths[0].exists()
     assert "<image" not in artifact.paths[0].read_text()
 

@@ -274,7 +274,7 @@ else:
 # Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
-# experiment the user owns) and torchlens.tviz.render_logit_lens_heatmap(result, path)
+# experiment the user owns) and torchlens.viz.logit_lens(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
 

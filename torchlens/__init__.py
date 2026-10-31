@@ -319,7 +319,7 @@ _REDIRECTS: dict[str, str] = {
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
-    "tviz": "import torchlens.tviz, then use torchlens.tviz.render_logit_lens_heatmap and its siblings -- a submodule, not a root name",
+    "tviz": "the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention); the kit is the torchlens.tviz submodule, not a root name",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
     "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",

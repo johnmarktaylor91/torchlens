@@ -304,7 +304,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert receipt.effect_source == (
         "expanded value copy read by one query head (op-level interceptor)"
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "query_heads.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "query_heads.png")
     assert (
         "pattern source: captured; effect source: expanded value copy read by one query "
         "head (op-level interceptor)"
@@ -354,5 +354,5 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
         "kv group 1 of 2, shared by query heads 0-1",
         "kv group 2 of 2, shared by query heads 2-3",
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "kv_groups.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "kv_groups.png")
     assert any("no cell is a per-query-head effect" in line for line in artifact.disclosure_lines)

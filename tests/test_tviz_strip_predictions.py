@@ -15,6 +15,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+import torchlens
 import torchlens.tviz as tviz
 from torchlens.semantic.logit_lens import (
     PROVENANCE_NATIVE,
@@ -77,7 +78,7 @@ def test_paper_strip_renders_all_formats(tmp_path: Path) -> None:
 
     record = _scores()
     for fmt in ("svg", "pdf", "png"):
-        artifact = tviz.render_token_strip(record, tmp_path / f"strip.{fmt}")
+        artifact = torchlens.viz.token_strip(record, tmp_path / f"strip.{fmt}")
         assert artifact.paths[0].exists()
     assert "<image" not in (tmp_path / "strip.svg").read_text()
 
@@ -185,7 +186,7 @@ class TestPredictionPictures:
         """Table pages keep whole positions and list every page."""
 
         table = tviz.prediction_table(_predictions())
-        artifact = tviz.render_prediction_table(table, tmp_path / "table.pdf")
+        artifact = torchlens.viz.prediction_table(table, tmp_path / "table.pdf")
         assert artifact.pages_total == 1
         assert artifact.paths[0].exists()
 
@@ -263,5 +264,5 @@ class TestMetricOracles:
         logits = torch.randn(4, 30, generator=generator)
         ids = torch.randint(0, 30, (4,), generator=generator)
         loss, _ = tviz.token_metrics(logits, ids, ("a", "b", "c", "d"))
-        artifact = tviz.render_metric_strip(loss, tmp_path / "loss.svg")
+        artifact = torchlens.viz.metric_strip(loss, tmp_path / "loss.svg")
         assert any("first token N/A" in line for line in artifact.disclosure_lines)

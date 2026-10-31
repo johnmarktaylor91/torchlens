@@ -2563,7 +2563,7 @@ deprecation shim owed*
   [facets](../facets.md).
 
 **render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*
-: `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
+: `torchlens.viz.logit_lens(result, path)` draws a
   `LogitLens` as a layers-by-positions heatmap: one row per projected
   block, one column per input position, each cell printing that layer's
   top-1 next-token prediction and colored on a fixed 0-to-1 probability
@@ -2608,7 +2608,7 @@ deprecation shim owed*
   controls are all deltas from that run. The default `intervention` wording is "clean activation of
   one head patched into the corrupted run" ("one kv group" with
   `kv_groups=`); a row's `fires` is its own cell count when the grid's
-  ledger shows one fire per cell. `tviz.render_receipt_grid` titles the
+  ledger shows one fire per cell. `tl.viz.ablation_grid` titles the
   figure "measured head effects on METRIC", labels the colorbar "change in
   METRIC", labels the x axis "query head" (or "kv group"), prints "each
   cell: change in METRIC from the unpatched corrupted run (B)" and says
