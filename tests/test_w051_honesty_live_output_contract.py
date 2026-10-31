@@ -237,3 +237,25 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     # The SOURCE trace is untouched: a matching-input run still verifies.
     again = trace.run(inputs=x)
     assert again.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_rebuild_arity_error_names_the_full_dry_slot_path() -> None:
+    """A dry leaf stream names the full nested slot path and the leaf/slot counts,
+    not just the last path component."""
+
+    from torchlens._ir.container import rebuild_container_from_spec
+
+    spec = ContainerSpec(
+        kind="dict",
+        length=2,
+        keys=("a", "b"),
+        child_specs=((DictKey("a"), ContainerSpec(kind="list", length=2)),),
+    )
+    with pytest.raises(ValueError, match="Not enough leaves") as excinfo:
+        rebuild_container_from_spec(spec, [torch.zeros(1), torch.zeros(1)])
+    message = str(excinfo.value)
+    assert "output['b']" in message
+    assert "2 leaves for 3 declared leaf slots" in message
+    with pytest.raises(ValueError, match="Not enough leaves") as excinfo:
+        rebuild_container_from_spec(spec, [torch.zeros(1)])
+    assert "output['a'][1]" in str(excinfo.value)
