@@ -61,6 +61,10 @@ change the model or loosen a check. `models/` is excluded from ruff for the same
 
 Each `manifest.json` entry records the entry id, file, constructor and input factory names, tier,
 era, year, the features the census saw, and why it was chosen.
+The two recurrence features (`trace:is_recurrent` and `feat:multipass`) are the exception: they
+were re-derived on 2026-10-31 under call-site grouping (a layer is one operation at one place in
+a module's code; adopted 2026-10-29), which changed them on 62 entries, and the end-to-end test
+checks them against every capture. Every other feature is as the census saw it.
 
 ## The behaviour net
 
