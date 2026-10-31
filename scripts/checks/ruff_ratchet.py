@@ -24,9 +24,10 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from _harness import REPO_ROOT, run_checks
+
+_PROJECT_ROOT = REPO_ROOT
 
 #: The family ratchet floor. GROW-ONLY: entries are never removed; new
 #: families join here in the same change that lands them in pyproject.
@@ -434,7 +435,7 @@ def _configured_extend_excludes() -> list[str]:
     return re.findall(r'"([^"]+)"', match.group(1))
 
 
-def test_ruff_select_ratchet_never_narrows() -> None:
+def check_ruff_select_ratchet_never_narrows() -> None:
     """[tool.ruff.lint] select must stay a superset of the family floor."""
 
     match = re.search(r"^select\s*=\s*\[(.*?)\]", _pyproject_text(), re.MULTILINE | re.DOTALL)
@@ -498,7 +499,7 @@ def _measure_deferred_codes() -> Counter[str]:
     return counts
 
 
-def test_deferred_lint_debt_never_grows() -> None:
+def check_deferred_lint_debt_never_grows() -> None:
     """Every ceilinged code's measured count stays at or below its ceiling."""
 
     counts = _measure_deferred_codes()
@@ -511,12 +512,12 @@ def test_deferred_lint_debt_never_grows() -> None:
         "deferred lint debt GREW (the ledger promises deferral, not license):\n  "
         + "\n  ".join(grown)
         + "\nFix the new sites (or, for a deliberate exception, raise the ceiling "
-        "in tests/test_ruff_ratchet_governance.py with a stated reason in the "
+        "in scripts/checks/ruff_ratchet.py with a stated reason in the "
         "same change)."
     )
 
 
-def test_deferred_ceiling_parser_is_red_capable() -> None:
+def check_deferred_ceiling_parser_is_red_capable() -> None:
     """The count parser attributes planted concise output correctly."""
 
     planted = (
@@ -542,7 +543,7 @@ def _configured_ignore_codes() -> set[str]:
     return set(re.findall(r'^\s*"([A-Z]+\d+)"', match.group(1), re.MULTILINE))
 
 
-def test_ignored_codes_all_carry_ceilings() -> None:
+def check_ignored_codes_all_carry_ceilings() -> None:
     """`ignore` is a bounded set: every entry has a no-growth ceiling.
 
     b9 R70 round 5 (second pass): four "proven harmful HERE" permanent
@@ -572,7 +573,7 @@ def test_ignored_codes_all_carry_ceilings() -> None:
 _BLANKET_NOQA_CEILING = 9
 
 
-def test_blanket_noqa_directives_never_grow() -> None:
+def check_blanket_noqa_directives_never_grow() -> None:
     """The file-level `# ruff: noqa` census stays at or below its ceiling."""
 
     blanket = sorted(
@@ -585,3 +586,22 @@ def test_blanket_noqa_directives_never_grow() -> None:
         f"{_BLANKET_NOQA_CEILING}): {blanket} — use per-line noqa so F401 "
         "stays armed for genuinely dead code"
     )
+
+
+CHECKS = (
+    check_ruff_select_ratchet_never_narrows,
+    check_deferred_lint_debt_never_grows,
+    check_deferred_ceiling_parser_is_red_capable,
+    check_ignored_codes_all_carry_ceilings,
+    check_blanket_noqa_directives_never_grow,
+)
+
+
+def main() -> int:
+    """Run every ruff_ratchet check and return the exit status."""
+
+    return run_checks("ruff_ratchet", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
