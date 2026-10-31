@@ -180,7 +180,7 @@ class TestProvenanceRecord:
         assert rehydrated is not None
         assert rehydrated.origin == "declared"
         assert rehydrated.rung == 2
-        assert not rehydrated.values_semantic
+        assert not rehydrated.has_semantic_values
         assert rehydrated.tensors[0].shape == (2, 3, 8, 8)
         assert rehydrated.recipes is not None
         assert rehydrated.caveats

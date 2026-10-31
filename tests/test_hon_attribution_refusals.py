@@ -57,7 +57,7 @@ def test_occlusion_refuses_an_empty_selection_and_the_remedy_runs() -> None:
     try:
         label = trace.input_ops[0].label
         empty = tl.units(label, [])
-        assert empty.resolve(trace).empty
+        assert empty.resolve(trace).is_empty
         with pytest.raises(AttributionError) as info:
             occlusion(trace, empty, score=_output_sum)
         assert info.value.fields["code"] == "occlusion_selection_empty"

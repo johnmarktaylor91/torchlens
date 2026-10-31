@@ -295,7 +295,7 @@ def test_standalone_buffer_pickle_round_trips() -> None:
     restored = pickle.loads(pickle.dumps(buffers[0]))
     assert isinstance(restored, Buffer)
     # The live weakref must not survive; it is rebuilt lazily via the accessor.
-    assert restored.source_trace is None
+    assert restored.trace is None
     assert isinstance(restored.versions, list)
 
 

@@ -42,7 +42,7 @@ def test_appliance_head_scores_equals_direct_call(gpt2_trace):
     for kind in ("previous_token", "duplicate_token", "induction"):
         bound = appliance.head_scores(kind=kind)
         direct = mi.head_scores(gpt2_trace, kind=kind)
-        for field in ("kind", "measure", "layer_addresses", "scores", "eligible_rows"):
+        for field in ("kind", "measure", "module_addresses", "scores", "eligible_rows"):
             assert getattr(bound, field) == getattr(direct, field), field
         assert any(score is not None for row in bound.scores for score in row)
 
@@ -90,7 +90,7 @@ def test_using_mi_head_scores_equals_direct_call(gpt2_trace):
     for kind in ("previous_token", "duplicate_token", "induction"):
         bound = gpt2_trace.using("mi").head_scores(kind=kind)
         direct = mi.head_scores(gpt2_trace, kind=kind)
-        for field in ("kind", "measure", "layer_addresses", "scores", "eligible_rows"):
+        for field in ("kind", "measure", "module_addresses", "scores", "eligible_rows"):
             assert getattr(bound, field) == getattr(direct, field), field
         assert any(score is not None for row in bound.scores for score in row)
 

@@ -63,7 +63,7 @@ def test_positive_conv_is_contained_and_tight() -> None:
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
     assert result.slack_per_axis == (0, 0, 0, 0)
-    gradient = next(iter(result.gradient.values()))
+    gradient = next(iter(result.grad.values()))
     box = next(iter(result.geometric.values()))
     assert gradient.support_ranges == tuple(
         (axis.clipped_start, axis.clipped_stop)
@@ -213,7 +213,7 @@ def test_normalization_matrix_contains_empirical_support(
     assert result.status is ReceptiveFieldValidationStatus.PASS
     assert result.cross_batch == expected_cross_batch
     if expected_cross_batch == "geometric":
-        gradient = next(iter(result.gradient.values()))
+        gradient = next(iter(result.grad.values()))
         box = next(iter(result.geometric.values()))
         assert gradient.cross_batch_influence
         assert box.axes[0].clipped_start == 0
@@ -238,7 +238,7 @@ def test_squeeze_excite_broadcast_branch_is_contained() -> None:
     result = _op(trace, "__mul__").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
-    gradient = next(iter(result.gradient.values()))
+    gradient = next(iter(result.grad.values()))
     assert gradient.support_ranges == ((0, 1), (0, 1), (0, 4), (0, 4))
 
 

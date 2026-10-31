@@ -99,7 +99,7 @@ def test_backward_birth_is_localized_with_forward_join() -> None:
         assert result.birth.op_label is not None and result.birth.op_label.startswith("sqrt")
         assert result.birth.source_line is not None
         assert "born in the backward" in result.message
-        shared = result.first_problem
+        shared = result.first_bad_thing
         assert isinstance(shared, FirstBadThing)
         assert shared.tool == "bisect_nan_backward"
         assert shared.backward_pass == 1
