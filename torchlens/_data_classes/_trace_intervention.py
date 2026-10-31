@@ -589,7 +589,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         return self
 
     @property
-    def edges(self: "Trace") -> tuple[Any, ...]:
+    def _graph_edges(self: "Trace") -> tuple[Any, ...]:
         """Return this trace's dataflow edge family (finalized edge views).
 
         One ``EdgeUseRecord`` per parent->child occurrence (parallel edges

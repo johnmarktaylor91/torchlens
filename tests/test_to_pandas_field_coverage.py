@@ -389,7 +389,7 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
     ``save_grads_policy``.
     """
 
-    bp = coverage_trace.backward_passes[0]
+    bp = coverage_trace.autograd.backward_passes[0]
     df = bp.to_pandas()
     columns = list(df.columns)
 
@@ -409,9 +409,9 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
     assert isinstance(df.loc[0, "engine_flags"], dict)
     assert df.loc[0, "save_grads_policy"] is not None
 
-    # trace.backward_passes.to_pandas() delegates through the base Accessor,
+    # trace.autograd.backward_passes.to_pandas() delegates through the base Accessor,
     # which concats each item's to_pandas() -- so it inherits the same fix.
-    accessor_df = coverage_trace.backward_passes.to_pandas()
+    accessor_df = coverage_trace.autograd.backward_passes.to_pandas()
     assert list(accessor_df.columns) == columns
 
 

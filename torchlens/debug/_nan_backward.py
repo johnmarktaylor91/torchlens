@@ -240,7 +240,10 @@ def _nonfinite_kind_of(leaves: list[torch.Tensor]) -> tuple[str, int, int]:
 def _grad_fn_rows(trace: Trace) -> dict[str, Any]:
     """Index grad_fn records by label through one accessor (unstable spellings)."""
 
-    return {getattr(node, "label", ""): node for node in getattr(trace, "grad_fns", ())}
+    return {
+        getattr(node, "label", ""): node
+        for node in getattr(getattr(trace, "autograd", None), "grad_fns", ())
+    }
 
 
 def _fire_index(node: Any) -> int:
@@ -289,7 +292,7 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
     from .._errors import InvalidArgumentError
 
     try:
-        backward_passes = list(trace.backward_passes)
+        backward_passes = list(trace.autograd.backward_passes)
     except (ValueError, AttributeError):
         backward_passes = []
     if not backward_passes:

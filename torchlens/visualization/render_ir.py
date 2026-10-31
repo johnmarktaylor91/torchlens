@@ -540,7 +540,7 @@ def _normalize_backward_nodes(
 
     visible_by_pass: defaultdict[int, list[tuple[Any, Any]]] = defaultdict(list)
     nodes: list[RenderIRNode] = []
-    for grad_fn in trace.grad_fns:
+    for grad_fn in trace.autograd.grad_fns:
         if vis_mode == "rolled":
             if not _grad_fn_matches_backward_filter(grad_fn, pass_filter):
                 continue
@@ -590,10 +590,10 @@ def _normalize_backward_edges(
     if vis_mode == "rolled":
         visible_ids = {
             grad_fn.grad_fn_object_id
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if _grad_fn_matches_backward_filter(grad_fn, pass_filter)
         }
-        for grad_fn in trace.grad_fns:
+        for grad_fn in trace.autograd.grad_fns:
             if grad_fn.grad_fn_object_id not in visible_ids:
                 continue
             for next_id in grad_fn.next_grad_fn_ids:
@@ -666,7 +666,7 @@ def _normalize_correspondence_edges(
     from ._render_leaf import _backward_dot_node_name, _grad_fn_matches_backward_filter
 
     edges: list[RenderIREdge] = []
-    for grad_fn in trace.grad_fns:
+    for grad_fn in trace.autograd.grad_fns:
         if not grad_fn.has_op or not _grad_fn_matches_backward_filter(grad_fn, pass_filter):
             continue
         op = grad_fn.op

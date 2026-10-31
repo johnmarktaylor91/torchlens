@@ -158,7 +158,7 @@ def _append_chunk_trace_state(
     try:
         trace._predicate_save_options = None
         new_trace._predicate_save_options = None
-        trace.append_state_from(new_trace)
+        trace._append_state_from(new_trace)
     finally:
         if old_predicate_options is MISSING:
             trace.__dict__.pop("_predicate_save_options", None)

@@ -109,10 +109,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         )
 
     # Tensor counts
-    if ml.num_tensors < ml.num_saved_ops:
+    if len(ml) < ml.num_saved_ops:
         raise MetadataInvariantError(
             name,
-            f"num_tensors={ml.num_tensors} < num_saved_ops={ml.num_saved_ops}",
+            f"len(trace)={len(ml)} < num_saved_ops={ml.num_saved_ops}",
         )
 
 
@@ -681,7 +681,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
     * ``has_siblings``/``has_co_parents`` mirror their lists' emptiness;
     * unresolvable edge labels are skipped (they are ``graph_topology``'s
       bidirectionality finding, and the properties skip them identically);
-    * orphan-registry records resolve through ``ml.orphans``, as the
+    * orphan-registry records resolve through ``ml.graph.orphans``, as the
       properties document.
 
     Cost is bounded by the same parent-children/child-parents walk the
@@ -700,7 +700,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
             record = ml[entry_label]
         except (KeyError, ValueError):
             try:
-                record = ml.orphans[entry_label]
+                record = ml.graph.orphans[entry_label]
             except KeyError:
                 record = None
         resolution_cache[entry_label] = record

@@ -2376,7 +2376,7 @@ def test_branching_invariant_fires_on_stale_is_branching_flag() -> None:
     """A trace claiming ``is_branching`` with no multi-child layer must raise."""
 
     fake_trace = SimpleNamespace(
-        is_branching=True,
+        graph=SimpleNamespace(is_branching=True),
         layer_list=[SimpleNamespace(children=[]), SimpleNamespace(children=["only_child"])],
     )
 

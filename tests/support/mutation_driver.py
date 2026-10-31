@@ -261,7 +261,7 @@ SUITE = [
     # r7 R74 (opus, PROVEN suite-composition artifacts): 2 of 4 sampled
     # executor survivors were killed by tests OUTSIDE this suite --
     # _run_step_16_5 (graph_shape_hash) by six surface-oracle byte params,
-    # _run_step_20 (release_param_refs) by the outcome-characterization
+    # _run_step_20 (_release_param_refs) by the outcome-characterization
     # planted-propagation test. The weekly executor leg was structurally red
     # on non-defects; score the real killers instead of writing duplicates.
     "tests/surface_oracle/test_surface_oracle.py",

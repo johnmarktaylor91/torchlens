@@ -373,7 +373,7 @@ class SuperGradFnAccessor(SharedNamesMixin, SuperAccessor["GradFn", SuperGradFn]
         """
 
         try:
-            resolved = trace.grad_fns[label]
+            resolved = trace.autograd.grad_fns[label]
         except (KeyError, ValueError):
             return None
         return cast("GradFn", resolved) if type(resolved).__name__ == "GradFn" else None
@@ -392,7 +392,7 @@ class SuperGradFnAccessor(SharedNamesMixin, SuperAccessor["GradFn", SuperGradFn]
             Grad-fn labels.
         """
 
-        return [str(label) for label in trace.grad_fns.keys()]
+        return [str(label) for label in trace.autograd.grad_fns.keys()]
 
 
 class SuperModuleCallAccessor(SuperAccessor["ModuleCall", SuperModuleCall]):
@@ -483,7 +483,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
         """
 
         try:
-            resolved = trace.grad_fn_calls[label]
+            resolved = trace.autograd.grad_fn_calls[label]
         except (KeyError, ValueError):
             return None
         return cast("GradFnCall", resolved) if type(resolved).__name__ == "GradFnCall" else None
@@ -504,7 +504,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
 
         return [
             str(call_label)
-            for grad_fn_handle in trace.grad_fns
+            for grad_fn_handle in trace.autograd.grad_fns
             for call_label in getattr(grad_fn_handle, "call_labels", [])
         ]
 

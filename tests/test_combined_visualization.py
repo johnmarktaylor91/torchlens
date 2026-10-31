@@ -149,7 +149,9 @@ def test_draw_combined_module_clusters() -> None:
     """Paired backward nodes are placed in the forward op's module cluster."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     addmm = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.type == "addmm"
+        grad_fn_handle
+        for grad_fn_handle in trace.autograd.grad_fns
+        if grad_fn_handle.type == "addmm"
     )
 
     assert _module_key_for_grad_fn(trace, addmm, "upstream") == "fc:1"
@@ -159,7 +161,7 @@ def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
     """The outside mode leaves intervening grad_fns out of module clusters."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
+        grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
 
     dot = trace.draw_combined(
@@ -177,7 +179,7 @@ def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
     """The own mode creates the dedicated intervening cluster."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
+        grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
 
     dot = trace.draw_combined(
@@ -195,7 +197,7 @@ def test_draw_combined_intervening_cluster_inherits() -> None:
     """Upstream and downstream inheritance modes are deterministic."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
+        grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
 
     upstream = _module_key_for_grad_fn(trace, intervening, "upstream")
@@ -210,7 +212,7 @@ def test_draw_combined_accumulategrad_attribution() -> None:
     trace = _log_backward_model(_SingleParamModel(), torch.randn(2, 3, requires_grad=True))
     accumulate_grad = next(
         grad_fn_handle
-        for grad_fn_handle in trace.grad_fns
+        for grad_fn_handle in trace.autograd.grad_fns
         if grad_fn_handle.type == "accumulategrad"
     )
 

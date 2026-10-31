@@ -160,7 +160,7 @@ def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> 
             "refused by the test edit", code="test_edit_refused", remedy="none"
         )
 
-    edge = next(e for e in fork.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in fork.graph.edges if e.parent_label == "relu_1_2")
     pairs = {
         "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
         "PARAM": (tl.param("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),

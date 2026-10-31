@@ -671,8 +671,8 @@ def _backward_summary_lines(log: Any) -> list[str]:
     if not bool(getattr(log, "has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
     pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
-    grad_fn_count = int(getattr(log, "num_grad_fns", 0) or 0)
-    grad_fn_call_count = int(getattr(log, "num_grad_fn_calls", 0) or 0)
+    grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
+    grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
     total_backward_memory = getattr(log, "total_backward_memory", None)
     memory_line = (
@@ -923,7 +923,7 @@ def _recurrent_loop_line(log: Any) -> str:
         Recurrent-loop summary.
     """
 
-    max_loops = int(getattr(log, "max_layer_op_count", 1) or 1)
+    max_loops = int(getattr(getattr(log, "graph", None), "max_ops_per_layer", 1) or 1)
     if max_loops > 1:
         return f"- Recurrent loops: at least one layer was observed across {max_loops} ops."
     return "- Recurrent loops: no repeated layer ops were detected."
@@ -944,7 +944,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
     """
 
     event_count = _safe_len(getattr(log, "conditional_records", None))
-    has_branching = bool(getattr(log, "has_conditional_branching", False))
+    has_branching = bool(getattr(getattr(log, "graph", None), "has_conditional_branching", False))
     if event_count or has_branching:
         return (
             f"- Dynamic control flow: {_format_count(event_count)} conditional event(s) recorded."

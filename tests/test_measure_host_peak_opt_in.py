@@ -110,7 +110,7 @@ def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
         assert trace.backward_peak_memory is None
         assert trace.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
         assert "measure_host_peak_memory=True" in CPU_PEAK_NOT_REQUESTED_REASON
-        pair = trace.forward_peak_memory_pair
+        pair = trace.cost.forward_peak_memory_pair
         assert pair is not None
         assert (pair["resident"], pair["resident_basis"]) == (None, "not_requested")
         for which in ("forward", "backward"):
@@ -157,7 +157,7 @@ def test_opt_in_measures_the_planted_buffer_as_before() -> None:
         assert trace.forward_peak_memory_reason is None
         assert int(trace.backward_peak_memory) >= PLANT_BYTES - MARGIN
         assert trace.backward_peak_memory_reason is None
-        assert trace.forward_peak_memory_pair["resident_basis"] == "per_capture"
+        assert trace.cost.forward_peak_memory_pair["resident_basis"] == "per_capture"
     finally:
         trace.cleanup()
 

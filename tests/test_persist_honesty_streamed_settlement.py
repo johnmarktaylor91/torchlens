@@ -83,7 +83,9 @@ def test_post_stage_failure_never_publishes(tmp_path):
     path = tmp_path / "failed.tlspec"
     # The streaming failure handler wraps the propagating step-20 error.
     with (
-        mock.patch.object(Trace, "release_param_refs", side_effect=RuntimeError("boom in step 20")),
+        mock.patch.object(
+            Trace, "_release_param_refs", side_effect=RuntimeError("boom in step 20")
+        ),
         pytest.raises(TorchLensIOError),
     ):
         tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))

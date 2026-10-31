@@ -369,7 +369,7 @@ def _run_step_20(ctx: StepContext) -> None:
     """Step 20: release live parameter references held for finalization."""
 
     with _vtimed(ctx.trace, "  Step 20: Release param refs"):
-        ctx.trace.release_param_refs(allow_iter_rehydrate=True)
+        ctx.trace._release_param_refs(allow_iter_rehydrate=True)
 
 
 #: The executable registry, in the canonical hand-established order. R1

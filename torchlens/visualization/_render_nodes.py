@@ -195,7 +195,7 @@ def _visible_backward_calls_by_pass(
     """
 
     calls_by_pass: dict[int, list[tuple[GradFn, Any]]] = defaultdict(list)
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         for call in grad_fn_handle.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
@@ -1461,7 +1461,7 @@ def _build_collapsed_module_node(
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
         # op renders separately in rolled mode too and counting it inside the
         # box double-represents it (round-27). ``ml.layer_labels`` is already
-        # in pass-free layer currency, matching ``ml.num_layers``.
+        # in pass-free layer currency, matching ``len(ml.layers)``.
         if (
             _collapsed_module_should_show_remainder(
                 self,

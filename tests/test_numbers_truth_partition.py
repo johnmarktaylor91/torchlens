@@ -93,7 +93,7 @@ def test_compute_partition_totals_are_owned_exactly_once() -> None:
             partition_sum = sum(
                 int(op.flops_forward) for op in real_ops if op.flops_forward is not None
             )
-            assert int(log.total_flops_forward) == partition_sum, name
+            assert int(log.cost.total_flops_forward) == partition_sum, name
             for op in log.layer_list:
                 if op.is_output:
                     assert op.flops_forward is None, (name, op.label)

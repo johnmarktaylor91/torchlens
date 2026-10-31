@@ -165,7 +165,7 @@ class GradOptions:
             all positional tinygrad tensor input leaves.
         intermediate_grads
             Whether to retain saved op outputs during a separate no-realize
-            backward pass and expose ``trace.intermediate_derived_grads``.
+            backward pass and expose ``trace.autograd.intermediate_derived_grads``.
         """
 
         object.__setattr__(self, "loss_fn", loss_fn)
@@ -1279,13 +1279,20 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                trace.intermediate_derived_grads = self._derive_intermediate_grads_no_realize(
-                    trace=trace,
-                    model=model,
-                    args=args,
-                    captured_output=captured_output,
-                    grad_options=grad_options,
-                    snapshots=snapshots,
+                from ...data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(
+                    trace,
+                    (
+                        self._derive_intermediate_grads_no_realize(
+                            trace=trace,
+                            model=model,
+                            args=args,
+                            captured_output=captured_output,
+                            grad_options=grad_options,
+                            snapshots=snapshots,
+                        )
+                    ),
                 )
                 _restore_tinygrad_grads(snapshots)
                 snapshots = _snapshot_tinygrad_grads(self, leaves)
@@ -1378,7 +1385,7 @@ class TinygradBackend:
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
             raise ValueError(
                 "tinygrad intermediate derived gradient run raw output diverged from captured "
-                "raw output; refusing to expose trace.intermediate_derived_grads."
+                "raw output; refusing to expose trace.autograd.intermediate_derived_grads."
             )
         records = _records_for_tinygrad_intermediate_grads(
             backend=self,

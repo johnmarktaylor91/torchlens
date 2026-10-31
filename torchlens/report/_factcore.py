@@ -320,12 +320,20 @@ def _params(trace: Any) -> ParamFacts:
         value = getattr(trace, name, None)
         return None if value is None else int(value)
 
-    tied = getattr(trace, "tied_param_groups", ()) or ()
+    def read_params(*path: str) -> int | None:
+        """Read one optional integer fact off ``trace.params`` along ``path``."""
+
+        value: Any = getattr(trace, "params", None)
+        for name in path:
+            value = getattr(value, name, None)
+        return None if value is None else int(value)
+
+    tied = getattr(getattr(trace, "graph", None), "tied_param_groups", ()) or ()
     return ParamFacts(
         total=read("num_params"),
-        per_path_total=read("num_params_by_path"),
-        executed=read("num_params_executed"),
-        unexecuted=read("num_params_unexecuted"),
+        per_path_total=read_params("numel_by_path"),
+        executed=read_params("executed", "numel"),
+        unexecuted=read_params("unexecuted", "numel"),
         trainable=read("num_params_trainable"),
         frozen=read("num_params_frozen"),
         tied_groups=tuple(tuple(str(name) for name in group) for group in tied),

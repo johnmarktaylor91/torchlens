@@ -200,7 +200,7 @@ _KIND_NAME_GETTERS: dict[str, Callable[[Any], Any]] = {
     "modules": lambda trace: trace.modules.keys(),
     "params": lambda trace: trace.params.keys(),
     "buffers": lambda trace: trace.buffers.keys(),
-    "grad_fns": lambda trace: trace.grad_fns.keys(),
+    "grad_fns": lambda trace: trace.autograd.grad_fns.keys(),
 }
 
 
@@ -1786,7 +1786,7 @@ class Bundle:
             parts = []
             if name == self._baseline_name:
                 parts.append("baseline")
-            if getattr(member, "pristine", None) is True:
+            if getattr(member, "is_pristine", None) is True:
                 parts.append("pristine")
             parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
             parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
@@ -2148,7 +2148,7 @@ class Bundle:
     def _auto_detect_baseline(self) -> str | None:
         """Auto-detect a pristine baseline when exactly one candidate exists.
 
-        A member is a candidate only when ``Trace.pristine`` reads ``True``;
+        A member is a candidate only when ``Trace.is_pristine`` reads ``True``;
         ``None`` (no evidence recorded) never counts as pristine.
 
         Returns
@@ -2160,7 +2160,7 @@ class Bundle:
         candidates = [
             name
             for name, member in self._members.items()
-            if getattr(member, "pristine", None) is True
+            if getattr(member, "is_pristine", None) is True
         ]
         return candidates[0] if len(candidates) == 1 else None
 

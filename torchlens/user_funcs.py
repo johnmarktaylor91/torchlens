@@ -1615,7 +1615,7 @@ def _run_model_and_save_specified_outs(
         Which layers to save outs for ('all', 'none'/None, or a list).
     keep_orphans:
         If True, island ops are retained in raw metadata and exposed via
-        ``trace.orphans`` while remaining hidden from the main graph.
+        ``trace.graph.orphans`` while remaining hidden from the main graph.
     output_device:
         Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
         activation_transform: Optional transform applied to each out before storage

@@ -215,7 +215,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture("log.modules.summary()", log.modules.summary()))
 
     # Multi-pass module info (for recurrent models)
-    if log.is_recurrent:
+    if log.graph.is_recurrent:
         for ml in log.modules:
             if ml.num_calls > 1 and ml.address != "self":
                 out.write(
@@ -381,7 +381,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 break
 
     # ===== D.1 Layer =====
-    if log.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("D.1 Layer (multi-pass)", level=3))
         for ll in log.layer_logs.values():
             if ll.num_passes > 1:
@@ -447,7 +447,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(tensor_for_dump, f"Op: {tensor_for_dump.layer_label}"))
 
     # F.3 Layer (multi-pass)
-    if log.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("F.3 Layer field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
@@ -1073,7 +1073,7 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
         # D.1 Layer (multi-pass)
-        if log.is_recurrent and len(log.layer_logs) > 0:
+        if log.graph.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
                 if ll.num_passes > 1:
                     doc.write(
@@ -1085,7 +1085,7 @@ def _build_latex_report() -> str:
                     break
 
         # Multi-pass module
-        if log.is_recurrent:
+        if log.graph.is_recurrent:
             for ml in log.modules:
                 if ml.num_calls > 1 and ml.address != "self":
                     ops_text = repr(ml) + "\n\n"

@@ -396,7 +396,7 @@ def backward_status(trace: Trace) -> BackwardStatus:
     measured: float | None = None
     if backward_passes:
         try:
-            timings = trace.grad_fn_fire_timings
+            timings = trace.autograd.grad_fn_fire_timings
         except Exception:  # noqa: BLE001 -- loaded/cleaned traces refuse typed; status degrades
             timings = None
         if timings:

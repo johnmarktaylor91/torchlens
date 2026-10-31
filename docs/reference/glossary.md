@@ -9,6 +9,26 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : The finalized record of one executed path: operations, dataflow edges, module context, selected
   payloads, and capture metadata. `tl.trace(...)` returns a `Trace`.
 
+**Trace.cost / Trace.graph / Trace.autograd / Trace.source**
+: Read-only concern groups of a `Trace`. `trace.cost` holds compute and timing totals
+  (`total_flops`, `total_macs`, `macs_by_kind`, `overhead_duration`, ...); `trace.graph` holds
+  graph-shape facts (`edges`, `is_recurrent`, `is_dynamic`, `max_ops_per_layer`, degree and edge
+  counts, `orphans`, `tied_param_groups`); `trace.autograd` holds the backward records
+  (`backward_passes`, `grad_fns`, `grad_fn_calls`, `saved_grad_fns`,
+  `intermediate_derived_grads`, ...); `trace.source` holds the model source facts
+  (`class_location`, `forward_location`, `init_location`, `cls`).
+
+**Trace.params filters and totals**
+: `trace.params.trainable`, `.frozen`, `.executed` and `.unexecuted` are parameter collections;
+  `len()` counts their Param records and `.numel` adds up their elements (ties counted once);
+  `trace.params.numel_by_path` counts ties once per module path; `.labels` gives the addresses
+  (`trace.params.unexecuted.labels`).
+
+**Layer filters**
+: `trace.layers.compute`, `.recurrent`, `.saved_grad`, `.internal_source` and `.internal_sink`
+  are Layer collections; on any Layer collection they keep the members that pass the Trace-level
+  filter, so `len(trace.layers.compute)` counts the compute Layers.
+
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
@@ -869,7 +889,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   positively verified, for example `mode_rescue_rerun`, `escape_rescue_unrecovered`,
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
 
-**Pristine (`Trace.pristine`)** *(spelling documented-unstable)*
+**Pristine (`Trace.is_pristine`)** *(spelling documented-unstable)*
 : Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
   `False`, or `None`. It is derived at read time from records that persist with the trace (the
   intervention audit, the operation history, mutation states, direct writes and op intervention
@@ -2068,9 +2088,9 @@ default-keep); mask-application semantics documented-unstable*
   tensors); values bind at do() time session-side; no executable-save path
   in v1.
 
-**trace.edges / edge substitution** — *unstable — no deprecation shim owed;
+**trace.graph.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
-: `trace.edges` returns the dataflow edge family (one `EdgeUseRecord` per
+: `trace.graph.edges` returns the dataflow edge family (one `EdgeUseRecord` per
   parent→child occurrence; requires an `intervention_ready` capture, else
   `edge_provenance_unavailable`). The canonical occurrence address is
   `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
@@ -2402,9 +2422,9 @@ shim owed*
   `size_by_rolled_varying`, `scale_requires_size_by`, `encoding_scale_invalid`,
   `stack_by_auto_underivable`, `stack_by_requires_unrolled`.
 
-**trace.grad_fn_fire_timings** — *unstable — no deprecation shim owed*
+**trace.autograd.grad_fn_fire_timings** — *unstable — no deprecation shim owed*
 : Live-trace-only per-fire backward timing spans, keyed like
-  `trace.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`). Both stamps of
+  `trace.autograd.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`). Both stamps of
   every span come from `time.perf_counter()`, paired at capture time by a
   per-node keyed LIFO (stale entries are discarded, never paired); untimed
   fires read `None`, never a false zero. Served from the runtime
@@ -2551,7 +2571,7 @@ deprecation shim owed*
   A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
   contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
 
-**Trace.sites_table()** — *unstable — no deprecation shim owed*
+**Trace.sites()** — *unstable — no deprecation shim owed*
 : The tabular view of a trace's structural sites: one row per distinct L1
   `site_key` in first-occurrence execution order, aggregating the ops that
   share the site (`module_site`, `layer_type`, `output_slot`,

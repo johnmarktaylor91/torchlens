@@ -41,7 +41,7 @@ class TestResnet18Rungs:
         gold = tl.trace(resnet18_eval, torch.rand(1, 3, 224, 224))
         declared = tl.trace(resnet18_eval, input_size=(1, 3, 224, 224))
         inferred = tl.trace(resnet18_eval)
-        assert gold.num_tensors == declared.num_tensors == inferred.num_tensors
+        assert len(gold) == len(declared) == len(inferred)
         assert trace_input_provenance(gold) is None
         assert trace_input_provenance(declared).origin == "declared"
         assert trace_input_provenance(inferred).origin == "inferred"
@@ -73,9 +73,9 @@ class TestResnet18Rungs:
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             log = tl.trace(model, torch.rand(1, 3, 224, 224))
-        assert log.num_tensors == 211
+        assert len(log) == 211
         eval_log = tl.trace(model.eval(), torch.rand(1, 3, 224, 224))
-        assert eval_log.num_tensors == 151
+        assert len(eval_log) == 151
 
 
 class TestGpt2Rungs:

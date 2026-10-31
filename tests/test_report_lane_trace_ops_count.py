@@ -76,8 +76,8 @@ def test_derived_accessors_and_trace_indexing_keep_every_row() -> None:
 
     assert [op.layer_label for op in trace.input_ops] == list(trace.input_layers)
     assert [op.layer_label for op in trace.output_ops] == list(trace.output_layers)
-    assert len(trace.input_ops) == trace.num_input_ops == 1
-    assert len(trace.output_ops) == trace.num_output_ops == 1
+    assert len(trace.input_ops) == len(trace.input_ops) == 1
+    assert len(trace.output_ops) == len(trace.output_ops) == 1
     saved = [op for op in rows if op.has_saved_activation]
     assert list(trace.saved_ops) == saved and any(op.is_input for op in trace.saved_ops)
     assert len(trace) == len(rows) == 5

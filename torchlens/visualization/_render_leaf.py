@@ -291,7 +291,7 @@ def _add_combined_backward_nodes(
     """
 
     inventory = compute_backward_style_inventory(trace, pass_filter)
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         if not _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter):
             continue
         node_args = _backward_node_graphviz_args(
@@ -327,10 +327,10 @@ def _add_combined_backward_edges(
 
     visible_ids = {
         grad_fn_handle.grad_fn_object_id
-        for grad_fn_handle in trace.grad_fns
+        for grad_fn_handle in trace.autograd.grad_fns
         if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
     }
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         if grad_fn_handle.grad_fn_object_id not in visible_ids:
             continue
         tail_name = _backward_dot_node_name(grad_fn_handle)
@@ -368,7 +368,7 @@ def _add_combined_correspondence_edges(
         Normalized backward-pass filter.
     """
 
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         if not grad_fn_handle.has_op:
             continue
         if not _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter):
@@ -597,7 +597,7 @@ def _infer_intervening_module_downstream(trace: "Trace", grad_fn_handle: "GradFn
     """
 
     reverse_edges: dict[int, list[int]] = defaultdict(list)
-    for candidate in trace.grad_fns:
+    for candidate in trace.autograd.grad_fns:
         for next_grad_fn_id in candidate.next_grad_fn_ids:
             reverse_edges[next_grad_fn_id].append(candidate.grad_fn_object_id)
     return _infer_intervening_module_bfs(
@@ -643,7 +643,7 @@ def _infer_intervening_module_bfs(
     seen: set[int] = set()
     if reverse and reverse_edges is None:
         reverse_edges = defaultdict(list)
-        for candidate in trace.grad_fns:
+        for candidate in trace.autograd.grad_fns:
             for next_grad_fn_id in candidate.next_grad_fn_ids:
                 reverse_edges[next_grad_fn_id].append(candidate.grad_fn_object_id)
     if reverse_edges is None:

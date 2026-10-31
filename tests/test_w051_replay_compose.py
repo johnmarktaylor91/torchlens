@@ -62,7 +62,7 @@ def _edge(trace, position):
     add = _add(trace)
     return next(
         e
-        for e in trace.edges
+        for e in trace.graph.edges
         if e.child_label in (add.label, add.layer_label) and e.arg_path == (position,)
     )
 

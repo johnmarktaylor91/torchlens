@@ -8,7 +8,7 @@ re-execution acceptance (verdict ``edge_intervention_boundary``, never
 "exempted"), the skip-shaped-acceptance meta-test, the v7 persistence
 boundary (level-exhaustive refusal, two-conjunct key, precedence over
 ``artifact_save_level_unsupported``, switch-on round-trip with the
-pre-release marker), ``trace.edges``, EDGE algebra rows, and the OBSERVE
+pre-release marker), ``trace.graph.edges``, EDGE algebra rows, and the OBSERVE
 masked-read kwarg.
 """
 
@@ -60,20 +60,20 @@ def capture():
 
 
 def _edge(trace, parent="relu_1_2"):
-    return next(e for e in trace.edges if e.parent_label == parent)
+    return next(e for e in trace.graph.edges if e.parent_label == parent)
 
 
 def test_trace_edges_family_and_provenance_gate(capture):
     model, x, trace = capture
-    labels = [(e.parent_label, e.child_label) for e in trace.edges]
+    labels = [(e.parent_label, e.child_label) for e in trace.graph.edges]
     assert ("relu_1_2", "conv2d_2_3") in labels
     # identity-stable rows: same record objects across reads
-    assert trace.edges[0] is trace.edges[0]
+    assert trace.graph.edges[0] is trace.graph.edges[0]
 
     torch.manual_seed(0)
     plain = tl.trace(_Net(), torch.randn(1, 1, 12, 12))
     with pytest.raises(SelectionError) as excinfo:
-        _ = plain.edges
+        _ = plain.graph.edges
     assert excinfo.value.fields["code"] == "edge_provenance_unavailable"
 
 
@@ -85,7 +85,7 @@ def test_edge_algebra_rows(capture):
     assert union.kind == "EDGE" and len(union) == 2
     # complement within the trace's dataflow edge family (well-defined universe)
     complement = ~union
-    assert len(complement) == len(trace.edges) - 2
+    assert len(complement) == len(trace.graph.edges) - 2
     # ACT x EDGE refuses via the closed matrix
     with pytest.raises(SelectionError) as excinfo:
         a | tl.units("relu_1_2", [(0, 0, 0, 0)])

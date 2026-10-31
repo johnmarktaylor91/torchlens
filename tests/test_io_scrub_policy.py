@@ -319,7 +319,7 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    _ = log.edges
+    _ = log.graph.edges
     for record in _all_record_instances(log):
         _sweep_public_accessors(record)
     log.save(str(tmp_path / "after_armed_sweep.tlspec"))
@@ -356,7 +356,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
-    "release_param_refs": "destructive; nulls live parameter refs",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
@@ -364,7 +363,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "push_from": "replay/push engine; execution, not presentation",
     "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
-    "append_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
     "fork": "constructs a new trace; the sweep audits reads on the original",
@@ -443,7 +441,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # policy" is precisely the draw()-then-save() poison this sweep exists to
         # catch, and a presenter that builds a sub-DAG view is a prime candidate.
         "bill_of_materials": lambda t: t.bill_of_materials(),
-        "sites_table": lambda t: t.sites_table(),
+        "sites": lambda t: t.sites(),
         # C02: a pure read over retained payloads (typed row states, no
         # persistence side effects) -- swept for the same reason as
         # sites_table/bill_of_materials.
@@ -451,7 +449,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # F09 (sumfam D24): the capability card is a metadata-only read of
         # the SurfaceRegistry filtered by this object -- swept like the
         # other pure report reads.
-        "capability_card": lambda t: t.capability_card(),
+        "capabilities": lambda t: t.capabilities(),
         "to_agent_json": lambda t: t.to_agent_json(),
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),

@@ -64,7 +64,7 @@ def test_act_selection_scalar_refuses_typed(capture, bad_value) -> None:
 def test_edge_selection_scalar_refuses_typed(capture) -> None:
     """EDGE lane: same refusal, same teaching."""
 
-    edge = next(e for e in capture.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in capture.graph.edges if e.parent_label == "relu_1_2")
     fork = capture.fork()
     with pytest.raises(SelectionError) as excinfo:
         fork.do(edge.__selection__(), 0.0)

@@ -124,7 +124,7 @@ def test_save_new_outs_recurrent():
     """save_new_outs works on recurrent models."""
     model = _RecurrentFF()
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
-    assert log.is_recurrent
+    assert log.graph.is_recurrent
 
     log.save_new_outs(model, torch.randn(2, 5), seed=42)
     assert log[log.output_layers[0]].has_saved_activation

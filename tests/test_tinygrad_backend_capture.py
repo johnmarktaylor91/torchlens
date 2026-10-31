@@ -777,17 +777,19 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
-    assert len(trace.intermediate_derived_grads) > 0
+    assert len(trace.autograd.intermediate_derived_grads) > 0
     assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
     assert scaled_op.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
-    assert hidden_op.label in trace.intermediate_derived_grads
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
+    assert hidden_op.label in trace.autograd.intermediate_derived_grads
+    assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
         "tinygrad_retained_tensor_backward_no_realize"
     )
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["status"] == "exact"
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["save_predicate_id"] == (
-        "trace.saved_ops"
+    assert (
+        trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["status"] == "exact"
     )
+    assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance[
+        "save_predicate_id"
+    ] == ("trace.saved_ops")
 
 
 def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
@@ -803,7 +805,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
@@ -850,7 +852,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert list(trace.params.keys()) == []
     assert trace.has_backward_pass is False
     assert trace.num_backward_passes == 0
-    assert trace.num_backward_edges is None
+    assert trace.autograd.num_backward_edges is None
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
@@ -896,7 +898,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace[0].grads
 

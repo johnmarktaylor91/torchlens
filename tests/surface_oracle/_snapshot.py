@@ -318,8 +318,8 @@ def snapshot_trace_surface(trace: Trace) -> dict[str, Any]:
         "module_calls": trace.module_calls,
         "params": trace.params,
         "buffers": trace.buffers,
-        "grad_fns": trace.grad_fns,
-        "backward_passes": trace.backward_passes,
+        "grad_fns": trace.autograd.grad_fns,
+        "backward_passes": trace.autograd.backward_passes,
     }
     for family_name, accessor in families.items():
         if accessor is None:

@@ -341,7 +341,7 @@ def test_uncounted_ops_are_named_never_zeroed() -> None:
         assert "_softmax_backward_data" in names
         assert all(count > 0 for count in names.values())
         assert "outside those families not counted" in status.status_line
-        ops = trace.backward_passes[0].aten_ops
+        ops = trace.autograd.backward_passes[0].aten_ops
         assert ops is not None
         counted = [op for op in ops if op.family == "matmul"]
         assert counted and all(op.grad_fn_call_ref is not None for op in counted)
@@ -360,7 +360,7 @@ def test_gradient_saving_never_changes_the_count() -> None:
         try:
             out = trace[trace.output_layers[0]].out
             trace.log_backward(out.sum())
-            ops = trace.backward_passes[0].aten_ops
+            ops = trace.autograd.backward_passes[0].aten_ops
             assert ops is not None
             return list(ops), backward_status(trace).executed_flops
         finally:

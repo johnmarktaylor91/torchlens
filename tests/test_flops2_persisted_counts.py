@@ -53,7 +53,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert _row_facts(status) == _row_facts(live)
         (attribution,) = status.attributions
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
-        (record,) = loaded.backward_passes
+        (record,) = loaded.autograd.backward_passes
         assert record.aten_ops is None
         assert executed_flops_record_problem(record.executed_flops_record) is None
     finally:
@@ -91,7 +91,7 @@ def test_artifacts_saved_without_the_field_load_none_and_read_unknown(
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
     try:
         loaded = _save_load(trace, tmp_path, "pre_field")
-        (loaded_pass,) = loaded.backward_passes
+        (loaded_pass,) = loaded.autograd.backward_passes
         loaded_pass.executed_flops_record = None  # what an artifact saved before the field holds
         status = backward_status(loaded)
         assert status.executed_flops is None and status.executed_evidence == "unknown"
@@ -141,7 +141,7 @@ def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
     try:
         loaded = _save_load(trace, tmp_path, "tampered")
-        (loaded_pass,) = loaded.backward_passes
+        (loaded_pass,) = loaded.autograd.backward_passes
         validate_persisted_forgery_surfaces(loaded)
         loaded_pass.executed_flops_record = {**_GOOD, "executed_flops": -1}
         with pytest.raises(TorchLensIOError) as refusal:

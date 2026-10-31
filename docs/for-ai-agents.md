@@ -13,7 +13,7 @@ Backend note: `backend=None` preserves the torch eager default, and EVERY previe
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 `tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
-`Trace.derived_grads`, `Trace.intermediate_derived_grads`, `Trace.payload_load_status`,
+`Trace.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
 `resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
@@ -21,12 +21,12 @@ second functional AD run and never populate backward-pass or op-gradient surface
 JAX intermediate derived gradients are requested with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`; they run a separate zero-tap AD
 replay plus per-boundary VJP and finite-difference oracle. Only `status == "exact"` records reach
-`Trace.intermediate_derived_grads` and `Op.derived_grad`; producer drift degrades to leaf grads plus
+`Trace.autograd.intermediate_derived_grads` and `Op.derived_grad`; producer drift degrades to leaf grads plus
 an empty intermediate accessor.
 tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracketed
 `DEV=PYTHON` leaf-gradient runs. tinygrad op-level intermediate derived gradients are requested
 with `GradOptions(intermediate_grads=True)` and are exposed only through
-`Trace.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
+`Trace.autograd.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
 surfaces.
 MLX leaf gradients use `tl.backends.mlx.GradOptions`; they run a second
 `mx.value_and_grad` pass with module param rebinding and expose `Trace.derived_grads` after
@@ -38,7 +38,7 @@ Paddle leaf gradients use `tl.backends.paddle.GradOptions`; they run a second gu
 pass and expose `Trace.derived_grads` without setting `has_backward_pass`. Paddle intermediate
 derived gradients are requested with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` and expose only exact replay
-matches through `Trace.intermediate_derived_grads` and `Op.derived_grad`. Paddle capture is
+matches through `Trace.autograd.intermediate_derived_grads` and `Op.derived_grad`. Paddle capture is
 dygraph/eager only; in-place mutation, RNG, tensor-derived Python scalar escapes, and active
 stochastic/training composites are denied in the preview.
 TensorFlow uses `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16 preview when

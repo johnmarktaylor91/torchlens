@@ -1054,7 +1054,7 @@ def _emit_and_finish_forward(
             # The typed raise names the saved source path, so keep the file.
             _raise_graphviz_timeout(
                 "forward graph (notebook display)",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 notebook_source_path,
                 render_timeout,
                 error,
@@ -1222,7 +1222,7 @@ def _publish_forward_render(
         except subprocess.TimeoutExpired as error:
             _raise_graphviz_timeout(
                 "forward graph",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 source_path,
                 render_timeout,
                 error,
@@ -1635,7 +1635,7 @@ def _add_orphan_island_nodes(
     """Render orphan (island) ops as a dashed cluster of disconnected nodes.
 
     Orphans are ops unreachable from both the model inputs and outputs; they are pruned
-    from the main graph and live only on ``trace.orphans`` when
+    from the main graph and live only on ``trace.graph.orphans`` when
     ``keep_orphans=True``. ``draw(show_orphans=True)`` surfaces them as a
     labelled, dashed cluster of edgeless nodes so a user can SEE the dead-end computation
     without it polluting the connected graph. This is a prototype rendering: nodes carry the

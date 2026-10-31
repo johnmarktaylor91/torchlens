@@ -350,6 +350,6 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
     assert unrolled["relu_1_2"].num_passes == 1
     assert "relu_6_7" in unrolled.layer_labels
 
-    assert unrolled.is_recurrent is True
-    assert unrolled.max_layer_op_count == rolled.max_layer_op_count
+    assert unrolled.graph.is_recurrent is True
+    assert unrolled.graph.max_ops_per_layer == rolled.graph.max_ops_per_layer
     assert int(unrolled.total_activation_memory) == int(rolled.total_activation_memory)

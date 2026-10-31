@@ -20,7 +20,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
 import weakref
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -946,6 +946,64 @@ class ParamAccessor(Accessor["Param"]):
                 except PostTraceParamUnavailable:
                     pass
             yield param_log
+
+    def _filtered(self, keep: Callable[["Param"], bool]) -> "ParamAccessor":
+        """Return a ParamAccessor over the members ``keep`` admits, in order."""
+
+        filtered = ParamAccessor({address: pl for address, pl in self._dict.items() if keep(pl)})
+        filtered._rehydrate_on_iter = self._rehydrate_on_iter
+        return filtered
+
+    @property
+    def trainable(self) -> "ParamAccessor":
+        """Access the trainable (``requires_grad``) parameters."""
+
+        return self._filtered(lambda pl: bool(pl.is_trainable))
+
+    @property
+    def frozen(self) -> "ParamAccessor":
+        """Access the frozen (non-trainable) parameters."""
+
+        return self._filtered(lambda pl: not pl.is_trainable)
+
+    @property
+    def executed(self) -> "ParamAccessor":
+        """Access the declared parameters a captured op consumed."""
+
+        return self._filtered(lambda pl: bool(pl.used_by_ops))
+
+    @property
+    def unexecuted(self) -> "ParamAccessor":
+        """Access the declared parameters no captured op consumed."""
+
+        return self._filtered(lambda pl: not pl.used_by_ops)
+
+    @property
+    def numel(self) -> int:
+        """Total parameter elements in this collection (ties counted once)."""
+
+        return sum(int(pl.num_params) for pl in self)
+
+    @property
+    def numel_by_path(self) -> int:
+        """Per-module-path parameter total (ties counted once PER PATH).
+
+        This is the ``named_parameters(remove_duplicate=False)`` tally --
+        torchinfo's number. It differs from ``numel`` exactly when
+        parameters are tied; the summary footer prints both and names the tie.
+        """
+
+        total = 0
+        for pl in self:
+            addresses = getattr(pl, "all_addresses", None) or (pl.address,)
+            total += int(pl.num_params) * len(addresses)
+        return total
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """Addresses of the parameters in this collection, in order."""
+
+        return tuple(pl.address for pl in self)
 
     def _resolve_substring(self, key: str) -> "Param | None":
         """Resolve an unambiguous parameter short name."""

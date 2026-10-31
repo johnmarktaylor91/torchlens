@@ -6416,7 +6416,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
         torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
         victim = next(
             grad_fn
-            for grad_fn in log.grad_fns
+            for grad_fn in log.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
         assert victim.order is not None

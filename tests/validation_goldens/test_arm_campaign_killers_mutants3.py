@@ -1283,9 +1283,12 @@ def test_recurrence_invariants_fires_on_is_recurrent_mismatch() -> None:
     """Arm 0: is_recurrent must match whether any layer has more than one pass."""
 
     fake_trace = SimpleNamespace(
-        layer_num_calls={"relu_1": 3}, is_recurrent=False, layer_labels=["relu_1"], layer_logs={}
+        layer_num_calls={"relu_1": 3},
+        graph=SimpleNamespace(is_recurrent=False),
+        layer_labels=["relu_1"],
+        layer_logs={},
     )
-    with pytest.raises(MetadataInvariantError, match="is_recurrent=False"):
+    with pytest.raises(MetadataInvariantError, match="graph.is_recurrent=False"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1294,12 +1297,11 @@ def test_recurrence_invariants_fires_on_max_layer_op_count_mismatch() -> None:
 
     fake_trace = SimpleNamespace(
         layer_num_calls={"relu_1": 3},
-        is_recurrent=True,
-        max_layer_op_count=99,
+        graph=SimpleNamespace(is_recurrent=True, max_ops_per_layer=99),
         layer_labels=["relu_1"],
         layer_logs={},
     )
-    with pytest.raises(MetadataInvariantError, match="max_layer_op_count=99"):
+    with pytest.raises(MetadataInvariantError, match="graph.max_ops_per_layer=99"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1307,7 +1309,10 @@ def test_recurrence_invariants_fires_on_unknown_layer_num_calls_key() -> None:
     """Arm 2: layer_num_calls keys must be valid layer_labels."""
 
     fake_trace = SimpleNamespace(
-        layer_num_calls={"ghost_layer": 1}, is_recurrent=False, layer_labels=[], layer_logs={}
+        layer_num_calls={"ghost_layer": 1},
+        graph=SimpleNamespace(is_recurrent=False),
+        layer_labels=[],
+        layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="not in layer_labels"):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1318,7 +1323,10 @@ def test_recurrence_invariants_fires_on_layer_log_pass_keys_mismatch() -> None:
 
     layer_log = SimpleNamespace(num_passes=2, ops={1: object()})
     fake_trace = SimpleNamespace(
-        layer_num_calls={}, is_recurrent=False, layer_labels=[], layer_logs={"relu_1": layer_log}
+        layer_num_calls={},
+        graph=SimpleNamespace(is_recurrent=False),
+        layer_labels=[],
+        layer_logs={"relu_1": layer_log},
     )
     with pytest.raises(MetadataInvariantError, match="ops keys="):
         _check_recurrence_invariants(fake_trace)  # type: ignore[arg-type]
@@ -1469,11 +1477,18 @@ def test_trace_self_consistency_fires_on_start_after_end_time() -> None:
         _check_trace_self_consistency(fake_trace)  # type: ignore[arg-type]
 
 
+class _SizedNamespace(SimpleNamespace):
+    """A stand-in trace whose ``len()`` is the ``size`` it was built with."""
+
+    def __len__(self) -> int:
+        return int(self.size)
+
+
 def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
     """Arm 9: num_tensors must be >= num_saved_ops."""
 
     layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
-    fake_trace = SimpleNamespace(
+    fake_trace = _SizedNamespace(
         op_labels=["relu_1"],
         layer_list=[layer],
         num_ops=1,
@@ -1486,9 +1501,9 @@ def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
         capture_duration=0,
         capture_start_time=0,
         capture_end_time=1,
-        num_tensors=0,
+        size=0,
         num_saved_ops=5,
         _orphan_logs=(),
     )
-    with pytest.raises(MetadataInvariantError, match="num_tensors=0"):
+    with pytest.raises(MetadataInvariantError, match=r"len\(trace\)=0"):
         _check_trace_self_consistency(fake_trace)  # type: ignore[arg-type]

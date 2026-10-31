@@ -380,7 +380,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         ),
         CardText(
             f"params: {getattr(trace, 'num_params', '?')} | "
-            f"flops fwd: {getattr(trace, 'total_flops_forward', '?')}"
+            f"flops fwd: {getattr(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
         ),
         CardText(f"saved: {saved if saved is not None else '?'}/{total or '?'} op records"),
     ]

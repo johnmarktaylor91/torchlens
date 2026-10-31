@@ -408,13 +408,13 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
         for name in _PREVIEW_NAMES:
             trace.backend = name
             with pytest.raises(ValueError):
-                _ = trace.backward_passes
+                _ = trace.autograd.backward_passes
             with pytest.raises(ValueError):
                 _ = trace.saved_grad_ops
             with pytest.raises(ValueError):
                 _ = trace.layer_list[0].grads
         trace.backend = "torch"
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
         _ = trace.saved_grad_ops
         _ = trace.layer_list[0].grads
     finally:

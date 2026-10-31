@@ -145,7 +145,7 @@ def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
         raise AssertionError("capability_card triggered a payload scan")
 
     monkeypatch.setattr(nonfinite_module, "_scan", _no_scan)
-    card = family_trace.capability_card()
+    card = family_trace.capabilities()
     text = str(card)
     assert "capability card" in text
     assert any(row.available for row in card.rows)
@@ -268,7 +268,7 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
     family_trace.to_agent_json()
     tl.report.cost_tree(family_trace)
     tl.report.flops_report(family_trace)
-    family_trace.capability_card()
+    family_trace.capabilities()
     assert calls == [], f"metadata-only members scanned: {calls}"
 
 

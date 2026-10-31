@@ -248,11 +248,14 @@ def test_tf_intermediate_derived_grads_survive_grouping() -> None:
 
     # Accessors iterate VALUES, not keys (see _data_classes/_accessor_base.py),
     # so iterate through .keys() to get label strings to look up.
-    grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads.keys()}
+    grouped_raw = {
+        grouped[label]._label_raw for label in grouped.autograd.intermediate_derived_grads.keys()
+    }
     ungrouped_raw = {
-        ungrouped[label]._label_raw for label in ungrouped.intermediate_derived_grads.keys()
+        ungrouped[label]._label_raw
+        for label in ungrouped.autograd.intermediate_derived_grads.keys()
     }
     assert ungrouped_raw, "reference ungrouped trace produced no records"
     assert grouped_raw == ungrouped_raw
     grouped_relu = _grouped_ops(grouped, "Relu")
-    assert grouped_relu[0].label in grouped.intermediate_derived_grads
+    assert grouped_relu[0].label in grouped.autograd.intermediate_derived_grads

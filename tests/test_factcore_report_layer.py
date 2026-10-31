@@ -91,7 +91,7 @@ def test_report_totals_read_the_one_aggregation() -> None:
     assert report.totals.macs_forward == int(aggregation.macs_total)
     assert report.totals.compute_coverage["unknown"] == aggregation.coverage.unknown
     # profile consumes the SAME aggregation: its whole-trace total agrees.
-    assert int(trace.total_flops_forward) == report.totals.flops_forward_fma2
+    assert int(trace.cost.total_flops_forward) == report.totals.flops_forward_fma2
 
 
 def test_report_rows_carry_identity_and_evidence() -> None:

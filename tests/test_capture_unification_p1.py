@@ -125,5 +125,5 @@ def test_phase1_event_materializer_buffers_and_conditionals() -> None:
         capture=CaptureOptions(save_source_context=True),
     )
     _assert_trace_structure(conditional_trace)
-    assert conditional_trace.has_conditional_branching
+    assert conditional_trace.graph.has_conditional_branching
     assert validate_forward_pass(conditional_model, conditional_input)

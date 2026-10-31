@@ -115,7 +115,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
     if _pandas_available():
         steps["op_table"] = "trace.to_pandas()"
         if _first_op_site_key(log) is not None:
-            steps["sites_table"] = "trace.sites_table()"
+            steps["sites_table"] = "trace.sites()"
         if getattr(log, "decoded_output", None) is not None:
             steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
@@ -252,7 +252,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         return {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
             "operations": int(getattr(log, "num_ops", 0) or 0),
-            "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
+            "tensors_total": len(log) if hasattr(log, "__len__") else 0,
             "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
@@ -262,7 +262,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         "operations": core.counts.tracked_tensor_rows,
         "compute_ops": core.counts.compute_ops,
         "alias_rows": core.counts.alias_rows,
-        "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
+        "tensors_total": len(log) if hasattr(log, "__len__") else 0,
         "tensors_saved": core.memory.at_capture_saved_ops,
         "parameters": core.params.total or 0,
         "modules": module_row_count,

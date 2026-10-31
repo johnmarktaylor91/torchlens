@@ -66,11 +66,11 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
 
     trace = _make_trace(CaptureOptions(layers_to_save="all", save_grads=True))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
-    grad_fn = next(record for record in trace.grad_fns if record.num_calls)
+    grad_fn = next(record for record in trace.autograd.grad_fns if record.num_calls)
     grad_fn_call = grad_fn.calls[0]
 
     assert not hasattr(grad_fn, "ops")
-    assert trace.grad_fn_calls[grad_fn_call.call_label] is grad_fn_call
+    assert trace.autograd.grad_fn_calls[grad_fn_call.call_label] is grad_fn_call
     assert grad_fn_call.is_saved is (
         grad_fn_call.grad_inputs is not None or grad_fn_call.grad_outputs is not None
     )

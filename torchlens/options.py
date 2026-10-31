@@ -451,9 +451,9 @@ class CaptureOptions:
             Whether rendered visualizer image files should be copied into portable bundles.
         keep_orphans:
             Whether island ops (computations unreachable from both the model inputs and
-            outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
+            outputs) are retained in raw metadata and exposed via ``trace.graph.orphans``. Defaults
             to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
-            enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
+            enter ``layer_list``/summaries; they live only on the ``trace.graph.orphans`` accessor.
         output_device:
             Device placement for saved tensors.
         save_arg_values:

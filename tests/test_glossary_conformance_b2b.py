@@ -46,23 +46,19 @@ def test_trace_derived_counts_match_accessors() -> None:
 
     trace = _make_trace()
 
-    assert trace.num_layers == len(trace.layers)
-    assert trace.num_compute_layers == len(trace.compute_layers)
-    assert trace.num_compute_ops == len(trace.compute_ops)
-    assert trace.num_saved_grad_ops == len(trace.saved_grad_ops)
-    assert trace.num_saved_grad_layers == len(trace.saved_grad_layers)
+    assert len(trace.layers) == len(trace.layers)
+    assert len(trace.layers.compute) == len(trace.layers.compute)
+    assert len(trace.compute_ops) == len(trace.compute_ops)
+    assert len(trace.saved_grad_ops) == len(trace.saved_grad_ops)
+    assert len(trace.layers.saved_grad) == len(trace.layers.saved_grad)
     assert trace.num_input_layers == len(trace.input_layers)
     assert trace.num_output_layers == len(trace.output_layers)
     assert trace.num_buffer_layers == len(trace.buffer_layers)
-    assert trace.num_internal_source_ops == len(trace.internal_source_ops)
-    assert trace.num_internal_sink_ops == len(trace.internal_sink_ops)
+    assert len(trace.internal_source_ops) == len(trace.internal_source_ops)
+    assert len(trace.internal_sink_ops) == len(trace.internal_sink_ops)
     assert trace.num_uncalled_modules == len(trace.uncalled_modules)
-    assert trace.num_param_tensors_trainable == sum(
-        1 for param in trace.params if param.is_trainable
-    )
-    assert trace.num_param_tensors_frozen == sum(
-        1 for param in trace.params if not param.is_trainable
-    )
+    assert len(trace.params.trainable) == sum(1 for param in trace.params if param.is_trainable)
+    assert len(trace.params.frozen) == sum(1 for param in trace.params if not param.is_trainable)
     assert trace.has_trainable_params is True
     assert trace.has_frozen_params is True
 
@@ -126,8 +122,8 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     module_call = trace.module_calls[0]
     param = trace.params[0]
     buffer = trace.buffers[0]
-    grad_fn = trace.grad_fns[0]
-    grad_fn_call = trace.grad_fn_calls[0]
+    grad_fn = trace.autograd.grad_fns[0]
+    grad_fn_call = trace.autograd.grad_fn_calls[0]
 
     assert op.trace is trace
     assert layer.trace is trace
@@ -139,6 +135,8 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     assert grad_fn_call.trace is trace
 
     assert trace.params[param.index] is param
-    assert trace.grad_fns[grad_fn.ordinal_index] is grad_fn
-    assert trace.grad_fn_calls[grad_fn_call.ordinal_index] is grad_fn_call
-    assert trace.num_grad_fns_with_op == sum(1 for record in trace.grad_fns if record.has_op)
+    assert trace.autograd.grad_fns[grad_fn.ordinal_index] is grad_fn
+    assert trace.autograd.grad_fn_calls[grad_fn_call.ordinal_index] is grad_fn_call
+    assert sum(1 for g in trace.autograd.grad_fns if g.has_op) == sum(
+        1 for record in trace.autograd.grad_fns if record.has_op
+    )

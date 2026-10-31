@@ -77,8 +77,8 @@ parameter.
 
 ## Records
 
-`trace.backward_passes` is indexed positionally with Python's 0-based rules, and supports named
-1-based lookup with `trace.backward_passes.for_pass(k)`. `trace.last_backward_pass` returns the
+`trace.autograd.backward_passes` is indexed positionally with Python's 0-based rules, and supports named
+1-based lookup with `trace.autograd.backward_passes.for_pass(k)`. `trace.autograd.last_backward_pass` returns the
 latest projected pass.
 
 `BackwardPass.backward_call_context` stores the Python source location where
@@ -93,7 +93,7 @@ has local dense call labels like `addmm_back_1_4:2`. Positional access remains 0
 colon suffixes and pass numbers are 1-based:
 
 ```python
-grad_fn = trace.grad_fns["addmm_back_1_4"]
+grad_fn = trace.autograd.grad_fns["addmm_back_1_4"]
 first_call = grad_fn.calls[0]
 second_pass_call = grad_fn.calls.for_pass(2)
 ```
@@ -258,8 +258,8 @@ has no detection power, so the result is unverifiable rather than passed.
 
 `trace.to_pandas()` never reads loud gradient properties. Ambiguous op gradients appear as
 `None` in the `grad` column with `num_saved_grads` set. Backward tables are available through
-`trace.grad_fns.to_pandas()`, `trace.grad_fn_calls.to_pandas()`, and
-`trace.backward_passes.to_pandas()`.
+`trace.autograd.grad_fns.to_pandas()`, `trace.autograd.grad_fn_calls.to_pandas()`, and
+`trace.autograd.backward_passes.to_pandas()`.
 
 Unified `.tlspec` manifests include `backward_summary`, gradient blob kinds in `body_index`, and
 the public policy for old bundles: legacy class remaps are accepted at load, while removed
@@ -285,32 +285,32 @@ features such as autograd node records and live backward intervention remain out
 another backend exposes hookable backward graphs. JAX exposes `trace.derived_grads`, populated by
 `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
 `fn(params, *inputs)`, and can optionally expose exact saved-op records through
-`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
 runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
 records. MLX exposes `trace.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
 output matches the captured output. MLX can optionally expose exact saved-op records through
-`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The MLX intermediate producer
 uses custom-VJP identity taps in that auxiliary AD replay, attaches by unambiguous grouped
 signatures, skips duplicates, and only exposes oracle-confirmed `status == "exact"` records.
 tinygrad exposes `trace.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
-records through `trace.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
+records through `trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
 Paddle exposes `trace.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
-exact saved-op records through `trace.intermediate_derived_grads` plus read-only
+exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
 `op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
 capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
 TF traces are forward eager-capture records only. `trace.log_backward(...)`,
-`trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
+`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
 prehook and the hook entry stamp pair one `time.perf_counter()` span per fire, served LIVE by
-`trace.grad_fn_fire_timings` (DOCUMENTED-UNSTABLE spelling; keys match `trace.grad_fn_calls`,
+`trace.autograd.grad_fn_fire_timings` (DOCUMENTED-UNSTABLE spelling; keys match `trace.autograd.grad_fn_calls`,
 untimed fires read `None`, and loaded traces refuse typed with
 `grad_fn_fire_timing_unavailable` because the runtime event stream never persists). The
 persisted `GradFnCall` timing fields keep their shipped single wall-stamp values until the

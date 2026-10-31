@@ -169,7 +169,7 @@ def render_backward_graph(
     graph_caption = (
         f"<<FONT COLOR='{skin.default_font}'>"
         f"<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
-        f"{self.num_grad_fns} grad_fn_handle nodes"
+        f"{len(self.autograd.grad_fns)} grad_fn_handle nodes"
         f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}"
         f"<br align='left'/>mode: {vis_mode}<br align='left'/></FONT>>"
@@ -213,10 +213,10 @@ def render_backward_graph(
         if vis_mode == "rolled":
             visible_ids = {
                 grad_fn_handle.grad_fn_object_id
-                for grad_fn_handle in self.grad_fns
+                for grad_fn_handle in self.autograd.grad_fns
                 if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
             }
-            for grad_fn_handle in self.grad_fns:
+            for grad_fn_handle in self.autograd.grad_fns:
                 if grad_fn_handle.grad_fn_object_id in visible_ids:
                     _add_backward_node_to_graphviz(
                         grad_fn_handle,
@@ -226,7 +226,7 @@ def render_backward_graph(
                         inventory=inventory,
                     )
 
-            for grad_fn_handle in self.grad_fns:
+            for grad_fn_handle in self.autograd.grad_fns:
                 if grad_fn_handle.grad_fn_object_id not in visible_ids:
                     continue
                 tail_name = _backward_dot_node_name(grad_fn_handle)
@@ -314,7 +314,7 @@ def render_backward_graph(
         except subprocess.TimeoutExpired as e:
             _raise_graphviz_timeout(
                 "backward graph",
-                f"{self.num_grad_fns} grad_fn_handle nodes",
+                f"{len(self.autograd.grad_fns)} grad_fn_handle nodes",
                 source_path,
                 _RENDER_TIMEOUT,
                 e,
@@ -434,7 +434,7 @@ def render_combined_graph(
 
     graph_caption = (
         f"<<B>{html_escape(self.model_class_name)} combined forward/backward graph</B><br align='left'/>"
-        f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn_handle nodes"
+        f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
         f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
     )
@@ -572,7 +572,7 @@ def render_combined_graph(
         except subprocess.TimeoutExpired as e:
             _raise_graphviz_timeout(
                 "combined graph",
-                f"{self.num_tensors + self.num_grad_fns} nodes",
+                f"{len(self) + len(self.autograd.grad_fns)} nodes",
                 source_path,
                 _RENDER_TIMEOUT,
                 e,

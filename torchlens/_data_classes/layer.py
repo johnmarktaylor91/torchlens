@@ -1449,7 +1449,7 @@ class Layer(_SelectionOperand):
             return trace[label].layer_label
         except (KeyError, ValueError):
             try:
-                return trace.orphans[label].layer_label
+                return trace.graph.orphans[label].layer_label
             except KeyError:
                 return None
 
@@ -1716,7 +1716,7 @@ class Layer(_SelectionOperand):
             return cast("Layer", trace[label])
         except (KeyError, ValueError):
             try:
-                return cast("Layer", trace.orphans[label])
+                return cast("Layer", trace.graph.orphans[label])
             except KeyError:
                 return None
 
@@ -1727,7 +1727,7 @@ class Layer(_SelectionOperand):
         -------
         list[Layer]
             Child layers resolved through the owning model log; orphan
-            relation labels resolve through ``trace.orphans`` (unresolvable
+            relation labels resolve through ``trace.graph.orphans`` (unresolvable
             skipped).
         """
         resolved = (self._resolve_relation_record(label) for label in self.children)
@@ -1740,7 +1740,7 @@ class Layer(_SelectionOperand):
         -------
         list[Layer]
             Parent layers resolved through the owning model log; orphan
-            relation labels resolve through ``trace.orphans`` (unresolvable
+            relation labels resolve through ``trace.graph.orphans`` (unresolvable
             skipped).
         """
         resolved = (self._resolve_relation_record(label) for label in self.parents)

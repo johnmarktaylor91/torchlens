@@ -578,3 +578,6 @@ recorded: 2026-10-31T02:32:38.269162+00:00
 reason: rename codemod: node member renames and removals
 source: ede64522994a5b8d05da9bf627a18ed197bf3c3a (dirty)
 recorded: 2026-10-31T02:56:31.867983+00:00
+reason: Trace members moved onto the cost, graph, autograd and source groups; counts beside a collection removed
+source: d4aafcb68137d37aa6103b77758e19caeff90992 (clean)
+recorded: 2026-10-31T03:21:12.128030+00:00

@@ -327,7 +327,7 @@ def test_backward_pass_setstate_present_but_wrong_typed_grad_fn_calls_is_coerced
     """
 
     live_trace = _build_backward_trace()
-    backward_pass_log = live_trace.backward_passes[0]
+    backward_pass_log = live_trace.autograd.backward_passes[0]
     state = backward_pass_log.__getstate__()
     state["grad_fn_calls"] = tuple(state["grad_fn_calls"])
 

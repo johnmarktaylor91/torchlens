@@ -37,7 +37,7 @@ def _assert_conserved(trace: Any) -> Any:
     status = backward_status(trace)
     assert status.state == "backward_observed"
     assert status.executed_flops is not None, status.reason
-    assert len(status.attributions) == len(trace.backward_passes)
+    assert len(status.attributions) == len(trace.autograd.backward_passes)
     total = 0
     for attribution, (pass_index, pass_count) in zip(
         status.attributions, status.executed_flops_per_pass, strict=True
@@ -264,7 +264,7 @@ def test_backward_pass_reads_its_own_attribution() -> None:
 
     trace = _traced_backward(*ZOO_BUILDERS["partial_requires_grad"]())
     try:
-        (record,) = trace.backward_passes
+        (record,) = trace.autograd.backward_passes
         attribution = record.flops_attribution
         assert attribution == backward_status(trace).attributions[0]
         assert attribution.source == "census"
@@ -309,7 +309,7 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
         out = trace[trace.output_layers[0]].out
         with pytest.raises(RuntimeError, match="refused on purpose"):
             trace.log_backward(out.sum())
-        (record,) = trace.backward_passes
+        (record,) = trace.autograd.backward_passes
         assert record.status != "ok"
         assert record.aten_ops  # the second Linear's backward ran before the raise
         status = backward_status(trace)
@@ -340,7 +340,7 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
     )
     try:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
-        (record,) = trace.backward_passes
+        (record,) = trace.autograd.backward_passes
         assert record.status == "ok" and record.aten_ops
         assert all(op.grad_fn_call_ref is None for op in record.aten_ops)
         attribution = record.flops_attribution

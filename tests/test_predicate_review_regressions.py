@@ -129,7 +129,7 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
             capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
         )
         armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
-    grad_fns = {g.label: g for g in armed.grad_fns}
+    grad_fns = {g.label: g for g in armed.autograd.grad_fns}
     selector = CompositeSelector(
         "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
     )

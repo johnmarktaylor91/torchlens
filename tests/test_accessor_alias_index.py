@@ -288,7 +288,7 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
                 assert indexed is scanned, key
         assert ambiguous_modules > 0
 
-        grad_fn_calls = trace.grad_fn_calls
+        grad_fn_calls = trace.autograd.grad_fn_calls
         assert len(grad_fn_calls) > 0
         grad_fn_keys = [getattr(call, "label", None) for call in grad_fn_calls]
         grad_fn_keys += [getattr(call, "call_label", None) for call in grad_fn_calls]
@@ -333,11 +333,11 @@ def test_edge_counters_match_unmemoized_reference() -> None:
                 if op.is_buffer or ops[child_label].is_buffer
             }
             assert trace.num_edges == len(direct_edges), name
-            assert trace.num_compute_edges == len(direct_compute), name
-            assert trace.num_buffer_edges == len(direct_buffer), name
+            assert trace.graph.num_compute_edges == len(direct_compute), name
+            assert trace.graph.num_buffer_edges == len(direct_buffer), name
             # Repeat reads must be stable once the memo is warm.
             assert trace.num_edges == len(direct_edges), name
-            assert trace.num_buffer_edges == len(direct_buffer), name
+            assert trace.graph.num_buffer_edges == len(direct_buffer), name
         finally:
             tl.release_model(model)
             trace.cleanup()

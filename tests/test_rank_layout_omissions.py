@@ -80,7 +80,7 @@ def test_rank_layout_discloses_orphans_it_does_not_draw(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
     try:
-        assert trace.orphans
+        assert trace.graph.orphans
         dot_source, dot_messages = _draw(
             trace, tmp_path, "dot", show_orphans=True, vis_node_placement="dot"
         )
@@ -92,7 +92,7 @@ def test_rank_layout_discloses_orphans_it_does_not_draw(tmp_path: Path) -> None:
         )
         assert "orphan__" not in rank_source
         (omission,) = _omission_messages(rank_messages)
-        assert f"{len(trace.orphans)} orphan node" in omission
+        assert f"{len(trace.graph.orphans)} orphan node" in omission
         assert "vis_node_placement='dot'" in omission
 
         _, hidden_messages = _draw(trace, tmp_path, "rank_hidden", vis_node_placement="rank")

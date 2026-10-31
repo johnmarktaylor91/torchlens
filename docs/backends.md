@@ -11,11 +11,11 @@ preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explici
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Technical preview; static-label `intervene=`/`halt=` | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `paddle` | Preview dygraph/eager capture with live forward `intervene=`/`halt=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `tf` | Preview eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` (eager entries only) |
+| `mlx` | Technical preview; static-label `intervene=`/`halt=` | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `paddle` | Preview dygraph/eager capture with live forward `intervene=`/`halt=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tf` | Preview eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
 Two cross-backend honesty notes apply to every preview row above:
 
@@ -177,7 +177,7 @@ divergence error, and one `tape.gradient` call produces leaf gradients for float
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to additionally
 `tape.watch` every float op output live at callback time and attach exact op-level records. Only
 unambiguous `status == "exact"` matches (keyed on stream position, op type, parents, and module
-stack) reach `trace.intermediate_derived_grads` and read-only `op.derived_grad`;
+stack) reach `trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`;
 `has_backward_pass` remains `False`, and true-backward surfaces still raise. `grad_options`
 requires an eager live-capture entry: graph-only FuncGraph captures (compiled `Model.call`,
 `tf.function` roots, SavedModel signatures) refuse it typed because the derived-gradient replay
@@ -247,7 +247,7 @@ capture logging remains off, so module call counts are not incremented by the AD
 uses grouped structural signatures rather than a capture-index map, and duplicate or ambiguous
 groups are skipped. Each public record must pass an independent replacement-gradient and
 perturbation oracle, and only records with `status == "exact"` reach
-`trace.intermediate_derived_grads` and read-only `op.derived_grad`.
+`trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`.
 
 These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
@@ -346,7 +346,7 @@ trace.derived_grads["inputs.0"]
 
 Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to request exact saved-op
 intermediate derived gradients from a second guarded Paddle AD replay. Only unambiguous
-`status == "exact"` records reach `trace.intermediate_derived_grads` and read-only
+`status == "exact"` records reach `trace.autograd.intermediate_derived_grads` and read-only
 `op.derived_grad`; `has_backward_pass` remains `False`, and true-backward surfaces still raise.
 
 Paddle `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
@@ -399,7 +399,7 @@ Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to run JA
 zero-tap AD replay for saved op boundaries. The producer uses one all-tap `jax.grad` pass, then an
 O(k) oracle checks each attached boundary with an independent boundary-replacement VJP and finite
 difference. The hard cap fails explicit requests above `max_intermediate_grads`. Only records whose
-provenance has `status == "exact"` are exposed through `trace.intermediate_derived_grads` and
+provenance has `status == "exact"` are exposed through `trace.autograd.intermediate_derived_grads` and
 read-only `op.derived_grad`; oracle failures and non-float/control outputs are skipped. If the
 producer cannot run on the installed JAX runtime, leaf `trace.derived_grads` remains intact and the
 intermediate accessor is empty.
@@ -501,7 +501,7 @@ trace.derived_grads["inputs.0"]
 
 Set `GradOptions(intermediate_grads=True)` to run tinygrad's separate no-realize
 intermediate-gradient pass. It calls `loss.backward()` before realizing any copied outputs, then
-attaches exact unambiguous records to `trace.intermediate_derived_grads`; each owning `Op` exposes
+attaches exact unambiguous records to `trace.autograd.intermediate_derived_grads`; each owning `Op` exposes
 the payload through read-only `op.derived_grad`. Ambiguous signature matches are skipped instead of
 attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
 

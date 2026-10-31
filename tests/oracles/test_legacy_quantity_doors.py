@@ -70,7 +70,7 @@ def _only(accessor):
 
 def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     trace, report = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     for value in (trace.num_params, layer.num_params, op.num_params, module.num_params):
         assert int(value) == A_PARAMS
@@ -83,7 +83,7 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     assert len(module.params) == A_TENSORS
 
     trace, report = fixture_b
-    layers = {layer.layer_label: layer for layer in trace.compute_layers}
+    layers = {layer.layer_label: layer for layer in trace.layers.compute}
     ops = {op.label: op for op in trace.compute_ops}
     modules = {module.address: module for module in trace.modules}
     assert int(trace.num_params_frozen) == B_A
@@ -104,7 +104,7 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
 
 def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     for value in (
         op.param_memory,
@@ -125,7 +125,7 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
 def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
     trace, report = fixture_a
     layer, op, module = (
-        _only(trace.compute_layers),
+        _only(trace.layers.compute),
         _only(trace.compute_ops),
         _only(trace.modules),
     )
@@ -136,7 +136,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
         module.total_macs_forward,
         report.total_macs_forward,
         report.totals.macs_forward,
-        trace.total_macs_forward,
+        trace.cost.total_macs_forward,
     ):
         assert int(value) == A_MACS
     for value in (
@@ -146,7 +146,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
         module.total_flops_forward,
         report.total_flops_forward,
         report.totals.flops_forward_fma2,
-        trace.total_flops_forward,
+        trace.cost.total_flops_forward,
     ):
         assert int(value) == A_FLOPS
     trace, _ = fixture_b
@@ -156,12 +156,12 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
     assert int(ops["linear_1_1:1"].flops_forward) == B_FLOPS_A
     assert int(ops["linear_2_3:1"].flops_forward) == B_FLOPS_B
     # ReLU is not a multiply-accumulate, so the total is the two linears.
-    assert int(trace.total_macs_forward) == B_MACS_A + B_MACS_B
+    assert int(trace.cost.total_macs_forward) == B_MACS_A + B_MACS_B
 
 
 def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     module, call = _only(trace.modules), _only(trace.module_calls)
     assert len(layer.ops) == 1 and int(layer.num_passes) == 1 and int(op.num_passes) == 1
     # A module call counts its boundary ops: input, linear, output.
@@ -177,7 +177,7 @@ def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
 
 def test_activation_bytes_on_every_compute_door(fixture_a) -> None:
     trace, _ = fixture_a
-    layer, op = _only(trace.compute_layers), _only(trace.compute_ops)
+    layer, op = _only(trace.layers.compute), _only(trace.compute_ops)
     for value in (op.activation_memory, layer.activation_memory, layer.total_activation_memory):
         assert int(value) == A_OUT_BYTES
     # The trace total sums every retained activation: the input and the output.

@@ -169,7 +169,7 @@ def test_params_by_path_recount(nest_trace) -> None:
     model, trace = nest_trace
     by_path = sum(p.numel() for _, p in model.named_parameters(remove_duplicate=False))
     assert by_path == 5 * (4 * 4 + 4)  # five Linear(4, 4), no ties: 100
-    assert trace.num_params_by_path == by_path
+    assert trace.params.numel_by_path == by_path
     assert trace.summary().totals.params_per_path_total == by_path
 
     torch.manual_seed(0)
@@ -178,7 +178,7 @@ def test_params_by_path_recount(nest_trace) -> None:
     try:
         by_path = sum(p.numel() for _, p in mixed.named_parameters(remove_duplicate=False))
         assert by_path == 20 + 2 * 20  # wide once, tied once per path: 60
-        assert tied.num_params_by_path == by_path
+        assert tied.params.numel_by_path == by_path
         assert tied.summary().totals.params_per_path_total == by_path
         assert tied.num_params == 40  # unique elements: the shared tensors once
         assert int(tied.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
@@ -196,7 +196,7 @@ def test_layer_and_op_counts_on_the_root_call() -> None:
         root = trace.module_calls["self:1"]
         assert len(root.ops) == G_OPS  # 13: the Linear ran twice
         assert root.num_layers == G_LAYERS  # 12: its two passes share one Layer
-        assert trace.num_layers == G_LAYERS
+        assert len(trace.layers) == G_LAYERS
         assert len(trace.modules["self"].layer_labels) == G_LAYERS
         assert len(trace.modules["fc"].layer_labels) == 1  # one Layer, two passes
         for label in ("fc:1", "fc:2"):
@@ -261,7 +261,7 @@ COND_BRANCH_DEPTH = {"add_1_4": 1, "mean_1_5": 1, "gt_2_6": 1, "mul_2_7": 2}
 def test_conditional_counts() -> None:
     trace = tl.trace(Cond(), torch.ones(2, 3))
     try:
-        assert trace.num_conditionals == 2
+        assert len(trace.conditionals) == 2
         for op in trace.ops:
             assert op.conditional_depth == COND_DEPTH.get(op.layer_label, 0), op.label
             expected = COND_BRANCH_DEPTH.get(op.layer_label, 0)

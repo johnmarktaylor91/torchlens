@@ -30,6 +30,12 @@ class _TraceStandIn:
         self._backward_projection_revision = 0
 
     @property
+    def autograd(self) -> _TraceStandIn:
+        """Serve ``trace.autograd.grad_fn_calls`` from the stand-in itself."""
+
+        return self
+
+    @property
     def grad_fn_calls(self) -> TraceGradFnCallAccessor:
         """Return the accessor over the stand-in's calls."""
 
@@ -96,7 +102,7 @@ def test_ordinal_index_on_live_backward_trace():
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
-    calls = list(trace.grad_fn_calls.values())
+    calls = list(trace.autograd.grad_fn_calls.values())
     assert calls, "backward capture produced no GradFnCall records"
     assert [call.ordinal_index for call in calls] == list(range(len(calls)))
     trace.cleanup()

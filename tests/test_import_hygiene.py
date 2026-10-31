@@ -720,7 +720,7 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     x = torch.randn(1, 3, 32, 32)
     trace = tl.trace(model, x, save=tl.func("conv2d"))
 
-    assert trace.num_layers > 0
+    assert len(trace.layers) > 0
     assert any(op.func_name == "conv2d" for op in trace.ops)
 
 

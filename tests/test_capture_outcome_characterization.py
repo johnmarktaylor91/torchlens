@@ -145,7 +145,7 @@ def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
     def _boom(self: object, **kwargs: object) -> None:
         raise ValueError("planted step20")
 
-    monkeypatch.setattr(Trace, "release_param_refs", _boom)
+    monkeypatch.setattr(Trace, "_release_param_refs", _boom)
     with pytest.raises(ValueError, match="planted step20"):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
 

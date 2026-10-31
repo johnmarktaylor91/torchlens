@@ -224,7 +224,7 @@ def build_torchlens_caption(trace: Any) -> str:
         )
     return (
         f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
-        f"{getattr(trace, 'num_tensors', 0)} tensors total "
+        f"{len(trace)} tensors total "
         f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
         f"{params_line}"
     )

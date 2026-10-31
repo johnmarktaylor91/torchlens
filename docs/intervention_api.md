@@ -228,7 +228,7 @@ this is a disclosure, never a refusal.
 `log.do([(selection, edit), ...])` applies a list of selection and edit pairs
 as one transaction with one intervention event. Activation (ACT) pairs attach
 together and push once. A batch may also carry parameter selections
-(`tl.param(...)`) and dataflow edge selections (from `log.edges`); on the
+(`tl.param(...)`) and dataflow edge selections (from `log.graph.edges`); on the
 replay engine the pairs then run in order exactly as one `do()` per pair would
 (each run of consecutive activation pairs attaches and pushes together; each
 parameter or edge pair goes through its own substitution path), and the result

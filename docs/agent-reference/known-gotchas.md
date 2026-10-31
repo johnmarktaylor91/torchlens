@@ -174,7 +174,7 @@
   each step or the next rerun or recipe save refuses `helper_tensor_changed_since_capture`. A
   bound executor is live instead: each call reads the tensor, an in-place change applies to the
   next call, and `BindReport.helper_tensor_versions` shows the version counter moving.
-- "Pristine" has three senses; never read one as another. `Trace.pristine` (documented-unstable)
+- "Pristine" has three senses; never read one as another. `Trace.is_pristine` (documented-unstable)
   is the derived reading "nothing ever intervened on this trace", computed from the evidence the
   trace carries (`torchlens/_data_classes/_trace_pristine.py`, one function), so it survives save
   and load and stays `False` after `clear_hooks()`, a `Trace.state` reassignment or a fork; `None`
@@ -182,7 +182,7 @@
   treated as `True`. `TraceState.PRISTINE` is only the operational state machine's start value: an
   assignment sets it and a func-targeted `intervene=` capture keeps it. Validation's
   pristine-torch oracle (`torchlens/validation/_pristine.py`) means unwrapped torch functions.
-  Bundle's pristine label and baseline auto-detection read `Trace.pristine is True`.
+  Bundle's pristine label and baseline auto-detection read `Trace.is_pristine is True`.
 - A capture-time module edit (`intervene=` with a `tl.module(...)` selector) is its own
   `interventionreplacement` op between the module's last op and its consumers. The last op keeps
   its pre-edit value by design (`tl.module(...)` reads the replacement op), and every later op is

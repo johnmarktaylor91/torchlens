@@ -113,7 +113,7 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
         assert set(trace2.grad_fn_logs) == graph2.keys()
         cases = ((trace1, root1, 2 * 5 * 4 * 3), (trace2, root2, 2 * 5 * 3 * 2))
         for trace, root, closed_form in cases:
-            (record,) = trace.backward_passes
+            (record,) = trace.autograd.backward_passes
             assert list(record.root_grad_fn_ids) == [id(root.grad_fn)]
             attribution = _single_pass(trace)
             assert attribution.executed_flops == closed_form
@@ -142,7 +142,7 @@ def test_one_capture_with_two_roots_walks_both() -> None:
         expected = _graph_nodes(root1) | _graph_nodes(root2)
         torch.autograd.backward([root1, root2])
         assert set(trace.grad_fn_logs) == expected.keys()
-        (record,) = trace.backward_passes
+        (record,) = trace.autograd.backward_passes
         assert list(record.root_grad_fn_ids) == [id(root1.grad_fn), id(root2.grad_fn)]
         assert len(record.root_meta) == 2
         attribution = _single_pass(trace)
@@ -202,7 +202,7 @@ def _census_refs(
     ``own_ops_only`` keeps the nodes whose forward op this trace recorded.
     """
 
-    record = trace.backward_passes[pass_index - 1]
+    record = trace.autograd.backward_passes[pass_index - 1]
     refs = set()
     for op in record.aten_ops:
         ref = op.grad_fn_call_ref

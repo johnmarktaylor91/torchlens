@@ -468,7 +468,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
 
     grad_scale, grad_scales = _validate_options(grad_scale, grad_scales, basis)
     try:
-        backward_passes = trace.backward_passes
+        backward_passes = trace.autograd.backward_passes
         saved_grad_ops = trace.saved_grad_ops
     except ValueError:
         return [], {"message": "torch-only", "torch_only": True}
