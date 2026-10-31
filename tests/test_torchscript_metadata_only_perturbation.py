@@ -21,8 +21,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import SCRIPT_FUNCTION_FUNC_NAME
-from torchlens.utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.validation import last_validation_failure
 from torchlens.validation._script_metadata_proof import (
     METADATA_READ_NODE_KINDS,
@@ -150,7 +150,7 @@ def _trace_and_validate(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, bo
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(
-            model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+            model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
         )
         result = trace.validate_forward_pass([model(x)], validate_metadata=False)
     return trace, result
@@ -178,7 +178,7 @@ def _assert_boundary_perturbation_failure(trace: tl.Trace, result: bool) -> None
 
     assert result is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_PERTURBATION
+    assert failure is not None and failure.check_name == CHECK_PERTURBATION
     assert failure.func_name == SCRIPT_FUNCTION_FUNC_NAME
     assert _metadata_decisions(trace) == []
 

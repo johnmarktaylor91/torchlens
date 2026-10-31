@@ -73,7 +73,7 @@ def _named_graph_inputs(function: Any) -> list[tuple[str, Any]] | None:
         return None
     if len(names) != len(inputs):
         return None
-    return list(zip(names, inputs))
+    return list(zip(names, inputs, strict=True))
 
 
 _TENSOR_FREE_TYPE_KINDS: frozenset[str] = frozenset(
