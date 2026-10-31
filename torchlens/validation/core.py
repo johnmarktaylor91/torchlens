@@ -52,6 +52,7 @@ from .._utils.tensor_utils import (
 )
 from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
+from ._destination_coverage import _perturbed_parents_only_occupy_out_kwarg
 from ._edge_boundary import (
     _capture_payload_equal,
     _check_edge_intervention_boundary,
@@ -71,6 +72,7 @@ from ._replay_device import (
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._replay_warnings import replay_warnings_ignored
+from ._script_metadata_proof import script_metadata_only_proof
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
 from ._source_provenance import check_source_provenance
 from .exemptions import (
@@ -2485,8 +2487,7 @@ def _check_perturbation_exemptions(
        the ``out=`` keyword slot, a storage target the op fully overwrites by
        torch API contract, so its prior values never influence the result.
     3. Structural arg positions (``STRUCTURAL_ARG_POSITIONS``) -- the perturbed
-       layer occupies a position that controls structure, not values (e.g.,
-       index tensors for ``embedding``, ``index_select``).
+       layer fills a slot read for shape, type or storage only (arg 1 of ``view_as``).
     4. Custom exemption functions (``CUSTOM_EXEMPTION_CHECKS``) -- op-specific
        logic for complex cases like ``__getitem__``, ``lstm``, etc.
 
@@ -2525,53 +2526,6 @@ def _check_perturbation_exemptions(
             return True
 
     return False
-
-
-def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: list[str]) -> bool:
-    """Return whether every perturbed parent is purely an ``out=`` destination.
-
-    Parameters
-    ----------
-    layer:
-        Operation whose parents are being perturbed.
-    layers_to_perturb:
-        Parent labels selected for perturbation.
-
-    Returns
-    -------
-    bool
-        True when each perturbed parent's only recorded position on ``layer``
-        is the ``out`` keyword argument (a write-only storage target under the
-        torch ``out=`` convention). A parent that also occupies a positional or
-        non-``out`` keyword slot feeds real values and is NOT exempt. TUPLE
-        ``out=`` destinations (``torch.sort(x, out=(values, indices))``) record
-        each member at a nested ``("out", index)`` key; those slots are the
-        same write-only destination contract and are accepted identically.
-    """
-
-    def _is_out_destination_key(key: Any) -> bool:
-        """Return whether an arg-map key addresses the ``out=`` destination."""
-
-        if key == "out":
-            return True
-        return isinstance(key, tuple) and len(key) == 2 and key[0] == "out"
-
-    if not layers_to_perturb:
-        return False
-    positions = getattr(layer, "parent_arg_positions", None) or {}
-    arg_positions = positions.get("args", {}) or {}
-    kwarg_positions = positions.get("kwargs", {}) or {}
-    for perturbed_label in layers_to_perturb:
-        if perturbed_label in arg_positions.values():
-            return False
-        occupied_kwargs = {
-            key for key, label in kwarg_positions.items() if label == perturbed_label
-        }
-        if not occupied_kwargs:
-            return False
-        if not all(_is_out_destination_key(key) for key in occupied_kwargs):
-            return False
-    return True
 
 
 def _execute_func_with_restored_state(
@@ -3185,6 +3139,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
         return ValidationCheckResult.exempted("pre_perturbation_exemption")
+    if perturb and (script_proof := script_metadata_only_proof(layer, layers_to_perturb)):
+        return ValidationCheckResult.exempted("torchscript_metadata_only_argument", script_proof)
 
     input_args, unverified_reason = _prepare_input_args_for_validating_layer(
         self, layer, layers_to_perturb
