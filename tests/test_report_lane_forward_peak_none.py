@@ -152,17 +152,13 @@ def test_positive_value_round_trips_with_no_reason(
     assert loaded.forward_peak_memory_reason is None
 
 
-def test_legacy_artifact_loads_with_no_reason() -> None:
-    """A real pre-change artifact (tlspec v7, no reason field) loads, reason None."""
+def test_legacy_artifact_refuses_as_2x() -> None:
+    """A real pre-change artifact (tlspec v7, no reason field) refuses typed: 2.x wrote it."""
 
-    import warnings
+    from _refuses_as_2x import assert_refuses_as_2x
 
     fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(fixture))
-    assert loaded.forward_peak_memory_reason is None
-    assert isinstance(loaded.forward_peak_memory, tl.types.Bytes)
+    assert_refuses_as_2x(fixture)
 
 
 def test_state_without_the_field_restores_with_no_reason() -> None:

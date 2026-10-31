@@ -24,12 +24,14 @@ refuses as newer-than-runtime.
 
 from __future__ import annotations
 
+import json
 import warnings
 from pathlib import Path
 
 import pytest
 import torch
 import torch.nn as nn
+from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
@@ -940,31 +942,24 @@ def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Version proofs: v7 still loads, v9 is distinguishable, v10 refuses.
+# Version proofs: the v7 (2.x) snapshot refuses, v10 is distinguishable,
+# a newer stamp refuses.
 # ---------------------------------------------------------------------------
 
 _V7_FIXTURE = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
 
 
-def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
-    """The checked-in pre-bump v7 byte snapshot loads correctly after the bump.
+def test_real_v7_artifact_refuses_as_2x() -> None:
+    """The checked-in pre-bump v7 byte snapshot refuses typed after the bump.
 
-    It loads at its RECORDED schema with one age advisory: version 7,
-    wholly-keyless site keys (legal at the v6/v7 boundary), no grouping
-    stamp, payloads intact.
+    The snapshot was written by torchlens 2.x, which this release does not
+    read: it refuses with the one typed 2.x error naming the re-save remedy.
+    Its manifest still records stamp 7.
     """
 
-    from torchlens._io import ArtifactSchemaAgeWarning
-
-    with pytest.warns(ArtifactSchemaAgeWarning, match="older than runtime"):
-        loaded = tl.load(str(_V7_FIXTURE))
-    assert loaded.tlspec_version == 7
-    assert all(op.site_key is None for op in loaded.ops)
-    # The legacy stampless artifact settles to the canonical degraded
-    # grouping-policy representation, never a fabricated healthy stamp.
-    assert loaded.grouping_policy["policy"] == "unknown"
-    assert loaded["relu_1_2"].out is not None
-    assert loaded.structure_only in (None, False)
+    manifest = json.loads((_V7_FIXTURE / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["tlspec_version"] == 7
+    assert_refuses_as_2x(_V7_FIXTURE)
 
 
 def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:

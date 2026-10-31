@@ -6,11 +6,12 @@ The MEMO 3.3 test obligations, on real bytes where the spec demands it:
   (``Trace`` -- the must-not-drop case: it never crashed, it silently
   absorbed), the hook-restored columnar path (``Op`` -- previously an
   untyped ``AttributeError``), and a slotted value class.
-- TWO-DIRECTION load on the harvested golden corpus: every governed old
-  writer's artifact loads (or refuses on its governed version window), and a
-  newer-shaped state under this reader's inventory refuses typed -- proven
-  END-TO-END through disk and the bundle wrappers (the D-ECO-10 on-disk cell
-  plus the anti-laundering guarantee: the stable code survives ``tl.load``).
+- TWO-DIRECTION load: every artifact in the harvested 2.x golden corpus
+  refuses typed (this release reads no 2.x file), and a newer-shaped state
+  under this reader's inventory refuses typed -- proven END-TO-END through
+  disk and the bundle wrappers on a bundle this release wrote (the D-ECO-10
+  on-disk cell plus the anti-laundering guarantee: the stable code survives
+  ``tl.load``).
 - INERT inventory: ``torchlens.io.inspect_state_contract`` reports unknown
   names with owning record types without loading anything and without
   refusing.
@@ -34,6 +35,7 @@ import pytest
 import torch
 import torch.nn as nn
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import (
@@ -168,36 +170,32 @@ def test_session_pickle_stays_outside_the_contract(tiny_trace) -> None:
 
 
 def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Path) -> None:
-    """Every governed writer's artifact settles per its governed window."""
+    """Every governed 2.x writer's artifact refuses typed at load, naming the remedy.
+
+    TorchLens 3 reads no file a 2.x release wrote. The harvested corpus stays as
+    refusal input: each formerly loadable 2.x artifact now refuses with the one
+    typed 2.x error, and the below-floor stamps still refuse through the same
+    typed family.
+    """
 
     import warnings
 
     from torchlens._io import ArtifactTooOldError
 
+    for name in (
+        "art_v2.31.0_portable",
+        "art_v2.31.0_audit",
+        "art_v2.32.4_portable",
+        "art_v2.33.0_portable",
+        "art_v2.34.1_portable",
+        "art_main_portable",
+    ):
+        assert_refuses_as_2x(corpus_dir / name)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        # Governed loadable writers: load green, honest outcomes. The
-        # rehydration floor is ``tlspec_version >= 6`` (MIN_TLSPEC_VERSION),
-        # and the FIRST tlspec-6 writer was released v2.31.0 (measured on
-        # genuine wheels; the compat ledger's governed producer windows), so
-        # the v2.31.0 / v2.32.4 artifacts LOAD losslessly -- adjudicated in
-        # WAVE-0-5.1 (AUD-CODE 2.4): the code was right, this pin and three
-        # doc sentences had inherited the false "first shipped in 2.33" claim.
-        for name, expected_status in (
-            ("art_v2.31.0_portable", "UNATTESTED"),
-            ("art_v2.31.0_audit", "UNATTESTED"),
-            ("art_v2.32.4_portable", "UNATTESTED"),
-            ("art_v2.33.0_portable", "UNATTESTED"),
-            ("art_v2.34.1_portable", "UNATTESTED"),
-            ("art_main_portable", "COMPLETE"),
-        ):
-            trace = tl.load(corpus_dir / name)
-            assert len(trace) == 151
-            assert trace.outcome.status.name == expected_status
-        # Below-floor stamps refuse typed with the floor named. The genuine
-        # v2.16 bundle predates the integer stamp entirely, so it refuses
-        # through the same typed family (erratum FORK F2 owns the remedy
-        # text; this pins that it cannot crash untyped or load wrong).
+        # Below-floor stamps refuse typed. The genuine v2.16 bundle predates
+        # the integer stamp entirely, so it refuses through the same typed
+        # family; this pins that it cannot crash untyped or load wrong.
         assert MIN_TLSPEC_VERSION == 6
         with pytest.raises(ArtifactError):
             tl.load(corpus_dir / "art_v2.16.0_portable")
@@ -213,11 +211,11 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Pa
 
 
 @pytest.fixture()
-def tampered_main_bundle(corpus_dir: Path, tmp_path: Path) -> Path:
-    """A byte-real main artifact whose Trace state gained one unknown field."""
+def tampered_main_bundle(tiny_trace: object, tmp_path: Path) -> Path:
+    """A bundle this release wrote whose Trace state gained one unknown field."""
 
-    bundle = tmp_path / "art_main_future.tlspec"
-    shutil.copytree(corpus_dir / "art_main_portable", bundle)
+    bundle = tmp_path / "art_current_future.tlspec"
+    tiny_trace.save(bundle)  # type: ignore[attr-defined]
     metadata_path = bundle / "metadata.pkl"
     with metadata_path.open("rb") as fh:
         scrubbed_state = pickle.load(fh)
@@ -243,13 +241,15 @@ def test_new_writer_direction_end_to_end_on_disk(tampered_main_bundle: Path) -> 
 
 
 def test_inert_inventory_reports_without_loading(
-    corpus_dir: Path, tampered_main_bundle: Path
+    tiny_trace: object, tampered_main_bundle: Path, tmp_path: Path
 ) -> None:
     """inspect_state_contract sees everything and refuses nothing."""
 
     from torchlens._io.state_contract import inspect_state_contract
 
-    pristine = inspect_state_contract(corpus_dir / "art_main_portable")
+    pristine_bundle = tmp_path / "art_current.tlspec"
+    tiny_trace.save(pristine_bundle)  # type: ignore[attr-defined]
+    pristine = inspect_state_contract(pristine_bundle)
     assert pristine["unknown_field_total"] == 0
 
     tampered = inspect_state_contract(tampered_main_bundle)

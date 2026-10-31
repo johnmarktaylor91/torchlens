@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 import torch
+from _refuses_as_2x import assert_refuses_as_2x
 from torch import nn
 
 import torchlens as tl
@@ -196,26 +197,32 @@ def test_hooked_fast_run_agrees_with_the_flag() -> None:
     assert pickle.loads(pickle.dumps(result.trace)).is_pristine is False
 
 
-def test_v9_artifact_reads_what_it_carries(tmp_path: Path) -> None:
+def test_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
+    """A v9 artifact written by torchlens 2.x refuses typed at load."""
+
     work = tmp_path / "clean_v9.tlspec"
     shutil.copytree(_V9_ARTIFACT, work)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.load(work)
-    assert trace.tlspec_version == 9
-    assert pristine_touch_evidence(trace) == ()
-    assert trace.is_pristine is True
+    assert_refuses_as_2x(work)
 
 
-def test_pre_v9_artifact_reads_no_evidence_never_pristine(tmp_path: Path) -> None:
+def test_pre_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
+    """A pre-v9 artifact written by torchlens 2.x refuses typed at load."""
+
     work = tmp_path / "tiny_v7.tlspec"
     shutil.copytree(_V7_ARTIFACT, work)
+    assert_refuses_as_2x(work)
+
+
+def test_saved_artifact_reads_what_it_carries(tmp_path: Path) -> None:
+    """An untouched trace saved by this release loads with no touch evidence, pristine."""
+
+    path = tmp_path / "clean.tlspec"
+    tl.trace(_model(), _x()).save(path)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.load(work)
-    assert trace.tlspec_version == 7
+        trace = tl.load(path)
     assert pristine_touch_evidence(trace) == ()
-    assert trace.is_pristine is None
+    assert trace.is_pristine is True
 
 
 @pytest.mark.parametrize(

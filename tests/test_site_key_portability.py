@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
 from torchlens._io import PreReleaseArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens._postprocess._site_key import SiteKeyMinter
@@ -148,32 +147,15 @@ def test_g4_marked_streaming_artifact_refuses_switch_off(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# G5: legacy load -- a real (switch-off) v7 artifact loads with
-# site_key=None everywhere; consumers behave per the consumer matrix
+# G5: legacy load -- the real (switch-off) v7 artifact was written by
+# torchlens 2.x, which this release does not read: it refuses typed
 # ---------------------------------------------------------------------------
 
 
-def test_g5_legacy_v7_artifact_loads_keyless_and_refuses_typed() -> None:
-    import warnings
+def test_g5_legacy_v7_artifact_refuses_as_2x() -> None:
     from pathlib import Path
 
-    fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
-    with warnings.catch_warnings():
-        # The checked-in pre-bump artifact loads with the age advisory.
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(fixture))  # real v7 write: site_key was DROPped
-    assert set(_keys(loaded).values()) == {None}
-    # Out of the invariant's declared domain: validation skips, never reds.
-    assert check_metadata_invariants(loaded)
-    # Consumer matrix: accessors and the join profile refuse typed.
-    with pytest.raises(InvalidArgumentError) as site_exc:
-        _ = loaded["linear_1_1"].site_key
-    assert site_exc.value.fields["code"] == "site_key_unavailable"
-    with pytest.raises(InvalidArgumentError) as peers_exc:
-        _ = loaded["linear_1_1"].site_peers
-    assert peers_exc.value.fields["code"] == "site_key_unavailable"
-    from torchlens._postprocess._site_join import site_profile
+    from _refuses_as_2x import assert_refuses_as_2x
 
-    with pytest.raises(InvalidArgumentError) as profile_exc:
-        site_profile(loaded)
-    assert profile_exc.value.fields["code"] == "site_key_unavailable"
+    fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
+    assert_refuses_as_2x(fixture)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import pickle
 from dataclasses import fields
 from pathlib import Path
 from types import MappingProxyType
@@ -13,6 +12,7 @@ from _source_corpus import package_ast, package_files
 
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
 from torchlens._data_classes.trace import Trace
+from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._runnable_seam import (
     LEGACY_RUNNABLE_TRACE_FIELD_MAP,
     RUNNABLE_TRACE_PUBLIC_MEMBERS,
@@ -20,6 +20,7 @@ from torchlens._runnable_seam import (
     RunnableTraceState,
     normalize_runnable_trace_state,
 )
+from torchlens.errors import ArtifactTooOldError
 
 _PACKAGE_ROOT = Path(__file__).parents[1] / "torchlens"
 _MIGRATION_DIRECT_READER_ALLOWLIST = frozenset()
@@ -185,20 +186,23 @@ def test_legacy_plain_pickle_fields_normalize_into_collapsed_state() -> None:
     assert state == {"_runnable": runnable_state}
 
 
-def test_trace_pickled_at_pre_seam_commit_loads_with_collapsed_state() -> None:
-    """Load a real Trace pickled at ``85c8c60f`` through the current state seam."""
+def test_trace_pickled_at_pre_seam_commit_refuses_as_2x() -> None:
+    """A real Trace pickled by torchlens 2.x (``85c8c60f``) refuses typed at the reader.
+
+    TorchLens 3 reads no 2.x file: the restricted reader the load door uses refuses the
+    pickle at its first 2.x module path, naming the 2.x origin and the remedy.
+    """
 
     fixture = Path(__file__).parent / "fixtures" / "legacy_trace_85c8c60f.pkl"
-    trace = pickle.loads(fixture.read_bytes())  # noqa: S301 - trusted checked-in fixture
+    with fixture.open("rb") as handle, pytest.raises(ArtifactTooOldError) as excinfo:
+        SafeBundleUnpickler(handle).load()
 
-    assert isinstance(trace, Trace)
-    assert len(trace) == 2
-    assert isinstance(trace.__dict__.get("_runnable"), RunnableTraceState)
-    assert not any(legacy_name in trace.__dict__ for legacy_name in LEGACY_RUNNABLE_TRACE_FIELD_MAP)
-    assert "_build_state" not in trace.__dict__
-    assert "_raw_graph_ws" not in trace.__dict__
-    assert "_module_capture_ws" not in trace.__dict__
-    assert "_wrapper_runtime_ws" not in trace.__dict__
+    message = str(excinfo.value)
+    assert "saved by torchlens 2.x" in message, message
+    assert "save it again with torchlens 2.36.x" in message, message
+    assert "capture the model again" in message, message
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"].startswith("module_path=torchlens.")
 
 
 def test_runnable_fork_keeps_mutable_witness_ledgers_independent() -> None:

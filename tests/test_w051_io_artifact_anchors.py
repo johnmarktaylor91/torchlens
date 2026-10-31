@@ -22,6 +22,7 @@ import pytest
 import torch
 import torch.nn as nn
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import ArtifactError
@@ -128,11 +129,9 @@ def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> 
         migrate(artifact)
     migrated = json.loads((artifact / "manifest.json").read_text())
     assert migrated["tlspec_version"] == tl._io.TLSPEC_VERSION
-    # Root state still carries the source stamp; the witness explains it.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(artifact)
-    assert len(loaded.layer_list) == 151
+    # The migrated manifest names the current stamp, but the bytes were still
+    # written by torchlens 2.x, which this release does not read.
+    assert_refuses_as_2x(artifact)
     # Delete the witness: the same bytes now refuse (the lineage is unproven).
     (artifact / "tl_migration_provenance.json").unlink()
     with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
@@ -396,26 +395,24 @@ def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> 
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
 
 
-def test_absent_root_entry_point_loads_on_v9_and_refuses_from_v10(
+def test_absent_root_entry_point_refuses_from_v10_and_2x_files_refuse(
     source_bundle: Path, tmp_path: Path
 ) -> None:
-    """tlspec 9 carries pre-C07X writers without the fact, so absence LOADS there.
+    """A current-stamp artifact with ``root_entry_point`` deleted refuses typed.
 
-    Evidence: ``tests/agent_surface_goldens/clean.tlspec`` (tlspec 9, torchlens
-    2.34.1) has no ``root_entry_point``. The fail-closed rule was armed for the
-    next coordinated bump (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the
-    v10 write is that bump: a current-stamp artifact with the fact deleted refuses.
+    The fail-closed rule was armed for the next coordinated bump
+    (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the v10 write is that
+    bump. Earlier stamps carried pre-C07X writers without the fact, but those
+    files were written by torchlens 2.x, which this release does not read:
+    they refuse with the typed 2.x error before the fact is consulted.
     """
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
     assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
-    legacy = tmp_path / "clean_v9.tlspec"
-    shutil.copytree(Path(__file__).parent / "agent_surface_goldens" / "clean.tlspec", legacy)
-    with pytest.warns(Warning):
-        loaded = tl.load(legacy)
-    assert loaded.tlspec_version == 9
-    assert loaded.root_entry_point is None
+    with tarfile.open(CORPUS, "r:gz") as tar:
+        tar.extractall(tmp_path)
+    assert_refuses_as_2x(tmp_path / "art_main_portable")
     path = _tampered(
         source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
     )
@@ -444,13 +441,13 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     facts._validate_root_entry_point(trace)
 
 
-def test_pre_v9_artifact_without_root_entry_point_still_loads(tmp_path: Path) -> None:
+def test_pre_v9_artifact_without_root_entry_point_refuses_as_2x(tmp_path: Path) -> None:
     with tarfile.open(CORPUS, "r:gz") as tar:
         tar.extractall(tmp_path)
-    with pytest.warns(Warning):
-        loaded = tl.load(tmp_path / "art_v2.34.1_portable")
-    assert loaded.root_entry_point is None
-    assert loaded.tlspec_version < 9
+    artifact = tmp_path / "art_v2.34.1_portable"
+    manifest = json.loads((artifact / "manifest.json").read_text())
+    assert manifest["tlspec_version"] < 9
+    assert_refuses_as_2x(artifact)
 
 
 def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
