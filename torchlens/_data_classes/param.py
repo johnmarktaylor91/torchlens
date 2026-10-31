@@ -91,6 +91,11 @@ _PARAM_CONTAINER_DEFAULTS: dict[str, Any] = {
 #: capture-time parameter evidence.
 _PARAM_VALUE_BASES = frozenset({"live_ref", "absent", "snapshot"})
 
+#: Caller action for a released Param whose live source parameter is gone.
+_RELEASED_PARAM_REMEDY = (
+    "keep the source model alive, with its parameters registered, while reading live Param values"
+)
+
 
 @dataclass(frozen=True)
 class ParamValueBasis:
@@ -627,7 +632,9 @@ class Param:
                 raise ParamReleasedError(
                     f"Parameter '{self.address}' is unavailable because the source model "
                     "has been garbage-collected after TorchLens released its direct "
-                    "parameter reference."
+                    "parameter reference.",
+                    code="run_source_model_collected",
+                    remedy=_RELEASED_PARAM_REMEDY,
                 )
             return None
 
@@ -635,11 +642,15 @@ class Param:
             param = model.get_parameter(self.address)
         except AttributeError as exc:
             raise ParamReleasedError(
-                f"Source model for parameter '{self.address}' does not support get_parameter()."
+                f"Source model for parameter '{self.address}' does not support get_parameter().",
+                code="run_source_model_collected",
+                remedy=_RELEASED_PARAM_REMEDY,
             ) from exc
         except KeyError as exc:
             raise ParamReleasedError(
-                f"Parameter '{self.address}' is no longer registered on the source model."
+                f"Parameter '{self.address}' is no longer registered on the source model.",
+                code="run_source_model_collected",
+                remedy=_RELEASED_PARAM_REMEDY,
             ) from exc
 
         if cache:
