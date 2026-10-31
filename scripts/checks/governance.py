@@ -3,8 +3,8 @@
 Each name in ``MOVED`` is a module here with a ``main()`` that runs its checks
 and returns an exit status. :func:`run` calls one; :func:`as_check` adapts one
 to the ``(repo) -> Outcome`` callable that ``run_all.py``'s ``CHECKS`` holds.
-The checks read the checkout that contains this folder, so ``repo`` must be
-that checkout.
+The checks read the checkout that contains this folder; for any other
+``repo`` the adapter reports a skip.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _CHECKS_DIR = Path(__file__).resolve().parent
 if str(_CHECKS_DIR) not in sys.path:
     sys.path.insert(0, str(_CHECKS_DIR))
 
-from _common import FAIL, OK, Outcome  # noqa: E402
+from _common import FAIL, OK, SKIP, Outcome  # noqa: E402
 
 MOVED: tuple[str, ...] = (
     "internal_id_lint",
@@ -59,7 +59,9 @@ def as_check(name: str) -> Callable[[Path], Outcome]:
 
     def check(repo: Path) -> Outcome:
         if repo.resolve() != _CHECKS_DIR.parents[1]:
-            return Outcome(FAIL, f"{name}: checks only the checkout that holds scripts/checks")
+            # The moved checks read this checkout only; another tree (a fixture) is
+            # not theirs to judge. Strict mode (TORCHLENS_CHECKS_STRICT=1) fails a skip.
+            return Outcome(SKIP, f"{name}: checks only the checkout that holds scripts/checks")
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
             status = run(name)
