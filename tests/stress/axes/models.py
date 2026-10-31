@@ -232,12 +232,12 @@ class NestedContainers(nn.Module):
         self.right = nn.Linear(WIDTH, WIDTH)
 
     def forward(self, batch: dict[str, Any]) -> dict[str, Any]:
-        pair = batch["pair"]
+        left, right = batch["pair"]  # indexed, so a flattened namedtuple still unpacks
         parts = [torch.relu(self.left(item)) for item in batch["items"]]
         return {
             "sum": parts[0] + parts[1],
             "parts": parts,
-            "pair": Pair(self.left(pair.left), self.right(pair.right)),
+            "pair": Pair(self.left(left), self.right(right)),
         }
 
 
