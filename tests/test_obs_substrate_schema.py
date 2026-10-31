@@ -29,7 +29,7 @@ def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> Observa
         "stream": stream,
         "phase": "forward",
         "presence": "observed",
-        "spine": spine.result(),
+        "spine": spine.compute(),
     }
     defaults.update(kwargs)
     return ObservationRecord(**defaults)
@@ -123,8 +123,8 @@ class TestMerges:
         a, b = _observed(), _observed()
         merged = merge_observations(a, b)
         assert merged.spine is not None and a.spine is not None
-        assert merged.spine.count_total == 2 * a.spine.count_total
-        assert merged.spine.count_zero == 2 * a.spine.count_zero
+        assert merged.spine.numel == 2 * a.spine.numel
+        assert merged.spine.num_zero == 2 * a.spine.num_zero
 
     def test_identity_mismatch_refuses(self) -> None:
         with pytest.raises(HistorySchemaError) as excinfo:

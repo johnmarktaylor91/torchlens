@@ -174,7 +174,7 @@ class TestStepSpellings:
         activation = next(o for o in block.observations if o.site_id == "module:0")
         assert activation.spine is not None
         # One row per optimizer step; micro-batch populations fold together.
-        assert activation.spine.count_total == 3 * 4 * 16
+        assert activation.spine.numel == 3 * 4 * 16
 
 
 class TestOptimizerTruth:
@@ -304,7 +304,7 @@ class TestObservationInertness:
         assert relu_obs.spine is not None
         # ReLU output has no negatives; the reduction happened at module
         # return, before any later in-place mutation could rewrite it.
-        assert relu_obs.spine.count_negative == 0
+        assert relu_obs.spine.num_negative == 0
 
 
 class TestCadence:

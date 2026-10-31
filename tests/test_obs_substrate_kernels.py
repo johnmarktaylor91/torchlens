@@ -45,11 +45,11 @@ class TestSpineReference:
         torch.manual_seed(0)
         data = torch.randn(1000)
         data[3] = 0.0
-        result = _spine_of(data).result()
-        assert result.count_total == 1000
-        assert result.count_finite == 1000
-        assert result.count_zero == int((data == 0).sum())
-        assert result.count_negative == int((data < 0).sum())
+        result = _spine_of(data).compute()
+        assert result.numel == 1000
+        assert result.num_finite == 1000
+        assert result.num_zero == int((data == 0).sum())
+        assert result.num_negative == int((data < 0).sum())
         assert result.finite_min == pytest.approx(float(data.min()), rel=0, abs=0)
         assert result.finite_max == pytest.approx(float(data.max()), rel=0, abs=0)
         assert result.finite_absmax == pytest.approx(float(data.abs().max()))
@@ -62,23 +62,23 @@ class TestSpineReference:
         # The classic cancellation case: large offset, small variance. The
         # naive E[x^2]-E[x]^2 form loses every significant digit here.
         data = torch.randn(10_000, dtype=torch.float64) + 1.0e8
-        result = _spine_of(data).result()
+        result = _spine_of(data).compute()
         expected_var = float(data.var(unbiased=False))
         assert result.m2 is not None
-        assert result.m2 / result.count_finite == pytest.approx(expected_var, rel=1e-6)
+        assert result.m2 / result.num_finite == pytest.approx(expected_var, rel=1e-6)
 
     def test_empty_update_is_a_specified_noop(self) -> None:
         spine = _spine_of(torch.empty(0))
-        result = spine.result()
-        assert result.count_total == 0
+        result = spine.compute()
+        assert result.numel == 0
         assert result.finite_min is None
         assert result.sum is None
 
     def test_batch_split_equals_whole_for_counts(self) -> None:
         torch.manual_seed(1)
         data = torch.randn(999)
-        whole = _spine_of(data).result()
-        split = _spine_of(data[:100], data[100:]).result()
+        whole = _spine_of(data).compute()
+        split = _spine_of(data[:100], data[100:]).compute()
         assert split.counts() == whole.counts()
         assert split.finite_min == whole.finite_min
         assert split.finite_max == whole.finite_max
@@ -95,20 +95,20 @@ class TestSpineMerge:
         a = _spine_of(torch.tensor([1.0, float("nan"), -3.0, 0.0]))
         b = _spine_of(torch.tensor([float("inf"), 2.0]))
         a.merge(b)
-        result = a.result()
-        assert result.count_total == 6
-        assert result.count_nan == 1
-        assert result.count_posinf == 1
-        assert result.count_zero == 1
-        assert result.count_negative == 1
+        result = a.compute()
+        assert result.numel == 6
+        assert result.num_nan == 1
+        assert result.num_posinf == 1
+        assert result.num_zero == 1
+        assert result.num_negative == 1
 
     def test_result_level_merge_matches_accumulator_merge(self) -> None:
         torch.manual_seed(2)
         x, y = torch.randn(500), torch.randn(300) + 2.0
         acc = _spine_of(x)
         acc.merge(_spine_of(y))
-        via_acc = acc.result()
-        via_results = merge_spine_results(_spine_of(x).result(), _spine_of(y).result())
+        via_acc = acc.compute()
+        via_results = merge_spine_results(_spine_of(x).compute(), _spine_of(y).compute())
         assert via_results.counts() == via_acc.counts()
         assert via_results.mean == pytest.approx(via_acc.mean)
         assert via_results.m2 == pytest.approx(via_acc.m2)
@@ -229,7 +229,7 @@ class TestDtypes:
     @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
     def test_half_widen_records_fp32_or_wider(self, dtype: torch.dtype) -> None:
         spine = _spine_of(torch.ones(8, dtype=dtype) * 0.5)
-        result = spine.result()
+        result = spine.compute()
         assert result.reduction_dtype in ("float32", "float64")
         assert result.sum == pytest.approx(4.0)
 
@@ -243,11 +243,11 @@ class TestDtypes:
 
     def test_integer_and_bool_inputs(self) -> None:
         spine = _spine_of(torch.tensor([1, -2, 0], dtype=torch.int64))
-        result = spine.result()
-        assert result.count_zero == 1
-        assert result.count_negative == 1
+        result = spine.compute()
+        assert result.num_zero == 1
+        assert result.num_negative == 1
         bool_spine = _spine_of(torch.tensor([True, False, True]))
-        assert bool_spine.result().count_zero == 1
+        assert bool_spine.compute().num_zero == 1
         h = Histogram()
         h.update(torch.tensor([4, -16], dtype=torch.int32))
         hist = h.result()
@@ -294,7 +294,7 @@ class TestRngIsolation:
         spine = RunningStats()
         spine.update(data)
         spine.merge(_spine_of(data))
-        spine.result()
+        spine.compute()
         h = Histogram()
         h.update(data)
         h.merge(Histogram())
@@ -315,7 +315,7 @@ class TestVectorPathParity:
         data[9] = float("inf")
         data[11] = 0.0
         via_vector = spine_result_from_vector(spine_vector(data), "float64")
-        via_acc = _spine_of(data).result()
+        via_acc = _spine_of(data).compute()
         assert via_vector.counts() == via_acc.counts()
         assert via_vector.finite_min == pytest.approx(via_acc.finite_min)
         assert via_vector.sum == pytest.approx(via_acc.sum)
@@ -326,7 +326,7 @@ class TestVectorPathParity:
         x, y = torch.randn(400), torch.randn(600) - 3.0
         merged_vec = merge_spine_vectors(spine_vector(x), spine_vector(y))
         via_vec = spine_result_from_vector(merged_vec, "float64")
-        via_results = merge_spine_results(_spine_of(x).result(), _spine_of(y).result())
+        via_results = merge_spine_results(_spine_of(x).compute(), _spine_of(y).compute())
         assert via_vec.counts() == via_results.counts()
         assert via_vec.mean == pytest.approx(via_results.mean)
         assert via_vec.m2 == pytest.approx(via_results.m2)

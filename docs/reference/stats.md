@@ -11,7 +11,7 @@ pending naming-session ratification.
 ## The accumulators
 
 Every accumulator implements the `tl.stats.StreamingStat` protocol --
-`update(value)` folds one batch, `result()` finalizes:
+`update(value)` folds one batch, `compute()` finalizes (`tl.stats.Histogram` finalizes with `result()`):
 
 | Accumulator | Result | Notes |
 |---|---|---|
@@ -266,12 +266,12 @@ x = torch.rand(2, 3, 16, 16)
 reduced = tl.trace(model, x, save="stats")
 spines = tl.stats.site_stats(reduced)
 label = next(iter(spines))
-print(label, spines[label].result().count_total, spines[label].result().mean)
+print(label, spines[label].compute().numel, spines[label].compute().mean)
 
 full = tl.trace(model, x)
 reference = tl.stats.RunningStats()
 reference.update(full[label].out)
-print(reference.result() == spines[label].result())
+print(reference.compute() == spines[label].compute())
 ```
 
 ## Trajectory statistics: `tl.mechinterp.measure_trajectory`

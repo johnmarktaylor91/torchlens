@@ -3148,14 +3148,15 @@ describe each surface in depth.
 | `ReadRow.is_frozen_resolved` | field of `ReadRow` |
 | `ReadRow.is_rescorable` | ``False`` on loaded tables (the runtime registry is not serialized) |
 | `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
+| `RunningStats.compute` | Return the finalized spine statistics (`RunningStatsResult`) |
 | `RunningStats.merge` | Fold another spine into this one |
-| `RunningStatsResult.count_finite` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_nan` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_negative` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_neginf` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_posinf` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_total` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_zero` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_finite` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_nan` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_negative` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_neginf` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_posinf` | field of `RunningStatsResult` |
+| `RunningStatsResult.numel` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_zero` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_absmax` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_max` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_min` | field of `RunningStatsResult` |
