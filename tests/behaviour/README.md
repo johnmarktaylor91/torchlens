@@ -45,7 +45,10 @@ or mark the cell to make it pass (the validation-integrity rule in
 * Every other case (the rest of the corpus and the toys) times `CORE_PAIRS`:
   `slow`.
 
-Run it with the cell grouping so one cell's seven tests share one worker:
+Run it with the cell grouping so one cell's seven tests share one worker
+(measured 2026-10-31: under this repository's root `conftest.py` the
+`xdist_group` marks are not yet honoured, so each worker recomputes the cells
+it draws; the cheap tier still finishes in under 3 minutes at `-n 4`):
 
 ```bash
 OMP_NUM_THREADS=1 TORCHLENS_SMOKE_PREFILTER=0 pytest tests/behaviour -m "not slow" -n 4 --dist loadgroup
