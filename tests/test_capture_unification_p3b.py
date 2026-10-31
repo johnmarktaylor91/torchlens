@@ -561,7 +561,7 @@ def test_followed_by_intervene_and_halt_fail_at_capture_start() -> None:
             x,
             intervene=tl.when(selector, tl.add(0.0)),
         )
-    with pytest.raises(PredicateError, match="trace\\(halt=.*does not support"):
+    with pytest.raises(PredicateError, match="trace\\(stop_after=.*does not support"):
         tl.trace(TinyLinear(), x, stop_after=selector)
     with pytest.raises(PredicateError, match="unsupported followed_by predicate shape"):
         tl.trace(TinyLinear(), x, stop_after=tl.followed_by(tl.func("relu")))

@@ -14,7 +14,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.report._health import TRACK_NONFINITE_HINT
 
-_OPTION = "CaptureOptions(track_nonfinite=True)"
+_OPTION = "CaptureOptions(on_nonfinite='track')"
 
 
 def _model() -> nn.Module:

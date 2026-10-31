@@ -340,7 +340,7 @@ def test_chunk_size_guarded_combinations(tmp_path: Path) -> None:
         tl.trace(
             model, x, intervene=lambda ctx: None, capture=tl.options.CaptureOptions(chunk_size=4)
         )
-    with pytest.raises(ChunkedForwardConfigError, match="halt"):
+    with pytest.raises(ChunkedForwardConfigError, match="stop_after"):
         tl.trace(
             model,
             x,

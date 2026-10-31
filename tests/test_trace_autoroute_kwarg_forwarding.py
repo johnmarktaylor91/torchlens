@@ -40,14 +40,10 @@ AUTOROUTE_EXEMPT_PARAMS = {
     "input_kwargs",
     # autoroute only runs when backend is None
     "backend",
-    # chunked forwards skip autoroute (chunk_size gate; chunk_paths without
-    # chunk_size raises before the branch)
-    "chunk_size",
+    # chunk_paths without CaptureOptions(chunk_size=) raises before the branch
     "chunk_paths",
-    # explicit backend-only options: raise before autoroute when backend is
-    # None
-    "jax_static_argnums",
-    "grad_options",
+    # the extra-positional catch-all refuses before dispatch
+    "extra_positional",
     # quickstart input ladder (F17): any non-None input_size returns via
     # _trace_via_ladder before the autoroute branch, so autoroute only ever
     # runs with input_shape=None (the ladder re-enters trace() with a real

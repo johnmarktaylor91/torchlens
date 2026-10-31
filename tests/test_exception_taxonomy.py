@@ -1086,14 +1086,19 @@ def test_predicate_type_doors_split_by_surface() -> None:
     import torchlens as tl
     from torchlens.recording.options import RecordingOptions
 
-    for kwarg in ("intervene", "halt"):
-        base = "intervention" if kwarg == "intervene" else "halt"
+    for kwarg, trace_code in (
+        ("intervene", "intervention_predicate_type_invalid"),
+        # the stop directive is one door (stop_after=, a site or a predicate):
+        # a value that is neither refuses under its own type code
+        ("stop_after", "stop_after_type_invalid"),
+    ):
         with pytest.raises(errors.ArgumentTypeError) as trace_info:
             tl.trace(nn.Identity(), torch.randn(2), **{kwarg: 123})
-        assert trace_info.value.fields["code"] == f"{base}_predicate_type_invalid"
+        assert trace_info.value.fields["code"] == trace_code
         assert isinstance(trace_info.value, TypeError)
         assert not isinstance(trace_info.value, ValueError)
 
+    for kwarg, base in (("intervene", "intervention"), ("halt", "halt")):
         with pytest.raises(errors.InvalidArgumentError) as record_info:
             RecordingOptions(**{kwarg: 123})
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"

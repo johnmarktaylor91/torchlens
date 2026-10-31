@@ -3728,6 +3728,12 @@ def _trace_torch_model(
             log_injections=capture_options.log_injections,
             carry_state=capture_options.carry_state,
             measure_host_peak_memory=capture_options.measure_host_peak_memory,
+            save_mode=save_mode_value,
+            reconstruction_ready=capture_options.reconstruction_ready,
+            grouping=capture_options.grouping,
+            jax_static_argnums=capture_options.jax_static_argnums,
+            grad_options=capture_options.grad_options,
+            chunk_size=None,
         )
         recursive_save_value: _SaveTransforms | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else save_options

@@ -67,7 +67,7 @@ RECORD_RECORDING_MOVES = (
 )
 RENAMES = {"halt": "stop_after", "streaming": "storage"}
 DROPS = ("profile",)
-DOORS = {"trace": "trace", "record": "record"}
+DOORS = {"trace": "trace", "record": "record", "trace_fn": "trace", "record_fn": "record"}
 
 
 def _door_name(func: ast.expr) -> str | None:

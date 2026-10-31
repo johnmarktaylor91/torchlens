@@ -133,7 +133,7 @@ def test_streaming_writes_blobs_before_postprocess(
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(path=bundle_path, async_writes=False),
+        storage=tl.options.StorageOptions(path=bundle_path, async_writes=False),
     )
 
     assert observed["final_exists"] is False
@@ -209,7 +209,7 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
             capture=tl.options.CaptureOptions(
                 layers_to_save="all", activation_transform=_raise_on_out
             ),
-            streaming=tl.options.StorageOptions(path=bundle_path),
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -232,7 +232,7 @@ def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path
                 layers_to_save="all",
                 activation_transform=lambda tensor: tensor.detach().cpu().numpy(),
             ),
-            streaming=tl.options.StorageOptions(path=bundle_path),
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -253,7 +253,7 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
             capture=tl.options.CaptureOptions(
                 layers_to_save="all", activation_transform=lambda tensor: tensor.to_sparse()
             ),
-            streaming=tl.options.StorageOptions(path=bundle_path),
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -433,7 +433,7 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         trace_fn(
             model2,
             inputs2,
-            streaming=tl.options.StorageOptions(path=tmp_path / "stream_bundle.tl", on_save=_sink),
+            storage=tl.options.StorageOptions(path=tmp_path / "stream_bundle.tl", on_save=_sink),
         )
     assert exc_info.value.fields["code"] == "output_sink_conflict"
 
@@ -448,7 +448,7 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="linear"),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     saved = _saved_layers(trace)
@@ -535,7 +535,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(path=bundle_path),
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
 
     assert detect_tlspec_format(bundle_path) == "v2.0_unified"

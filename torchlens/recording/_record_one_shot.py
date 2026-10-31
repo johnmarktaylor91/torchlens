@@ -89,6 +89,8 @@ def _unfold_record_options(
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
     if flat["postprocess"] is MISSING:
         flat["postprocess"] = "none"
+    if flat["on_forward_error"] is MISSING:
+        flat["on_forward_error"] = "raise"
     return flat
 
 
