@@ -173,7 +173,7 @@ def build_baseline_diff(
         "schema": BASELINE_SUMMARY_SCHEMA,
         "source": "torchlens.report.diff",
         "direction": "subject - reference",
-        "reference_model_class": str(getattr(reference, "model_class_name", "")),
+        "reference_model_class": str(getattr(reference, "_source_class_name", "")),
         "row_counts": dict(sorted(report.counts.items())),
         "nodes_with_diff_facts": len(node_facts),
         "removed_count": len(removed),

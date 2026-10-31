@@ -623,7 +623,7 @@ def save_new_outs(
     """
     if backward_ready is not None:
         model_detach_saved_activations = self.detach_saved_activations
-        model_train_mode = getattr(self, "backward_ready", False)
+        model_train_mode = getattr(self, "_options_backward_ready", False)
         layer_detach_saved_activations = {
             layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
@@ -654,7 +654,7 @@ def save_new_outs(
     from ..user_funcs import _run_model_and_save_specified_outs
     from .projectors import RefreshProjector
 
-    save_grads_policy = getattr(self, "save_grads", None)
+    save_grads_policy = getattr(self, "_options_save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     refresh_seed = self.random_seed if seed is None else seed
@@ -672,28 +672,28 @@ def save_new_outs(
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
-        output_device=getattr(self, "output_device", "same"),
-        activation_transform=getattr(self, "activation_transform", None),
-        grad_transform=getattr(self, "grad_transform", None),
-        save_raw_activations=getattr(self, "save_raw_activations", True),
-        save_raw_grads=getattr(self, "save_raw_gradients", True),
-        save_mode=getattr(self, "save_mode", "copy"),
+        output_device=getattr(self, "_options_output_device", "same"),
+        activation_transform=getattr(self, "_options_activation_transform", None),
+        grad_transform=getattr(self, "_options_grad_transform", None),
+        save_raw_activations=getattr(self, "_options_save_raw_activations", True),
+        save_raw_grads=getattr(self, "_options_save_raw_grads", True),
+        save_mode=getattr(self, "_options_save_mode", "copy"),
         capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
-        keep_orphans=getattr(self, "keep_orphans", False),
-        mark_layer_depths=getattr(self, "mark_layer_depths", False),
-        detach_saved_activations=getattr(self, "detach_saved_activations", False),
-        save_args=getattr(self, "save_arg_values", False),
+        keep_orphans=getattr(self, "_options_keep_orphans", False),
+        mark_layer_depths=getattr(self, "_options_mark_layer_depths", False),
+        detach_saved_activations=getattr(self, "_options_detach_saved_activations", False),
+        save_args=getattr(self, "_options_save_args", False),
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
         seed=refresh_seed,
-        num_context_lines=getattr(self, "num_context_lines", 7),
+        num_context_lines=getattr(self, "_options_source_context_lines", 7),
         optimizer=getattr(self, "_optimizer", None),
-        save_source_context=getattr(self, "save_code_context", False),
-        save_rng=getattr(self, "save_rng_states", False),
-        recurrence_detection=getattr(self, "recurrence_detection", True),
-        verbose=getattr(self, "verbose", False),
-        backward_ready=getattr(self, "backward_ready", False),
-        inference_only=getattr(self, "inference_only", False),
+        save_source_context=getattr(self, "_options_save_source_context", False),
+        save_rng=getattr(self, "_options_save_rng", False),
+        recurrence_detection=getattr(self, "_options_recurrence_detection", True),
+        verbose=getattr(self, "_options_verbose", False),
+        backward_ready=getattr(self, "_options_backward_ready", False),
+        inference_only=getattr(self, "_options_inference_only", False),
         # A refresh retains payloads like any capture; dropping the configured
         # budget here silently rebudgeted every refresh/run() forward at the
         # default "auto" (or left a save_budget=None session budgeted).
@@ -701,11 +701,11 @@ def save_new_outs(
         # F2: a refresh re-arms the nonfinite tripwire. The historical refresh
         # forwarded only inference_only, so a raise_on_nan capture silently
         # lost its abort policy on every refreshed forward.
-        raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+        raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
-        save_transformed_output=getattr(self, "save_raw_output", "small"),
+        save_transformed_output=getattr(self, "_options_save_transformed_output", "small"),
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
         _resolved_grad_layer_nums_to_save=(
@@ -1010,7 +1010,7 @@ def _register_model_input_container_snapshots(
             reconstructable=result.reconstructable,
         )
     if first_spec is not None:
-        trace.__dict__["input_structure"] = first_spec
+        trace.__dict__["_provenance_input_structure"] = first_spec
 
 
 _OPAQUE_INPUT_LEAF = object()
@@ -1361,7 +1361,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     events = self.__dict__.pop("capture_events", None)
     if events is None:
         return
-    if getattr(self, "capture_mode", None) == "predicate":
+    if getattr(self, "_options_mode", None) == "predicate":
         return
     if hasattr(events, "release_runtime_sidecars"):
         events.release_runtime_sidecars()
@@ -1762,13 +1762,13 @@ def run_and_log_inputs_through_model(
         if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
             self._stop_directive = StopDirective(
                 halt_options=getattr(self, "_predicate_save_options", None),
-                raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+                raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
                 forward_error_mode=getattr(
                     getattr(self, "_predicate_save_options", None),
                     "on_forward_error",
                     "raise",
                 ),
-                inference_only=bool(getattr(self, "inference_only", False)),
+                inference_only=bool(getattr(self, "_options_inference_only", False)),
             )
         self._capture_config = InternalCaptureConfig(
             capture_mode=str(self.capture_mode),
@@ -1799,7 +1799,7 @@ def run_and_log_inputs_through_model(
         _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
 
         # Print input summary
-        if getattr(self, "verbose", False):
+        if getattr(self, "_options_verbose", False):
             devices = set()
             for t in input_tensors:
                 if hasattr(t, "device"):

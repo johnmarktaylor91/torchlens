@@ -583,7 +583,7 @@ def _report_escape(
         "storage_hint": _storage_hint(callsite),
         "owner_thread_id": guard.owner_thread_id,
         "guard_pass_index": guard.guard_pass_index,
-        "capture_mode": getattr(guard.trace, "capture_mode", None),
+        "capture_mode": getattr(guard.trace, "_options_mode", None),
         "exhaustive_pass": guard.trace._wrapper_runtime_ws.in_exhaustive_pass,
         "stack": tuple(traceback.format_stack(callsite, limit=5)),
         "witness_corroborated": False,
@@ -817,33 +817,36 @@ def _copy_recording_diagnostics(trace: Any) -> None:
     recording = getattr(trace, "_fastlog_recording", None)
     if recording is None:
         return
-    for field_name in (
-        "escape_detector_mode",
-        "escape_detector_verified",
-        "completeness_witness_mode",
-        "completeness_witness_verified",
-        "capture_owner_thread_id",
-        "capture_owner_thread_qualified",
-        "capture_thread_count_start",
-        "capture_thread_count_end",
-        "capture_thread_activity_detected",
-        "capture_verified",
-        "capture_verification_reason",
-        "escape_detector_backward_coverage",
-        "escape_diagnostics",
-        "escape_detector_event_count",
-        "escape_detector_callback_ns",
-        "completeness_diagnostics",
-        "completeness_decompositions",
-        "completeness_witness_event_count",
-        "completeness_witness_accounted_count",
-        "completeness_witness_expected_opaque_count",
-        "completeness_witness_unaccounted_count",
-        "completeness_witness_callback_ns",
-        "capture_guard_passes",
+    for recording_name, trace_name in (
+        ("escape_detector_mode", "_health_escape_detector_mode"),
+        ("escape_detector_verified", "_health_escape_detector_verified"),
+        ("completeness_witness_mode", "_health_completeness_mode"),
+        ("completeness_witness_verified", "_health_completeness_verified"),
+        ("capture_owner_thread_id", "_provenance_owner_thread_id"),
+        ("capture_owner_thread_qualified", "_provenance_owner_thread_qualified"),
+        ("capture_thread_count_start", "_provenance_thread_count_start"),
+        ("capture_thread_count_end", "_provenance_thread_count_end"),
+        ("capture_thread_activity_detected", "_provenance_thread_activity_detected"),
+        ("capture_verified", "_provenance_verified"),
+        ("capture_verification_reason", "_provenance_verification_reason"),
+        ("escape_detector_backward_coverage", "_autograd_escape_detector_backward_coverage"),
+        ("escape_diagnostics", "escape_diagnostics"),
+        ("escape_detector_event_count", "_health_num_escape_detector_events"),
+        ("escape_detector_callback_ns", "_health_escape_detector_callback_ns"),
+        ("completeness_diagnostics", "completeness_diagnostics"),
+        ("completeness_decompositions", "_health_completeness_decompositions"),
+        ("completeness_witness_event_count", "_health_num_witness_events"),
+        ("completeness_witness_accounted_count", "_health_num_accounted_witness_events"),
+        (
+            "completeness_witness_expected_opaque_count",
+            "_health_num_expected_opaque_witness_events",
+        ),
+        ("completeness_witness_unaccounted_count", "_health_num_unaccounted_witness_events"),
+        ("completeness_witness_callback_ns", "_health_completeness_callback_ns"),
+        ("capture_guard_passes", "capture_guard_passes"),
     ):
-        if hasattr(trace, field_name):
-            object.__setattr__(recording, field_name, getattr(trace, field_name))
+        if hasattr(trace, trace_name):
+            object.__setattr__(recording, recording_name, getattr(trace, trace_name))
 
 
 @contextmanager

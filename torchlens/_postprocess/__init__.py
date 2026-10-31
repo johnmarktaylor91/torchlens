@@ -576,7 +576,7 @@ def _populate_var_names(self: "Trace") -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "save_code_context", False):
+    if not getattr(self, "_options_save_source_context", False):
         return
     for op in getattr(self, "layer_list", ()):
         if getattr(op, "type", None) == "output":
@@ -794,7 +794,7 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+    _post_t0 = time.time() if getattr(self, "_options_verbose", False) else 0
 
     # Steps 1-20 run through the derived-order executor (_executor.py): the
     # registry mirrors the historical hand order (R2 pins them equal), each

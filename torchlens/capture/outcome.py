@@ -752,7 +752,7 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
     inference_only = bool(state.get("inference_only"))
     if halted and finished:
         reason = state.get("stop_reason")
-        frontier = state.get("halt_frontier")
+        frontier = state.get("_graph_stop_frontier")
         return CaptureOutcome(
             status=CaptureStatus.STOPPED,
             reason=reason if isinstance(reason, str) else None,

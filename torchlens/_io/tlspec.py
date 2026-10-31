@@ -620,7 +620,7 @@ class _TlSpecWriter:
             JSON-ready derived-gradient summary, or ``None`` when absent.
         """
 
-        leaf_records = getattr(source, "derived_grads", {})
+        leaf_records = getattr(source, "_autograd_derived_grads", {})
         intermediate_records = getattr(
             getattr(source, "autograd", None), "intermediate_derived_grads", {}
         )
@@ -661,14 +661,14 @@ class _TlSpecWriter:
         """
 
         model_signature = cls._model_signature(source, kind="trace")
-        graph_shape_hash = getattr(source, "graph_shape_hash", None)
+        graph_shape_hash = getattr(source, "_provenance_fingerprint", None)
         return {
             "backend_fingerprint": {
                 "backend": backend_name,
                 "model_signature": model_signature,
                 "graph_digest": graph_shape_hash or "metadata-only",
                 "module_identity_mode": getattr(source, "module_identity_mode", None),
-                "param_source": getattr(source, "param_source", None),
+                "param_source": getattr(source, "_provenance_param_source", None),
             }
         }
 
@@ -691,7 +691,7 @@ class _TlSpecWriter:
 
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        model_class_qualname = getattr(source, "model_class_qualname", None)
+        model_class_qualname = getattr(source, "_source_class_qualname", None)
         if isinstance(model_class_qualname, str) and model_class_qualname:
             return model_class_qualname
         model = _source_model(source)
@@ -738,7 +738,7 @@ class _TlSpecWriter:
             parameter_hash = _hash_named_tensor_meta(model.named_parameters())
             buffer_hash = _hash_named_tensor_meta(model.named_buffers())
         else:
-            raw_parameter_hash = getattr(source, "param_hash_quick", None)
+            raw_parameter_hash = getattr(source, "_provenance_param_hash_quick", None)
             if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
                 parameter_hash = raw_parameter_hash
             else:
@@ -900,7 +900,7 @@ class _TlSpecWriter:
         if backend_name == "torch":
             saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))
         return {
-            "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
+            "has_backward_pass": bool(getattr(source, "_autograd_has_backward_pass", False)),
             "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
             "num_grad_fns": _safe_len(getattr(source, "grad_fn_logs", None)),
             "num_grad_fn_calls": _safe_len(
@@ -1048,9 +1048,11 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     """
 
     return {
-        "model_class_name": _json_str_or_none(getattr(source, "model_class_name", None)),
-        "graph_shape_hash": _json_str_or_none(getattr(source, "graph_shape_hash", None)),
-        "input_signature_hash": _json_str_or_none(getattr(source, "input_signature_hash", None)),
+        "model_class_name": _json_str_or_none(getattr(source, "_source_class_name", None)),
+        "graph_shape_hash": _json_str_or_none(getattr(source, "_provenance_fingerprint", None)),
+        "input_signature_hash": _json_str_or_none(
+            getattr(source, "_provenance_input_signature_hash", None)
+        ),
     }
 
 

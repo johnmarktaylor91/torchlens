@@ -645,7 +645,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # silently loses the mutation. Recording it lets the runnable descriptor stay honestly
     # UNVERIFIABLE instead of VERIFYING a replay that omits the write.
     _record_pruned_alias_mutation(self, orphan_nodes)
-    if getattr(self, "keep_orphans", False):
+    if getattr(self, "_options_keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_graph_ws.raw_layer_dict[orphan_label].is_orphan = True
         return

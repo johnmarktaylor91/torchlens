@@ -429,7 +429,9 @@ class Recorder:
 
             if getattr(self._recording, "_outcome", None) is None:
                 recording = self._recording
-                inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
+                inference_only = bool(
+                    getattr(self._state.runtime_trace, "_options_inference_only", False)
+                )
                 if recording.is_stopped:
                     stamped = CaptureOutcome(
                         status=CaptureStatus.STOPPED,

@@ -221,7 +221,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "state_view_accessor": event.state_view_accessor,
             }
         )
-    decompositions = trace.__dict__.setdefault("completeness_decompositions", [])
+    decompositions = trace.__dict__.setdefault("_health_completeness_decompositions", [])
     for owner, operators in owner_events.values():
         owner_scope = (
             "expected_opaque"
@@ -389,13 +389,13 @@ def _init_witness_fields(trace: Any, mode: str) -> None:
     if not hasattr(trace, "_health_completeness_verified"):
         trace._health_completeness_verified = None
     trace.__dict__.setdefault("completeness_diagnostics", [])
-    trace.__dict__.setdefault("completeness_decompositions", [])
+    trace.__dict__.setdefault("_health_completeness_decompositions", [])
     for counter_field in (
-        "completeness_witness_event_count",
-        "completeness_witness_accounted_count",
-        "completeness_witness_expected_opaque_count",
-        "completeness_witness_unaccounted_count",
-        "completeness_witness_callback_ns",
+        "_health_num_witness_events",
+        "_health_num_accounted_witness_events",
+        "_health_num_expected_opaque_witness_events",
+        "_health_num_unaccounted_witness_events",
+        "_health_completeness_callback_ns",
     ):
         trace.__dict__.setdefault(counter_field, 0)
 

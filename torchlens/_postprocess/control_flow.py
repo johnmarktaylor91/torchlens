@@ -960,7 +960,7 @@ def _fix_buffer_layers(self: Trace) -> None:
             source_matches_buffer = _buffer_source_value_matches(
                 self[layer.buffer_source],
                 layer,
-                structure_only=bool(getattr(self, "structure_only", False)),
+                structure_only=bool(getattr(self, "_options_structure_only", False)),
             )
             if source_matches_buffer:
                 layer.func = identity

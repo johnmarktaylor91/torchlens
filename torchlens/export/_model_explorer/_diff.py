@@ -62,7 +62,7 @@ def model_explorer_diff(
     left, right, names = _resolve_pair(members)
     destination = Path(path)
     destination.mkdir(parents=True, exist_ok=True)
-    base = str(label or getattr(left, "model_class_name", None) or "model")
+    base = str(label or getattr(left, "_source_class_name", None) or "model")
     payloads = {}
     for side, trace, name in (("left", left, names[0]), ("right", right, names[1])):
         payload = to_model_explorer_dict(

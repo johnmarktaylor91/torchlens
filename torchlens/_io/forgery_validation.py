@@ -1318,7 +1318,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
         Loaded trace carrying the optional structure-only marker.
     """
 
-    marker = trace.__dict__.get("structure_only")
+    marker = trace.__dict__.get("_options_structure_only")
     if marker in (None, False):
         return
     if marker is not True:
@@ -1326,7 +1326,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
             f"expected a bool marker, got {marker!r}",
             "type",
         )
-    if trace.__dict__.get("capture_verified") is True:
+    if trace.__dict__.get("_provenance_verified") is True:
         _structure_only_invalid(
             "capture_verified=True on a structure-only capture (verification requires values)",
             "verification_claim",
@@ -1812,7 +1812,7 @@ def _validate_source_snapshots(trace: Trace) -> None:
     until the F30 writer lands; present rows validate fail-closed.
     """
 
-    rows = trace.__dict__.get("source_snapshots")
+    rows = trace.__dict__.get("_source_snapshots")
     if rows is None or rows == []:
         return
     if not _is_sequence(rows):
@@ -1905,10 +1905,10 @@ def _validate_structure_evidence(trace: Trace) -> None:
     values contradicts the mode it exists to disclose.
     """
 
-    envelope = trace.__dict__.get("structure_evidence")
+    envelope = trace.__dict__.get("_graph_structure_evidence")
     if envelope is None:
         return
-    if not trace.__dict__.get("structure_only", False):
+    if not trace.__dict__.get("_options_structure_only", False):
         _evidence_invalid(
             "an evidence envelope is present on a capture whose "
             "structure_only marker is False; the envelope exists to disclose "

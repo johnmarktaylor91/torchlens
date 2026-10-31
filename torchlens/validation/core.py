@@ -911,7 +911,9 @@ def validate_saved_outs(
             decision="failed",
             reason=dispatch_count_result.reason,
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        status = decision_recorder.as_status(
+            backend=str(getattr(self, "_provenance_backend", "torch"))
+        )
         setattr(self, "_validation_replay_status", status)
         return status
     if dispatch_count_result.decision == "validated":
@@ -986,7 +988,9 @@ def validate_saved_outs(
                 decision="failed",
                 reason="output_count_mismatch",
             )
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            status = decision_recorder.as_status(
+                backend=str(getattr(self, "_provenance_backend", "torch"))
+            )
             setattr(self, "_validation_replay_status", status)
             return status
         output_label_counts: dict[str, int] = defaultdict(int)
@@ -1012,7 +1016,9 @@ def validate_saved_outs(
                     decision="failed",
                     reason="output_missing",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                status = decision_recorder.as_status(
+                    backend=str(getattr(self, "_provenance_backend", "torch"))
+                )
                 setattr(self, "_validation_replay_status", status)
                 return status
             if not _ground_truth_output_matches_saved(
@@ -1041,7 +1047,9 @@ def validate_saved_outs(
                     decision="failed",
                     reason="ground_truth_mismatch",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                status = decision_recorder.as_status(
+                    backend=str(getattr(self, "_provenance_backend", "torch"))
+                )
                 setattr(self, "_validation_replay_status", status)
                 return status
             decision_recorder.record(
@@ -1088,7 +1096,9 @@ def validate_saved_outs(
                 decision_recorder,
             )
         if parents_valid.failed:
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            status = decision_recorder.as_status(
+                backend=str(getattr(self, "_provenance_backend", "torch"))
+            )
             setattr(self, "_validation_replay_status", status)
             return status
 
@@ -1122,7 +1132,9 @@ def validate_saved_outs(
             decision="failed",
             reason="bfs_incomplete",
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        status = decision_recorder.as_status(
+            backend=str(getattr(self, "_provenance_backend", "torch"))
+        )
         setattr(self, "_validation_replay_status", status)
         return status
 
@@ -1159,7 +1171,7 @@ def validate_saved_outs(
             raise
     # Source-less tensor args replay fine from saved args; a gap records a failure here.
     check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+    status = decision_recorder.as_status(backend=str(getattr(self, "_provenance_backend", "torch")))
     setattr(self, "_validation_replay_status", status)
     return status
 

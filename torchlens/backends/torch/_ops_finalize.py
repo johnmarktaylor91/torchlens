@@ -403,7 +403,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
         If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
     """
 
-    if not getattr(self, "raise_on_nan", False):
+    if not getattr(self, "_options_on_nonfinite", False):
         return
     try:
         with pause_logging():

@@ -455,7 +455,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_barcode_text(key): value for key, value in parent_param_ops.items()
             }
 
-    equivalence_groups = state.get("op_equivalence_classes")
+    equivalence_groups = state.get("_graph_op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
         rebuilt_groups = {
             equivalence_class_map.get(key) or canonical_equivalence_key(key): value
@@ -476,9 +476,9 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             remapped_groups.update(rebuilt_groups)
         else:
             remapped_groups = type(equivalence_groups)(rebuilt_groups)
-        state["op_equivalence_classes"] = remapped_groups
+        state["_graph_op_equivalence_classes"] = remapped_groups
 
-    grad_fn_order = list(state.get("grad_fn_order") or ())
+    grad_fn_order = list(state.get("_autograd_grad_fn_order") or ())
     grad_fn_logs = state.get("grad_fn_logs") or {}
     grad_id_map: dict[int, int] = {}
 
@@ -527,9 +527,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             ]
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
         state["grad_fn_logs"] = remapped_logs
-    state["grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
-    state["backward_root_grad_fn_object_ids"] = [
-        remap_grad_id(grad_id) for grad_id in (state.get("backward_root_grad_fn_object_ids") or ())
+    state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
+    state["_autograd_backward_root_grad_fn_object_ids"] = [
+        remap_grad_id(grad_id)
+        for grad_id in (state.get("_autograd_backward_root_grad_fn_object_ids") or ())
     ]
     for record in (*ops, *layers):
         record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
@@ -538,8 +539,12 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         if root_ids:
             pass_record.root_grad_fn_ids = [remap_grad_id(root_id) for root_id in root_ids]
 
-    state["model_object_id"] = 1 if state.get("model_object_id") is not None else None
-    state["input_object_id"] = 1 if state.get("input_object_id") is not None else None
+    state["_provenance_model_object_id"] = (
+        1 if state.get("_provenance_model_object_id") is not None else None
+    )
+    state["_provenance_input_object_id"] = (
+        1 if state.get("_provenance_input_object_id") is not None else None
+    )
 
 
 def detach_conditional_trace_backrefs(value: Any) -> None:
@@ -1200,8 +1205,8 @@ def _scrub_value(
         # so a loaded artifact can never CLAIM verification -- the row can only
         # ever worsen a verdict, preserving the monotonicity the runnable side
         # enforces structurally. rescue_rerun stays session-time as documented.
-        if getattr(value, "capture_verified", None) is False:
-            reason = getattr(value, "capture_verification_reason", None)
+        if getattr(value, "_provenance_verified", None) is False:
+            reason = getattr(value, "_provenance_verification_reason", None)
             scrubbed_state["_capture_verification"] = {
                 "verified": False,
                 "reason": str(reason) if reason is not None else None,
@@ -1369,15 +1374,15 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
-        "jax_closed_jaxpr",
+        "_provenance_jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",
         "_jax_capture_index_to_raw_op_label",
         "jax_capture_index_to_final_op_label",
-        "jax_inlined_call_primitives",
+        "_provenance_jax_inlined_call_primitives",
         "jax_outvar_key_to_capture_index",
-        "jax_static_argnums",
+        "_options_jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
         # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared

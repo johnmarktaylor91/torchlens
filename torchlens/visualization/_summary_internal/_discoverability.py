@@ -472,7 +472,7 @@ def _parent_run_summary(trace: Trace) -> str:
     parent = parent_ref()
     if parent is None:
         return "collected"
-    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, 'model_class_name', None)})"
+    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, '_source_class_name', None)})"
 
 
 def _fork_chain_summary(trace: Trace) -> str:

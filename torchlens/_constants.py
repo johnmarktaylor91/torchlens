@@ -62,17 +62,17 @@ ARG_EXPRESSIONS_FIELD = "arg_expressions"
 # it is a reviewed contract diff, because every additional row weakens the
 # reproducibility tripwire.
 _ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
-    "random_seed",
-    "capture_start_time",
-    "capture_end_time",
+    "_options_seed",
+    "_provenance_start_time",
+    "_provenance_end_time",
     "_phase_timings",
-    "setup_duration",
-    "forward_duration",
-    "cleanup_duration",
-    "func_calls_duration",
-    "forward_peak_memory",
+    "_provenance_setup_duration",
+    "_cost_forward_duration",
+    "_provenance_cleanup_duration",
+    "_cost_func_calls_duration",
+    "_cost_forward_peak_memory",
     # varies exactly with forward_peak_memory (set iff a CPU delta read 0).
-    "forward_peak_memory_reason",
+    "_cost_forward_peak_memory_reason",
 )
 _ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
     "created_at",

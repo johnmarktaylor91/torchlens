@@ -304,7 +304,7 @@ def log_function_output_tensors(
     # path pays one attribute read; imports stay INSIDE the branch because
     # ops.py rebinds this function under its own globals (the split-module
     # pattern), so module-level helpers here are not visible at runtime.
-    if getattr(self, "structure_only", False):
+    if getattr(self, "_options_structure_only", False):
         from ...capture._weightsfree_admission import weightsfree_meta_active
 
         if weightsfree_meta_active(self):

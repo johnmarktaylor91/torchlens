@@ -129,7 +129,7 @@ def _build_shared_fields_dict(
     fields_dict["_construction_done"] = False
     fields_dict["interventions"] = []
     should_capture_template = bool(
-        getattr(self, "is_replayable", False) or getattr(self, "save_arg_templates", False)
+        getattr(self, "is_replayable", False) or getattr(self, "_options_save_arg_templates", False)
     )
     if should_capture_template:
         captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
@@ -147,7 +147,7 @@ def _build_shared_fields_dict(
     # Grad info
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
-    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["save_grads"] = getattr(self, "_options_save_grads", None) not in (None, False)
     fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None

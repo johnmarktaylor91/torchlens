@@ -273,7 +273,7 @@ def _build_root_module_log(
         class_qualname=root_meta.get("class_qualname", ""),
         ordinal_index=0,
         forward_duration=float(self.forward_duration or 0.0),
-        code_context=list(getattr(self, "code_context", [])),
+        code_context=list(getattr(self, "_source_frames", [])),
         module_call_stack=[],
         _source_trace=self,
     )
@@ -614,7 +614,7 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     self:
         Model log being finalized.
     """
-    if getattr(self, "conditional_edge_call_indices", None):
+    if getattr(self, "_graph_conditional_edge_call_indices", None):
         self.conditional_edge_call_indices = {
             edge_key: sorted(dict.fromkeys(call_indexs))
             for edge_key, call_indexs in self.conditional_edge_call_indices.items()
@@ -1049,7 +1049,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
-    keep_forward_args = getattr(self, "module_identity_mode", None) in {
+    keep_forward_args = getattr(self, "_options_module_identity_mode", None) in {
         "pytree_module",
         "object_module",
     }

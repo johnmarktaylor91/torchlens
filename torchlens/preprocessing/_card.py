@@ -140,7 +140,7 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record
-    return getattr(trace_or_record, "input_preprocessor", None)
+    return getattr(trace_or_record, "_provenance_input_preprocessor", None)
 
 
 def _live_model(trace_or_record: Any) -> Any:

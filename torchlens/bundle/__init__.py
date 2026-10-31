@@ -579,7 +579,9 @@ class Bundle:
             Whether every member has an equal ``graph_shape_hash`` value.
         """
 
-        hashes = {getattr(member, "graph_shape_hash", None) for member in self._members.values()}
+        hashes = {
+            getattr(member, "_provenance_fingerprint", None) for member in self._members.values()
+        }
         return len(hashes) == 1
 
     def _kind_names(self, kind: str, *, shared: bool) -> list[str]:
@@ -2363,8 +2365,8 @@ class Bundle:
         if left is right:
             return Relationship.SAME_OBJECT
 
-        left_class = getattr(left, "model_class_qualname", None)
-        right_class = getattr(right, "model_class_qualname", None)
+        left_class = getattr(left, "_source_class_qualname", None)
+        right_class = getattr(right, "_source_class_qualname", None)
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
 
@@ -2380,10 +2382,10 @@ class Bundle:
                 return Relationship.SAME_OBJECT
             return Relationship.SAME_MODEL_OBJECT_AT_CAPTURE
 
-        left_graph = getattr(left, "graph_shape_hash", None)
-        right_graph = getattr(right, "graph_shape_hash", None)
-        left_input = getattr(left, "input_signature_hash", None)
-        right_input = getattr(right, "input_signature_hash", None)
+        left_graph = getattr(left, "_provenance_fingerprint", None)
+        right_graph = getattr(right, "_provenance_fingerprint", None)
+        left_input = getattr(left, "_provenance_input_signature_hash", None)
+        right_input = getattr(right, "_provenance_input_signature_hash", None)
         if left_graph is not None and left_graph == right_graph:
             if left_input is not None and left_input == right_input:
                 return Relationship.SHARED_GRAPH_SAME_INPUT

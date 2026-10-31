@@ -404,7 +404,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
             setattr(self, "_validation_replay_status", status)
             return status
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(getattr(self, "_provenance_backend", "torch"))
         validation_result = spec.validate_trace(
             self,
             ground_truth_output_tensors=ground_truth_output_tensors,
@@ -437,7 +437,7 @@ class TraceValidationMixin(_TraceMixinBase):
         cached_status = getattr(self, "_validation_replay_status", None)
         if isinstance(cached_status, ValidationStatus):
             return cached_status
-        backend = str(getattr(self, "backend", "torch"))
+        backend = str(getattr(self, "_provenance_backend", "torch"))
         if _loaded_non_torch_validation_replay_unavailable(self):
             return ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=backend,
@@ -1297,7 +1297,7 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "log_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(getattr(self, "_provenance_backend", "torch"))
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
@@ -1345,7 +1345,7 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "recording_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(getattr(self, "_provenance_backend", "torch"))
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
