@@ -70,6 +70,10 @@ from ._replay_device import (
     saved_args_on_consumed_devices,
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
+from ._replay_storage_context import (
+    restore_receiver_storage_context,
+    write_into_receiver_storage_context,
+)
 from ._replay_warnings import replay_warnings_ignored
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
 from ._source_provenance import check_source_provenance
@@ -3743,6 +3747,7 @@ def _prepare_input_args_for_validating_layer(
         "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
+    restore_receiver_storage_context(layer_to_validate_parents_for, input_args)
     _restore_live_parameter_args_for_replay(input_args, layer_to_validate_parents_for)
 
     # Swap in saved parent outs:
@@ -3809,7 +3814,14 @@ def _prepare_input_args_for_validating_layer(
                 layer_to_validate_parents_for, arg_type, key, parent_layer, parent_layer_func_values
             )
             if not isinstance(key, tuple):
-                input_args[arg_type][key] = parent_layer_func_values
+                if not write_into_receiver_storage_context(
+                    layer_to_validate_parents_for,
+                    input_args,
+                    arg_type,
+                    key,
+                    parent_layer_func_values,
+                ):
+                    input_args[arg_type][key] = parent_layer_func_values
             else:
                 input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
                     input_args[arg_type][key[0]],

@@ -671,7 +671,6 @@ def _decorate_direct_transforms() -> None:
 # computational operations, and logging them would cause infinite recursion
 # (e.g. size() is called internally by logging code).
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
-
 # Print functions get special handling: intercepted to add TorchLens label
 # info to the repr without creating a new logged operation.
 print_funcs = ["__repr__", "__str__", "_str"]
@@ -1756,10 +1755,9 @@ def torch_func_decorator(
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            from ._ops_retention import _copy_saved_arg_tree
+            from ._ops_retention import _copy_saved_call_args
 
-            arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])
-            kwarg_copies = {k: _copy_saved_arg_tree(v) for k, v in kwargs.items()}
+            arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
             arg_copies = args
             kwarg_copies = kwargs

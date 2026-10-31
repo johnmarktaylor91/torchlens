@@ -11,6 +11,10 @@ journaled as one in-place write produced by the resize op.
 The metadata-only in-place views (``unsqueeze_``, ``squeeze_``, ``transpose_``,
 ``t_``, ``swapdims_``, ``swapaxes_``, ``as_strided_``) already record one graph
 from every entry state; they are pinned here so that stays true.
+
+Validation replays ``as_strided_`` and a resize that grows inside a larger
+shared storage on the receiver's saved storage context (offset, strides and the
+whole storage), so those calls validate from the aliased state too.
 """
 
 from __future__ import annotations
@@ -66,34 +70,9 @@ _DEFINED_FROM_EVERY_STATE = [
     "t_",
     "swapdims_",
     "swapaxes_",
+    "as_strided_offset",
 ]
 _DEFINED_FROM_NONEMPTY_STATES = ["resize_shrink", "resize_same", "resize_as_shrink"]
-
-# Validation gaps that are not entry-state graph dependence; each is pinned so it
-# flips loudly when fixed.
-_KNOWN_VALIDATION_GAPS = {
-    # The buffer views a larger shared storage, so the grow exposes the neighbour's
-    # defined elements; replay resizes a compact copy of the receiver instead.
-    ("resize_grow_then_zero", "aliased"): "replay of a grow inside a shared storage",
-}
-
-
-def _cases(names: list[str], states: list[str]) -> list[Any]:
-    """Return ``(name, state)`` params, marking known validation gaps as strict xfails."""
-
-    return [
-        pytest.param(
-            name,
-            state,
-            marks=(
-                [pytest.mark.xfail(strict=True, reason=_KNOWN_VALIDATION_GAPS[(name, state)])]
-                if (name, state) in _KNOWN_VALIDATION_GAPS
-                else []
-            ),
-        )
-        for name in names
-        for state in states
-    ]
 
 
 def _model_class(name: str) -> type[nn.Module]:
@@ -210,17 +189,16 @@ def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: s
     assert any(version_label in parents for _, parents, _ in rows)
 
 
-@pytest.mark.parametrize(("name", "state"), _cases(_DEFINED_FROM_EVERY_STATE, list(_ENTRY_STATES)))
+@pytest.mark.parametrize("state", list(_ENTRY_STATES))
+@pytest.mark.parametrize("name", _DEFINED_FROM_EVERY_STATE)
 def test_geometry_write_validates_from_every_entry_state(name: str, state: str) -> None:
     """Validation (first trace from the entry state, re-trace from after it) returns True."""
 
     assert _quiet_validate(_model_in_state(name, state), torch.rand(4)) is True
 
 
-@pytest.mark.parametrize(
-    ("name", "state"),
-    _cases(_DEFINED_FROM_NONEMPTY_STATES, ["fresh", "after_one_forward", "aliased"]),
-)
+@pytest.mark.parametrize("state", ["fresh", "after_one_forward", "aliased"])
+@pytest.mark.parametrize("name", _DEFINED_FROM_NONEMPTY_STATES)
 def test_prefix_preserving_resize_validates(name: str, state: str) -> None:
     """A resize that never grows past the buffer's elements validates from a non-empty buffer."""
 
