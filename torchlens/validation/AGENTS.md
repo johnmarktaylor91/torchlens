@@ -19,7 +19,7 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_pristine.py` | Pristine-oracle helpers (fixwave-5 R75-1): the untouched-baseline capture the replay oracle compares against |
 | `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
 | `_index_domain.py` | Index-domain slot/domain facts and in-domain index perturbations (rotation, single-entry move) for the gather/scatter/embedding/cross_entropy family |
-| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets |
+| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets; the pure `out=` destination predicate (`_perturbed_parents_only_occupy_out_kwarg`) |
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
 | `_script_metadata_proof.py` | TorchScript-graph proof (nested scripted calls inlined) that a `jitscript` boundary call reads a perturbed tensor argument only through `aten::size`, `aten::dim`, `aten::numel`, `prim::dtype` or `prim::device`; recorded as exemption reason `torchscript_metadata_only_argument` with its proof, any other use keeps the perturbation check |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |

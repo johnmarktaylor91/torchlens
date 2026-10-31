@@ -116,10 +116,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 5350 -> 5200 (2026-10-05 rung-1 ratchet settle): the completeness
     # backstop census split to validation/_completeness_backstop.py; re-keyed
     # down to the next 50-line step above the measured 5188 (R43-F2).
-    # 5200 -> 5250: the TorchScript metadata-only argument proof lives in
-    # validation/_script_metadata_proof.py; core keeps only its import and the
-    # two-line hook that records its own exemption reason (measured 5202).
-    "torchlens/validation/core.py": 5250,
+    "torchlens/validation/core.py": 5200,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the

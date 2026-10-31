@@ -52,6 +52,7 @@ from ..utils.tensor_utils import (
 )
 from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
+from ._destination_coverage import _perturbed_parents_only_occupy_out_kwarg
 from ._edge_boundary import (
     _capture_payload_equal,
     _check_edge_intervention_boundary,
@@ -2525,53 +2526,6 @@ def _check_perturbation_exemptions(
             return True
 
     return False
-
-
-def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: list[str]) -> bool:
-    """Return whether every perturbed parent is purely an ``out=`` destination.
-
-    Parameters
-    ----------
-    layer:
-        Operation whose parents are being perturbed.
-    layers_to_perturb:
-        Parent labels selected for perturbation.
-
-    Returns
-    -------
-    bool
-        True when each perturbed parent's only recorded position on ``layer``
-        is the ``out`` keyword argument (a write-only storage target under the
-        torch ``out=`` convention). A parent that also occupies a positional or
-        non-``out`` keyword slot feeds real values and is NOT exempt. TUPLE
-        ``out=`` destinations (``torch.sort(x, out=(values, indices))``) record
-        each member at a nested ``("out", index)`` key; those slots are the
-        same write-only destination contract and are accepted identically.
-    """
-
-    def _is_out_destination_key(key: Any) -> bool:
-        """Return whether an arg-map key addresses the ``out=`` destination."""
-
-        if key == "out":
-            return True
-        return isinstance(key, tuple) and len(key) == 2 and key[0] == "out"
-
-    if not layers_to_perturb:
-        return False
-    positions = getattr(layer, "parent_arg_positions", None) or {}
-    arg_positions = positions.get("args", {}) or {}
-    kwarg_positions = positions.get("kwargs", {}) or {}
-    for perturbed_label in layers_to_perturb:
-        if perturbed_label in arg_positions.values():
-            return False
-        occupied_kwargs = {
-            key for key, label in kwarg_positions.items() if label == perturbed_label
-        }
-        if not occupied_kwargs:
-            return False
-        if not all(_is_out_destination_key(key) for key in occupied_kwargs):
-            return False
-    return True
 
 
 def _execute_func_with_restored_state(
