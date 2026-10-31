@@ -59,6 +59,34 @@ def test_guard_fails_missing_report(tmp_path: Path) -> None:
     assert result.returncode == 1
 
 
+def test_legs_mode_checks_every_declared_leg(tmp_path: Path) -> None:
+    """``--legs DIR`` checks each floor file's legs; one hollow leg fails the run."""
+
+    def run_legs(legs_dir: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(_GUARD), "--legs", str(legs_dir)],
+            capture_output=True,
+            text=True,
+        )
+
+    healthy = tmp_path / "junit-a"
+    healthy.mkdir()
+    _write_junit(healthy / "a.xml", tests=10, skipped=0)
+    (healthy / "legs.floor").write_text("a.xml 5\n", encoding="utf-8")
+    hollow = tmp_path / "junit-b"
+    hollow.mkdir()
+    _write_junit(hollow / "b.xml", tests=10, skipped=10)
+    (hollow / "legs.floor").write_text("b.xml 5\n", encoding="utf-8")
+
+    assert run_legs(healthy).returncode == 0
+    result = run_legs(tmp_path)
+    assert result.returncode == 1
+    assert "1 leg(s) below floor" in result.stderr
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert run_legs(empty).returncode == 1
+
+
 def test_guard_passes_executed_suite(tmp_path: Path) -> None:
     """A suite with executed tests above the floor passes."""
 
