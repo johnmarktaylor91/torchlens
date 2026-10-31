@@ -123,8 +123,8 @@ def main() -> None:
     print_table("auto-detected output labels", auto_trace)
     print("\n## output table")
     print(auto_trace.output_table())
-    print("\n## decode_output(top_n=1)")
-    print(auto_trace.decode_output(top_n=1))
+    print("\n## decode_output(k=1)")
+    print(auto_trace.decode_output(k=1))
     output_rows = auto_trace.to_pandas(include_decoded_output_summary=True)
     output_preview = output_rows.loc[output_rows["is_output"], ["label", "decoded_output_summary"]]
     print("\n## output-node pandas summary")

@@ -16,7 +16,7 @@ time:
 ```python
 trace = tl.trace(model, x)
 trace.output_table(k=5)
-trace.decode_output(top_n=3)
+trace.decode_output(k=3)
 ```
 
 Use `output_style=` and `output_head=` when auto-detection should be
@@ -341,7 +341,7 @@ core flow runs without downloading external model weights.
 
 - `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
 - `Trace.output_table(k=5, batch_items=None)`
-- `Trace.decode_output(top_n=None)`
+- `Trace.decode_output(k=None)`
 - `Trace.output_postprocessor`
 - `tl.autoroute.output.register(...)`
 - `tl.autoroute.output.unregister(...)`

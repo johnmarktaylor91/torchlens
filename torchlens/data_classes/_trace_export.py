@@ -397,7 +397,7 @@ class TraceExportMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        top_n:
+        k:
             Optional maximum rank to return per batch item.
 
         Returns
@@ -408,7 +408,7 @@ class TraceExportMixin(_TraceMixinBase):
         Raises
         ------
         ValueError
-            If decoded output was not captured or the requested ``top_n`` exceeds
+            If decoded output was not captured or the requested ``k`` exceeds
             the capture-time bound.
         """
 
@@ -471,7 +471,7 @@ class TraceExportMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        top_n:
+        k:
             Maximum number of class rows per batch item.
         batch_items:
             ``None`` returns all captured batch items, an integer returns the
@@ -503,7 +503,7 @@ class TraceExportMixin(_TraceMixinBase):
                 remedy="pass a positive integer top_n",
                 argument="top_n",
             )
-        decoded = self.decode_output(top_n=k)
+        decoded = self.decode_output(k=k)
         rows = _decoded_batch_topk_rows(decoded)
         if rows is None:
             raise PayloadUnavailableError(

@@ -102,7 +102,7 @@ def test_decoded_output_uses_typed_batch_topk_representation() -> None:
     trace = _trace_batch_classifier()
 
     assert trace.decoded_output["kind"] == "batch_topk"
-    assert trace.decode_output(top_n=1)["rows"] == [
+    assert trace.decode_output(k=1)["rows"] == [
         row for row in trace.decoded_output["rows"] if row["rank"] == 1
     ]
 
