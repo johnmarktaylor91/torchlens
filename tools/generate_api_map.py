@@ -152,6 +152,7 @@ def _lazy_rows(module: Module, node: ast.Dict) -> dict[str, tuple[str, str | Non
     for key, value in zip(
         node.keys,
         node.values,
+        strict=True,
     ):
         if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
             continue
@@ -483,7 +484,7 @@ def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool
     defaults: list[ast.expr | None] = [None] * (len(positional) - len(args.defaults))
     defaults += list(args.defaults)
     pieces: list[str] = []
-    for i, (arg, default) in enumerate(zip(positional, defaults)):
+    for i, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
         if i == 0 and drop_first:
             continue
         if not arg.arg.startswith("_"):
@@ -494,7 +495,7 @@ def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool
         pieces.append(f"*{args.vararg.arg}")
     elif args.kwonlyargs:
         pieces.append("*")
-    for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+    for arg, default in zip(args.kwonlyargs, args.kw_defaults, strict=True):
         if not arg.arg.startswith("_"):
             pieces.append(_brief_param(arg, default))
     if args.kwarg is not None:
@@ -517,6 +518,7 @@ def signature(
         zip(
             positional,
             defaults,
+            strict=True,
         )
     ):
         if i == 0 and drop_first:
@@ -533,6 +535,7 @@ def signature(
     for arg, default in zip(
         args.kwonlyargs,
         args.kw_defaults,
+        strict=True,
     ):
         pieces.append(_param(arg, default))
         names.append(arg.arg)
@@ -896,6 +899,7 @@ def _package_layers(modules: Modules) -> dict[str, str]:
     for key, val in zip(
         value.keys,
         value.values,
+        strict=True,
     ):
         if isinstance(key, ast.Constant) and isinstance(val, ast.Constant):
             out[str(key.value)] = str(val.value)
@@ -911,7 +915,7 @@ def _layer_roles(modules: Modules) -> dict[str, str]:
         return {}
     return {
         str(k.value): str(v.value)
-        for k, v in zip(value.keys, value.values)
+        for k, v in zip(value.keys, value.values, strict=True)
         if isinstance(k, ast.Constant) and isinstance(v, ast.Constant)
     }
 
@@ -944,6 +948,7 @@ def read_surface_rows(repo: Path) -> list[dict[str, str]]:
             zip(
                 header,
                 ln.split("\t"),
+                strict=False,
             )
         )
         for ln in lines[1:]
