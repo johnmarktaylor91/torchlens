@@ -1505,7 +1505,6 @@ docs-md	docs/reference/oracle_independence.md	35_
 docs-md	docs/reference/oracle_independence.md	63
 docs-md	docs/reference/oracle_independence.md	64
 docs-md	docs/reference/oracle_independence.md	75
-docs-md	docs/reference/predicate_runtime.md	1_2_
 docs-md	docs/reference/runnable_model.md	11
 docs-md	docs/reference/runnable_model.md	11.
 docs-md	docs/reference/runnable_model.md	12
@@ -5311,15 +5310,6 @@ test-docstrings	tests/test_capture_targets.py	21
 test-docstrings	tests/test_capture_unification_p2.py	10
 test-docstrings	tests/test_capture_unification_p7.py	10.
 test-docstrings	tests/test_capture_unification_p7.py	12
-test-docstrings	tests/test_check_plan_link_consistency.py	1166
-test-docstrings	tests/test_check_plan_link_consistency.py	1168
-test-docstrings	tests/test_check_plan_link_consistency.py	1184.
-test-docstrings	tests/test_check_plan_link_consistency.py	12
-test-docstrings	tests/test_check_plan_link_consistency.py	12.
-test-docstrings	tests/test_check_plan_link_consistency.py	12.1
-test-docstrings	tests/test_check_plan_link_consistency.py	12.3
-test-docstrings	tests/test_check_plan_link_consistency.py	2.6
-test-docstrings	tests/test_check_plan_link_consistency.py	33
 test-docstrings	tests/test_checkpoint_invocation_tokens.py	2.14
 test-docstrings	tests/test_checkpoint_invocation_tokens.py	261
 test-docstrings	tests/test_checkpoint_live_ref_real_models.py	18
@@ -7378,9 +7368,6 @@ test-names	tests/test_bug_fixes_phase14.py	256_
 test-names	tests/test_capture_cache_impl_fingerprint.py	16_
 test-names	tests/test_capture_cache_impl_fingerprint.py	32
 test-names	tests/test_capture_outcome_characterization.py	20_
-test-names	tests/test_check_plan_link_consistency.py	12_1_
-test-names	tests/test_check_plan_link_consistency.py	12_5_
-test-names	tests/test_check_plan_link_consistency.py	2_6_
 test-names	tests/test_checkpoint_live_ref_real_models.py	18_
 test-names	tests/test_checkpoint_live_ref_real_models.py	70
 test-names	tests/test_checks_kit_scan.py	16

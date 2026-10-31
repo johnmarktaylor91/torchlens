@@ -569,11 +569,6 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "coverage the L2 episode suite does not already carry"
     ),
     "reference/limitations.md": "illustrative failure-mode fragments, not runnable programs",
-    "reference/predicate_runtime.md": (
-        "the fence is a Protocol DECLARATION sketch (`...` bodies, and `Protocol`/"
-        "`RecordContext` deliberately unimported) -- there is no program to run; the "
-        "shipped protocol itself is pinned by the predicate-registry suite"
-    ),
     "reference/runnable_tlspec_contract.md": "contract fragments reference artifacts not in-repo",
     "semantic_io.md": "pending execution coverage (autoroute/facet demos)",
     "speed_optimized_defaults.md": "pending execution coverage",

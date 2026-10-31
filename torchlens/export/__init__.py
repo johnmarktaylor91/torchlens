@@ -1125,50 +1125,6 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
     )
 
 
-def _render_html(payload: str) -> str:
-    """Render a self-contained HTML graph viewer.
-
-    Parameters
-    ----------
-    payload:
-        JSON graph payload.
-
-    Returns
-    -------
-    str
-        HTML document.
-    """
-
-    return (
-        "<!doctype html><html><head><meta charset='utf-8'><title>TorchLens graph</title>"
-        "<style>html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif}"
-        "#tip{position:fixed;display:none;background:#111;color:white;padding:6px 8px;border-radius:4px;"
-        "font-size:12px;pointer-events:none}.tl-edge{stroke:#666;stroke-width:1.4}.tl-node rect{fill:#fff;"
-        "stroke:#222;stroke-width:1.2}.tl-node:hover rect{stroke:#0072B2;stroke-width:3}"
-        ".tl-node-input rect{fill:#D9F0D3}.tl-node-output rect{fill:#F6D7C3}"
-        ".tl-node-parameterized rect{fill:#DDEAF7}.tl-node-buffer rect{fill:#F7E7BA}"
-        ".tl-node text{font:12px sans-serif;fill:#111;pointer-events:none}</style></head>"
-        "<body><svg id='graph' width='100%' height='100%'><g id='viewport'></g></svg><div id='tip'></div>"
-        f"<script>const graph={payload};"
-        "const svg=document.getElementById('graph'),vp=document.getElementById('viewport'),tip=document.getElementById('tip');"
-        "let scale=1,tx=20,ty=20,drag=false,last=[0,0];const byId=new Map(graph.nodes.map(n=>[n.id,n]));"
-        "function el(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e}"
-        "function draw(){graph.edges.forEach(ed=>{const s=byId.get(ed.source),t=byId.get(ed.target);"
-        "vp.appendChild(el('line',{class:'tl-edge',x1:s.x+60,y1:s.y,x2:t.x-60,y2:t.y}));});"
-        "graph.nodes.forEach(n=>{const g=el('g',{class:'tl-node tl-node-'+n.type,transform:`translate(${n.x},${n.y})`});"
-        "g.appendChild(el('rect',{x:-65,y:-28,width:130,height:56,rx:6}));"
-        "let a=el('text',{'text-anchor':'middle',y:-4});a.textContent=n.label;g.appendChild(a);"
-        "let b=el('text',{'text-anchor':'middle',y:16});b.textContent=n.shape||n.memory;g.appendChild(b);"
-        "g.onmousemove=e=>{tip.style.display='block';tip.style.left=e.clientX+12+'px';tip.style.top=e.clientY+12+'px';"
-        "tip.textContent=[n.label,n.shape,n.memory].filter(Boolean).join('  ')};g.onmouseleave=()=>tip.style.display='none';vp.appendChild(g);});}"
-        "function apply(){vp.setAttribute('transform',`translate(${tx},${ty}) scale(${scale})`)}"
-        "svg.addEventListener('wheel',e=>{e.preventDefault();scale*=e.deltaY<0?1.1:.9;apply()},{passive:false});"
-        "svg.addEventListener('mousedown',e=>{drag=true;last=[e.clientX,e.clientY]});"
-        "window.addEventListener('mouseup',()=>drag=false);window.addEventListener('mousemove',e=>{if(!drag)return;"
-        "tx+=e.clientX-last[0];ty+=e.clientY-last[1];last=[e.clientX,e.clientY];apply()});draw();apply();</script></body></html>"
-    )
-
-
 def _safe_id(value: str) -> str:
     """Return a CSS/SVG-safe identifier fragment.
 
