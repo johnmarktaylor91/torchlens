@@ -81,5 +81,5 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
     )
     failure = getattr(log, TRACE_FAILURE_ATTR, None)
     assert failure is not None, "validation failed without recording a failure"
-    assert failure.check == CHECK_COMPLETENESS
+    assert failure.check_name == CHECK_COMPLETENESS
     assert phantom_label in failure.message, failure.message
