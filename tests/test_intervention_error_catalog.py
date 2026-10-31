@@ -249,7 +249,7 @@ def test_each_named_error_is_importable_and_has_severity(name: str) -> None:
 
     cls = _catalog_class(name)
 
-    assert getattr(tl.intervention, name) is cls
+    assert getattr(tl.errors, name) is cls
     assert hasattr(cls, "severity"), f"{name} missing severity tag"
     assert cls.severity in ("recoverable", "informational", "fatal")
 
