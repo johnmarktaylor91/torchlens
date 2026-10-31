@@ -6,7 +6,7 @@ See `architecture.md` in `.project-context` for the older full map and
 
 Key entry points:
 - Main capture: `torchlens/_user_funcs.py` - `trace()`, `show_model_graph()`,
-  `draw_backward()`, `validate_forward_pass()`
+  `draw()`, `validate_forward_pass()`
 - Backend registry: `torchlens/backends/registry.py` - `BackendSpec`, `BackendName`,
   backend resolution, validation dispatch, and canonical backend errors.
 - Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
