@@ -3,8 +3,8 @@
 One backend-neutral record owning the NUMBERS; every stats line, card,
 table cell, and seam adapter is a pure formatter over it (D1: the shipped
 cost bug existed BECAUSE the helper was a string function). Per-family
-evidence carries exact/sampled/unavailable per D16; counts are exact
-integers per D17; ``dim``/``dim_names``/``role``/``relations`` are RESERVED
+evidence carries exact/sampled/unavailable/verdict per D16; known counts
+are exact integers per D17; ``dim``/``dim_names``/``role``/``relations`` are RESERVED
 from day one so per-channel tables, semantic roles, and ``= parent`` marks
 land as renderers, never rework (memo section 8 plumbing table).
 
@@ -22,14 +22,15 @@ import torch
 from ._stats_kernel import KernelResult, run_kernel
 
 #: TensorStats record schema version (bump on any field change).
-TENSOR_STATS_SCHEMA_VERSION = 1
+TENSOR_STATS_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
 class FamilyEvidence:
     """Per-family computation evidence (D16).
 
-    ``policy`` is one of ``exact`` / ``sampled`` / ``unavailable``; the
+    ``policy`` is one of ``exact`` / ``sampled`` / ``unavailable`` /
+    ``verdict``. A nonfinite ``verdict`` proves presence without counts; the
     ``~`` display mark belongs to the sampled family ONLY, and
     ``unavailable`` always carries a reason -- never a silent absence.
     """
@@ -60,10 +61,10 @@ class TensorStats:
     device: str
     numel: int
     nbytes: int | None
-    #: Exact nonfinite census (D17): silence is a proof on supported paths.
-    num_nan: int
-    num_posinf: int
-    num_neginf: int
+    #: Exact counts when known; None makes no census claim.
+    num_nan: int | None
+    num_posinf: int | None
+    num_neginf: int | None
     nonfinite_evidence: FamilyEvidence
     num_zero: int | None
     num_true: int | None
@@ -112,16 +113,45 @@ class TensorStats:
         )
 
     @property
-    def num_nonfinite(self) -> int:
-        """Total nonfinite elements."""
+    def policy(self) -> str:
+        """Summarize populated families; their evidence remains authoritative.
 
+        Any sampled family makes the summary sampled. Only reused facts
+        (track_nonfinite verdicts or its exact zero census) summarize as
+        reuse; otherwise all populated families are exact.
+        """
+
+        families = (
+            self.nonfinite_evidence,
+            self.extrema_evidence,
+            self.mean_evidence,
+            self.std_evidence,
+            self.histogram_evidence,
+        )
+        populated = [evidence for evidence in families if evidence.policy != "unavailable"]
+        if any(evidence.is_sampled for evidence in populated):
+            return "sampled"
+        if populated and all(
+            evidence.policy == "verdict" or evidence.reason == "track_nonfinite"
+            for evidence in populated
+        ):
+            return "reuse"
+        return "exact"
+
+    @property
+    def num_nonfinite(self) -> int | None:
+        """Total nonfinite elements, or None when any count is unknown."""
+
+        if self.num_nan is None or self.num_posinf is None or self.num_neginf is None:
+            return None
         return self.num_nan + self.num_posinf + self.num_neginf
 
     @property
-    def num_finite(self) -> int:
-        """Elements with finite values."""
+    def num_finite(self) -> int | None:
+        """Elements with finite values, or None when the census is unknown."""
 
-        return self.numel - self.num_nonfinite
+        nonfinite = self.num_nonfinite
+        return None if nonfinite is None else self.numel - nonfinite
 
     @property
     def is_empty(self) -> bool:
@@ -238,9 +268,9 @@ def _record_from_kernel(
         device=str(tensor.device),
         numel=result.numel,
         nbytes=nbytes,
-        num_nan=result.nan_count,
-        num_posinf=result.posinf_count,
-        num_neginf=result.neginf_count,
+        num_nan=result.nan_count if supported else None,
+        num_posinf=result.posinf_count if supported else None,
+        num_neginf=result.neginf_count if supported else None,
         nonfinite_evidence=nonfinite_evidence,
         num_zero=result.zero_count,
         num_true=result.true_count,

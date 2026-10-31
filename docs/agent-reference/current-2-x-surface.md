@@ -1833,3 +1833,11 @@ object's docstring):
 - `tl.types.RunnableDiagnostic`: Structured diagnostic shared by preflight, readiness, and run reports.
 - `tl.user_funcs.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
 - `tl.user_funcs.UserTransformError`: Raised when activation_transform or grad_transform raises.
+
+- `tl.stats.TensorStats` is the frozen tensor statistics record. Its read-only
+  `TensorStats.policy` summarizes populated families (`exact`, `sampled`, `reuse`);
+  `FamilyEvidence.policy` remains authoritative per family. The nonfinite family
+  admits `verdict` for presence without counts. `TensorStats.num_nan`,
+  `TensorStats.num_posinf`, and `TensorStats.num_neginf` are optional exact counts;
+  `TensorStats.num_nonfinite` and `TensorStats.num_finite` are `None` if any count
+  is unknown. Reused `track_nonfinite` false verdicts carry an exact zero census.

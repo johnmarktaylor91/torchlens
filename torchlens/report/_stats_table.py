@@ -207,7 +207,11 @@ class StatsTable:
                     "max": None if stats is None else stats.finite_max,
                     "zero_count": None if stats is None else stats.num_zero,
                     "nan_count": None if stats is None else stats.num_nan,
-                    "inf_count": (None if stats is None else stats.num_posinf + stats.num_neginf),
+                    "inf_count": (
+                        None
+                        if stats is None or stats.num_posinf is None or stats.num_neginf is None
+                        else stats.num_posinf + stats.num_neginf
+                    ),
                     "sampled": None if stats is None else stats.std_evidence.is_sampled,
                     "same_as_parent": row.parent_mark,
                     "relation_basis": row.relation_basis,

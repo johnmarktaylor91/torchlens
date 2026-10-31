@@ -3111,6 +3111,7 @@ describe each surface in depth.
 | `FacetSpec.function_id` | Recipe identifier that produced this facet |
 | `FacetSpec.function_version` | Recipe version that produced this facet |
 | `FacetView.function_source` | Return recipe name provenance for this view |
+| `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
 | `HeadScores.eligible_rows` | field of `HeadScores` |
@@ -3173,13 +3174,14 @@ describe each surface in depth.
 | `TensorStats.is_all_true` | bool family: every element true (exact) |
 | `TensorStats.is_all_zero` | Whether every element is exactly zero (exact claim) |
 | `TensorStats.is_magnitude_based` | field of `TensorStats` |
-| `TensorStats.num_finite` | Elements with finite values |
-| `TensorStats.num_nan` | field of `TensorStats` |
-| `TensorStats.num_neginf` | field of `TensorStats` |
-| `TensorStats.num_nonfinite` | Total nonfinite elements |
-| `TensorStats.num_posinf` | field of `TensorStats` |
+| `TensorStats.num_finite` | Elements with finite values, or `None` when any nonfinite count is unknown |
+| `TensorStats.num_nan` | Exact count, or `None` when unknown |
+| `TensorStats.num_neginf` | Exact count, or `None` when unknown |
+| `TensorStats.num_nonfinite` | Total nonfinite elements, or `None` when any count is unknown |
+| `TensorStats.num_posinf` | Exact count, or `None` when unknown |
 | `TensorStats.num_true` | field of `TensorStats` |
 | `TensorStats.num_zero` | field of `TensorStats` |
+| `TensorStats.policy` | Read-only family summary: `sampled` if any family is sampled, `reuse` if only reused facts are present, otherwise `exact` |
 | `TensorStats.std` | field of `TensorStats` |
 | `TensorStats.std_evidence` | field of `TensorStats` |
 | `TensorStats.std_se` | field of `TensorStats` |
