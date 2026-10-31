@@ -220,7 +220,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
   `<module>.<attr>.<key>`.
   parent, not as a parameter edge, so it is absent from that read's `params`.
-  The receiver may be given by keyword (`torch.clamp_(input=p, ...)`). A frozen Parameter written
+  The receiver may be given by keyword, as the `input` keyword of `torch.clamp_`. A frozen Parameter written
   in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
   write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
   a completeness failure.
@@ -3731,6 +3731,7 @@ Members of classes whose public home changed, one entry per class.
 | `history_id=` | keyword of `Bundle.effects`: which recorded history to read |
 | `input_op=` | keyword of the receptive-field queries (`Trace.receptive_fields`, `Trace.projective_fields`): the input op to measure against |
 | `max_scan_elements=` | keyword of `Trace.summary(view="stats")`: the payload-scan element budget; later retained rows become typed `unscanned` rows; refused typed with any other view |
+| `stats_columns=` | constructor keyword of `SummaryReport`: the stats-view column names the report renders, set by `Trace.summary(view="stats")` from `columns=` |
 | `input_route=` | keyword of `tl.splice_module`: the route name for the spliced input |
 | `is_analysis_load_available=` | field and constructor keyword of `RunnableDiagnostic` |
 | `is_audited=` | field and constructor keyword of `ScanRow` |

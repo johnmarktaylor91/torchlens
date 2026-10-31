@@ -126,7 +126,7 @@
   `ValueError` for TorchLens multi-pass access errors.
 - `copy()` on `Op` deep-copies graph metadata and shares tensor payloads/callables; see data_classes/AGENTS.md.
 - An in-place write to a prepared Parameter inside `forward` is a logged op (receiver positional
-  or `input=`); a frozen Parameter written with a grad-requiring operand runs tracked with its own
+  or passed as the torch `input` keyword); a frozen Parameter written with a grad-requiring operand runs tracked with its own
   `requires_grad=False` and ends a non-leaf, as in eager, so `restore_param_requires_grad` and the
   prep-time forcing skip non-leaf Parameters. Validate a fresh copy, not an already-run model: a
   deepcopy of the run model makes that Parameter a trainable leaf (torch's `Parameter.__deepcopy__`),
