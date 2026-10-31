@@ -476,7 +476,7 @@
   "field": "modules",
   "file": "torchlens/_data_classes/module.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -1169,18 +1169,18 @@
  },
  {
   "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/_ir/op_record.py",
-  "has_default": false,
-  "sites": 3,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "is_bottom_level",
   "file": "torchlens/_ir/op_record.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/_ir/op_record.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -5865,7 +5865,7 @@
  },
  {
   "ambiguous": false,
-  "field": "is_edited",
+  "field": "is_bottom_level",
   "file": "torchlens/capture/projections.py",
   "has_default": false,
   "sites": 1,
@@ -5873,7 +5873,7 @@
  },
  {
   "ambiguous": false,
-  "field": "is_bottom_level",
+  "field": "is_edited",
   "file": "torchlens/capture/projections.py",
   "has_default": false,
   "sites": 1,

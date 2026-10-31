@@ -115,12 +115,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -237,7 +237,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -254,7 +254,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -363,12 +363,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -471,7 +471,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -488,7 +488,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -603,12 +603,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -708,7 +708,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -725,7 +725,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -823,12 +823,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -949,7 +949,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -966,7 +966,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1092,12 +1092,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1190,7 +1190,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -1207,7 +1207,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1332,12 +1332,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": true,
@@ -1446,7 +1446,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -1463,7 +1463,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1581,12 +1581,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1691,7 +1691,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -1708,7 +1708,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1856,7 +1856,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     }
    }
   },
@@ -1876,13 +1876,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -2046,7 +2044,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -2064,7 +2061,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "training": true
    }
@@ -2275,13 +2272,13 @@
     "internal_source_parents": [
      "rand_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2422,7 +2419,7 @@
     "site_key": "s1||add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -2430,7 +2427,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -2635,13 +2632,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -2771,7 +2768,7 @@
     "site_key": "s1||gt||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 4,
     "terminal_bool_for": [
@@ -2782,7 +2779,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -2950,13 +2947,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3089,7 +3086,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -3097,7 +3094,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -3292,13 +3289,13 @@
     "internal_source_parents": [
      "sigmoid_1_5"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3447,7 +3444,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -3455,7 +3452,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -3657,13 +3654,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3791,7 +3788,7 @@
     "site_key": "s1||rand||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -3799,7 +3796,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4021,13 +4018,13 @@
     "internal_source_parents": [
      "add_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -4164,7 +4161,7 @@
     "site_key": "s1||sigmoid||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -4172,7 +4169,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4381,13 +4378,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": true,
@@ -4517,7 +4514,7 @@
     "site_key": "s1||sum||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -4525,7 +4522,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4743,6 +4740,7 @@
     "\"sum_1_4_raw\"": "sum_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
@@ -4990,7 +4988,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -5022,9 +5019,9 @@
     "gt_1_4:1"
    ],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -5398,6 +5395,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "conditional_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -5488,7 +5486,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "conditional_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -5505,7 +5503,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
@@ -5514,9 +5511,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "conditional_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -5543,16 +5539,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -5679,12 +5675,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -5801,7 +5797,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -5818,7 +5814,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -5927,12 +5923,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -6035,7 +6031,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -6052,7 +6048,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -6167,12 +6163,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6272,7 +6268,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -6289,7 +6285,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -6387,12 +6383,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6513,7 +6509,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -6530,7 +6526,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -6656,12 +6652,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6754,7 +6750,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -6771,7 +6767,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -6896,12 +6892,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": true,
@@ -7010,7 +7006,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -7027,7 +7023,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -7145,12 +7141,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7255,7 +7251,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -7272,7 +7268,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -7420,7 +7416,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     }
    }
   },
@@ -7440,13 +7436,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -7610,7 +7604,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -7628,7 +7621,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "training": true
    }
@@ -7839,13 +7832,13 @@
     "internal_source_parents": [
      "rand_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7986,7 +7979,7 @@
     "site_key": "s1||add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -7994,7 +7987,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -8199,13 +8192,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -8335,7 +8328,7 @@
     "site_key": "s1||gt||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": [
@@ -8346,7 +8339,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -8514,13 +8507,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -8653,7 +8646,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -8661,7 +8654,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -8856,13 +8849,13 @@
     "internal_source_parents": [
      "sigmoid_1_5"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -9011,7 +9004,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -9019,7 +9012,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -9221,13 +9214,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -9355,7 +9348,7 @@
     "site_key": "s1||rand||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -9363,7 +9356,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -9585,13 +9578,13 @@
     "internal_source_parents": [
      "add_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -9728,7 +9721,7 @@
     "site_key": "s1||sigmoid||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -9736,7 +9729,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -9945,13 +9938,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": true,
@@ -10081,7 +10074,7 @@
     "site_key": "s1||sum||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -10089,7 +10082,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -10307,6 +10300,7 @@
     "\"sum_1_4_raw\"": "sum_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
@@ -10543,7 +10537,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -10575,9 +10568,9 @@
     "gt_1_4:1"
    ],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -10951,6 +10944,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "conditional_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -11062,7 +11056,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
@@ -11070,7 +11063,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -11099,16 +11091,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -11235,12 +11227,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11357,7 +11349,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -11374,7 +11366,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11483,12 +11475,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -11591,7 +11583,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -11608,7 +11600,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11723,12 +11715,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11828,7 +11820,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -11845,7 +11837,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11943,12 +11935,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12069,7 +12061,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -12086,7 +12078,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12212,12 +12204,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12310,7 +12302,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -12327,7 +12319,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12452,12 +12444,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": true,
@@ -12566,7 +12558,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -12583,7 +12575,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12701,12 +12693,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12811,7 +12803,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -12828,7 +12820,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12976,7 +12968,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     }
    }
   },
@@ -12996,13 +12988,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -13166,7 +13156,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13184,7 +13173,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "training": true
    }
@@ -13395,13 +13384,13 @@
     "internal_source_parents": [
      "rand_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -13542,7 +13531,7 @@
     "site_key": "s1||add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -13550,7 +13539,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -13755,13 +13744,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -13891,7 +13880,7 @@
     "site_key": "s1||gt||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": [
@@ -13902,7 +13891,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14070,13 +14059,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14209,7 +14198,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -14217,7 +14206,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14412,13 +14401,13 @@
     "internal_source_parents": [
      "sigmoid_1_5"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14567,7 +14556,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -14575,7 +14564,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -14777,13 +14766,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14911,7 +14900,7 @@
     "site_key": "s1||rand||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -14919,7 +14908,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15141,13 +15130,13 @@
     "internal_source_parents": [
      "add_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -15284,7 +15273,7 @@
     "site_key": "s1||sigmoid||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -15292,7 +15281,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15501,13 +15490,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": true,
@@ -15637,7 +15626,7 @@
     "site_key": "s1||sum||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -15645,7 +15634,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15863,6 +15852,7 @@
     "\"sum_1_4_raw\"": "sum_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
@@ -16110,7 +16100,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -16142,9 +16131,9 @@
     "gt_1_4:1"
    ],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -16518,6 +16507,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "conditional_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -16622,7 +16612,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
@@ -16630,7 +16619,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -16657,16 +16645,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -16793,12 +16781,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16915,7 +16903,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -16932,7 +16920,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -17041,12 +17029,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -17149,7 +17137,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -17166,7 +17154,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -17281,12 +17269,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17386,7 +17374,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -17403,7 +17391,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -17501,12 +17489,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17627,7 +17615,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -17644,7 +17632,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -17770,12 +17758,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17868,7 +17856,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -17885,7 +17873,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -18010,12 +17998,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": true,
@@ -18124,7 +18112,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -18141,7 +18129,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -18259,12 +18247,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -18369,7 +18357,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -18386,7 +18374,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -18534,7 +18522,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     }
    }
   },
@@ -18554,13 +18542,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -18724,7 +18710,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -18742,7 +18727,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "training": true
    }
@@ -18953,13 +18938,13 @@
     "internal_source_parents": [
      "rand_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19100,7 +19085,7 @@
     "site_key": "s1||add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -19108,7 +19093,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -19313,13 +19298,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -19449,7 +19434,7 @@
     "site_key": "s1||gt||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 4,
     "terminal_bool_for": [
@@ -19460,7 +19445,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -19628,13 +19613,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19767,7 +19752,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -19775,7 +19760,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -19970,13 +19955,13 @@
     "internal_source_parents": [
      "sigmoid_1_5"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20125,7 +20110,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -20133,7 +20118,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -20335,13 +20320,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20469,7 +20454,7 @@
     "site_key": "s1||rand||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -20477,7 +20462,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -20699,13 +20684,13 @@
     "internal_source_parents": [
      "add_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -20842,7 +20827,7 @@
     "site_key": "s1||sigmoid||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -20850,7 +20835,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -21059,13 +21044,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": true,
@@ -21195,7 +21180,7 @@
     "site_key": "s1||sum||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -21203,7 +21188,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1_fork_4"
     },
     "transform_chain": [],
     "transform_config": {
@@ -21421,6 +21406,7 @@
     "\"sum_1_4_raw\"": "sum_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
@@ -21668,7 +21654,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -21700,9 +21685,9 @@
     "gt_1_4:1"
    ],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -22076,6 +22061,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "conditional_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -22166,7 +22152,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "conditional_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -22183,7 +22169,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
@@ -22192,9 +22177,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "conditional_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -22229,16 +22213,16 @@
      "\"timestamp\"": "<measured>"
     }
    ],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -22365,12 +22349,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22487,7 +22471,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -22504,7 +22488,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -22613,12 +22597,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -22721,7 +22705,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -22738,7 +22722,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -22853,12 +22837,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22958,7 +22942,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -22975,7 +22959,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -23073,12 +23057,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23188,7 +23172,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -23205,7 +23189,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -23331,12 +23315,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23429,7 +23413,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -23446,7 +23430,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -23571,12 +23555,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": true,
@@ -23685,7 +23669,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -23702,7 +23686,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -23820,12 +23804,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23930,7 +23914,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -23947,7 +23931,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -24095,7 +24079,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     }
    }
   },
@@ -24115,13 +24099,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -24285,7 +24267,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -24303,7 +24284,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "training": true
    }
@@ -24490,13 +24471,13 @@
     "internal_source_parents": [
      "rand_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -24634,7 +24615,7 @@
     "site_key": "s1||add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -24642,7 +24623,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -24835,13 +24816,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -24968,7 +24949,7 @@
     "site_key": "s1||gt||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 4,
     "terminal_bool_for": [
@@ -24979,7 +24960,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -25147,13 +25128,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25283,7 +25264,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -25291,7 +25272,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -25471,13 +25452,13 @@
     "internal_source_parents": [
      "sigmoid_1_5"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25612,7 +25593,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -25620,7 +25601,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -25819,13 +25800,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25950,7 +25931,7 @@
     "site_key": "s1||rand||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -25958,7 +25939,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -26163,13 +26144,13 @@
     "internal_source_parents": [
      "add_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": true,
     "is_in_conditional_body": false,
@@ -26303,7 +26284,7 @@
     "site_key": "s1||sigmoid||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -26311,7 +26292,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -26505,13 +26486,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": true,
@@ -26638,7 +26619,7 @@
     "site_key": "s1||sum||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -26646,7 +26627,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "conditional_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -26864,6 +26845,7 @@
     "\"sum_1_4_raw\"": "sum_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class ConditionalModel(nn.Module):\n    \"\"\"Model with tensor-data-dependent control flow and RNG consumption.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.rng_draw_count = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Choose a branch from live tensor data and consume one RNG draw.\n\n        Parameters\n        ----------\n        x:\n            Branch-control input.\n\n        Returns\n        -------\n        torch.Tensor\n            Result of the selected branch.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        random_offset = torch.rand((), device=x.device)\n        count_side_effect(self, \"rng_draw_count\")\n        shifted = x + random_offset\n        if bool((x.sum() > 0).item()):\n            return torch.sigmoid(shifted)\n        return torch.tanh(shifted)",
@@ -27105,7 +27087,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -27137,9 +27118,9 @@
     "gt_1_4:1"
    ],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -27513,6 +27494,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "conditional_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -27617,7 +27599,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
@@ -27625,7 +27606,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -27652,16 +27632,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],

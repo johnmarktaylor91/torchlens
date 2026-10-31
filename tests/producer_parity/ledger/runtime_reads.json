@@ -50,13 +50,13 @@
  "intervention_fired": {
   "tests/producer_parity/_snapshot.py": 1
  },
- "is_edited": {
-  "tests/producer_parity/_snapshot.py": 1
- },
  "intervention_template_ref": {
   "tests/producer_parity/_snapshot.py": 1
  },
  "is_bottom_level": {
+  "tests/producer_parity/_snapshot.py": 1
+ },
+ "is_edited": {
   "tests/producer_parity/_snapshot.py": 1
  },
  "is_output_parent": {

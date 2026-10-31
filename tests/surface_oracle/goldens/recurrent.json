@@ -98,12 +98,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -203,7 +203,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -220,7 +220,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -359,12 +359,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -492,7 +492,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -509,7 +509,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -607,12 +607,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -733,7 +733,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -750,7 +750,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -876,12 +876,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -982,7 +982,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -999,7 +999,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -1154,7 +1154,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     }
    },
    "cell:2": {
@@ -1297,7 +1297,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     }
    },
    "cell:3": {
@@ -1440,7 +1440,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     }
    },
    "self:1": {
@@ -1585,7 +1585,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     }
    }
   },
@@ -1605,7 +1605,6 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -1613,10 +1612,6 @@
      "cell:3"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -1722,10 +1717,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -1743,7 +1734,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "training": true
    },
@@ -1766,18 +1757,11 @@
     "call_children": [
      "cell"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "cell"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -1925,10 +1909,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -1946,7 +1926,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "training": true
    }
@@ -2095,13 +2075,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2238,7 +2218,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -2246,7 +2226,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -2484,13 +2464,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2655,7 +2635,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -2663,7 +2643,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -2901,13 +2881,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3072,7 +3052,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -3080,7 +3060,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -3318,13 +3298,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3489,7 +3469,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -3497,7 +3477,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -3688,13 +3668,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -3842,7 +3822,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -3850,7 +3830,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -4065,13 +4045,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4213,7 +4193,7 @@
     "site_key": "s1||tanh||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -4221,7 +4201,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4438,13 +4418,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4586,7 +4566,7 @@
     "site_key": "s1||tanh||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -4594,7 +4574,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4807,13 +4787,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4951,7 +4931,7 @@
     "site_key": "s1||tanh||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -4959,7 +4939,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -5038,8 +5018,6 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -5047,7 +5025,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -5122,8 +5100,6 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -5132,7 +5108,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_1"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -5394,6 +5370,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
@@ -5639,7 +5616,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -5665,9 +5641,9 @@
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -6069,6 +6045,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "recurrent_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -6149,7 +6126,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "recurrent_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -6166,7 +6143,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.RecurrentModel.forward",
    "root_module": {
@@ -6175,9 +6151,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "recurrent_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -6204,16 +6179,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "recurrent_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -6321,12 +6296,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6426,7 +6401,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -6443,7 +6418,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -6582,12 +6557,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6715,7 +6690,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -6732,7 +6707,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -6830,12 +6805,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6956,7 +6931,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -6973,7 +6948,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -7099,12 +7074,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7205,7 +7180,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -7222,7 +7197,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -7377,7 +7352,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:2": {
@@ -7520,7 +7495,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:3": {
@@ -7663,7 +7638,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "self:1": {
@@ -7808,7 +7783,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    }
   },
@@ -7828,7 +7803,6 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -7836,10 +7810,6 @@
      "cell:3"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -7945,10 +7915,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -7966,7 +7932,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    },
@@ -7989,18 +7955,11 @@
     "call_children": [
      "cell"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "cell"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -8148,10 +8107,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -8169,7 +8124,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    }
@@ -8318,13 +8273,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -8461,7 +8416,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -8469,7 +8424,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -8707,13 +8662,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -8878,7 +8833,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -8886,7 +8841,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -9124,13 +9079,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -9295,7 +9250,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -9303,7 +9258,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -9541,13 +9496,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -9712,7 +9667,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -9720,7 +9675,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -9911,13 +9866,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10065,7 +10020,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -10073,7 +10028,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -10288,13 +10243,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10436,7 +10391,7 @@
     "site_key": "s1||tanh||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -10444,7 +10399,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -10661,13 +10616,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10809,7 +10764,7 @@
     "site_key": "s1||tanh||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -10817,7 +10772,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -11030,13 +10985,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11174,7 +11129,7 @@
     "site_key": "s1||tanh||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -11182,7 +11137,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -11261,8 +11216,6 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -11270,7 +11223,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -11345,8 +11298,6 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -11355,7 +11306,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -11617,6 +11568,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
@@ -11850,7 +11802,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -11876,9 +11827,9 @@
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -12280,6 +12231,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "recurrent_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -12382,7 +12334,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.RecurrentModel.forward",
    "root_module": {
@@ -12390,7 +12341,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -12426,16 +12376,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "recurrent_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -12543,12 +12493,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12648,7 +12598,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -12665,7 +12615,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12804,12 +12754,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12937,7 +12887,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -12954,7 +12904,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -13052,12 +13002,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -13178,7 +13128,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -13195,7 +13145,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -13321,12 +13271,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -13427,7 +13377,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -13444,7 +13394,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -13599,7 +13549,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:2": {
@@ -13742,7 +13692,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:3": {
@@ -13885,7 +13835,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "self:1": {
@@ -14030,7 +13980,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    }
   },
@@ -14050,7 +14000,6 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -14058,10 +14007,6 @@
      "cell:3"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -14167,10 +14112,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -14188,7 +14129,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    },
@@ -14211,18 +14152,11 @@
     "call_children": [
      "cell"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "cell"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -14370,10 +14304,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -14391,7 +14321,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    }
@@ -14540,13 +14470,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14683,7 +14613,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -14691,7 +14621,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14929,13 +14859,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -15100,7 +15030,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -15108,7 +15038,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15346,13 +15276,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -15517,7 +15447,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -15525,7 +15455,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15763,13 +15693,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -15934,7 +15864,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -15942,7 +15872,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -16133,13 +16063,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16287,7 +16217,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -16295,7 +16225,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -16510,13 +16440,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16658,7 +16588,7 @@
     "site_key": "s1||tanh||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -16666,7 +16596,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -16883,13 +16813,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17031,7 +16961,7 @@
     "site_key": "s1||tanh||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -17039,7 +16969,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -17252,13 +17182,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17396,7 +17326,7 @@
     "site_key": "s1||tanh||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -17404,7 +17334,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -17467,8 +17397,6 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17523,8 +17451,6 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17783,6 +17709,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
@@ -18028,7 +17955,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -18054,9 +17980,9 @@
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -18458,6 +18384,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "recurrent_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -18552,7 +18479,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.RecurrentModel.forward",
    "root_module": {
@@ -18560,7 +18486,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -18587,16 +18512,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "recurrent_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -18704,12 +18629,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -18809,7 +18734,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -18826,7 +18751,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -18965,12 +18890,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19098,7 +19023,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -19115,7 +19040,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -19213,12 +19138,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19339,7 +19264,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -19356,7 +19281,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -19482,12 +19407,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19588,7 +19513,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -19605,7 +19530,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -19760,7 +19685,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     }
    },
    "cell:2": {
@@ -19903,7 +19828,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     }
    },
    "cell:3": {
@@ -20046,7 +19971,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     }
    },
    "self:1": {
@@ -20191,7 +20116,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     }
    }
   },
@@ -20211,7 +20136,6 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -20219,10 +20143,6 @@
      "cell:3"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -20328,10 +20248,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -20349,7 +20265,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "training": true
    },
@@ -20372,18 +20288,11 @@
     "call_children": [
      "cell"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "cell"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -20531,10 +20440,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -20552,7 +20457,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "training": true
    }
@@ -20701,13 +20606,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20844,7 +20749,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -20852,7 +20757,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -21090,13 +20995,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -21261,7 +21166,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -21269,7 +21174,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -21507,13 +21412,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -21678,7 +21583,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -21686,7 +21591,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -21924,13 +21829,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22095,7 +22000,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -22103,7 +22008,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -22294,13 +22199,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22448,7 +22353,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -22456,7 +22361,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -22671,13 +22576,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22819,7 +22724,7 @@
     "site_key": "s1||tanh||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -22827,7 +22732,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23044,13 +22949,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23192,7 +23097,7 @@
     "site_key": "s1||tanh||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -23200,7 +23105,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23413,13 +23318,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23557,7 +23462,7 @@
     "site_key": "s1||tanh||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -23565,7 +23470,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23644,8 +23549,6 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -23653,7 +23556,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -23728,8 +23631,6 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -23738,7 +23639,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1_fork_3"
     },
     "used_by_layers": [
      "linear_1_1"
@@ -24000,6 +23901,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
@@ -24245,7 +24147,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -24271,9 +24172,9 @@
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -24675,6 +24576,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "recurrent_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -24755,7 +24657,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "recurrent_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -24772,7 +24674,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.RecurrentModel.forward",
    "root_module": {
@@ -24781,9 +24682,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "recurrent_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -24818,16 +24718,16 @@
      "\"timestamp\"": "<measured>"
     }
    ],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "recurrent_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -24935,12 +24835,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25040,7 +24940,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -25057,7 +24957,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -25196,12 +25096,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25329,7 +25229,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -25346,7 +25246,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -25444,12 +25344,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25559,7 +25459,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -25576,7 +25476,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -25702,12 +25602,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25808,7 +25708,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -25825,7 +25725,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": "<raises InvalidArgumentError>",
@@ -25980,7 +25880,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:2": {
@@ -26123,7 +26023,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "cell:3": {
@@ -26266,7 +26166,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    },
    "self:1": {
@@ -26411,7 +26311,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     }
    }
   },
@@ -26431,7 +26331,6 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -26439,10 +26338,6 @@
      "cell:3"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -26548,10 +26443,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -26569,7 +26460,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    },
@@ -26592,18 +26483,11 @@
     "call_children": [
      "cell"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "cell"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -26751,10 +26635,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "cell.weight",
-     "cell.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -26772,7 +26652,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "training": true
    }
@@ -26921,13 +26801,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -27061,7 +26941,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -27069,7 +26949,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -27288,13 +27168,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -27456,7 +27336,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -27464,7 +27344,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -27683,13 +27563,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -27851,7 +27731,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -27859,7 +27739,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -28078,13 +27958,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": true,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28246,7 +28126,7 @@
     "site_key": "s1|cell|linear||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 5,
     "terminal_bool_for": null,
@@ -28254,7 +28134,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -28430,13 +28310,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28570,7 +28450,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -28578,7 +28458,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -28776,13 +28656,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28921,7 +28801,7 @@
     "site_key": "s1||tanh||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -28929,7 +28809,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -29129,13 +29009,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29274,7 +29154,7 @@
     "site_key": "s1||tanh||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 4,
     "terminal_bool_for": null,
@@ -29282,7 +29162,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -29478,13 +29358,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29619,7 +29499,7 @@
     "site_key": "s1||tanh||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "step_index": 6,
     "terminal_bool_for": null,
@@ -29627,7 +29507,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "recurrent_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -29690,8 +29570,6 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29746,8 +29624,6 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -30006,6 +29882,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
@@ -30245,7 +30122,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -30271,9 +30147,9 @@
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -30675,6 +30551,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "recurrent_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -30769,7 +30646,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.RecurrentModel.forward",
    "root_module": {
@@ -30777,7 +30653,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -30804,16 +30679,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "recurrent_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],

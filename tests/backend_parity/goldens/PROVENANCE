@@ -485,3 +485,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 8177837d997276f26f111c962696c132320687bb (dirty)
 recorded: 2026-10-31T09:22:33.215589+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.178841+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.264871+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.365953+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.684353+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.703275+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:24.917137+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:25.103204+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:25.282577+00:00

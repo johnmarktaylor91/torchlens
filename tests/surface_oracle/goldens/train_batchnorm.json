@@ -53,7 +53,7 @@
     "shape": [],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "versions": [
      {
@@ -130,7 +130,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "versions": [
      {
@@ -207,7 +207,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "versions": [
      {
@@ -338,12 +338,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -449,7 +449,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -466,7 +466,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -623,12 +623,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -775,7 +775,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -792,7 +792,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -912,12 +912,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1014,7 +1014,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -1031,7 +1031,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1143,12 +1143,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1255,7 +1255,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -1272,7 +1272,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1395,12 +1395,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1501,7 +1501,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -1518,7 +1518,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1641,12 +1641,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1747,7 +1747,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -1764,7 +1764,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -1880,12 +1880,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -1999,7 +1999,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -2016,7 +2016,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -2132,12 +2132,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2251,7 +2251,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -2268,7 +2268,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -2377,12 +2377,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2486,7 +2486,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -2503,7 +2503,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -2601,12 +2601,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2733,7 +2733,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -2750,7 +2750,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -2868,12 +2868,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -2989,7 +2989,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -3006,7 +3006,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -3176,7 +3176,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     }
    },
    "self:1": {
@@ -3328,7 +3328,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     }
    }
   },
@@ -3355,16 +3355,11 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -3543,10 +3538,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -3564,7 +3555,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "training": true
    },
@@ -3594,18 +3585,11 @@
     "call_children": [
      "bn"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "bn"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -3796,10 +3780,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -3817,7 +3797,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "training": true
    }
@@ -4015,13 +3995,13 @@
     "internal_source_parents": [
      "buffer_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4156,7 +4136,7 @@
     "site_key": "s1|bn|add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -4164,7 +4144,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4453,13 +4433,13 @@
      "buffer_3",
      "buffer_4"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4637,7 +4617,7 @@
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -4645,7 +4625,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -4822,13 +4802,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -4958,7 +4938,7 @@
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -4966,7 +4946,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -5155,13 +5135,13 @@
     "internal_source_parents": [
      "add_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -5295,7 +5275,7 @@
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -5303,7 +5283,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -5483,13 +5463,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -5625,7 +5605,7 @@
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -5633,7 +5613,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -5813,13 +5793,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -5955,7 +5935,7 @@
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -5963,7 +5943,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -6168,13 +6148,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6317,7 +6297,7 @@
     "site_key": "s1|bn|buffer||5",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -6325,7 +6305,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -6534,13 +6514,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -6683,7 +6663,7 @@
     "site_key": "s1|bn|buffer||6",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -6691,7 +6671,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -6865,13 +6845,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7012,7 +6992,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -7020,7 +7000,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -7218,13 +7198,13 @@
     "internal_source_parents": [
      "relu_1_3"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7380,7 +7360,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -7388,7 +7368,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -7604,13 +7584,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -7755,7 +7735,7 @@
     "site_key": "s1||relu||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -7763,7 +7743,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -7842,8 +7822,6 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -7851,7 +7829,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -7923,8 +7901,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -7932,7 +7908,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_1"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -8250,6 +8226,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
@@ -8538,7 +8515,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -8572,9 +8548,9 @@
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -9148,6 +9124,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "trainbatchnorm_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -9250,7 +9227,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "trainbatchnorm_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -9267,7 +9244,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.TrainBatchNorm.forward",
    "root_module": {
@@ -9276,9 +9252,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "trainbatchnorm_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -9305,16 +9280,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "trainbatchnorm_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -9377,7 +9352,7 @@
     "shape": [],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -9454,7 +9429,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -9531,7 +9506,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -9662,12 +9637,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -9773,7 +9748,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -9790,7 +9765,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -9947,12 +9922,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10099,7 +10074,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -10116,7 +10091,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -10236,12 +10211,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10338,7 +10313,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -10355,7 +10330,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -10467,12 +10442,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10579,7 +10554,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -10596,7 +10571,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -10719,12 +10694,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -10825,7 +10800,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -10842,7 +10817,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -10965,12 +10940,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11071,7 +11046,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -11088,7 +11063,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11204,12 +11179,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11323,7 +11298,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -11340,7 +11315,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11456,12 +11431,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11575,7 +11550,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -11592,7 +11567,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11701,12 +11676,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -11810,7 +11785,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -11827,7 +11802,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -11925,12 +11900,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12057,7 +12032,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -12074,7 +12049,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12192,12 +12167,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -12313,7 +12288,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -12330,7 +12305,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -12500,7 +12475,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    },
    "self:1": {
@@ -12652,7 +12627,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    }
   },
@@ -12679,16 +12654,11 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -12867,10 +12837,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12888,7 +12854,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    },
@@ -12918,18 +12884,11 @@
     "call_children": [
      "bn"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "bn"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -13120,10 +13079,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13141,7 +13096,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    }
@@ -13339,13 +13294,13 @@
     "internal_source_parents": [
      "buffer_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -13480,7 +13435,7 @@
     "site_key": "s1|bn|add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -13488,7 +13443,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -13777,13 +13732,13 @@
      "buffer_3",
      "buffer_4"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -13961,7 +13916,7 @@
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -13969,7 +13924,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14146,13 +14101,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14282,7 +14237,7 @@
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -14290,7 +14245,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14479,13 +14434,13 @@
     "internal_source_parents": [
      "add_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14619,7 +14574,7 @@
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -14627,7 +14582,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -14807,13 +14762,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -14949,7 +14904,7 @@
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -14957,7 +14912,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15137,13 +15092,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -15279,7 +15234,7 @@
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -15287,7 +15242,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15492,13 +15447,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -15641,7 +15596,7 @@
     "site_key": "s1|bn|buffer||5",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -15649,7 +15604,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -15858,13 +15813,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16007,7 +15962,7 @@
     "site_key": "s1|bn|buffer||6",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -16015,7 +15970,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -16189,13 +16144,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16336,7 +16291,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -16344,7 +16299,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -16542,13 +16497,13 @@
     "internal_source_parents": [
      "relu_1_3"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -16704,7 +16659,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -16712,7 +16667,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -16928,13 +16883,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -17079,7 +17034,7 @@
     "site_key": "s1||relu||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -17087,7 +17042,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -17166,8 +17121,6 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17175,7 +17128,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -17247,8 +17200,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17256,7 +17207,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -17574,6 +17525,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
@@ -17850,7 +17802,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -17884,9 +17835,9 @@
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -18460,6 +18411,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "trainbatchnorm_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -18587,7 +18539,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.TrainBatchNorm.forward",
    "root_module": {
@@ -18595,7 +18546,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -18627,16 +18577,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "trainbatchnorm_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -18693,7 +18643,7 @@
     "shape": [],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -18762,7 +18712,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -18831,7 +18781,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -18962,12 +18912,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19073,7 +19023,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -19090,7 +19040,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -19247,12 +19197,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19399,7 +19349,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -19416,7 +19366,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -19536,12 +19486,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19638,7 +19588,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -19655,7 +19605,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -19767,12 +19717,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -19879,7 +19829,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -19896,7 +19846,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -20019,12 +19969,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20125,7 +20075,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -20142,7 +20092,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -20265,12 +20215,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20371,7 +20321,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -20388,7 +20338,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -20504,12 +20454,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20623,7 +20573,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -20640,7 +20590,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -20756,12 +20706,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -20875,7 +20825,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -20892,7 +20842,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -21001,12 +20951,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -21110,7 +21060,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -21127,7 +21077,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -21225,12 +21175,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -21357,7 +21307,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -21374,7 +21324,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -21492,12 +21442,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -21613,7 +21563,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -21630,7 +21580,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -21800,7 +21750,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    },
    "self:1": {
@@ -21952,7 +21902,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    }
   },
@@ -21979,16 +21929,11 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -22167,10 +22112,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -22188,7 +22129,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    },
@@ -22218,18 +22159,11 @@
     "call_children": [
      "bn"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "bn"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -22420,10 +22354,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -22441,7 +22371,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    }
@@ -22639,13 +22569,13 @@
     "internal_source_parents": [
      "buffer_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -22780,7 +22710,7 @@
     "site_key": "s1|bn|add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -22788,7 +22718,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23077,13 +23007,13 @@
      "buffer_3",
      "buffer_4"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23261,7 +23191,7 @@
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -23269,7 +23199,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23446,13 +23376,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23582,7 +23512,7 @@
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -23590,7 +23520,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -23779,13 +23709,13 @@
     "internal_source_parents": [
      "add_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -23919,7 +23849,7 @@
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -23927,7 +23857,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -24107,13 +24037,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -24249,7 +24179,7 @@
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -24257,7 +24187,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -24437,13 +24367,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -24579,7 +24509,7 @@
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -24587,7 +24517,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -24792,13 +24722,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -24941,7 +24871,7 @@
     "site_key": "s1|bn|buffer||5",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -24949,7 +24879,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -25158,13 +25088,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25307,7 +25237,7 @@
     "site_key": "s1|bn|buffer||6",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -25315,7 +25245,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -25489,13 +25419,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -25636,7 +25566,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -25644,7 +25574,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -25842,13 +25772,13 @@
     "internal_source_parents": [
      "relu_1_3"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -26004,7 +25934,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -26012,7 +25942,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -26228,13 +26158,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -26379,7 +26309,7 @@
     "site_key": "s1||relu||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -26387,7 +26317,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -26450,8 +26380,6 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -26504,8 +26432,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -26820,6 +26746,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
@@ -27108,7 +27035,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -27142,9 +27068,9 @@
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -27718,6 +27644,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "trainbatchnorm_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -27834,7 +27761,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.TrainBatchNorm.forward",
    "root_module": {
@@ -27842,7 +27768,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -27869,16 +27794,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "trainbatchnorm_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -27941,7 +27866,7 @@
     "shape": [],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "versions": [
      {
@@ -28018,7 +27943,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "versions": [
      {
@@ -28095,7 +28020,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "versions": [
      {
@@ -28226,12 +28151,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28337,7 +28262,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -28354,7 +28279,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -28511,12 +28436,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28663,7 +28588,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -28680,7 +28605,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -28800,12 +28725,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -28902,7 +28827,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -28919,7 +28844,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -29031,12 +28956,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29143,7 +29068,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -29160,7 +29085,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -29283,12 +29208,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29389,7 +29314,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -29406,7 +29331,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -29529,12 +29454,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29635,7 +29560,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -29652,7 +29577,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -29768,12 +29693,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -29887,7 +29812,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -29904,7 +29829,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -30020,12 +29945,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -30139,7 +30064,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -30156,7 +30081,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -30265,12 +30190,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -30374,7 +30299,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -30391,7 +30316,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -30489,12 +30414,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -30621,7 +30546,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -30638,7 +30563,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -30756,12 +30681,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -30877,7 +30802,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -30894,7 +30819,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -31064,7 +30989,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     }
    },
    "self:1": {
@@ -31216,7 +31141,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     }
    }
   },
@@ -31243,16 +31168,11 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -31431,10 +31351,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -31452,7 +31368,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "training": true
    },
@@ -31482,18 +31398,11 @@
     "call_children": [
      "bn"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "bn"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -31684,10 +31593,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -31705,7 +31610,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "training": true
    }
@@ -31903,13 +31808,13 @@
     "internal_source_parents": [
      "buffer_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -32044,7 +31949,7 @@
     "site_key": "s1|bn|add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -32052,7 +31957,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -32341,13 +32246,13 @@
      "buffer_3",
      "buffer_4"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -32525,7 +32430,7 @@
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -32533,7 +32438,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -32710,13 +32615,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -32846,7 +32751,7 @@
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -32854,7 +32759,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -33043,13 +32948,13 @@
     "internal_source_parents": [
      "add_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -33183,7 +33088,7 @@
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -33191,7 +33096,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -33371,13 +33276,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -33513,7 +33418,7 @@
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -33521,7 +33426,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -33701,13 +33606,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -33843,7 +33748,7 @@
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -33851,7 +33756,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -34056,13 +33961,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -34205,7 +34110,7 @@
     "site_key": "s1|bn|buffer||5",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -34213,7 +34118,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -34422,13 +34327,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -34571,7 +34476,7 @@
     "site_key": "s1|bn|buffer||6",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -34579,7 +34484,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -34753,13 +34658,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -34900,7 +34805,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -34908,7 +34813,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -35106,13 +35011,13 @@
     "internal_source_parents": [
      "relu_1_3"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -35268,7 +35173,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -35276,7 +35181,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -35492,13 +35397,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -35643,7 +35548,7 @@
     "site_key": "s1||relu||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -35651,7 +35556,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "transform_chain": [],
     "transform_config": {
@@ -35730,8 +35635,6 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -35739,7 +35642,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -35811,8 +35714,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -35820,7 +35721,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1_fork_2"
     },
     "used_by_layers": [
      "batchnorm_1_2"
@@ -36138,6 +36039,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
@@ -36426,7 +36328,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -36460,9 +36361,9 @@
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -37036,6 +36937,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "trainbatchnorm_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -37138,7 +37040,7 @@
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "trainbatchnorm_1"
    },
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
@@ -37155,7 +37057,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.TrainBatchNorm.forward",
    "root_module": {
@@ -37164,9 +37065,8 @@
    },
    "root_trace": {
     "__ref__": "Trace",
-    "label": null
+    "label": "trainbatchnorm_1"
    },
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -37201,16 +37101,16 @@
      "\"timestamp\"": "<measured>"
     }
    ],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "trainbatchnorm_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -37267,7 +37167,7 @@
     "shape": [],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -37336,7 +37236,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -37405,7 +37305,7 @@
     ],
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "versions": [
      {
@@ -37536,12 +37436,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -37647,7 +37547,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -37664,7 +37564,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -37821,12 +37721,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -37973,7 +37873,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -37990,7 +37890,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -38110,12 +38010,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -38212,7 +38112,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -38229,7 +38129,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -38341,12 +38241,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -38453,7 +38353,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -38470,7 +38370,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -38593,12 +38493,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -38699,7 +38599,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -38716,7 +38616,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -38839,12 +38739,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -38945,7 +38845,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -38962,7 +38862,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -39078,12 +38978,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -39197,7 +39097,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -39214,7 +39114,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -39330,12 +39230,12 @@
     "in_multi_output": false,
     "in_submodule": true,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -39449,7 +39349,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -39466,7 +39366,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -39575,12 +39475,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -39684,7 +39584,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -39701,7 +39601,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -39799,12 +39699,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -39918,7 +39818,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -39935,7 +39835,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -40053,12 +39953,12 @@
     "in_multi_output": false,
     "in_submodule": false,
     "input_was_parameter": false,
-    "is_edited": false,
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_layer": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -40174,7 +40074,7 @@
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -40191,7 +40091,7 @@
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transformed_activation_memory": "<measured>",
     "transformed_grad": null,
@@ -40361,7 +40261,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    },
    "self:1": {
@@ -40513,7 +40413,7 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     }
    }
   },
@@ -40540,16 +40440,11 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
-    "call_parent_module": {
-     "__ref__": "Module",
-     "label": "self"
-    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -40728,10 +40623,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -40749,7 +40640,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    },
@@ -40779,18 +40670,11 @@
     "call_children": [
      "bn"
     ],
-    "call_children_modules": [
-     {
-      "__ref__": "Module",
-      "label": "bn"
-     }
-    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -40981,10 +40865,6 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [
-     "bn.weight",
-     "bn.bias"
-    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -41002,7 +40882,7 @@
     "total_output_gradient_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "training": true
    }
@@ -41186,13 +41066,13 @@
     "internal_source_parents": [
      "buffer_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -41324,7 +41204,7 @@
     "site_key": "s1|bn|add||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 1,
     "terminal_bool_for": null,
@@ -41332,7 +41212,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -41572,13 +41452,13 @@
      "buffer_3",
      "buffer_4"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -41753,7 +41633,7 @@
     "site_key": "s1|bn|batchnorm||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 2,
     "terminal_bool_for": null,
@@ -41761,7 +41641,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -41938,13 +41818,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -42071,7 +41951,7 @@
     "site_key": "s1|bn|buffer||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -42079,7 +41959,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -42256,13 +42136,13 @@
     "internal_source_parents": [
      "add_1_1"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -42393,7 +42273,7 @@
     "site_key": "s1|bn|buffer||2",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -42401,7 +42281,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -42581,13 +42461,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -42720,7 +42600,7 @@
     "site_key": "s1|bn|buffer||3",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -42728,7 +42608,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -42908,13 +42788,13 @@
      ]
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -43047,7 +42927,7 @@
     "site_key": "s1|bn|buffer||4",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -43055,7 +42935,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -43243,13 +43123,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -43389,7 +43269,7 @@
     "site_key": "s1|bn|buffer||5",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -43397,7 +43277,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -43589,13 +43469,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": true,
     "is_buffer_source": true,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -43735,7 +43615,7 @@
     "site_key": "s1|bn|buffer||6",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -43743,7 +43623,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -43917,13 +43797,13 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "is_edited": false,
     "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -44061,7 +43941,7 @@
     "site_key": "s1||input||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 0,
     "terminal_bool_for": null,
@@ -44069,7 +43949,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -44250,13 +44130,13 @@
     "internal_source_parents": [
      "relu_1_3"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -44396,7 +44276,7 @@
     "site_key": "s1||output||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -44404,7 +44284,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {},
@@ -44601,13 +44481,13 @@
     "internal_source_parents": [
      "batchnorm_1_2"
     ],
-    "is_edited": false,
     "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
     "is_in_conditional_body": false,
@@ -44749,7 +44629,7 @@
     "site_key": "s1||relu||1",
     "source_trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "step_index": 3,
     "terminal_bool_for": null,
@@ -44757,7 +44637,7 @@
     "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
-     "label": null
+     "label": "trainbatchnorm_1"
     },
     "transform_chain": [],
     "transform_config": {
@@ -44820,8 +44700,6 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -44874,8 +44752,6 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
-    "num_uses_by_layers": 1,
-    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -45190,6 +45066,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
    "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
@@ -45472,7 +45349,6 @@
     "\"site_join\"": "none"
    },
    "halt_frontier": null,
-   "stop_reason": null,
    "halted": false,
    "has_backward_pass": false,
    "has_frozen_params": false,
@@ -45506,9 +45382,9 @@
    ],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
-   "replayable": false,
    "is_appended": false,
    "is_pristine": true,
+   "is_replayable": false,
    "keep_orphans": false,
    "last_run": null,
    "layer_dict_all_keys": {
@@ -46082,6 +45958,7 @@
    "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "name": "trainbatchnorm_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
@@ -46198,7 +46075,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "_replay_frontier": {},
    "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.TrainBatchNorm.forward",
    "root_module": {
@@ -46206,7 +46082,6 @@
     "label": "self"
    },
    "root_trace": null,
-   "runnable_descriptor": null,
    "save_arg_templates": false,
    "save_arg_values": false,
    "save_code_context": false,
@@ -46233,16 +46108,16 @@
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "stop_reason": null,
    "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 10,
+   "tlspec_version": 11,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_memory": "<measured>",
    "total_gradient_memory": "<measured>",
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
-   "name": "trainbatchnorm_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
