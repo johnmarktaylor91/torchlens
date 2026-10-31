@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
-import pytest
+from _harness import REPO_ROOT, run_checks
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = REPO_ROOT
 
 _SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".rst", ".txt")
 
@@ -157,7 +159,7 @@ _TL_MOVED_NEEDLE_NAMES = (
 
 #: Plain-substring prefilter needles per group: a group's regex can only
 #: match text containing at least one of its needles (C-level ``in`` scans
-#: keep the lint inside the smoke runtime budget; the red-capability test
+#: keep the lint inside its runtime budget; the red-capability test
 #: routes through this same filter, so needle/regex drift fails loudly).
 _NEEDLES: dict[str, tuple[str, ...]] = {
     "machinery": ("warn_deprecated_alias", "TorchLensDeprecationWarning"),
@@ -262,7 +264,7 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "harvested torchlens 2.16 wheel (G1 golden corpus), whose API IS the "
         "paper-era spelling; it never runs against current torchlens",
     ),
-    "tests/test_deprecation_inventory.py": (
+    "scripts/checks/deprecation_inventory.py": (
         frozenset({"ALL"}),
         "the package deprecation scanners recognize the deleted helper names",
     ),
@@ -316,7 +318,7 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"paper_era"}),
         "docs-lockstep incident's historical reference (moved from AGENTS.md)",
     ),
-    "tests/test_removed_spelling_lint.py": (
+    "scripts/checks/removed_spelling_lint.py": (
         frozenset({"ALL"}),
         "this lint's own ledger",
     ),
@@ -358,7 +360,7 @@ def _tracked_scan_files() -> list[Path]:
             check=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover - non-checkout run
-        pytest.skip("removed-spelling lint requires a git checkout")
+        raise AssertionError("removed-spelling lint requires a git checkout")  # noqa: B904
     return [_REPO_ROOT / rel for rel in listing.splitlines() if _in_scan_scope(rel)]
 
 
@@ -384,7 +386,7 @@ def _relative(path: Path) -> str:
     return path.relative_to(_REPO_ROOT).as_posix()
 
 
-def test_no_removed_spelling_creeps_back() -> None:
+def check_no_removed_spelling_creeps_back() -> None:
     """Every hit outside the audited ledger is a resurrection defect."""
 
     offenders: list[str] = []
@@ -415,7 +417,7 @@ def test_no_removed_spelling_creeps_back() -> None:
     stale = [
         f"{rel} (reason: {_ALLOWED[rel][1]})"
         for rel in _ALLOWED
-        if rel not in matched_allowlist_groups and rel != "tests/test_removed_spelling_lint.py"
+        if rel not in matched_allowlist_groups and rel != "scripts/checks/removed_spelling_lint.py"
     ]
     assert not stale, (
         "Stale allowlist rows (file no longer matches any forbidden pattern); "
@@ -423,8 +425,15 @@ def test_no_removed_spelling_creeps_back() -> None:
     )
 
 
-def test_lint_is_red_capable(tmp_path: Path) -> None:
+def check_lint_is_red_capable() -> None:
     """The scanner actually detects a planted resurrection per group shape."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_lint_is_red_capable(Path(tmp))
+
+
+def _check_lint_is_red_capable(tmp_path: Path) -> None:
+    """Plant one resurrection per group under ``tmp_path`` and demand a hit."""
 
     planted = {
         "machinery": "from torchlens._deprecations import warn_deprecated_alias\n",
@@ -459,3 +468,19 @@ def test_lint_is_red_capable(tmp_path: Path) -> None:
     assert not _scan_file(tmp_path / "clean.py", clean), (
         "grouped-option spelling must not false-positive"
     )
+
+
+CHECKS = (
+    check_no_removed_spelling_creeps_back,
+    check_lint_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every removed_spelling_lint check and return the exit status."""
+
+    return run_checks("removed_spelling_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

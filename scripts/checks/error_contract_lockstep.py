@@ -15,18 +15,20 @@ capture-outcome vocabularies) are declared through enum members or differently
 named attributes, so they do not enter this scanner's universe; if one ever
 does, the equality check goes red and the collision is adjudicated explicitly.
 
-Everything here is smoke-tier: pure file scanning, no capture.
+Everything here is pure file scanning, no capture.
 """
 
 from __future__ import annotations
 
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+from _harness import REPO_ROOT, run_checks
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = REPO_ROOT
 _CONTRACT_DOC = _REPO_ROOT / "docs" / "reference" / "error_refusal_contract.md"
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
 
@@ -138,7 +140,7 @@ def _source_codes() -> dict[str, set[str]]:
         source_path = _PACKAGE_ROOT.parent / rel_path
         if not source_path.exists():
             # Enrollment integrity is enforced separately by
-            # test_constant_spelled_codes_resolve_in_source against the real
+            # check_constant_spelled_codes_resolve_in_source against the real
             # tree; the red-capability test points _PACKAGE_ROOT elsewhere.
             continue
         pattern = re.compile(
@@ -149,7 +151,7 @@ def _source_codes() -> dict[str, set[str]]:
     return declared
 
 
-def test_contract_doc_parses_to_a_nonempty_table() -> None:
+def check_contract_doc_parses_to_a_nonempty_table() -> None:
     """The scanner actually finds the contract table (anti-vacuity guard)."""
 
     rows = _documented_codes()
@@ -159,14 +161,14 @@ def test_contract_doc_parses_to_a_nonempty_table() -> None:
         assert remedy.strip(), f"contract row {code!r} has an empty remedy column"
 
 
-def test_source_scanner_finds_a_nonempty_universe() -> None:
+def check_source_scanner_finds_a_nonempty_universe() -> None:
     """The source scan actually matches code declarations (anti-vacuity guard)."""
 
     declared = _source_codes()
     assert len(declared) > 100, f"source code scan collapsed: {len(declared)} codes"
 
 
-def test_every_documented_code_exists_in_source() -> None:
+def check_every_documented_code_exists_in_source() -> None:
     """No contract row names a code the package no longer raises."""
 
     stale = set(_documented_codes()) - set(_source_codes())
@@ -176,7 +178,7 @@ def test_every_documented_code_exists_in_source() -> None:
     )
 
 
-def test_every_source_code_is_documented() -> None:
+def check_every_source_code_is_documented() -> None:
     """No refusal code ships without a contract row."""
 
     declared = _source_codes()
@@ -190,7 +192,7 @@ def test_every_source_code_is_documented() -> None:
     )
 
 
-def test_constant_spelled_codes_resolve_in_source() -> None:
+def check_constant_spelled_codes_resolve_in_source() -> None:
     """Every enrolled constant-spelled kind exists with its exact string value.
 
     A rename of the constant, a move to another module, or a drift of the
@@ -213,7 +215,7 @@ def test_constant_spelled_codes_resolve_in_source() -> None:
         )
 
 
-def test_constant_spelled_codes_are_documented() -> None:
+def check_constant_spelled_codes_are_documented() -> None:
     """Every enrolled constant-spelled kind has a contract-doc row."""
 
     documented = set(_documented_codes())
@@ -221,26 +223,49 @@ def test_constant_spelled_codes_are_documented() -> None:
     assert missing == set(), f"constant-spelled kinds missing contract-doc rows: {sorted(missing)}"
 
 
-def test_lockstep_scanners_are_red_capable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def check_lockstep_scanners_are_red_capable() -> None:
     """Planted drift in either direction is reported (the gate can fail)."""
 
-    doc = tmp_path / "contract.md"
-    doc.write_text(
-        "| Code | Refusal | Remedy class |\n"
-        "|---|---|---|\n"
-        "| `documented_only_code` | A refusal | A remedy |\n"
-        "| `shared_code` | A refusal | A remedy |\n"
-    )
-    package = tmp_path / "pkg"
-    package.mkdir()
-    (package / "mod.py").write_text(
-        'X = dict(code="shared_code")\nY = dict(code="source_only_code")\n'
-    )
-    module = sys.modules[__name__]
-    monkeypatch.setattr(module, "_CONTRACT_DOC", doc)
-    monkeypatch.setattr(module, "_PACKAGE_ROOT", package)
+    with tempfile.TemporaryDirectory() as tmp, pytest.MonkeyPatch.context() as monkeypatch:
+        tmp_path = Path(tmp)
+        doc = tmp_path / "contract.md"
+        doc.write_text(
+            "| Code | Refusal | Remedy class |\n"
+            "|---|---|---|\n"
+            "| `documented_only_code` | A refusal | A remedy |\n"
+            "| `shared_code` | A refusal | A remedy |\n"
+        )
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "mod.py").write_text(
+            'X = dict(code="shared_code")\nY = dict(code="source_only_code")\n'
+        )
+        module = sys.modules[__name__]
+        monkeypatch.setattr(module, "_CONTRACT_DOC", doc)
+        monkeypatch.setattr(module, "_PACKAGE_ROOT", package)
 
-    with pytest.raises(AssertionError, match="documented_only_code"):
-        test_every_documented_code_exists_in_source()
-    with pytest.raises(AssertionError, match="source_only_code"):
-        test_every_source_code_is_documented()
+        with pytest.raises(AssertionError, match="documented_only_code"):
+            check_every_documented_code_exists_in_source()
+        with pytest.raises(AssertionError, match="source_only_code"):
+            check_every_source_code_is_documented()
+
+
+CHECKS = (
+    check_contract_doc_parses_to_a_nonempty_table,
+    check_source_scanner_finds_a_nonempty_universe,
+    check_every_documented_code_exists_in_source,
+    check_every_source_code_is_documented,
+    check_constant_spelled_codes_resolve_in_source,
+    check_constant_spelled_codes_are_documented,
+    check_lockstep_scanners_are_red_capable,
+)
+
+
+def main() -> int:
+    """Run every error_contract_lockstep check and return the exit status."""
+
+    return run_checks("error_contract_lockstep", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

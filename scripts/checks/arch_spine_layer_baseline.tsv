@@ -1,4 +1,4 @@
-# test_arch_spine_layer_baseline.tsv -- FROZEN eager-upward inversion
+# arch_spine_layer_baseline.tsv -- FROZEN eager-upward inversion
 # baseline per module, recomputed under the memo tiering after the C01
 # moves (item 1). Counts only shrink; regenerate deliberately with
 # TORCHLENS_REGEN_LAYER_BASELINE=1 and review the diff.
