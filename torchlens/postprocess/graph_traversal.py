@@ -595,6 +595,18 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         if getattr(self._raw_graph_ws.raw_layer_dict[label], "buffer_write_kind", None) is not None
     ]
     node_stack = self.input_layers + self.output_layers + written_buffer_layers
+    # A halted capture is an honest prefix of the forward: every op that ran
+    # stays. A value computed before the halt whose consumer never ran (a
+    # positional-weight table built from numpy ahead of the embedding it
+    # scales) is childless AND input-disconnected at the frontier, so the
+    # bidirectional flood from inputs and the halt output alone would prune
+    # it as dead computation it is not. Seed every childless op as frontier.
+    if getattr(self, "halted", False):
+        node_stack = node_stack + [
+            label
+            for label, entry in self._raw_graph_ws.raw_layer_dict.items()
+            if len(entry.children) == 0 and label not in node_stack
+        ]
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
     # per-node `label not in <list>` scans were O(k^2) in sink count
     # (hunt-6 R52-2). The lists stay the portable source of truth.
