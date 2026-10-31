@@ -93,7 +93,7 @@ repair stale bindings. Coverage is now:
 ## Shadow detector semantics
 
 `escape_detector="shadow"` observes raw callable execution using exact object/code identity. It
-reports a `TorchLensCaptureGapWarning` with the callable, registered export sites, source callsite,
+reports a `tl.errors.CaptureGapWarning` with the callable, registered export sites, source callsite,
 storage hint, short stack, and remediation. Reports also appear in `trace.escape_diagnostics`, and
 a diagnostic now also TRIGGERS the rescue re-run (the report from the primary run is preserved in
 `trace.rescue_rerun["primary_escape_diagnostics"]`).

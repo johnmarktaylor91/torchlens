@@ -27,7 +27,7 @@ unaffected.
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
 | `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
-| `PostTraceParamUnavailable` | `torchlens.errors.PostTraceParamUnavailable` | removed |
+| `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
 | `SaveLevel` | `torchlens.types.SaveLevel` | removed |
 | `SiteTable` | `torchlens.types.SiteTable` | removed |
