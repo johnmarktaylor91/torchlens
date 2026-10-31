@@ -156,7 +156,10 @@ def test_tier_partition_moves_no_fields() -> None:
 def test_registry_mirrors_the_lockstep_catalogs() -> None:
     """RECORD_CONTRACT_CLASSES covers exactly the FIELD_ORDER catalog owners."""
 
-    from tests.test_schema_lockstep import CATALOGS
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
+    from schema_lockstep import CATALOGS  # noqa: E402
 
     lockstep_owners = {catalog.owner.__name__ for catalog in CATALOGS if catalog.owner is not None}
     registry_owners = {class_name for _, class_name in RECORD_CONTRACT_CLASSES.values()}
