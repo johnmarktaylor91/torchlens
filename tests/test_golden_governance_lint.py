@@ -373,10 +373,6 @@ GOLDEN_LEDGER: dict[str, tuple[str, str]] = {
         "raw DOT bytes; family fingerprint extends with the graphviz emitter "
         "version (TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE)",
     ),
-    "godobject_oracle/goldens/legacy_baseline_cnn_loaded.json": (
-        "env-governed",
-        "loaded-surface byte dump (TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE)",
-    ),
     "godobject_oracle/goldens/state_keysets.json": (
         "env-governed",
         "state-keyset contract (TORCHLENS_UPDATE_STATE_KEYSET_ORACLE)",
@@ -633,10 +629,6 @@ _GENERATION_WRAP_GUARD_CENSUS: dict[str, tuple[str, str]] = {
     "TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE": (
         "godobject_oracle/test_viz_identity.py",
         "subprocess",
-    ),
-    "TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE": (
-        "godobject_oracle/test_legacy_artifact.py",
-        "in-process",
     ),
     "TORCHLENS_UPDATE_MODULE_CONTAINMENT": (
         "test_module_containment_equality.py",

@@ -135,6 +135,7 @@ from .._utils._callable_safety import (
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
 )
+from .format_errors import ArtifactTooOldError
 
 __all__ = ["SafeBundleUnpickler"]
 
@@ -1443,11 +1444,10 @@ def refuse_pre_3_module_path(module: str) -> None:
     if root != "torchlens" or rest.partition(".")[0] not in _PRE_3_PACKAGES:
         return
     from .format_contract import MIN_TLSPEC_VERSION
-    from .format_errors import ArtifactTooOldError
 
     remedy = (
-        "load it with torchlens 2.x (pip install 'torchlens<3'), or capture the model "
-        "again with this release and save that."
+        "save it again with torchlens 2.36.x, which can read it (pip install "
+        "'torchlens>=2.36,<3'), or capture the model again with this release and save that."
     )
     raise ArtifactTooOldError(
         f"This artifact was saved by torchlens 2.x (it names the module {module}); "
@@ -1556,7 +1556,8 @@ class SafeBundleUnpickler(pickle._Unpickler):
 
         try:
             return super().load()
-        except pickle.UnpicklingError:
+        except (pickle.UnpicklingError, ArtifactTooOldError):
+            # The earlier-major refusal is a typed load verdict, not corruption.
             raise
         except Exception as exc:  # noqa: BLE001 -- locus-classified; see docstring
             if _exception_arose_outside_vm(exc):

@@ -4,7 +4,7 @@ The two committed artifacts under ``goldens/`` were written by torchlens 2.34.1 
 pre-columnar baseline (tree ``db2bc7a5``) and are NEVER regenerated: they ARE the 2.x
 format. TorchLens 3 carries no reader for 2.x files (their field names and package paths
 changed in the 3.0 rename), so loading either one raises one typed error that names the
-2.x origin and the two ways out: the 2.x release line reads the file, or capture again.
+2.x origin and the two ways out: save it again with torchlens 2.36.x, or capture again.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def test_legacy_artifact_refuses_with_the_2x_remedy(artifact: Path) -> None:
 
     message = str(excinfo.value)
     assert "saved by torchlens 2.x" in message
-    assert "torchlens<3" in message
+    assert "save it again with torchlens 2.36.x" in message
     assert "capture the model again" in message
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
     assert excinfo.value.fields["observed"].startswith("module_path=torchlens.")
