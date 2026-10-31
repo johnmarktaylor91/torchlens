@@ -219,7 +219,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # pattern) -- tl.report.mfu's three D16/D17 disclosure knobs bundle into
     # the frozen MfuProvenance dataclass (validation unchanged at the mfu()
     # door, so the typed refusals still fire), and the D9 evidence= knob
-    # moved from build_profile to TraceProfile.to_pandas(evidence=) -- the
+    # moved from build_profile to ProfileReport.to_pandas(evidence=) -- the
     # export door -- so build_profile keeps its historical five-argument
     # view surface. The lane's PRIVATE offenders (_remainder,
     # _assemble_level_rows, _rollup_row) were refactored in-lane. F09 adds

@@ -70,7 +70,7 @@ def process_group(tmp_path: Path) -> Iterator[None]:
 
 
 def _record_under_group(*args: object, **kwargs: object):
-    """Call tl.fastlog.record, expecting the unvetted-torch disclosure.
+    """Call tl.record, expecting the unvetted-torch disclosure.
 
     Capturing under a genuinely initialized process group lazily arms
     collective capture; on a census-vetted torch build that is silent, and on

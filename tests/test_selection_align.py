@@ -1,4 +1,4 @@
-"""L6 stage 4a: cross-run selection alignment (``ResolvedSelection.align_to``).
+"""L6 stage 4a: cross-run selection alignment (``Selection.align_to``).
 
 Pins the cross-run door: alignment keys on the L1 structural site keys each
 ACT entry records (the bridging relation), SAME-POLICY captures only per the

@@ -208,7 +208,7 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
     one = _fixture_scores(method="eap")
     by_name = {row.address[0]: row.score for row in rows}
     assert by_name["input->logits"] == pytest.approx(2 * one["input->R"], abs=1e-12)
-    loaded = tl.attribution.onebackward.load_read_table(table.save(tmp_path / "edges.json"))
+    loaded = tl.attribution.load_read_table(table.save(tmp_path / "edges.json"))
     assert {row.address[0]: row.score for row in loaded.rows()} == by_name
 
 

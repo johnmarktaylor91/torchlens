@@ -149,7 +149,7 @@ class TestRenderFacade:
 
     @pytest.mark.smoke
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
-        """RenderResult.save() re-renders from the stored DOT source."""
+        """Drawing.save() re-renders from the stored DOT source."""
 
         result = render(_cnn().eval(), input_size=SIZE, file=str(tmp_path / "g.svg"))
         assert isinstance(result, Drawing)

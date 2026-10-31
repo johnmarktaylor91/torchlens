@@ -49,7 +49,7 @@ def test_to_pandas_attrs_carry_honesty(export_trace: tl.Trace) -> None:
 
 @pytest.mark.smoke
 def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> None:
-    """TraceProfile.to_pandas and accessor to_pandas carry the facts."""
+    """ProfileReport.to_pandas and accessor to_pandas carry the facts."""
 
     profile_facts = export_trace.profile().to_pandas().attrs["torchlens_capture_honesty"]
     assert profile_facts["capture_status"] == "complete"

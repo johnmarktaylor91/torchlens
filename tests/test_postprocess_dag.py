@@ -910,7 +910,7 @@ def test_token_read_before_write_check_fires(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.requires_assertions
 def test_clone_scope_tags_step1_reads(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Op.copy's whole-schema loop lands as category (d), not findings.
+    """Op._copy_with_shallow_fields's whole-schema loop lands as category (d), not findings.
 
     Step 1 clones the output node; naive recording would report ~180
     category-(c) reads. The row-clone scope routes them into the clone
