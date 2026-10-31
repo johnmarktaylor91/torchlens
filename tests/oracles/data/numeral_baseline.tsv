@@ -613,8 +613,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
 docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0,
 docs-md	docs/agent-reference/current-2-x-surface.md	2.32.4
-docs-md	docs/agent-reference/current-2-x-surface.md	2.33.0
-docs-md	docs/agent-reference/current-2-x-surface.md	2.34.1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.5
 docs-md	docs/agent-reference/current-2-x-surface.md	2.6
 docs-md	docs/agent-reference/current-2-x-surface.md	20
@@ -2214,7 +2212,6 @@ package-docstrings	torchlens/_io/forgery_validation.py	64
 package-docstrings	torchlens/_io/format_contract.py	17
 package-docstrings	torchlens/_io/format_contract.py	3.2
 package-docstrings	torchlens/_io/format_contract.py	3.3
-package-docstrings	torchlens/_io/format_contract.py	65
 package-docstrings	torchlens/_io/format_errors.py	2.31.0
 package-docstrings	torchlens/_io/format_errors.py	3.1
 package-docstrings	torchlens/_io/format_errors.py	3.2
@@ -2223,7 +2220,6 @@ package-docstrings	torchlens/_io/injection_codec.py	2.3
 package-docstrings	torchlens/_io/injection_codec.py	2026
 package-docstrings	torchlens/_io/injection_codec.py	44
 package-docstrings	torchlens/_io/lazy.py	256
-package-docstrings	torchlens/_io/manifest.py	2.31.0
 package-docstrings	torchlens/_io/manifest.py	256
 package-docstrings	torchlens/_io/manifest.py	440
 package-docstrings	torchlens/_io/manifest.py	64
@@ -3325,8 +3321,6 @@ package-docstrings	torchlens/distributed/_lifecycle.py	18
 package-docstrings	torchlens/distributed/_recognizer.py	10
 package-docstrings	torchlens/distributed/_recognizer.py	26
 package-docstrings	torchlens/distributed/_recognizer.py	5.2
-package-docstrings	torchlens/_ecosystem/__init__.py	32
-package-docstrings	torchlens/_ecosystem/__init__.py	35
 package-docstrings	torchlens/_ecosystem/plugins.py	256
 package-docstrings	torchlens/_ecosystem/plugins.py	8.1
 package-docstrings	torchlens/errors/episode.py	40
@@ -5459,10 +5453,6 @@ test-docstrings	tests/test_dtype_range_audit.py	32
 test-docstrings	tests/test_dtype_range_audit.py	65504
 test-docstrings	tests/test_dynamo_fake_guard.py	2.6
 test-docstrings	tests/test_ecosystem_rt_conformance.py	256
-test-docstrings	tests/test_ecosystem_rt_ledger.py	2.16
-test-docstrings	tests/test_ecosystem_rt_ledger.py	2.17.0
-test-docstrings	tests/test_ecosystem_rt_ledger.py	2.31.0
-test-docstrings	tests/test_ecosystem_rt_ledger.py	2.32.4
 test-docstrings	tests/test_ecosystem_rt_plugins.py	256
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	17
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	18
@@ -6321,14 +6311,9 @@ test-docstrings	tests/test_recurrent_ops_pooling.py	12
 test-docstrings	tests/test_recurrent_ops_pooling.py	2026
 test-docstrings	tests/test_reentrant_trace.py	55
 test-docstrings	tests/test_rehydration_floor.py	10,
-test-docstrings	tests/test_rehydration_floor.py	15
 test-docstrings	tests/test_rehydration_floor.py	2.16
 test-docstrings	tests/test_rehydration_floor.py	2.16_
-test-docstrings	tests/test_rehydration_floor.py	2.31.0
-test-docstrings	tests/test_rehydration_floor.py	2.32.4
-test-docstrings	tests/test_rehydration_floor.py	2.33
 test-docstrings	tests/test_rehydration_floor.py	2026
-test-docstrings	tests/test_rehydration_floor.py	3.1,
 test-docstrings	tests/test_rehydration_floor.py	65
 test-docstrings	tests/test_release_model.py	56
 test-docstrings	tests/test_render_bugs.py	19
@@ -6531,7 +6516,6 @@ test-docstrings	tests/test_schema_lockstep.py	3.10
 test-docstrings	tests/test_schema_lockstep.py	3.11
 test-docstrings	tests/test_schema_lockstep.py	53
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
-test-docstrings	tests/test_schema_v10_contract_and_goldens.py	2.34.1
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	36
 test-docstrings	tests/test_schema_v9_c07x_episode.py	10
@@ -7356,8 +7340,6 @@ test-names	tests/test_distributed_census_topologies.py	10
 test-names	tests/test_distributed_funcol_boundaries.py	10
 test-names	tests/test_dtype_range_audit.py	16_
 test-names	tests/test_dtype_range_audit.py	32_
-test-names	tests/test_ecosystem_rt_ledger.py	216_
-test-names	tests/test_ecosystem_rt_migrate.py	216_
 test-names	tests/test_explorer_watch_gates.py	18
 test-names	tests/test_explorer_watch_p1_summary_role.py	64_
 test-names	tests/test_extract_fixes_extraction.py	18_
