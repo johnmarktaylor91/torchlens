@@ -3576,6 +3576,117 @@ The sections above describe each surface in depth.
 | `ValidationStatus.unavailable_unsupported` | Build an unavailable status for a backend without replay validation |
 | `ValidationStatus.unverified_reason_counts` | Stable reason-code counts for nodes that replay could not verify |
 | `WatchdogSnapshot.is_tripped` | Whether the watchdog fired |
+### Members by class
+Members of classes whose public home changed, one entry per class.
+
+**`tl.types.Container`**
+: Computed view over a captured Python output container. `Container.leaf_occurrences`: every tensor occurrence and its container path; `Container.leaves`: the ops whose outputs are the container's tensor leaves; `Container.reconstruct_at`: rebuild the container from a snapshot selector (`site=`, `role=`, `values=`); `Container.reconstructable`: whether the view can rebuild the original Python object; `Container.root_id`: identity of the container's root; `Container.root_kind`: what kind of root the container hangs from; `Container.supports_reconstruct`: whether reconstruction is supported for this container.
+
+**`tl.types.ContainerSpec`**
+: Portable description of an output container seen during capture. `ContainerSpec.aux_data`: auxiliary data needed to rebuild the container type; `ContainerSpec.child_specs`: the child path components and their nested specs; `ContainerSpec.literal_value`: the stored value for a non-tensor literal leaf; `ContainerSpec.lossy_reconstruction`: whether rebuilding the container loses information; `ContainerSpec.type_module`: module of the container's type; `ContainerSpec.type_qualname`: qualified name of the container's type.
+
+**`tl.types.ContainerLeafOccurrence`**
+: One tensor occurrence at one container path. `ContainerLeafOccurrence.occ_index`: index of this occurrence; `ContainerLeafOccurrence.producer_op_label`: label of the op that produced the tensor, or `None`; `ContainerLeafOccurrence.tensor_identity`: identity of the tensor, or `None`.
+
+**`tl.types.MergeAlignment`**
+: Structural merge verdict; value divergence never changes it. `MergeAlignment.ALIGNED`: the rank captures line up structurally; `MergeAlignment.CONFLICTED`: at least one structural conflict was found.
+
+**`tl.types.MergeValueStatus`**
+: Merge-level value verdict derived from the join ledger. `MergeValueStatus.ATTESTED_COMPLETE`: every applicable join boundary is attested; `MergeValueStatus.ATTESTED_PARTIAL`: some applicable join boundaries are attested, not all; `MergeValueStatus.DIVERGENT`: at least one join boundary mismatched across ranks; `MergeValueStatus.UNWITNESSED`: no join boundary is attested.
+
+**`tl.types.MergedFinding`**
+: One structured merge finding. `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
+
+**`tl.report.MergeReport`**
+: Graph-free diagnostic summary of a merge. `MergeReport.alignment`: the effective structural verdict; `MergeReport.conflicts`: the structural conflict findings, which never join and never become gaps; `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed value; `MergeReport.expected_ranks`: the declared world, when one was given; `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded; `MergeReport.stored_alignment`: the structural verdict derived at merge time; `MergeReport.value_status`: the merge-level value verdict.
+
+**`tl.types.MergedTrace`**
+: N rank-local captures stitched at their collective boundaries. `MergedTrace.alignment`: the effective verdict: the stored one, lowered by load degradations; `MergedTrace.expected_ranks`: the declared world, when one was given (it can only widen expectations); `MergedTrace.gaps`: the typed presence-gap ledger; `MergedTrace.happens_before`: partial-order query over two join keys (`left`, `right`); `MergedTrace.join_ops`: resolve a join's boundary ops on every presenting rank; `MergedTrace.joins`: the cross-rank collective joins, in deterministic key order; `MergedTrace.member_outcomes`: read-only map of each rank to its settled capture-outcome status; `MergedTrace.rank_ids`: the global ranks present in the merge; `MergedTrace.release`: drop every rank-trace handle so the member traces can be reclaimed; `MergedTrace.stored_alignment`: the structural verdict derived at merge time; `MergedTrace.stored_value_status`: the value verdict derived at merge time; `MergedTrace.value_status`: the merge-level value verdict from the join ledger.
+
+**`tl.trackers.HistoryReader`**
+: Reads one history artifact without loading the run or importing a model. `HistoryReader.observations`: materialize observations, optionally filtered by `step`, `site_id` and `stream`; verifies checksums; `HistoryReader.step_blocks`: the committed step blocks, oldest first.
+
+**`tl.trackers.HistoryView`**
+: Session-side read view over one run's committed history. `HistoryView.from_blocks`: wrap in-memory committed blocks; `HistoryView.from_collector`: read the live collector's in-memory ring; `HistoryView.from_reader`: build a view from a disk artifact (checksums verified); `HistoryView.series`: one site and stream series in step order, disambiguated by phase; `HistoryView.site_streams`: the (stream, phase) pairs observed for one site.
+
+**`tl.trackers.SeriesPoint`**
+: One sample of a series. `SeriesPoint.observation`: the observation record; `SeriesPoint.step_hi`: last step of the span the sample covers; `SeriesPoint.step_lo`: first step of the span the sample covers.
+
+**`tl.types.PartialTrace`**
+: Thin wrapper around raw capture state from a failed forward pass. `PartialTrace.FIELD_POLICY`: the declared field policy, so field-declaration checks also cover failed partial captures; `PartialTrace.audit`: an evidence-backed health report for the partial capture; `PartialTrace.capability_card`: which family members work on this object; `PartialTrace.from_trace`: build the wrapper from a failed capture's internal state and its exception; `PartialTrace.original_exception`: the exception the failed capture raised; `PartialTrace.output_table`: typed refusal: a failed forward has no outputs; `PartialTrace.raw_layers`: the layer entries captured before the failure; `PartialTrace.to_agent_json`: typed refusal: the machine map needs finalized identities.
+
+**`tl.types.InputProvenance`**
+: Persistent provenance for how a capture's input came to exist. `InputProvenance.cache_key_version`: version of the input cache key, or `None`; `InputProvenance.cache_status`: whether the input came from the cache, or `None`; `InputProvenance.call_structure`: normalized call description: positional count, keyword names, and whether non-tensor arguments are present; `InputProvenance.caveats`: the rendered disclosure sentences; `InputProvenance.d8_meta`: metadata for the reserved meta-device rung, or `None`; `InputProvenance.evidence_grade`: `verified_exact`, `empirically_flexible`, `under_determined` or `unsupported`; `InputProvenance.execution_policy`: `"caller_mode"` (the caller's flags are kept) or `"eval_no_grad_restored"` (eval and no-grad are pinned, then restored); `InputProvenance.lazy_transitions`: module addresses whose lazy parameters materialized during the captured forward; `InputProvenance.rung`: the input ladder rung, 1 to 3.
+
+**`tl.types.ContractCheck`**
+: One contract check recorded in a run report. `ContractCheck.diagnostic`: the diagnostic for a failed check, or `None`.
+
+**`tl.types.NumericAttestationStatus`**
+: Result states for the optional saved-activation check. `NumericAttestationStatus.ATTESTED`: the run's values match the saved activations; `NumericAttestationStatus.NOT_APPLICABLE`: the check does not apply to this run; `NumericAttestationStatus.NOT_PRESENT`: no saved activations were available to check against; `NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED`: the run's values did not match the saved activations.
+
+**`tl.types.PathFaithfulness`**
+: Honesty states reported by a completed sparse run. `PathFaithfulness.DIVERGED`: the run left the recorded path; `PathFaithfulness.UNVERIFIABLE`: the path could not be checked; `PathFaithfulness.VERIFIED`: the run followed the recorded path.
+
+**`tl.types.ReadinessReport`**
+: Complete non-executing readiness report for a trace provider. `ReadinessReport.capability`: the capability the report is about, or `None`; `ReadinessReport.diagnostics`: the readiness diagnostics; `ReadinessReport.provider`: which provider would serve the run; `ReadinessReport.resolver_records`: how each callable was resolved; `ReadinessReport.state_sources_available`: the state sources the run could use; `ReadinessReport.witness_completeness`: how complete the recorded witnesses are, or `None`.
+
+**`tl.types.ReadinessStatus`**
+: Overall non-executing readiness states. `ReadinessStatus.READY`: the trace can run; `ReadinessStatus.UNAVAILABLE`: the trace cannot run.
+
+**`tl.types.RunProvider`**
+: Providers selected by `Trace.run`. `RunProvider.LIVE`: run on the live model; `RunProvider.LOADED_ANALYSIS`: run from a loaded analysis trace; `RunProvider.LOADED_SPARSE`: run from a loaded sparse trace.
+
+**`tl.types.RunReport`**
+: Honesty, state, resolution and contract metadata for one run. `RunReport.contract_checks`: the contract checks the run recorded; `RunReport.first_mismatch`: the first mismatch diagnostic, or `None`; `RunReport.initializer_policy_version`: version of the initializer policy used to fill slots, or `None`; `RunReport.nondeterministic_sources`: sources of nondeterminism the run met; `RunReport.numeric_attestation`: the saved-activation check result; `RunReport.path_faithfulness`: whether the run followed the recorded path; `RunReport.random_filled_slot_ids`: slots filled with random values; `RunReport.readiness`: the readiness report the run started from; `RunReport.state_source`: where the run's state came from.
+
+**`tl.types.RunnableCompatibility`**
+: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
+
+**`tl.types.RunnableDiagnostic`**
+: Structured diagnostic shared by preflight, readiness and run reports. `RunnableDiagnostic.affected_op_labels`: labels of the ops the diagnostic concerns; `RunnableDiagnostic.current_runtime`: the runtime now in use, or `None`; `RunnableDiagnostic.details`: extra (key, value) details; `RunnableDiagnostic.detection_stage`: the stage that found the problem; `RunnableDiagnostic.recorded_runtime`: the runtime recorded at capture, or `None`; `RunnableDiagnostic.registry_id`: the registry entry involved, or `None`; `RunnableDiagnostic.resolver_provenance`: how the callable was resolved, or `None`.
+
+**`tl.types.BasisProvenance`**
+: Frozen reproducibility record for one subspace basis. `BasisProvenance.space_dim`: dimension of the space the basis lives in.
+
+**`tl.types.NarrationEvent`**
+: One immutable narration record. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
+
+**`tl.types.TraceSlice`**
+: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; `TraceSlice.source_trace`: the trace this slice views (never copied).
+
+**`tl.transformer.Annotation`**
+: One typed annotation attached to an attention picture. `Annotation.legend`: the kind legend line.
+
+**`tl.transformer.AttentionView`**
+: One attention pattern in canonical coordinates. `AttentionView.coordinate`: optional shared site coordinate; `AttentionView.crop`: optional crop disclosure (cropping never renormalizes); `AttentionView.crop_to`: return a cropped view with an exact omitted-mass disclosure; `AttentionView.domain`: `"probability"` (fixed 0 to 1) or `"per_panel"`; `AttentionView.gqa`: optional grouped-query-attention disclosure; `AttentionView.head_view`: a single-head view selected by original head index; `AttentionView.key_tokens`: source-axis tokens, a separate record even for self-attention; `AttentionView.provenance_wording`: the rendered provenance wording for the view; `AttentionView.query_tokens`: destination-axis tokens.
+
+**`tl.transformer.CausalReceipt`**
+: Validated measured-intervention evidence for an annotation. `CausalReceipt.cell_sum`: the sum of the measured single-head effects; `CausalReceipt.fingerprints`: content fingerprints for the joined artifacts; `CausalReceipt.negative_control`: measured self-patch metric delta (must be about 0); `CausalReceipt.negative_control_tol`: tolerance for the negative control; `CausalReceipt.pattern_source`: where the attention pattern came from (default `"captured"`); `CausalReceipt.positive_control`: measured large-perturbation metric delta (must move); `CausalReceipt.positive_control_min`: smallest movement the positive control must show.
+
+**`tl.transformer.CropInfo`**
+: Crop disclosure; cropping never renormalizes. `CropInfo.key_range`: kept source (column) index range; `CropInfo.omitted_keys`: number of source positions cropped away; `CropInfo.omitted_mass_max`: maximum probability mass omitted from any kept destination row, measured on the uncropped pattern; `CropInfo.query_range`: kept destination (row) index range.
+
+**`tl.transformer.EpisodeCoordinates`**
+: Episode coordinates carried by transformer records. `EpisodeCoordinates.role`: `"prefill"` or `"decode"`.
+
+**`tl.transformer.PredictionTable`**
+: Top-k tokens per position. `PredictionTable.context_tokens`: the input token at each position; `PredictionTable.top_probs`: full-vocabulary probabilities, one row of k per position.
+
+**`tl.transformer.PredictionTrajectory`**
+: Per-layer prediction trajectory record. `PredictionTrajectory.target_probs`: the tracked token's probability at each layer, or `None`; `PredictionTrajectory.target_ranks`: the tracked token's rank at each layer, or `None`; `PredictionTrajectory.target_token`: optional tracked answer token; `PredictionTrajectory.top_probs`: full-vocabulary probabilities, one row of k per layer.
+
+**`tl.transformer.ScoreDecomposition`**
+: Term-complete score decomposition for one (head, destination, source) triple. `ScoreDecomposition.additive_terms`: named additive contributions applied after the scaled dot product; `ScoreDecomposition.destination`: destination position; `ScoreDecomposition.key_vector`: the key vector; `ScoreDecomposition.products`: elementwise query-times-key products; `ScoreDecomposition.query_vector`: the query vector; `ScoreDecomposition.reference_score`: the captured score this decomposition claims to equal; `ScoreDecomposition.tolerance`: closure tolerance.
+
+**`tl.transformer.TokenAxis`**
+: One labeled token axis. `TokenAxis.role`: `"query"`, `"key"` or `"position"`.
+
+**`tl.transformer.TokenMetrics`**
+: Per-token metric strip record (loss, entropy). `TokenMetrics.source_fingerprint`: fingerprint of the one logits tensor both metrics were computed from.
+
+**`tl.transformer.TokenScores`**
+: Colored-token strip record. `TokenScores.domain`: `"zero_centered_diverging"`, `"unit_interval"` or `"magnitude_sequential"`; `TokenScores.from_attribution`: build a strip record from an attribution token payload.
+
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
