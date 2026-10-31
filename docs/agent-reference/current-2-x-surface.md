@@ -1506,7 +1506,7 @@
   "cka"))` is ungated and numpy-only, reads each site once (never re-runs the model)
   and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
   exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
-  with `table()`/`disagreement()`/`to_dict()`; `n_resamples=` adds stimulus-bootstrap
+  with `table()`/`disagreement()`/`to_dict()`; `num_resamples=` adds stimulus-bootstrap
   `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.rdm_compare_interval`,
   `tl.repgeom.cka_interval`); `tl.repgeom.metric_disagreement(scores)` ranks sites per
   metric and flags opposite orders. The neuro `compare` refusal row is gone; the

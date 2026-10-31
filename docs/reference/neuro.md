@@ -161,7 +161,7 @@ trace = tl.trace(model, images, save=...)
 result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"))
 print(result.table())                  # one row per site, one column per analysis
 print(result.disagreement().table())   # where the analyses rank sites differently
-result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"), n_resamples=1000)
+result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"), num_resamples=1000)
 ```
 
 `neuro.compare` needs no extra (it is numpy-only). It reads each site's
@@ -187,7 +187,7 @@ similarity on these stimuli:
 - `"cka"`: linear CKA with the biased Gretton HSIC, the variant
   `tl.stats.cka` computes.
 
-With `n_resamples=`, each score gets a stimulus-bootstrap `ScoreInterval`
+With `num_resamples=`, each score gets a stimulus-bootstrap `ScoreInterval`
 (the ridge interval resamples the evaluation of the out-of-fold predictions
 and does not refit). `result.similarity_repository_ids` names the catalogued
 variant of each analysis (ridge has none). Inference, voxel maps, variance
@@ -200,11 +200,11 @@ feature bank).
 
 ## Uncertainty on TorchLens's own scores
 
-`tl.repgeom.rdm_compare_interval(rdm_a, rdm_b, method, n_resamples=1000,
+`tl.repgeom.rdm_compare_interval(rdm_a, rdm_b, method, num_resamples=1000,
 seed=0, confidence=0.95)` and `tl.repgeom.cka_interval(a, b, ...)` return a
 `ScoreInterval`: the unchanged point score (exactly `rdm_compare`; linear CKA
 as `tl.stats.cka` computes it) with a percentile bootstrap interval over
-stimuli beside it, plus the settings that made it (`n_resamples`, `num_valid_resamples`,
+stimuli beside it, plus the settings that made it (`num_resamples`, `num_valid_resamples`,
 `seed`, `confidence`, `basis`). RDM resamples drop the entries that pair a
 stimulus with a copy of itself; CKA resamples reindex the stimulus Gram
 matrices, so each resample costs O(n^2) whatever the feature count. The same

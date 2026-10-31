@@ -1494,13 +1494,13 @@ shims, by declared contract. Each carries the same tag at its definition.
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
-  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `num_valid_resamples`
+  percentile bootstrap over stimuli), `confidence`, `num_resamples`, `num_valid_resamples`
   (resamples with a finite score), `seed`, `basis` (how the interval was
   made, in words) and `similarity_repository_id` (the measure variant `score`
   computes: the linear CKA identifier from `cka_interval`, `None` from
   `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
   plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
-  rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
+  rdm_b, method, num_resamples=1000, seed=0, confidence=0.95)` resamples
   stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
   stays with rsatoolbox.
@@ -1540,7 +1540,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
   leave-one-out on the training fold, then the mean over target columns of
   the Pearson r between out-of-fold predictions and the target); `"cka"` is
-  linear CKA. `n_resamples=` adds a `ScoreInterval` per score. The returned
+  linear CKA. `num_resamples=` adds a `ScoreInterval` per score. The returned
   report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
   `similarity_repository_ids`, `table()`, `disagreement()` (a
   `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,

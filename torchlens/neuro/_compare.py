@@ -54,7 +54,7 @@ class Comparison:
         ``scores[analysis][site]`` point score.
     intervals:
         ``intervals[analysis][site]`` stimulus-bootstrap
-        :class:`~torchlens.repgeom.ScoreInterval` when ``n_resamples`` was
+        :class:`~torchlens.repgeom.ScoreInterval` when ``num_resamples`` was
         set; empty otherwise.
     settings:
         The settings that produced the scores (metric, methods, penalties,
@@ -376,7 +376,7 @@ def _analysis_runners(
             site_rdm,
             target_rdm,
             settings["rsa_method"],
-            n_resamples=bootstrap.n_resamples,
+            num_resamples=bootstrap.num_resamples,
             seed=bootstrap.seed,
             confidence=bootstrap.confidence,
         ), None
@@ -442,7 +442,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     rsa_method: str = "spearman",
     ridge_alphas: Sequence[float] = DEFAULT_RIDGE_ALPHAS,
     n_folds: int = 5,
-    n_resamples: int | None = None,
+    num_resamples: int | None = None,
     seed: int = 0,
     confidence: float = 0.95,
 ) -> Comparison:
@@ -487,7 +487,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     n_folds:
         Cross-validation folds for ridge (each training fold needs at least
         3 stimuli).
-    n_resamples:
+    num_resamples:
         When set, every score gets a stimulus-bootstrap
         :class:`~torchlens.repgeom.ScoreInterval` (the ridge interval
         resamples the evaluation of the out-of-fold predictions; it does
@@ -517,8 +517,8 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     _check_settings(analyses, rsa_method, alphas, n_folds)
     bootstrap = (
         None
-        if n_resamples is None
-        else BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
+        if num_resamples is None
+        else BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)
     )
     target_matrix = _as_rows(target, "target")
     n_stimuli = target_matrix.shape[0]
@@ -540,7 +540,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
         "ridge_alphas": alphas,
         "n_folds": n_folds,
         "seed": int(seed),
-        "n_resamples": n_resamples,
+        "num_resamples": num_resamples,
         "confidence": float(confidence),
         "n_stimuli": n_stimuli,
         "target_shape": tuple(target_matrix.shape),

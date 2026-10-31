@@ -46,11 +46,11 @@ def _features(seed: int, n: int = 20, d: int = 6) -> tuple[np.ndarray, np.ndarra
 def test_point_score_is_exactly_rdm_compare(method: str) -> None:
     x, y = _features(0, n=12)
     rdm_a, rdm_b = rdm(x, "euclidean"), rdm(y, "correlation")
-    result = rdm_compare_interval(rdm_a, rdm_b, method, n_resamples=20, seed=1)
+    result = rdm_compare_interval(rdm_a, rdm_b, method, num_resamples=20, seed=1)
     assert isinstance(result, ScoreInterval)
     assert result.score == rdm_compare(rdm_a, rdm_b, method=method)
     assert result.low <= result.high
-    assert result.n_resamples == 20 and result.seed == 1 and result.confidence == 0.95
+    assert result.num_resamples == 20 and result.seed == 1 and result.confidence == 0.95
     assert result.basis == "bootstrap over stimuli, percentile interval"
 
 
@@ -58,17 +58,19 @@ def test_condensed_input_gives_the_same_interval_as_square() -> None:
     x, y = _features(1, n=10)
     square_a, square_b = rdm(x), rdm(y)
     upper = np.triu_indices(10, k=1)
-    from_square = rdm_compare_interval(square_a, square_b, n_resamples=50, seed=3)
-    from_condensed = rdm_compare_interval(square_a[upper], square_b[upper], n_resamples=50, seed=3)
+    from_square = rdm_compare_interval(square_a, square_b, num_resamples=50, seed=3)
+    from_condensed = rdm_compare_interval(
+        square_a[upper], square_b[upper], num_resamples=50, seed=3
+    )
     assert from_square == from_condensed
 
 
 def test_same_seed_same_interval_other_seed_differs() -> None:
     x, y = _features(2)
     rdm_a, rdm_b = rdm(x), rdm(y)
-    first = rdm_compare_interval(rdm_a, rdm_b, n_resamples=200, seed=7)
-    again = rdm_compare_interval(rdm_a, rdm_b, n_resamples=200, seed=7)
-    other = rdm_compare_interval(rdm_a, rdm_b, n_resamples=200, seed=8)
+    first = rdm_compare_interval(rdm_a, rdm_b, num_resamples=200, seed=7)
+    again = rdm_compare_interval(rdm_a, rdm_b, num_resamples=200, seed=7)
+    other = rdm_compare_interval(rdm_a, rdm_b, num_resamples=200, seed=8)
     assert first == again
     assert (first.low, first.high) != (other.low, other.high)
     assert first.score == other.score
@@ -78,10 +80,10 @@ def test_identical_inputs_give_a_zero_width_interval() -> None:
     x, _ = _features(3)
     same = rdm(x, "correlation")
     for method in ("pearson", "spearman", "kendall"):
-        result = rdm_compare_interval(same, same.copy(), method, n_resamples=100, seed=0)
+        result = rdm_compare_interval(same, same.copy(), method, num_resamples=100, seed=0)
         assert result.width == 0.0, method
         assert result.low == result.high == 1.0, method
-    cka_result = cka_interval(x, x.copy(), n_resamples=100, seed=0)
+    cka_result = cka_interval(x, x.copy(), num_resamples=100, seed=0)
     assert cka_result.width == 0.0
     assert cka_result.low == cka_result.high == 1.0
 
@@ -89,7 +91,7 @@ def test_identical_inputs_give_a_zero_width_interval() -> None:
 def test_rdm_resample_equals_hand_recomputation() -> None:
     x, y = _features(4, n=9)
     rdm_a, rdm_b = rdm(x), rdm(y)
-    result = rdm_compare_interval(rdm_a, rdm_b, "pearson", n_resamples=5, seed=11)
+    result = rdm_compare_interval(rdm_a, rdm_b, "pearson", num_resamples=5, seed=11)
     indices = np.random.default_rng(11).integers(0, 9, size=(5, 9))
     hand = []
     for index in indices:
@@ -108,7 +110,7 @@ def test_rdm_resample_equals_hand_recomputation() -> None:
 def test_kendall_resample_never_compares_copies_of_one_pair() -> None:
     x, y = _features(8, n=8)
     rdm_a, rdm_b = rdm(x), rdm(y)
-    result = rdm_compare_interval(rdm_a, rdm_b, "kendall", n_resamples=4, seed=5)
+    result = rdm_compare_interval(rdm_a, rdm_b, "kendall", num_resamples=4, seed=5)
     indices = np.random.default_rng(5).integers(0, 8, size=(4, 8))
     hand = []
     for index in indices:
@@ -133,7 +135,7 @@ def test_kendall_resample_never_compares_copies_of_one_pair() -> None:
 
 def test_cka_point_and_resamples_match_tl_stats_cka() -> None:
     x, y = _features(5, n=15, d=40)
-    result = cka_interval(x, y, n_resamples=6, seed=2)
+    result = cka_interval(x, y, num_resamples=6, seed=2)
     assert result.score == pytest.approx(cka(x, y), abs=1e-12)
     indices = np.random.default_rng(2).integers(0, 15, size=(6, 15))
     hand = [cka(x[index], y[index]) for index in indices]
@@ -154,7 +156,7 @@ def test_population_coverage_meets_the_stated_rate() -> None:
         pick = np.random.default_rng(10_000 + seed).choice(population, n_sample, replace=False)
         sub = np.ix_(pick, pick)
         result = rdm_compare_interval(
-            rdm_x[sub], rdm_y[sub], "pearson", n_resamples=400, seed=seed, confidence=confidence
+            rdm_x[sub], rdm_y[sub], "pearson", num_resamples=400, seed=seed, confidence=confidence
         )
         covered += int(result.low <= truth <= result.high)
     rate = covered / n_seeds
@@ -172,8 +174,8 @@ def test_population_coverage_meets_the_stated_rate() -> None:
 def test_invalid_settings_refuse() -> None:
     x, y = _features(6, n=8)
     rdm_a, rdm_b = rdm(x), rdm(y)
-    with pytest.raises(ValueError, match="n_resamples"):
-        rdm_compare_interval(rdm_a, rdm_b, n_resamples=1)
+    with pytest.raises(ValueError, match="num_resamples"):
+        rdm_compare_interval(rdm_a, rdm_b, num_resamples=1)
     with pytest.raises(ValueError, match="confidence"):
         rdm_compare_interval(rdm_a, rdm_b, confidence=1.0)
     with pytest.raises(ValueError, match="method"):
@@ -188,14 +190,14 @@ def test_invalid_settings_refuse() -> None:
 
 def test_to_dict_carries_every_field() -> None:
     x, y = _features(7, n=10)
-    data = rdm_compare_interval(rdm(x), rdm(y), n_resamples=10, seed=0).to_dict()
+    data = rdm_compare_interval(rdm(x), rdm(y), num_resamples=10, seed=0).to_dict()
     assert set(data) == {
         "score",
         "low",
         "high",
         "width",
         "confidence",
-        "n_resamples",
+        "num_resamples",
         "n_valid",
         "seed",
         "basis",
@@ -208,7 +210,7 @@ def test_to_dict_carries_every_field() -> None:
 
 def test_cka_interval_names_the_cka_variant_in_its_result_and_dict() -> None:
     x, y = _features(8, n=10)
-    result = cka_interval(x, y, n_resamples=10, seed=0)
+    result = cka_interval(x, y, num_resamples=10, seed=0)
     expected = "measure/*/cka-kernel=linear-hsic=gretton-score"
     assert result.similarity_repository_id == expected
     assert result.to_dict()["similarity_repository_id"] == expected
@@ -218,7 +220,7 @@ def test_spearman_resample_with_ties_equals_hand_recomputation() -> None:
     rng = np.random.default_rng(12)
     rdm_a = rdm(np.round(rng.normal(size=(9, 2)), 0))  # rounded: tied distances
     rdm_b = rdm(rng.normal(size=(9, 3)))
-    result = rdm_compare_interval(rdm_a, rdm_b, "spearman", n_resamples=5, seed=13)
+    result = rdm_compare_interval(rdm_a, rdm_b, "spearman", num_resamples=5, seed=13)
     indices = np.random.default_rng(13).integers(0, 9, size=(5, 9))
     hand = []
     for index in indices:
@@ -257,5 +259,5 @@ def test_constant_resamples_are_counted_out() -> None:
     seed = seeds_with_constant[0]
     rows = np.random.default_rng(seed).integers(0, 3, (40, 3))
     n_constant = sum(len(set(row)) == 1 for row in rows)
-    result = cka_interval(x, y, n_resamples=40, seed=seed)
+    result = cka_interval(x, y, num_resamples=40, seed=seed)
     assert result.num_valid_resamples <= 40 - n_constant

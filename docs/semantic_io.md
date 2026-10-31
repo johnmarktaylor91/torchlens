@@ -201,11 +201,11 @@ trace = tl.trace(
         output_style="classification",
     ),
 )
-coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
+coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
 ```
 
 The selected activations must be saved by the original capture; this is why
-the demo uses a curated `save=` subset instead of exhaustive saving. `min_n`
+the demo uses a curated `save=` subset instead of exhaustive saving. `min_stimuli`
 defaults to 8 because the scatter is a visual summary over a stimulus batch,
 not a statistical inference routine. Recurrent aggregate layers are rejected;
 select a pass-qualified op when a reused module should be visualized.
@@ -312,7 +312,7 @@ trace = tl.trace(
 
 trace.model_profile
 trace.output_table(top_n=5)
-tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
+tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
 trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 trace.draw(show_input_transform_summary=True)
 ```

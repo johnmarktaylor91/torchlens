@@ -47,7 +47,7 @@ sections:
    analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
    and scores every site against one target with RSA, a cross-validated
    ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
-   intervals with ``n_resamples=``); ``.disagreement()`` reports where the
+   intervals with ``num_resamples=``); ``.disagreement()`` reports where the
    analyses rank sites differently.
 6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals

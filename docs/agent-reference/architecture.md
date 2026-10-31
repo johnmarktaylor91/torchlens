@@ -103,7 +103,7 @@ Key entry points:
   `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` is
   ungated and numpy-only, reads each site once (never re-runs the model),
   and returns descriptive scores plus `table()`/`disagreement()`/`to_dict()`;
-  `n_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
+  `num_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
   standalone as `tl.repgeom.rdm_compare_interval` / `cka_interval`);
   `tl.repgeom.metric_disagreement(scores)` ranks sites per metric and flags
   opposite orders. Doc: `docs/reference/neuro.md`.
