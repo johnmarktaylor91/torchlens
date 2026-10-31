@@ -68,16 +68,16 @@ def timed_trace():
 
 def test_capture_phase_durations_are_bounded_by_an_outside_clock(timed_trace) -> None:
     trace, wall = timed_trace
-    capture = float(trace.capture_duration)
+    capture = float(trace.provenance.duration)
     setup, forward, cleanup = (
-        float(trace.setup_duration),
-        float(trace.forward_duration),
-        float(trace.cleanup_duration),
+        float(trace.provenance.setup_duration),
+        float(trace.cost.forward_duration),
+        float(trace.provenance.cleanup_duration),
     )
     assert SLEEP <= forward <= capture <= wall
     assert 0 < setup <= wall and 0 < cleanup <= wall
     assert setup + forward + cleanup <= wall
-    func_calls = float(trace.func_calls_duration)
+    func_calls = float(trace.cost.func_calls_duration)
     # The planted sleep is not a function call: the op total excludes it.
     assert 0 < func_calls <= forward - SLEEP
     assert SLEEP <= float(trace.cost.overhead_duration) <= wall
@@ -86,12 +86,12 @@ def test_capture_phase_durations_are_bounded_by_an_outside_clock(timed_trace) ->
 def test_module_and_call_durations_are_bounded(timed_trace) -> None:
     trace, wall = timed_trace
     root, sleeper, fc = (trace.module_calls[label] for label in ("self:1", "s:1", "s.fc:1"))
-    assert SLEEP <= float(sleeper.forward_duration) <= float(root.forward_duration) <= wall
+    assert SLEEP <= float(sleeper.cost.forward_duration) <= float(root.forward_duration) <= wall
     # fc runs after the sleep, inside Sleeper's call.
-    assert 0 < float(fc.forward_duration) <= float(sleeper.forward_duration) - SLEEP
+    assert 0 < float(fc.forward_duration) <= float(sleeper.cost.forward_duration) - SLEEP
     for call in (root, sleeper, fc):
         assert 0 < float(call.func_calls_duration) <= float(call.forward_duration)
-    assert float(sleeper.func_calls_duration) <= float(sleeper.forward_duration) - SLEEP
+    assert float(sleeper.cost.func_calls_duration) <= float(sleeper.cost.forward_duration) - SLEEP
     for address, call in (("self", root), ("s", sleeper), ("s.fc", fc)):
         module = trace.modules[address]
         assert float(module.forward_duration) == pytest.approx(float(call.forward_duration))
@@ -103,7 +103,7 @@ def test_module_and_call_durations_are_bounded(timed_trace) -> None:
 
 def test_op_and_layer_func_durations_are_bounded(timed_trace) -> None:
     trace, wall = timed_trace
-    budget = float(trace.forward_duration) - SLEEP  # ops run outside the sleep
+    budget = float(trace.cost.forward_duration) - SLEEP  # ops run outside the sleep
     total = 0.0
     for op in trace.ops:
         duration = float(op.func_duration)
@@ -159,8 +159,8 @@ def test_capture_thread_counts_match_a_recount() -> None:
     before = threading.active_count()
     trace = tl.trace(Grad(), torch.randn(2, 4))
     try:
-        assert trace.capture_thread_count_start == before
-        assert trace.capture_thread_count_end == before  # nothing started a thread
+        assert trace.provenance.thread_count_start == before
+        assert trace.provenance.thread_count_end == before  # nothing started a thread
     finally:
         trace.cleanup()
     stop = threading.Event()
@@ -168,9 +168,9 @@ def test_capture_thread_counts_match_a_recount() -> None:
         before = threading.active_count()
         trace = tl.trace(Spawner(stop), torch.randn(2, 4))
         try:
-            assert trace.capture_thread_count_start == before
+            assert trace.provenance.thread_count_start == before
             assert (
-                trace.capture_thread_count_end == before + 1
+                trace.provenance.thread_count_end == before + 1
             )  # the one thread the forward started
         finally:
             trace.cleanup()
@@ -239,15 +239,15 @@ def test_witness_and_detector_event_counts_match_a_recount(model_name: str) -> N
     trace = tl.trace(model, inputs if len(inputs) > 1 else inputs[0])
     wall_ns = (time.perf_counter() - started) * 1e9
     try:
-        assert trace.completeness_witness_event_count == dispatches.count
+        assert trace.health.num_witness_events == dispatches.count
         # A tensor bool read is an audited opaque boundary; every other
         # dispatch lies under a captured wrapped call and is accounted.
-        assert trace.completeness_witness_expected_opaque_count == dispatches.scalar_reads
+        assert trace.health.num_expected_opaque_witness_events == dispatches.scalar_reads
         assert dispatches.scalar_reads == (2 if model_name == "cond" else 0)
         accounted = dispatches.count - dispatches.scalar_reads
-        assert trace.completeness_witness_accounted_count == accounted
-        assert trace.escape_detector_event_count == functions.count
-        assert 0 < trace.completeness_witness_callback_ns <= wall_ns
-        assert 0 < trace.escape_detector_callback_ns <= wall_ns
+        assert trace.health.num_accounted_witness_events == accounted
+        assert trace.health.num_escape_detector_events == functions.count
+        assert 0 < trace.health.completeness_callback_ns <= wall_ns
+        assert 0 < trace.health.escape_detector_callback_ns <= wall_ns
     finally:
         trace.cleanup()

@@ -462,7 +462,7 @@ def test_l1_grouping_family_roundtrip(tmp_path) -> None:
     assert loaded.options.grouping == trace.options.grouping == "structural"
     assert loaded.options.grouping_policy == trace.options.grouping_policy
     gen2 = _second_generation(loaded, tmp_path, "grouping")
-    assert gen2.grouping_policy == loaded.options.grouping_policy
+    assert gen2.options.grouping_policy == loaded.options.grouping_policy
 
 
 def test_l1_site_key_family_roundtrip(tmp_path) -> None:
@@ -561,7 +561,7 @@ def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
     loaded = _plain_roundtrip(trace, tmp_path, "structure_only")
     assert loaded.options.structure_only is True
     gen2 = _second_generation(loaded, tmp_path, "structure_only")
-    assert gen2.structure_only is True
+    assert gen2.options.structure_only is True
 
 
 def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
@@ -574,7 +574,7 @@ def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
     loaded = _plain_roundtrip(trace, tmp_path, "distributed_scope")
     assert loaded.provenance.distributed_scope == RANK_LOCAL_SHARD
     gen2 = _second_generation(loaded, tmp_path, "distributed_scope")
-    assert gen2.distributed_scope == RANK_LOCAL_SHARD
+    assert gen2.provenance.distributed_scope == RANK_LOCAL_SHARD
 
 
 def test_l9_timing_provenance_family_roundtrip(tmp_path) -> None:

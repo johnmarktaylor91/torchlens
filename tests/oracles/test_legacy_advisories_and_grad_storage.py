@@ -1,4 +1,4 @@
-"""Hand-counted oracles for ``CaptureFacts.advisories`` and ``Trace.total_backward_memory``.
+"""Hand-counted oracles for ``CaptureFacts.advisories`` and ``Trace.cost.total_backward_memory``.
 
 ``advisories`` is the number of capture-advisory records on the trace, one per
 advisory kind the capture raised (``Trace.annotations["capture_advisories"]``,
@@ -120,6 +120,6 @@ def test_total_backward_memory_counts_unique_storage_bytes(
 ) -> None:
     trace = _two_pass_trace(transform)
     try:
-        assert int(trace.total_backward_memory) == expected
+        assert int(trace.cost.total_backward_memory) == expected
     finally:
         trace.cleanup()

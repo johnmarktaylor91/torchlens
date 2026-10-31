@@ -211,7 +211,7 @@ def test_assert_then_if_still_materializes_branch() -> None:
     guarded = _log_model(AssertThenIfModel(), torch.ones(2, 2))
     control = _log_model(IfOnlyModel(), torch.ones(2, 2))
 
-    assert len(guarded.conditional_records) == 1
+    assert len(guarded.graph.conditional_records) == 1
     assert len(control.conditional_records) == 1
 
     guarded_relu = _find_only_layer(guarded, "relu")
@@ -219,7 +219,7 @@ def test_assert_then_if_still_materializes_branch() -> None:
     assert guarded_relu.conditional_branch_stack == ((0, "then"),)
     assert guarded_relu.conditional_branch_stack == control_relu.conditional_branch_stack
 
-    (conditional,) = list(guarded.conditionals)
+    (conditional,) = list(guarded.graph.conditionals)
     assert conditional.fired_arm_kind == "then"
     bool_layer = _find_only_layer(guarded, "all")
     assert bool_layer.conditional_context_kind == "if_test"

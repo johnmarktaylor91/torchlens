@@ -249,7 +249,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     """Both footprint fields carry real byte counts, sparse or not."""
 
     full = tl.trace(_plain_model(), torch.randn(2, 4))
-    assert int(full.total_activation_memory) > 0
+    assert int(full.cost.total_activation_memory) > 0
     # A1 identity partition: total EXCLUDES output pseudo-rows (the producer
     # owns the bytes). D-17 byte model: saved counts PHYSICAL retained
     # storage once per storage. HONESTY 13-R1: the output pseudo-row now
@@ -266,11 +266,11 @@ def test_activation_footprint_fields_are_populated() -> None:
     for layer in output_rows:
         parent = full[layer.parents[0]]
         assert layer.out.untyped_storage().data_ptr() == parent.out.untyped_storage().data_ptr()
-    assert int(full.saved_activation_memory) == int(full.total_activation_memory)
+    assert int(full.cost.saved_activation_memory) == int(full.cost.total_activation_memory)
 
     sparse = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    assert int(sparse.total_activation_memory) > 0
-    assert 0 < int(sparse.saved_activation_memory) < int(sparse.total_activation_memory)
+    assert int(sparse.cost.total_activation_memory) > 0
+    assert 0 < int(sparse.cost.saved_activation_memory) < int(sparse.cost.total_activation_memory)
 
 
 @pytest.mark.parametrize("guessed", ["activation_memory", "memory", "total_memory", "footprint"])

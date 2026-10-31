@@ -52,8 +52,8 @@ class _SharedMultiOutputModel(nn.Module):
 def test_general_info_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.model_class_name, str)
-    assert len(mh.model_class_name) > 0
+    assert isinstance(mh.source.class_name, str)
+    assert len(mh.source.class_name) > 0
     assert mh._tracing_finished is True
     assert isinstance(mh.num_ops, int)
     assert mh.num_ops > 0
@@ -137,10 +137,10 @@ def test_tensor_info_fields(small_input):
     mh = trace_fn(model, small_input)
     assert isinstance(len(mh), int)
     assert len(mh) > 0
-    assert isinstance(mh.total_activation_memory, (int, float))
-    assert mh.total_activation_memory > 0
-    assert isinstance(mh.total_activation_memory, torchlens.types.Bytes)
-    assert len(str(mh.total_activation_memory)) > 0
+    assert isinstance(mh.cost.total_activation_memory, (int, float))
+    assert mh.cost.total_activation_memory > 0
+    assert isinstance(mh.cost.total_activation_memory, torchlens.types.Bytes)
+    assert len(str(mh.cost.total_activation_memory)) > 0
 
 
 def test_forward_peak_memory_is_populated(small_input):
@@ -161,14 +161,14 @@ def test_forward_peak_memory_is_populated(small_input):
 
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    if mh.forward_peak_memory is None:
-        assert mh.forward_memory_backend == "cpu"
-        assert "measure_host_peak_memory=True" in mh.forward_peak_memory_reason
+    if mh.cost.forward_peak_memory is None:
+        assert mh.provenance.forward_memory_backend == "cpu"
+        assert "measure_host_peak_memory=True" in mh.cost.forward_peak_memory_reason
     else:
-        assert isinstance(mh.forward_peak_memory, torchlens.types.Bytes)
-        assert int(mh.forward_peak_memory) >= 0
-        assert mh.forward_peak_memory_reason is None
-    assert mh.forward_memory_backend in {"cpu", "cuda", "mps"}
+        assert isinstance(mh.cost.forward_peak_memory, torchlens.types.Bytes)
+        assert int(mh.cost.forward_peak_memory) >= 0
+        assert mh.cost.forward_peak_memory_reason is None
+    assert mh.provenance.forward_memory_backend in {"cpu", "cuda", "mps"}
     assert mh.measure_python_peak_memory is False
     assert mh.measure_host_peak_memory is False
 
@@ -193,9 +193,9 @@ def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
         ),
     )
     assert measured.measure_python_peak_memory is True
-    assert isinstance(measured.forward_peak_memory, torchlens.types.Bytes)
-    assert int(measured.forward_peak_memory) > 0
-    assert measured.forward_memory_backend in {"cpu", "cuda", "mps"}
+    assert isinstance(measured.cost.forward_peak_memory, torchlens.types.Bytes)
+    assert int(measured.cost.forward_peak_memory) > 0
+    assert measured.provenance.forward_memory_backend in {"cpu", "cuda", "mps"}
     assert [op.layer_label for op in measured.ops] == [op.layer_label for op in baseline.ops]
 
 
@@ -225,11 +225,11 @@ def test_module_info_fields(small_input):
 def test_time_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.capture_duration, float)
-    assert mh.capture_duration > 0
-    assert isinstance(mh.setup_duration, float)
-    assert isinstance(mh.forward_duration, float)
-    assert isinstance(mh.cleanup_duration, float)
+    assert isinstance(mh.provenance.duration, float)
+    assert mh.provenance.duration > 0
+    assert isinstance(mh.provenance.setup_duration, float)
+    assert isinstance(mh.cost.forward_duration, float)
+    assert isinstance(mh.provenance.cleanup_duration, float)
     assert isinstance(mh.cost.overhead_duration, float)
 
 
@@ -260,8 +260,8 @@ def test_internal_source_ops(small_input):
 def test_equivalent_ops(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
-    assert isinstance(mh.op_equivalence_classes, dict)
-    assert len(mh.op_equivalence_classes) > 0
+    assert isinstance(mh.graph.op_equivalence_classes, dict)
+    assert len(mh.graph.op_equivalence_classes) > 0
 
 
 # =============================================================================
@@ -671,7 +671,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
 def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(save_args=True))
-    assert mh.save_arg_values is True
+    assert mh.options.save_args is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
@@ -684,7 +684,7 @@ def test_saved_args_populated(small_input):
 def test_saved_args_not_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert mh.save_arg_values is False
+    assert mh.options.save_args is False
 
 
 # =============================================================================
@@ -1458,7 +1458,7 @@ def test_custom_num_context_lines(small_input):
 def test_num_context_lines_stored_on_trace(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(source_context_lines=5))
-    assert mh.num_context_lines == 5
+    assert mh.options.source_context_lines == 5
 
 
 # --- Labeled code context ---
@@ -1734,7 +1734,7 @@ class TestConditionalBranchDetection:
         """trace.graph.conditional_branch_edges is non-empty."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        assert len(mh.conditional_branch_edges) > 0
+        assert len(mh.graph.conditional_branch_edges) > 0
 
     def test_conditional_then_arm_edges_populated(self):
         """Canonical THEN arm edges non-empty with save_code_context."""
@@ -1742,7 +1742,7 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._pos_input(), save_source_context=True)
         then_edges = [
             edge
-            for (_, branch_kind), edges in mh.conditional_arm_entry_edges.items()
+            for (_, branch_kind), edges in mh.graph.conditional_arm_entry_edges.items()
             if branch_kind == "then"
             for edge in edges
         ]
@@ -1753,10 +1753,10 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._pos_input(), save_source_context=True)
         all_labels = set(mh.layer_labels)
-        for parent, child in mh.conditional_branch_edges:
+        for parent, child in mh.graph.conditional_branch_edges:
             assert parent in all_labels, f"IF edge parent {parent} not in layer_labels"
             assert child in all_labels, f"IF edge child {child} not in layer_labels"
-        for edges in mh.conditional_arm_entry_edges.values():
+        for edges in mh.graph.conditional_arm_entry_edges.values():
             for parent, child in edges:
                 assert parent in all_labels, f"arm edge parent {parent} not in layer_labels"
                 assert child in all_labels, f"arm edge child {child} not in layer_labels"
@@ -1893,8 +1893,8 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._pos_input(), save_source_context=True)
         mh2 = copy.deepcopy(mh)
-        assert mh2.conditional_branch_edges == mh.conditional_branch_edges
-        assert mh2.conditional_arm_entry_edges == mh.conditional_arm_entry_edges
+        assert mh2.graph.conditional_branch_edges == mh.graph.conditional_branch_edges
+        assert mh2.graph.conditional_arm_entry_edges == mh.graph.conditional_arm_entry_edges
         for label in mh.layer_labels:
             assert mh2[label].conditional_entry_children == mh[label].conditional_entry_children
             assert mh2[label].conditional_then_children == mh[label].conditional_then_children

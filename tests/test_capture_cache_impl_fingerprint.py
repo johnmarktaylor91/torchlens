@@ -176,7 +176,7 @@ def test_changed_plain_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     assert second[second.layer_labels[2]].num_passes == 5
     torch.manual_seed(0)
     third = tl.trace(_AttrLoop(5), x, capture=_cache_capture(tmp_path))
-    assert third.capture_cache_hit is True, (
+    assert third.provenance.cache_hit is True, (
         "an unchanged attribute inventory must still re-hit (no false misses)"
     )
 
@@ -255,7 +255,7 @@ def test_registered_forward_hook_is_a_cache_miss(tmp_path) -> None:
 
     # Removing the hook restores the original inventory: the first entry re-hits.
     third = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert third.capture_cache_hit is True
+    assert third.provenance.cache_hit is True
 
 
 def test_registered_forward_pre_hook_is_a_cache_miss(tmp_path) -> None:

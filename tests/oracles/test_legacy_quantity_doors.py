@@ -110,7 +110,7 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
         layer.total_param_memory,
         module.param_memory,
         call.param_memory,
-        trace.total_param_memory,
+        trace.cost.total_param_memory,
     ):
         assert int(value) == A_PARAMS * FP32
     by_name = {param.address: param for param in trace.param_logs}
@@ -118,7 +118,7 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
     assert int(by_name["bias"].param_memory) == 16 * FP32
     trace, _ = fixture_b
     # Declared parameters, the never-called module included.
-    assert int(trace.total_param_memory) == (B_A + B_B + B_DEAD) * FP32
+    assert int(trace.cost.total_param_memory) == (B_A + B_B + B_DEAD) * FP32
 
 
 def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
@@ -180,7 +180,7 @@ def test_activation_bytes_on_every_compute_door(fixture_a) -> None:
     for value in (op.activation_memory, layer.activation_memory, layer.total_activation_memory):
         assert int(value) == A_OUT_BYTES
     # The trace total sums every retained activation: the input and the output.
-    assert int(trace.total_activation_memory) == A_IN_BYTES + A_OUT_BYTES
+    assert int(trace.cost.total_activation_memory) == A_IN_BYTES + A_OUT_BYTES
 
 
 class BufferHolder(nn.Module):

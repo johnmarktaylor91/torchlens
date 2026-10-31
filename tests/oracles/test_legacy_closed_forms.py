@@ -426,14 +426,14 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
         assert int(ops[label].gradient_memory) == nbytes, label
     # save_grads keeps one gradient record per Op per backward pass
     # (``Op.grads``), so the trace holds every pass's gradients.
-    assert int(trace.saved_gradient_memory) == passes * (96 + 96 + 24)
-    assert int(trace.total_gradient_memory) == passes * (96 + 96 + 24)
+    assert int(trace.cost.saved_grad_memory) == passes * (96 + 96 + 24)
+    assert int(trace.cost.total_grad_memory) == passes * (96 + 96 + 24)
     raw = _param_grad_bytes(model)  # recounted from Tensor.grad
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
     params = {param.address: param for param in trace.param_logs}
     for address, nbytes in raw.items():
         assert int(params[address].gradient_memory) == nbytes, address
-    assert int(trace.total_param_gradient_memory) == sum(raw.values())
+    assert int(trace.cost.total_param_grad_memory) == sum(raw.values())
     for label, pair in (("a:1", (96, 0)), ("b:1", (24, 0)), ("self:1", (24, 96 + 96 + 24))):
         call = calls[label]
         assert (int(call.output_gradient_memory), int(call.internal_gradient_memory)) == pair
@@ -467,7 +467,7 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     # grouping rule rows 26-27: the two block calls' muls are one Layer (mul_1_3, 2 passes).
     assert int(layers["mul_1_3"].total_gradient_memory) == 2 * 48
     assert int(layers["sum_1_5"].total_gradient_memory) == 12
-    assert int(trace.total_gradient_memory) == 6 * 48 + 24 + 12
+    assert int(trace.cost.total_grad_memory) == 6 * 48 + 24 + 12
     block = modules["block"]
     assert (int(block.total_output_gradient_memory), int(block.total_internal_gradient_memory)) == (
         2 * 48,

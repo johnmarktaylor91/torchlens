@@ -261,7 +261,7 @@ COND_BRANCH_DEPTH = {"add_1_4": 1, "mean_1_5": 1, "gt_2_6": 1, "mul_2_7": 2}
 def test_conditional_counts() -> None:
     trace = tl.trace(Cond(), torch.ones(2, 3))
     try:
-        assert len(trace.conditionals) == 2
+        assert len(trace.graph.conditionals) == 2
         for op in trace.ops:
             assert op.conditional_depth == COND_DEPTH.get(op.layer_label, 0), op.label
             expected = COND_BRANCH_DEPTH.get(op.layer_label, 0)

@@ -593,12 +593,12 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
     assert merged, "the merge wrapper never ran"
     buffer_branch_edges = [
         (parent, child)
-        for parent, child in traced.conditional_branch_edges
+        for parent, child in traced.graph.conditional_branch_edges
         if parent.startswith("buffer")
     ]
     assert buffer_branch_edges, (
         "the surviving buffer lost its step-5 conditional branch edge: "
-        f"{traced.conditional_branch_edges}"
+        f"{traced.graph.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
         op.layer_label for op in traced.layer_list if getattr(op, "is_buffer", False)

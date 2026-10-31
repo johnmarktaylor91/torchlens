@@ -173,41 +173,41 @@ SummaryTotals.params_total	int	quantity	num_params	green	tests/oracles/test_lega
 SummaryTotals.params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.retained_bytes	int	quantity	retained_now_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
-Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_backward_peak_is_the_largest_pass_peak (I1)	-
+Trace.cost.backward_peak_memory	Bytes	quantity	backward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_backward_peak_is_the_largest_pass_peak (I1)	-
 TraceGraph.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
-Trace.capture_duration	Duration	quantity	capture_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.capture_end_time	float	identifier	-	-	-	wall-clock timestamp
-Trace.capture_owner_thread_id	int	identifier	-	-	-	thread id
-Trace.capture_start_time	float	identifier	-	-	-	wall-clock timestamp
-Trace.capture_thread_count_end	int	quantity	capture_thread_count_end	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
-Trace.capture_thread_count_start	int	quantity	capture_thread_count_start	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
-Trace.class_source_line	int	identifier	-	-	-	id/index/line
-Trace.cleanup_duration	Duration	quantity	cleanup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.completeness_witness_accounted_count	int	quantity	completeness_witness_accounted_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.completeness_witness_callback_ns	int	quantity	completeness_witness_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.completeness_witness_event_count	int	quantity	completeness_witness_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.completeness_witness_expected_opaque_count	int	quantity	completeness_witness_expected_opaque_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.completeness_witness_unaccounted_count	int	quantity	completeness_witness_unaccounted_count	green	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness (I2)	-
-Trace.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.escape_detector_event_count	int	quantity	escape_detector_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
-Trace.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.forward_peak_memory	Bytes	quantity	forward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward (I1)	-
-Trace.forward_source_line	int	identifier	-	-	-	id/index/line
-Trace.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.init_source_line	int	identifier	-	-	-	id/index/line
-Trace.input_object_id	int	identifier	-	-	-	id/index/line
+Trace.provenance.duration	Duration	quantity	capture_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.provenance.end_time	float	identifier	-	-	-	wall-clock timestamp
+Trace.provenance.owner_thread_id	int	identifier	-	-	-	thread id
+Trace.provenance.start_time	float	identifier	-	-	-	wall-clock timestamp
+Trace.provenance.thread_count_end	int	quantity	capture_thread_count_end	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
+Trace.provenance.thread_count_start	int	quantity	capture_thread_count_start	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_thread_counts_match_a_recount (I1)	-
+Trace.source.class_line	int	identifier	-	-	-	id/index/line
+Trace.provenance.cleanup_duration	Duration	quantity	cleanup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.health.num_accounted_witness_events	int	quantity	completeness_witness_accounted_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.health.completeness_callback_ns	int	quantity	completeness_witness_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.health.num_witness_events	int	quantity	completeness_witness_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.health.num_expected_opaque_witness_events	int	quantity	completeness_witness_expected_opaque_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.health.num_unaccounted_witness_events	int	quantity	completeness_witness_unaccounted_count	green	tests/test_completeness_witness.py::test_direct_aten_call_trips_non_vacuous_witness (I2)	-
+Trace.health.escape_detector_callback_ns	int	quantity	escape_detector_callback_ns	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.health.num_escape_detector_events	int	quantity	escape_detector_event_count	green	tests/oracles/test_legacy_timing_bounds.py::test_witness_and_detector_event_counts_match_a_recount (I1)	-
+Trace.cost.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.cost.forward_peak_memory	Bytes	quantity	forward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward (I1)	-
+Trace.source.forward_line	int	identifier	-	-	-	id/index/line
+Trace.cost.func_calls_duration	Duration	quantity	func_calls_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.source.init_line	int	identifier	-	-	-	id/index/line
+Trace.provenance.input_object_id	int	identifier	-	-	-	id/index/line
 TraceCost.last_backward_duration	Duration	quantity	last_backward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_backward_durations_are_bounded_by_an_outside_clock (I1)	-
 TraceAutograd.last_backward_root_grad_fn_object_id	int	identifier	-	-	-	id/index/line
 TraceGraph.max_in_degree	int	quantity	max_in_degree	green	tests/test_edge_counts.py::test_n_way_combine_max_in_degree (I2)	-
 TraceGraph.max_ops_per_layer	int	quantity	max_layer_op_count	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
 TraceGraph.max_out_degree	int	quantity	max_out_degree	green	tests/test_edge_counts.py::test_residual_reuse_counts_skip_edge (I2)	-
-Trace.model_object_id	int	identifier	-	-	-	id/index/line
+Trace.provenance.model_object_id	int	identifier	-	-	-	id/index/line
 TraceAutograd.num_backward_edges	int	quantity	num_backward_edges	green	tests/oracles/test_legacy_closed_forms.py::test_backward_graph_counts_match_a_raw_recount (I2)	-
 Trace.num_backward_passes	int	quantity	num_backward_passes	green	tests/test_backward.py::test_recording_backward_context_manager (I2)	-
 TraceGraph.num_buffer_edges	int	quantity	num_buffer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
 Trace.num_buffer_layers	int	quantity	num_buffer_layers	green	tests/oracles/test_legacy_module_counts.py::test_buffer_layer_counts (I2)	-
 TraceGraph.num_compute_edges	int	quantity	num_compute_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
-Trace.num_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
+Trace.options.source_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
 Trace.num_edges	int	quantity	num_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_input_layers	int	quantity	num_input_layers	green	tests/oracles/test_legacy_graph_counts.py::test_boundary_counts (I2)	-
 TraceGraph.num_layer_edges	int	quantity	num_layer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
@@ -228,20 +228,20 @@ Trace.num_saved_module_calls	int	quantity	num_saved_module_calls	green	tests/ora
 Trace.num_saved_ops	int	quantity	num_saved_ops	green	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs (I2)	-
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 TraceCost.overhead_duration	Duration	quantity	overhead_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Trace.random_seed	int	identifier	-	-	-	seed echo
-Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
-Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
-Trace.setup_duration	Duration	quantity	setup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
+Trace.cost.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+Trace.options.seed	int	identifier	-	-	-	seed echo
+Trace.cost.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
+Trace.cost.saved_grad_memory	Bytes	quantity	saved_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
+Trace.provenance.setup_duration	Duration	quantity	setup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.tlspec_version	int	identifier	-	-	-	format version
-Trace.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
-Trace.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+Trace.cost.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
+Trace.cost.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 TraceCost.total_backward_duration	Duration	quantity	backward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_backward_durations_are_bounded_by_an_outside_clock (I1)	-
-Trace.total_backward_memory	Bytes	quantity	backward_memory	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_total_backward_memory_counts_unique_storage_bytes (I2)	-
+Trace.cost.total_backward_memory	Bytes	quantity	backward_memory	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_total_backward_memory_counts_unique_storage_bytes (I2)	-
 TraceCost.total_flops	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 TraceCost.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-
 TraceCost.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
-Trace.total_gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
+Trace.cost.total_grad_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
 TraceCost.total_macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
-Trace.total_param_gradient_memory	Bytes	quantity	param_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
-Trace.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
+Trace.cost.total_param_grad_memory	Bytes	quantity	param_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
+Trace.cost.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-

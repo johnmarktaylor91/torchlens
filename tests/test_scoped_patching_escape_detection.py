@@ -689,7 +689,7 @@ def test_scoped_and_legacy_match_on_in_scope_standard_model() -> None:
     unwrap_torch()
     wrap_torch()
     scoped = tl.trace(model, inputs)
-    assert scoped.graph_shape_hash == legacy.graph_shape_hash
+    assert scoped.provenance.fingerprint == legacy.graph_shape_hash
     assert [op.func_name for op in scoped.ops] == [op.func_name for op in legacy.ops]
     assert scoped.layer_labels == legacy.layer_labels
 
@@ -716,7 +716,7 @@ def test_scoped_and_legacy_match_standard_test_model_zoo(
     unwrap_torch()
     wrap_torch()
     scoped = tl.trace(model_type(), inputs)
-    assert scoped.graph_shape_hash == legacy.graph_shape_hash
+    assert scoped.provenance.fingerprint == legacy.graph_shape_hash
     assert [op.func_name for op in scoped.ops] == [op.func_name for op in legacy.ops]
     assert scoped.layer_labels == legacy.layer_labels
 

@@ -87,7 +87,7 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
         if "Ignoring TorchLens capture cache entry" in str(item.message)
     ]
     assert torn_warnings == [], torn_warnings
-    assert after.capture_cache_hit is True
+    assert after.provenance.cache_hit is True
 
 
 def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monkeypatch) -> None:
@@ -123,7 +123,7 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
 
     assert entry.read_bytes() == before
     after = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert after.capture_cache_hit is True
+    assert after.provenance.cache_hit is True
 
 
 @pytest.mark.smoke

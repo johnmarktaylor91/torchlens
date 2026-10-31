@@ -119,7 +119,7 @@ def test_paddle_depth_parity() -> None:
         backend="paddle",
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
-    assert ungrouped.recurrence_detection is False
+    assert ungrouped.options.recurrence_detection is False
 
 
 @pytest.mark.backend_tinygrad

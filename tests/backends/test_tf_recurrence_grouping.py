@@ -132,7 +132,7 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
     ungrouped_status = ungrouped.validation_replay_status
     assert grouped_status.num_failed_ops == ungrouped_status.num_failed_ops == 0
     assert grouped_status.num_replayed_ops == ungrouped_status.num_replayed_ops
-    assert ungrouped.recurrence_detection is False
+    assert ungrouped.options.recurrence_detection is False
     assert all(op.num_passes == 1 for op in ungrouped.layer_list)
 
 
