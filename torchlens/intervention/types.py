@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._io import FieldPolicy
+from .._selection import _SelectionOperand
 from ..ir.container import (
     ContainerSpec,
     DataclassField,
@@ -18,7 +19,6 @@ from ..ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from ..selection import _SelectionOperand
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -505,7 +505,7 @@ class EdgeUseRecord(_SelectionOperand):
     def __selection__(self) -> Any:
         """Lift this edge occurrence as an EDGE selection term."""
 
-        from ..selection import _selection_from_edge
+        from .._selection import _selection_from_edge
 
         return _selection_from_edge(self)
 

@@ -465,7 +465,7 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("in_module_container", "conv", lambda: tl.in_module("features")),
     ("in_module_pass", "conv", lambda: tl.in_module("features:1")),
     ("output_index", "conv", lambda: tl.model_output(0)),
-    ("output_at_0", "conv", lambda: tl.output_at((0,))),
+    ("output_at_0", "conv", lambda: tl.intervention.output_at((0,))),
     ("input_at_0", "conv", lambda: tl.model_input(0)),
     ("where_type_relu", "conv", _where_relu),
     ("and_func_inmodule", "conv", lambda: tl.func("relu") & tl.in_module("features")),
@@ -500,12 +500,12 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("contains_raw_sub", "conv", lambda: tl.label_contains("_raw")),
     ("regex_raw_anchor", "conv", lambda: tl.label_matches(r"_raw$")),
     # Typed output-path components against real container outputs.
-    ("dict_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
-    ("dict_output_at_aux0", "dictout", lambda: tl.output_at(("aux", 0))),
-    ("dict_output_at_aux1", "dictout", lambda: tl.output_at(("aux", 1))),
+    ("dict_output_at_logits", "dictout", lambda: tl.intervention.output_at(("logits",))),
+    ("dict_output_at_aux0", "dictout", lambda: tl.intervention.output_at(("aux", 0))),
+    ("dict_output_at_aux1", "dictout", lambda: tl.intervention.output_at(("aux", 1))),
     ("dict_output_name", "dictout", lambda: tl.model_output("logits")),
-    ("nt_output_at_main", "ntout", lambda: tl.output_at(("main",))),
-    ("nt_output_at_extra", "ntout", lambda: tl.output_at(("extra",))),
+    ("nt_output_at_main", "ntout", lambda: tl.intervention.output_at(("main",))),
+    ("nt_output_at_extra", "ntout", lambda: tl.intervention.output_at(("extra",))),
     # MODEL_INPUT container paths (positive input_at cells).
     ("dictin_input_at_a", "dictin", lambda: tl.model_input("a")),
     ("dictin_input_at_b", "dictin", lambda: tl.model_input("b")),
@@ -619,7 +619,7 @@ BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("bwd_not_accumulate", lambda: ~tl.grad_fn("AccumulateGrad")),
     # Direction-agnostic container kinds must intersect with backward kinds
     # through the grad_fn boundary-alias bridge (deleted-code invariant).
-    ("bwd_output_at_and_grad_input", lambda: tl.output_at((0,)) & tl.grad_input()),
+    ("bwd_output_at_and_grad_input", lambda: tl.intervention.output_at((0,)) & tl.grad_input()),
     ("bwd_output0_and_grad_input", lambda: tl.model_output(0) & tl.grad_input()),
     ("bwd_input_at_and_grad_output", lambda: tl.model_input(0) & tl.grad_output()),
 )
@@ -634,9 +634,9 @@ BACKWARD_CONTAINER_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     (
         "dictout_output_at_logits_and_grad_input",
         "dictout",
-        lambda: tl.output_at(("logits",)) & tl.grad_input(),
+        lambda: tl.intervention.output_at(("logits",)) & tl.grad_input(),
     ),
-    ("dictout_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
+    ("dictout_output_at_logits", "dictout", lambda: tl.intervention.output_at(("logits",))),
 )
 
 #: Selector compositions expected to be decided at construction time.

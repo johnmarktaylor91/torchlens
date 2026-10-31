@@ -99,7 +99,7 @@ def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:
     rows: list[tuple[str, int]] = []
     for frame in frames:
         address = getattr(frame, "address", None)
-        pass_index = getattr(frame, "pass_index", None)
+        pass_index = getattr(frame, "pass_number", None)
         if isinstance(address, str) and isinstance(pass_index, int):
             rows.append((address, pass_index))
     return tuple(rows)

@@ -1,7 +1,7 @@
 """Value-based and statistical selection producers (L6 producer wave).
 
 Selects by WHAT VALUES ARE, not just where. Two producer families, both
-returning :class:`~torchlens.selection.Selection` queries that compose with
+returning :class:`~torchlens._selection.Selection` queries that compose with
 the full ``| & - ~`` algebra and resolve explicitly against one trace:
 
 - VALUE producers read the resolution trace's OWN retained activations:
@@ -47,13 +47,12 @@ from typing import Any
 
 import torch
 
-from .errors._base import TorchLensError
-from .selection import (
+from ._selection import (
     Selection,
     SelectionError,
     SelectionProvenance,
     Selector,
-    SiteEntry,
+    Site,
     _act_entry,
     _find_act_ops,
     _forward_ops,
@@ -65,6 +64,7 @@ from .selection import (
     _WholeSiteTerm,
     register_term_resolver,
 )
+from .errors._base import TorchLensError
 
 __all__ = [
     "dead",
@@ -157,29 +157,27 @@ def _default_population(trace: Any) -> Selection:
     return Selection(trace, "ACT", entries)
 
 
-def _op_for_entry(trace: Any, entry: SiteEntry, *, sample_name: str | None = None) -> Any:
+def _op_for_entry(trace: Any, entry: Site, *, sample_name: str | None = None) -> Any:
     """Return the op backing one population entry on one trace."""
 
-    layer_label, pass_index = entry.site_key
+    layer_label, pass_index = entry.key
     ops = [
         op
         for op in _find_act_ops(trace, layer_label)
-        if (getattr(op, "pass_index", 1) or 1) == pass_index
+        if (getattr(op, "pass_number", 1) or 1) == pass_index
     ]
     if not ops:
         where = "this trace" if sample_name is None else sample_name
         raise _unresolvable(
             "site_not_in_trace",
-            f"site {entry.site_key!r} is not present on {where}.",
+            f"site {entry.key!r} is not present on {where}.",
             site=layer_label,
             **({} if sample_name is None else {"sample": sample_name}),
         )
     return ops[0]
 
 
-def _read_saved_value(
-    trace: Any, entry: SiteEntry, *, sample_name: str | None = None
-) -> torch.Tensor:
+def _read_saved_value(trace: Any, entry: Site, *, sample_name: str | None = None) -> torch.Tensor:
     """Read one entry's retained activation, refusing typed when absent."""
 
     op = _op_for_entry(trace, entry, sample_name=sample_name)
@@ -235,14 +233,12 @@ def _refuse_complex(value: torch.Tensor, producer: str, site: Any) -> None:
         )
 
 
-def _entry_with_mask(
-    entry: SiteEntry, dense: torch.Tensor, relation: str, source: str
-) -> SiteEntry:
+def _entry_with_mask(entry: Site, dense: torch.Tensor, relation: str, source: str) -> Site:
     """Rebuild one population entry with a criterion mask and provenance."""
 
-    return SiteEntry(
+    return Site(
         kind=entry.kind,
-        site_key=entry.site_key,
+        key=entry.key,
         provenance=SelectionProvenance(
             relation=_join_relation(entry.provenance.relation, relation),
             source=source,
@@ -322,10 +318,10 @@ def _resolve_rank_criterion(node: _ValueTerm, trace: Any) -> Selection:
     """
 
     population = _resolve_population(node.within, trace)
-    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
+    per_entry: list[tuple[Site, torch.Tensor, torch.Tensor]] = []
     for entry in population:
         value = _read_saved_value(trace, entry)
-        keys = _rank_keys(value, node.by, node.criterion, entry.site_key)
+        keys = _rank_keys(value, node.by, node.criterion, entry.key)
         valid = entry._mask._dense_ro() & ~torch.isnan(keys)
         per_entry.append((entry, keys.reshape(-1), valid.reshape(-1)))
     total_valid = int(sum(valid.sum().item() for _, _, valid in per_entry))
@@ -361,7 +357,7 @@ def _resolve_rank_criterion(node: _ValueTerm, trace: Any) -> Selection:
     order = torch.argsort(flat_keys, descending=node.largest, stable=True)[:k]
     selected_flat = torch.zeros(flat_keys.shape[0], dtype=torch.bool)
     selected_flat[order] = True
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     offset = 0
     for entry, keys, _ in per_entry:
         span = keys.shape[0]
@@ -375,14 +371,14 @@ def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> Selection:
     """Resolve an elementwise value criterion (threshold / sign) exactly."""
 
     population = _resolve_population(node.within, trace)
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for entry in population:
         value = _read_saved_value(trace, entry)
         if node.criterion == "threshold":
             if node.by == "abs":
                 compared = value.abs()
             else:
-                _refuse_complex(value, "threshold", entry.site_key)
+                _refuse_complex(value, "threshold", entry.key)
                 compared = value
             dense = torch.ones(entry.shape, dtype=torch.bool)
             if node.above is not None:
@@ -396,7 +392,7 @@ def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> Selection:
                 magnitude = value.abs()
                 dense = magnitude <= node.tol if which == "zero" else magnitude > node.tol
             else:
-                _refuse_complex(value, "sign", entry.site_key)
+                _refuse_complex(value, "sign", entry.key)
                 dense = value > node.tol if which == "positive" else value < -node.tol
             source = f"sign({which!r}, tol={node.tol})"
         dense &= entry._mask._dense_ro()
@@ -594,7 +590,7 @@ class _StatTerm:
         return f"{head}, within={population})"
 
 
-def _sample_values(node: _StatTerm, entry: SiteEntry) -> list[torch.Tensor]:
+def _sample_values(node: _StatTerm, entry: Site) -> list[torch.Tensor]:
     """Read one entry's activation from every sample trace (typed refusals)."""
 
     values = []
@@ -613,7 +609,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> Selection:
     """
 
     population = _resolve_population(node.within, trace)
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for entry in population:
         values = _sample_values(node, entry)
         if node.stat == "dead":
@@ -932,14 +928,14 @@ def _table_population_explicit(
     node: _TableScoreTerm,
     trace: Any,
     rows: dict[str, Any],
-) -> list[tuple[SiteEntry, Any]]:
+) -> list[tuple[Site, Any]]:
     """Apply the explicit-population CONTRACT arm of the D9 law."""
 
     population = _resolve_population(node.within, trace)
-    pairs: list[tuple[SiteEntry, Any]] = []
+    pairs: list[tuple[Site, Any]] = []
     uncovered: list[tuple[str, str]] = []
     for entry in population:
-        label = f"{entry.site_key[0]}:{entry.site_key[1]}"
+        label = f"{entry.key[0]}:{entry.key[1]}"
         row = rows.get(label)
         reason = "no_row" if row is None else _row_unrankable_reason(row)
         if reason is not None:
@@ -962,7 +958,7 @@ def _table_population(
     node: _TableScoreTerm,
     trace: Any,
     rows: dict[str, Any],
-) -> tuple[list[tuple[SiteEntry, Any]], dict[str, int]]:
+) -> tuple[list[tuple[Site, Any]], dict[str, int]]:
     """Apply the D9 contract/filter law to the ranking population.
 
     Explicit ``within=``: every population site must be covered by an ``ok``
@@ -972,7 +968,7 @@ def _table_population(
     """
 
     excluded: dict[str, int] = {}
-    pairs: list[tuple[SiteEntry, Any]] = []
+    pairs: list[tuple[Site, Any]] = []
     if node.within is not None:
         return _table_population_explicit(node, trace, rows), excluded
     for label, row in rows.items():
@@ -1019,7 +1015,7 @@ def _resolve_table_score_term(node: _TableScoreTerm, trace: Any) -> Selection:
 def _resolve_table_site_grain(
     node: _TableScoreTerm,
     trace: Any,
-    pairs: list[tuple[SiteEntry, Any]],
+    pairs: list[tuple[Site, Any]],
     source: str,
 ) -> Selection:
     """Rank/threshold whole sites by their scalar scores."""
@@ -1066,18 +1062,18 @@ def _resolve_table_site_grain(
 def _resolve_table_element_grain(
     node: _TableScoreTerm,
     trace: Any,
-    pairs: list[tuple[SiteEntry, Any]],
+    pairs: list[tuple[Site, Any]],
     source: str,
 ) -> Selection:
     """Rank/threshold elements by the table's dense per-element values."""
 
-    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
+    per_entry: list[tuple[Site, torch.Tensor, torch.Tensor]] = []
     for entry, row in pairs:
         value = row.value
         if not isinstance(value, torch.Tensor) or tuple(value.shape) != entry.shape:
             raise _unresolvable(
                 "by_table_index_space_mismatch",
-                f"the element-grain score for site {entry.site_key!r} has "
+                f"the element-grain score for site {entry.key!r} has "
                 f"shape {tuple(value.shape) if isinstance(value, torch.Tensor) else None!r}, "
                 f"which does not exactly match the selected index space "
                 f"{entry.shape!r}.",
@@ -1133,7 +1129,7 @@ def _resolve_table_element_grain(
 def _table_element_threshold(
     node: _TableScoreTerm,
     trace: Any,
-    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]],
+    per_entry: list[tuple[Site, torch.Tensor, torch.Tensor]],
     source: str,
 ) -> Selection:
     """Elementwise threshold over the table's dense per-element values."""

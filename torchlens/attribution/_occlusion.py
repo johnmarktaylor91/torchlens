@@ -25,6 +25,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection import Selection, Selector
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
@@ -37,7 +38,6 @@ from torchlens.attribution._core import (
     _temporarily_eval,
 )
 from torchlens.intervention import mean_ablate, zero_ablate
-from torchlens.selection import Selection, Selector
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms

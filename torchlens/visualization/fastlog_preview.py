@@ -119,7 +119,7 @@ def _context_from_layer(
             "input_output_address": getattr(op_log, "io_role", None),
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_index": module_frame.pass_index if module_frame else None,
+            "module_pass_index": module_frame.pass_number if module_frame else None,
         },
         module_stack=module_stack,
         history=history,
@@ -199,7 +199,7 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
             layer_label = getattr(op_log, "layer_label", None)
             if isinstance(layer_label, str):
                 preview_nodes.setdefault(layer_label, preview_node)
-            short_label = getattr(op_log, "layer_label_short", None)
+            short_label = getattr(op_log, "short_layer_label", None)
             if isinstance(short_label, str):
                 preview_nodes.setdefault(short_label, preview_node)
         history.append(ctx)

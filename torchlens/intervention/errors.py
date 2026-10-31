@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError
+from .._selection import SelectionError
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
@@ -11,7 +12,6 @@ from ..errors._base import (
     TorchLensWarning,
     ValidationError,
 )
-from ..selection import SelectionError
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""

@@ -180,7 +180,7 @@ def check_lockstep_license(trace: Trace) -> None:
         )
     previous = 0
     for op in ops:
-        pass_index = int(getattr(op, "pass_index", 1) or 1)
+        pass_index = int(getattr(op, "pass_number", 1) or 1)
         if pass_index < previous:
             raise _encoding_error(
                 "stack_by auto-annotation is underivable: the multi-pass "

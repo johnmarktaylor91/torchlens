@@ -92,7 +92,7 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
 
     turn1 = tl.trace(model, turn1_ids)
     turn2 = tl.trace(model, turn2_ids)
-    bundle = tl.bundle({"turn1": turn1, "turn2": turn2})
+    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2})
 
     # Path-1 shape on a real chat model: the derived relationship is the
     # identity rank, exactly the evidence the old gate accepted as proof of

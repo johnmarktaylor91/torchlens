@@ -50,7 +50,7 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     x = torch.randn(2, 3)
     two = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"baseline": two, "lost_output": one}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": two, "lost_output": one}, baseline="baseline")
 
     # The comparison gate now refuses the pair first (the two graphs are not
     # one model's); the arity guard below it stays the second line of defence.
@@ -72,7 +72,7 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
     second = tl.trace(
         _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
-    bundle = tl.bundle({"baseline": first, "other": second}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": first, "other": second}, baseline="baseline")
 
     delta = bundle.output_delta("baseline")
     assert set(delta) == {"baseline", "other"}

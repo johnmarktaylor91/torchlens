@@ -192,7 +192,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     """Op identity: label, pass, function, module, site key, access key."""
 
     label = str(getattr(op, "label", "?"))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     num_passes = getattr(op, "num_passes", None)
     identity = f"{getattr(op, 'func_name', '?')}"
     if pass_index is not None and num_passes is not None and num_passes > 1:
@@ -403,7 +403,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         *modules,
         _proof_section(trace),
     )
-    title = str(getattr(trace, "trace_label", None) or getattr(trace, "model_label", "Trace"))
+    title = str(getattr(trace, "name", None) or getattr(trace, "model_name", "Trace"))
     status = getattr(getattr(trace, "outcome", None), "status", None)
     return Card(
         title=f"TorchLens Trace: {title}",

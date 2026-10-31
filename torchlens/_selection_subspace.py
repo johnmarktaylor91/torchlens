@@ -3,7 +3,7 @@
 Selects the elements a DIRECTION (or small subspace) in activation space
 lives on — the spelling for probe directions, steering vectors, PCA
 components, and SAE feature directions. One producer,
-:func:`subspace`, returning a :class:`~torchlens.selection.Selection` query
+:func:`subspace`, returning a :class:`~torchlens._selection.Selection` query
 that composes with the full ``| & - ~`` algebra and resolves explicitly
 against one trace.
 
@@ -61,14 +61,14 @@ from typing import Any
 
 import torch
 
-from .selection import (
+from ._selection import (
     Selection,
     Selector,
-    SiteEntry,
+    Site,
     _unresolvable,
     register_term_resolver,
 )
-from .selection_values import (
+from ._selection_values import (
     _entry_with_mask,
     _lift_within,
     _resolve_population,
@@ -200,11 +200,11 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> Selection:
 
     record = node.provenance
     population = _resolve_population(node.within, trace)
-    support = _support_vector(node.basis, record.tol)
+    support = _support_vector(node.basis, record.atol)
     source = record.summary()
     if support.numel() > 1 and bool(support.all()):
         source += DENSE_SUPPORT_NOTE
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for entry in population:
         shape = entry.shape
         axis = record.dim if record.dim >= 0 else len(shape) + record.dim
@@ -212,9 +212,9 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> Selection:
             raise _unresolvable(
                 "basis_dim_mismatch",
                 f"subspace binds basis axis dim={record.dim}, but site "
-                f"{entry.site_key!r} has only {len(shape)} output axes "
+                f"{entry.key!r} has only {len(shape)} output axes "
                 f"(shape {shape!r}). Name an axis of the site's output space.",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 dim=record.dim,
                 site_ndim=len(shape),
             )
@@ -222,12 +222,12 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> Selection:
             raise _unresolvable(
                 "basis_dim_mismatch",
                 f"subspace basis {record.origin!r} is {record.space_dim}-dimensional, "
-                f"but site {entry.site_key!r} has extent {shape[axis]} on axis "
+                f"but site {entry.key!r} has extent {shape[axis]} on axis "
                 f"{axis} (shape {shape!r}). A direction is minted for one "
                 "representation space: it is never broadcast, truncated, or "
                 "padded onto another. Restrict `within=` to sites with a "
                 f"{record.space_dim}-wide axis, or bind a different `dim=`.",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 basis_dim=record.space_dim,
                 site_extent=shape[axis],
                 axis=axis,

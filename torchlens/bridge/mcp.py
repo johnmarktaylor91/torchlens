@@ -212,7 +212,7 @@ _LEDGER_TOOL_ADAPTERS: dict[str, Any] = {
     "torchlens_ledger_evidence": lambda args: _tool_ledger_evidence(
         _required_str(args, "path"),
         entry_id=_required_str(args, "entry_id"),
-        index=args.get("ref_index"),
+        ref_index=args.get("ref_index"),
     ),
 }
 

@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..selection import (
+from .._selection import (
     Selection,
     SelectionError,
     _apply_invalid,
@@ -240,7 +240,7 @@ def apply_edge_substitution_do(
     committed: list[tuple[Any, tuple[Any, ...]]] = []
     try:
         for entry in resolved:
-            if entry.selected_count == 0:
+            if entry.num_selected == 0:
                 continue
             address = entry.site_key
             record = family.get(tuple(address))

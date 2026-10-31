@@ -14,8 +14,6 @@ max_tokens=N)``, ``torchlens.agent.guide()``, and the CLI
 
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
@@ -27,14 +25,12 @@ __version__ = "2.36.1"
 
 if _TYPE_CHECKING:
     from .data_classes.trace import Trace
-    from .intervention import Bundle
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
-    "ActivationLookup": ("torchlens.captured_run", "ActivationLookup"),
     "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
     "Bytes": ("torchlens.quantities", "Bytes"),
     "CapturedRun": ("torchlens.captured_run", "CapturedRun"),
@@ -61,7 +57,7 @@ _LAZY_ATTRS = {
     "tap": ("torchlens.observers", "tap"),
     "to_disk": ("torchlens.options", "to_disk"),
     "AtenOp": ("torchlens.data_classes.aten_op", "AtenOp"),
-    "Bundle": ("torchlens.intervention", "Bundle"),
+    "Bundle": ("torchlens.bundle", "Bundle"),
     "Container": ("torchlens.data_classes.container", "Container"),
     "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
     "Layer": ("torchlens.data_classes.layer", "Layer"),
@@ -117,7 +113,6 @@ _LAZY_ATTRS = {
     "grad_clamp": ("torchlens.intervention", "grad_clamp"),
     "grad_clip": ("torchlens.intervention", "grad_clip"),
     "grad_fn": ("torchlens.intervention", "grad_fn"),
-    "grad_fn_label": ("torchlens.intervention", "grad_fn_label"),
     "grad_input": ("torchlens.intervention", "grad_input"),
     "grad_noise": ("torchlens.intervention", "grad_noise"),
     "grad_output": ("torchlens.intervention", "grad_output"),
@@ -139,7 +134,6 @@ _LAZY_ATTRS = {
     "module": ("torchlens.intervention", "module"),
     "noise": ("torchlens.intervention", "noise"),
     "model_output": ("torchlens.intervention", "model_output"),
-    "output_at": ("torchlens.intervention", "output_at"),
     "partial": ("torchlens.partial", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
@@ -159,7 +153,6 @@ _LAZY_ATTRS = {
     "run": ("torchlens.intervention", "run"),
     "save": ("torchlens._io.bundle", "save"),
     "scale": ("torchlens.intervention", "scale"),
-    "show_bundle_graph": ("torchlens.user_funcs", "show_bundle_graph"),
     "summary": ("torchlens.user_funcs", "summary"),
     "splice_module": ("torchlens.intervention", "splice_module"),
     "stats": ("torchlens.stats", None),
@@ -177,9 +170,11 @@ _LAZY_ATTRS = {
     "validation": ("torchlens.validation", None),
     "visualization": ("torchlens.visualization", None),
     "types": ("torchlens.types", None),
-    "accessors": ("torchlens.accessors", None),
+    "appliances": ("torchlens.appliances", None),
     "backends": ("torchlens.backends", None),
     "viz": ("torchlens.viz", None),
+    "site": ("torchlens.intervention.selectors", "site"),
+    "at_step": ("torchlens.intervention.selectors", "at_step"),
     "when": ("torchlens.intervention", "when"),
     "where": ("torchlens.intervention", "where"),
     "without_op": ("torchlens.intervention", "without_op"),
@@ -188,33 +183,33 @@ _LAZY_ATTRS = {
     "patch_from": ("torchlens.intervention", "patch_from"),
     # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "Selector": ("torchlens.selection", "Selector"),
-    "Selection": ("torchlens.selection", "Selection"),
-    "units": ("torchlens.selection", "units"),
-    "param": ("torchlens.selection", "param"),
-    "random_like": ("torchlens.selection", "random_like"),
+    "Selector": ("torchlens._selection", "Selector"),
+    "Selection": ("torchlens._selection", "Selection"),
+    "units": ("torchlens._selection", "units"),
+    "param": ("torchlens._selection", "param"),
+    "random_like": ("torchlens._selection", "random_like"),
     # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "top_k": ("torchlens.selection_values", "top_k"),
-    "top_fraction": ("torchlens.selection_values", "top_fraction"),
-    "threshold": ("torchlens.selection_values", "threshold"),
-    "sign": ("torchlens.selection_values", "sign"),
-    "dead": ("torchlens.selection_values", "dead"),
-    "saturated": ("torchlens.selection_values", "saturated"),
-    "low_variance": ("torchlens.selection_values", "low_variance"),
+    "top_k": ("torchlens._selection_values", "top_k"),
+    "top_fraction": ("torchlens._selection_values", "top_fraction"),
+    "threshold": ("torchlens._selection_values", "threshold"),
+    "sign": ("torchlens._selection_values", "sign"),
+    "dead": ("torchlens._selection_values", "dead"),
+    "saturated": ("torchlens._selection_values", "saturated"),
+    "low_variance": ("torchlens._selection_values", "low_variance"),
     # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "neighborhood": ("torchlens.selection_graph", "neighborhood"),
-    "between": ("torchlens.selection_graph", "between"),
+    "neighborhood": ("torchlens._selection_graph", "neighborhood"),
+    "between": ("torchlens._selection_graph", "between"),
     # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
     # pending naming-session ratification; provisional-name protocol).
-    "changed": ("torchlens.selection_compare", "changed"),
-    "top_changed": ("torchlens.selection_compare", "top_changed"),
-    "stable_across_passes": ("torchlens.selection_compare", "stable_across_passes"),
-    "pass_variance": ("torchlens.selection_compare", "pass_variance"),
+    "changed": ("torchlens._selection_compare", "changed"),
+    "top_changed": ("torchlens._selection_compare", "top_changed"),
+    "stable_across_passes": ("torchlens._selection_compare", "stable_across_passes"),
+    "pass_variance": ("torchlens._selection_compare", "pass_variance"),
     # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "subspace": ("torchlens.selection_subspace", "subspace"),
+    "subspace": ("torchlens._selection_subspace", "subspace"),
 }
 
 
@@ -720,50 +715,6 @@ def extract(
     return outputs
 
 
-def bundle(*args: _Any, **kwargs: _Any) -> Bundle:
-    """Construct a TorchLens Bundle.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Forwarded to :class:`torchlens.intervention.bundle.Bundle`.
-
-    Returns
-    -------
-    Bundle
-        Constructed Bundle.
-    """
-
-    return _resolve_top_level("Bundle")(*args, **kwargs)
-
-
-class _TorchLensModule(_types.ModuleType):
-    """Protect top-level callables whose names collide with submodules."""
-
-    def __setattr__(self, name: str, value: _Any) -> None:
-        """Keep the public ``bundle`` constructor after its package is imported.
-
-        Parameters
-        ----------
-        name:
-            Attribute name being assigned by Python's import machinery or a caller.
-        value:
-            Value being assigned.
-        """
-
-        if (
-            name == "bundle"
-            and isinstance(value, _types.ModuleType)
-            and value.__name__ == "torchlens.bundle"
-            and callable(self.__dict__.get(name))
-        ):
-            return
-        super().__setattr__(name, value)
-
-
-_sys.modules[__name__].__class__ = _TorchLensModule
-
-
 __all__ = [
     "AtenOp",
     "trace",
@@ -776,7 +727,6 @@ __all__ = [
     "facets",
     "record",
     "Recording",
-    "ActivationLookup",
     "CapturedRun",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
@@ -786,7 +736,6 @@ __all__ = [
     "push",
     "push_from",
     "run",
-    "bundle",
     "pluck",
     "extract",
     "extract_dataset",
@@ -795,7 +744,6 @@ __all__ = [
     "decide_recording_of_batch",
     "record_kpi_in_graph",
     "register_tensor_connection",
-    "show_bundle_graph",
     "summary",
     "options",
     "to_disk",
@@ -817,7 +765,6 @@ __all__ = [
     "func_transform",
     "followed_by",
     "grad_fn",
-    "grad_fn_label",
     "grad_input",
     "grad_output",
     "in_backward_pass",
@@ -825,7 +772,6 @@ __all__ = [
     "label_matches",
     "module",
     "model_output",
-    "output_at",
     "model_input",
     "register_container",
     "preceded_by",
@@ -850,6 +796,8 @@ __all__ = [
     "sweep",
     "swap_with",
     "zero_ablate",
+    "site",
+    "at_step",
     "when",
     "bwd_hook",
     "grad_clip",

@@ -152,8 +152,8 @@ class LoreftArtifact:
             over the site's label.
         """
 
-        from ..selection import units
-        from ..selection_subspace import subspace
+        from .._selection import units
+        from .._selection_subspace import subspace
 
         width = int(self.rotation.shape[0])
         label = site if isinstance(site, str) else _checked_site(site, width, positions)

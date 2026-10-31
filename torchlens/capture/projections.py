@@ -312,12 +312,12 @@ class RecordingState:
         if len(self.predicate_failures) < self.options.max_predicate_failures:
             self.predicate_failures.append(failure)
         else:
-            self.num_predicate_failure_overflows += 1
+            self.predicate_failure_overflow_count += 1
         object.__setattr__(self.recording, "predicate_failures", list(self.predicate_failures))
         object.__setattr__(
             self.recording,
             "predicate_failure_overflow_count",
-            self.num_predicate_failure_overflows,
+            self.predicate_failure_overflow_count,
         )
 
     def handle_predicate_exception(self, ctx: RecordContext, exc: BaseException) -> None:
@@ -332,7 +332,7 @@ class RecordingState:
 
         if self.effective_predicate_error_mode() != "accumulate":
             return
-        if not self.predicate_failures and self.num_predicate_failure_overflows == 0:
+        if not self.predicate_failures and self.predicate_failure_overflow_count == 0:
             return
         details = ""
         if self.predicate_failures:
@@ -341,8 +341,8 @@ class RecordingState:
             f"fastlog predicate failed during recording{details}. "
             "Remedy: fix the predicate; exc.failures carries the accumulated tracebacks.",
             failures=list(self.predicate_failures),
-            total_count=len(self.predicate_failures) + self.num_predicate_failure_overflows,
-            overflow=self.num_predicate_failure_overflows,
+            total_count=len(self.predicate_failures) + self.predicate_failure_overflow_count,
+            overflow=self.predicate_failure_overflow_count,
             code="predicate_evaluation_failed",
         )
 

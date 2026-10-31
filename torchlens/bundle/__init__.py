@@ -12,12 +12,6 @@ import torch
 
 from ..errors.episode import BundleRelationError
 from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
-from ..intervention._super.at import (
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-    TraceAccessor,
-)
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
     SuperGradFnAccessor,
@@ -25,6 +19,13 @@ from ..intervention._super.super_logs import (
     SuperModuleAccessor,
     SuperModuleCallAccessor,
     SuperParamAccessor,
+)
+from ..intervention._super.super_op import (
+    SuperAtenOp,
+    SuperLayerAccessor,
+    SuperOp,
+    SuperOpAccessor,
+    TraceAccessor,
 )
 from ..intervention._topology.topology import Supergraph, build_supergraph
 from ..intervention.errors import (
@@ -766,7 +767,7 @@ class Bundle:
 
         previous = self._operations[-1] if self._operations else None
         row = BundleOperation(
-            history_id=mint_bundle_id(),
+            operation_id=mint_bundle_id(),
             seq=(previous.seq + 1) if previous is not None else 1,
             kind=kind,
             member_names=tuple(member_names),
@@ -2231,7 +2232,7 @@ class Bundle:
 
         if name is not None:
             return str(name)
-        log_name = getattr(log, "trace_label", None)
+        log_name = getattr(log, "name", None)
         if log_name:
             return str(log_name)
         return f"member_{index}"
@@ -2543,4 +2544,4 @@ class Bundle:
             return None
 
 
-__all__ = ["AmbiguousLabelError", "Bundle"]
+__all__ = ["AmbiguousLabelError", "SuperAtenOp", "SuperOp"]

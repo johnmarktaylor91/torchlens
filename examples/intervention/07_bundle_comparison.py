@@ -49,7 +49,7 @@ def main() -> None:
     zero.attach_hooks(tl.func("relu"), tl.zero_ablate())
     zero.push()
 
-    bundle = tl.bundle({"clean": clean, "zero": zero}, baseline="clean")
+    bundle = tl.Bundle({"clean": clean, "zero": zero}, baseline="clean")
     node = bundle.node(tl.func("relu"))
     sizes = bundle.apply(lambda member: len(member.layer_list))
     comparison = bundle.compare_at(tl.func("relu"))

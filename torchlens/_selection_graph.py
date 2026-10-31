@@ -1,7 +1,7 @@
 """Graph-structural selection producers (L6 producer wave, graph slice).
 
 Selects by WHERE OPS SIT IN THE EXECUTED DAG, not by value or by name. Two
-producers, both returning :class:`~torchlens.selection.Selection` queries
+producers, both returning :class:`~torchlens._selection.Selection` queries
 that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
@@ -48,7 +48,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .selection import (
+from ._selection import (
     Selection,
     SelectionError,
     Selector,
@@ -105,7 +105,7 @@ class _TraceGraph:
         by_site: dict[tuple[str, int], str] = {}
         for label, op in by_label.items():
             layer_label = getattr(op, "layer_label", None) or label
-            pass_index = getattr(op, "pass_index", 1) or 1
+            pass_index = getattr(op, "pass_number", 1) or 1
             by_site[(layer_label, pass_index)] = label
         return cls(
             ops=by_label,
@@ -289,10 +289,10 @@ def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> fr
 
     labels: set[str] = set()
     for entry in resolved:
-        label = graph.by_site.get(entry.site_key)
+        label = graph.by_site.get(entry.key)
         if label is None:
             raise RuntimeError(
-                f"{producer} resolved site {entry.site_key!r} on this trace but "
+                f"{producer} resolved site {entry.key!r} on this trace but "
                 "the executed-DAG index has no such node; the site and graph "
                 "universes drifted (internal invariant)."
             )

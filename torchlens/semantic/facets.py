@@ -20,6 +20,7 @@ from typing import Any, Literal, TypeAlias, overload
 
 import torch
 
+from .._selection import _SelectionOperand
 from ..ir.container import (
     DataclassField,
     DictKey,
@@ -28,7 +29,6 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
-from ..selection import _SelectionOperand
 from ..utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from ._families import family_entries, family_spec
 
@@ -594,7 +594,7 @@ class FacetSpec(_SelectionOperand):
     def __selection__(self) -> object:
         """Lift this facet's write region as an ACT selection term."""
 
-        from ..selection import _selection_from_facet
+        from .._selection import _selection_from_facet
 
         return _selection_from_facet(self)
 

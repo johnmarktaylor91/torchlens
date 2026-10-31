@@ -389,7 +389,7 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     A CONTAINER product declares the same self-authority flag over a DERIVED
     fold (``Bundle``: the worst-of-members fold, COMPLETE never blessed above
     the weakest member, ``derived=True``, disclosure-only). Without it the
-    gate treated every ``tl.bundle()``-built product as UNKNOWN and
+    gate treated every ``tl.Bundle()``-built product as UNKNOWN and
     ``tl.save`` false-refused every bundle with the same false hand-built
     warning while ``bundle.save()`` worked -- the same two-answers disease,
     instance three (foldB D9). The fold is reported beside results and never

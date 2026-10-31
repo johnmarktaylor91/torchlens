@@ -87,7 +87,7 @@ def stepped_pair() -> Any:
 
 @pytest.fixture()
 def ckpt_bundle(stepped_pair: dict[str, Any]) -> Any:
-    return tl.bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
+    return tl.Bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
 
 
 def _assert_checkpoint_refusal(excinfo: pytest.ExceptionInfo[Any], *members: str) -> None:
@@ -191,7 +191,7 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
     path1 = tmp_path / "ck64.tlspec"
     tl.save(stepped_pair["trace_before"], path0)
     tl.save(stepped_pair["trace_after"], path1)
-    loaded = tl.bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
+    loaded = tl.Bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
     view = loaded.params[_WEIGHT]
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
         _ = view.weight_norm_diff
@@ -224,7 +224,7 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
 
     model = _toy_model()
     x = _toy_input()
-    bundle = tl.bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
+    bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
     matrix = bundle.compare_at("relu_1_2")
     assert tuple(matrix.shape) == (2, 2)
     view = bundle.node("relu_1_2")
@@ -254,7 +254,7 @@ def test_single_member_param_view_keeps_live_handle_contract(
 ) -> None:
     """One resolved member is not a cross-member claim: the live read stands."""
 
-    bundle = tl.bundle({"only": stepped_pair["trace_before"]})
+    bundle = tl.Bundle({"only": stepped_pair["trace_before"]})
     view = bundle.params[_WEIGHT]
     out = view.out
     assert isinstance(out, torch.Tensor)
@@ -331,7 +331,7 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
     x = stepped_pair["x"]
     halted = tl.trace(model, x, halt=tl.func("relu"))
     assert halted.outcome.status.name == "HALTED"
-    bundle = tl.bundle({"h": halted, "c": stepped_pair["trace_before"]})
+    bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
         _ = bundle.params[_WEIGHT].weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "h", "c")

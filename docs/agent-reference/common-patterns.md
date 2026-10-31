@@ -25,7 +25,7 @@ stages = tl.extract(backbone, torch.randn(1, 4), ["layer1", "layer2"])
 stage_log = tl.trace(backbone, torch.randn(1, 4), save=["layer1", "layer2"])  # list form
 stage_log["layer2"].out
 # Appliances hang off one door: trace.using(name), registered with
-# torchlens.accessors.register_appliance(name, factory) (spellings DOCUMENTED-UNSTABLE).
+# torchlens.appliances.register(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
 print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
@@ -237,7 +237,7 @@ comments name the exports that need one.
 
 ```python
 # trace.using(name) appliances, with a one-line summary each.
-appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
+appliances = tl.appliances.names()  # {name: summary}, sorted by name
 # Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
 basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
 ablate = tl.intervention.subspace_ablate(basis, feature_axis=1)  # x - P x on the span

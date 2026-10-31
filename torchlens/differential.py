@@ -113,7 +113,7 @@ def _ops_by_key(trace: Any, keys: dict[str, str]) -> dict[str, list[str]]:
 def _pass_of(trace: Any, label: str) -> int:
     """Return one op's 1-based pass index (single-pass ops read 1)."""
 
-    return int(getattr(trace.ops[label], "pass_index", 1) or 1)
+    return int(getattr(trace.ops[label], "pass_number", 1) or 1)
 
 
 @dataclass(frozen=True)

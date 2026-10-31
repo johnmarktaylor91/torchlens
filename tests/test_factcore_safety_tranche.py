@@ -120,7 +120,7 @@ def test_bundle_repr_baseline_none_is_unquoted() -> None:
 
     model = _TinyMLP().eval()
     x = torch.randn(2, 8)
-    bundle = tl.bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
+    bundle = tl.Bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
     text = repr(bundle)
     assert "baseline=None" in text
     assert "baseline='None'" not in text

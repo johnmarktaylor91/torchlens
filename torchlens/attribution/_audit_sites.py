@@ -90,7 +90,7 @@ class _SitesPlan:
         example.
         """
 
-        from torchlens.selection import units as unit_selection
+        from torchlens._selection import units as unit_selection
 
         by_site: dict[str, list[tuple[int, ...]]] = {}
         for key in keys:

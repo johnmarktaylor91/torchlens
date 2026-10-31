@@ -2,7 +2,7 @@
 
 ``ResolvedSelection.align_to(target)`` re-binds a selection resolved on
 trace A onto trace B, keyed on the L1 STRUCTURAL SITE KEYS (``op.site_key``,
-``site_key_v1``) that every ACT :class:`~torchlens.selection.SiteEntry`
+``site_key_v1``) that every ACT :class:`~torchlens._selection.Site`
 records as its bridging relation. This is the sanctioned cross-run door:
 ``do()`` keeps refusing foreign resolved selections typed
 (``selection_trace_mismatch``) — alignment is EXPLICIT, never a silent
@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .selection import Selection
+    from ._selection import Selection
 
 __all__ = ["ALIGNMENT_REASONS", "align_resolved_selection"]
 
@@ -65,7 +65,7 @@ def _alignment_invalid(reason: str, message: str, **fields: Any) -> Exception:
         If ``reason`` is outside the closed alignment-reason vocabulary.
     """
 
-    from .selection import SelectionError
+    from ._selection import SelectionError
 
     if reason not in ALIGNMENT_REASONS:
         raise ValueError(f"unknown selection alignment reason: {reason!r}")
@@ -138,22 +138,22 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
     family stays ambiguous and refuses).
     """
 
-    from .selection import _find_act_ops
+    from ._selection import _find_act_ops
 
     structural_key = entry.structural_site_key
     if structural_key is None:
         raise _alignment_invalid(
             "site_key_unavailable",
-            f"resolved site {entry.site_key!r} carries no structural site key "
+            f"resolved site {entry.key!r} carries no structural site key "
             "(legacy keyless capture); cross-run alignment keys on L1 site "
             "keys and cannot bridge without one.",
-            site=repr(entry.site_key),
+            site=repr(entry.key),
         )
-    layer_label, pass_index = entry.site_key
+    layer_label, pass_index = entry.key
     candidates = [
         op
         for op in _find_act_ops(target, layer_label)
-        if (getattr(op, "pass_index", 1) or 1) == pass_index
+        if (getattr(op, "pass_number", 1) or 1) == pass_index
     ]
     if candidates and getattr(candidates[0], "site_key", None) == structural_key:
         return candidates[0]
@@ -173,13 +173,13 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
             "'corroborated' -- positional agreement is display-only and a "
             "refused join names a structural change; cross-run action is "
             "authorized only by a corroborated join (verdict policy D-2).",
-            site=repr(entry.site_key),
+            site=repr(entry.key),
             structural_site_key=structural_key,
             join_verdict=verdict,
         )
     raise _alignment_invalid(
         "site_not_in_target",
-        f"the target trace has no op at address {entry.site_key!r} with "
+        f"the target trace has no op at address {entry.key!r} with "
         f"structural site key {structural_key!r}"
         + (
             f" ({len(key_family)} target ops share that key -- a reuse family "
@@ -189,7 +189,7 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
         )
         + "; cross-run alignment requires the position proof (site key) and, "
         "when the label survives, the same-policy address to agree.",
-        site=repr(entry.site_key),
+        site=repr(entry.key),
         structural_site_key=structural_key,
     )
 
@@ -226,7 +226,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
 
     import dataclasses
 
-    from .selection import Selection, SelectionProvenance, _site_shape
+    from ._selection import Selection, SelectionProvenance, _site_shape
 
     if target is resolved._trace:
         return resolved
@@ -239,7 +239,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
             kind=resolved.kind,
         )
     _require_same_policy(resolved, target)
-    source_label = str(getattr(resolved._trace, "trace_label", "") or "source trace")
+    source_label = str(getattr(resolved._trace, "name", "") or "source trace")
     entries = []
     for entry in resolved:
         op = _target_op_for_entry(entry, target, resolved._trace)
@@ -247,10 +247,10 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
         if target_shape != entry.shape:
             raise _alignment_invalid(
                 "index_space_mismatch",
-                f"target site {entry.site_key!r} output space {target_shape!r} "
+                f"target site {entry.key!r} output space {target_shape!r} "
                 f"does not match the source index space {entry.shape!r}; masks "
                 "travel unchanged and cannot re-index.",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 source_shape=entry.shape,
                 target_shape=target_shape,
             )
@@ -258,14 +258,12 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
             relation=entry.provenance.relation,
             source=f"{entry.provenance.source} [cross-run aligned from {source_label!r}]",
         )
-        target_address = (op.layer_label, getattr(op, "pass_index", 1) or 1)
-        if target_address != entry.site_key:
+        target_address = (op.layer_label, getattr(op, "pass_number", 1) or 1)
+        if target_address != entry.key:
             # Site-key-first rebind under label drift (C03/B4): the aligned
             # entry addresses the TARGET op's same-policy address; the
             # provenance line above already discloses the cross-run origin.
-            entries.append(
-                dataclasses.replace(entry, site_key=target_address, provenance=provenance)
-            )
+            entries.append(dataclasses.replace(entry, key=target_address, provenance=provenance))
         else:
             entries.append(dataclasses.replace(entry, provenance=provenance))
     return Selection(target, "ACT", entries)

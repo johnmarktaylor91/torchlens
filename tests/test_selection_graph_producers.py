@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 
 class _Branchy(nn.Module):
@@ -104,7 +104,7 @@ def _labels(resolved) -> set[str]:
 
     return {
         f"{layer_label}:{pass_index}"
-        for layer_label, pass_index in (entry.site_key for entry in resolved)
+        for layer_label, pass_index in (entry.key for entry in resolved)
     }
 
 
@@ -149,7 +149,7 @@ def test_neighborhood_masks_are_whole_site_exact(log) -> None:
     resolved = tl.neighborhood("relu_1_2", hops=1).resolve(log)
     for entry in resolved:
         assert entry.provenance.relation == "exact"
-        assert entry.selected_count == entry.mask.numel()
+        assert entry.num_selected == entry.mask.numel()
         assert "neighborhood(hops=1" in entry.provenance.source
 
 
@@ -159,7 +159,7 @@ def test_neighborhood_family_semantics_ignore_element_masks(log) -> None:
     seed = tl.units(_RELU, [(0, 0)])
     resolved = tl.neighborhood(seed, hops=0).resolve(log)
     assert _labels(resolved) == {_RELU}
-    assert resolved[0].selected_count == resolved[0].mask.numel()
+    assert resolved[0].num_selected == resolved[0].mask.numel()
 
 
 def test_neighborhood_accepts_op_and_layer_seeds(log) -> None:
@@ -180,7 +180,7 @@ def test_neighborhood_composes_with_the_algebra(log) -> None:
     restricted = tl.neighborhood("relu_1_2", hops=1) & tl.units(_ADD, [(0, 0)])
     resolved = restricted.resolve(log)
     assert _labels(resolved) == {_ADD}
-    assert resolved[0].selected_count == 1
+    assert resolved[0].num_selected == 1
 
 
 # ---------------------------------------------------------------------------

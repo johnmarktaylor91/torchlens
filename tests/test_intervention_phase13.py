@@ -166,7 +166,7 @@ def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> N
     log1 = _capture(name="same")
     log2 = _capture(name="same")
 
-    bundle = tl.bundle([log1, log2])
+    bundle = tl.Bundle([log1, log2])
 
     assert bundle.names == ["same", "same_2"]
     assert log1.name == "same"

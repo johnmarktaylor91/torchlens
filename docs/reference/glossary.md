@@ -153,7 +153,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   COUPLED (attested coupling): `trace.episode_coupling` recomputes and
   compares the capture digest (the positive ledger-to-product binding) and
   serves fire counts plus per-segment facts that never span a measured break;
-  `torchlens.intervention.at_step(*steps)` is the step-qualified selector
+  `torchlens.at_step(*steps)` is the step-qualified selector
   (live and post hoc via the persisted `Op.episode_step` stamps); replay
   derives a fresh ledger or refuses (`episode_coupled_replay_underivable` on
   both `run()` engines; `do()` edits quarantine inherited episode evidence). A diagnostic-tier product for tens of steps
@@ -506,7 +506,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
   `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). `torchlens.intervention.steer_generate` is one-call sugar for
   `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
-  `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
+  `torchlens.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
   refuses `episode_step_selector_without_episode`. Gradient edits (`tl.grad_zero`,
@@ -597,7 +597,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,
   `method`, `n_pairs`, `read_token_index`, `model_type` (the traced model's
   `config.model_type`, or `None`) and `provenance`, a
-  `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
+  `torchlens._selection_subspace.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
   the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
   place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
@@ -620,7 +620,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   enters a message.
 
 **Bundle**
-: A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
+: A named collection of aligned Traces, constructed with `tl.Bundle(...)` or `tl.Bundle(...)`, for
   cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
   `add`; an empty bundle saves and loads like any other.
 
@@ -1240,8 +1240,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Namespaces**
 : `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
-  `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl.show_bundle_graph` renders a bundle's graph:
+  `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
+  Trace collections and `tl.visualization.show_bundle_graph` renders a bundle's graph:
   `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
@@ -1255,9 +1255,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   kit, whose methods return exactly what the matching `torchlens.mechinterp` functions return).
   Appliances hang off this one door instead of adding methods to `Trace`; TorchLens's own and
   outside packages register the same way, with
-  `torchlens.accessors.register_appliance(name, factory, summary="", replace=False)`, where
+  `torchlens.appliances.register(name, factory, summary="", replace=False)`, where
   `factory` is a callable taking the trace or a lazily imported `"module:attribute"` path.
-  `torchlens.accessors.registered_appliances()` lists the names with their summaries. An
+  `torchlens.appliances.names()` lists the names with their summaries. An
   unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
   refuses `appliance_registration_invalid`. The word clashes with `torchlens.semantic.using(*recipes)`
@@ -1723,11 +1723,11 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `selection.resolve(trace)`
   returns a `tl.Selection` — frozen, trace-bound, an ordered tuple of
-  `SiteEntry(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
+  `Site(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
   first-class; `.empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
-  implements `__selection__`; `SiteEntry.mask` returns a FRESH materialization
+  implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
   inexactness rides the closed `provenance.relation` lattice
   (`exact | upper_bound | lower_bound | unknown`). `ResolvedSelection` is
@@ -1813,7 +1813,7 @@ no deprecation shim owed*
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
   member sites with no output index space refuse `non_tensor_site` /
   `no_index_space`. Both producers are pure functions over the ONE
-  executed-DAG graph substrate (`torchlens.selection_graph._TraceGraph`,
+  executed-DAG graph substrate (`torchlens._selection_graph._TraceGraph`,
   shared with the influence-geometry path machinery), the seam a future
   graph-MOTIF producer plugs into.
 
@@ -1916,7 +1916,7 @@ deprecation shim owed*
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore
   `do()` audit records); the frozen
-  `torchlens.selection_subspace.BasisProvenance` record is the programmatic
+  `torchlens._selection_subspace.BasisProvenance` record is the programmatic
   face. DIMENSION HONESTY: `dim=` names the bound site axis (default `-1`,
   the trailing feature axis; conv channel directions are `dim=1`); a site
   whose extent there differs from `d` refuses `selection_unresolvable` /
@@ -1950,7 +1950,7 @@ deprecation shim owed*
 
 **SelectionError / selection refusal codes** — *unstable — no deprecation
 shim owed; S2-gated*
-: One carrier class (`torchlens.selection.SelectionError`, catalogued in the
+: One carrier class (`torchlens._selection.SelectionError`, catalogued in the
   intervention error catalog) for the closed codes
   `selection_trace_mismatch`, `selection_bool_ambiguous`,
   `selection_kind_incompatible`, `selection_unresolvable` (closed reason set
@@ -2167,7 +2167,7 @@ shim owed*
   `VisualizationOptions.theme`.
 
 **theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `tl.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+: `tl.visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that

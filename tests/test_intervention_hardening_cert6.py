@@ -192,13 +192,13 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(intervention_ready=True, save_grads="all"),
     )
-    branch0 = log.find_sites(tl.output_at(0))
+    branch0 = log.find_sites(tl.intervention.output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"
     log.log_backward(branch0[0].out.sum())
 
     # A backward-only selector composed with a forward output-position selector
     # must bridge the GradFn site back to its paired forward op.
-    composed = log.find_sites(tl.output_at(0) & tl.grad_input())
+    composed = log.find_sites(tl.intervention.output_at(0) & tl.grad_input())
     assert len(composed) >= 1
 
 

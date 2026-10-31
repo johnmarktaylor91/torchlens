@@ -918,11 +918,11 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.data_classes.trace", "ResolvedPreprocessing"),
         ("torchlens.data_classes.trace", "Trace"),
         # Bundle Super* aligned-view wrappers (locked ``NodeView`` rename target).
-        ("torchlens.intervention._super.at", "SuperLayer"),
-        ("torchlens.intervention._super.at", "SuperLayerAccessor"),
-        ("torchlens.intervention._super.at", "SuperOp"),  # locked rename target
-        ("torchlens.intervention._super.at", "SuperOpAccessor"),
-        ("torchlens.intervention._super.at", "TraceAccessor"),
+        ("torchlens.intervention._super.super_op", "SuperLayer"),
+        ("torchlens.intervention._super.super_op", "SuperLayerAccessor"),
+        ("torchlens.intervention._super.super_op", "SuperOp"),  # locked rename target
+        ("torchlens.intervention._super.super_op", "SuperOpAccessor"),
+        ("torchlens.intervention._super.super_op", "TraceAccessor"),
         # Intervention-spec DATA types (portable recipe descriptors, not runtime
         # callables). ``Edit`` is instance-callable but INERT: ``__call__``
         # takes no attacker args and its ``factory`` is scrubbed to ``None`` before

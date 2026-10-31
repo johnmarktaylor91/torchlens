@@ -430,7 +430,7 @@ def module_call_repr_line(call: Any) -> str:
     module_class = getattr(call, "class_name", None)
     if not module_class:
         module_class = fail_open(lambda: call.module.class_name, lambda _error: "?")
-    label = getattr(call, "call_label", "?")
+    label = getattr(call, "label", "?")
     core = f"{module_class} ops={getattr(call, 'num_ops', '?')}"
     return envelope_line(core, address=label, bracket=("module_call",))
 

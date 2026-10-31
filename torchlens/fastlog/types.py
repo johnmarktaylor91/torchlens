@@ -855,8 +855,8 @@ class Recording(CapturedRun):
 
         index = len(self.grad_records)
         self.grad_records.append(record)
-        if record.ctx.pass_index is not None:
-            self.grad_by_pass.setdefault(record.ctx.pass_index, []).append(index)
+        if record.ctx.pass_number is not None:
+            self.grad_by_pass.setdefault(record.ctx.pass_number, []).append(index)
         if record.ctx.layer_label is not None:
             self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)

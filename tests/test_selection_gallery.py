@@ -45,7 +45,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 #: The two late-conv unit coordinates (channel, spatial) of the artifact.
 P = (3, 3)
@@ -130,7 +130,7 @@ def test_flagship_compositions_are_selections(gallery):
     # (exact RF geometry ops only).
     for resolved in (resolved_inter, resolved_union):
         assert len(resolved) == 1
-        assert resolved[0].site_key == ("input_1", 1)
+        assert resolved[0].key == ("input_1", 1)
         assert resolved[0].provenance.relation == "exact"
 
 
@@ -180,8 +180,8 @@ def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
     inter_deltas = _ablation_deltas(trace, inter)
     union_deltas = _ablation_deltas(trace, union)
     report = {
-        "inter": {"elements": sum(e.selected_count for e in resolved_inter)},
-        "union": {"elements": sum(e.selected_count for e in resolved_union)},
+        "inter": {"elements": sum(e.num_selected for e in resolved_inter)},
+        "union": {"elements": sum(e.num_selected for e in resolved_union)},
     }
     for name, deltas in (("inter", inter_deltas), ("union", union_deltas)):
         report[name].update({"d_u1": deltas[0], "d_u2": deltas[1], "d_out": deltas[2]})
@@ -196,9 +196,7 @@ def test_a4_control_is_size_matched_by_construction(gallery):
     trace, inter, union, ctrl = gallery
     resolved_inter = inter.resolve(trace)
     resolved_ctrl = ctrl.resolve(trace)
-    assert sum(e.selected_count for e in resolved_ctrl) == sum(
-        e.selected_count for e in resolved_inter
-    )
+    assert sum(e.num_selected for e in resolved_ctrl) == sum(e.num_selected for e in resolved_inter)
     # The control is disjoint from the union (sampled from its complement).
     union_mask = union.resolve(trace)[0].mask
     ctrl_mask = resolved_ctrl[0].mask

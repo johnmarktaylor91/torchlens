@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
-from torchlens.selection_subspace import BasisProvenance
+from torchlens._selection import SelectionError
+from torchlens._selection_subspace import BasisProvenance
 
 _RELU = "relu_1_2"
 _SIGMOID = "sigmoid_1_4"
@@ -87,7 +87,7 @@ def test_sparse_direction_selects_exactly_its_support(log):
     expected[:, [1, 4]] = True
     assert torch.equal(entry.mask, expected)
     assert entry.provenance.relation == "exact"
-    assert entry.selected_count == 4
+    assert entry.num_selected == 4
 
 
 def test_multi_vector_basis_unions_row_supports(log):
@@ -106,7 +106,7 @@ def test_dense_direction_supports_the_whole_axis(log):
     """A dense direction resolves to the whole site — the documented set claim."""
 
     resolved = tl.subspace(_RELU, torch.ones(_D), origin="dense test direction").resolve(log)
-    assert resolved[0].selected_count == 2 * _D
+    assert resolved[0].num_selected == 2 * _D
     assert bool(resolved[0].mask.all())
 
 
@@ -129,7 +129,7 @@ def test_resolution_is_geometry_only_unsaved_sites_resolve(model):
         resolved = tl.subspace(_RELU, _sparse_direction(), origin="unsaved-site test").resolve(
             trace
         )
-        assert resolved[0].selected_count == 4
+        assert resolved[0].num_selected == 4
     finally:
         trace.cleanup()
 
@@ -347,7 +347,7 @@ def test_basis_is_canonicalized_defensively(log):
     selection = tl.subspace(_RELU, basis, origin="mutation test")
     basis[0] = 99.0
     resolved = selection.resolve(log)
-    assert resolved[0].selected_count == 4  # still {1, 4} x batch 2
+    assert resolved[0].num_selected == 4  # still {1, 4} x batch 2
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +395,7 @@ def test_bare_layer_label_on_multipass_layer_supports_every_pass():
         direction = torch.tensor([1.0, 0.0, 0.0, 1.0])
         resolved = tl.subspace("tanh_1_2", direction, origin="recurrent probe").resolve(trace)
         assert len(resolved) == 3  # one entry per pass
-        assert {entry.site_key for entry in resolved} == {
+        assert {entry.key for entry in resolved} == {
             ("tanh_1_2", 1),
             ("tanh_1_2", 2),
             ("tanh_1_2", 3),

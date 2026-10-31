@@ -5,7 +5,7 @@ outcome-authority disease (PartialTrace: ``_OUTCOME_DELEGATE_FIELD``;
 Recording: ``_OUTCOME_SELF_AUTHORITY``): ``outcome_for(bundle)`` returned
 ``None`` while every member was COMPLETE, so ``tl.save(bundle)`` false-refused
 EVERY bundle (N1 status 'unknown' + a RuntimeWarning blaming the user for
-hand-building an object ``tl.bundle()`` built) while ``bundle.save()`` worked.
+hand-building an object ``tl.Bundle()`` built) while ``bundle.save()`` worked.
 
 This file pins the retirement of that disagreement:
 
@@ -79,13 +79,13 @@ def _failed_trace() -> Trace:
 
 @pytest.fixture(scope="module")
 def complete_pair():
-    """Bundle of two real COMPLETE captures, built by tl.bundle()."""
+    """Bundle of two real COMPLETE captures, built by tl.Bundle()."""
 
     with torch.no_grad():
         a = tl.trace(ThreeStageModel(), torch.ones(1, 3))
         b = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     try:
-        yield tl.bundle({"a": a, "b": b})
+        yield tl.Bundle({"a": a, "b": b})
     finally:
         a.cleanup()
         b.cleanup()
@@ -217,7 +217,7 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
     with torch.no_grad():
         complete = tl.trace(ThreeStageModel(), torch.ones(1, 3))
         halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    mixed = tl.bundle({"complete": complete, "halted": halted})
+    mixed = tl.Bundle({"complete": complete, "halted": halted})
     assert mixed.outcome.status is CaptureStatus.HALTED
 
     tl.save(mixed, tmp_path / "tl_door.tlspec")
@@ -238,7 +238,7 @@ def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> No
     with torch.no_grad():
         good = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     bad = _failed_trace()
-    mixed = tl.bundle({"good": good, "bad": bad})
+    mixed = tl.Bundle({"good": good, "bad": bad})
     assert mixed.outcome.status is CaptureStatus.FAILED
 
     with pytest.raises(CaptureOutcomeError) as tl_door:
@@ -256,7 +256,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
     with torch.no_grad():
         good = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     bad = _failed_trace()
-    mixed = tl.bundle({"good": good, "bad": bad})
+    mixed = tl.Bundle({"good": good, "bad": bad})
 
     # Container fold is FAILED, but the COMPLETE member's facts stay readable
     # and savable through its own per-member gate.

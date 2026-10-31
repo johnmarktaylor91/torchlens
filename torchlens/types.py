@@ -10,6 +10,8 @@ __tl_role__ = "FACADE"
 
 import torch
 
+from ._selection import Site
+from ._selection_subspace import BasisProvenance
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from .data_classes.aten_op import AtenOp, OpRef
 from .data_classes.attribute_write import AttributeWrite
@@ -22,7 +24,7 @@ from .data_classes.module import Module, ModuleCall
 from .data_classes.op import TensorLog
 from .data_classes.param import Param
 from .data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
-from .intervention import SaveLevel, SiteTable, SpecCompat, TargetManifestDiff, TensorSliceSpec
+from .intervention import SaveLevel, SpecCompat, TargetManifestDiff, TensorSliceSpec
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
 
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -33,6 +35,7 @@ __all__ = [
     "AtenOp",
     "AttributeWrite",
     "BackwardPass",
+    "BasisProvenance",
     "Buffer",
     "Bytes",
     "CaptureOutcome",
@@ -54,7 +57,7 @@ __all__ = [
     "PreHookEffect",
     "Quantity",
     "SaveLevel",
-    "SiteTable",
+    "Site",
     "SpecCompat",
     "TargetManifestDiff",
     "TensorLog",

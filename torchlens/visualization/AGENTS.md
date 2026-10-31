@@ -57,7 +57,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_segment_descriptors.py` | Segment descriptor construction and label derivation for collapse plans |
 | `_collapse_disclosures.py` | Human-facing collapse disclosure warnings (no-silent-floor, memo D4) |
 | `_collapse_frontier.py` | Collapse-optimizer frontier records (`_DecisionPoint` and the decision witnesses), `K_CAP`/`FRONTIER_CAP`, and the pure frontier-merge helpers |
-| `_bundle_graph.py` | Graphviz node/cluster/edge construction helpers behind `tl.show_bundle_graph` |
+| `_bundle_graph.py` | Graphviz node/cluster/edge construction helpers behind `tl.visualization.show_bundle_graph` |
 | `_rank_layout_internal/`, `_summary_internal/` | Rank-layout backend internals and `summary()` internals |
 | `renderers/` | Renderer protocol (`base.py`) and the Graphviz backend (`graphviz.py`) |
 
@@ -156,7 +156,7 @@ pure-Python rank layout above 20,000 cost units.
   collapse memo D4; R43 split from `auto_collapse.py`).
 - `_collapse_frontier.py`: frontier records, `K_CAP`/`FRONTIER_CAP` and the pure
   frontier-merge helpers (R43 split from `collapse_optimizer.py`).
-- `_bundle_graph.py`: Graphviz construction helpers for `tl.show_bundle_graph` (R43 split
+- `_bundle_graph.py`: Graphviz construction helpers for `tl.visualization.show_bundle_graph` (R43 split
   from `_user_public_impls.py`).
 - `request.py`: resolved visualization requests and output targets.
 

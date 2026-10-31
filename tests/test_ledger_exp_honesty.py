@@ -122,7 +122,7 @@ def test_apply_uninspectable_callable_falls_back_single_arg() -> None:
 
 def test_relate_is_a_real_method() -> None:
     assert hasattr(tl.Bundle, "relate")
-    assert hasattr(tl.Bundle, "derive_episode_status")
+    assert hasattr(tl.Bundle, "episode_status")
     assert inspect.isfunction(tl.Bundle.relate)
     bundle = _pair()
     bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
@@ -188,7 +188,7 @@ def test_member_construction_tracks_add_and_remove() -> None:
 @pytest.mark.smoke
 def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
     row = BundleOperation(
-        history_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
+        operation_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
     )
     payload = row.to_payload()
     rebuilt = BundleOperation.from_payload(payload)
@@ -201,16 +201,16 @@ def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
 
 def test_bundle_operation_refuses_unknown_kind_and_bad_seq() -> None:
     with pytest.raises(ValueError, match="closed"):
-        BundleOperation(history_id="a", seq=1, kind="mystery")
+        BundleOperation(operation_id="a", seq=1, kind="mystery")
     with pytest.raises(ValueError, match="positive int"):
-        BundleOperation(history_id="a", seq=0, kind="fork")
+        BundleOperation(operation_id="a", seq=0, kind="fork")
 
 
 @pytest.mark.smoke
 def test_operation_chain_break_refuses_typed() -> None:
-    first = BundleOperation(history_id="a", seq=1, kind="fork")
+    first = BundleOperation(operation_id="a", seq=1, kind="fork")
     # A second row that does not chain from the first.
-    orphan = BundleOperation(history_id="b", seq=2, kind="do", prev_operation_digest="0" * 64)
+    orphan = BundleOperation(operation_id="b", seq=2, kind="do", prev_operation_digest="0" * 64)
     with pytest.raises(BundleRelationError) as excinfo:
         validate_operation_chain([first, orphan])
     assert excinfo.value.fields["code"] == "bundle_lineage_invalid"
@@ -233,7 +233,7 @@ def test_member_construction_validator_fail_closed() -> None:
 @pytest.mark.smoke
 def test_effect_table_round_trip_and_refusals() -> None:
     table = MemberEffectTable(
-        history_id="op1",
+        operation_id="op1",
         rows=(
             MemberEffectRow(candidate_id="c0", status="completed", member_name="m0", value=1.5),
             MemberEffectRow(candidate_id="c1", status="released", value=0.25),
@@ -250,7 +250,7 @@ def test_effect_table_round_trip_and_refusals() -> None:
         MemberEffectRow(candidate_id="c", status="vanished")
     with pytest.raises(ValueError, match="duplicate"):
         MemberEffectTable(
-            history_id="op",
+            operation_id="op",
             rows=(
                 MemberEffectRow(candidate_id="c", status="completed"),
                 MemberEffectRow(candidate_id="c", status="failed"),

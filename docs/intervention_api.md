@@ -280,10 +280,10 @@ drawn as planned sites.
 
 ## Bundle
 
-Construct with `tl.bundle(...)` or `tl.Bundle(...)`:
+Construct with `tl.Bundle(...)` or `tl.Bundle(...)`:
 
 ```python
-bundle = tl.bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
+bundle = tl.Bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
 ```
 
 Common operations:

@@ -346,7 +346,7 @@ def test_pass_window_on_moe_episode_discloses(moe_episode: dict) -> None:
             warnings.simplefilter("always")
             try:
                 tl.pass_variance(above=-1.0, within=label).resolve(log)
-            except tl.selection.SelectionError:
+            except tl.errors.SelectionError:
                 continue
         coded = [
             w.message

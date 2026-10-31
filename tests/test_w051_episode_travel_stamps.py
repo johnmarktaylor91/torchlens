@@ -16,12 +16,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import at_step
 from torchlens.capture._annotations_travel import (
     scrub_episode_step_stamps,
     scrub_fresh_execution_annotations,
 )
 from torchlens.errors import TorchLensError
-from torchlens.intervention import at_step
 from torchlens.options import EpisodeSpec
 
 V = 16

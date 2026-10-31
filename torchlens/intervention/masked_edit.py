@@ -4,7 +4,7 @@ The scatter contract lives here: a whole-site mask returns the edit's
 behavior unchanged (recipe disclosure stamped); element masks wrap the hook
 factory with the EDIT-THEN-SCATTER step on a fresh tensor (stored capture
 truth is never written through). Consumers: the ACT selection do-plan
-(``torchlens.selection.build_selection_do_plan``) and the edge/param
+(``torchlens._selection.build_selection_do_plan``) and the edge/param
 substitution doors. Moved out of ``torchlens/selection.py`` under the R43
 file-size ratchet; semantics unchanged.
 """
@@ -18,14 +18,14 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import SiteEntry, _apply_invalid, _Mask
+from .._selection import Site, _apply_invalid, _Mask
 from .types import Edit
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]
 
 
 def _row_equivariance_facts(
-    edit: Edit, entry: SiteEntry, site_label: str
+    edit: Edit, entry: Site, site_label: str
 ) -> tuple[tuple[str, Any], ...]:
     """Apply the D23 mask-equivariance law to a row-coherent element-masked edit.
 
@@ -171,7 +171,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
     return factory
 
 
-def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: str) -> Any:
+def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) -> Any:
     """Derive the per-site edit spec/hook under the mask contract.
 
     A whole-site mask short-circuits the scatter and returns the edit's
@@ -190,7 +190,7 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
         "resolve_digest": digest,
         "site_key": repr(entry.site_key),
         "relation": entry.provenance.relation,
-        "selected": entry.selected_count,
+        "selected": entry.num_selected,
         "source": entry.provenance.source,
     }
     if isinstance(edit, Edit):

@@ -42,7 +42,7 @@ def owners():
     try:
         yield {
             "Trace": first,
-            "Bundle": tl.bundle({"a": first, "b": second}),
+            "Bundle": tl.Bundle({"a": first, "b": second}),
             "VisualizationOptions": VisualizationOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
         }

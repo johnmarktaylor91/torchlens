@@ -904,7 +904,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
             frame_address = frame.get("address")
         if frame_address is None:
             continue
-        frame_pass = getattr(frame, "pass_index", None)
+        frame_pass = getattr(frame, "pass_number", None)
         if frame_pass is None and isinstance(frame, dict):
             frame_pass = frame.get("pass_index")
         candidates.append(str(frame_address))

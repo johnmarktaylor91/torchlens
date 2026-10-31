@@ -130,8 +130,8 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
+    from .._selection import Selection, Selector
     from ..intervention.selectors import FacetSelector
-    from ..selection import Selection, Selector
 
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
@@ -156,7 +156,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         lifted = converter()
     if isinstance(lifted, (Selector, Selection)):
         resolved = lifted.resolve(baseline) if isinstance(lifted, Selector) else lifted
-        # ResolvedSelection is a Sequence of SiteEntry rows. Entry site keys
+        # ResolvedSelection is a Sequence of Site rows. Entry site keys
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
         labels = tuple(str(entry.site_key[0]) for entry in resolved)
@@ -818,7 +818,7 @@ def sweep_sites(
 
     operation = _record_sweep_operation(state)
     table = MemberEffectTable(
-        history_id=operation.operation_id,
+        operation_id=operation.operation_id,
         rows=tuple(state.rows),
         baseline_member="baseline",
         metric_repr=getattr(metric, "__qualname__", repr(metric)),
@@ -886,14 +886,14 @@ class EffectsView:
     def top(self, k: int) -> EffectsView:
         """Sub-view holding the k largest-effect measured candidates."""
 
-        keep = {name for name, _ in self.rank_changes(top_n=k)}
+        keep = {name for name, _ in self.rank_changes(k=k)}
         rows = tuple(
             row
             for row in self.table.rows
             if row.candidate_id == "__baseline__" or row.candidate_id in keep
         )
         sub_table = MemberEffectTable(
-            history_id=self.table.operation_id,
+            operation_id=self.table.operation_id,
             rows=rows,
             baseline_member=self.table.baseline_member,
             metric_repr=self.table.metric_repr,
@@ -958,7 +958,7 @@ def bundle_effects(bundle: Bundle, operation_id: str | None = None) -> EffectsVi
         raise BundleExperimentError(
             f"no effect table for operation {operation_id!r}; stored tables: {list(tables)}",
             code="effects_table_missing",
-            history_id=operation_id,
+            operation_id=operation_id,
         )
     selections = getattr(bundle, "_session_effect_selections", None)
     return EffectsView(table=tables[operation_id], _selections=selections)

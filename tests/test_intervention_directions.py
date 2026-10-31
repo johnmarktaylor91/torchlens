@@ -23,8 +23,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._selection_subspace import BasisProvenance
 from torchlens.intervention import Direction, _directions, direction_from_pairs
-from torchlens.selection_subspace import BasisProvenance
 
 _HIDDEN = 8
 _SITE = "layers.1"

@@ -159,13 +159,13 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
 
 
 def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
-    """Resolve a Selection operand to its SiteEntry rows on this trace.
+    """Resolve a Selection operand to its Site rows on this trace.
 
     A ResolvedSelection bound to a foreign trace refuses typed -- alignment
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens.selection import Selection, Selector
+    from torchlens._selection import Selection, Selector
 
     if isinstance(selection, Selection):
         resolved: Any = selection
@@ -206,7 +206,7 @@ def _selection_labels(trace: Trace, selection: Any) -> frozenset[str]:
     entries = _resolve_selection_operand(trace, selection)
     labels: set[str] = set()
     structural: set[str] = set()
-    for entry in entries:  # SiteEntry rows (family level: zero-mask sites count)
+    for entry in entries:  # Site rows (family level: zero-mask sites count)
         site_key = getattr(entry, "site_key", None)
         if isinstance(site_key, tuple) and site_key:
             layer_label = str(site_key[0])

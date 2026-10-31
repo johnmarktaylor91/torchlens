@@ -218,8 +218,8 @@ def _resolve_within_impl(
 
     if within is None:
         return (dict.fromkeys(index.edges), False)
-    from ...selection import Selection, Selector
-    from ...selection_values import _lift_within
+    from ..._selection import Selection, Selector
+    from ..._selection_values import _lift_within
 
     population: dict[str, torch.Tensor | None] = {}
     if isinstance(within, Selection):

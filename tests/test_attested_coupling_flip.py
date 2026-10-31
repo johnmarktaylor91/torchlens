@@ -20,8 +20,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import at_step
 from torchlens.errors.episode import EpisodeCaptureError
-from torchlens.intervention import at_step
 from torchlens.options import EpisodeSpec
 
 SEED = 1234

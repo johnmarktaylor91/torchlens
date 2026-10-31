@@ -24,18 +24,18 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention.selectors import CompositeSelector, NotSelector
-from torchlens.selection import (
+from torchlens._selection import (
     _FLIP,
     _RELATIONS,
     Selection,
     SelectionError,
     Selector,
-    SiteEntry,
+    Site,
     _difference_relation,
     _join_relation,
     _meet_relation,
 )
+from torchlens.intervention.selectors import CompositeSelector, NotSelector
 
 
 class _TwoConv(nn.Module):
@@ -73,7 +73,7 @@ def other_log():
 
 
 def _elements(resolved: Selection) -> int:
-    return sum(entry.selected_count for entry in resolved)
+    return sum(entry.num_selected for entry in resolved)
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def test_metaplan_flagship_expression(log):
     assert _elements(resolved_inter) <= _elements(resolved_union)
     # Overlapping late-layer RF boxes at the input site: one shared ACT site.
     assert len(resolved_union) == 1
-    assert resolved_union[0].site_key == ("input_1", 1)
+    assert resolved_union[0].key == ("input_1", 1)
 
 
 def test_mixin_dispatch_box_facet_unit_cross_shapes(log):
@@ -165,9 +165,9 @@ def test_op_and_layer_lift(log):
     resolved_layer = layer.__selection__().resolve(log)
     resolved_op = op.__selection__().resolve(log)
     assert resolved_layer == resolved_op  # single-pass model: same denotation
-    assert resolved_op[0].site_key == ("relu_1_2", 1)
+    assert resolved_op[0].key == ("relu_1_2", 1)
     assert resolved_op[0].provenance.relation == "exact"
-    assert resolved_op[0].selected_count == resolved_op[0].mask.numel()
+    assert resolved_op[0].num_selected == resolved_op[0].mask.numel()
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ def test_bool_refusal_pair(log):
 
 
 def _family(resolved: Selection) -> frozenset:
-    return frozenset(entry.site_key for entry in resolved)
+    return frozenset(entry.key for entry in resolved)
 
 
 def test_law_table(log):
@@ -275,7 +275,7 @@ def test_complement_empty_cells(log):
     restored = ~element_empty
     assert _family(restored) == _family(a)
     assert not restored.empty
-    assert restored[0].selected_count == restored[0].mask.numel()  # FULL masks
+    assert restored[0].num_selected == restored[0].mask.numel()  # FULL masks
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +386,7 @@ def test_kind_matrix_edge_cells_pinned_for_stage3():
     ACT x EDGE / PARAM x EDGE refuse via the same closed matrix when the
     edge-term producer lands (trace.edges, stage 3)."""
 
-    from torchlens.selection import _SELECTION_KINDS
+    from torchlens._selection import _SELECTION_KINDS
 
     assert _SELECTION_KINDS == ("ACT", "PARAM", "EDGE")
 
@@ -400,7 +400,7 @@ def test_query_composition_flattens_or(log):
         | tl.units("relu_1_2", [(0, 0, 3, 3)])
     )
     assert isinstance(query, Selector)
-    assert query.resolve(log)[0].selected_count == 3
+    assert query.resolve(log)[0].num_selected == 3
 
 
 def test_query_resolved_mixing(log, other_log):
@@ -411,7 +411,7 @@ def test_query_resolved_mixing(log, other_log):
     resolved = tl.units("relu_1_2", [(0, 0, 2, 2)]).resolve(log)
     mixed = resolved | query
     assert isinstance(mixed, Selection)
-    assert mixed[0].selected_count == 2
+    assert mixed[0].num_selected == 2
     mixed_reflected = query | resolved
     assert mixed_reflected == mixed
 
@@ -520,7 +520,7 @@ def test_mask_representation_parity(log):
     dense_box = torch.zeros(box.input_shape, dtype=torch.bool)
     dense_box[box.slices()] = True
     from_dense = tl.units("input_1", dense_box).resolve(log)
-    assert from_slices[0].site_key == from_dense[0].site_key
+    assert from_slices[0].key == from_dense[0].key
     assert torch.equal(from_slices[0].mask, from_dense[0].mask)
 
 
@@ -533,7 +533,7 @@ def test_mask_immutability_pin(log):
     handed_out = entry.mask
     assert handed_out is not entry.mask  # fresh materialization per access
     handed_out.fill_(True)
-    assert entry.selected_count == 1
+    assert entry.num_selected == 1
     assert resolved.resolve_digest == digest_before
     assert resolved == tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
 
@@ -557,15 +557,15 @@ def test_multi_site_value_type(log):
     """
 
     resolved = (tl.func("relu") | tl.func("conv2d")).__selection__().resolve(log)
-    keys = [entry.site_key for entry in resolved]
+    keys = [entry.key for entry in resolved]
     execution_order = {
         (op.layer_label, op.pass_index): index for index, op in enumerate(log.layer_list)
     }
     steps = [execution_order[key] for key in keys]
     assert steps == sorted(steps), "resolved ACT entries must read in execution order"
-    assert resolved[0].site_key == keys[0]
+    assert resolved[0].key == keys[0]
     assert len(resolved) == len(keys)
-    assert all(isinstance(entry, SiteEntry) for entry in resolved)
+    assert all(isinstance(entry, Site) for entry in resolved)
 
 
 def test_empty_selection_legal_end_to_end(log):
@@ -627,7 +627,7 @@ def test_resolver_refusals_no_index_space_and_non_tensor(log, monkeypatch):
         layer_label = "tuple_1_1"
         out = ("not", "a", "tensor")
 
-    import torchlens.selection as selection_module
+    import torchlens._selection as selection_module
 
     monkeypatch.setattr(
         selection_module, "_forward_ops", lambda trace: (_NoShapeOp(), _NonTensorOp())
@@ -648,9 +648,9 @@ def test_facet_lift_and_refusal_rows(log):
     op = log["relu_1_2"].ops[0]
     spec = FacetSpec.from_home(op)
     resolved = spec.__selection__().resolve(log)
-    assert resolved[0].site_key == ("relu_1_2", 1)
+    assert resolved[0].key == ("relu_1_2", 1)
     assert resolved[0].provenance.relation == "exact"
-    assert resolved[0].selected_count == resolved[0].mask.numel()
+    assert resolved[0].num_selected == resolved[0].mask.numel()
 
     # Mixin dispatch on the facet producer
     assert isinstance(spec | op, Selector)
@@ -685,12 +685,12 @@ def test_gradient_rf_lift():
     assert isinstance(selection, Selector)
     resolved = selection.resolve(armed)
     assert resolved[0].provenance.relation == "exact"
-    assert resolved[0].selected_count == int(gradient.support_mask.sum().item())
+    assert resolved[0].num_selected == int(gradient.support_mask.sum().item())
     # Mixin dispatch with a geometric box at the same site
     box = armed_op.receptive_field.at("center")
     combined = gradient | box
     assert isinstance(combined, Selector)
-    assert combined.resolve(armed)[0].selected_count >= resolved[0].selected_count
+    assert combined.resolve(armed)[0].num_selected >= resolved[0].num_selected
 
 
 def test_box_lift_relation_and_shape_guard(log):
@@ -700,7 +700,7 @@ def test_box_lift_relation_and_shape_guard(log):
     resolved = box.__selection__().resolve(log)
     expected = "exact" if (box.exact and not box.sparse_possible) else "upper_bound"
     assert resolved[0].provenance.relation == expected
-    assert resolved[0].site_key == ("input_1", 1)
+    assert resolved[0].key == ("input_1", 1)
 
 
 # ---------------------------------------------------------------------------
@@ -792,7 +792,7 @@ def test_internal_closed_set_guards_raise(log):
     hiding these behind ``pragma: no cover``.
     """
 
-    from torchlens.selection import (
+    from torchlens._selection import (
         _compose_resolved,
         _resolve_node,
         _SelectionOperand,

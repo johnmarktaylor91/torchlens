@@ -62,7 +62,7 @@ def _canonical_bundle() -> tl.Bundle:
             tl.zero_ablate(),
             intervention=tl.options.InterventionOptions(confirm_mutation=True),
         )
-    return tl.bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
+    return tl.Bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
 
 def _normalize_svg(svg: str) -> bytes:
@@ -208,7 +208,7 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     model = torch.nn.Linear(3, 2).eval()
     left = tl.trace(model, torch.randn(1, 3))
     right = left.fork("patched")
-    bundle = tl.bundle({"base": left, "patched": right}, baseline="base")
+    bundle = tl.Bundle({"base": left, "patched": right}, baseline="base")
 
     outpath = tmp_path / "member_caption"
     dot_source = bundle.show_diff(

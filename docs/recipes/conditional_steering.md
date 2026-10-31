@@ -185,7 +185,7 @@ count from 0, so a four-token generation (steps 0 to 3) never reaches step 4:
 
 ```python
 # recipe-test: tool=transformers expected='bind_zero_fire'
-from torchlens.intervention import at_step
+from torchlens import at_step
 
 late = tl.when(tl.module(CONDITION_SITE) & at_step(4), read_condition).merge(
     tl.when(tl.module(STEER_SITE), gated_steer)

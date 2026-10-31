@@ -100,7 +100,7 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     assert repr(tl.module("block")) == "tl.module('block')"
     assert repr(tl.label_contains("relu")) == "tl.label_contains('relu')"
     assert repr(tl.in_module("block")) == "tl.in_module('block')"
-    assert repr(tl.output_at("logits")) == "tl.output_at(('logits',))"
+    assert repr(tl.intervention.output_at("logits")) == "tl.intervention.output_at(('logits',))"
     assert repr(tl.without_op()) == "tl.without_op()"
 
 

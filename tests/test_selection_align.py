@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 #: Committed index set for the aligned patch rows.
 IDX = ((0, 0, 1, 1), (0, 1, 2, 2))
@@ -100,7 +100,7 @@ def test_align_to_rebinds_with_masks_and_provenance(pair):
     assert aligned._trace is trace_b
     assert len(aligned) == len(resolved)
     for source_entry, aligned_entry in zip(resolved, aligned, strict=True):
-        assert aligned_entry.site_key == source_entry.site_key
+        assert aligned_entry.key == source_entry.key
         assert aligned_entry.structural_site_key == source_entry.structural_site_key
         assert torch.equal(aligned_entry.mask, source_entry.mask)
         assert aligned_entry.provenance.relation == source_entry.provenance.relation
@@ -160,7 +160,7 @@ def test_alignment_mask_stays_immutable(pair):
     mask = aligned[0].mask
     mask.zero_()
     assert aligned.resolve_digest == digest
-    assert aligned[0].selected_count == len(IDX)
+    assert aligned[0].num_selected == len(IDX)
 
 
 def test_refusal_kind_unsupported(pair):
@@ -223,7 +223,7 @@ def test_refusal_site_key_unavailable(pair):
 
     import dataclasses
 
-    from torchlens.selection import Selection
+    from torchlens._selection import Selection
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)

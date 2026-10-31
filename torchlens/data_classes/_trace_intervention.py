@@ -600,7 +600,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         pending naming-session ratification.
         """
 
-        from ..selection import _trace_edge_records
+        from .._selection import _trace_edge_records
 
         return _trace_edge_records(self)
 
@@ -1065,8 +1065,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             attached (for the caller's failure cleanup).
         """
 
+        from .._selection import Selection, Selector
         from ..intervention.spec import InterventionSpec as PublicInterventionSpec
-        from ..selection import Selection, Selector
 
         if isinstance(hooks_or_site, PublicInterventionSpec):
             # C03 spec door: do(spec) applies the whole immutable spec through
@@ -1165,7 +1165,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             return False
         if not all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value):
             return False
-        from ..selection import Selection, Selector
+        from .._selection import Selection, Selector
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1175,7 +1175,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     def _selection_batch_kind(selection: Any) -> str:
         """The selection kind (``ACT``/``PARAM``/``EDGE``) of one batch pair's target."""
 
-        from ..selection import Selection, Selector, _lift
+        from .._selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         if slice_module is not None and isinstance(selection, slice_module.TraceSlice):
@@ -1221,7 +1221,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             batch, which has already propagated.
         """
 
-        from ..selection import Selection, Selector, _lift
+        from .._selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1270,7 +1270,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
 
-        from ..selection import build_selection_do_plan
+        from .._selection import build_selection_do_plan
 
         resolved, plan, audit = build_selection_do_plan(self, selection, edit)
         leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
@@ -1389,8 +1389,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             ids attached for the hook kind (empty otherwise).
         """
 
+        from .._selection import _lift, build_selection_do_plan
         from ..intervention.errors import EngineDispatchError
-        from ..selection import _lift, build_selection_do_plan
 
         lifted = _lift(selection)
         if lifted is not None and lifted.kind == "EDGE":
@@ -1502,7 +1502,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> str:
         """Apply one EDGE-kind selection edit through the edge-substitution path."""
 
-        from ..selection import Selection, SelectionError
+        from .._selection import Selection, SelectionError
 
         if edit is None:
             raise ValueError(
@@ -1552,7 +1552,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         default on the replay path; rerun/set_only keep refusing typed).
         """
 
-        from ..selection import Selection, SelectionError
+        from .._selection import Selection, SelectionError
 
         if edit is None:
             raise ValueError(
@@ -1594,11 +1594,11 @@ class TraceInterventionMixin(_TraceMixinBase):
         disclosure matches the hook path.
         """
 
+        from .._selection import _apply_invalid
         from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key
         from ..intervention.types import Edit
-        from ..selection import _apply_invalid
 
         pending_updates: dict[str, torch.Tensor] = {}
         pending_records: dict[str, list[Any]] = {}

@@ -42,7 +42,7 @@
   measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —
   per-row measured `fire_count` (zero and multiple fires first-class), the
   deterministic header `intervention_digest`, `fidelity_basis="perturbed"` on
-  replacing fires, the step-qualified selector `torchlens.intervention.at_step(...)`
+  replacing fires, the step-qualified selector `torchlens.at_step(...)`
   (live + post hoc via `Op.episode_step` stamps), `trace.episode_coupling`
   (recompute-and-compare capture-digest binding + per-segment facts that never span a
   measured break), and the replay law: `run()` on coupled products refuses

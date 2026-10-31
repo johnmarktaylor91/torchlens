@@ -34,11 +34,9 @@ from ._metrics import (
 )
 from ._position_edits import at_positions
 from ._subspace_edits import subspace_ablate, subspace_interchange
-from ._super.at import (
-    SuperAtenOp,
+from ._super.super_op import (
     SuperLayer as SuperLayer,
     SuperLayerAccessor as SuperLayerAccessor,
-    SuperOp,
     SuperOpAccessor as SuperOpAccessor,
     TraceAccessor as TraceAccessor,
 )
@@ -47,7 +45,6 @@ from ._topology.topology import (
     SupergraphNode as SupergraphNode,
     TopologyDiff as TopologyDiff,
     build_supergraph as build_supergraph,
-    compare_topology,
 )
 
 # F01 surgery live lanes: the capture-free bound executor, the bind-side
@@ -132,7 +129,7 @@ from .population import OneDatum, PerRowDatums, Reference, reference
 from .predicates import add, replace_with
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget, region
 from .replay import push, push_from
-from .resolver import SiteTable, resolve_sites
+from .resolver import resolve_sites
 from .runtime import do
 from .save import (
     SaveLevel,
@@ -143,7 +140,6 @@ from .save import (
     save_intervention,
 )
 from .selectors import (
-    at_step,
     facet,
     followed_by,
     func,
@@ -163,7 +159,6 @@ from .selectors import (
     module,
     output_at,
     preceded_by,
-    site,
     where,
     without_op,
 )
@@ -219,7 +214,6 @@ from .types import (
 )
 
 if TYPE_CHECKING:  # typing-only mirror of the lazy names below
-    from .bundle import Bundle
     from .rerun import run
 
 __all__ = [
@@ -228,13 +222,11 @@ __all__ = [
     "AppendStateValidationWarning",
     "AppendStreamingNotSupportedError",
     "add",
-    "at_step",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",
     "BatchNormTrainModeWarning",
     "BindReport",
     "BoundInterventionExecutor",
-    "Bundle",
     "BundleMemberError",
     "BundleRelationshipError",
     "CapturedArgTemplate",
@@ -293,11 +285,8 @@ __all__ = [
     "SpecCompat",
     "SpecMutationError",
     "SpecPortabilityError",
-    "SuperAtenOp",
-    "SiteTable",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
-    "SuperOp",
     "TargetManifestDiff",
     "TargetSpec",
     "TensorSliceSpec",
@@ -307,7 +296,6 @@ __all__ = [
     "clamp",
     "check_spec_compat",
     "classify_where",
-    "compare_topology",
     "compose",
     "label_contains",
     "cosine_distance",
@@ -374,7 +362,6 @@ __all__ = [
     "save_intervention",
     "scramble_elements",
     "scale",
-    "site",
     "splice_module",
     "sites",
     "steer",
@@ -396,7 +383,6 @@ __all__ = [
 # this ``__init__`` has finished executing, so no partially-initialized module is
 # ever observed.
 _LAZY_NAMES: dict[str, str] = {
-    "Bundle": ".bundle",
     "run": ".rerun",
 }
 

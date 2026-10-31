@@ -489,7 +489,7 @@ def _fork_chain_summary(trace: Trace) -> str:
         Fork chain from root to current log.
     """
 
-    names = [str(getattr(trace, "trace_label", None))]
+    names = [str(getattr(trace, "name", None))]
     seen = {id(trace)}
     current = trace
     while True:
@@ -499,7 +499,7 @@ def _fork_chain_summary(trace: Trace) -> str:
         parent = parent_ref()
         if parent is None or id(parent) in seen:
             break
-        names.append(str(getattr(parent, "trace_label", None)))
+        names.append(str(getattr(parent, "name", None)))
         seen.add(id(parent))
         current = parent
     return " <- ".join(reversed(names))

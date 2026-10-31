@@ -252,7 +252,7 @@ class CapturedRun:
 
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
-            return getattr(ctx, "pass_index", None)
+            return getattr(ctx, "pass_number", None)
         return getattr(activation, "pass_index", None)
 
     def _activation_address(self, activation: Any) -> str | None:

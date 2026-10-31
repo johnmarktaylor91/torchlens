@@ -5,7 +5,7 @@ Pins here:
 - ``Trace.draw_backward(theme=...)`` and the functional
   ``torchlens.visualization.draw_backward(visualization=VisualizationOptions(theme=...))``
   paint the skin's page, text ink and typography; an unknown skin refuses;
-- ``tl.show_bundle_graph(theme=..., show_legend=True)`` uses the skin's page and
+- ``tl.visualization.show_bundle_graph(theme=..., show_legend=True)`` uses the skin's page and
   Helvetica face, ``draw``'s node shapes and fills, the key under the header,
   and member lists only on nodes and arrows not every member runs;
 - the dark bundle diff caption takes the page's text ink.
@@ -100,7 +100,7 @@ def test_functional_draw_backward_reads_the_grouped_theme(tmp_path: Path) -> Non
 def test_bundle_picture_follows_draw(tmp_path: Path) -> None:
     """Skin page and face, draw's shapes and fills, the key, member lists only where they differ."""
 
-    dot = tl.show_bundle_graph(
+    dot = tl.visualization.show_bundle_graph(
         _bundle(),
         vis_outpath=str(tmp_path / "bundle_dark"),
         vis_save_only=True,
@@ -127,7 +127,7 @@ def test_bundle_member_lists_appear_where_members_differ(tmp_path: Path) -> None
     torch.manual_seed(0)
     small = tl.trace(nn.Sequential(nn.Linear(3, 3)), torch.randn(1, 3))
     large = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
-    dot = tl.show_bundle_graph(
+    dot = tl.visualization.show_bundle_graph(
         tl.Bundle({"small": small, "large": large}, baseline="small"),
         vis_outpath=str(tmp_path / "bundle_diff_members"),
         vis_save_only=True,

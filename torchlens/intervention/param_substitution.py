@@ -63,10 +63,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..selection import (
+from .._selection import (
     Selection,
     SelectionError,
-    SiteEntry,
+    Site,
     _apply_invalid,
 )
 from .masked_edit import _derive_masked_edit, _validate_edited
@@ -114,7 +114,7 @@ def _underivable(message: str, **fields: Any) -> SelectionError:
     )
 
 
-def _param_for_entry(trace: Trace, entry: SiteEntry) -> Param:
+def _param_for_entry(trace: Trace, entry: Site) -> Param:
     """Return the Param record addressed by one resolved PARAM entry."""
 
     address = entry.site_key[0]
@@ -223,7 +223,7 @@ def _param_occurrences_for_op(
 
 
 def _substituted_value(
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     consumed: torch.Tensor,
@@ -324,7 +324,7 @@ def apply_param_substitution_do(
     staging = _Staging()
     try:
         for entry in resolved:
-            if entry.selected_count == 0:
+            if entry.num_selected == 0:
                 continue
             _stage_param_entry(trace, entry, edit, resolved.resolve_digest, staging)
         _propagate_staged(trace, staging, strict=strict)
@@ -341,7 +341,7 @@ def apply_param_substitution_do(
 
 def _stage_param_entry(
     trace: Trace,
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     staging: _Staging,
@@ -439,7 +439,7 @@ def _staged_param_value(payload: Any, param_address: str) -> torch.Tensor | None
 
 
 def _derive_entry_occurrences(
-    trace: Trace, entry: SiteEntry
+    trace: Trace, entry: Site
 ) -> list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]]:
     """Resolve one PARAM entry to ``(op, consumer_label, occurrences)`` rows."""
 
@@ -523,7 +523,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_index", 0) or 0)
+                int(getattr(child_op, "pass_number", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():
@@ -701,7 +701,7 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         the mask does not match the buffer's shape.
     """
 
-    from ..selection import _ParamTerm, units
+    from .._selection import _ParamTerm, units
 
     node = getattr(selection, "_node", None)
     if not isinstance(node, _ParamTerm):

@@ -170,7 +170,7 @@ class BaseSelector:
         BEFORE lifting (``~lift(s) != lift(~s)``, pinned non-law).
         """
 
-        from ..selection import _selection_from_selector
+        from .._selection import _selection_from_selector
 
         return _selection_from_selector(self)
 

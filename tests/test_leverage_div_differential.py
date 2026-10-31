@@ -18,9 +18,9 @@ from test_leverage_div_fixtures import (
 )
 
 import torchlens as tl
+from torchlens._selection import SelectionError
 from torchlens.differential import diff_report
 from torchlens.errors._base import TorchLensError
-from torchlens.selection import SelectionError
 
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 

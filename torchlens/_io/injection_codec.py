@@ -428,7 +428,7 @@ def _pass_qualified_label(op: Any) -> str:
     """The ``layer_label:pass_index`` spelling of one restored model op row."""
 
     layer_label = str(getattr(op, "layer_label", ""))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     return f"{layer_label}:{pass_index}" if pass_index is not None else layer_label
 
 

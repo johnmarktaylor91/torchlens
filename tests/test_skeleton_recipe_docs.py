@@ -171,7 +171,7 @@ def test_page_states_no_torchlens_verb_edits_the_model() -> None:
     assert "tests/test_skeleton_recipe_docs.py" in text
     # The authored spellings the fences depend on; a rename must retouch the page.
     for spelling in (
-        "tl.intervention.site(",
+        "tl.site(",
         "attach_hooks(",
         "tl.io.save_intervention(",
         "tl.io.load_intervention_spec(",

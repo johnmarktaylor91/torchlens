@@ -36,13 +36,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from .selection import (
+from ._selection import (
     SelectionError,
     Selector,
     _lift,
     _SelectionOperand,
 )
-from .selection_graph import (
+from ._selection_graph import (
     _edge_partition,
     _lift_region_group,
     _region_labels,
@@ -336,12 +336,12 @@ class TraceSlice(_SelectionOperand):
         space (``non_tensor_site`` / ``no_index_space``).
         """
 
-        from .selection_graph import _SliceMembersTerm
+        from ._selection_graph import _SliceMembersTerm
 
         sites = tuple(
             (
                 getattr(self._graph.ops[label], "layer_label", None) or label,
-                getattr(self._graph.ops[label], "pass_index", 1) or 1,
+                getattr(self._graph.ops[label], "pass_number", 1) or 1,
             )
             for label in self._labels
         )
@@ -352,7 +352,7 @@ def build_slice_between(trace: Any, sources: Any, sinks: Any) -> TraceSlice:
     """Build the influence-region slice for ``trace.between(sources, sinks)``.
 
     Shares the exact member-set machinery with the ``tl.between`` producer
-    (:func:`torchlens.selection_graph.resolve_between_labels`): the
+    (:func:`torchlens._selection_graph.resolve_between_labels`): the
     presenter and the Selection denote the same region.
     """
 
@@ -374,7 +374,7 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
     lifted = _lift(selection_like)
     if lifted is None:
         if isinstance(selection_like, str):
-            from .selection import _WholeSiteTerm
+            from ._selection import _WholeSiteTerm
 
             lifted = Selector(
                 _WholeSiteTerm(site_label=selection_like, pass_index=None), kind="ACT"

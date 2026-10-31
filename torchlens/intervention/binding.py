@@ -657,7 +657,7 @@ def _consider_op(
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
             module_pass_number=(
-                getattr(module_frame, "pass_index", None) if module_frame else None
+                getattr(module_frame, "pass_number", None) if module_frame else None
             ),
         )
         try:

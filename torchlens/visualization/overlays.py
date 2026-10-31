@@ -34,13 +34,13 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     """Lower a Selection-shaped overlay source to per-site SELECTED COUNTS.
 
     The element-mask law (leverage D-4): a consumer of a Selection-shaped
-    source reads element masks / ``selected_count``, never family membership
+    source reads element masks / ``num_selected``, never family membership
     — painting whole sites for a sparse element selection is the measured
     2.7x overpaint. Touched sites with zero selected elements stay in the
     mapping as an honest ``0``.
     """
 
-    from ..selection import Selection, Selector
+    from .._selection import Selection, Selector
 
     if isinstance(overlay, Selector):
         overlay = overlay.resolve(trace)
@@ -50,7 +50,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
             return overlay
         overlay = selection_hook().resolve(trace)
     if overlay._trace is not trace:
-        from ..selection import SelectionError
+        from .._selection import SelectionError
 
         raise SelectionError(
             "the node_overlay selection is resolved against a DIFFERENT "
@@ -189,8 +189,8 @@ def external_overlay_value(node: Any, scores: OverlayScores | Callable[[Any], An
     candidates = (
         getattr(node, "layer_label", None),
         getattr(node, "label", None),
-        getattr(node, "layer_label_short", None),
-        getattr(node, "label_short", None),
+        getattr(node, "short_layer_label", None),
+        getattr(node, "short_label", None),
     )
     for candidate in candidates:
         if isinstance(candidate, str) and candidate in scores:

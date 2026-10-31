@@ -55,7 +55,7 @@ def _validate_graph_structure(trace: Trace) -> None:
     known = _known_relation_targets(ops)
     for op in ops:
         label = str(getattr(op, "label", "<unknown>"))
-        pass_index = getattr(op, "pass_index", None)
+        pass_index = getattr(op, "pass_number", None)
         num_passes = getattr(op, "num_passes", None)
         if not (
             _is_int(pass_index)

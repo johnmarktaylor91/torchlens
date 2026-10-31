@@ -48,7 +48,7 @@ def _rich_bundle() -> tl.Bundle:
     child = bundle.fork()
     operation = child.operations[0]
     child._effect_tables[operation.operation_id] = MemberEffectTable(
-        history_id=operation.operation_id,
+        operation_id=operation.operation_id,
         rows=(
             MemberEffectRow(
                 candidate_id="c0",

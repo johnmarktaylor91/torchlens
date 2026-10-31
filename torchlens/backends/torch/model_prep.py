@@ -313,7 +313,7 @@ def _refuse_release_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
+    model_label = getattr(trace, "model_name", None) or getattr(trace, "model_class_name", None)
     raise CaptureContextError(
         "tl.release_model() was called while a TorchLens capture is still active"
         + (f" for model {model_label!r}" if model_label else ""),
@@ -2360,15 +2360,15 @@ def module_forward_decorator(
             frame = _mstack.push_frame(trace, state.module_stack, module)
             from .prehook_provenance import bind_invocation
 
-            bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+            bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
                 op_log_or_op_data={
-                    "label": f"{frame.address}:enter:{frame.pass_index}",
+                    "label": f"{frame.address}:enter:{frame.pass_number}",
                     "address": frame.address,
                     "module_type": frame.module_type,
-                    "module_pass_index": frame.pass_index,
+                    "module_pass_index": frame.pass_number,
                 },
                 module_stack=state.module_stack,
                 history=tuple(state.history),
@@ -2436,7 +2436,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=frame.module_type,
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2446,7 +2446,7 @@ def module_forward_decorator(
                     state,
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                 )
                 return out
             finally:
@@ -2455,10 +2455,10 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": frame.module_type,
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_index": frame.pass_number,
                     },
                     module_stack=state.module_stack,
                     history=tuple(state.history),
@@ -2522,7 +2522,7 @@ def module_forward_decorator(
         frame = _mstack.push_frame(trace, trace._module_capture_ws.exhaustive_module_stack, module)
         from .prehook_provenance import bind_invocation
 
-        bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+        bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
@@ -2549,7 +2549,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=_module_type(module),
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2585,17 +2585,17 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": _module_type(module),
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_index": frame.pass_number,
                         # tl.module evaluates capture-time subjects through
                         # output_of_module_calls, so a module-boundary halt
                         # (incl. compiled stop_after= module addresses) can only
                         # fire if this exit ctx names its own module call; the
                         # exhaustive path previously left it empty and every
                         # tl.module halt silently ran the full forward.
-                        "output_of_module_calls": (f"{frame.address}:{frame.pass_index}",),
+                        "output_of_module_calls": (f"{frame.address}:{frame.pass_number}",),
                     },
                     module_stack=[],
                     history=(),

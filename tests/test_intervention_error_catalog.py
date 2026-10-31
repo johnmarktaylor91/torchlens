@@ -492,7 +492,7 @@ def test_bundle_member_error_raised_for_missing_bundle_site() -> None:
     x = torch.randn(1, 3)
     first = _capture(_ReluAdd(), x)
     second = _capture(_ReluAdd(), x)
-    bundle = tl.bundle({"first": first, "second": second})
+    bundle = tl.Bundle({"first": first, "second": second})
 
     with pytest.raises(terrors.BundleMemberError, match="failed to resolve"):
         bundle.node(tl.func("missing"))

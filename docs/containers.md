@@ -45,10 +45,10 @@ Input-container reconstruction and module-boundary container records require con
 
 ## Nested Output Selection
 
-`tl.output_at(path)` selects an output leaf by nested path:
+`tl.intervention.output_at(path)` selects an output leaf by nested path:
 
 ```python
-site = trace.resolve_sites(tl.output_at(("past_key_values", 0, 1))).first()
+site = trace.resolve_sites(tl.intervention.output_at(("past_key_values", 0, 1))).first()
 ```
 
 The selector matches TorchLens typed paths for dict keys, HuggingFace `ModelOutput` keys, namedtuple/dataclass fields, and tuple/list indices.

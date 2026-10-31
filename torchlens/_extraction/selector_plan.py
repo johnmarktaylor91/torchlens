@@ -152,7 +152,7 @@ def is_selector_request(layers: Any) -> bool:
         door).
     """
 
-    from ..selection import Selector
+    from .._selection import Selector
 
     if isinstance(layers, Selector):
         _refuse_partial_units(layers)

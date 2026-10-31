@@ -270,6 +270,6 @@ def bundle_vary(
             failed_member=failed_member,
             outcomes=dict(outcomes),
             material_action_completed=True,
-            history_id=operation.operation_id,
+            operation_id=operation.operation_id,
         ) from original
     return bundle

@@ -96,13 +96,13 @@ lives at `transformer.h.1.inner.<child>`, and a brand-new
 ## Step 1: author the recipe with structural addresses, save it
 
 Trace the original model and attach your analysis recipe with a **structural
-selector** -- `tl.intervention.site(...)` addresses by module path, op type,
+selector** -- `tl.site(...)` addresses by module path, op type,
 and occurrence, never by recorded numbering. Then save the recipe to disk.
 
 ```python
 import torchlens as tl
 
-recipe = tl.when(tl.intervention.site(module_path="lm_head"), tl.scale(0.5))
+recipe = tl.when(tl.site(module_path="lm_head"), tl.scale(0.5))
 original_log = tl.trace(model, input_ids)
 original_log.attach_hooks(recipe, confirm_mutation=True)
 tl.io.save_intervention(original_log, "recipe.tlspec")
@@ -110,7 +110,7 @@ tl.io.save_intervention(original_log, "recipe.tlspec")
 
 Two authoring choices matter for later alignment:
 
-- **Address structurally.** `tl.intervention.site(module_path="lm_head")` is a
+- **Address structurally.** `tl.site(module_path="lm_head")` is a
   structural address, valid on any capture of any model that has that site.
   A label selector like `"linear_1_121"` is a recorded address -- it names
   this capture's numbering and cannot survive renumbering.
@@ -188,7 +188,7 @@ recipe.
 
 ```python
 inner_rule = tl.when(
-    tl.intervention.site(module_path="transformer.h.1.mlp.c_proj", op_type="addmm"),
+    tl.site(module_path="transformer.h.1.mlp.c_proj", op_type="addmm"),
     tl.zero_ablate(),
 )
 original_log.attach_hooks(inner_rule, confirm_mutation=True)
@@ -258,13 +258,13 @@ the same capture it was saved from comes back `EXACT`.
 ```python
 print(
     edited_log.find_sites(
-        tl.intervention.site(
+        tl.site(
             module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
         )
     )
 )
 recipe_v2 = tl.when(
-    tl.intervention.site(
+    tl.site(
         module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
     ),
     tl.zero_ablate(),
@@ -294,7 +294,7 @@ EXACT
   intervention workflow; see [intervention_api.md](intervention_api.md) and
   the save-level table in
   [intervention_explainers.md](intervention_explainers.md).
-- **Spelling stability.** `op.site_key`, `tl.intervention.site(...)`, and the
+- **Spelling stability.** `op.site_key`, `tl.site(...)`, and the
   compatibility checker's field spellings are DOCUMENTED-UNSTABLE pending
   naming-session ratification; the workflow itself is the supported path.
 - **This page is executable.** The realism test

@@ -444,7 +444,7 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(
             intervention_ready=True,
-            hooks={tl.output_at(1): _zero_hook},
+            hooks={tl.intervention.output_at(1): _zero_hook},
         ),
     )
 

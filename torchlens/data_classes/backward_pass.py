@@ -348,7 +348,7 @@ class BackwardPassAccessor(Accessor[BackwardPass]):
 
         items = [backward_passes[index] for index in sorted(backward_passes)]
         super().__init__(
-            {str(pass_record.pass_index): pass_record for pass_record in items},
+            {str(pass_record.pass_number): pass_record for pass_record in items},
             item_list=items,
         )
 
@@ -357,6 +357,6 @@ class BackwardPassAccessor(Accessor[BackwardPass]):
 
         key = str(pass_index)
         if key not in self._dict:
-            available = [pass_record.pass_index for pass_record in self._list]
+            available = [pass_record.pass_number for pass_record in self._list]
             raise KeyError(f"Backward pass {pass_index} not found. Available passes: {available}.")
         return self._dict[key]

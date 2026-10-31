@@ -352,8 +352,8 @@ def _step_intervention(
         mask selects anything.
     """
 
+    from torchlens._selection import units
     from torchlens.intervention.predicates import replace_with
-    from torchlens.selection import units
 
     if not any(bool(mask.any()) for mask in masks):
         return ()

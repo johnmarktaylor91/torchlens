@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 _RELU = "relu_1_2"
 _TANH = "tanh_1_2"
@@ -185,7 +185,7 @@ def test_top_changed_matches_manual_ranking(log, log_b):
     expected = torch.zeros_like(keys, dtype=torch.bool)
     expected[torch.argsort(keys, descending=True, stable=True)[:7]] = True
     assert torch.equal(resolved[0].mask.reshape(-1), expected)
-    assert resolved[0].selected_count == 7
+    assert resolved[0].num_selected == 7
     assert _relations(resolved) == ["exact"]
 
 
@@ -194,7 +194,7 @@ def test_top_changed_fraction_least_moved_and_signed(log, log_b):
 
     numel = log[_RELU].out.numel()
     fractional = tl.top_changed(log_b, _RELU, fraction=0.01).resolve(log)
-    assert fractional[0].selected_count == math.ceil(0.01 * numel)
+    assert fractional[0].num_selected == math.ceil(0.01 * numel)
     least = tl.top_changed(log_b, _RELU, 4, largest=False).resolve(log)
     abs_keys = _delta(log, log_b, _RELU).abs().reshape(-1)
     expected_least = torch.zeros_like(abs_keys, dtype=torch.bool)
@@ -224,7 +224,7 @@ def test_global_default_population_spans_saved_sites(log, log_b):
 
     resolved = tl.top_changed(log_b, None, 10).resolve(log)
     assert len(resolved) > 1
-    assert sum(entry.selected_count for entry in resolved) == 10
+    assert sum(entry.num_selected for entry in resolved) == 10
 
 
 def test_changed_nan_delta_never_satisfies():
@@ -365,7 +365,7 @@ def test_structural_site_key_mismatch_refuses():
     subject = tl.trace(_A(), torch.randn(1, 4))
     reference = tl.trace(_C(), torch.randn(1, 4))
     try:
-        assert subject["linear_1_1"].site_key != reference["linear_1_1"].site_key
+        assert subject["linear_1_1"].key != reference["linear_1_1"].key
         with pytest.raises(SelectionError) as excinfo:
             tl.changed(reference, "linear_1_1").resolve(subject)
         # Since leverage B4 the guarded join is the pairing authority: the
@@ -443,7 +443,7 @@ def test_stable_selects_the_pass_invariant_unit(rec_log):
     """The engineered constant unit is stable; masks land on every pass site."""
 
     resolved = tl.stable_across_passes(_TANH, tol=1e-9).resolve(rec_log)
-    assert [entry.site_key for entry in resolved] == [(_TANH, 1), (_TANH, 2), (_TANH, 3)]
+    assert [entry.key for entry in resolved] == [(_TANH, 1), (_TANH, 2), (_TANH, 3)]
     stacked = _stacked_passes(rec_log)
     expected = (stacked.max(dim=0).values - stacked.min(dim=0).values) <= 1e-9
     for entry in resolved:
@@ -471,7 +471,7 @@ def test_explicit_pass_window_restricts_evidence_and_family(rec_log):
     """passes=[2, 3] uses only that window and touches only those sites."""
 
     resolved = tl.stable_across_passes(_TANH, tol=1e-6, passes=[2, 3]).resolve(rec_log)
-    assert [entry.site_key for entry in resolved] == [(_TANH, 2), (_TANH, 3)]
+    assert [entry.key for entry in resolved] == [(_TANH, 2), (_TANH, 3)]
     stacked = _stacked_passes(rec_log, passes=(2, 3))
     expected = (stacked.max(dim=0).values - stacked.min(dim=0).values) <= 1e-6
     for entry in resolved:
@@ -519,13 +519,13 @@ def test_single_pass_layer_refuses_vacuous_claim(log):
 def test_cross_pass_shape_drift_refuses():
     """A layer whose index space drifts across the window refuses typed."""
 
-    from torchlens.selection import SelectionProvenance, SiteEntry, _mask_whole
-    from torchlens.selection_compare import _pass_groups, _PassTerm
+    from torchlens._selection import SelectionProvenance, Site, _mask_whole
+    from torchlens._selection_compare import _pass_groups, _PassTerm
 
-    def _entry(pass_index: int, shape: tuple[int, ...]) -> SiteEntry:
-        return SiteEntry(
+    def _entry(pass_index: int, shape: tuple[int, ...]) -> Site:
+        return Site(
             kind="ACT",
-            site_key=("grow_1_1", pass_index),
+            key=("grow_1_1", pass_index),
             provenance=SelectionProvenance(relation="exact", source="test"),
             _mask=_mask_whole(shape),
         )

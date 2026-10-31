@@ -3,7 +3,7 @@
 ``Selection`` is the composable QUERY — a frozen AST over leaf terms and
 boolean combinators, model/trace-independent; resolving it is explicit.
 ``ResolvedSelection`` is returned by ``selection.resolve(trace)`` — frozen,
-concrete, trace-bound: an ordered tuple of :class:`SiteEntry` rows.
+concrete, trace-bound: an ordered tuple of :class:`Site` rows.
 
 Every public spelling here ships DOCUMENTED-UNSTABLE pending its
 naming-session ratification (provisional-name protocol).
@@ -56,7 +56,7 @@ __all__ = [
     "Selection",
     "Selector",
     "SelectionError",
-    "SiteEntry",
+    "Site",
     "param",
     "random_like",
     "units",
@@ -303,15 +303,15 @@ def _mask_equal(a: _Mask, b: _Mask) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# SiteEntry + ResolvedSelection.
+# Site + ResolvedSelection.
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class SiteEntry:
+class Site:
     """One (site, mask, provenance) row of a resolved selection.
 
-    ``site_key`` is ``(layer_label, pass_index)`` for ACT sites and
+    ``key`` is ``(layer_label, pass_index)`` for ACT sites and
     ``(parameter_address,)`` for PARAM sites. ``structural_site_key`` carries
     the L1 structural site key when present (bridging relation; ``None``
     otherwise). ``mask`` returns a FRESH dense bool materialization on every
@@ -319,7 +319,7 @@ class SiteEntry:
     """
 
     kind: str
-    site_key: tuple[Any, ...]
+    key: tuple[Any, ...]
     provenance: SelectionProvenance
     _mask: _Mask
     structural_site_key: Any = None
@@ -337,7 +337,7 @@ class SiteEntry:
         return self._mask.shape
 
     @property
-    def selected_count(self) -> int:
+    def num_selected(self) -> int:
         """Return the number of selected elements at this site."""
 
         return self._mask.count()
@@ -346,18 +346,18 @@ class SiteEntry:
         """Return a compact disclosure row."""
 
         return (
-            f"SiteEntry({self.site_key!r}, {self.selected_count}/{self._mask.numel()} "
+            f"Site({self.key!r}, {self.num_selected}/{self._mask.numel()} "
             f"elements, relation={self.provenance.relation})"
         )
 
 
-def _canonical_entry_order(entries: Iterable[SiteEntry]) -> tuple[SiteEntry, ...]:
+def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
     """Return entries in canonical deterministic order (sorted by site key)."""
 
-    return tuple(sorted(entries, key=lambda entry: (entry.kind, tuple(map(str, entry.site_key)))))
+    return tuple(sorted(entries, key=lambda entry: (entry.kind, tuple(map(str, entry.key)))))
 
 
-def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEntry, ...]:
+def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
     """Return entries in GRAPH ORDER (F10; lovely matrix row, bug 14).
 
     ACT entries order by the trace's execution order of their
@@ -384,11 +384,11 @@ def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEn
     if not order:
         return placed
 
-    def sort_key(indexed: tuple[int, SiteEntry]) -> tuple[int, int, int]:
+    def sort_key(indexed: tuple[int, Site]) -> tuple[int, int, int]:
         """Graph step first; unplaced entries keep canonical order after."""
 
         position, entry = indexed
-        step = order.get(tuple(entry.site_key)) if entry.kind == "ACT" else None
+        step = order.get(tuple(entry.key)) if entry.kind == "ACT" else None
         if step is None:
             return (1, position, 0)
         return (0, step, position)
@@ -397,7 +397,7 @@ def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEn
 
 
 class Selection:
-    """Frozen, concrete, trace-bound selection: an ordered tuple of SiteEntry.
+    """Frozen, concrete, trace-bound selection: an ordered tuple of Site.
 
     Zero-mask (element-empty) entries are retained first-class — the family
     level of the two-level denotation. ``.empty`` and ``__bool__`` report the
@@ -408,11 +408,11 @@ class Selection:
     __slots__ = ("_digest", "_entries", "_kind", "_trace")
 
     _digest: str
-    _entries: tuple[SiteEntry, ...]
+    _entries: tuple[Site, ...]
     _kind: str
     _trace: Any
 
-    def __init__(self, trace: Any, kind: str, entries: Iterable[SiteEntry]) -> None:
+    def __init__(self, trace: Any, kind: str, entries: Iterable[Site]) -> None:
         """Freeze a resolved selection (internal constructor).
 
         Parameters
@@ -433,7 +433,7 @@ class Selection:
         digest = hashlib.sha256()
         digest.update(kind.encode())
         for entry in self._entries:
-            digest.update(repr(entry.site_key).encode())
+            digest.update(repr(entry.key).encode())
             digest.update(repr(entry.shape).encode())
             digest.update(entry._mask.canonical_bytes())
         object.__setattr__(self, "_digest", digest.hexdigest())
@@ -457,7 +457,7 @@ class Selection:
         touched-site family stays readable via iteration / ``len()``.
         """
 
-        return all(entry.selected_count == 0 for entry in self._entries)
+        return all(entry.num_selected == 0 for entry in self._entries)
 
     @property
     def resolve_digest(self) -> str:
@@ -501,12 +501,12 @@ class Selection:
 
         return len(self._entries)
 
-    def __iter__(self) -> Iterator[SiteEntry]:
+    def __iter__(self) -> Iterator[Site]:
         """Iterate site entries in canonical order."""
 
         return iter(self._entries)
 
-    def __getitem__(self, index: int) -> SiteEntry:
+    def __getitem__(self, index: int) -> Site:
         """Return one site entry by position."""
 
         return self._entries[index]
@@ -519,7 +519,7 @@ class Selection:
         if self._kind != other._kind or len(self._entries) != len(other._entries):
             return False
         for mine, theirs in zip(self._entries, other._entries, strict=True):
-            if mine.kind != theirs.kind or mine.site_key != theirs.site_key:
+            if mine.kind != theirs.kind or mine.key != theirs.key:
                 return False
             if not _mask_equal(mine._mask, theirs._mask):
                 return False
@@ -533,7 +533,7 @@ class Selection:
     def __repr__(self) -> str:
         """Return a compact two-level summary."""
 
-        elements = sum(entry.selected_count for entry in self._entries)
+        elements = sum(entry.num_selected for entry in self._entries)
         return f"ResolvedSelection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
 
     def __selection__(self) -> Selection:
@@ -574,9 +574,9 @@ class Selection:
         if self._kind == "EDGE":
             return _edge_family_complement(self)
         entries = tuple(
-            SiteEntry(
+            Site(
                 kind=entry.kind,
-                site_key=entry.site_key,
+                key=entry.key,
                 provenance=SelectionProvenance(
                     relation=_FLIP[entry.provenance.relation],
                     source=entry.provenance.source,
@@ -972,8 +972,8 @@ def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> 
 def _compose_resolved(op: str, left: Selection, right: Selection) -> Selection:
     """Compose two same-trace resolved selections (family + element rules)."""
 
-    left_by_key = {entry.site_key: entry for entry in left._entries}
-    right_by_key = {entry.site_key: entry for entry in right._entries}
+    left_by_key = {entry.key: entry for entry in left._entries}
+    right_by_key = {entry.key: entry for entry in right._entries}
     if op == "or":
         entries = _compose_entries_union(left_by_key, right_by_key)
     elif op == "and":
@@ -986,11 +986,11 @@ def _compose_resolved(op: str, left: Selection, right: Selection) -> Selection:
 
 
 def _compose_entries_union(
-    left_by_key: dict[Any, SiteEntry], right_by_key: dict[Any, SiteEntry]
-) -> list[SiteEntry]:
+    left_by_key: dict[Any, Site], right_by_key: dict[Any, Site]
+) -> list[Site]:
     """Union entries: every touched site survives; shared sites join masks."""
 
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for key, entry in left_by_key.items():
         other = right_by_key.get(key)
         if other is None:
@@ -1004,11 +1004,11 @@ def _compose_entries_union(
 
 
 def _compose_entries_intersection(
-    left_by_key: dict[Any, SiteEntry], right_by_key: dict[Any, SiteEntry]
-) -> list[SiteEntry]:
+    left_by_key: dict[Any, Site], right_by_key: dict[Any, Site]
+) -> list[Site]:
     """Intersect entries; shared sites stay touched even when element-empty."""
 
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for key, entry in left_by_key.items():
         other = right_by_key.get(key)
         if other is not None:
@@ -1017,11 +1017,11 @@ def _compose_entries_intersection(
 
 
 def _compose_entries_difference(
-    left_by_key: dict[Any, SiteEntry], right_by_key: dict[Any, SiteEntry]
-) -> list[SiteEntry]:
+    left_by_key: dict[Any, Site], right_by_key: dict[Any, Site]
+) -> list[Site]:
     """Difference entries; subtraction never un-touches: fam(A - B) = fam(A)."""
 
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for key, entry in left_by_key.items():
         other = right_by_key.get(key)
         if other is None:
@@ -1032,25 +1032,25 @@ def _compose_entries_difference(
 
 
 def _entry_compose(
-    left: SiteEntry,
-    right: SiteEntry,
+    left: Site,
+    right: Site,
     mask_op: Any,
     relation_op: Any,
-) -> SiteEntry:
+) -> Site:
     """Compose two entries at one shared site."""
 
     if left.shape != right.shape:
         raise SelectionError(
-            f"site {left.site_key!r} resolved with two different index spaces "
+            f"site {left.key!r} resolved with two different index spaces "
             f"({left.shape} vs {right.shape}); the selections cannot compose.",
             code="selection_unresolvable",
             reason="mask_shape_mismatch",
-            site_key=left.site_key,
+            site_key=left.key,
         )
     source = left.provenance.source or right.provenance.source
-    return SiteEntry(
+    return Site(
         kind=left.kind,
-        site_key=left.site_key,
+        key=left.key,
         provenance=SelectionProvenance(
             relation=relation_op(left.provenance.relation, right.provenance.relation),
             source=source,
@@ -1114,19 +1114,19 @@ def _site_shape(op: Any) -> tuple[int, ...]:
     return shape
 
 
-def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> SiteEntry:
+def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
     """Build one ACT site entry for a resolved op."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
-    return SiteEntry(
+    pass_index = getattr(op, "pass_number", 1) or 1
+    return Site(
         kind="ACT",
-        site_key=(layer_label, pass_index),
+        key=(layer_label, pass_index),
         provenance=SelectionProvenance(relation=relation, source=source),
         _mask=mask,
         # The L1 structural-position identity lives on Op as ``site_key``
-        # (site_key_v1 strings); SiteEntry's field keeps the qualified name
-        # because SiteEntry.site_key is already the (label, pass) address.
+        # (site_key_v1 strings); Site's field keeps the qualified name
+        # because Site.key is already the (label, pass) address.
         structural_site_key=getattr(op, "site_key", None),
     )
 
@@ -1272,7 +1272,7 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> Selection:
         )
     pass_index = getattr(spec, "pass_index", None)
     if pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == pass_index)
         if not matches:
             raise _unresolvable(
                 "site_not_in_trace",
@@ -1352,9 +1352,9 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
             )
         mask = _mask_from_dense(shape, node.mask.bool())
     address = getattr(target, "address", None) or target.name
-    entry = SiteEntry(
+    entry = Site(
         kind="PARAM",
-        site_key=(address,),
+        key=(address,),
         provenance=SelectionProvenance(relation="exact", source=f"params({node.name!r})"),
         _mask=mask,
     )
@@ -1377,7 +1377,7 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
         from .intervention.resolver import multipass_bare_label_message
 
         layer_label = getattr(matches[0], "layer_label", None) or node.site
-        pass_indices = sorted(int(getattr(op, "pass_index", 1) or 1) for op in matches)
+        pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
         raise _unresolvable(
             "multipass_bare_label",
             multipass_bare_label_message(layer_label, pass_indices),
@@ -1436,7 +1436,7 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
 
     matches = _find_act_ops(trace, node.site_label)
     if node.pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == node.pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_index)
     if not matches:
         raise _unresolvable(
             "site_not_in_trace",
@@ -1455,8 +1455,8 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
 
     like = _resolve_operand_for_random(node.like, trace)
     within = _resolve_operand_for_random(node.within, trace)
-    requested = sum(entry.selected_count for entry in like._entries)
-    population: list[tuple[SiteEntry, int]] = []
+    requested = sum(entry.num_selected for entry in like._entries)
+    population: list[tuple[Site, int]] = []
     for entry in within._entries:
         flat = entry._mask._dense_ro().reshape(-1)
         for index in torch.nonzero(flat, as_tuple=False).reshape(-1).tolist():
@@ -1471,19 +1471,19 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
         )
     rng = _random_module.Random(node.seed)
     sampled = rng.sample(range(len(population)), requested)
-    dense_by_key: dict[tuple[Any, ...], tuple[SiteEntry, torch.Tensor]] = {}
+    dense_by_key: dict[tuple[Any, ...], tuple[Site, torch.Tensor]] = {}
     for position in sampled:
         entry, flat_index = population[position]
-        if entry.site_key not in dense_by_key:
-            dense_by_key[entry.site_key] = (
+        if entry.key not in dense_by_key:
+            dense_by_key[entry.key] = (
                 entry,
                 torch.zeros(entry.shape, dtype=torch.bool),
             )
-        dense_by_key[entry.site_key][1].reshape(-1)[flat_index] = True
+        dense_by_key[entry.key][1].reshape(-1)[flat_index] = True
     entries = [
-        SiteEntry(
+        Site(
             kind=entry.kind,
-            site_key=entry.site_key,
+            key=entry.key,
             provenance=SelectionProvenance(
                 relation="exact", source=f"random_selection(seed={node.seed})"
             ),
@@ -1634,7 +1634,7 @@ def _selection_from_op(op: Any) -> Selector:
     """Lift one Op (whole-output, one pass)."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
 
 
@@ -1742,16 +1742,16 @@ def _build_selection_do_plan(
 
     plan: list[dict[str, Any]] = []
     for entry in resolved:
-        layer_label, pass_index = entry.site_key
+        layer_label, pass_index = entry.key
         ops = [
             op
             for op in _find_act_ops(trace, layer_label)
-            if getattr(op, "pass_index", 1) == pass_index
+            if getattr(op, "pass_number", 1) == pass_index
         ]
         if not ops:
             raise _unresolvable(
                 "site_not_in_trace",
-                f"resolved site {entry.site_key!r} is not present on this trace.",
+                f"resolved site {entry.key!r} is not present on this trace.",
                 site=layer_label,
             )
         op = ops[0]
@@ -1776,9 +1776,9 @@ def _build_selection_do_plan(
         "resolve_digest": resolved.resolve_digest,
         "sites": [
             {
-                "site_key": repr(entry.site_key),
+                "site_key": repr(entry.key),
                 "relation": entry.provenance.relation,
-                "selected": entry.selected_count,
+                "selected": entry.num_selected,
                 "source": entry.provenance.source + ("" if projection is None else projection.note),
             }
             for entry in resolved
@@ -1875,12 +1875,12 @@ def _trace_edge_records(trace: Any) -> tuple[Any, ...]:
     return tuple(records)
 
 
-def _edge_entry(record: Any) -> SiteEntry:
+def _edge_entry(record: Any) -> Site:
     """Build one EDGE site entry (whole-edge mask over a 1-element space)."""
 
-    return SiteEntry(
+    return Site(
         kind="EDGE",
-        site_key=edge_address_of(record),
+        key=edge_address_of(record),
         provenance=SelectionProvenance(
             relation="exact",
             source=f"edge {record.parent_label!r} -> {record.child_label!r}",
@@ -1927,7 +1927,7 @@ def _edge_family_complement(resolved: Selection) -> Selection:
     QUERY, ``~`` defers to resolve time.)
     """
 
-    selected = {entry.site_key for entry in resolved._entries if entry.selected_count > 0}
+    selected = {entry.key for entry in resolved._entries if entry.num_selected > 0}
     entries = [
         _edge_entry(record)
         for record in _trace_edge_records(resolved._trace)

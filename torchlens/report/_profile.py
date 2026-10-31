@@ -844,7 +844,7 @@ def _assemble_level_rows(
         for call in trace.module_calls.values():
             ops = _ops_for_labels(trace, list(getattr(call, "ops", ())))
             row, one_evidence = _rollup_row(
-                (str(getattr(call, "call_label", "")), "call", getattr(call, "num_params", None)),
+                (str(getattr(call, "label", "")), "call", getattr(call, "num_params", None)),
                 ops,
                 {str(call.call_label)},
                 context,

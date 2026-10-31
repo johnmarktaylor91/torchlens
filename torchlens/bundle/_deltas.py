@@ -506,7 +506,7 @@ def _bundle_show_diff(
     >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     >>> ablated = trace.fork("ablated")
     >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
-    >>> bundle = tl.bundle({"clean": trace, "ablated": ablated}, baseline="clean")
+    >>> bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
     >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
 
     Parameters

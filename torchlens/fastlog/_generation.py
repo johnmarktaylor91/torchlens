@@ -12,7 +12,7 @@ call; each model forward is one Recorder pass. With the cache on, a decode
 forward computes only the new position, so each step records only that
 position and the total cost grows linearly with the number of generated
 tokens. Step 0 is the prefill forward, the same convention as the bound decode
-step (``torchlens.intervention.at_step``).
+step (``torchlens.at_step``).
 """
 
 from __future__ import annotations

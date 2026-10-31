@@ -240,7 +240,7 @@
   `intervention_digest` (`episode_intervention_digest_v1`; identical re-runs mint
   identical digests — compare digests, never output equality alone) +
   `fidelity_basis="perturbed"` when a fired edit replaced a value (outranks
-  forced/escalation bases). `torchlens.intervention.at_step(*steps)` is the
+  forced/escalation bases). `torchlens.at_step(*steps)` is the
   step-qualified selector (live via the armed join session; post hoc via the persisted
   `Op.episode_step` stamps written at settlement; composes with pass-qualified labels;
   no-steps-to-qualify doors refuse `episode_step_selector_without_episode` /
@@ -303,8 +303,8 @@
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `tl.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `tl.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
+  `tl.visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
+  `tl.visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
   and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
@@ -752,7 +752,7 @@
   `__selection__`/operators slate-ratified subject to D7, producer
   constructors + members DOCUMENTED-UNSTABLE): `tl.Selector` is the
   composable trace-independent query AST; `selection.resolve(trace)` returns
-  the frozen trace-bound `tl.Selection` (ordered `SiteEntry(site_key,
+  the frozen trace-bound `tl.Selection` (ordered `Site(site_key,
   mask, provenance)` tuple; SESSION-ONLY, never persisted). TWO-LEVEL
   denotation: (touched-site family, selected-element set) — zero-mask entries
   stay first-class, `.empty`/`__bool__` are element-level, and `bool()` on
@@ -872,7 +872,7 @@
   refuse at construction; resolution is geometry-only (unsaved sites
   resolve); relation `exact`; PARAM/EDGE refuse
   `selection_kind_incompatible`. New extension seam:
-  `torchlens.selection.register_term_resolver` (producer modules register
+  `torchlens._selection.register_term_resolver` (producer modules register
   frozen AST terms at import; `torchlens/selection_values.py`,
   `torchlens/selection_graph.py`, `torchlens/selection_subspace.py`).
   GRAPH-STRUCTURAL PRODUCERS + SLICE VIEW (graph wave; DOCUMENTED-UNSTABLE):
@@ -900,7 +900,7 @@
   `torchlens/selection_compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
-  site keys each `SiteEntry` records (`structural_site_key`, now live data),
+  site keys each `Site` records (`structural_site_key`, now live data),
   SAME-POLICY captures only per the L1 cross-stamp rule (healthy agreeing
   grouping stamps both sides); refusals ride `selection_alignment_invalid`
   with a closed six-reason set, `do()` keeps refusing foreign resolved

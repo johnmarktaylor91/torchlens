@@ -68,6 +68,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._save_budget import SaveBudgetExceededError
+from .._selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import (
@@ -106,7 +107,6 @@ from ..quantities import (
     as_flops,
     as_macs,
 )
-from ..selection import _SelectionOperand
 from ..utils._torch_compat import tensor_version_or_none
 from ..utils.arg_handling import copy_arg_tree
 from ..utils.tensor_utils import (
@@ -3520,7 +3520,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def __selection__(self) -> object:
         """Lift this op's whole output as an ACT selection term (one pass)."""
 
-        from ..selection import _selection_from_op
+        from .._selection import _selection_from_op
 
         return _selection_from_op(self)
 

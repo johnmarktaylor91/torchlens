@@ -339,7 +339,7 @@ def _seed(spec: _SeedSpec) -> Any:
 def _within(labels: list[str]) -> Any:
     """Return the union selection of ``labels`` for ``read(within=...)``."""
 
-    from ...selection_values import _lift_within
+    from ..._selection_values import _lift_within
 
     return functools.reduce(operator.or_, (_lift_within(label, "read") for label in labels))
 

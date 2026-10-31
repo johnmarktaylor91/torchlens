@@ -238,7 +238,7 @@ it where you report the number and call the result a descriptive comparison.
   `selected_by`, `successor_of`, `forked_from`, `escalates`), nearest member first.
 - `b.node(site, members=["a", "b"])`: one site across a subset of members, so a foreign member such
   as a small router model does not disable the view for the rest.
-- `tl.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
+- `tl.visualization.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
   drawn from the earlier member to the later one and labelled with the kind, the row's `label`, on
   `fed_by` its basis and coverage, and on `selected_by` the `chosen` decision. Solid edges carry token spans TorchLens checked
   (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the

@@ -1423,7 +1423,7 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle graph",
         "several traces of one model, grouped",
-        "tl.show_bundle_graph(bundle)",
+        "tl.visualization.show_bundle_graph(bundle)",
         "docs/reference/glossary.md",
     ),
     (

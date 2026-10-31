@@ -88,7 +88,7 @@ def test_aligned_pairs_returns_best_match_sites_across_architectures() -> None:
 
     torch.manual_seed(10)
     x = torch.randn(2, 4)
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {
             "small": _log(_OneHidden(), x),
             "large": _log(_TwoHidden(), x),

@@ -280,7 +280,7 @@ def _check_pass_count_consistency(ml: Trace) -> None:
                 f"num_passes={getattr(layer_log, 'num_passes', None)!r}",
             )
         for pass_index, op in ops.items():
-            if getattr(op, "pass_index", None) != pass_index:
+            if getattr(op, "pass_number", None) != pass_index:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{layer_label}' stores op with pass_index="
