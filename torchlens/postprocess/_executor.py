@@ -416,11 +416,22 @@ def _step_15_5_violation(trace: Trace) -> str | None:
     return None
 
 
-def _step_1_violation(trace: Trace) -> str | None:
-    """Return the step-1 output-registration postcondition violation, if any."""
+def _step_1_violation(ctx: StepContext) -> str | None:
+    """Return the step-1 output-registration postcondition violation, if any.
 
-    if not trace.output_layers:
-        return "Step 1 must register output layers"
+    Step 1 creates exactly one output node per attributable output tensor
+    (one with a graph parent) and none for the rest, so a model whose outputs
+    are all unattributable (``None``, raw ``torch.func`` escapes) legitimately
+    has no output layers; the count, not non-emptiness, is the contract.
+    """
+
+    expected = sum(1 for label in ctx.output_parent_labels if label is not None)
+    registered = len(ctx.trace.output_layers)
+    if registered != expected:
+        return (
+            f"Step 1 must register one output layer per attributable output: "
+            f"registered {registered}, expected {expected}"
+        )
     return None
 
 
@@ -459,18 +470,18 @@ def _step_17_violation(trace: Trace) -> str | None:
 
 
 #: Per-step postconditions checked after the step runs, on every capture.
-STEP_POSTCONDITIONS: dict[str, Callable[[Trace], str | None]] = {
+STEP_POSTCONDITIONS: dict[str, Callable[[StepContext], str | None]] = {
     "1": _step_1_violation,
-    "8": _step_8_violation,
-    "11": _step_11_violation,
-    "15.5": _step_15_5_violation,
-    "16": _step_16_violation,
-    "16.5": _step_16_5_violation,
-    "17": _step_17_violation,
+    "8": lambda ctx: _step_8_violation(ctx.trace),
+    "11": lambda ctx: _step_11_violation(ctx.trace),
+    "15.5": lambda ctx: _step_15_5_violation(ctx.trace),
+    "16": lambda ctx: _step_16_violation(ctx.trace),
+    "16.5": lambda ctx: _step_16_5_violation(ctx.trace),
+    "17": lambda ctx: _step_17_violation(ctx.trace),
 }
 
 
-def _check_step_postconditions(trace: Trace, step: str) -> None:
+def _check_step_postconditions(ctx: StepContext, step: str) -> None:
     """Raise if a completed step left its postcondition unmet.
 
     Runs on every capture, with no env gate, and raises a typed error rather
@@ -485,7 +496,7 @@ def _check_step_postconditions(trace: Trace, step: str) -> None:
     """
 
     check = STEP_POSTCONDITIONS.get(step)
-    violation = None if check is None else check(trace)
+    violation = None if check is None else check(ctx)
     if violation is not None:
         from ..validation.invariants import MetadataInvariantError
 
@@ -503,4 +514,4 @@ def run_pipeline(ctx: StepContext) -> None:
     for spec in STEP_REGISTRY:
         if spec.should_run(ctx):
             spec.run(ctx)
-            _check_step_postconditions(ctx.trace, spec.step)
+            _check_step_postconditions(ctx, spec.step)

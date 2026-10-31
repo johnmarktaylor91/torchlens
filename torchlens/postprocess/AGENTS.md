@@ -34,7 +34,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 ## Step Order
 
 Step order is load-bearing and is the order of `STEP_REGISTRY` in `_executor.py`.
-After each step runs, `run_pipeline` checks that step's postcondition (`STEP_POSTCONDITIONS`: steps 1, 8, 11, 15.5, 16, 16.5, 17) on every capture, with no env gate, and raises `MetadataInvariantError` (`postprocess_step_postcondition`) on a violation.
+After each step runs, `run_pipeline` checks that step's postcondition (`STEP_POSTCONDITIONS`: steps 1, 8, 11, 15.5, 16, 16.5, 17) on every capture, with no env gate, and raises `MetadataInvariantError` (`postprocess_step_postcondition`) on a violation; step 1's is one output layer per attributable output, so all-unattributable outputs leave none.
 Reordering steps requires the byte-identity oracles and a warnings/exception-order
 review (those are pinned only by the existing order). Transient
 build scratch lives in three named per-phase workspaces (`ir/workspaces.py`),

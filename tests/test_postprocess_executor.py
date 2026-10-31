@@ -320,6 +320,10 @@ def _empty_output_layers(trace: Any) -> None:
     trace.output_layers = []
 
 
+def _duplicate_output_layer(trace: Any) -> None:
+    trace.output_layers = [*trace.output_layers, trace.output_layers[0]]
+
+
 def _clear_layer_label_map(trace: Any) -> None:
     trace._raw_to_final_layer_labels.clear()
 
@@ -353,8 +357,15 @@ def _postcondition_breakers() -> list[Any]:
             "1",
             "_add_output_layers",
             lambda: _wrap_then(pp._add_output_layers, _empty_output_layers),
-            "must register output",
-            id="1",
+            "registered 0, expected 1",
+            id="1-missing",
+        ),
+        pytest.param(
+            "1",
+            "_add_output_layers",
+            lambda: _wrap_then(pp._add_output_layers, _duplicate_output_layer),
+            "registered 2, expected 1",
+            id="1-extra",
         ),
         pytest.param(
             "8",
