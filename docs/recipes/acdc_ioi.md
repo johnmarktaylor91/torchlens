@@ -135,7 +135,7 @@ for receiver in walk:
         edge = graph.edges[f"{sender.name}->{receiver.name}"]
         tested.append(edge.name)
         trial = circuit_kl(pruned + [edge])
-        led.entry(
+        led.open_entry(
             question=f"Is {edge.name} needed?",
             hypothesis=f"{edge.name} carries part of the prediction",
             metric="KL(full || circuit) change when the edge is patched",

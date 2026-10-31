@@ -319,7 +319,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `ledger_arm_failed` | The experiment ledger could not arm (sink unwritable); arm-time preflight fails CLOSED before any material work (F03 D4g rule 1) | Fix the path/permissions and re-arm |
 | `ledger_already_armed` | Another experiment ledger is armed in this context; nested different-scope arming refuses (F03 D4d) | Close the active ledger first |
 | `ledger_locked` | The ledger artifact is locked by another writer; v1 is single-writer and a future merge is never last-write-wins (F03 D4f) | Close the other writer, or use a different path |
-| `ledger_no_entry` | A semantic ledger call arrived with no open entry (F03 D4d) | Arm with `ledger(path, ...)` or open one with `.entry()` |
+| `ledger_no_entry` | A semantic ledger call arrived with no open entry (F03 D4d) | Arm with `ledger(path, ...)` or open one with `.open_entry()` |
 | `ledger_entry_quarantined` | A ledger write targeted a QUARANTINED entry — its rows stopped being claims after a write failure (F03 D4g rule 3; the quarantine itself is the coded warning) | Open a new entry |
 | `ledger_write_failed` | A ledger write failed: before material work, under `on_record_error='raise'` (the exception's `fields['result']` carries the material result and `material_action_completed` says whether work ran), or an explicit `save()`/`close()` on a dead sink (F03 D4g rules 4-5) | Fix the sink; nothing material is lost |
 | `ledger_verdict_invalid` | The verdict token is outside the closed vocabulary `supports` / `refutes` / `inconclusive` / `not_assessed` — free text rides beside, the enum never grows (F03 D4b) | Use a documented token with `text=` |

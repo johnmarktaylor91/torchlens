@@ -609,7 +609,7 @@ class ExperimentLedger:
 
         if self._current_entry_id is None:
             raise BundleExperimentError(
-                "no open ledger entry; arm with ledger(path, ...) or open one with .entry()",
+                "no open ledger entry; arm with ledger(path, ...) or open one with .open_entry()",
                 code="ledger_no_entry",
             )
         return self._current_entry_id
