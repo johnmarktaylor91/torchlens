@@ -32,7 +32,7 @@ _PACKAGE_ROOT = Path(torchlens.__file__).resolve().parent
 #: through the session engine and the chrome-file join path is deleted.
 #: Adding ANY row here requires a lane-report-visible justification.
 _PROFILER_DOOR_ALLOWLIST = {
-    "observability/_session.py": 1,
+    "_observability/_session.py": 1,
 }
 
 

@@ -433,7 +433,7 @@ def test_device_move_walker_descends_registered_containers() -> None:
         def __init__(self, tensor: torch.Tensor) -> None:
             self.tensor = tensor
 
-    tl.register_container(
+    tl.types.register_container(
         WrappedBatch,
         lambda wrap: ([wrap.tensor], None),
         lambda aux, children: WrappedBatch(children[0]),

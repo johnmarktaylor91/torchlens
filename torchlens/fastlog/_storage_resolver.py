@@ -17,7 +17,7 @@ from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
 
 if TYPE_CHECKING:
-    from ..types import ActivationPostfunc
+    from ..types import _ActivationPostfunc
 
 _INTEGER_DTYPES = {
     torch.int8,
@@ -96,7 +96,7 @@ def _resolve_storage(
     spec: CaptureSpec,
     intent: StorageIntent,
     *,
-    activation_transform: ActivationPostfunc | None = None,
+    activation_transform: _ActivationPostfunc | None = None,
     save_raw_activations: bool = True,
     ctx: Any | None = None,
     kind: Literal["activation", "grad"] = "activation",

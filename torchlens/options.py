@@ -58,8 +58,8 @@ if TYPE_CHECKING:
     from ._data_classes.module import Module
 
 T = TypeVar("T")
-ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
-GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
@@ -1002,16 +1002,16 @@ class SaveOptions:
     True
     """
 
-    activation_transform: ActivationPostfunc | None = None
-    grad_transform: GradientPostfunc | None = None
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
     save_raw_activations: bool = True
     save_raw_gradients: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
     ) -> None:

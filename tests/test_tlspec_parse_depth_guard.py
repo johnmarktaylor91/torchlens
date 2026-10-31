@@ -352,7 +352,7 @@ def test_read_bounded_still_refuses_a_file_that_exceeds_the_ceiling(tmp_path: Pa
 BARE_JSON_READ_LEDGER = {
     # PERMANENT: reads a first-party file shipped inside the wheel
     # (torchlens/_autoroute/data/imagenet1k_labels.json), not an artifact boundary.
-    "autoroute/_builtin_output.py": "package-shipped label table, not untrusted input",
+    "_autoroute/_builtin_output.py": "package-shipped label table, not untrusted input",
 }
 
 

@@ -440,7 +440,7 @@ def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_
     ACCIDENT (gate read the wrapper's empty ``__dict__`` as UNKNOWN); it must
     refuse typed, never proceed into Trace save machinery and crash."""
 
-    from torchlens._partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     complete = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     assert complete.outcome.status is CaptureStatus.COMPLETE

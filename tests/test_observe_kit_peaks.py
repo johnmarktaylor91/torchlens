@@ -18,7 +18,7 @@ _DISPLAY_PACKAGES = ("report", "export", "visualization", "notebook", "bridge", 
 
 #: Files sanctioned to read the raw fields inside display packages: the gate
 #: itself.
-_GATE_MODULE = "observe/_peaks.py"
+_GATE_MODULE = "_observe/_peaks.py"
 
 
 class _FakeTrace:

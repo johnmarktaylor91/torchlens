@@ -361,7 +361,7 @@ def _classify_rows(
             row["reason"] = (
                 "non-finite gradient LANDED on this op (carrier observation, not the "
                 "birth site -- per-op grads are w.r.t. the op's OUTPUT, so the birth is "
-                "in a CONSUMER's backward); run tl._debug.bisect_nan_backward(trace, "
+                "in a CONSUMER's backward); run tl.report.bisect_nan_backward(trace, "
                 "bwd=N) to localize the birth"
             )
         row.update(

@@ -193,7 +193,7 @@ def rehydrate_trace_core(trace: Trace) -> bool:
         freeze_trace_relation_views(trace)
         store.freeze()
         # Register the loaded core as a payload-lifetime owner, exactly like the
-        # capture freeze seam (postprocess/__init__.py) and TraceCore.fork().
+        # capture freeze seam (_postprocess/__init__.py) and TraceCore.fork().
         # Without this the owner count stays 0, so forking the loaded trace
         # (which DOES adopt: count -> 1) and then dropping that fork drops the
         # count back to 0 and evicts the SEALED base's tensor payloads --

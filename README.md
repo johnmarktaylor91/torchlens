@@ -608,8 +608,8 @@ pinning model weights or module names:
 # `model` and `x` are your model and a representative example input.
 import torchlens as tl
 
-pinned = tl.assert_unchanged(model, x, expected=None)  # prints and returns a hash
-tl.assert_unchanged(model, x, pinned)  # raises if the architecture changes
+pinned = tl.fingerprint.assert_unchanged(model, x, expected=None)  # prints and returns a hash
+tl.fingerprint.assert_unchanged(model, x, pinned)  # raises if the architecture changes
 ```
 
 See [`tl.fingerprint`](docs/reference/hash.md) for trace-level hashing and its structural scope.

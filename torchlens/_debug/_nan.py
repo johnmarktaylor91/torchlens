@@ -18,7 +18,7 @@ from ._common import _ordered_ops, _source_line
 
 
 @dataclass(frozen=True)
-class BisectNanResult(FoundReport):
+class BisectNanReport(FoundReport):
     """Result returned by :func:`bisect_nan`.
 
     Parameters
@@ -568,7 +568,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanResult:
     )
 
 
-def bisect_nan(trace: Trace) -> BisectNanResult:
+def bisect_nan(trace: Trace) -> BisectNanReport:
     """Locate the first saved op whose output contains NaN or Inf.
 
     Parameters
@@ -578,7 +578,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
 
     Returns
     -------
-    BisectNanResult
+    BisectNanReport
         Clear result object instead of raising when no non-finite saved
         activation is found.
     """
@@ -602,7 +602,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
         if kind != "none":
             label = _op_label(op)
             source_line = _source_line(op)
-            return BisectNanResult(
+            return BisectNanReport(
                 found=True,
                 op=op,
                 label=label,
@@ -612,7 +612,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
             )
 
     if unsaved_compute_ops:
-        return BisectNanResult(
+        return BisectNanReport(
             found=False,
             op=None,
             label=None,
@@ -624,7 +624,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
                 "a wider predicate, or no selective save."
             ),
         )
-    return BisectNanResult(
+    return BisectNanReport(
         found=False,
         op=None,
         label=None,

@@ -1126,7 +1126,7 @@ def test_register_container_racing_lookup_never_breaks_iteration() -> None:
                     break
                 fresh = type(f"_RaceContainer{index}", (), {})
                 registered_types.append(fresh)
-                tl.register_container(
+                tl.types.register_container(
                     fresh,
                     lambda value: ([], None),
                     lambda aux, children: object(),

@@ -27,7 +27,7 @@ Key entry points:
 - Quickstart input ladder (F17; spellings DOCUMENTED-UNSTABLE): trace/summary/
   render share one resolver -- real input XOR `input_size=` (flat tuple /
   sequence / keyword-to-shape mapping; seed-0 local synthesis; fail-closed
-  dtype facts, `torchlens._quickstart.InputSpec` override) XOR zero-arg
+  dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
@@ -51,7 +51,7 @@ Key entry points:
   typed naming its successor (`REMOVED_SUMMARY_OPTIONS`/`REMOVED_SUMMARY_LEVELS`
   in `report/_summary_config.py`); `fma1` refuses `flop_convention_unavailable`
   when underivable. One-call input precedence: args XOR `input_size=` XOR
-  zero-input (reuses `infer_input_shape`'s verified trace, synthesis
+  zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
   `trace.provenance()` serves the relocated preamble byte-exact;

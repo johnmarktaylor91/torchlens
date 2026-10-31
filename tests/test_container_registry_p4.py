@@ -277,7 +277,7 @@ def test_after_save_tensor_fill_is_best_effort(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
     )
     output_container = streamed_trace.ops[streamed_trace.output_layers[0]].container
-    assert isinstance(output_container, tl.Container)
+    assert isinstance(output_container, tl.types.Container)
     assert output_container.reconstructable is False
 
     loaded = tl.load(path)

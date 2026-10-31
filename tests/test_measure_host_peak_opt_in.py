@@ -189,7 +189,7 @@ def test_state_without_the_backward_reason_restores_none() -> None:
 
 @pytest.mark.parametrize(
     ("peak", "reason", "why"),
-    [(None, 5, "not_a_string"), (tl.Bytes(4096), "forged", "reason_beside_a_value")],
+    [(None, 5, "not_a_string"), (tl.types.Bytes(4096), "forged", "reason_beside_a_value")],
 )
 def test_malformed_backward_reason_refuses_at_load(
     tmp_path: Path, peak: Any, reason: Any, why: str

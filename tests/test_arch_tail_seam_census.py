@@ -146,7 +146,7 @@ def test_open_row_term_resolvers_trigger() -> None:
 def test_open_row_facet_settlement_triggers() -> None:
     """Armed flip triggers for the two facet-settlement OPEN rows."""
 
-    module_source = (PACKAGE_ROOT / "data_classes/module.py").read_text()
+    module_source = (PACKAGE_ROOT / "_data_classes/module.py").read_text()
     assert "from ..semantic import FacetView" in module_source, (
         "Module.facets no longer defers into semantic/ -- settlement part 1 "
         "(vocabulary relocation) or the deletability contract landed; flip the "

@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._partial import PartialTrace
 from torchlens.errors import CaptureError
+from torchlens.types import PartialTrace
 
 
 class NonFiniteFixture(nn.Module):

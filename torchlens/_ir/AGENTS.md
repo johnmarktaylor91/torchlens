@@ -40,7 +40,7 @@ rules, not an internal refactor.
 
 ## container.py / container_registry.py
 - `register_container(...)` is the PUBLIC user entry point for declaring
-  custom output-container types (top-level `tl.register_container`); treat
+  custom output-container types (top-level `tl.types.register_container`); treat
   its name and signature as frozen public API.
 - `ContainerSpec` + `rebuild_container_from_spec()` describe and rebuild output containers;
   `reconstruction_is_lossy()` gates what may round-trip.

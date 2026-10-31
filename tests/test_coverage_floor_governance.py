@@ -259,7 +259,7 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
 #: branch in the overhead harness, plus the compute-truth join lookup's
 #: torn-install ImportError belt. Each is a disclosure/degradation path,
 #: never a semantics branch.
-#: 50 -> 51 (2026-08-19 post-tour sprint): debug/_params.py's both-entries-None
+#: 50 -> 51 (2026-08-19 post-tour sprint): _debug/_params.py's both-entries-None
 #: guard in the param-diff walk. UNREACHABLE by construction -- ``names`` is the
 #: UNION of both state keysets, so a name cannot be absent from both -- which is
 #: also why it cannot gain a covering test the way the wave-0 reachable raise did.

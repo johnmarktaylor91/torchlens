@@ -118,7 +118,7 @@ from torchlens.options import CaptureOptions  # noqa: E402
 _KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
     Trace: frozenset(
         {
-            # Computed @property (data_classes/_trace_stats.py); never stored
+            # Computed @property (_data_classes/_trace_stats.py); never stored
             # in self.__dict__, so there is no state for FIELD_ORDER to lose.
             # Its sibling `num_ops_with_params` (also computed) correctly has
             # no PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is

@@ -24,13 +24,12 @@ from torchlens.transforms import (
     chain,
     channel_mean,
     cls_token,
-    coerce_transform,
-    pipeline_from_record,
-    pipeline_record,
     pool_spatial,
     pool_tokens,
     unit_norm,
 )
+from torchlens.transforms._coerce import coerce_transform
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 
 
 def _right_padded() -> tuple[torch.Tensor, torch.Tensor]:

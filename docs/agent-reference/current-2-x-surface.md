@@ -142,7 +142,7 @@
 - QUICKSTART INPUT LADDER (F17; every quickstart spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.trace`/`tl.summary`/the render facade share ONE input resolver --
   a real input (gold rung) XOR `input_size=` (declared shape, seed-0 local synthesis,
-  fail-closed static dtype facts with `torchlens._quickstart.InputSpec` as the override;
+  fail-closed static dtype facts with `torchlens.types.InputSpec` as the override;
   flat tuple / sequence of tuples / forward-keyword-to-shape mapping, which reaches
   multi-input models like CLIP today) XOR nothing (inference verifies once and the
   surface consumes the EXACT verified trace; non-default capture kwargs recapture with
@@ -585,7 +585,7 @@
   caches stay intact with the warm artifact bitwise-reproduced afterward, and TorchLens wrapper
   install/uninstall costs a bounded burst of recompilations on the first compiled call
   after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny GPT-2;
-  verify with `tl._debug.count_compiles()`; correlate breaks with `tl._debug.graph_breaks()`). Compiled child
+  verify with `tl.report.count_compiles()`; correlate breaks with `tl.report.graph_breaks()`). Compiled child
   `nn.Module`s are still unwrapped to their eager source in both regimes. On torch < 2.6 (or a
   stance that fails to engage) the exact historical fallback holds: a Dynamo-traced region reached
   mid-capture is bypassed with a one-per-forward warning and the returned `Trace` honestly contains
@@ -1089,7 +1089,7 @@
   footer adds `size`, a `pruned:` raw/effective note, and the optimizer
   state (capture given `optimizer=`). One-call door: input
   precedence args XOR `input_size=` XOR zero-input (reuses
-  `infer_input_shape`'s verified trace; synthesis disclosed);
+  `guess_input_shape`'s verified trace; synthesis disclosed);
   `execution_mode`/`grad_mode`/`input_size`
   are one-call-only (`summary_one_call_only` on `trace.summary()`). Result
   API: `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` +

@@ -113,14 +113,14 @@ def test_lineage_walks_ancestors_and_reports_bad_lookup() -> None:
     torch.manual_seed(0)
     trace = tl.trace(TinyMlp(), torch.randn(2, 4))
 
-    result = tl._debug.lineage(trace, trace.output_layers[0], max_depth=2)
+    result = tl.report.lineage(trace, trace.output_layers[0], max_depth=2)
     labels = [node[0] for node in result.nodes]
 
     assert result.start_label == "output_1:1"
     assert "linear_2_3:1" in labels
     assert all(depth <= 2 for _, depth, _, _, _ in result.nodes)
 
-    missing = tl._debug.lineage(trace, "missing")
+    missing = tl.report.lineage(trace, "missing")
     assert missing.nodes == []
     assert "unavailable" in missing.message
 
@@ -227,8 +227,8 @@ def test_recompute_candidates_ranks_budget_and_excludes_zero_flops() -> None:
     trace = tl.trace(TinyCnn(), torch.randn(1, 1, 5, 5))
     flatten_trace = tl.trace(nn.Flatten(), torch.randn(1, 2, 2))
 
-    frame = tl._debug.recompute_candidates(trace, budget_gb=1e-9).to_pandas()
-    zero = tl._debug.recompute_candidates(flatten_trace).to_pandas()
+    frame = tl.report.recompute_candidates(trace, budget_gb=1e-9).to_pandas()
+    zero = tl.report.recompute_candidates(flatten_trace).to_pandas()
 
     assert len(frame) > 0
     assert bool(frame["suggested"].any())

@@ -314,7 +314,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
             m,
             x,
             save=tl.func("linear"),
-            intervene=tl.when(tl.module("fc"), tl.tap(lambda t: None)),
+            intervene=tl.when(tl.module("fc"), tl.observers.tap(lambda t: None)),
         ),
     ),
     (
@@ -547,7 +547,7 @@ def test_static_ast_guard_no_expansion_no_conditional_kwargs() -> None:
         "user_funcs.py",
         "backends/torch/model_prep.py",
         "backends/torch/backend.py",
-        "postprocess/graph_traversal.py",
+        "_postprocess/graph_traversal.py",
         "backends/tf/backend.py",
         "backends/tf/interventions.py",
         "backends/mlx/backend.py",

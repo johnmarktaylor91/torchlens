@@ -21,7 +21,7 @@ from ..backends import (
 )
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc, GradientPostfunc
+from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
@@ -59,11 +59,11 @@ def record(
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
-    activation_transform: ActivationPostfunc | None = None,
+    activation_transform: _ActivationPostfunc | None = None,
     save_raw_activations: bool = True,
     save_grads: GradPredicateFn | bool | CaptureSpec | None = None,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
-    grad_transform: GradientPostfunc | None = None,
+    grad_transform: _GradientPostfunc | None = None,
     save_raw_gradients: bool = True,
     backward_ready: bool = False,
     echo: Any | None = None,

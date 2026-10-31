@@ -68,7 +68,7 @@ def test_cpu_positive_delta_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> Non
     _rss(monkeypatch, 1_000_000, 1_004_096)
     trace = _capture()
 
-    assert isinstance(trace.forward_peak_memory, tl.Bytes)
+    assert isinstance(trace.forward_peak_memory, tl.types.Bytes)
     assert int(trace.forward_peak_memory) == 4096
     assert trace.forward_peak_memory_reason is None
     assert pass_peak_facts(trace).meaning == "process RSS growth (NOT a tensor peak)"
@@ -105,7 +105,7 @@ def test_opt_in_positive_python_peak_is_a_value(monkeypatch: pytest.MonkeyPatch)
         capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True)
     )
 
-    assert isinstance(trace.forward_peak_memory, tl.Bytes)
+    assert isinstance(trace.forward_peak_memory, tl.types.Bytes)
     assert int(trace.forward_peak_memory) > 0
     assert trace.forward_peak_memory_reason is None
 
@@ -161,7 +161,7 @@ def test_legacy_artifact_loads_with_no_reason() -> None:
         warnings.simplefilter("ignore")
         loaded = tl.load(str(fixture))
     assert loaded.forward_peak_memory_reason is None
-    assert isinstance(loaded.forward_peak_memory, tl.Bytes)
+    assert isinstance(loaded.forward_peak_memory, tl.types.Bytes)
 
 
 def test_state_without_the_field_restores_with_no_reason() -> None:
@@ -174,13 +174,13 @@ def test_state_without_the_field_restores_with_no_reason() -> None:
     restored.__setstate__(state)
     assert restored.forward_peak_memory_reason is None
     assert restored.forward_peak_memory is None or isinstance(
-        restored.forward_peak_memory, tl.Bytes
+        restored.forward_peak_memory, tl.types.Bytes
     )
 
 
 @pytest.mark.parametrize(
     ("peak", "reason", "why"),
-    [(None, 5, "not_a_string"), (tl.Bytes(4096), "forged", "reason_beside_a_value")],
+    [(None, 5, "not_a_string"), (tl.types.Bytes(4096), "forged", "reason_beside_a_value")],
 )
 def test_malformed_reason_refuses_at_load(tmp_path: Path, peak: Any, reason: Any, why: str) -> None:
     trace = _capture()

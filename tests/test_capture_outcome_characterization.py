@@ -72,7 +72,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
     new region through the settlement authority.
     """
 
-    # The sanctioned writers: postprocess/finalization.py::_set_tracing_finished
+    # The sanctioned writers: _postprocess/finalization.py::_set_tracing_finished
     # (torch step 17 + the no-layers early return), the shared preview finalize
     # (both finish_before_module_logs arms), and JAX's own finalize path.
     writer_files: dict[str, int] = {}
@@ -88,7 +88,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
         if hits:
             writer_files[str(path.relative_to(TORCHLENS_DIR))] = len(hits)
     assert writer_files == {
-        "postprocess/finalization.py": 1,
+        "_postprocess/finalization.py": 1,
         "backends/_finalize.py": 2,
         "backends/jax/backend.py": 1,
     }, (

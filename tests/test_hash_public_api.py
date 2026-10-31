@@ -207,10 +207,10 @@ def test_assert_unchanged_returns_hash_and_bootstraps() -> None:
     from torchlens.errors import TorchLensWarning
 
     expected = tl.fingerprint.model(_ResidualModel(), _input())
-    assert tl.assert_unchanged(_ResidualModel(), _input(), expected) == expected
+    assert tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), expected) == expected
 
     with pytest.warns(TorchLensWarning, match="TorchLens structural hash") as record:
-        bootstrapped = tl.assert_unchanged(_ResidualModel(), _input(), None)
+        bootstrapped = tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), None)
     assert bootstrapped == expected
     assert any(bootstrapped in str(warning.message) for warning in record)
 
@@ -222,7 +222,7 @@ def test_assert_unchanged_reports_both_hashes_on_mismatch() -> None:
     actual = tl.fingerprint.model(_SequentialModel(), _input())
 
     with pytest.raises(tl.fingerprint.StructuralHashMismatchError) as error:
-        tl.assert_unchanged(_SequentialModel(), _input(), expected)
+        tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
     assert expected in str(error.value)
     assert actual in str(error.value)
@@ -243,7 +243,7 @@ def test_structural_hash_mismatch_error_joins_the_taxonomy() -> None:
 
     expected = tl.fingerprint.model(_ResidualModel(), _input())
     with pytest.raises(AssertionError):
-        tl.assert_unchanged(_SequentialModel(), _input(), expected)
+        tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
 
 def test_assert_unchanged_expected_type_door_is_typed() -> None:
@@ -252,7 +252,7 @@ def test_assert_unchanged_expected_type_door_is_typed() -> None:
     from torchlens import errors
 
     with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.assert_unchanged(_ResidualModel(), _input(), 123)  # type: ignore[arg-type]
+        tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), 123)  # type: ignore[arg-type]
 
     assert isinstance(exc_info.value, TypeError)
     assert exc_info.value.fields["code"] == "hash_expected_type_invalid"

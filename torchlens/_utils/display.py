@@ -29,7 +29,7 @@ _T = TypeVar("_T")
 
 # Package directory, resolved once at import: `user_stacklevel` compares frame
 # filenames against it to find the first non-torchlens frame. Matches the
-# already-established approach in utils/introspection.py's stack filter.
+# already-established approach in _utils/introspection.py's stack filter.
 _PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
 
 

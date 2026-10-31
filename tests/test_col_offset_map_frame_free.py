@@ -175,7 +175,7 @@ def test_cold_map_build_in_hooked_capture_triggers_no_rng_frame_snapshots() -> N
         original_snapshot(self, frame)
 
     model = _ReluBranch()
-    tap = tl.tap(tl.func("relu"))
+    tap = tl.observers.tap(tl.func("relu"))
     introspection._clear_col_offset_cache()
     with pytest.MonkeyPatch.context() as patcher:
         patcher.setattr(introspection, "_build_col_offset_map", counting_build)

@@ -242,7 +242,7 @@ def _audit_partial_trace(partial: PartialTrace) -> TraceAudit:
             "dead_neurons",
             "gradient_flow_audit",
             "hot_path",
-            "infer_input_shape",
+            "guess_input_shape",
             "lineage",
             "recompute_candidates",
         )
@@ -261,7 +261,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
     ``gradient_flow_audit`` (exactly one captured backward pass). Every other
     diagnostic is listed in ``skipped`` with a reason and is NOT counted as a
     check that ran: ``compare`` (a second trace), ``lineage`` (a selected start
-    op), ``infer_input_shape`` (a fresh execution), ``dead_neurons`` (single-
+    op), ``guess_input_shape`` (a fresh execution), ``dead_neurons`` (single-
     trace inactivity is an insufficient sample, not a per-trace health verdict),
     a multi-backward ``gradient_flow_audit`` (needs a ``bwd=`` pass selection),
     and the ``hot_path`` / ``recompute_candidates`` performance rankings (not
@@ -290,7 +290,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
     skipped: list[tuple[str, str]] = [
         ("compare", "requires a second trace"),
         ("lineage", "requires a selected starting operation"),
-        ("infer_input_shape", "requires a model and a new probe execution"),
+        ("guess_input_shape", "requires a model and a new probe execution"),
     ]
     # Op labels already reported non-finite, so a second non-finite check does
     # not double-report the same op.
@@ -327,7 +327,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                     message=bisect.message,
                     ops=(bisect.label,),
                     modules=(),
-                    follow_up="tl._debug.bisect_nan(trace)",
+                    follow_up="tl.report.bisect_nan(trace)",
                 )
             )
     else:
@@ -381,7 +381,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                 (
                     "bisect_nan_backward",
                     f"{num_backward} backward passes captured; select one with "
-                    "tl._debug.bisect_nan_backward(trace, bwd=...)",
+                    "tl.report.bisect_nan_backward(trace, bwd=...)",
                 )
             )
         else:
@@ -415,7 +415,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                         message=backward_bisect.message,
                         ops=(headline.label,) if headline.label else (),
                         modules=(headline.module,) if headline.module else (),
-                        follow_up="tl._debug.bisect_nan_backward(trace)",
+                        follow_up="tl.report.bisect_nan_backward(trace)",
                     )
                 )
 
@@ -423,12 +423,12 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
     # checks: they never establish a model-health issue, so they are honestly
     # listed as skipped rather than counted as health checks that ran.
     skipped.append(
-        ("hot_path", "performance ranking, not a health check; run tl._debug.hot_path(trace)")
+        ("hot_path", "performance ranking, not a health check; run tl.report.hot_path(trace)")
     )
     skipped.append(
         (
             "recompute_candidates",
-            "performance ranking, not a health check; run tl._debug.recompute_candidates(trace)",
+            "performance ranking, not a health check; run tl.report.recompute_candidates(trace)",
         )
     )
     findings.sort(

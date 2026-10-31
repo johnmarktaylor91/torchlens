@@ -1055,7 +1055,7 @@ instance-state rules it encodes:
   the exact-type gate (extra instance state is not type-observable on the trusted bases); honest
   captures never produce a stateful instance because the save refuses it.
 - `registered` requires the registration's explicit `state_complete=True` declaration
-  (`tl.register_container(..., state_complete=True)`) before an instance carrying extra
+  (`tl.types.register_container(..., state_complete=True)`) before an instance carrying extra
   `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
   the trusted statement that `unflatten` restores everything `flatten` observed.
 - `opaque` is always a typed save refusal.
@@ -3127,7 +3127,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   outside its closed vocabulary (section 7).
 - `CONTAINER_KIND_CAPABILITIES` (r37) -- the one per-kind output reconstruction capability table
   shared by spec construction, producer proof, and runtime recompute (section 5).
-- `tl.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
+- `tl.types.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
   a registered container's hooks round-trip all per-instance state; without it, runnable saves
   refuse instances carrying extra state.
 - `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for

@@ -56,8 +56,8 @@ def _inference_remedies(model: nn.Module) -> str:
         "tl.<verb>(model, input_kwargs={...}); "
         "(2) pass input_size= with your shape -- a flat tuple, a sequence of "
         "tuples, or a mapping of forward keyword names to shapes, with "
-        "torchlens._quickstart.InputSpec for dtype/value-recipe hints; "
-        "(3) run torchlens._debug.infer_input_shape(model, ...) directly with "
+        "torchlens.types.InputSpec for dtype/value-recipe hints; "
+        "(3) run torchlens.report.guess_input_shape(model, ...) directly with "
         "hints and read its attempt diary"
     )
     if _is_hf_model(model):
@@ -90,9 +90,9 @@ def _grade_for_inference(result: Any) -> str:
 def _resolve_inferred(model: nn.Module, verb: str) -> ResolvedInputs:
     """Run the zero-argument rung: inference search + verified-trace reuse."""
 
-    from .._debug._infer_input_shape import infer_input_shape
+    from .._debug._infer_input_shape import guess_input_shape
 
-    result = infer_input_shape(model, return_trace=True)
+    result = guess_input_shape(model, return_trace=True)
     if not result.found or result.example_input is None:
         raise ShapeInferenceError(
             f"tl.{verb}(model) could not infer a runnable input: "

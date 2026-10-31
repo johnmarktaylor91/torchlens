@@ -362,9 +362,9 @@ def test_generate_and_close_ledger(tmp_path: Path) -> None:
     hashing_defaults = [
         site
         for site in sites
-        if site.file.endswith("utils/hashing.py") and site.via_getattr and site.has_default
+        if site.file.endswith("_utils/hashing.py") and site.via_getattr and site.has_default
     ]
-    assert hashing_defaults, "pinned getattr default-reliers in utils/hashing.py not found"
+    assert hashing_defaults, "pinned getattr default-reliers in _utils/hashing.py not found"
 
     # ---- source 2: runtime instrumentation over the battery ----------------
     with runtime_read_recorder() as reads:
@@ -428,7 +428,7 @@ def test_generate_and_close_ledger(tmp_path: Path) -> None:
     # Legacy channels stay dead: no replace_op_event callers outside its
     # definition module, no in-place op_events[i] list writes anywhere.
     legacy_callers = {
-        site for site in mutators["replace_op_event_callers"] if "ir/capture_events.py" not in site
+        site for site in mutators["replace_op_event_callers"] if "_ir/capture_events.py" not in site
     }
     assert not legacy_callers, (
         f"replace_op_event callers resurfaced after the P4 migration: {legacy_callers}"
@@ -436,7 +436,7 @@ def test_generate_and_close_ledger(tmp_path: Path) -> None:
     inplace_writes = {
         site
         for site in mutators["op_events_inplace_writes"]
-        if "ir/capture_events.py" not in site  # replace_op_event's own body, deleted in P4
+        if "_ir/capture_events.py" not in site  # replace_op_event's own body, deleted in P4
         # _backfill_cooked_ancestry (e9332023): runs ONLY on the cook path's
         # own copy_for_replay() working projection -- the documented sanctioned
         # mutation surface -- before postprocess; the frozen Recording's sealed

@@ -124,7 +124,7 @@ def test_success_note_reaches_the_user_and_its_remedy_runs() -> None:
 def test_construction_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site backend.py construction failed: the note survives on 3.10 too."""
 
-    from torchlens._partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted construction failure")
@@ -137,7 +137,7 @@ def test_construction_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> N
 def test_suppressed_advisory_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site backend.py advisory suppressed: a filter raising the advisory leaves a note."""
 
-    from torchlens._partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted construction failure")

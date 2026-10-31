@@ -142,7 +142,7 @@ _GREP_SKIP_PREFIXES = (
     "_decomp",
     "_prims",
     "_meta_registrations",
-    "utils/_sympy",
+    "_utils/_sympy",
 )
 
 # (relative source path, attribute name) pairs reviewed 2026-08-14:

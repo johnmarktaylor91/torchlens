@@ -265,7 +265,7 @@ def test_hash_namespace_is_available_through_all_public_import_patterns() -> Non
     assert tl.fingerprint is hash_module
     assert imported_namespace is hash_module
     assert model_hash is hash_module.model
-    assert tl.assert_unchanged is hash_module.assert_unchanged
+    assert tl.fingerprint.assert_unchanged is hash_module.assert_unchanged
 
 
 class _Tracker:

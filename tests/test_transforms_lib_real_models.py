@@ -37,11 +37,11 @@ from torchlens.transforms import (
     cls_token,
     flatten,
     pca_apply,
-    pipeline_from_record,
     pool_tokens,
     srp,
     unit_norm,
 )
+from torchlens.transforms._pipeline import pipeline_from_record
 
 pytestmark = [pytest.mark.slow, pytest.mark.real_model]
 

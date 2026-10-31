@@ -49,7 +49,7 @@ def test_setitem_int_is_pinned_as_the_pass_index_basis() -> None:
 
     Flipping this to the read basis is a coordinated change with the
     finalization callers (backends/_finalize.py, backends/jax/backend.py,
-    postprocess/finalization.py); this pin makes the flip deliberate.
+    _postprocess/finalization.py); this pin makes the flip deliberate.
     """
 
     a, c = _op("a"), _op("c")

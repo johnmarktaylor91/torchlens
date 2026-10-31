@@ -84,7 +84,7 @@ INPUT_CONTAINER_KINDS: frozenset[str] = frozenset(
 )
 """The CLOSED container-kind vocabulary of the model-input boundary (see module doc).
 
-r67 C2 adds ``registered`` (a ``tl.register_container`` type, descended through its own
+r67 C2 adds ``registered`` (a ``tl.types.register_container`` type, descended through its own
 ``flatten`` with indexed children) and extends ``empty`` to zero-field dataclasses.
 """
 

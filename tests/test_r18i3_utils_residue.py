@@ -1,4 +1,4 @@
-"""Regression tests for r18i3 utils/__init__.py residue findings M12/M13/M14.
+"""Regression tests for r18i3 _utils/__init__.py residue findings M12/M13/M14.
 
 Each finding is a diagnostic/state-hygiene bug that r18i-2 diagnosed but could
 not reach from its options.py lease:

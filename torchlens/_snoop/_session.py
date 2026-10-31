@@ -20,7 +20,7 @@ The hot-path contract, non-negotiable per the panel memo:
 
 The slot's callable protocol is fixed in wave 1 (frozen record in, string
 out, exactly once, never the tensor unless stats is armed) even though wave
-1 ships only the built-in narrator: later mounts (``tl.tap`` migration, user
+1 ships only the built-in narrator: later mounts (``tl.observers.tap`` migration, user
 formatters) are a change of mount, not a redesign.
 """
 

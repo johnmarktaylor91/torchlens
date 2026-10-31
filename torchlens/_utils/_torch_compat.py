@@ -2254,7 +2254,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degrade on -- named-dim metadata simply cannot exist on such builds.
         "HAS_NAMED_TENSOR_API",
         # r7 R26 (opus b4 LM): the three ``torch.Generator`` method probes gate
-        # rows of the RNG GENERATOR_METHOD_TABLE (utils/rng.py); a ``False``
+        # rows of the RNG GENERATOR_METHOD_TABLE (_utils/rng.py); a ``False``
         # DROPS the row, so there is no method left to monitor and NOTHING
         # degrades. Absent on the older half of the declared torch>=2.1 matrix
         # by upstream version, not by breakage.

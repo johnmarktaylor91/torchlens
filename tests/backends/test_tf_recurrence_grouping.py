@@ -246,7 +246,7 @@ def test_tf_intermediate_derived_grads_survive_grouping() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    # Accessors iterate VALUES, not keys (see data_classes/_accessor_base.py),
+    # Accessors iterate VALUES, not keys (see _data_classes/_accessor_base.py),
     # so iterate through .keys() to get label strings to look up.
     grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads.keys()}
     ungrouped_raw = {

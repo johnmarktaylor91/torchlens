@@ -75,7 +75,7 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "dtype_range_audit": lambda f: debug.dtype_range_audit(f["trace"]),
         "flops_vs_dispatch": lambda f: debug.flops_vs_dispatch(f["model"], f["x"]),
         "graph_breaks": lambda f: debug.graph_breaks(f["model"], f["x"]),
-        "infer_input_shape": lambda f: debug.infer_input_shape(nn.Linear(4, 2)),
+        "guess_input_shape": lambda f: debug.guess_input_shape(nn.Linear(4, 2)),
         "lineage": lambda f: debug.lineage(f["trace"], f["trace"].output_layers[0]),
         "find_nan": lambda f: debug.find_nan(f["model"], f["x"]),
         "bisect_nan": lambda f: debug.bisect_nan(f["trace"]),
@@ -134,7 +134,7 @@ def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
 
 
 def test_table_report_never_is_a_dataframe(trace: Any) -> None:
-    report = tl._debug.hot_path(trace)
+    report = tl.report.hot_path(trace)
 
     assert not isinstance(report, pd.DataFrame)
     assert not hasattr(report, "columns")
@@ -161,9 +161,9 @@ def _assert_same(report: Any, expected: Any) -> None:
 
 
 def test_hot_path_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl._debug.hot_path_rows(trace, "flops")
+    rows, attrs = tl.report.hot_path_rows(trace, "flops")
     columns = ["source_file:line", "op_count", "total_cost", "pct_total"]
-    _assert_same(tl._debug.hot_path(trace), _frame(rows, columns, attrs))
+    _assert_same(tl.report.hot_path(trace), _frame(rows, columns, attrs))
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
@@ -216,7 +216,7 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
     columns = ["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"]
     expected = _frame(rows, columns, {"total_freeable": sum(r["activation_memory"] for r in rows)})
     assert rows, "the fixture must yield candidates"
-    _assert_same(tl._debug.recompute_candidates(trace), expected)
+    _assert_same(tl.report.recompute_candidates(trace), expected)
 
 
 def test_compare_params_frame_is_unchanged() -> None:

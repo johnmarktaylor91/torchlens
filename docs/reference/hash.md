@@ -34,7 +34,7 @@ Output:
 
 `tl.fingerprint.model(model, example_input)` performs an inference-only metadata capture with
 `layers_to_save=None`, then hashes it. This is the same capture policy used by
-`tl.assert_unchanged(model, example_input, expected)`.
+`tl.fingerprint.assert_unchanged(model, example_input, expected)`.
 
 ```python
 import torch
@@ -44,7 +44,7 @@ import torchlens as tl
 model = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
 example = torch.ones(1, 2)
 pinned = tl.fingerprint.model(model, example)
-print(tl.assert_unchanged(model, example, pinned) == pinned)
+print(tl.fingerprint.assert_unchanged(model, example, pinned) == pinned)
 ```
 
 Output:
@@ -56,7 +56,7 @@ True
 To bootstrap a pin, pass `expected=None`. The helper prints and returns the current hash:
 
 ```python
-pinned = tl.assert_unchanged(model, example, None)
+pinned = tl.fingerprint.assert_unchanged(model, example, None)
 ```
 
 On a mismatch it raises `tl.fingerprint.StructuralHashMismatchError`, an `AssertionError` subclass,

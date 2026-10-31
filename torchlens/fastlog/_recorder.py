@@ -31,7 +31,7 @@ from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc, GradientPostfunc
+from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import HaltSignal
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
@@ -220,11 +220,11 @@ class Recorder:
         storage: StreamingOptions | None | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
         echo: Any | None | MissingType = MISSING,

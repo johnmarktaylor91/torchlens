@@ -15,7 +15,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens._debug import GradFnWalkError, sketch_grad_fn, walk_grad_fn
+from torchlens._debug import GradFnWalkError
+from torchlens.report import sketch_grad_fn, walk_grad_fn
 
 
 def test_walk_names_leaves_and_orients_edges_forward() -> None:

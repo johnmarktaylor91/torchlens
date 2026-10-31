@@ -221,7 +221,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # reads guarded by try/except AttributeError; no row left to hold --
     # same zero-row convention as a package that never had a reach-in.
     # 0 -> 2 (2026-08-14 fixwave-2 reconcile, R40 viz hardening): the shared
-    # `_visualizer_dir` scratch-dir helpers moved into utils/display.py; the
+    # `_visualizer_dir` scratch-dir helpers moved into _utils/display.py; the
     # attribute is genuinely optional session state (absent until the first
     # render), so the None default is the correct "no scratch dir yet" reading.
     "utils": 2,
@@ -327,7 +327,7 @@ def test_trace_reachin_counts_match_the_ledger_exactly() -> None:
         f"{grew}. `getattr(trace, '_x', default)` is invisible to SLF001 and "
         "fail-open: a renamed field degrades silently. Read the declared "
         "attribute directly (SLF001-visible, AttributeError on rename) or add a "
-        "typed seam like merged/_presenter.py::_rank_raw_to_final_op_labels. "
+        "typed seam like _merged/_presenter.py::_rank_raw_to_final_op_labels. "
         f"Offending sites: { {p: found[p] for p in grew} }"
     )
     shrank = {

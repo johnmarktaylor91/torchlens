@@ -56,7 +56,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: next 50-line step above their post-wave sizes -- the growth is the wave's
 #: reviewed defensive fixes (typed refusals, R56 teardown guards, provenance
 #: sentinels), not drift. tensor_utils.py instead SHRANK below the unledgered
-#: cap by splitting the r37 INV-2 alias engine into utils/alias_footprint.py.
+#: cap by splitting the r37 INV-2 alias engine into _utils/alias_footprint.py.
 #: 2026-08-16 fixwave-6 integration settle: 10 ceilings re-stepped to the next
 #: 50 above the union-tree measurement -- this ledger was frozen on the
 #: fix/infra-r7 lane while the other fixwave-6 lanes (capture/iomerged/
@@ -78,14 +78,14 @@ _NEW_FILE_LINE_CAP = 2000
 #: kickoff 75439a67 (the debloat pass's target to return to or beat):
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
 #:   bundle/__init__.py 2450 | capture/trace.py 2200
-#:   data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
+#:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
 #:   _runnable_state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
 #:   visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
 #: (edge boundary verdict in validation/core, tier-(ii) edge stores on Op,
 #: the v7 save boundary in _io/bundle). PRE-SPRINT BASELINE at 75439a67:
-#:   validation/core.py 5300 | data_classes/op.py 5200
+#:   validation/core.py 5300 | _data_classes/op.py 5200
 #:   (_io/bundle.py already listed above at 4450; L6 re-steps 4500 -> 4550)
 #: 2026-08-17 gov-sweep settle: the L6 edge-boundary check family moved out
 #: of validation/core into validation/_edge_boundary.py; core re-keyed
@@ -95,7 +95,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: + pairing), checkpoint invocation tokens (classifier + witness + D1-D6),
 #: and the journal/scavenge/finalize implicit-close split all land in
 #: backends/torch/backward.py (3900 -> 4450); the two DROP-gated Trace fields
-#: + init/load-fill land in data_classes/trace.py (3850 -> 3900).
+#: + init/load-fill land in _data_classes/trace.py (3850 -> 3900).
 #: PRE-SPRINT BASELINES unchanged (backward.py 3800, trace.py 3750 at
 #: 75439a67); the post-features debloat pass keeps both as targets.
 #: 2026-08-17 L8 C2-recording merge settle (same debt record): three ceilings
@@ -103,7 +103,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: shard-local erasure-prevention chokepoint in _io/bundle.py (4550 -> 4600),
 #: the plane-P record branch + rebinds in backends/torch/completeness_witness
 #: (2050 -> 2100), and the funcol group-resolution / wait-interposition
-#: capability probes in utils/_torch_compat.py (3450 -> 3550). PRE-SPRINT
+#: capability probes in _utils/_torch_compat.py (3450 -> 3550). PRE-SPRINT
 #: BASELINES unchanged (bundle 4450, _torch_compat 3450-eve, witness 2050-eve
 #: at 75439a67); the debloat pass keeps all three as targets.
 #: 2026-08-26 P03 fix cycle: options.py (2371, over its 2300 ceiling after the
@@ -404,7 +404,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measured ~4995. Debloat target unchanged: 3450.
     # Held at 5000 (2026-10-06 next-release): the legacy-constructor flag
     # registration fit by moving the tensor sq_item ctypes layout mirror out to
-    # its stdlib-only sibling leaf utils/_type_sequence_slot.py (flag, probe and
+    # its stdlib-only sibling leaf _utils/_type_sequence_slot.py (flag, probe and
     # capability warning stay here); measured 4968. Debloat target: 3450.
     "torchlens/_utils/_torch_compat.py": 5000,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
@@ -479,7 +479,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
     "torchlens/backends/torch/model_prep.py": 3150,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
-    # resolution helper family split to data_classes/_call_tree.py after the
+    # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
     # 2948); ceilings follow files down (R43-F2). Next 50-line step above the
     # post-split measurement (2750; ~2760 with the F10 union). Supersedes the

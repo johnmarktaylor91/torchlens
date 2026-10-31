@@ -39,27 +39,21 @@ from ._ledger import (
     membership_digest_for_ranks,
 )
 from ._lifecycle import (
-    AMBIGUOUS_GROUP_LIFETIME,
     AmbiguousGroupLifetimeError,
     ArmingRecord,
     GroupIdentity,
     arm,
-    auto_arm_degradation,
     disarm,
     is_armed,
 )
 from ._recognizer import (
-    COLLECTIVE_NAMESPACES,
     UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
-    derive_collective_recognizer,
     has_vetted_snapshot,
 )
 
 __all__ = [
-    "AMBIGUOUS_GROUP_LIFETIME",
-    "COLLECTIVE_NAMESPACES",
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
     "UNCAPTURED_COLLECTIVE_OP",
     "AmbiguousGroupLifetimeError",
@@ -70,8 +64,6 @@ __all__ = [
     "UncapturedCollectiveOpError",
     "arm",
     "audit_membership_lineages",
-    "auto_arm_degradation",
-    "derive_collective_recognizer",
     "disarm",
     "has_vetted_snapshot",
     "is_armed",

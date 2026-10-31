@@ -1922,7 +1922,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         The graph-VIEW binding of the one influence-region idea: the same
         member set the ``tl.between(sources, sinks)`` producer selects,
-        presented as a :class:`torchlens._trace_slice.TraceSlice` — member
+        presented as a :class:`torchlens.types.TraceSlice` — member
         ops, internal dataflow edges, and an EXPLICIT boundary (every edge
         crossing in or out is declared, so external dependencies are
         visible rather than silently dropped). A slice is a presenter,
@@ -1940,7 +1940,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         Returns
         -------
-        torchlens._trace_slice.TraceSlice
+        torchlens.types.TraceSlice
             Frozen sub-DAG view (session-time only; never persisted).
         """
 
@@ -1956,7 +1956,7 @@ class TraceStatsMixin(_TraceMixinBase):
         ``tl.units(...)``, an ``Op``/``Layer``, or a future graph-motif
         producer's hits — its touched-site FAMILY becomes the member set
         (element masks never shrink a graph region), presented with the
-        same explicit-boundary :class:`~torchlens._trace_slice.TraceSlice`
+        same explicit-boundary :class:`~torchlens.types.TraceSlice`
         contract as :meth:`between`. DOCUMENTED-UNSTABLE spelling.
 
         Parameters
@@ -1968,7 +1968,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         Returns
         -------
-        torchlens._trace_slice.TraceSlice
+        torchlens.types.TraceSlice
             Frozen sub-DAG view (session-time only; never persisted).
         """
 

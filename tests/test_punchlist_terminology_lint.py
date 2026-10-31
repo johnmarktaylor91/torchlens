@@ -253,12 +253,8 @@ def test_three_axes_stay_apart() -> None:
 def test_merged_trace_vocabulary_stays_domain_specific() -> None:
     """R2: MergedTrace's frozen enums are pinned, never re-graded."""
 
-    from torchlens._merged import (
-        BoundaryConsistency,
-        MergeAlignment,
-        MergedErrorCode,
-        MergeValueStatus,
-    )
+    from torchlens._merged import BoundaryConsistency, MergedErrorCode
+    from torchlens.types import MergeAlignment, MergeValueStatus
 
     assert {m.value for m in MergeAlignment} == {"aligned", "partial", "conflicted"}
     assert {m.value for m in BoundaryConsistency} == {

@@ -20,9 +20,7 @@ import pytest
 from torchlens._merged import (
     MERGE_FINDING_KINDS,
     BoundaryConsistency,
-    MergeAlignment,
     MergedErrorCode,
-    MergeValueStatus,
     derive_merge,
 )
 from torchlens._merged._errors import MergeInputError
@@ -37,6 +35,7 @@ from torchlens.distributed._ledger import (
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
+from torchlens.types import MergeAlignment, MergeValueStatus
 
 WORLD = membership_digest_for_ranks([0, 1])
 

@@ -233,7 +233,7 @@ class TupleModel(nn.Module):
 def _register_pair_box() -> None:
     """Register the PairBox fixture type."""
 
-    tl.register_container(
+    tl.types.register_container(
         PairBox,
         lambda value: ([value.left, value.right], None),
         lambda _aux, children: PairBox(children[0], children[1]),
@@ -255,7 +255,7 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
 
     output_container = trace.ops[trace.output_layers[0]].container
-    assert isinstance(output_container, tl.Container)
+    assert isinstance(output_container, tl.types.Container)
     assert output_container.reconstructable is True
     assert output_container["past_key_values"][0][1].layer_label in trace.output_layers
 
@@ -270,7 +270,7 @@ def test_container_repr_summary_uses_output_cross_references() -> None:
     )
     output_container = trace.ops[trace.output_layers[0]].container
 
-    assert isinstance(output_container, tl.Container)
+    assert isinstance(output_container, tl.types.Container)
     tree = repr(output_container)
     assert "logits: -> output_1" in tree
     assert "past_key_values: tuple" in tree
@@ -447,7 +447,7 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
 
     container = op.container
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.reconstructable is False
     with pytest.raises(ValueError, match="Path-only"):
         container.reconstruct()
@@ -467,7 +467,7 @@ def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
     input_container = stack_op.input_containers[0]
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.kind is None
     assert container.reconstructable is False
     assert input_container.kind is None

@@ -91,7 +91,7 @@ from ..intervention.types import (
     InterventionSpec,
     Relationship,
 )
-from ..types import ActivationPostfunc, GradientPostfunc
+from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._preprocessing_provenance import status_of
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
@@ -1385,7 +1385,7 @@ class Trace(
         "save_rng_states": FieldPolicy.KEEP,
         "recurrence_detection": FieldPolicy.KEEP,
         # L1 grouping surface: persists as of tlspec v8; the grouping-policy
-        # stamp validates at load (C1-C8, postprocess/_grouping_stamp.py).
+        # stamp validates at load (C1-C8, _postprocess/_grouping_stamp.py).
         "grouping": FieldPolicy.KEEP,
         "grouping_policy": FieldPolicy.KEEP,
         # L8/F6 shard-local capture marker (merge-ranks C2 substrate):
@@ -1669,8 +1669,8 @@ class Trace(
         self,
         model_class_name: str,
         output_device: str = "same",
-        activation_transform: ActivationPostfunc | None = None,
-        grad_transform: GradientPostfunc | None = None,
+        activation_transform: _ActivationPostfunc | None = None,
+        grad_transform: _GradientPostfunc | None = None,
         save_raw_activations: bool = True,
         save_raw_gradients: bool = True,
         save_mode: SaveMode = "copy",
@@ -3443,7 +3443,7 @@ class Trace(
         # F9: adopt the restored detached records into a fresh sealed core so
         # loaded traces rejoin the single-truth store (best-effort — an abort
         # preserves the coreless-island behavior; backward records stay
-        # detached by design). See data_classes/_trace_rehydrate.py.
+        # detached by design). See _data_classes/_trace_rehydrate.py.
         from ._trace_rehydrate import rehydrate_trace_core
 
         rehydrate_trace_core(self)

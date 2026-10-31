@@ -620,7 +620,7 @@ def _finalize_single_op(
         op_log.equivalence_class = assignment.equivalence_key
     trace.layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
-    # op.label (postprocess/labeling.py's
+    # op.label (_postprocess/labeling.py's
     # ``self.layer_dict_main_keys[layer_entry.label] = layer_entry``), never
     # the raw backend label -- a single-pass op's raw label was never a valid
     # main key, so any lookup of a relabeled (bare or pass-qualified) final
@@ -632,7 +632,7 @@ def _finalize_single_op(
     # multi-pass groups). Without this, single-pass ops -- the common case --
     # were never resolvable by bare layer_label through layer_dict_all_keys,
     # which silently starved module-hierarchy building
-    # (postprocess/finalization.py::_build_module_logs looks each recorded
+    # (_postprocess/finalization.py::_build_module_logs looks each recorded
     # layer up by its bare label via this exact dict) of every single-pass
     # op, leaving Module.layer_labels empty for any module whose ops never
     # recur and tripping the module_layer_containment invariant.

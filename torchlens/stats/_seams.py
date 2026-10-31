@@ -182,7 +182,7 @@ def echo(
 ) -> EchoObserver:
     """Create an echo observer (the live line density) for one site.
 
-    Mounts on the shipped hook surface exactly like ``tl.tap``::
+    Mounts on the shipped hook surface exactly like ``tl.observers.tap``::
 
         obs = tl.stats.echo(tl.func("relu"), sink=print)
         tl.trace(model, x,
@@ -197,7 +197,7 @@ def echo(
         Optional per-line consumer (e.g. ``print`` or a logger method);
         lines always also accumulate on ``observer.lines``.
     direction:
-        Hook direction, as on ``tl.tap``.
+        Hook direction, as on ``tl.observers.tap``.
     style:
         Rendering style for the echoed cores.
 

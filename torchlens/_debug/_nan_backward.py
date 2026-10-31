@@ -30,7 +30,7 @@ from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
-__all__ = ["BackwardNanResult", "BackwardTransition", "bisect_nan_backward"]
+__all__ = ["BackwardNanReport", "BackwardTransition", "bisect_nan_backward"]
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ class BackwardTransition:
 
 
 @dataclass(frozen=True)
-class BackwardNanResult(FoundReport):
+class BackwardNanReport(FoundReport):
     """Result of :func:`bisect_nan_backward`.
 
     Parameters
@@ -474,7 +474,7 @@ def bisect_nan_backward(
     *,
     bwd: int | None = None,
     grad_scale: float | None = None,
-) -> BackwardNanResult:
+) -> BackwardNanReport:
     """Locate where a backward pass's NaN/Inf gradients were BORN.
 
     Post-hoc over one logged backward; no rerun. Requires a trace captured
@@ -495,7 +495,7 @@ def bisect_nan_backward(
 
     Returns
     -------
-    BackwardNanResult
+    BackwardNanReport
         The full fire-order transition ledger with the earliest provable
         birth headlined.
 
@@ -555,7 +555,7 @@ def bisect_nan_backward(
 
     message = _compose_message(walk, verdict_scope=verdict_scope, bwd=bwd, amp_hint=amp_hint)
 
-    return BackwardNanResult(
+    return BackwardNanReport(
         found=found,
         birth=birth,
         verdict_scope=verdict_scope,

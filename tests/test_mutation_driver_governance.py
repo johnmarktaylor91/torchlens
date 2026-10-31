@@ -187,7 +187,7 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
 
     b9-sol round-5 R74-2: the direct roster covered exactly one validation
     comparator and one postprocess checker while validation/core.py carried
-    five more raise-on-violation entry points and postprocess/__init__.py two
+    five more raise-on-violation entry points and _postprocess/__init__.py two
     assert seams — claimed-exhaustive tripwire coverage derived from the
     metadata-contract registry alone. Registry contracts are enrolled by
     construction; this census makes the DIRECT scope structural too: a new

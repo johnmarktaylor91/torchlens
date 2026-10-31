@@ -96,7 +96,7 @@ def test_failed_capture_advisory_never_replaces_user_exception_under_error_filte
 def test_partial_construction_failure_warning_never_replaces_user_exception(monkeypatch):
     """Sibling sweep of b3-opus-R07-1: the construction-failure RuntimeWarning
     inside the partial-attachment arm has the same as-error filter hazard."""
-    from torchlens._partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     def _boom_from_trace(*args, **kwargs):
         raise ValueError("construction exploded")

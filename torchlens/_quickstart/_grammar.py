@@ -94,7 +94,7 @@ def _refuse(problem: str, *, code: str = "input_size_invalid", **context: Any) -
             "pass one flat positive-int tuple for one input, a sequence of "
             "shape tuples for several positional inputs, or a mapping of "
             "forward keyword names to shapes; use "
-            "torchlens._quickstart.InputSpec(shape, dtype=..., low=..., high=...) "
+            "torchlens.types.InputSpec(shape, dtype=..., low=..., high=...) "
             "to pin a slot's dtype and value recipe -- or pass a real input, "
             "which is always the better answer"
         ),

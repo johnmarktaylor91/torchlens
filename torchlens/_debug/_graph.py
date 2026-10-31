@@ -30,7 +30,7 @@ LineageDirection = Literal["ancestors", "descendants", "both"]
 
 
 @dataclass(frozen=True)
-class LineageResult(DebugReport):
+class LineageReport(DebugReport):
     """Result returned by :func:`lineage`.
 
     Parameters
@@ -80,7 +80,7 @@ def lineage(
     *,
     direction: str = "ancestors",
     max_depth: int | None = None,
-) -> LineageResult:
+) -> LineageReport:
     """Walk graph lineage for a completed trace.
 
     Parameters
@@ -96,21 +96,21 @@ def lineage(
 
     Returns
     -------
-    LineageResult
+    LineageReport
         Traversal result with unavailable lookups reported in ``message``.
     """
 
     start_op, error = _resolve_op(trace, op_or_label)
     if direction not in {"ancestors", "descendants", "both"}:
         requested = str(getattr(op_or_label, "label", op_or_label))
-        return LineageResult(
+        return LineageReport(
             start_label=requested,
             direction=direction,
             nodes=[],
             message="unavailable: direction must be 'ancestors', 'descendants', or 'both'",
         )
     if start_op is None:
-        return LineageResult(
+        return LineageReport(
             start_label=str(op_or_label),
             direction=direction,
             nodes=[],
@@ -149,7 +149,7 @@ def lineage(
                 continue
             queue.append((child_op, depth + 1))
 
-    return LineageResult(
+    return LineageReport(
         start_label=start_label,
         direction=direction,
         nodes=nodes,

@@ -1167,7 +1167,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
-: `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
+: `tl.observers.tap` creates a tap observer for a site; `tl.observers.span` records a named observer span
   around captures or hook execution (the former `record_span` alias is removed);
   `tl.record_kpi_in_graph` records a user KPI on the active capture graph;
   `tl.register_tensor_connection` registers a manual parent-child tensor edge during
@@ -1216,20 +1216,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only
   when the rerun graph matches op for op; otherwise the rerun refuses `rerun_resave_ops_shifted`
   (trace unchanged).
-  `tl.PayloadLoadHints` carries backend-specific payload materialization hints
-  (`tl.JaxPayloadLoadHint` is the JAX-specific form).
+  `tl._io.PayloadLoadHints` carries backend-specific payload materialization hints
+  (`tl._io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
 : `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
   `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StreamingOptions`.
 
 **Structural hash**
-: `tl.fingerprint` is the provisional structural-hash namespace; `tl.assert_unchanged` asserts
+: `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
   a model still matches a pinned address-free structural hash.
 
 **Container registration**
-: `tl.register_container` registers a custom container type (flatten/unflatten pair) for
-  capture and reconstruction. `tl.Container` is the computed view over a captured Python
+: `tl.types.register_container` registers a custom container type (flatten/unflatten pair) for
+  capture and reconstruction. `tl.types.Container` is the computed view over a captured Python
   output container.
 
 **Capture-product bases**
@@ -1316,9 +1316,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Quantities and typed errors
 
 **Quantities**
-: `tl.Quantity` is the marker base for numeric quantity wrappers with unit-aware
-  display: `tl.Bytes` (memory), `tl.Duration` (seconds), `tl.Flops` (floating-point
-  operations), `tl.Macs` (multiply-accumulates).
+: `tl.types.Quantity` is the marker base for numeric quantity wrappers with unit-aware
+  display: `tl.types.Bytes` (memory), `tl.types.Duration` (seconds), `tl.types.Flops` (floating-point
+  operations), `tl.types.Macs` (multiply-accumulates).
 
 **FLOP convention (`flop_convention=`)**
 : `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted

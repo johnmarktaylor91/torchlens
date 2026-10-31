@@ -15,11 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._debug import (
-    FirstBadThing,
-    bisect_nan_backward,
-    gradient_flow_audit_rows,
-)
+from torchlens._debug import gradient_flow_audit_rows
+from torchlens.report import FirstBadThing, bisect_nan_backward
 
 
 class _NanBirthBackward(torch.autograd.Function):

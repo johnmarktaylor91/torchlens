@@ -18,7 +18,6 @@ from torchlens._ir import (
     CaptureEvents,
     CapturePolicy,
     ConditionalEvent,
-    ContainerSpec,
     DeferredRef,
     DeviceRef,
     DtypeRef,
@@ -43,6 +42,7 @@ from torchlens._ir import (
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens.types import ContainerSpec
 
 
 def _assert_frozen_and_slotted(instance: object) -> None:

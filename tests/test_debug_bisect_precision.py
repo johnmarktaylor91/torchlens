@@ -49,7 +49,7 @@ def test_bisect_precision_finds_engineered_cancellation() -> None:
 
     torch.manual_seed(0)
     model = CancellingModel().eval()
-    result = tl._debug.bisect_precision(model, torch.randn(2, 8))
+    result = tl.report.bisect_precision(model, torch.randn(2, 8))
 
     assert result.found is True
     assert result.func_name == "__sub__"
@@ -66,7 +66,7 @@ def test_bisect_precision_clean_model_reports_no_divergence() -> None:
 
     torch.manual_seed(0)
     model = CleanModel().eval()
-    result = tl._debug.bisect_precision(model, torch.randn(2, 8))
+    result = tl.report.bisect_precision(model, torch.randn(2, 8))
 
     assert result.found is False
     assert result.label is None
@@ -83,7 +83,7 @@ def test_bisect_precision_leaves_caller_model_and_rng_untouched() -> None:
     x = torch.randn(2, 8)
     state_before = {name: value.clone() for name, value in model.state_dict().items()}
     rng_before = torch.random.get_rng_state()
-    tl._debug.bisect_precision(model, x)
+    tl.report.bisect_precision(model, x)
 
     assert torch.equal(rng_before, torch.random.get_rng_state())
     for name, value in model.state_dict().items():
@@ -112,7 +112,7 @@ def test_bisect_precision_flags_stochastic_first_divergence() -> None:
             return self.drop(self.a(x))
 
     model = Droppy().train()
-    result = tl._debug.bisect_precision(model, torch.randn(4, 8))
+    result = tl.report.bisect_precision(model, torch.randn(4, 8))
     if result.found:
         first_row = next(row for row in result.rows if row.label == result.label)
         assert first_row.stochastic is True
@@ -125,7 +125,7 @@ def test_bisect_precision_explicit_tolerances_override_dtype_defaults() -> None:
 
     torch.manual_seed(0)
     model = CleanModel().eval()
-    result = tl._debug.bisect_precision(model, torch.randn(2, 8), rtol=0.5, atol=1.0)
+    result = tl.report.bisect_precision(model, torch.randn(2, 8), rtol=0.5, atol=1.0)
 
     assert all(row.rtol == 0.5 and row.atol == 1.0 for row in result.rows)
     assert result.found is False

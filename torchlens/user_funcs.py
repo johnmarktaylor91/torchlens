@@ -183,7 +183,7 @@ from .options import (
     merge_save_options,
     merge_streaming_options,
 )
-from .types import ActivationPostfunc, GradientPostfunc
+from .types import _ActivationPostfunc, _GradientPostfunc
 from .visualization.code_panel import (
     capture_model_source_code,
     make_weak_model_ref,
@@ -764,8 +764,8 @@ def _trace_mlx_model(
     save_visualizations: bool | MissingType,
     keep_orphans: bool | MissingType,
     output_device: OutputDeviceLiteral | MissingType,
-    activation_transform: ActivationPostfunc | None | MissingType,
-    grad_transform: GradientPostfunc | None | MissingType,
+    activation_transform: _ActivationPostfunc | None | MissingType,
+    grad_transform: _GradientPostfunc | None | MissingType,
     save_raw_activations: bool | MissingType,
     save_raw_gradients: bool | MissingType,
     capture_tensor_grad_hooks: bool | MissingType,
@@ -1548,8 +1548,8 @@ def _run_model_and_save_specified_outs(
     layers_to_save: str | list[int | str] | None = "all",
     keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
-    activation_transform: ActivationPostfunc | None = None,
-    grad_transform: GradientPostfunc | None = None,
+    activation_transform: _ActivationPostfunc | None = None,
+    grad_transform: _GradientPostfunc | None = None,
     save_raw_activations: bool = True,
     save_raw_gradients: bool = True,
     save_mode: SaveMode = "copy",
@@ -2540,7 +2540,7 @@ def trace(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
@@ -2629,7 +2629,7 @@ def trace(
         tuple, a sequence of shape tuples, or a mapping of forward keyword
         names to shapes (batch included exactly as written). Dtype/value
         recipes are fail-closed static facts (override:
-        ``torchlens._quickstart.InputSpec``); local seed-0 synthesis,
+        ``torchlens.types.InputSpec``); local seed-0 synthesis,
         disclosed in the trace's persistent provenance record.
     save:
         Which layers to save outs for; the canonical selection kwarg (see
@@ -2905,8 +2905,8 @@ def _trace_torch_model(
     save_raw_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
@@ -3734,12 +3734,12 @@ def _trace_torch_model(
         recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else recursive_save_options
         )
-        recursive_activation_transform: ActivationPostfunc | None | MissingType = (
+        recursive_activation_transform: _ActivationPostfunc | None | MissingType = (
             activation_transform
             if save_predicate is not None and activation_transform is not None
             else MISSING
         )
-        recursive_grad_transform: GradientPostfunc | None | MissingType = (
+        recursive_grad_transform: _GradientPostfunc | None | MissingType = (
             grad_transform if save_predicate is not None and grad_transform is not None else MISSING
         )
         recursive_save_raw_activations: bool | MissingType = (

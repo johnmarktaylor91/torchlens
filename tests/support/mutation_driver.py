@@ -99,7 +99,7 @@ MUTANTS: dict[str, tuple[str, str]] = {
     # The b9-sol round-5 enrollment gap (R74-2): the direct roster covered
     # exactly one validation comparator and one postprocess checker while
     # validation/core.py carries five more raise-on-violation entry points
-    # and postprocess/__init__.py two assert seams, all previously
+    # and _postprocess/__init__.py two assert seams, all previously
     # margin-unmeasured. tests/test_mutation_driver_governance.py now
     # censuses the check-shaped functions in both files against this roster,
     # so the next entry point cannot ship unenrolled.

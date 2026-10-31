@@ -27,12 +27,12 @@ LICENSED_COMPUTE_READERS = {
     # Producers: build/derive the fields they then re-read for verification.
     "capture/compute_record.py": "two-term record producer (verifies its own split)",
     "capture/projections.py": "journal commit tail (writes the persisted field)",
-    "ir/op_record_scatter.py": "generated ingest scatter (field plumbing, not aggregation)",
+    "_ir/op_record_scatter.py": "generated ingest scatter (field plumbing, not aggregation)",
     # Record classes: field definitions + per-record accessors (a single
     # op/layer's own value is record surface, not aggregation).
-    "data_classes/op.py": "field definition + per-record accessors",
-    "data_classes/layer.py": "per-layer mirrors/rollups of its OWN ops (record surface)",
-    "data_classes/_trace_stats.py": (
+    "_data_classes/op.py": "field definition + per-record accessors",
+    "_data_classes/layer.py": "per-layer mirrors/rollups of its OWN ops (record surface)",
+    "_data_classes/_trace_stats.py": (
         "reads ComputeRow.fma_macs from the aggregation service's own rows "
         "(name-collision with the raw op field; the totals themselves come "
         "from aggregate_forward_compute/compute_aggregation)"

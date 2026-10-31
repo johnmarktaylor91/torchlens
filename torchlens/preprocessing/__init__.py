@@ -48,25 +48,12 @@ from ._diagnostics import (
     diagnose,
 )
 from ._imagenet_default import imagenet_default
-from ._records import (
-    COMPARABLE_FIELDS,
-    STATUS_AUTHORITATIVE,
-    STATUS_UNKNOWN,
-    STATUS_UNVERIFIED_FALLBACK,
-    DeclaredPreprocessing,
-    Resolution,
-    status_of,
-    unknown_resolution,
-)
+from ._records import DeclaredPreprocessing, Resolution, unknown_resolution
 
 __tl_layer__ = "L5"
 
 __all__ = [
-    "COMPARABLE_FIELDS",
     "DEFAULT_CHECKS",
-    "STATUS_AUTHORITATIVE",
-    "STATUS_UNKNOWN",
-    "STATUS_UNVERIFIED_FALLBACK",
     "AuditFinding",
     "AuthorityAdapter",
     "DeclaredPreprocessing",
@@ -82,6 +69,5 @@ __all__ = [
     "imagenet_default",
     "register_authority_adapter",
     "resolve",
-    "status_of",
     "unknown_resolution",
 ]

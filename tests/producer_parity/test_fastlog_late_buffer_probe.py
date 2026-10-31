@@ -93,7 +93,7 @@ def test_hash_covers_post_pre0_stream_today() -> None:
     assert cooked._raw_event_shape_hash
     # Recompute over the retained (released) structural stream is impossible
     # post-release; instead assert the invariant the hash mechanism gives us:
-    # the hash was computed AFTER pre-0 (postprocess/__init__.py computes it
+    # the hash was computed AFTER pre-0 (_postprocess/__init__.py computes it
     # from trace.capture_events after _resolve_output_parent_labels), so a
     # journal WITHOUT the buffer event must hash differently.
     model, inputs = BufferOutputModel(), _small_vec_input()

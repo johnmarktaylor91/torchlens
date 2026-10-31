@@ -657,7 +657,7 @@ def _facet_register_aliases(tree: ast.Module) -> set[str]:
 def test_no_module_level_registry_mutation_in_tests() -> None:
     """Test modules must not mutate public registries at IMPORT time.
 
-    A module-level ``@tl.facets.register`` or ``tl.register_container(...)``
+    A module-level ``@tl.facets.register`` or ``tl.types.register_container(...)``
     fires at pytest COLLECTION -- before any fixture can isolate it -- so a
     full collection left extra recipes/containers in the process-global
     registry for the whole session while a targeted run did not: the same

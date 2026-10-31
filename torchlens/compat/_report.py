@@ -1288,8 +1288,8 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
                 "dynamo_region_not_logged), not logged."
             )
         suggestion = (
-            "Verify the contract with tl._debug.count_compiles(); correlate Dynamo graph "
-            "breaks with tl._debug.graph_breaks(). For compiled-artifact introspection "
+            "Verify the contract with tl.report.count_compiles(); correlate Dynamo graph "
+            "breaks with tl.report.graph_breaks(). For compiled-artifact introspection "
             "use the ecosystem tools (torch DebugMode, tlparse, the profiler, depyf)."
             if detected
             else ""
@@ -1329,7 +1329,7 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
         detected,
         details,
         "Log the original eager model (torch >= 2.6 captures compiled callables eagerly "
-        "via set_stance). Correlate Dynamo graph breaks with tl._debug.graph_breaks(); "
+        "via set_stance). Correlate Dynamo graph breaks with tl.report.graph_breaks(); "
         "for compiled-code context use torch DebugMode, tlparse, or torchlens.bridge.depyf."
         if detected
         else "",

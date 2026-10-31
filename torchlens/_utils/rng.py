@@ -625,7 +625,7 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
             # query helpers is torch 2.4+ only). On torch>=2.4 the shim calls
             # ``torch.is_autocast_enabled``/``torch.get_autocast_dtype``
             # directly (identical behavior); on torch 2.1-2.3 it routes to the
-            # legacy per-device helpers. See utils/_torch_compat.py.
+            # legacy per-device helpers. See _utils/_torch_compat.py.
             state[device] = {
                 "enabled": autocast_is_enabled(device),
                 "dtype": autocast_get_dtype(device),

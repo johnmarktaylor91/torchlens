@@ -461,7 +461,7 @@ def test_selective_save_with_intervention_features(feature: str) -> None:
             op.has_saved_activation and op.layer_type == "linear" for op in linear_trace.layer_list
         )
     else:
-        observer = tl.tap(tl.func("relu"))
+        observer = tl.observers.tap(tl.func("relu"))
         trace = tl.trace(
             TinyLinear(),
             x,

@@ -25,7 +25,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
-report = tl._debug.hot_path(trace, by="flops")
+report = tl.report.hot_path(trace, by="flops")
 print(isinstance(report, tl._debug.DebugReport), report.report_type)
 print(report.to_pandas().columns.tolist())
 ```
@@ -158,8 +158,8 @@ Output:
 
 ## `bisect_nan`
 
-`tl._debug.bisect_nan(trace)` returns the first saved operation with a NaN or Inf output.
-It returns a `BisectNanResult`; it does not raise when every saved output is finite. See
+`tl.report.bisect_nan(trace)` returns the first saved operation with a NaN or Inf output.
+It returns a `BisectNanReport`; it does not raise when every saved output is finite. See
 [`lineage`](#lineage) to inspect the offending operation's neighborhood.
 
 ```python
@@ -168,7 +168,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Identity(), torch.tensor([float("nan")]))
-result = tl._debug.bisect_nan(trace)
+result = tl.report.bisect_nan(trace)
 print(result.found, result.kind)
 ```
 
@@ -180,10 +180,10 @@ True nan
 
 ## `bisect_precision`
 
-`tl._debug.bisect_precision(model, input_args)` (DOCUMENTED-UNSTABLE spelling) runs the
+`tl.report.bisect_precision(model, input_args)` (DOCUMENTED-UNSTABLE spelling) runs the
 same seeded forward twice -- once at native precision, once with floating state and
 inputs cast to `reference_dtype` (fp64 by default) -- and returns a
-`BisectPrecisionResult` naming the first op whose native output separates from the
+`BisectPrecisionReport` naming the first op whose native output separates from the
 high-precision reference beyond tolerance, plus the full per-op error table in
 `result.rows` and disclosed skips in `result.skipped`. Both runs happen on deep copies
 under a forked RNG, so the caller's model and global RNG are untouched. Default
@@ -211,7 +211,7 @@ class Cancelling(nn.Module):
 
 
 torch.manual_seed(0)
-result = tl._debug.bisect_precision(Cancelling().eval(), torch.randn(2, 8))
+result = tl.report.bisect_precision(Cancelling().eval(), torch.randn(2, 8))
 print(result.found, result.func_name)
 ```
 
@@ -279,7 +279,7 @@ Output:
 
 ## `count_compiles`
 
-`tl._debug.count_compiles()` measures Dynamo compilation events (including recompiles) across a
+`tl.report.count_compiles()` measures Dynamo compilation events (including recompiles) across a
 block, through the feature-detected `HAS_DYNAMO_COMPILE_COUNTERS` capability. Use it to verify the
 torch.compile coexistence contract on your own model: zero compiles while a capture holds the
 `force_eager` stance (torch >= 2.6), and a bounded burst of recompilations on the first
@@ -311,10 +311,10 @@ model(x)  # warm the compile cache
 
 with warnings.catch_warnings(record=True) as capture_notes:
     warnings.simplefilter("always")
-    with tl._debug.count_compiles() as during:
+    with tl.report.count_compiles() as during:
         tl.trace(model, x)
 assert any("force_eager" in str(note.message) for note in capture_notes)
-with tl._debug.count_compiles() as after:
+with tl.report.count_compiles() as after:
     model(x)
 print(during.frames_compiled, after.frames_compiled <= 1)
 ```
@@ -440,7 +440,7 @@ TorchLens unknown cells, and a native ZERO can be a registry-coverage fact
 
 ## `hot_path`
 
-`tl._debug.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
+`tl.report.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
 duration by source line. `by` is one of `"flops"`, `"memory"`, `"duration"`, or
 `"device_time"` (joined Kineto device nanoseconds; refuses typed
 `device_time_unavailable` without a joined `torchlens._observability`
@@ -454,7 +454,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
-report = tl._debug.hot_path(trace, by="flops").to_pandas()
+report = tl.report.hot_path(trace, by="flops").to_pandas()
 print(report.columns.tolist(), report.attrs["metric"])
 ```
 
@@ -469,7 +469,7 @@ Output:
 `tl._debug.compare_rows(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)`,
 `tl._debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`,
 `tl._debug.gradient_flow_audit_rows(trace, *, bwd=None, vanishing_threshold=1e-7,
-exploding_threshold=1e4)`, and `tl._debug.hot_path_rows(trace, by="flops")`
+exploding_threshold=1e4)`, and `tl.report.hot_path_rows(trace, by="flops")`
 (DOCUMENTED-UNSTABLE spellings) are the pandas-free cores of
 [`compare`](#compare), [`dead_neurons`](#dead_neurons),
 [`gradient_flow_audit`](#gradient_flow_audit), and [`hot_path`](#hot_path).
@@ -497,20 +497,20 @@ Output:
 2 2
 ```
 
-## `infer_input_shape`
+## `guess_input_shape`
 
-`tl._debug.infer_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
+`tl.report.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
 seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
-returns an `InferInputShapeResult` with a verified synthetic shape or a diagnostic failure.
+returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python
 import torch
 from torch import nn
 import torchlens as tl
 
-result = tl._debug.infer_input_shape(nn.Linear(3, 2), max_probes=4)
+result = tl.report.guess_input_shape(nn.Linear(3, 2), max_probes=4)
 print(result.found, result.shape)
 ```
 
@@ -522,9 +522,9 @@ True (1, 3)
 
 ## `lineage`
 
-`tl._debug.lineage(trace, op_or_label, *, direction="ancestors", max_depth=None)` walks
+`tl.report.lineage(trace, op_or_label, *, direction="ancestors", max_depth=None)` walks
 parents, children, or both from an operation accepted by trace indexing. It returns a
-`LineageResult` with labels, depths, source locations, shapes, and dtypes. Pair it with
+`LineageReport` with labels, depths, source locations, shapes, and dtypes. Pair it with
 [`bisect_nan`](#bisect_nan) after locating a non-finite output.
 
 ```python
@@ -533,7 +533,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Sequential(nn.Linear(2, 2), nn.ReLU()), torch.ones(1, 2))
-result = tl._debug.lineage(trace, trace.output_layers[0], max_depth=1)
+result = tl.report.lineage(trace, trace.output_layers[0], max_depth=1)
 print(result.message, len(result.nodes))
 ```
 
@@ -545,7 +545,7 @@ Output:
 
 ## `recompute_candidates`
 
-`tl._debug.recompute_candidates(trace, *, budget_gb=None)` ranks operations by activation
+`tl.report.recompute_candidates(trace, *, budget_gb=None)` ranks operations by activation
 memory per forward FLOP and optionally marks a greedy set that reaches an activation-memory
 budget. See [`hot_path`](#hot_path) for source-line cost ranking.
 
@@ -555,7 +555,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
-report = tl._debug.recompute_candidates(trace).to_pandas()
+report = tl.report.recompute_candidates(trace).to_pandas()
 print(report.columns.tolist())
 ```
 
@@ -601,7 +601,7 @@ True nan
 
 ## `bisect_nan_backward`
 
-`tl._debug.bisect_nan_backward(trace, *, bwd=None, grad_scale=None)` (DOCUMENTED-UNSTABLE
+`tl.report.bisect_nan_backward(trace, *, bwd=None, grad_scale=None)` (DOCUMENTED-UNSTABLE
 spelling) walks one captured backward pass's grad-fn fires in MEASURED fire order and
 classifies every transition: `clean` / `birth` / `propagated` / `healed` / `root_seed`
 (plus `unchecked` for fires `save_grads` did not cover). Healing is measured fact -- a
@@ -629,7 +629,7 @@ Deepcopy-refusing models return `inconclusive` with a `model_factory` remedy.
 
 ## `first_divergence`
 
-`tl._debug.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
+`tl.report.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
 EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
 It is the direct spelling of the first-diverging-op recipe over `compare_rows`, whose
 rows follow execution order -- never alphabetical.
@@ -653,7 +653,7 @@ inside someone else's training loop — with no re-execution and no capture cont
 reads `tensor.grad_fn` / `next_functions` only (no values, no timing, no verification)
 and every render carries that legend.
 
-`tl._debug.walk_grad_fn(outputs, *, params=None, model=None, max_nodes=...)` walks the
+`tl.report.walk_grad_fn(outputs, *, params=None, model=None, max_nodes=...)` walks the
 graph into a frozen `GradFnSketch` (nodes, forward-direction edges, truncation flag).
 `outputs` is a tensor with a `grad_fn` or a sequence of them; `params` is the torchviz
 `name -> tensor` leaf-naming convention and `model` provides leaf names via
@@ -661,7 +661,7 @@ graph into a frozen `GradFnSketch` (nodes, forward-direction edges, truncation f
 `max_nodes` ceiling (20,000) sets `truncated` and is disclosed on renders; a tensor
 with no walkable graph raises the typed `GradFnWalkError`.
 
-`tl._debug.sketch_grad_fn(outputs, path=None, *, file_format="png", params=None,
+`tl.report.sketch_grad_fn(outputs, path=None, *, file_format="png", params=None,
 model=None, max_nodes=..., view=False)` renders the same sketch through the bounded
 TorchLens graphviz runner (a wedged `dot` cannot hang the caller; renders are
 time-bounded and atomically published) and returns the DOT source. `path` follows the

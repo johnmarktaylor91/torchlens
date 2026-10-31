@@ -18,15 +18,10 @@ from test_merged_engine import (
     trace_for_boundaries,
 )
 
-from torchlens._merged import (
-    BoundaryConsistency,
-    MergeAlignment,
-    MergedErrorCode,
-    MergeValueStatus,
-    derive_merge,
-)
+from torchlens._merged import BoundaryConsistency, MergedErrorCode, derive_merge
 from torchlens._merged._errors import MergeInputError
 from torchlens._merged._evidence import extract_rank_evidence
+from torchlens.types import MergeAlignment, MergeValueStatus
 
 
 def _hex64(char: str) -> str:

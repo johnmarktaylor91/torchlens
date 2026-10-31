@@ -219,7 +219,7 @@ def _exported_public_classes() -> dict[str, type]:
         value = _resolve(name)
         if isinstance(value, type):
             resolved[f"{value.__module__}.{value.__qualname__}"] = value
-    from torchlens._partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     resolved[f"{PartialTrace.__module__}.{PartialTrace.__qualname__}"] = PartialTrace
     return resolved

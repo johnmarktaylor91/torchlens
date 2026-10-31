@@ -47,7 +47,7 @@ streams are never advanced, and the model is never moved). Dtype and value
 recipes are fail-closed static facts: an unambiguous embedding entry
 permits vocab-bounded integer ids, an unambiguous float entry permits
 uniform `[0, 1)` values, and ambiguity refuses with a teach naming
-`torchlens._quickstart.InputSpec(shape, dtype=..., low=..., high=...)` as
+`torchlens.types.InputSpec(shape, dtype=..., low=..., high=...)` as
 the override. TorchLens never discovers dtypes by running failed forwards.
 
 **Rung 3 (nothing).** Shape inference probes the model (bounded, disclosed
@@ -55,7 +55,7 @@ in a probe diary) and the surface consumes the exact verified capture --
 the cost is "N probes + 1 verified capture", never a second capture after
 verification. When inference cannot help, the refusal teaches the exact
 next command, in order: pass the real call; pass `input_size=` (including
-the mapping form); call `torchlens._debug.infer_input_shape` directly with
+the mapping form); call `torchlens.report.guess_input_shape` directly with
 hints. For Hugging Face models the refusal says the better answer first: a
 real prompt string.
 
