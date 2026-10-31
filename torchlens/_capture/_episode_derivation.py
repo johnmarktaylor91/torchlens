@@ -18,10 +18,11 @@ F40b declared-derivation doc of record (``docs/reference/episode_capture.md``).
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from .._utils.hashing import sha256_canonical_json
 
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode
@@ -585,8 +586,7 @@ def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
 def _canonical_digest(payload: Mapping[str, Any]) -> str:
     """sha256 over the canonical (sorted, compact) JSON form of ``payload``."""
 
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_canonical_json(payload, default=str)
 
 
 def _ledger_content(ledger_payload: Mapping[str, Any]) -> dict[str, Any]:

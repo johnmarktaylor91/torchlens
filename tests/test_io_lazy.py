@@ -244,7 +244,7 @@ def test_lazy_ref_metadata_access_does_not_materialize(
     def _fail(*_: Any, **__: Any) -> Any:
         raise AssertionError("filesystem access should not occur")
 
-    monkeypatch.setattr("torchlens._io.lazy.sha256_of_file", _fail)
+    monkeypatch.setattr("torchlens._io.lazy.sha256_file", _fail)
     monkeypatch.setattr("torchlens._io.lazy.load_file", _fail)
 
     assert ref.shape == tuple(layer.shape)

@@ -88,10 +88,10 @@ def _write_blob(path: Path):
     import torch
     from safetensors.torch import save_file
 
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
 
     save_file({"payload": torch.arange(8, dtype=torch.float32)}, str(path))
-    return path, sha256_of_file(path)
+    return path, sha256_file(path)
 
 
 def test_blob_verify_never_reads_whole_file_before_digest(tmp_path, monkeypatch) -> None:
@@ -99,7 +99,7 @@ def test_blob_verify_never_reads_whole_file_before_digest(tmp_path, monkeypatch)
 
     ``_load_verified_blob_tensor`` previously did ``blob_path.read_bytes()`` --
     fully materializing an attacker-controlled blob BEFORE the digest check. It
-    now hashes via the chunked ``sha256_of_file`` and materializes through the
+    now hashes via the chunked ``sha256_file`` and materializes through the
     mmap-backed safetensors loader, so ``Path.read_bytes`` is never called. Ban it
     and prove a valid blob still verifies + loads.
     """

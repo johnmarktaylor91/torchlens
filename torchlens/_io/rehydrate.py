@@ -26,11 +26,12 @@ from torchlens.backends.registry import BackendRuntimeCompatibilityError
 from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
+from .._utils._torch_symbols import torch_dtype_named
+from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
-from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef, _file_identity
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from .manifest import Manifest, TensorEntry
 from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
 from .payload_codec import materialize_transport_tensor
 from .scrub import (
@@ -881,7 +882,7 @@ def _materialize_blob_ref(
         pre_hash_identity = _file_identity(blob_path.stat())
     except OSError as exc:
         raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
-    observed_sha256 = sha256_of_file(blob_path)
+    observed_sha256 = sha256_file(blob_path)
     expected_sha256 = entry.sha256 if isinstance(entry, TensorEntry) else entry.get("sha256")
     if expected_sha256 is not None and observed_sha256 != expected_sha256:
         raise ArtifactError(
@@ -1063,8 +1064,8 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
     # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
     # dtype is a ``torch.__dict__`` entry and still resolves.
-    dtype_obj = torch_attr(dtype_name)
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(dtype_name)
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
 
@@ -1272,7 +1273,7 @@ def rehydrate_nested(
 
     expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
-        observed_manifest_sha256 = sha256_of_file(manifest_path)
+        observed_manifest_sha256 = sha256_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
             raise ArtifactError(
                 "source bundle manifest has changed since load; materialize refs and retry"

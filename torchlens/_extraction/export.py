@@ -39,6 +39,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
+from .._utils.hashing import sha256_file
 from .context import sanitize_key
 from .ragged import RaggedBatch
 
@@ -64,29 +65,6 @@ _MAT_V5_LIMIT = 2**31 - 1
 
 #: Dtypes NumPy cannot represent: widened to fp32 with disclosure.
 _WIDEN_DTYPES = (torch.bfloat16, torch.float8_e4m3fn, torch.float8_e5m2)
-
-
-def _sha256_file(path: Path) -> str:
-    """Stream one file's sha256 (computed AT EXPORT TIME, always).
-
-    Parameters
-    ----------
-    path:
-        File to hash.
-
-    Returns
-    -------
-    str
-        ``"sha256:..."`` digest.
-    """
-
-    hasher = hashlib.sha256()
-    with open(path, "rb") as handle:
-        while True:
-            chunk = handle.read(1 << 20)
-            if not chunk:
-                return f"sha256:{hasher.hexdigest()}"
-            hasher.update(chunk)
 
 
 def _widen_for_export(
@@ -654,7 +632,7 @@ def _member_rows(
             "source_key": key,
             "role": role,
             "byte_size": path.stat().st_size,
-            "sha256": _sha256_file(path),
+            "sha256": "sha256:" + sha256_file(path),
         }
         ledger.append(row)
         rows.append(row)
@@ -713,8 +691,10 @@ def _write_contract(
         "schema": "tl_extraction_export_v1",
         "format": export_format,
         "source": {
-            "manifest_sha256": _sha256_file(source / "manifest.json"),
-            "ledger_sha256": _sha256_file(ledger_path) if ledger_path.exists() else None,
+            "manifest_sha256": "sha256:" + sha256_file(source / "manifest.json"),
+            "ledger_sha256": (
+                "sha256:" + sha256_file(ledger_path) if ledger_path.exists() else None
+            ),
             "stimulus_ids_digest": (manifest.get("signature") or {}).get("stimulus_ids_digest"),
             "n_stimuli": reader.n_stimuli,
             "n_shards": reader.n_shards,

@@ -297,12 +297,12 @@ def test_finalize_waits_for_every_slow_pending_write(
 
     manifest = _manifest(bundle)
     assert manifest["tensors"], "expected streamed blobs"
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
 
     for entry in manifest["tensors"]:
         blob_path = bundle / entry["relative_path"]
         assert blob_path.exists()
-        assert sha256_of_file(blob_path) == entry["sha256"]
+        assert sha256_file(blob_path) == entry["sha256"]
     loaded = tl.load(bundle)
     reference = tl.trace(_model(), x)
     for index in range(len(loaded.layer_list)):
