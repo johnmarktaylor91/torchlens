@@ -58,6 +58,8 @@ def runtime_data_files(package_root: Path = _PACKAGE_ROOT) -> list[str]:
     for path in package_root.rglob("*"):
         if not path.is_file() or "__pycache__" in path.parts:
             continue
+        if path.name.startswith("."):
+            continue  # host caches (fontconfig writes fonts/.uuid) are never package data
         if path.name.endswith(_SOURCE_SUFFIXES) or path.name in _AGENT_DOCS:
             continue
         files.append(path.relative_to(package_root).as_posix())

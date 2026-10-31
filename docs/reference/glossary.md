@@ -3311,7 +3311,7 @@ describe each surface in depth.
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
 | `TrajectoryStats.num_positions` | Sequence length every batch shared |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
-#### `tl.recording.Recording`
+#### `tl.Recording`
 
 | Spelling | Meaning |
 | --- | --- |
@@ -3341,7 +3341,7 @@ describe each surface in depth.
 | `Recording.save_grads_repr` | Repr of the gradient-saving selector used at recording time, or `None` |
 | `Recording.start_times` | Per-pass start timestamps of the recording |
 
-#### `tl.recording.RecordingOptions`
+#### `tl.options.RecordingOptions`
 
 | Spelling | Meaning |
 | --- | --- |
