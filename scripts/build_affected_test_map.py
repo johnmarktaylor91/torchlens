@@ -11,16 +11,21 @@ that map statically from the source tree:
    such as ``_LAZY_ATTRS``);
 3. every test file's torchlens references are collected: direct imports, names
    bound by ``from torchlens... import``, attribute chains such as ``tl.trace``
-   resolved through package export tables to the defining module, and
-   ``"torchlens.x.y"`` / ``"torchlens/x/y.py"`` strings. Helper modules a test
-   imports from ``tests/`` contribute their references, and ``conftest.py``
-   references reach every test in the conftest's directory tree;
+   resolved through package export tables to the defining module. A
+   ``"torchlens.x.y"`` / ``"torchlens/x/y.py"`` string is a *mention*: it is
+   kept apart from code references because a ledger or lint test that names a
+   module does not exercise it (``"-m", "torchlens.x"`` runs ``x/__main__.py``
+   and counts as code). Helper modules a test imports from ``tests/``
+   contribute their references, and ``conftest.py`` references reach every
+   test in the conftest's directory tree;
 4. candidates for each module are ranked: pinned entries, test files whose name
-   contains the module's stem, direct users by reference count, users reached
-   through one level of torchlens-internal imports, then conftest-inherited
-   users. Files that apply a ``slow``/``rare``/``big_memory`` mark anywhere sort
-   last (the selector runs listed files without ``-m`` under a fixed budget).
-   Lists cap at 8;
+   contains the module's stem and that reference it, direct users by reference
+   count, at most two stem-named files without a reference (shortest name
+   first), users reached through one level of torchlens-internal imports,
+   conftest-inherited users, then files that only mention the module. Files
+   that apply a ``slow``/``rare``/``big_memory`` mark anywhere sort last (the
+   selector runs listed files without ``-m`` under a fixed budget). Lists cap
+   at 8;
 5. a module no test reaches takes its closest ancestor subpackage's list, else
    its importers' lists, else (for a package) its submodules' lists, else the
    root package's list; a directory whose modules all share one list collapses
@@ -51,6 +56,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = "torchlens"
 TIERS_FILE = "test-tiers.json"
 MAX_TESTS = 8
+#: Stem-named test files admitted without any reference to the module.
+MAX_UNREFERENCED_NAMED = 2
 
 #: Entries kept regardless of ranking (the map's original hand-reviewed rows).
 PINNED: dict[str, tuple[str, ...]] = {
@@ -527,12 +534,13 @@ def build_package(repo: Path) -> Package:
 # --------------------------------------------------------------------------- #
 
 
-def _count_refs(pkg: Package, scan: _Scan) -> Counter[str]:
+def _count_refs(pkg: Package, scan: _Scan) -> tuple[Counter[str], set[str]]:
     """Count the torchlens module references in one scanned file.
 
     Imports count once per statement (and once more for a re-exported name's
     defining module); every later load of a bound name or attribute chain
-    counts toward the module that defines it; module strings count once each.
+    counts toward the module that defines it. A module named only by a string
+    constant is returned apart, as a mention.
 
     Parameters
     ----------
@@ -543,10 +551,12 @@ def _count_refs(pkg: Package, scan: _Scan) -> Counter[str]:
 
     Returns
     -------
-    Counter[str]
-        Module name -> reference count.
+    tuple[Counter[str], set[str]]
+        Module name -> code reference count, and the modules only mentioned
+        by string constants.
     """
     refs: Counter[str] = Counter()
+    mentions: set[str] = set()
     module_names: dict[str, str] = {}
     symbol_names: dict[str, str] = {}
     for imp in scan.imports:
@@ -612,14 +622,16 @@ def _count_refs(pkg: Package, scan: _Scan) -> Counter[str]:
         if text.startswith(PACKAGE):
             found = _string_module(pkg, text)
             if previous == "-m" and text.split(".")[0] == PACKAGE:
-                # ``[sys.executable, "-m", "torchlens.x"]`` runs ``x/__main__.py``.
+                # ``[sys.executable, "-m", "torchlens.x"]`` runs ``x/__main__.py``:
+                # an execution, so it counts as a code reference.
                 runner, _ = pkg.longest_module(text)
                 if runner is not None and f"{runner}.__main__" in pkg.path_of:
-                    found = f"{runner}.__main__"
+                    refs[f"{runner}.__main__"] += 1
+                    found = None
             if found is not None:
-                refs[found] += 1
+                mentions.add(found)
         previous = text
-    return refs
+    return refs, mentions
 
 
 def _local_imports(scan: _Scan, rel: str, test_files: set[str]) -> set[str]:
@@ -730,7 +742,9 @@ class ReferenceIndex:
     Attributes
     ----------
     own:
-        Test path -> module -> reference count (file plus imported helpers).
+        Test path -> module -> code reference count (file plus imported helpers).
+    mentioned:
+        Test path -> modules named only by string constants (file plus helpers).
     inherited:
         Test path -> module -> reference count from governing conftests.
     expensive:
@@ -740,6 +754,7 @@ class ReferenceIndex:
     """
 
     own: dict[str, Counter[str]]
+    mentioned: dict[str, set[str]]
     inherited: dict[str, Counter[str]]
     expensive: set[str]
     tests: list[str]
@@ -763,18 +778,20 @@ def build_test_index(repo: Path, pkg: Package) -> ReferenceIndex:
     paths = {_rel(path, repo): path for path in _iter_py(repo / "tests")}
     test_files = set(paths)
     raw: dict[str, Counter[str]] = {}
+    raw_mentions: dict[str, set[str]] = {}
     helpers: dict[str, set[str]] = {}
     expensive: set[str] = set()
     for rel, path in paths.items():
         tree = _parse(path)
         scan = _scan(tree)
-        raw[rel] = _count_refs(pkg, scan)
+        raw[rel], raw_mentions[rel] = _count_refs(pkg, scan)
         helpers[rel] = _local_imports(scan, rel, test_files)
         if is_test_file(rel) and _has_expensive_marks(scan):
             expensive.add(rel)
 
-    def closure(start: str) -> Counter[str]:
+    def closure(start: str) -> tuple[Counter[str], set[str]]:
         total: Counter[str] = Counter(raw.get(start, Counter()))
+        named: set[str] = set(raw_mentions.get(start, ()))
         seen = {start}
         stack = list(helpers.get(start, ()))
         while stack:
@@ -783,15 +800,17 @@ def build_test_index(repo: Path, pkg: Package) -> ReferenceIndex:
                 continue
             seen.add(item)
             total.update(raw.get(item, Counter()))
+            named.update(raw_mentions.get(item, ()))
             stack.extend(helpers.get(item, ()))
-        return total
+        return total, named
 
-    conftests = {rel: closure(rel) for rel in raw if rel.endswith("/conftest.py")}
+    conftests = {rel: closure(rel)[0] for rel in raw if rel.endswith("/conftest.py")}
     tests = sorted(rel for rel in raw if is_test_file(rel))
     own: dict[str, Counter[str]] = {}
+    mentioned: dict[str, set[str]] = {}
     inherited: dict[str, Counter[str]] = {}
     for rel in tests:
-        own[rel] = closure(rel)
+        own[rel], mentioned[rel] = closure(rel)
         governing: Counter[str] = Counter()
         directory = rel.rsplit("/", 1)[0]
         while True:
@@ -800,7 +819,9 @@ def build_test_index(repo: Path, pkg: Package) -> ReferenceIndex:
                 break
             directory = directory.rsplit("/", 1)[0]
         inherited[rel] = governing
-    return ReferenceIndex(own=own, inherited=inherited, expensive=expensive, tests=tests)
+    return ReferenceIndex(
+        own=own, mentioned=mentioned, inherited=inherited, expensive=expensive, tests=tests
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -912,6 +933,10 @@ def _rank_candidates(pkg: Package, index: ReferenceIndex) -> tuple[dict[str, lis
     for test, refs in index.inherited.items():
         for module, count in refs.items():
             inherited_users[module][test] += count
+    mentioners: dict[str, list[str]] = defaultdict(list)
+    for test in index.tests:
+        for module in index.mentioned.get(test, ()):
+            mentioners[module].append(test)
 
     importers: dict[str, set[str]] = defaultdict(set)
     for source, targets in pkg.edges.items():
@@ -962,12 +987,18 @@ def _rank_candidates(pkg: Package, index: ReferenceIndex) -> tuple[dict[str, lis
                 or (parent_tokens and _token_match(parent_tokens, test_tokens[test]))
             )
         ]
+        referenced = [t for t in named if t in direct or t in reach]
+        unreferenced = sorted(
+            (t for t in named if t not in direct and t not in reach), key=lambda t: (len(t), t)
+        )
         tiers: list[list[str]] = [
             list(PINNED.get(path, ())),
-            sorted(named, key=lambda t: (-direct[t], -reach[t], len(t), t)),
+            sorted(referenced, key=lambda t: (-direct[t], -reach[t], len(t), t)),
             sorted(direct, key=lambda t: (-direct[t], t)),
+            unreferenced[:MAX_UNREFERENCED_NAMED],
             sorted(reach, key=lambda t: (-reach[t], t)),
             sorted(inherited, key=lambda t: (-inherited[t], t)),
+            mentioners.get(module, []),
         ]
         ordered: list[str] = []
         seen: set[str] = set()
