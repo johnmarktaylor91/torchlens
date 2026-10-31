@@ -103,12 +103,12 @@ VisualizationOptions.order_siblings
 VisualizationOptions.renderer
 VisualizationOptions.return_graph
 VisualizationOptions.save_only
-VisualizationOptions.size_scale
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
 VisualizationOptions.show_legend
 VisualizationOptions.show_redundant_args
 VisualizationOptions.size_by
+VisualizationOptions.size_scale
 VisualizationOptions.skip_fn
 VisualizationOptions.stack_by
 VisualizationOptions.theme

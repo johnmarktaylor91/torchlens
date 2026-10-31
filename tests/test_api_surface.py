@@ -126,9 +126,9 @@ TARGET_ALL = [
     "pass_variance",
     "subspace",
     # F39 unhide (conflict-ledger row 8): tl.stats / tl.stats.aggregate promoted
-    # from reachable-but-undeclared lazy names to declared surface = 116.
+    # from reachable-but-undeclared lazy names to declared surface = 116; the
+    # visuals-and-kits rename moved tl.aggregate to tl.stats.aggregate = 115.
     "stats",
-    "aggregate",
 ]
 
 CANONICAL_SUBMODULES = [
@@ -216,7 +216,8 @@ def test_all_matches_frozen_target_ledger() -> None:
     producer wave adds `subspace` (direction/subspace support selection with
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
     completeness work F39 unhide promotes the shipped streaming-stats
-    surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
+    surface `stats` and `aggregate` (conflict-ledger row 8) = 116. The
+    visuals-and-kits rename moves `aggregate` to `tl.stats.aggregate` = 115.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

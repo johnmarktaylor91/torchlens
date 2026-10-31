@@ -28,13 +28,11 @@ torchlens.Trace	torchlens.data_classes.trace	L1	core	1	0
 torchlens.accessors	torchlens.accessors	L1	core	0	0
 torchlens.add	torchlens.intervention	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
-torchlens.aggregate	torchlens.stats	L5	core	1	0
 torchlens.assert_unchanged	torchlens.hash	L1	core	1	0
 torchlens.attribution	torchlens.attribution	L5	core	0	0
 torchlens.autoroute	torchlens.autoroute	L4	core	0	0
 torchlens.backends	torchlens.backends	L2	core	0	0
 torchlens.between	torchlens.selection_graph	L4	core	1	0
-torchlens.brainpipe	torchlens.brainpipe	FACADE	facade	0	0
 torchlens.bridge	torchlens.bridge	L8	bridge	0	1
 torchlens.bundle	torchlens	FACADE	facade	1	0
 torchlens.bwd_hook	torchlens.intervention	L4	core	1	0
@@ -59,7 +57,7 @@ torchlens.experimental	torchlens.experimental	FACADE	facade	0	0
 torchlens.export	torchlens.export	L7	present	1	1
 torchlens.extract	torchlens	FACADE	facade	1	0
 torchlens.extract_dataset	torchlens.dataset_extraction	L5	core	1	0
-torchlens.facet	torchlens.intervention	L4	core	1	0
+torchlens.facet	torchlens.intervention.selectors	L4	core	1	0
 torchlens.facets	torchlens.semantic	L6	appliance	1	1
 torchlens.fastlog	torchlens.fastlog	L2	core	1	0
 torchlens.followed_by	torchlens.intervention	L4	core	1	0

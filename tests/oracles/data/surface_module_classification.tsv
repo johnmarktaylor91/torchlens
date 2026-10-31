@@ -23,13 +23,11 @@ Trace	declared
 accessors	submodule
 add	declared
 agent	submodule
-aggregate	declared
 assert_unchanged	declared
 attribution	submodule
 autoroute	submodule
 backends	submodule
 between	declared
-brainpipe	submodule
 bridge	submodule
 bundle	declared
 bwd_hook	declared
