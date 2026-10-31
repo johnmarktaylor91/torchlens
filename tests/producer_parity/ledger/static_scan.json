@@ -7177,14 +7177,6 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/hooks.py",
-  "has_default": false,
-  "sites": 6,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/hooks.py",
   "has_default": true,
