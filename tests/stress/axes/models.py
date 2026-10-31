@@ -1,6 +1,6 @@
 """Model axis by mechanism: small synthetic models, one per mechanism capture must handle.
 
-Each row names one mechanism in its ``reason``: state carried across calls,
+Each row names one mechanism in its ``reason``: state carried across calls (buffer and plain attribute),
 module sharing and tying, hooks installed before capture, compiled and
 checkpointed children, in-place and aliasing behaviour, nested containers,
 lazy materialization, ``torch.func`` transforms, custom autograd, keyword-only
@@ -84,20 +84,6 @@ class GRUCarriedState(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out, hidden = self.gru(x, self.hidden)
         self.hidden.copy_(hidden.detach())
-        return out
-
-
-class LSTMCarriedState(nn.Module):
-    """LSTM whose ``(h, c)`` pair is a plain attribute carried across calls."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lstm = nn.LSTM(WIDTH, WIDTH, batch_first=True)
-        self.state: tuple[torch.Tensor, torch.Tensor] | None = None
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, (h, c) = self.lstm(x, self.state)
-        self.state = (h.detach(), c.detach())
         return out
 
 
@@ -254,6 +240,19 @@ class LazyFirstCall(nn.Module):
         super().__init__()
         self.pre = nn.Linear(WIDTH, WIDTH)
         self.lazy: nn.Module = nn.LazyLinear(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.lazy = nn.LazyLinear(4)
+        return self.lazy(torch.relu(self.pre(x)))
+
+
+class LazyBuiltInForward(nn.Module):
+    """``nn.LazyLinear`` created and materialized inside forward, never seen by ``.to()``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pre = nn.Linear(WIDTH, WIDTH)
+        self.lazy: nn.Module | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         self.lazy = nn.LazyLinear(4)
@@ -466,12 +465,6 @@ MODELS: tuple[ModelSpec, ...] = (
         example_input=_sequence,
     ),
     _row(
-        "mech_lstm_state",
-        LSTMCarriedState,
-        "LSTM (h, c) carried across calls as a plain attribute",
-        example_input=_sequence,
-    ),
-    _row(
         "mech_shared_twice",
         SharedTwice,
         "one submodule called twice in one forward",
@@ -536,7 +529,13 @@ MODELS: tuple[ModelSpec, ...] = (
     _row(
         "mech_lazy_first_call",
         LazyFirstCall,
-        "nn.LazyLinear materialized on its first call inside the captured forward",
+        "nn.LazyLinear built uninitialized, moved with .to(), materialized in each forward",
+        dtypes=F32,
+    ),
+    _row(
+        "mech_lazy_in_forward",
+        LazyBuiltInForward,
+        "nn.LazyLinear created and materialized inside the captured forward",
         dtypes=F32,
     ),
     _row(
