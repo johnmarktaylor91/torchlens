@@ -515,11 +515,11 @@ class _CallModel(nn.Module):
         return self.call(h, g)
 
 
-def _parent_label(op, func_name: str) -> str:
-    """Return the label of ``op``'s parent produced by ``func_name`` (labels lead with it)."""
+def _slot_label(op, slot: int | str | tuple) -> str:
+    """Return the parent label capture recorded at a slot (``(i, j)`` for a container member)."""
 
-    (label,) = [p for p in op.parents if p.split("_")[0] == func_name]
-    return label
+    head = slot[0] if isinstance(slot, tuple) else slot
+    return op.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
 
 
 @pytest.mark.parametrize(
@@ -537,31 +537,30 @@ def test_attack_parent_also_inside_a_container_slot_gets_no_proof(call) -> None:
 
     trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
     op = _boundary_op(trace)
-    h_label = _parent_label(op, "linear")
-    assert script_metadata_only_proof(op, [h_label]) is None
+    assert script_metadata_only_proof(op, [_slot_label(op, 0)]) is None
     assert _metadata_decisions(trace) == []
     assert result is True
 
 
 @pytest.mark.parametrize(
-    ("call", "size_func"),
+    ("call", "size_slot", "value_slot"),
     [
-        (lambda h, g: value_then_size(g, h), "linear"),
-        (lambda h, g: value_then_size(h, g), "tanh"),
-        (lambda h, g: scale_by_last_dim(y=g, x=h), "linear"),
-        (lambda h, g: scale_by_last_dim(h, y=g), "linear"),
-        (lambda h, g: value_then_size(x=g, y=h), "tanh"),
+        (lambda h, g: value_then_size(g, h), 1, 0),
+        (lambda h, g: value_then_size(h, g), 1, 0),
+        (lambda h, g: scale_by_last_dim(y=g, x=h), "x", "y"),
+        (lambda h, g: scale_by_last_dim(h, y=g), 0, "y"),
+        (lambda h, g: value_then_size(x=g, y=h), "x", "y"),
     ],
-    ids=["positional-1", "positional-1-swapped", "keywords", "mixed", "keywords-swapped"],
+    ids=["positional", "positional-swapped", "keywords", "mixed", "keywords-swapped"],
 )
-def test_attack_slot_mapping_follows_the_schema(call, size_func: str) -> None:
+def test_attack_slot_mapping_follows_the_schema(call, size_slot, value_slot) -> None:
     """Only the parent bound to the size-read argument is proven, by position or keyword."""
 
     trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
     op = _boundary_op(trace)
-    value_func = "tanh" if size_func == "linear" else "linear"
-    assert script_metadata_only_proof(op, [_parent_label(op, size_func)]) is not None
-    assert script_metadata_only_proof(op, [_parent_label(op, value_func)]) is None
+    assert _slot_label(op, size_slot) != _slot_label(op, value_slot)
+    assert script_metadata_only_proof(op, [_slot_label(op, size_slot)]) is not None
+    assert script_metadata_only_proof(op, [_slot_label(op, value_slot)]) is None
     assert len(_metadata_decisions(trace)) == 1
     assert result is True
 
@@ -645,8 +644,7 @@ def test_attack_parent_hidden_below_the_slot_map_gets_no_proof(call) -> None:
 
     trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
     op = _boundary_op(trace)
-    h_label = _parent_label(op, "linear")
-    assert script_metadata_only_proof(op, [h_label]) is None
+    assert script_metadata_only_proof(op, [_slot_label(op, 0)]) is None
     _assert_boundary_perturbation_failure(trace, result)
 
 
@@ -657,6 +655,6 @@ def test_attack_shallow_container_keeps_the_proof_for_the_size_argument() -> Non
         _CallModel(lambda h, g: size_with_shallow_list(h, [g])), torch.randn(3, 4)
     )
     op = _boundary_op(trace)
-    assert script_metadata_only_proof(op, [_parent_label(op, "linear")]) is not None
-    assert script_metadata_only_proof(op, [_parent_label(op, "tanh")]) is None
+    assert script_metadata_only_proof(op, [_slot_label(op, 0)]) is not None
+    assert script_metadata_only_proof(op, [_slot_label(op, (1, 0))]) is None
     assert result is True
