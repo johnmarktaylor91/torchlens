@@ -618,8 +618,10 @@ def _record_module_output_grad_failure(trace: Any, layer_report: LayerGradReport
         _record_backward_failure(
             trace,
             reason="no_module_output_evidence",
-            message=f"no module-output gradient to compare: all {len(layer_report.coverage)} "
-            "module call(s) are proven exclusions",
+            message="nothing was compared: no module output carried a gradient on both "
+            f"sides ({layer_report.compared_no_grad_count} output(s) had none in stock or "
+            f"capture; the other {len(layer_report.coverage) - layer_report.compared_no_grad_count}"
+            " module call(s) are proven exclusions)",
         )
         return
     label, bucket = first_gap if first_gap is not None else (None, "unexpected")
@@ -751,6 +753,7 @@ def validate_backward_pass(
     trace = None
     stock_module_grads = None
     stock_identity_addresses = None
+    stock_reached_keys = None
 
     try:
         set_random_seed(random_seed)
@@ -773,7 +776,11 @@ def validate_backward_pass(
                 if validate_layer_grads:
                     from ._stock_layer_grads import _stock_layer_grads
 
-                    stock_module_grads, stock_identity_addresses = _stock_layer_grads(
+                    (
+                        stock_module_grads,
+                        stock_identity_addresses,
+                        stock_reached_keys,
+                    ) = _stock_layer_grads(
                         model,
                         stock_inputs,
                         stock_kwargs,
@@ -871,6 +878,7 @@ def validate_backward_pass(
                 trace,
                 stock_module_grads,
                 stock_identity_addresses,
+                stock_reached_keys=stock_reached_keys,
                 # None flows through: the comparator derives the tolerance per
                 # gradient dtype (R13: the fp32 constants applied to fp64
                 # masked corruption ~4.5e11 fp64 ULPs above round-off).

@@ -381,6 +381,21 @@
 
 ### Bug Fixes
 
+- **capture**: a module registered under several names (`self.act = nn.Tanh()` reused inside
+  two `nn.Sequential`s) now gets its first registration path as its canonical address, as
+  `named_modules()` reports it and the glossary says; the later paths stay alias addresses. The
+  last path used to win, so backward validation's stock module hooks (keyed by `named_modules()`)
+  and the capture disagreed on the shared module's calls and the verdict was False
+  (`aenet-PyTorch` in the classics corpus).
+- **validation**: backward validation's module-output gradient check now agrees with the
+  capture on what a module's outputs are and on outputs no gradient reaches. The stock side
+  enumerates the tensor leaves of a plain object output (a `torch.distributions` object) with
+  the capture's own fallback walk, and an output that received no gradient in stock autograd
+  and none in the capture is `compared_no_grad` (agreement, recorded, not counted as evidence)
+  instead of a fail-closed gap; stock-has-gradient-capture-none and capture-has-gradient-stock-none
+  still fail, and a run that compares no gradient at all still returns False with a record saying
+  nothing was compared. `IQL (Implicit Q-Learning, rlkit actor)` in the classics corpus now
+  validates.
 - **validation**: every False verdict of `tl.validate(..., scope="backward")` now records a
   structured failure: `last_validation_failure()` returns a record with `check="backward"` and
   `extra["reason"]` naming the refusal or mismatch (`parameter_grad_mismatch` with the parameter
