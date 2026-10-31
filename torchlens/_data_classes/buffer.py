@@ -225,7 +225,13 @@ class Buffer:
         return [version for version in self.versions if version.buffer_write_kind is not None]
 
     @property
-    def overwrite_index(self) -> int | None:
+    def buffer_overwrite_index(self) -> int | None:
+        """Return the most recent version's overwrite index."""
+
+        return self.buffer_pass
+
+    @property
+    def buffer_pass(self) -> int | None:
         """Return the most recent graph version pass index."""
 
         return None if not self.versions else self.versions[-1].buffer_pass
@@ -234,7 +240,7 @@ class Buffer:
     def call_index(self) -> int | None:
         """Return the most recent graph version call index."""
 
-        return self.overwrite_index
+        return self.buffer_pass
 
     @property
     def layer_label(self) -> str | None:
@@ -285,13 +291,13 @@ class Buffer:
         return None if not self.versions else self.versions[-1].grad_dtype
 
     @property
-    def grad_memory(self) -> Any:
+    def gradient_memory(self) -> Any:
         """Return final observed gradient memory."""
 
         return None if not self.versions else self.versions[-1].gradient_memory
 
     @property
-    def writer_label(self) -> str | None:
+    def buffer_source(self) -> str | None:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):

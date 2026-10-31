@@ -310,6 +310,30 @@ class Param:
         return len(self.all_addresses) > 1
 
     @property
+    def num_uses_by_ops(self) -> int:
+        """Return the number of distinct Op usages.
+
+        Returns
+        -------
+        int
+            Count of pass-qualified Op labels in ``used_by_ops``.
+        """
+
+        return len(self.used_by_ops)
+
+    @property
+    def num_uses_by_layers(self) -> int:
+        """Return the number of distinct Layer usages.
+
+        Returns
+        -------
+        int
+            Count of Layer labels in ``used_by_layers``.
+        """
+
+        return len(self.used_by_layers)
+
+    @property
     def trace(self) -> Any:
         """Owning Trace, if still alive."""
 
@@ -710,7 +734,7 @@ class Param:
         self._grad_dtype = value
 
     @property
-    def grad_memory(self) -> Bytes:
+    def gradient_memory(self) -> Bytes:
         """Return the grad tensor size in bytes.
 
         Returns
@@ -721,8 +745,8 @@ class Param:
         self._check_param_grad()
         return self._grad_memory
 
-    @grad_memory.setter
-    def grad_memory(self, value: int) -> None:
+    @gradient_memory.setter
+    def gradient_memory(self, value: int) -> None:
         """Set cached grad tensor size in bytes.
 
         Parameters

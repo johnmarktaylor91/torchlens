@@ -3482,7 +3482,7 @@ def _run_backward_with_capture(
         record_backward_peak(trace, backend, peak_delta)
         trace.backward_durations.append(Duration(duration))
         trace.total_param_gradient_memory = Bytes(
-            sum(int(param_log.grad_memory) for param_log in getattr(trace, "param_logs", []))
+            sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
         )
         # Fence in-flight cpu_async D2H grad copies before projections make
         # the payloads reachable (R36-1 for the backward seam): the forward

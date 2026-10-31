@@ -86,6 +86,8 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
         "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
         "params",  # ParamAccessor -- use trace.params.to_pandas()
         "recursive_params",  # ParamAccessor -- same as params
+        "call_parent_module",  # Module reference -- call_parent already carries the label
+        "call_children_modules",  # list[Module] -- call_children already carries the labels
         "output_structure",  # ContainerSpec -- structural, not a flat scalar
         "forward_args_template",  # arbitrary structural template, not a flat scalar
         "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
@@ -531,8 +533,14 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
+
+    @property
+    def num_ops(self) -> int:
+        """Number of Ops in this module call."""
+
+        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -1589,6 +1597,11 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
+    def num_layers(self) -> int:
+        """Number of unique layers in this module."""
+        return len(self.layer_labels)
+
+    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -1648,6 +1661,23 @@ class Module:
 
         return module_collapse_score(self)
 
+    @property
+    def call_parent_module(self) -> "Module | None":
+        """Parent Module in the dynamic call tree, if any."""
+
+        if self.call_parent is None or self._source_trace is None:
+            return None
+        return cast("Module", self._source_trace.modules[self.call_parent])
+
+    @property
+    def call_children_modules(self) -> list["Module"]:
+        """Child Modules in the dynamic call tree."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        return [cast("Module", trace.modules[address]) for address in self.call_children]
+
     def _recursive_modules_depth_first(self) -> list["Module"]:
         """Return this Module and address descendants in stable depth-first order."""
 
@@ -1692,6 +1722,12 @@ class Module:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
+
+    @property
+    def recursive_param_addresses(self) -> list[str]:
+        """Parameter addresses in the same order as ``recursive_params``."""
+
+        return list(self.recursive_params.keys())
 
     @property
     def num_recursive_params(self) -> int:
@@ -2139,6 +2175,12 @@ class Module:
                 show_call_index=show_call_index,
                 file=file,
             )
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors owned by this Module (the root owns all)."""
+
+        return len(self.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:
