@@ -30,9 +30,13 @@ from __future__ import annotations
 import math
 import pickle
 import re
+import warnings
+from functools import cache
 from typing import Any
 
 import torch
+
+from ..utils._torch_symbols import torch_attr
 
 __all__ = [
     "INLINE_TENSOR_GLOBAL",
@@ -44,20 +48,27 @@ __all__ = [
 INLINE_TENSOR_GLOBAL: tuple[str, str] = ("torchlens._io._inline_tensor", "rebuild_inline_tensor")
 
 
-def _plain_dense_dtypes() -> dict[str, tuple[torch.dtype, int]]:
+@cache
+def _dtypes_by_name() -> dict[str, tuple[torch.dtype, int]]:
     """Map canonical dtype names to ``(dtype, itemsize)`` for plain dense dtypes only.
 
-    Quantized dtypes (and any dtype torch cannot allocate plainly) are left out, so a
-    stream naming one is refused as an unknown dtype before any allocation.
+    Built on the first inline-tensor load, not at import, and cached; lookups are
+    exact-string on ``str(dtype)``. Quantized dtypes (and any dtype torch cannot
+    allocate plainly) are left out, so a stream naming one is refused as an unknown
+    dtype before any allocation.
     """
 
     table: dict[str, tuple[torch.dtype, int]] = {}
     for name in dir(torch):
-        value = getattr(torch, name, None)
+        value = torch_attr(name)
         if not isinstance(value, torch.dtype):
             continue
         try:
-            probe = torch.empty((), dtype=value)
+            # torch warns when some dtypes are allocated (complex32, the quantized dtypes);
+            # this probe is ours, so its warnings must not surface in the user's session.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                probe = torch.empty((), dtype=value)
         except Exception:  # noqa: BLE001 -- not a plainly allocatable dtype
             continue
         if probe.is_quantized:
@@ -65,10 +76,6 @@ def _plain_dense_dtypes() -> dict[str, tuple[torch.dtype, int]]:
         table[str(value)] = (value, int(probe.element_size()))
     return table
 
-
-#: Canonical dtype names (``str(dtype)``) to ``(dtype, itemsize)`` for every plain dense
-#: dtype the running torch exposes. Built once; lookups are exact-string.
-_DTYPES_BY_NAME: dict[str, tuple[torch.dtype, int]] = _plain_dense_dtypes()
 
 _DEVICE_PATTERN = re.compile(r"^[a-z_]+(:\d{1,3})?$")
 _MAX_DIMS = 64
@@ -154,13 +161,14 @@ def rebuild_inline_tensor(
     """
 
     def _refuse(detail: str) -> pickle.UnpicklingError:
+        """Return the typed refusal for a malformed inline tensor, naming ``detail``."""
         return pickle.UnpicklingError(
             "Blocked malformed inline tensor during bundle metadata unpickle: " + detail
         )
 
     if type(data) is not bytes:
         raise _refuse(f"payload must be bytes, got {type(data).__name__}.")
-    if type(dtype_name) is not str or dtype_name not in _DTYPES_BY_NAME:
+    if type(dtype_name) is not str or dtype_name not in _dtypes_by_name():
         raise _refuse(f"unknown dtype {dtype_name!r}.")
     if (
         type(shape) is not tuple
@@ -172,7 +180,7 @@ def rebuild_inline_tensor(
         raise _refuse("requires_grad must be a bool.")
     if type(device) is not str or len(device) > 32 or not _DEVICE_PATTERN.match(device):
         raise _refuse(f"device must be a short device string, got {device!r}.")
-    dtype, itemsize = _DTYPES_BY_NAME[dtype_name]
+    dtype, itemsize = _dtypes_by_name()[dtype_name]
     numel = math.prod(shape)
     if numel * itemsize != len(data):
         raise _refuse(
