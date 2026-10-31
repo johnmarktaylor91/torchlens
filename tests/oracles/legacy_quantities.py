@@ -73,6 +73,10 @@ DOOR_PATHS = {
     "TraceCost": "torchlens._data_classes._trace_groups.TraceCost",
     "TraceGraph": "torchlens._data_classes._trace_groups.TraceGraph",
     "TraceAutograd": "torchlens._data_classes._trace_groups.TraceAutograd",
+    "TraceSource": "torchlens._data_classes._trace_groups.TraceSource",
+    "TraceProvenance": "torchlens._data_classes._trace_groups.TraceProvenance",
+    "TraceOptions": "torchlens._data_classes._trace_groups.TraceOptions",
+    "TraceHealth": "torchlens._data_classes._trace_groups.TraceHealth",
     "ParamAccessor": "torchlens._data_classes.param.ParamAccessor",
 }
 
@@ -90,6 +94,10 @@ SCOPE = (
     "TraceCost",
     "TraceGraph",
     "TraceAutograd",
+    "TraceSource",
+    "TraceProvenance",
+    "TraceOptions",
+    "TraceHealth",
     "ParamAccessor",
 )
 
@@ -147,6 +155,10 @@ def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
     yield "TraceCost", trace.cost
     yield "TraceGraph", trace.graph
     yield "TraceAutograd", trace.autograd
+    yield "TraceSource", trace.source
+    yield "TraceProvenance", trace.provenance
+    yield "TraceOptions", trace.options
+    yield "TraceHealth", trace.health
     yield "ParamAccessor", trace.params
     yield "SummaryReport", report
     yield "SummaryTotals", report.totals

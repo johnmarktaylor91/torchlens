@@ -181,7 +181,7 @@ def test_params_by_path_recount(nest_trace) -> None:
         assert tied.params.numel_by_path == by_path
         assert tied.summary().totals.params_per_path_total == by_path
         assert tied.num_params == 40  # unique elements: the shared tensors once
-        assert int(tied.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
+        assert int(tied.cost.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
         tied_param = tied.params["tied.weight"]
         assert sorted(tied_param.all_addresses) == ["tied.weight", "tied2.weight"]
     finally:

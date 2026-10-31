@@ -649,9 +649,9 @@ def test_semantic_output_fields_do_not_add_dataframe_columns() -> None:
 
     projection = _dataframe_projection(_default_trace())
     semantic_fields = {
-        "transform_repr",
+        "_activation_transform_repr",
         "_decoded_output",
-        "output_postprocessor",
+        "_provenance_output_postprocessor",
         "output_id2label",
         "output_num_classes",
     }

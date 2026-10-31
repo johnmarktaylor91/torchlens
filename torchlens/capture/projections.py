@@ -1069,7 +1069,7 @@ _LIVE_FIELD_GETTER_PAIRS: tuple[tuple[str, Callable[[Trace, OpEvent], Any]], ...
     ("_construction_done", lambda trace, event: event.construction_done),
     ("type", lambda trace, event: event.layer_type),
     ("type_index", lambda trace, event: event.type_index),
-    ("pass_index", lambda trace, event: event.pass_index),
+    ("pass_number", lambda trace, event: event.pass_index),
     ("num_passes", lambda trace, event: 1),
     ("lookup_keys", lambda trace, event: []),
     ("out", lambda trace, event: event.output.tensor.payload),
