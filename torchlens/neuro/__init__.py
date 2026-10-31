@@ -137,7 +137,7 @@ _REDIRECTS: dict[str, str] = {
     "effective_dimensionality": ("use tl.repgeom.effective_dimensionality (needs no extra)"),
     "procrustes_align": "use tl.repgeom.procrustes_align (needs no extra)",
     "extract_dataset": "use tl.extract_dataset (needs no extra)",
-    "load_extraction": "use tl.load_extraction (needs no extra)",
+    "load_extraction": "use tl.load (needs no extra)",
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "

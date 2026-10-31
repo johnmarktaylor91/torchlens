@@ -301,5 +301,5 @@ def test_trace_only_save_options_refuse_typed(tmp_path, complete_pair: Bundle) -
             _save_bundle(complete_pair, tmp_path / "opt.tlspec", **kwargs)
         assert excinfo.value.fields["code"] == "bundle_save_option_unsupported"
     # Explicitly passing a value equal to the trace-door default is honored.
-    complete_pair.save(tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
+    _save_bundle(complete_pair, tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
     assert tl.load(tmp_path / "default_ok.tlspec").names == ["a", "b"]
