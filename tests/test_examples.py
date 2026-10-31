@@ -64,7 +64,8 @@ def test_intervention_examples_discovered() -> None:
     assert not missing, f"intervention examples missing from discovery: {sorted(missing)}"
 
 
-@pytest.mark.slow
+# Unmarked on purpose: each example runs well inside the 5 s budget, and a ``slow``
+# mark kept these out of every CI tier, so a stale name in an example went unseen.
 @pytest.mark.parametrize("example_path", EXAMPLE_FILES, ids=tuple(_example_ids()))
 def test_intervention_example_runs(example_path: Path) -> None:
     """Import and run one intervention worked example.
