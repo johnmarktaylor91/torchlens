@@ -87,7 +87,7 @@ def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name
     # Writer identity was never forged.
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["torchlens_version"] == name.split("_")[1].lstrip("v")
-    assert manifest["tlspec_version"] == 10
+    assert manifest["tlspec_version"] == 11
     # The retained backup is byte-compatible with the original manifest.
     backup_manifest = json.loads((report.backup_path / "manifest.json").read_text(encoding="utf-8"))
     assert backup_manifest["tlspec_version"] == 6
