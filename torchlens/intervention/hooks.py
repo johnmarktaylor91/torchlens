@@ -284,7 +284,7 @@ def lower_record_site_target(site_target: Any) -> Any:
     """Lower an ``Op``/``Layer`` RECORD used as a hook site to an exact selector.
 
     A record is the most precise site spelling a user can hold (``do(
-    log["relu_1_2:2"].ops[0], edit)``), yet the post-hoc resolver only knew
+    log["relu_1_2:2"], edit)``), yet the post-hoc resolver only knew
     selector-likes and refused it ("Unsupported site query"), while the
     spec lowering would have dropped an ``Op`` to its BARE ``layer_label``
     -- the last pass of a multi-pass layer -- had it been accepted

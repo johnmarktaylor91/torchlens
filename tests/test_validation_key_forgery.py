@@ -50,8 +50,8 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
     )
     try:
         first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
-        donor = first.ops[0]
-        for op in second.ops:
+        donor = first
+        for op in (second,):
             op._param_barcodes = _copy.copy(donor._param_barcodes)
             op.equivalence_class = donor.equivalence_class
         with pytest.raises(MetadataInvariantError, match="Param sharing violation"):

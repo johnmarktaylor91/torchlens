@@ -134,7 +134,7 @@ def test_predicate_save_not_saved_token() -> None:
 
     trace = tl.trace(_Mixed().eval(), torch.randn(2, 8), save=tl.func("relu"))
     unsaved = next(op for op in trace.layer_list if not op.has_saved_activation)
-    assert "(not saved)" in repr(unsaved.ops[0])
+    assert "(not saved)" in repr(unsaved)
     saved = trace["relu_1_2"].ops[0]
     assert "(not saved)" not in repr(saved)
     trace.cleanup()

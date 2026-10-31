@@ -65,6 +65,7 @@ import torch
 
 from torchlens._selection import SelectionError
 
+from .._record_type import first_op
 from .._selection import (
     Selection,
     Site,
@@ -467,14 +468,14 @@ def _derive_entry_occurrences(
     staged_op_ids: set[int] = set()
     for consumer_label in consumers:
         layer = trace.layer_dict_all_keys.get(consumer_label)
-        if layer is None or not getattr(layer, "ops", None):
+        if layer is None or (getattr(layer, "ops", None) is not None and not layer.ops):
             raise _underivable(
                 f"consumer {consumer_label!r} of parameter {param_address!r} "
                 "is not present on this trace.",
                 param_address=param_address,
                 site=consumer_label,
             )
-        child_op = layer.ops[0]
+        child_op = first_op(layer)
         if (
             int(getattr(child_op, "num_passes", 1) or 1) > 1
             and consumer_label == child_op.layer_label
@@ -595,7 +596,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
         preserve_origins=False,
     )
     for label, records in staging.pending_records.items():
-        trace.layer_dict_all_keys[label].ops[0].interventions.extend(records)
+        first_op(trace.layer_dict_all_keys[label]).interventions.extend(records)
 
 
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:

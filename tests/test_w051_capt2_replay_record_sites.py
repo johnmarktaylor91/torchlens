@@ -75,7 +75,7 @@ def test_set_door_op_record_edits_exactly_its_pass(loop) -> None:
 
     model, x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], torch.zeros(2, 4))
+    fork.do(trace["relu_1_2:2"], torch.zeros(2, 4))
     _assert_matches(fork, _truth(model, x, {2}))
     assert torch.equal(fork["relu_1_2:1"].out, trace["relu_1_2:1"].out)
     assert torch.allclose(fork["relu_1_2:3"].out, _truth(model, x, {2})["relu_1_2:3"], atol=1e-6)
@@ -95,7 +95,7 @@ def test_set_door_stored_target_is_pass_qualified(loop) -> None:
 
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], torch.zeros(2, 4))
+    fork.do(trace["relu_1_2:2"], torch.zeros(2, 4))
     spec = fork._ensure_intervention_spec()
     targets = [
         (s.site_target.selector_kind, s.site_target.selector_value) for s in spec.target_value_specs
@@ -106,7 +106,7 @@ def test_set_door_stored_target_is_pass_qualified(loop) -> None:
 
 def test_target_spec_from_op_record_is_its_own_pass(loop) -> None:
     _model, _x, trace = loop
-    op_spec = trace._target_spec_from_site(trace["relu_1_2:2"].ops[0], strict=False)
+    op_spec = trace._target_spec_from_site(trace["relu_1_2:2"], strict=False)
     assert (op_spec.selector_kind, op_spec.selector_value) == ("label", "relu_1_2:2")
     layer_spec = trace._target_spec_from_site(trace["relu_1_2"], strict=False)
     assert layer_spec.selector_kind == "or"
@@ -119,7 +119,7 @@ def test_target_spec_from_op_record_is_its_own_pass(loop) -> None:
 
 def test_resolve_sites_accepts_records_pass_qualified(loop) -> None:
     _model, _x, trace = loop
-    resolved = trace.resolve_sites(trace["relu_1_2:2"].ops[0])
+    resolved = trace.resolve_sites(trace["relu_1_2:2"])
     labels = {getattr(site, "label", None) or str(site) for site in resolved}
     assert any("relu_1_2:2" in label for label in labels), labels
     assert not any("relu_1_2:1" in label or "relu_1_2:3" in label for label in labels), labels
@@ -127,7 +127,7 @@ def test_resolve_sites_accepts_records_pass_qualified(loop) -> None:
 
 def test_normalize_selector_like_lowers_records_in_both_lifecycles(loop) -> None:
     _model, _x, trace = loop
-    op = trace["relu_1_2:2"].ops[0]
+    op = trace["relu_1_2:2"]
     for lifecycle in ("live", "site"):
         lowered = normalize_selector_like(op, lifecycle=lifecycle)
         assert isinstance(lowered, LabelSelector) and lowered.selector_value == "relu_1_2:2"
