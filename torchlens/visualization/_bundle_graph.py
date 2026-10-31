@@ -262,7 +262,7 @@ def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
     for member_name, member in bundle.members.items():
         with dot.subgraph(name=f"cluster_backward_{member_name}") as subgraph:
             subgraph.attr(label=f"{member_name} backward", color="#7A3E9D")
-            grad_fns = list(getattr(member, "grad_fns", []))
+            grad_fns = list(getattr(getattr(member, "autograd", None), "grad_fns", []))
             if not grad_fns:
                 subgraph.node(
                     f"bwd_{member_name}_empty",

@@ -1897,7 +1897,7 @@ class Bundle:
             parts = []
             if name == self._baseline_name:
                 parts.append("baseline")
-            if getattr(member, "pristine", None) is True:
+            if getattr(member, "is_pristine", None) is True:
                 parts.append("pristine")
             parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
             parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
@@ -2271,7 +2271,7 @@ class Bundle:
         candidates = [
             name
             for name, member in self._members.items()
-            if getattr(member, "pristine", None) is True
+            if getattr(member, "is_pristine", None) is True
         ]
         return candidates[0] if len(candidates) == 1 else None
 
