@@ -168,10 +168,24 @@ def test_pure_forward_surface_not_over_denied() -> None:
 # the structural rule off and require the explicit entry to refuse by itself.
 # --------------------------------------------------------------------------- #
 
-# The exec / spawn / debug / install modules on the explicit module list. The
-# list is a declared floor: entries may be added, never dropped.
-_EXEC_SPAWN_DEBUG_INSTALL_MODULES = frozenset(
+# Every entry of the explicit module list, by class. The list is a declared
+# floor: entries may be added, never dropped.
+_EXPLICIT_MODULE_FLOOR = frozenset(
     {
+        # Serialization.
+        "torch.serialization",
+        "torch.storage",
+        "torch._utils_internal",
+        "pickle",
+        "_pickle",
+        "marshal",
+        # Torch entry points that run user code, import packages or spawn.
+        "torch.jit",
+        "torch.package",
+        "torch.hub",
+        "torch.multiprocessing",
+        "torch.distributed",
+        # Code execution, imports, debuggers, profilers.
         "builtins",
         "importlib",
         "_frozen_importlib",
@@ -186,6 +200,7 @@ _EXEC_SPAWN_DEBUG_INSTALL_MODULES = frozenset(
         "trace",
         "cProfile",
         "profile",
+        # Spawn processes or browsers; install packages.
         "pydoc",
         "webbrowser",
         "antigravity",
@@ -194,18 +209,49 @@ _EXEC_SPAWN_DEBUG_INSTALL_MODULES = frozenset(
         "pip",
         "setuptools",
         "venv",
+        # Process, OS and filesystem I/O.
         "os",
         "posix",
         "nt",
+        "sys",
         "subprocess",
+        "shutil",
+        "socket",
         "pty",
-        "multiprocessing",
+        "signal",
         "threading",
+        "multiprocessing",
+        "glob",
+        "tempfile",
+        "pathlib",
     }
 )
 
-# The elementwise Python-callable runners on the explicit callable-name list.
+# The torch callables on the explicit name list that run a caller-supplied
+# Python callable or compile one: ``(owner, name)``.
+_CODE_RUNNING_TORCH_CALLABLES = (
+    (torch, "compile"),
+    (torch, "vmap"),
+    (torch.Tensor, "apply_"),
+    (torch.Tensor, "map_"),
+    (torch.Tensor, "map2_"),
+    (torch.Tensor, "register_hook"),
+    (torch.Tensor, "register_post_accumulate_grad_hook"),
+)
+
+# The elementwise runners, reachable through the unpickler's restricted getattr.
 _CALLABLE_RUNNER_NAMES = ("apply_", "map_", "map2_")
+
+# Explicit entries the stdlib gate does NOT cover (not standard library), so
+# the explicit entry is the only module-level refusal on the trusted resolver
+# path. ``pip`` / ``setuptools`` are third-party; the torch submodules are not
+# stdlib. One real callable each; resolution only, nothing is called.
+_SOLE_LAYER_REFS = [
+    "pip:main",
+    "setuptools:setup",
+    "torch.storage:_load_from_bytes",
+    "torch.distributed:init_process_group",
+]
 
 
 @pytest.fixture
@@ -221,26 +267,43 @@ def stdlib_gate_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def invoker_shape_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Disable the structural ``(map|apply)\\d*_`` / ``register*`` invoker-name rule."""
+def structural_name_rules_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable the invoker-name shape rule and the callable-parameter signature rule."""
 
     monkeypatch.setattr(_callable_safety, "_is_callable_invoker_name", lambda _name: False)
+    monkeypatch.setattr(_callable_safety, "_signature_invokes_callable", lambda _func: False)
 
 
-@pytest.mark.parametrize("module_name", sorted(_EXEC_SPAWN_DEBUG_INSTALL_MODULES))
-def test_exec_spawn_debug_install_modules_stay_on_explicit_list(module_name: str) -> None:
-    """Each exec/spawn/debug/install module stays on the shared explicit denylist."""
+@pytest.mark.parametrize("module_name", sorted(_EXPLICIT_MODULE_FLOOR))
+def test_explicit_module_list_never_drops_an_entry(module_name: str) -> None:
+    """Each floor module stays on the shared explicit denylist (unpickler alias too)."""
 
     assert module_name in _callable_safety._DENIED_MODULES
     assert _safe_unpickle._module_denied(module_name)
     assert _safe_unpickle._module_denied(module_name + ".submodule")
 
 
-@pytest.mark.parametrize("name", _CALLABLE_RUNNER_NAMES)
-def test_callable_runner_names_stay_on_explicit_list(name: str) -> None:
-    """Each elementwise Python-callable runner stays on the explicit name list."""
+@pytest.mark.parametrize(("owner", "name"), _CODE_RUNNING_TORCH_CALLABLES)
+def test_code_running_torch_names_stay_on_explicit_list(owner: object, name: str) -> None:
+    """Each code-running torch callable stays on the explicit name list."""
 
+    assert hasattr(owner, name)
     assert name in _callable_safety._DENIED_CALLABLE_NAMES
+
+
+@pytest.mark.parametrize("import_path", _SOLE_LAYER_REFS)
+def test_non_stdlib_explicit_entries_deny_under_trust(import_path: str) -> None:
+    """Explicit entries with no stdlib-gate twin refuse on the trusted resolver path."""
+
+    module_name, name = import_path.split(":", 1)
+    with pytest.raises(UntrustedCallableError):
+        resolve_import_ref(import_path, trust_custom_callables=True)
+    with pytest.raises(UntrustedCallableError):
+        resolve_import_ref(import_path, allowed_custom_callable_modules={module_name})
+    if module_name in {"pip", "setuptools"}:
+        blob = _global_ref_pickle(module_name, name)
+        with pytest.raises(pickle.UnpicklingError, match="dangerous global"):
+            SafeBundleUnpickler(io.BytesIO(blob), trust_custom_callables=True).load()
 
 
 @pytest.mark.usefixtures("stdlib_gate_off")
@@ -260,17 +323,18 @@ def test_explicit_module_list_alone_denies_exec_spawn_install(import_path: str) 
         SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={module_name}).load()
 
 
-@pytest.mark.usefixtures("invoker_shape_off")
-@pytest.mark.parametrize("name", _CALLABLE_RUNNER_NAMES)
-def test_explicit_name_list_alone_denies_callable_runners(name: str) -> None:
-    """With the invoker-shape rule off, the explicit name list alone refuses each runner."""
+@pytest.mark.usefixtures("structural_name_rules_off")
+@pytest.mark.parametrize(("owner", "name"), _CODE_RUNNING_TORCH_CALLABLES)
+def test_explicit_name_list_alone_denies_code_running_callables(owner: object, name: str) -> None:
+    """With the shape and signature rules off, the explicit name list alone refuses each."""
 
-    method = getattr(torch.Tensor, name)
-    assert not is_pure_forward_callable(method)
+    assert not is_pure_forward_callable(getattr(owner, name))
+    owner_path = "torch" if owner is torch else "torch.Tensor"
     with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(f"torch.Tensor:{name}", trust_custom_callables=True)
-    with pytest.raises(pickle.UnpicklingError, match="side-effecting"):
-        _safe_unpickle._safe_getattr(torch._C.TensorBase, name)
+        resolve_import_ref(f"{owner_path}:{name}", trust_custom_callables=True)
+    if name in _CALLABLE_RUNNER_NAMES:
+        with pytest.raises(pickle.UnpicklingError, match="side-effecting"):
+            _safe_unpickle._safe_getattr(torch._C.TensorBase, name)
 
 
 # --------------------------------------------------------------------------- #
@@ -354,7 +418,7 @@ def test_tl_load_timeit_payload_executes_nothing(
     if layers == "explicit_only":
         monkeypatch.setattr(_safe_unpickle, "_stdlib_or_builtin_denied", lambda _m: False)
     marker = tmp_path / "RAN"
-    bundle = _forged_bundle(tmp_path, pickle.dumps(_TimeitGadget(marker), protocol=2))
+    bundle = _forged_bundle(tmp_path, pickle.dumps(_TimeitGadget(marker), protocol=4))
     with pytest.raises((TorchLensIOError, pickle.UnpicklingError)) as raised:
         tl.load(bundle, trust_custom_callables=True, allowed_custom_callable_modules={"timeit"})
     assert "timeit" in _error_chain_text(raised.value)
@@ -370,7 +434,7 @@ def test_tl_load_refuses_callable_runner_pivot(
 
     if layers == "explicit_only":
         monkeypatch.setattr(_callable_safety, "_is_callable_invoker_name", lambda _name: False)
-    bundle = _forged_bundle(tmp_path, pickle.dumps(_RunnerPivot(name), protocol=2))
+    bundle = _forged_bundle(tmp_path, pickle.dumps(_RunnerPivot(name), protocol=4))
     with pytest.raises((TorchLensIOError, pickle.UnpicklingError)) as raised:
         tl.load(bundle, trust_custom_callables=True)
     assert repr(name) in _error_chain_text(raised.value)
