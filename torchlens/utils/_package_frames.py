@@ -9,14 +9,13 @@ is whatever path the import system joined when the module was loaded: a
 filename of the package, a relative entry leaves a relative one. The package
 directory this module computes is normalised, so a bare prefix comparison on the
 raw filename failed in those processes and TorchLens's frames leaked into every
-op's code context. Both sides are normalised here, once per code object.
+op's code context. Both sides are normalised here, once per filename.
 """
 
 from __future__ import annotations
 
 import os
 from types import CodeType
-from weakref import WeakKeyDictionary
 
 #: The package directory with a trailing separator, normalised the same way as
 #: every filename checked against it. The separator keeps sibling installs
@@ -25,10 +24,12 @@ TORCHLENS_PACKAGE_PREFIX = (
     os.path.normcase(os.path.abspath(os.path.dirname(os.path.dirname(__file__)))) + os.sep
 )
 
-# Verdict per code object. Code objects are immutable and weak-referenceable, so
-# the memo never pins run-time code (``exec``, reloaded modules) and the per-frame
-# cost on the capture hot path is one dictionary lookup.
-_VERDICTS: WeakKeyDictionary[CodeType, bool] = WeakKeyDictionary()
+# Verdict per filename. Keyed by the filename string, never by the code object:
+# CPython compares code objects structurally and ignores ``co_filename``, so two
+# files with identical code (two empty ``__init__.py``) would share one verdict.
+# Distinct filenames in a process are few, and a string's hash is cached, so the
+# per-frame cost on the capture hot path is one dictionary lookup.
+_VERDICTS: dict[str, bool] = {}
 
 
 def normalized_filename(filename: str) -> str:
@@ -45,8 +46,9 @@ def is_torchlens_code(code: CodeType) -> bool:
     same. Pseudo-filenames (``<string>``, ``<frozen ...>``) answer False.
     """
 
-    verdict = _VERDICTS.get(code)
+    filename = code.co_filename
+    verdict = _VERDICTS.get(filename)
     if verdict is None:
-        verdict = normalized_filename(code.co_filename).startswith(TORCHLENS_PACKAGE_PREFIX)
-        _VERDICTS[code] = verdict
+        verdict = normalized_filename(filename).startswith(TORCHLENS_PACKAGE_PREFIX)
+        _VERDICTS[filename] = verdict
     return verdict
