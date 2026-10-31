@@ -29,8 +29,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -102,9 +102,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -153,8 +153,8 @@
             "params[1].trainable": "populated",
             "parent_arg_positions": "populated",
             "parent_params": "populated",
+            "parents[0]._edge_use": "populated",
             "parents[0].arg_position": "defaulted_zero",
-            "parents[0].edge_use": "populated",
             "parents[0].parent_label_raw": "populated",
             "pass_index": "populated",
             "policy.save_grad": "defaulted_false",
@@ -191,8 +191,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": true,
-            "is_edited": true,
             "is_bottom_level": true,
+            "is_edited": true,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -290,9 +290,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "populated",
-            "is_edited": "populated",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "populated",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -325,8 +325,8 @@
             "params": "defaulted_empty",
             "parent_arg_positions": "populated",
             "parent_params": "defaulted_empty",
+            "parents[0]._edge_use": "populated",
             "parents[0].arg_position": "defaulted_zero",
-            "parents[0].edge_use": "populated",
             "parents[0].parent_label_raw": "populated",
             "pass_index": "populated",
             "policy.save_grad": "defaulted_false",
@@ -450,12 +450,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": null,
-        "stop_reason": null,
         "halted": false,
         "output_layers": [
           "output_1"
         ],
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -623,20 +623,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 503888,
+      "python_peak_memory_median_bytes": 523311,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 68.8884831033647
+      "wall_time_median_ms": 60.05426775664091
     }
   },
   "sha256_chunks": [
-    "406d42af",
-    "866c441e",
-    "519deba9",
-    "aa197c63",
-    "166874bf",
-    "41ba92fa",
-    "6cd6daa1",
-    "d993fdc5"
+    "82566b86",
+    "0ae0d38a",
+    "ea33d59d",
+    "d0d21c2f",
+    "21eb4a4d",
+    "85ec2f8a",
+    "7800a05e",
+    "4eb6f721"
   ]
 }

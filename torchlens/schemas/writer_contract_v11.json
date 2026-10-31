@@ -1308,8 +1308,8 @@
    "tlspec_manifest_v1.json": "be0266e58ed12debf1e1964dc56838a48576c214fe32fdbc192e04ec66d19948",
    "tlspec_manifest_v2.json": "b7b6604e74132fa580c708bf8dd63677cb14bab98a69806405af75ec93bc1286"
   },
-  "min_tlspec_version": 6,
-  "min_torchlens_version": "2.31.0",
+  "min_tlspec_version": 11,
+  "min_torchlens_version": "3.0.0",
   "payload_codec_ids": [
    "torch_safetensors_v1",
    "numpy_safetensors_v1"
@@ -3281,48 +3281,7 @@
     ]
    },
    "trace": {
-    "aliases": [
-     "_buffer_write_events",
-     "_grad_layer_nums_to_save",
-     "_grad_stream_retain_in_memory",
-     "_keep_grads_in_memory",
-     "_runnable_archived_activations",
-     "_runnable_callables_by_call_id",
-     "_runnable_capture_ambient",
-     "_runnable_capture_state",
-     "_runnable_capture_state_signatures",
-     "_runnable_descriptor",
-     "_runnable_embedded_nonpersistent_buffers",
-     "_runnable_embedded_state",
-     "_runnable_first_mismatch",
-     "_runnable_host_rng_channels",
-     "_runnable_host_rng_consumed",
-     "_runnable_host_rng_replayable_reads",
-     "_runnable_host_rng_unreplayable",
-     "_runnable_input_label_layouts",
-     "_runnable_input_metadata_reads",
-     "_runnable_input_nontensor_leaves",
-     "_runnable_input_structure",
-     "_runnable_input_tensor_sites",
-     "_runnable_module_training_modes",
-     "_runnable_output_losslessness",
-     "_runnable_path_faithfulness",
-     "_runnable_persistent_buffer_universe",
-     "_runnable_poisoned",
-     "_runnable_readiness",
-     "_runnable_rng_monitor_uncertain",
-     "_runnable_rng_monitor_uncertain_detail",
-     "_runnable_staged_user_state",
-     "_runnable_state_alias_topology",
-     "_runnable_state_compromised",
-     "_saved_grads_set",
-     "_warned_nonfinite_check_unavailable",
-     "conditional_elif_entry_edges",
-     "conditional_else_entry_edges",
-     "conditional_then_entry_edges",
-     "detached_patch_epoch",
-     "detached_patch_policy"
-    ],
+    "aliases": [],
     "class": "torchlens._data_classes.trace.Trace",
     "field_policies": {
      "_activation_transform_repr": "keep",
@@ -4083,5 +4042,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "c379ebbe058560c9e12c1db3869d7b6cd01492b2009902591b6fd6c5d6c665fc"
+ "writer_contract_digest": "e5593ca8ed565caf70a265fbb54b58dacdf0ad335eb5538c8cf22a03fb363e7b"
 }

@@ -27,8 +27,8 @@
             "func_name": "clone",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -98,9 +98,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -133,8 +133,8 @@
             "params": "defaulted_empty",
             "parent_arg_positions": "populated",
             "parent_params": "defaulted_empty",
+            "parents[0]._edge_use": "populated",
             "parents[0].arg_position": "defaulted_zero",
-            "parents[0].edge_use": "populated",
             "parents[0].parent_label_raw": "populated",
             "pass_index": "populated",
             "policy.save_grad": "defaulted_false",
@@ -171,8 +171,8 @@
             "func_name": "add_",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": false,
             "kind": "op",
@@ -242,9 +242,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "defaulted_false",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -277,8 +277,8 @@
             "params": "defaulted_empty",
             "parent_arg_positions": "populated",
             "parent_params": "defaulted_empty",
+            "parents[0]._edge_use": "populated",
             "parents[0].arg_position": "defaulted_zero",
-            "parents[0].edge_use": "populated",
             "parents[0].parent_label_raw": "populated",
             "pass_index": "populated",
             "policy.save_grad": "defaulted_false",
@@ -315,8 +315,8 @@
             "func_name": "relu_",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": false,
             "kind": "op",
@@ -386,9 +386,9 @@
             "input_was_parameter": "defaulted_false",
             "internal_source_ancestors": "defaulted_empty",
             "intervention_fired": "defaulted_false",
-            "is_edited": "defaulted_false",
             "intervention_template_ref": "unknown",
             "is_bottom_level": "populated",
+            "is_edited": "defaulted_false",
             "is_output_parent": "populated",
             "is_scalar_bool": "defaulted_false",
             "is_transform": "defaulted_false",
@@ -421,8 +421,8 @@
             "params": "defaulted_empty",
             "parent_arg_positions": "populated",
             "parent_params": "defaulted_empty",
+            "parents[0]._edge_use": "populated",
             "parents[0].arg_position": "defaulted_zero",
-            "parents[0].edge_use": "populated",
             "parents[0].parent_label_raw": "populated",
             "pass_index": "populated",
             "policy.save_grad": "defaulted_false",
@@ -558,12 +558,12 @@
       "outcome": {
         "failed": false,
         "halt_frontier": null,
-        "stop_reason": null,
         "halted": false,
         "output_layers": [
           "output_1"
         ],
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -740,20 +740,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 532927,
+      "python_peak_memory_median_bytes": 530707,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 48.7443758174777
+      "wall_time_median_ms": 43.19721460342407
     }
   },
   "sha256_chunks": [
-    "71dd378c",
-    "676748bb",
-    "796ff7a9",
-    "ddbb7bb1",
-    "3653cde7",
-    "3139b84e",
-    "add099a5",
-    "64a3f64d"
+    "12cef844",
+    "4481ac27",
+    "081e4265",
+    "5678e3ff",
+    "5ecf8aa5",
+    "0d7704dc",
+    "87b960d8",
+    "c6afec98"
   ]
 }

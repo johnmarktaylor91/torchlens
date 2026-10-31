@@ -27,8 +27,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -60,8 +60,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -93,8 +93,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -126,8 +126,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -159,8 +159,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -192,8 +192,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -230,8 +230,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -286,8 +286,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -391,8 +391,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -447,8 +447,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -540,8 +540,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -596,8 +596,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -701,8 +701,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -757,8 +757,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -850,8 +850,8 @@
             "func_name": "linear",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -906,8 +906,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1011,8 +1011,8 @@
             "func_name": "tanh",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": null,
             "kind": "op",
@@ -1067,8 +1067,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1163,13 +1163,13 @@
         "error_message": null,
         "error_type": null,
         "failed": false,
-        "stop_reason": null,
         "halted": false,
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
         "n_ops_completed": 0,
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -1367,20 +1367,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 334062,
+      "python_peak_memory_median_bytes": 422406,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 36.3331699045375
+      "wall_time_median_ms": 36.51530295610428
     }
   },
   "sha256_chunks": [
-    "179ab32b",
-    "a52549ef",
-    "baaa7755",
-    "995906b8",
-    "a470f27e",
-    "848f6b43",
-    "690d1057",
-    "a493a599"
+    "bf0fd4b8",
+    "8e272dfd",
+    "70bf0533",
+    "53567a6c",
+    "d057c447",
+    "40713e1b",
+    "f9574025",
+    "c1ec7677"
   ]
 }

@@ -1125,3 +1125,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1f28bc702f6d77fddc13780c5a65daad2163aa6d (dirty)
 recorded: 2026-10-16T03:09:57.166218+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:09.164237+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:14.138673+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:18.596430+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:23.593601+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:28.523160+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:33.615832+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:38.584498+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:43.060883+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:47.986762+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:52.414904+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:05:57.663281+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:02.067399+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:07.656866+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:13.088308+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:17.654612+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:22.593569+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:27.524952+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:32.433408+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:37.411979+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:41.637604+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:46.595584+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:51.401163+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:06:56.159962+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:00.939965+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:05.744940+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:10.771210+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:15.761318+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:21.585784+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:26.349701+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:30.923028+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: ParentEdge._edge_use, Trace legacy adapters cut, reader floor 11 (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
+recorded: 2026-10-31T16:07:35.179266+00:00

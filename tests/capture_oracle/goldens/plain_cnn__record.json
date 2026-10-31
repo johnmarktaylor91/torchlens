@@ -27,8 +27,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -60,8 +60,8 @@
               "function.func_rng_states": "unknown",
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
-              "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "sentinel_unknown"
+              "parents[0]._edge_use": "sentinel_unknown",
+              "parents[0].arg_position": "unknown"
             },
             "values": {
               "is_inplace": false,
@@ -98,8 +98,8 @@
             "func_name": "conv2d",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": false,
             "is_scalar_bool": null,
             "kind": "op",
@@ -156,8 +156,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -261,8 +261,8 @@
             "func_name": "relu",
             "has_saved_activation": true,
             "intervention_fired": false,
-            "is_edited": false,
             "is_bottom_level": true,
+            "is_edited": false,
             "is_output_parent": true,
             "is_scalar_bool": null,
             "kind": "op",
@@ -319,8 +319,8 @@
             "core.output.tensor.shape": "populated",
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
+            "core.parents[0]._edge_use": "sentinel_unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -415,13 +415,13 @@
         "error_message": null,
         "error_type": null,
         "failed": false,
-        "stop_reason": null,
         "halted": false,
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
         "n_ops_completed": 0,
-        "status": "complete"
+        "status": "complete",
+        "stop_reason": null
       },
       "selected_payloads": [
         {
@@ -543,20 +543,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 301040,
+      "python_peak_memory_median_bytes": 420042,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 29.53787602018565
+      "wall_time_median_ms": 33.020916394889355
     }
   },
   "sha256_chunks": [
-    "d13c6cb2",
-    "832153ec",
-    "45f88c05",
-    "33a09cd9",
-    "f99d4292",
-    "e03ee559",
-    "787b5334",
-    "7ed51a1e"
+    "6b1c0a67",
+    "531e60d6",
+    "a77106d7",
+    "cec189d1",
+    "ebab8e9a",
+    "37c00345",
+    "09a10422",
+    "0cf4d028"
   ]
 }
