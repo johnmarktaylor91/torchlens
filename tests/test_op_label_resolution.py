@@ -210,3 +210,45 @@ def test_validation_fails_on_a_dangling_label(trace: tl.Trace) -> None:
     indexes.raw.pop(later.raw_label, None)
     with pytest.raises(MetadataInvariantError, match="does not resolve to it"):
         _check_op_label_resolution(trace)
+
+
+class _ReusedThenFresh(nn.Module):
+    """A Linear reused for two passes, one single-pass op, then a fresh Linear.
+
+    Final step numbers count layers while raw numbers count every op, so the
+    reused Linear's second pass gets the raw spelling of the fresh Linear's
+    final label (``linear_2_4`` under loop grouping) with no planting.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the reused and the fresh projection."""
+
+        super().__init__()
+        self.shared = nn.Linear(4, 4)
+        self.fresh = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the reused projection twice, a sine, then the fresh one."""
+
+        for _ in range(2):
+            x = torch.relu(self.shared(x))
+        return self.fresh(torch.sin(x))
+
+
+def test_reused_module_raw_spelling_does_not_shadow_a_final_label() -> None:
+    """A captured (not planted) raw spelling equal to a final label loses to the label's owner."""
+
+    model = _ReusedThenFresh()
+    trace = tl.trace(model, torch.randn(3, 4))
+    try:
+        fresh = next(
+            op for op in trace.layer_list if op.layer_type == "linear" and op.num_passes == 1
+        )
+        shadows = [op for op in trace.layer_list if op.raw_label == fresh.layer_label]
+        assert shadows and all(op is not fresh for op in shadows)
+        assert trace.ops[fresh.layer_label] is fresh
+        assert trace.ops[fresh.label] is fresh
+        _check_op_label_resolution(trace)
+    finally:
+        tl.release_model(model)
+        trace.cleanup()
