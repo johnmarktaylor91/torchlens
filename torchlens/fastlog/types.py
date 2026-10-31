@@ -391,7 +391,7 @@ class RecordingTrace:
 
         return timeline_html(self)
 
-    def repredicate(
+    def filter(
         self,
         other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
     ) -> RecordingTrace:

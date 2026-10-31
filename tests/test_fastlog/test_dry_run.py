@@ -54,10 +54,10 @@ def test_to_pandas_has_expected_columns() -> None:
 
 
 def test_repredicate_changes_decisions_without_changing_events() -> None:
-    """repredicate changes decisions while preserving event identity."""
+    """filter changes decisions while preserving event identity."""
 
     trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
-    updated = trace.repredicate(other_keep_op=_keep_relu)
+    updated = trace.filter(other_keep_op=_keep_relu)
 
     assert updated.events is trace.events
     assert updated.decisions != trace.decisions
