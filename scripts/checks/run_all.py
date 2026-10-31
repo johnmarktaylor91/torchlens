@@ -8,7 +8,7 @@ run a subset.
 
 from __future__ import annotations
 
-import importlib
+import functools
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -17,39 +17,12 @@ _CHECKS_DIR = Path(__file__).resolve().parent
 if str(_CHECKS_DIR) not in sys.path:
     sys.path.insert(0, str(_CHECKS_DIR))
 
-
-def _module_main(module_name: str) -> Callable[[], int]:
-    """Return a callable that imports ``module_name`` and runs its ``main()``."""
-
-    def run() -> int:
-        return int(importlib.import_module(module_name).main())
-
-    run.__name__ = module_name
-    return run
-
+import governance  # noqa: E402
 
 CHECKS: list[tuple[str, Callable[[], int]]] = [
     # Moved from tests/ (governance checks run as scripts, not by the test runner).
-    ("internal_id_lint", _module_main("internal_id_lint")),
-    ("mypy_ratchet", _module_main("mypy_ratchet")),
-    ("not_mvp_audit", _module_main("not_mvp_audit")),
-    ("filename_convention_lint", _module_main("filename_convention_lint")),
-    ("deprecation_inventory", _module_main("deprecation_inventory")),
-    ("file_size_ratchet", _module_main("file_size_ratchet")),
-    ("claims_lint", _module_main("claims_lint")),
-    ("arch_spine_layer_lint", _module_main("arch_spine_layer_lint")),
-    ("factcore_import_lint", _module_main("factcore_import_lint")),
-    ("arch_tail_vocab_lint", _module_main("arch_tail_vocab_lint")),
-    ("arch_tail_seam_census", _module_main("arch_tail_seam_census")),
-    ("arch_tail_surface_audit", _module_main("arch_tail_surface_audit")),
-    ("state_access_ratchet", _module_main("state_access_ratchet")),
-    ("error_contract_lockstep", _module_main("error_contract_lockstep")),
-    ("docs_lockstep_names", _module_main("docs_lockstep_names")),
-    ("terminology_lint", _module_main("terminology_lint")),
-    ("removed_spelling_lint", _module_main("removed_spelling_lint")),
-    ("ruff_ratchet", _module_main("ruff_ratchet")),
-    ("known_failures_ledger", _module_main("known_failures_ledger")),
-    ("skip_audit", _module_main("skip_audit")),
+    (name, functools.partial(governance.run, name))
+    for name in governance.MOVED
 ]
 
 
