@@ -85,14 +85,18 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
         log.cleanup()
 
 
-def test_bundle_show_accepts_vis_mode_none() -> None:
-    """``Bundle.show`` accepts render kwargs and skips on ``vis_mode='none'``."""
+def test_bundle_show_draws_every_member(tmp_path: Path) -> None:
+    """``Bundle.show`` takes ``Trace.draw`` keywords and returns one Drawing per member."""
 
     log = _interventions()
     clean = tl.trace(_ReluAdd(), torch.randn(2, 3))
     try:
         bundle = tl.Bundle({"intervened": log, "clean": clean})
-        assert bundle.show(vis_mode="none") == {"intervened": None, "clean": None}
+        pictures = bundle.show(path=str(tmp_path / "strip"), file_format="svg")
+        assert set(pictures) == {"intervened", "clean"}
+        for name, picture in pictures.items():
+            assert isinstance(picture, tl.viz.Drawing)
+            assert any(written.name.startswith(f"strip_{name}") for written in tmp_path.iterdir())
     finally:
         log.cleanup()
         clean.cleanup()
