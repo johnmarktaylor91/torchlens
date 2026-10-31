@@ -1299,6 +1299,7 @@
     "dtype:float32",
     "feat:inplace",
     "feat:internal_source",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -1334,7 +1335,8 @@
     "mod:Linear",
     "mod:MultiheadAttention",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "smoke: first to cover 21 feature(s), e.g. func:__or__, in:dict, func:repeat_interleave, func:masked_fill_",
    "census_seconds": 7.2,
@@ -1356,6 +1358,7 @@
     "feat:capture_warning",
     "feat:conditional_body",
     "feat:inplace",
+    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__eq__",
@@ -1371,7 +1374,8 @@
     "mod:Linear",
     "size:lt50",
     "trace:has_conditional_branching",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "smoke: first to cover 12 feature(s), e.g. feat:conditional_body, func:_is_all_true, trace:has_conditional_branching, func:broadcast_tensors",
    "census_seconds": 4.3,
@@ -1392,6 +1396,7 @@
     "dtype:float64",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "func:__add__",
     "func:double",
     "func:einsum",
@@ -1404,7 +1409,8 @@
     "mod:Sequential",
     "mod:Tanh",
     "param_dtype:float64",
-    "size:lt50"
+    "size:lt50",
+    "trace:is_recurrent"
    ],
    "why": "smoke: first to cover 8 feature(s), e.g. func:double, param_dtype:float64, dtype:float64, in:tuple+nested",
    "census_seconds": 4.15,
@@ -1544,6 +1550,7 @@
     "feat:conditional_body",
     "feat:inplace",
     "feat:internal_source",
+    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__eq__",
@@ -1567,7 +1574,8 @@
     "size:lt50",
     "trace:capture_unverified:mode_rescue_rerun",
     "trace:has_conditional_branching",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "smoke: first to cover 8 feature(s), e.g. func:gt, func:div, func:reciprocal, trace:capture_unverified:mode_rescue_rerun",
    "census_seconds": 5.3,
@@ -1623,7 +1631,6 @@
     "feat:buffers",
     "feat:inplace",
     "feat:internal_source",
-    "feat:multipass",
     "func:__mul__",
     "func:__neg__",
     "func:__rmul__",
@@ -1652,8 +1659,7 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "smoke: first to cover 12 feature(s), e.g. mod:AdaptiveMaxPool1d, func:adaptive_max_pool1d, mod:MaxPool1d, func:max_pool1d",
    "census_seconds": 6.22,
@@ -1871,6 +1877,7 @@
     "feat:capture_warning",
     "feat:inplace",
     "feat:module_reused",
+    "feat:multipass",
     "func:__add__",
     "func:alpha_dropout",
     "func:cat",
@@ -1891,7 +1898,8 @@
     "mod:Sigmoid",
     "mod:Softmax",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 8 feature(s), e.g. func:alpha_dropout, mod:AlphaDropout, mod:SELU, func:selu",
    "census_seconds": 6.51,
@@ -1962,6 +1970,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__abs__",
@@ -2005,7 +2014,8 @@
     "mod:Dropout",
     "mod:ReLU",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 18 feature(s), e.g. func:angle, func:arcsin, func:eig, func:eigvals",
    "census_seconds": 14.06,
@@ -2026,6 +2036,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__add__",
@@ -2064,7 +2075,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 14 feature(s), e.g. func:hann_window, func:mul_, mod:GLU, func:glu",
    "census_seconds": 9.03,
@@ -2455,6 +2467,7 @@
    "features": [
     "dtype:complex64",
     "feat:internal_source",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__add__",
@@ -2481,7 +2494,8 @@
     "in:T",
     "param_dtype:complex64",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 3 feature(s), e.g. func:inv, param_dtype:complex64, func:diag_embed",
    "census_seconds": 14.27,
@@ -2508,6 +2522,7 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "feat:rank_ge5",
@@ -2544,7 +2559,8 @@
     "mod:Embedding",
     "mod:Linear",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 7 feature(s), e.g. func:cross_entropy, func:view_as_real, func:type_as, func:view_as_complex",
    "census_seconds": 12.85,
@@ -2943,7 +2959,6 @@
     "feat:buffer_op",
     "feat:buffers",
     "feat:internal_source",
-    "feat:multipass",
     "func:__add__",
     "func:__matmul__",
     "func:__mul__",
@@ -2967,8 +2982,7 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 3 feature(s), e.g. func:scatter_reduce, func:scatter_add, func:index_select",
    "census_seconds": 5.55,
@@ -2991,6 +3005,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -3033,7 +3048,8 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 7 feature(s), e.g. mod:Transformer, mod:TransformerDecoder, mod:TransformerDecoderLayer, mod:ReflectionPad2d",
    "census_seconds": 21.82,
@@ -3182,6 +3198,7 @@
     "dtype:int64",
     "feat:inplace",
     "feat:intermediate_output",
+    "feat:multipass",
     "func:__add__",
     "func:__sub__",
     "func:__truediv__",
@@ -3200,7 +3217,8 @@
     "func:vector_norm",
     "in:tuple+nested",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:nan_to_num, func:spmm",
    "census_seconds": 6.85,
@@ -3319,6 +3337,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:rank0",
     "func:__add__",
     "func:__getitem__",
@@ -3346,7 +3365,8 @@
     "func:tile",
     "in:tuple",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 3 feature(s), e.g. func:slogdet, func:tile, func:norm",
    "census_seconds": 9.83,
@@ -3450,6 +3470,7 @@
     "dtype:float32",
     "dtype:int64",
     "feat:internal_source",
+    "feat:multipass",
     "func:__add__",
     "func:__getitem__",
     "func:__mod__",
@@ -3469,7 +3490,8 @@
     "func:unsqueeze",
     "in:T",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 3 feature(s), e.g. func:__xor__, func:floor, func:__mod__",
    "census_seconds": 9.37,
@@ -3495,7 +3517,6 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -3528,8 +3549,7 @@
     "mod:Linear",
     "mod:SiLU",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 3 feature(s), e.g. func:bitwise_not, func:swapaxes, func:__idiv__",
    "census_seconds": 15.45,
@@ -3548,6 +3568,7 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_reused",
+    "feat:multipass",
     "func:atan",
     "func:conv2d",
     "func:dropout",
@@ -3561,7 +3582,8 @@
     "mod:Dropout",
     "mod:Linear",
     "mod:ReLU",
-    "size:lt50"
+    "size:lt50",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:atan, func:multiply",
    "census_seconds": 6.78,
@@ -3835,6 +3857,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:param_multi_use",
     "func:__add__",
     "func:__eq__",
@@ -3884,7 +3907,8 @@
     "mod:Linear",
     "mod:MultiheadAttention",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 3 feature(s), e.g. func:add_, func:copy_, func:baddbmm",
    "census_seconds": 17.56,
@@ -4009,6 +4033,7 @@
     "dtype:float32",
     "dtype:int64",
     "feat:internal_source",
+    "feat:multipass",
     "func:__getitem__",
     "func:cat",
     "func:embedding",
@@ -4025,7 +4050,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:tril_indices",
    "census_seconds": 3.21,
@@ -4139,6 +4165,7 @@
     "dtype:int64",
     "feat:inplace",
     "feat:module_reused",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:adaptive_max_pool3d_with_indices",
     "func:conv3d",
@@ -4156,7 +4183,8 @@
     "mod:MaxPool3d",
     "mod:ReLU",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:adaptive_max_pool3d_with_indices, mod:AdaptiveMaxPool3d",
    "census_seconds": 15.19,
@@ -4181,6 +4209,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -4211,7 +4240,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:istft, func:stft",
    "census_seconds": 13.83,
@@ -4230,6 +4260,7 @@
     "dtype:float32",
     "feat:frozen_param",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "func:__add__",
     "func:__radd__",
     "func:linear",
@@ -4238,7 +4269,8 @@
     "in:T",
     "mod:Linear",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for feat:frozen_param, func:__radd__, feat:module_depth_ge4, size:lt50",
    "census_seconds": 5.58,
@@ -4398,6 +4430,7 @@
     "feat:inplace",
     "feat:intermediate_output",
     "feat:internal_source",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "feat:scalar_bool",
@@ -4450,7 +4483,8 @@
     "mod:Linear",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 3 feature(s), e.g. func:__le__, func:tril, func:__and__",
    "census_seconds": 22.6,
@@ -4502,6 +4536,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "func:__eq__",
     "func:__getitem__",
     "func:__gt__",
@@ -4535,7 +4570,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:randperm, func:sort",
    "census_seconds": 11.1,
@@ -4665,6 +4701,7 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
+    "feat:multipass",
     "func:__getitem__",
     "func:__iadd__",
     "func:__mul__",
@@ -4703,7 +4740,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. func:concatenate, func:concat",
    "census_seconds": 15.79,
@@ -5198,6 +5236,7 @@
     "feat:buffer_op",
     "feat:buffers",
     "feat:internal_source",
+    "feat:multipass",
     "func:T",
     "func:__add__",
     "func:__getitem__",
@@ -5217,7 +5256,8 @@
     "func:sum",
     "in:T",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:new_ones",
    "census_seconds": 4.17,
@@ -5236,6 +5276,7 @@
     "dtype:float32",
     "feat:intermediate_output",
     "feat:module_reused",
+    "feat:multipass",
     "func:clamp",
     "func:hardtanh",
     "func:linear",
@@ -5246,7 +5287,8 @@
     "mod:ReLU6",
     "mod:Sequential",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. mod:ReLU6",
    "census_seconds": 3.03,
@@ -5730,7 +5772,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "func:__add__",
     "func:__getitem__",
     "func:__matmul__",
@@ -5760,8 +5801,7 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:fill_diagonal_",
    "census_seconds": 9.48,
@@ -5828,6 +5868,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "func:__add__",
     "func:__eq__",
     "func:__getitem__",
@@ -5853,7 +5894,8 @@
     "mod:Sigmoid",
     "mod:Softplus",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:atleast_2d",
    "census_seconds": 9.72,
@@ -5873,7 +5915,6 @@
     "feat:buffer_op",
     "feat:buffers",
     "feat:internal_source",
-    "feat:multipass",
     "func:__add__",
     "func:__matmul__",
     "func:__mul__",
@@ -5898,8 +5939,7 @@
     "func:zeros",
     "in:tuple",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:solve",
    "census_seconds": 8.08,
@@ -5922,7 +5962,6 @@
     "feat:buffers",
     "feat:inplace",
     "feat:internal_source",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__abs__",
@@ -5950,8 +5989,7 @@
     "mod:AdaptiveAvgPool2d",
     "mod:BatchNorm2d",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:arctanh",
    "census_seconds": 10.8,
@@ -6030,6 +6068,7 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__mul__",
@@ -6059,7 +6098,8 @@
     "mod:Sequential",
     "mod:UpsamplingBilinear2d",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 2 feature(s), e.g. mod:UpsamplingBilinear2d, mod:AvgPool2d",
    "census_seconds": 23.09,
@@ -6084,6 +6124,7 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
+    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__eq__",
@@ -6114,7 +6155,8 @@
     "mod:Sequential",
     "size:lt50",
     "trace:has_conditional_branching",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:normal",
    "census_seconds": 7.66,
@@ -6135,6 +6177,7 @@
     "feat:inplace",
     "feat:intermediate_output",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "func:__add__",
     "func:conv2d",
     "func:cummax",
@@ -6149,7 +6192,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:cummax",
    "census_seconds": 11.85,
@@ -6167,6 +6211,7 @@
    "features": [
     "dtype:float32",
     "feat:inplace",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__truediv__",
     "func:adaptive_avg_pool2d",
@@ -6194,7 +6239,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. mod:LocalResponseNorm",
    "census_seconds": 10.09,
@@ -6218,6 +6264,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "func:__add__",
     "func:__eq__",
     "func:__getitem__",
@@ -6234,7 +6281,8 @@
     "mod:Linear",
     "mod:ReLU",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:hstack",
    "census_seconds": 8.25,
@@ -6287,7 +6335,6 @@
    "features": [
     "dtype:float32",
     "feat:internal_source",
-    "feat:multipass",
     "func:T",
     "func:__add__",
     "func:__matmul__",
@@ -6308,8 +6355,7 @@
     "func:vector_norm",
     "in:T",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:atanh",
    "census_seconds": 13.33,
@@ -6328,7 +6374,6 @@
     "dtype:float32",
     "feat:intermediate_output",
     "feat:internal_source",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__add__",
@@ -6352,8 +6397,7 @@
     "in:T",
     "mod:Linear",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:svd",
    "census_seconds": 14.17,
@@ -6449,6 +6493,7 @@
     "feat:inplace",
     "feat:intermediate_output",
     "feat:internal_source",
+    "feat:multipass",
     "func:__getitem__",
     "func:__mul__",
     "func:__setitem__",
@@ -6464,7 +6509,8 @@
     "mod:Sequential",
     "mod:Tanhshrink",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. mod:Tanhshrink",
    "census_seconds": 16.76,
@@ -6523,6 +6569,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "feat:rank0",
     "func:__add__",
     "func:__mul__",
@@ -6564,7 +6611,8 @@
     "mod:Dropout",
     "mod:Linear",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:lgamma",
    "census_seconds": 15.24,
@@ -6655,6 +6703,7 @@
    "year": "2024",
    "features": [
     "dtype:float32",
+    "feat:multipass",
     "func:__add__",
     "func:__getitem__",
     "func:__mul__",
@@ -6677,7 +6726,8 @@
     "mod:Linear",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:logsigmoid",
    "census_seconds": 19.11,
@@ -6920,6 +6970,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "func:__add__",
     "func:__getitem__",
     "func:batch_norm",
@@ -6935,7 +6986,8 @@
     "mod:ELU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "first to cover 1 feature(s), e.g. func:feature_dropout_",
    "census_seconds": 21.05,
@@ -6955,6 +7007,7 @@
     "dtype:float64",
     "dtype:int64",
     "feat:inplace",
+    "feat:multipass",
     "func:adaptive_max_pool1d",
     "func:conv1d",
     "func:double",
@@ -6968,7 +7021,8 @@
     "mod:Linear",
     "param_dtype:float64",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:double, param_dtype:float64, dtype:float64, func:adaptive_max_pool1d",
    "census_seconds": 4.58,
@@ -7283,6 +7337,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__add__",
@@ -7321,7 +7376,8 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:hann_window, func:mul_, mod:GLU, func:glu",
    "census_seconds": 9.07,
@@ -7343,6 +7399,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -7394,7 +7451,8 @@
     "mod:Sigmoid",
     "mod:Tanh",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:new_tensor, func:index_add_, func:unfold, func:type",
    "census_seconds": 13.9,
@@ -7600,6 +7658,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_reused",
+    "feat:multipass",
     "func:__iadd__",
     "func:__mul__",
     "func:adaptive_avg_pool1d",
@@ -7627,7 +7686,8 @@
     "mod:Sequential",
     "mod:Sigmoid",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for mod:AdaptiveAvgPool1d, func:adaptive_avg_pool1d, mod:AvgPool2d, func:avg_pool2d",
    "census_seconds": 11.12,
@@ -7743,6 +7803,7 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -7781,7 +7842,8 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for mod:TransformerDecoder, mod:TransformerDecoderLayer, func:split_with_sizes, mod:TransformerEncoder",
    "census_seconds": 8.64,
@@ -8411,6 +8473,7 @@
     "feat:capture_warning",
     "feat:conditional_body",
     "feat:inplace",
+    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__eq__",
@@ -8434,7 +8497,8 @@
     "mod:Sequential",
     "size:lt50",
     "trace:has_conditional_branching",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for feat:conditional_body, func:_is_all_true, trace:has_conditional_branching, func:as_tensor",
    "census_seconds": 4.08,
@@ -8496,7 +8560,6 @@
     "feat:buffer_op",
     "feat:buffers",
     "feat:internal_source",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:T",
@@ -8509,8 +8572,7 @@
     "func:stack",
     "in:T",
     "size:lt50",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:erf, func:T, func:expand_as, feat:rank0",
    "census_seconds": 4.28,
@@ -8566,6 +8628,7 @@
    "features": [
     "dtype:float32",
     "dtype:int64",
+    "feat:multipass",
     "func:__add__",
     "func:__mul__",
     "func:__rmul__",
@@ -8590,7 +8653,8 @@
     "mod:Sequential",
     "mod:Tanh",
     "size:lt50",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:clamp_max, func:cdist, func:cos, func:pow",
    "census_seconds": 5.81,
@@ -8820,6 +8884,7 @@
     "feat:capture_warning",
     "feat:inplace",
     "feat:internal_source",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -8845,7 +8910,8 @@
     "mod:MaxPool2d",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:stft, mod:ELU, func:log, func:abs",
    "census_seconds": 8.6,
@@ -8897,6 +8963,7 @@
    "features": [
     "dtype:float32",
     "feat:internal_source",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__abs__",
@@ -8918,7 +8985,8 @@
     "func:zeros",
     "in:tuple",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:solve, func:__abs__, func:eye, func:softplus",
    "census_seconds": 8.74,
@@ -9029,7 +9097,6 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:rank0",
     "feat:scalar_bool",
     "func:__add__",
@@ -9066,8 +9133,7 @@
     "mod:Sequential",
     "mod:SiLU",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:any, feat:scalar_bool, in:list, func:unbind",
    "census_seconds": 8.48,
@@ -9232,7 +9298,6 @@
     "dtype:complex64",
     "dtype:float32",
     "feat:internal_source",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -9255,8 +9320,7 @@
     "mod:GRU",
     "mod:Linear",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:complex, dtype:complex64, func:gru, mod:GRU",
    "census_seconds": 8.88,
@@ -9437,6 +9501,7 @@
     "dtype:float32",
     "feat:intermediate_output",
     "feat:internal_source",
+    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank0",
     "func:__add__",
@@ -9457,7 +9522,8 @@
     "func:unsqueeze",
     "in:T",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:tile, func:log_softmax, func:randn_like, func:softplus",
    "census_seconds": 9.59,
@@ -9533,6 +9599,7 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -9564,7 +9631,8 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:logical_not, func:masked_fill_, func:__invert__, mod:TransformerEncoder",
    "census_seconds": 8.57,
@@ -9792,6 +9860,7 @@
    "features": [
     "dtype:float32",
     "feat:inplace",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__truediv__",
     "func:add",
@@ -9822,7 +9891,8 @@
     "mod:Softmax",
     "mod:Tanh",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for mod:LocalResponseNorm, func:avg_pool3d, func:mul, mod:Softmax",
    "census_seconds": 12.36,
@@ -9840,7 +9910,6 @@
    "features": [
     "dtype:float32",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "func:__abs__",
     "func:__add__",
     "func:__getitem__",
@@ -9874,8 +9943,7 @@
     "mod:Sequential",
     "mod:SiLU",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:atan2, func:min, func:log, func:__abs__",
    "census_seconds": 9.04,
@@ -9896,6 +9964,7 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
+    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -9926,7 +9995,8 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:rand, func:__lt__, mod:TransformerEncoder, mod:TransformerEncoderLayer",
    "census_seconds": 9.83,
@@ -10032,7 +10102,6 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "func:__abs__",
     "func:__add__",
     "func:__getitem__",
@@ -10065,8 +10134,7 @@
     "mod:Linear",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:norm, func:__abs__, func:__pow__, func:matmul",
    "census_seconds": 10.32,
@@ -10326,6 +10394,7 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_reused",
+    "feat:multipass",
     "func:dropout_",
     "func:leaky_relu",
     "func:linear",
@@ -10334,7 +10403,8 @@
     "mod:Dropout",
     "mod:LeakyReLU",
     "mod:Linear",
-    "size:lt500"
+    "size:lt500",
+    "trace:is_recurrent"
    ],
    "why": "second witness for func:dropout_, mod:LeakyReLU, func:leaky_relu, mod:Dropout",
    "census_seconds": 9.21,
@@ -10352,6 +10422,7 @@
    "features": [
     "dtype:float32",
     "feat:module_reused",
+    "feat:multipass",
     "func:__add__",
     "func:cat",
     "func:clone",
@@ -10368,7 +10439,8 @@
     "mod:ReflectionPad2d",
     "mod:UpsamplingNearest2d",
     "size:lt500",
-    "trace:is_branching"
+    "trace:is_branching",
+    "trace:is_recurrent"
    ],
    "why": "second witness for mod:UpsamplingNearest2d, mod:ReflectionPad2d, func:clone, func:pad",
    "census_seconds": 9.75,
