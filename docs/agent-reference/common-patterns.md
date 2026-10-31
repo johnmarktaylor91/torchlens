@@ -140,8 +140,7 @@ prompts), pick the path by what you need back. Build the spec once; every path t
 
 - Steering only: `spec.bind(model)`. A capture-free executor that runs at about the cost of
   a plain forward hook. Call it like the model, or call `.generate(...)` on it (KV cache on or
-  off); `.last_report` counts the firings. `torchlens.intervention.steer_generate` is one-call
-  sugar for `spec.bind(model).generate(...)`. A binding selects ops structurally
+  off); `.last_report` counts the firings. A binding selects ops structurally
   (`tl.func("relu") & tl.in_module("1")`, `tl.module("1")`); it refuses final or short labels such
   as `tl.label("relu_1_2")` when bound, because labels are assigned after a capture.
 - Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,

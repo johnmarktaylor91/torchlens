@@ -483,13 +483,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   bound executor that applies a spec to live calls. A synchronous generator or iterator returned
   by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
   settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`, as does a lazy
-  `generate` output under `torchlens.intervention.steer_generate`, whose report must settle
-  before it returns.
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
-: One knob on every intervention door: `spec.bind`, `torchlens.intervention.steer_generate`,
-  `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
+: One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
   recorded on the door's own record (the bind report's `zero_fire_rule_ids`, the capture's
   `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
   `last_run["hooks_unfired"]`). The knob then decides the same way everywhere: `"warn"`
@@ -504,8 +501,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
-  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). `torchlens.intervention.steer_generate` is one-call sugar for
-  `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
+  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). Decode steps: the binding counts root forwards, so
   `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
