@@ -19,13 +19,12 @@ import torch
 
 from torchlens.conformance import (
     CLAIM_MIN_PRETRAINED_FAMILIES,
-    FAKE_PLANTS,
     ConformanceReport,
     RosterModel,
     claim_string,
     run_conformance,
 )
-from torchlens.conformance._adapters import resolve_adapter
+from torchlens.conformance._adapters import FAKE_PLANTS, resolve_adapter
 from torchlens.errors import ConfigurationError
 
 

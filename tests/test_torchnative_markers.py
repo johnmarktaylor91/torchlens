@@ -154,12 +154,13 @@ def test_borrowed_session_never_closed_and_joinable() -> None:
     """Borrowed mode: markers land in the caller's profiler; we never close it."""
 
     from torchlens import observability as obs
+    from torchlens.observability._native_profile import join_session
 
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     with torch.profiler.profile() as prof, obs.session(mode="borrowed", profiler=prof) as sess:
         log = tl.trace(model, torch.randn(2, 8))
     # The borrowed profiler closed AFTER the session exited without touching it.
-    join = obs.join_session(sess, log)
+    join = join_session(sess, log)
     assert join.facts["n_markers"] >= 2
     assert join.availability == "empty"  # CPU-only: honest, with reason
     assert "device" in (join.coverage.reason or "")

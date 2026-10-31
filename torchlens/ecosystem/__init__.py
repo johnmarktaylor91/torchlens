@@ -21,10 +21,9 @@ from __future__ import annotations
 
 from . import plugins
 from .compat import compat_window
-from .migrate import MigrationReport, MigrationStep, migrate
+from .migrate import MigrationStep, migrate
 
 __all__ = [
-    "MigrationReport",
     "MigrationStep",
     "compat_window",
     "migrate",

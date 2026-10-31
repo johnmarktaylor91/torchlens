@@ -22,7 +22,7 @@ here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
-from ..ir.summary_role import SummaryTransform, is_summary_transform, summary
+from ..ir.summary_role import summary
 from ._artifact import (
     DEFAULT_RING_CAPACITY,
     RAM_POLICIES,
@@ -55,17 +55,11 @@ from ._memory_parity import (
     EMITTED_CATEGORIES,
     NEVER_EMITTED_CATEGORIES,
     categorized_key_counts,
-    category_vocabulary_report,
     pinned_parity_scenario,
 )
 from ._memory_totals import (
     total_transformed_activation_memory,
     total_transformed_gradient_memory,
-)
-from ._native_profile import (
-    join_result_for,
-    join_session,
-    register_join_result,
 )
 from ._op_tier import FacetSplitter, OpTierCollector, split_heads
 from ._overhead import ArmSpec, OverheadMeasurement, RefusalPredicate, measure_overhead
@@ -170,12 +164,10 @@ __all__ = [
     "SpineResult",
     "StepBlockRecord",
     "StepTruth",
-    "SummaryTransform",
     "WatchPlan",
     "WatchRenderError",
     "WatchSettings",
     "categorized_key_counts",
-    "category_vocabulary_report",
     "coarsen_pair",
     "color_by_watch",
     "contact_sheet_pages",
@@ -184,10 +176,7 @@ __all__ = [
     "extract_events",
     "format_markdown",
     "histogram_payload",
-    "is_summary_transform",
     "join_events",
-    "join_result_for",
-    "join_session",
     "measure_ab",
     "measure_noise_band",
     "merge_histogram_results",
@@ -198,7 +187,6 @@ __all__ = [
     "pinned_parity_scenario",
     "rank_sites",
     "region",
-    "register_join_result",
     "render_contact_sheet",
     "render_detail",
     "render_fan",

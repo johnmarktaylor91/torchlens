@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..errors import ConfigurationError
-from ._adapters import FAKE_PLANTS, RosterModel, default_roster, resolve_adapter
+from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
 from ._preview_adapters import PREVIEW_BACKENDS
 from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
@@ -41,7 +41,6 @@ from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 __tl_layer__ = "L9"
 
 __all__ = [
-    "FAKE_PLANTS",
     "PREVIEW_BACKENDS",
     "CaseResult",
     "ConformanceReport",

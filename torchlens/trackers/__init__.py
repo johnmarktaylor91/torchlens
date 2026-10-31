@@ -60,7 +60,6 @@ from ._protocol import (
 from ._records import (
     EMISSION_SCHEMA_VERSION,
     FAMILIES,
-    TAG_SAFETY_CHECK_VERSION,
     HistogramPoint,
     ScalarPoint,
     StepEmission,
@@ -96,7 +95,6 @@ __all__ = [
     "JSONL_FORMAT",
     "SCALE_EVIDENCE",
     "SIGNALS",
-    "TAG_SAFETY_CHECK_VERSION",
     "TIMING_EVIDENCE",
     "WANDB_BUCKET_CAP",
     "WANDB_SAFE_DESCRIPTOR",

@@ -36,6 +36,6 @@ class TraceNarrateMixin:
             Rendered narration block (no trailing newline).
         """
 
-        from ..snoop import narrate_trace
+        from torchlens.snoop._narrate import narrate_trace
 
         return narrate_trace(self, last=last, select=select)

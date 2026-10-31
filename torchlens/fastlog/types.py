@@ -1058,7 +1058,7 @@ class Recording(CapturedRun):
             Rendered narration block (no trailing newline).
         """
 
-        from ..snoop import narrate_recording
+        from torchlens.snoop._narrate import narrate_recording
 
         return narrate_recording(self, last=last, select=select)
 

@@ -41,7 +41,6 @@ from ._authorities import (
 )
 from ._card import check_card
 from ._diagnostics import (
-    DEFAULT_CHECKS,
     DiagnosticFinding,
     InputDiagnostics,
     diagnose,
@@ -62,7 +61,6 @@ __tl_layer__ = "L5"
 
 __all__ = [
     "COMPARABLE_FIELDS",
-    "DEFAULT_CHECKS",
     "STATUS_AUTHORITATIVE",
     "STATUS_UNKNOWN",
     "STATUS_UNVERIFIED_FALLBACK",

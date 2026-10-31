@@ -21,8 +21,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensError
-from torchlens.observability import join_events, register_join_result
+from torchlens.observability import join_events
 from torchlens.observability._kineto import NormalizedEvent
+from torchlens.observability._native_profile import register_join_result
 
 
 @pytest.fixture()
