@@ -20,5 +20,5 @@ tests/oracles/data/surface_module_classification.tsv merge=union
 # Ratchet-ceiling dicts: union-merge both lanes' ceiling edits. A same-key or
 # neighbouring-key edit leaves a repeated key, which the integrity test refuses;
 # keep one row and set its value deliberately (shrink-only doctrine).
-tests/test_file_size_ratchet.py merge=union
-tests/test_ruff_ratchet_governance.py merge=union
+scripts/checks/file_size_ratchet.py merge=union
+scripts/checks/ruff_ratchet.py merge=union

@@ -621,7 +621,7 @@ def test_emitter_packages_match_declared_env_markers() -> None:
 #: every sibling carried it — this census makes the omission structural.
 _GENERATION_WRAP_GUARD_CENSUS: dict[str, tuple[str, str]] = {
     "TORCHLENS_REGEN_EXPORT_GOLDENS": ("test_exports.py", "in-process"),
-    "TORCHLENS_REGEN_LAYER_BASELINE": ("test_arch_spine_layer_lint.py", "in-process"),
+    "TORCHLENS_REGEN_LAYER_BASELINE": ("../scripts/checks/arch_spine_layer_lint.py", "in-process"),
     "TORCHLENS_UPDATE_BACKEND_PARITY": (
         "backend_parity/test_torch_parity_gates.py",
         "in-process",
@@ -702,6 +702,10 @@ def test_golden_generators_carry_wrap_state_guard() -> None:
     """Every golden generator family is censused; in-process ones call the guard."""
 
     sources = dict(_test_texts())
+    # Golden generators that moved out of tests/ into scripts/checks/ stay censused.
+    for relpath, _mode in _GENERATION_WRAP_GUARD_CENSUS.values():
+        if relpath.startswith("../scripts/checks/"):
+            sources[relpath] = (_TESTS_DIR / relpath).resolve().read_text(encoding="utf-8")
     discovered: set[str] = set()
     for _relpath, source in sources.items():
         discovered.update(_FLAG_LITERAL_RE.findall(source))
