@@ -62,7 +62,7 @@ from torchlens.errors import (
     RuntimeSignatureDriftError,
 )
 
-_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
+_CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
 
 
 class _Factory(nn.Module):

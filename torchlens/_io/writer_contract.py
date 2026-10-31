@@ -16,9 +16,10 @@ same-grammar signal the ledger keys on. Concrete writer identity lives in
 the compatibility ledger row next to the digest, not inside it.
 
 The contract of record is committed at
-``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
-batch-2 coordinated schema write; the superseded v9 contract stays frozen
-byte-for-byte at ``torchlens/schemas/writer_contract_v9.json`` and the v8
+``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v11 as of the
+3.0 persisted-field pass; the superseded v10 and v9 contracts stay frozen
+byte-for-byte at ``torchlens/schemas/writer_contract_v10.json`` and
+``torchlens/schemas/writer_contract_v9.json``, and the v8
 contract at ``tests/release_goldens/writer_contract_v8.json``, for the
 reviewable cross-version field-set diffs) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree

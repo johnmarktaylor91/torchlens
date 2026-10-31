@@ -39,7 +39,7 @@ def buffered():
     torch.manual_seed(0)
     model = _Buf().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -121,7 +121,7 @@ def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
         model.bn.running_mean.uniform_(-1, 1)
         model.bn.running_var.uniform_(0.5, 2)
     x = torch.randn(2, 2, 4, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         written = _written_buffer_op(trace)
         assert written.buffer_write_kind == "fused"
@@ -150,7 +150,7 @@ def test_unproven_fused_buffer_write_in_cone_still_discloses(value_changed) -> N
     torch.manual_seed(0)
     model = _EvalNorm().eval()
     x = torch.randn(2, 2, 4, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         written = _written_buffer_op(trace)
         assert written.buffer_write_kind == "fused"

@@ -114,7 +114,7 @@ def _capture(
     log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     return log, capture_x
 

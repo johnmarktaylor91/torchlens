@@ -433,7 +433,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         receipt digest) and ledgers each shard's fire receipt; the
         intervention identity joins the resume signature. Module- and
         op-type-addressed specs run; finer address classes refuse typed.
-        Helpers must declare ``batch_independent=True``. String or mapping
+        Helpers must declare ``is_batch_independent=True``. String or mapping
         ``layers=`` only.
     store_input_ids:
         Store each batch's token ids as the ordinary ``input_ids`` key

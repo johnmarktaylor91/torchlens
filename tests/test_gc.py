@@ -792,9 +792,7 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(
-                intervention_ready=True, cache=False, layers_to_save="all"
-            ),
+            capture=tl.options.CaptureOptions(replayable=True, cache=False, layers_to_save="all"),
         )
         path = tmp_path / "gc_archived.tlspec"
         trace.save(path, level="runnable", include_weights=True, include_activations=True)

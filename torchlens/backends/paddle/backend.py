@@ -516,7 +516,7 @@ class PaddleBackend:
                 )
             from ...semantic import facets as facets_mod
 
-            trace.facet_registry_snapshot = facets_mod.snapshot(recipe_tuple)
+            trace.facet_functions = facets_mod.snapshot(recipe_tuple)
         trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))
         trace.backend_runtime_config = {"version": trace.backend_runtime_version}
         trace.backend_runtime_device_summary = {}
@@ -1157,14 +1157,14 @@ class PaddleBackend:
                 event = replace(
                     event,
                     intervention_fired=True,
-                    intervention_replaced=site_fire.replaced,
+                    is_edited=site_fire.replaced,
                     fire_results=(site_fire,),
                 )
             emitted.append(event)
             self.tensor_store.set_label_if_unlabeled(tensor, site.label_raw)
         events.extend(tuple(emitted))
         for event in emitted:
-            if event.intervention_replaced:
+            if event.is_edited:
                 events.append_intervention(
                     InterventionAppliedEvent(
                         label_raw=event.label_raw,
@@ -1542,7 +1542,7 @@ class PaddleBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self.build_record_context(session, reserved, func_event_input, output),
@@ -2003,7 +2003,7 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
         return False
     if intervention.raw_first_output is None:
         return True
-    if not bool(getattr(op, "intervention_replaced", False)):
+    if not bool(getattr(op, "is_edited", False)):
         return False
     for record in getattr(op, "interventions", ()) or ():
         if not bool(getattr(record, "replaced", False)):

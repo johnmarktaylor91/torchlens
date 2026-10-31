@@ -79,7 +79,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # out of reach for a line lint and are covered by the runtime TypeError.
     "trace_flat": re.compile(
         r"(?:tl|torchlens)\.trace\s*\([^)\n]*\b(?:layers_to_save|vis_mode|vis_opt"
-        r"|intervention_ready|backward_ready|output_style|output_head|random_seed"
+        r"|replayable|backward_ready|output_style|output_head|random_seed"
         r"|save_grads|structure_only|save_outs_to|out_sink|keep_outs_in_memory"
         r"|activation_transform|save_arg_values|capture_container_structure)\s*="
     ),

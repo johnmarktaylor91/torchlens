@@ -166,7 +166,7 @@ def _interventions(model: torch.nn.Module, x: torch.Tensor) -> Any:
         TorchLens model log.
     """
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _first_func(log: Any, func_name: str) -> Any:
@@ -204,7 +204,7 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert log.last_run["engine"] == "replay"
     assert relu_site.interventions[-1].engine == "replay"
     assert relu_site.interventions[-1].replaced is True
-    assert relu_site.intervention_replaced is True
+    assert relu_site.is_edited is True
 
 
 def test_differentiable_replay_patching_captures_backward_grads() -> None:
@@ -216,14 +216,14 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
         ReplayPatchModel(),
         clean_x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
+            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
         ),
     )
     corrupt = tl.trace(
         ReplayPatchModel(),
         corrupt_x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
+            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
         ),
     )
     clean_relu = _first_func(clean, "relu")
@@ -261,13 +261,13 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
 
     assert replayed is not corrupt
     assert corrupt.has_backward_pass is False
-    assert replay_relu.layer_label in replayed.replay_frontier
-    assert replayed.replay_frontier[replay_relu.layer_label].is_leaf
-    assert replayed.replay_frontier[replay_relu.layer_label].requires_grad
+    assert replay_relu.layer_label in replayed._replay_frontier
+    assert replayed._replay_frontier[replay_relu.layer_label].is_leaf
+    assert replayed._replay_frontier[replay_relu.layer_label].requires_grad
     assert torch.equal(replay_output, reference_output.detach())
     assert reference_patch.grad is not None
     assert replay_relu.grad is not None
-    frontier_grad = replayed.replay_frontier[replay_relu.layer_label].grad
+    frontier_grad = replayed._replay_frontier[replay_relu.layer_label].grad
     assert frontier_grad is not None
     replay_relu_grad = replay_relu.grad
     reference_grad = reference_patch.grad
@@ -295,7 +295,7 @@ def test_differentiable_replay_forks_isolated_records() -> None:
         ReplayPatchModel(),
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
+            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
         ),
     )
 

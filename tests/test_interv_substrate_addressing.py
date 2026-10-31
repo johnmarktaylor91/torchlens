@@ -50,10 +50,8 @@ def _capture_pair() -> tuple[tl.Trace, tl.Trace]:
     inserted_model.load_state_dict(base_model.state_dict())
     torch.manual_seed(0)
     x = torch.randn(2, 4)
-    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    inserted = tl.trace(
-        inserted_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
+    inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
     return base, inserted
 
 
@@ -121,10 +119,8 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     inserted_model.load_state_dict(base_model.state_dict())
     torch.manual_seed(0)
     x = torch.randn(2, 4)
-    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    inserted = tl.trace(
-        inserted_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
+    inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     base.attach_hooks(tl.func("relu"), tl.scale(0.5), confirm_mutation=True)
     spec_path = os.path.join(tmp_path, "spec.tlspec")
@@ -169,9 +165,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     derived = load_intervention_spec(derived_path)
     assert derived.metadata["spec_derived"] is True
 
-    ready = tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    ready = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(replayable=True))
     fork = ready.fork()
     fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)), confirm_mutation=True)
     authored_path = os.path.join(tmp_path, "authored.tlspec")

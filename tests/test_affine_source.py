@@ -49,7 +49,7 @@ _B = torch.randn(4, generator=torch.Generator().manual_seed(5), dtype=torch.floa
 
 
 def _ready() -> Any:
-    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _one_position_mask() -> torch.Tensor:

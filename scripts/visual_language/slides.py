@@ -717,7 +717,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Flow",
-                capture={"intervention_ready": True},
+                capture={"replayable": True},
                 intervene="zero_tanh",
                 kwargs={
                     "vis_intervention_mode": "node_mark",
@@ -729,7 +729,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "b",
                 "Flow",
-                capture={"intervention_ready": True},
+                capture={"replayable": True},
                 intervene="zero_tanh",
                 kwargs={"vis_intervention_mode": "as_node"},
                 label='"as_node"',
@@ -754,7 +754,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                capture={"intervention_ready": True, "save_args": True},
+                capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
                 # since the F32 fix), so the crop shows both passes.
@@ -783,7 +783,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery_diff",
-                capture={"intervention_ready": True, "save_args": True},
+                capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 crop=('node(text~"linear_1_1:1")', 'node(text~"linear_1_1:2")'),
             ),

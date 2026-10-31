@@ -125,14 +125,14 @@ def _tiny_transformer_fixture(seed: int) -> tuple[TinyTransformer, torch.Tensor]
     return TinyTransformer().eval(), torch.randn(2, 3, 5, dtype=torch.float64)
 
 
-def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
+def _capture_cnn(seed: int, *, replayable: bool = False) -> tl.Trace:
     """Capture the tiny CNN counterpart for one fixture.
 
     Parameters
     ----------
     seed:
         Fixture seed.
-    intervention_ready:
+    replayable:
         Whether to include intervention replay metadata.
 
     Returns
@@ -146,7 +146,7 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
         model,
         x,
         capture=CaptureOptions(
-            intervention_ready=intervention_ready,
+            replayable=replayable,
             layers_to_save="all",
             seed=0,
         ),
@@ -189,7 +189,7 @@ def _build_intervention_counterpart(seed: int) -> tl.Trace:
         Model log with the zero-ablation recipe attached.
     """
 
-    log = _capture_cnn(seed, intervention_ready=True)
+    log = _capture_cnn(seed, replayable=True)
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     return log
 

@@ -110,7 +110,7 @@ class CausalAuditUnit:
         """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``.
 
         Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace
-        captured with ``capture=tl.options.CaptureOptions(intervention_ready=True)``.
+        captured with ``capture=tl.options.CaptureOptions(replayable=True)``.
         """
 
         assert self._plan is not None  # noqa: S101 - every audit row carries its plan

@@ -10096,7 +10096,7 @@
     },
     {
       "device": "cpu",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "tinynet",
       "operation": "tl_trace_intervention_ready",
@@ -10810,7 +10810,7 @@
     },
     {
       "device": "cpu",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "resnet18",
       "operation": "tl_trace_intervention_ready",
@@ -11524,7 +11524,7 @@
     },
     {
       "device": "cpu",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "gpt2_hf",
       "operation": "tl_trace_intervention_ready",
@@ -12244,7 +12244,7 @@
     },
     {
       "device": "cpu",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "small_lstm",
       "operation": "tl_trace_intervention_ready",
@@ -12968,7 +12968,7 @@
     },
     {
       "device": "cuda",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "tinynet",
       "operation": "tl_trace_intervention_ready",
@@ -13700,7 +13700,7 @@
     },
     {
       "device": "cuda",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "resnet18",
       "operation": "tl_trace_intervention_ready",
@@ -14432,7 +14432,7 @@
     },
     {
       "device": "cuda",
-      "label": "TL Trace, intervention_ready=True",
+      "label": "TL Trace, replayable=True",
       "metadata": {},
       "model": "gpt2_hf",
       "operation": "tl_trace_intervention_ready",

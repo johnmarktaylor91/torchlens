@@ -58,7 +58,7 @@ def _build(tmp_path: Path, name: str) -> Path:
     trace = tl.trace(
         _Tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     bundle = tmp_path / name
     trace.save(str(bundle), level="runnable", include_weights=True)

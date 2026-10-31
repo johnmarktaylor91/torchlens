@@ -34,7 +34,7 @@ carries the per-edge intervened marker (FireRecord.edge_address); the
 producer view (what did the producer compute) stays ``parent.out``,
 untouched. Neither surface lies; the edge provenance record is the bridge.
 
-Node-level ``intervention_replaced`` is deliberately NOT set: edge
+Node-level ``is_edited`` is deliberately NOT set: edge
 substitution replaces no node's output (the child's output is DERIVED from
 the substituted input by re-execution), so the node-level corroboration key
 correctly never fires for edges.
@@ -215,7 +215,7 @@ def apply_edge_substitution_do(
     ------
     SelectionError
         ``edge_intervention_engine_unsupported`` off the replay engine;
-        ``edge_provenance_unavailable`` without an intervention_ready
+        ``edge_provenance_unavailable`` without an replayable
         capture; ``selection_apply_invalid`` for ineligible payloads.
     """
 

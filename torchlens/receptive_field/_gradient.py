@@ -242,7 +242,7 @@ def _probe_suppressed(trace: Trace) -> Iterator[None]:
     deliberately not registered from here: mutating the class-level
     ``_PORTABLE_STATE_SPEC`` per probe is a process-global side effect of a
     per-instance operation, and it desynchronizes that spec from the
-    ``FIELD_POLICY`` table it is generated from.
+    ``_FIELD_POLICY`` table it is generated from.
 
     Parameters
     ----------

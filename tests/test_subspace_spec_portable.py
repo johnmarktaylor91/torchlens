@@ -49,7 +49,7 @@ _ROTATION = torch.linalg.qr(
 
 
 def _ready(x: torch.Tensor = _X) -> Any:
-    return tl.trace(_MODEL, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_MODEL, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _edited(rows: torch.Tensor, edit: Any, **subspace_kwargs: Any) -> Any:

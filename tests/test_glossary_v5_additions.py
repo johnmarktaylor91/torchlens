@@ -37,7 +37,7 @@ def _make_trace() -> Any:
     return tl.trace(
         model,
         torch.randn(1, 4),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
 
@@ -89,7 +89,7 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
 
     assert isinstance(root, Module)
     assert isinstance(root.recursive_params, ParamAccessor)
-    assert root.recursive_param_addresses == [
+    assert list(root.recursive_params.keys()) == [
         "block.0.weight",
         "block.0.bias",
         "head.weight",

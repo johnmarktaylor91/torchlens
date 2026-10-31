@@ -397,7 +397,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # replay leaking torch's matmul precision fields; measured 4930. Debloat
     # target unchanged: 3450.
     # 4950 -> 5000 (2026-10-03 fix/ff-tf32): read_legacy_fp32_controls (the
-    # safe legacy TF32 readers that stop intervention_ready capture and
+    # safe legacy TF32 readers that stop replayable capture and
     # check_determinism crashing under torch >= 2.9 per-backend fp32_precision
     # policies) plus the replay reset of the controls no legacy setter writes;
     # extends FE's fp32_precision pair, no second flag or snapshot path;

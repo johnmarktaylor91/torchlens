@@ -41,7 +41,7 @@ from torchlens._io.runnable import build_sparse_run_descriptor
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode, StateSource
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class _BNModel(nn.Module):

@@ -35,7 +35,7 @@ from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

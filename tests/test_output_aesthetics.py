@@ -1661,7 +1661,7 @@ class TestVisualizationBugfixes:
         log = trace_fn(
             ReluAdd(),
             torch.randn(2, 3),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
         log.set(func("relu"), torch.zeros(2, 3))
         try:

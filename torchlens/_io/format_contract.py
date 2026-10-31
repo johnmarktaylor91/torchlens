@@ -76,7 +76,10 @@ __tl_layer__ = "L1"
 # the later member; optional ``chosen`` / ``candidates`` / ``evidence``);
 # a v9 reader refuses both bare kinds, as the loader doctrine requires. The v9
 # contract of record stays frozen byte-for-byte beside the v10 one.
-TLSPEC_VERSION = 10
+# v11 (3.0 persisted record shape): every stored key follows its decided
+# public name (renames, removals and private stored fields in one bump); the
+# v10 contract of record stays frozen byte-for-byte beside the v11 one.
+TLSPEC_VERSION = 11
 
 # Rehydration floor: artifacts older than tlspec_version 6 refuse to load
 # instead of being resurrected through legacy field-alias ladders. The FIRST

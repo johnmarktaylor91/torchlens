@@ -196,7 +196,7 @@ def _gated_rerun_case() -> tuple[nn.Module, tl.Trace, dict[str, bool]]:
     """A sticky hook resolved on the source trace that stops matching on the rerun."""
 
     model = _ReluAdd()
-    trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(replayable=True))
     gate = {"active": True}
     trace.attach_hooks(
         tl.func("relu") & tl.where(lambda _op: gate["active"], name_hint="runtime_gate"),
@@ -295,7 +295,7 @@ def test_disclose_cannot_silence_the_post_capture_predicate_refusal(same_inputs:
     torch.manual_seed(0)
     model = _Net().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     label = str(trace.find_sites(tl.func("relu"))[0].layer_label)
     trace.attach_hooks(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())
     run_x = x if same_inputs else x + 1.0

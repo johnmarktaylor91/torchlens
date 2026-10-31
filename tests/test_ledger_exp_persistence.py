@@ -35,10 +35,8 @@ class _Tiny(nn.Module):
 def _pair() -> tl.Bundle:
     torch.manual_seed(11)
     x = torch.randn(2, 3)
-    baseline = tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    changed = tl.trace(
-        _Tiny(offset=0.5), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    baseline = tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(replayable=True))
+    changed = tl.trace(_Tiny(offset=0.5), x, capture=tl.options.CaptureOptions(replayable=True))
     return tl.Bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 

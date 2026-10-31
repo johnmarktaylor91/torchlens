@@ -41,7 +41,7 @@ import torchlens as tl
 from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class _Simple(nn.Module):
@@ -64,7 +64,7 @@ class _Simple(nn.Module):
 def _save(path: Path, *, cache: bool = False) -> Path:
     """Capture ``_Simple`` and save a runnable artifact."""
 
-    capture = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=cache)
+    capture = CaptureOptions(replayable=True, capture_container_structure=True, cache=cache)
     trace = tl.trace(_Simple(), torch.randn(2, 4), capture=capture)
     trace.save(path, level="runnable", include_weights=True)
     return path

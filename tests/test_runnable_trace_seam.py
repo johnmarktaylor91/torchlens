@@ -106,7 +106,6 @@ def test_runnable_trace_surface_and_state_are_declared() -> None:
         frozenset(
             {
                 "readiness",
-                "runnable_descriptor",
                 "archived_activations",
                 "load_state_dict",
                 "run",

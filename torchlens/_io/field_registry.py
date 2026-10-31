@@ -5,7 +5,7 @@ can answer, per record contract: which field names are DECLARED, which of
 them PERSIST (``FieldPolicy`` other than ``DROP``), what evidence TIER each
 persisted field carries, and which legacy alias spellings a reader still
 accepts. Everything here is DERIVED from the existing single sources of
-truth -- the per-class ``FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
+truth -- the per-class ``_FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
 + ``_PORTABLE_STATE_SPEC``) and the raw ``_PORTABLE_STATE_SPEC`` dicts on
 nested value classes -- so the registry can never drift from the code that
 actually serializes state. It declares NO new fields and moves NONE: field-set
@@ -151,7 +151,7 @@ def record_field_policies(record_key: str) -> dict[str, FieldPolicy]:
     """
 
     cls = _resolve_record_class(record_key)
-    field_policy = getattr(cls, "FIELD_POLICY")  # noqa: B009 -- typed as bare `type`
+    field_policy = getattr(cls, "_FIELD_POLICY")  # noqa: B009 -- typed as bare `type`
     return {name: row.portable_policy for name, row in field_policy.items()}
 
 
@@ -226,13 +226,13 @@ def known_state_keys(cls: type, *, extra: frozenset[str] = frozenset()) -> froze
     """
 
     known: set[str] = {"tlspec_version", "_tlspec_prerelease"}
-    field_policy = getattr(cls, "FIELD_POLICY", None)
+    field_policy = getattr(cls, "_FIELD_POLICY", None)
     if field_policy:
         known.update(field_policy.keys())
     spec = getattr(cls, "_PORTABLE_STATE_SPEC", None)
     if isinstance(spec, dict):
         known.update(spec.keys())
-    defaults = getattr(cls, "DEFAULT_FILL_STATE", None)
+    defaults = getattr(cls, "_DEFAULT_FILL_STATE", None)
     if isinstance(defaults, dict):
         known.update(defaults.keys())
     aliases = getattr(cls, "_PORTABLE_STATE_ALIASES", None)

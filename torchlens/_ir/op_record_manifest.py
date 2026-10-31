@@ -112,7 +112,7 @@ CELL_SOURCE_MANIFEST: dict[str, str] = {
     'input_was_parameter': 'FACET:graph',
     'internal_source_ancestors': 'FACET:ancestry',
     'internal_source_parents': 'JOIN:ancestry',
-    'intervention_replaced': 'FACET:intervention',
+    'is_edited': 'FACET:intervention',
     'interventions': 'FACET:intervention',
     'io_role': 'JOIN:io_role',
     'is_atomic_module': 'JOIN:module_exit',

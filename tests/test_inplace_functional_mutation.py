@@ -64,7 +64,7 @@ def _runnable_trace(model: nn.Module, inputs: torch.Tensor) -> Any:
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

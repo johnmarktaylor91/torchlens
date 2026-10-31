@@ -51,7 +51,7 @@ pytestmark = pytest.mark.skipif(
     reason="NumPy build emits c_call for RNG draw methods (digest belt inactive)",
 )
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _branch(x: torch.Tensor, value: float) -> torch.Tensor:

@@ -692,8 +692,8 @@ input-conditional at run time, not a static descriptor flag.
 
 The producer can emit a runnable descriptor only when the source capture recorded replay-template
 metadata. Users must capture with
-`capture=tl.options.CaptureOptions(intervention_ready=True)` (or flat
-`intervention_ready=True`) before `trace.save(..., level="runnable")`. This capture flag is required
+`capture=tl.options.CaptureOptions(replayable=True)` (or flat
+`replayable=True`) before `trace.save(..., level="runnable")`. This capture flag is required
 even when the user intends replay without an intervention. Omitting it produces a typed
 `RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain available,
 but save-time code never guesses or reconstructs missing call templates.
@@ -2968,7 +2968,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   `ModelOutput` whose contract the capture did not persist -- since W051-CAPT2 the final-output
   `ContainerSpec` is registered on EVERY capture, so this arm is reachable only from artifacts
   written before that change; the remedy still names
-  `CaptureOptions(capture_container_structure=True)`, which `intervention_ready=True` implies, or
+  `CaptureOptions(capture_container_structure=True)`, which `replayable=True` implies, or
   returning a bare tensor), `opaque_leaf` (a declared container carrying a tensor-holding object the
   contract cannot rebuild, e.g. a HuggingFace `DynamicCache` under `past_key_values` -- pass
   `use_cache=False` / `return_dict=False` or wrap the model to return the logits tensor; the

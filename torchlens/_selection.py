@@ -1854,12 +1854,12 @@ def edge_address_of(record: Any) -> tuple[Any, ...]:
 def _require_edge_provenance(trace: Any) -> None:
     """Refuse typed when edge provenance was not captured."""
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         raise SelectionError(
-            "edge provenance requires an intervention_ready capture "
+            "edge provenance requires an replayable capture "
             "(EdgeUseRecords exist only under it). Re-capture with "
             "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "intervention_ready=True)).",
+            "replayable=True)).",
             code="edge_provenance_unavailable",
         )
 

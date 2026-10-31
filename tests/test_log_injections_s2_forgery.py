@@ -155,12 +155,12 @@ def test_carve_out_theft_refuses(tmp_path) -> None:
 
 
 def test_replaced_stamp_on_injected_row_refuses(tmp_path) -> None:
-    """An injected row claiming intervention_replaced refuses record_func."""
+    """An injected row claiming is_edited refuses record_func."""
 
     def tamper(state) -> None:
         """Forge the replacement stamp."""
 
-        _injected_rows(state)[0].intervention_replaced = True
+        _injected_rows(state)[0].is_edited = True
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_func")
 

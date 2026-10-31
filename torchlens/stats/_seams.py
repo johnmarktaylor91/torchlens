@@ -121,7 +121,7 @@ class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
-    (``capture=CaptureOptions(intervention_ready=True, hooks=echo_obs)``,
+    (``capture=CaptureOptions(replayable=True, hooks=echo_obs)``,
     the ``site``/``direction``/``__call__(out, *, hook)`` protocol) and
     returns the observed value unchanged. Each firing appends one
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
@@ -187,7 +187,7 @@ def narrate(
         obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
-                     intervention_ready=True, hooks=obs))
+                     replayable=True, hooks=obs))
 
     Parameters
     ----------

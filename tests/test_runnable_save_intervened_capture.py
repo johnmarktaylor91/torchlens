@@ -21,7 +21,7 @@ from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -54,7 +54,7 @@ def test_runnable_save_refuses_intervention_replaced_capture(tmp_path: Path) -> 
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=_CAPTURE,
     )
-    assert any(bool(getattr(op, "intervention_replaced", False)) for op in trace.layer_list)
+    assert any(bool(getattr(op, "is_edited", False)) for op in trace.layer_list)
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "intervened.tlspec", level="runnable")
     assert excinfo.value.fields.get("code") == "sparse_preflight_failed"
@@ -75,7 +75,7 @@ def test_runnable_save_allows_zero_match_intervention(tmp_path: Path) -> None:
             intervene=tl.when(tl.func("sigmoid"), tl.zero_ablate()),
             capture=_CAPTURE,
         )
-    assert not any(bool(getattr(op, "intervention_replaced", False)) for op in trace.layer_list)
+    assert not any(bool(getattr(op, "is_edited", False)) for op in trace.layer_list)
     trace.save(tmp_path / "plain.tlspec", level="runnable")
     loaded = tl.load(tmp_path / "plain.tlspec")
     assert loaded.readiness is not None

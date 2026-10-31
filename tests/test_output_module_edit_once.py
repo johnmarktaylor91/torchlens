@@ -313,7 +313,7 @@ def _ready_trace(model: nn.Module, x: torch.Tensor) -> Any:
         The trace.
     """
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _setup(factory: Callable[[], nn.Module]) -> tuple[nn.Module, torch.Tensor, torch.Tensor]:

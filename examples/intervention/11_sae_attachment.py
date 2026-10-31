@@ -51,7 +51,7 @@ def main() -> None:
     torch.manual_seed(11)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     edited = log.fork("sae_splice")
     edited.attach_hooks(tl.func("relu"), tl.splice_module(SAEStyleSplice()))

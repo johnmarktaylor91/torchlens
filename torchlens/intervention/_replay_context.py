@@ -171,7 +171,7 @@ _JOURNAL_OP_FIELDS = (
     "transformed_activation_memory",
     "has_saved_activation",
     "interventions",
-    "intervention_replaced",
+    "is_edited",
     "edge_substitutions",
     "edge_replacement_stamps",
 )
@@ -182,7 +182,7 @@ _JOURNAL_TRACE_FIELDS = (
     "state",
     "_out_recipe_revision",
     "_has_direct_writes",
-    "replay_frontier",
+    "_replay_frontier",
     "state_history",
     "intervention_audit",
 )

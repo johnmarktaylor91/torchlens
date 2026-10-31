@@ -83,7 +83,7 @@ def _save_runnable(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
         model,
         x,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -182,9 +182,7 @@ def test_h2_layout_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None
     trace = tl.trace(
         LayoutOblivious(),
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     # The recording is read-gated: no metadata-predicate read, no recorded fact.
     assert trace._runnable.input_metadata_reads == {}
@@ -205,7 +203,7 @@ def test_h2_scoped_patch_is_restored_after_capture() -> None:
     """The metadata observers must not leak past the capture window."""
 
     x = torch.randn(4, 4)
-    options = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+    options = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
     # First capture forces TorchLens's own (permanent) torch wrapping, so the
     # snapshot below reflects the steady state the scoped patch must restore.
     tl.trace(ContiguityBranch(), x, capture=options)

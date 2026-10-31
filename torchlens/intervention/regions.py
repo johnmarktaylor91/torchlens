@@ -844,7 +844,7 @@ def _refuse_unaddressable_exits(region_target: RegionTarget) -> None:
             "address in the dataflow edge family; the coordinated exit "
             "substitution cannot address these crossings",
             code="region_exit_address_underivable",
-            remedy="re-capture with CaptureOptions(intervention_ready=True) so "
+            remedy="re-capture with CaptureOptions(replayable=True) so "
             "argument provenance is recorded, or reshape the region so its "
             "exits are ordinary tensor arguments",
         )

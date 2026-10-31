@@ -57,8 +57,8 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
         "zero_ablate",
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -84,10 +84,10 @@ def mean_ablate(
         Optional external source (a tensor, or an Op-like object exposing
         ``out``). When given, the fill value is the SOURCE's global mean and
         never reads the traced batch, so the spec derives
-        ``batch_independent=True`` (append across batch chunks stays sound).
+        ``is_batch_independent=True`` (append across batch chunks stays sound).
         When omitted, the mean is computed from the current out at hook fire
         time -- a value that couples every batch row, so the spec derives
-        ``batch_independent=False`` and the append gate refuses.
+        ``is_batch_independent=False`` and the append gate refuses.
     dim:
         Mean policy. The vocabulary is CLOSED and validated at construction:
         ``"self"`` (the default -- global mean of the fire-time value) is the
@@ -100,7 +100,7 @@ def mean_ablate(
     Returns
     -------
     Edit
-        Built-in forward helper spec with a DERIVED ``batch_independent``
+        Built-in forward helper spec with a DERIVED ``is_batch_independent``
         flag: ``True`` iff the fill value provably never reads the traced
         batch (external ``source=``), ``False`` otherwise.
     """
@@ -143,14 +143,14 @@ def mean_ablate(
     # DERIVED, never tabled (edits memo D18): True only when the fill value
     # provably never reads the traced batch. An external source qualifies;
     # the self-mean reads every batch row and fails closed.
-    batch_independent = source is not None
+    is_batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",
         args=(source,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=batch_independent,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=is_batch_independent,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -254,8 +254,8 @@ def scramble_elements(
         args=(source_value,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=False,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -317,8 +317,8 @@ def steer(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -359,8 +359,8 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
         args=(factor,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -410,8 +410,8 @@ def clamp(
         "clamp",
         kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -474,8 +474,8 @@ def add_noise(
         args=(std,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -534,8 +534,8 @@ def project_onto(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -591,8 +591,8 @@ def project_out(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -669,8 +669,8 @@ def swap_with(
         args=(other_label,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -759,8 +759,8 @@ def splice_module(
         },
         factory=factory,
         metadata={"input_route": input_route, "output_route": output_route},
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -799,8 +799,8 @@ def hook_grad(fn: Callable[..., torch.Tensor]) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -841,8 +841,8 @@ def zero_grad(*, allow_shape_change: bool = False) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -886,8 +886,8 @@ def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -946,8 +946,8 @@ def clip_grad(max_norm: float, norm_type: float = 2.0) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -1008,8 +1008,8 @@ def add_grad_noise(std: float, *, seed: int | None = None) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -1060,8 +1060,8 @@ def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -1075,8 +1075,8 @@ def _helper_spec(
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
     direction: HelperDirection | None = None,
-    batch_independent: bool = False,
-    compatible_with_append: bool = False,
+    is_batch_independent: bool = False,
+    is_compatible_with_append: bool = False,
 ) -> Edit:
     """Build a Edit with stable tuple metadata.
 
@@ -1098,9 +1098,9 @@ def _helper_spec(
         Extra helper metadata.
     direction:
         Optional default signal direction requested by legacy helpers.
-    batch_independent:
+    is_batch_independent:
         Whether this helper can be applied independently to each batch item.
-    compatible_with_append:
+    is_compatible_with_append:
         Whether this helper opts into append when it changes out shape.
 
     Returns
@@ -1118,8 +1118,8 @@ def _helper_spec(
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
         direction=direction,
-        batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        is_batch_independent=is_batch_independent,
+        is_compatible_with_append=is_compatible_with_append,
     )
 
 
@@ -1181,8 +1181,8 @@ def helper_from_serialized(
             helper_name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            batch_independent=bool(data.get("batch_independent", False)),
-            compatible_with_append=bool(data.get("compatible_with_append", False)),
+            is_batch_independent=bool(data.get("is_batch_independent", False)),
+            is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1458,8 +1458,8 @@ def _non_executable_builtin_placeholder(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
             ("executable", False),
         ),
-        batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
+        is_batch_independent=bool(data.get("is_batch_independent", False)),
+        is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
     )
 
 
@@ -1930,5 +1930,5 @@ def patch_from(
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
     )

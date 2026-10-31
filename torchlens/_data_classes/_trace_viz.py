@@ -727,9 +727,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         for grad_fn in getattr(self, "grad_fn_logs", {}).values():
             calls = getattr(getattr(grad_fn, "calls", None), "_list", [])
             for call in calls:
-                for record in _flatten_backward_fire_ref(
-                    getattr(call, "intervention_fire_ref", None)
-                ):
+                for record in _flatten_backward_fire_ref(getattr(call, "fire_record", None)):
                     record_timestamp = getattr(record, "timestamp", None)
                     if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                         records.append(record)

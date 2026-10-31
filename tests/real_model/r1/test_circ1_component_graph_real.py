@@ -133,7 +133,7 @@ def test_edge_patch_runs_on_gpt2_small(r1_loader) -> None:
     assert clean_ids.shape == corrupt_ids.shape
     answer = tokenizer(" " + row["indirect_object"])["input_ids"][0]
     distractor = tokenizer(" " + row["subject"])["input_ids"][0]
-    capture = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+    capture = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
     clean = tl.trace(model, clean_ids, capture=capture)
     corrupt = tl.trace(model, corrupt_ids, capture=capture)
 

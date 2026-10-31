@@ -45,7 +45,7 @@ log = tl.trace(
     model,
     x,
     save=tl.func("relu"),
-    capture=tl.options.CaptureOptions(intervention_ready=True),
+    capture=tl.options.CaptureOptions(replayable=True),
 )
 channels = tuple(log._runnable.host_rng_channels)
 assert channels == (), (

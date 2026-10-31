@@ -9,7 +9,7 @@ single chokepoint, ``CaptureEvents.append_amendment``. Four layers:
    checked as ``(facet path, flat field)`` PAIRs against its family's registry
    row joined through ``PATH_TO_FLAT``, in registry order, and its call site
    must be the family's ONE intended site. A same-set identity permutation
-   (the review's ``intervention_fired <-> intervention_replaced`` swap) is red.
+   (the review's ``intervention_fired <-> is_edited`` swap) is red.
 2. **Emit-site value round-trip** — at every live call the folded journal
    record must carry each patch value at its own flat field AND (decomposed
    leg) at its own facet path, by object identity for non-interned values.
@@ -76,7 +76,7 @@ _RETIRED_FAMILIES: dict[str, str] = {
     # rewires the module boundary but does not replace the producing op's
     # value, so it must not mint replacement evidence that would exempt the
     # native op from replay validation (tripwire strengthening). The fresh-
-    # tensor branch stamps intervention_replaced at record construction and
+    # tensor branch stamps is_edited at record construction and
     # never used this amendment.
     "raw_hook_intervention": "emit site removed by 8858793e (recontainer hooks must not mint replacement evidence)",
 }

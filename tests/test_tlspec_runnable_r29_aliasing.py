@@ -32,9 +32,7 @@ def _save(model: nn.Module, args: object, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_activations=True)
     return path

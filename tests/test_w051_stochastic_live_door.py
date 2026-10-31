@@ -51,7 +51,7 @@ def test_live_door_matches_replay_door() -> None:
     model = _TwoBlock()
     torch.manual_seed(100)
     x = torch.randn(5, 4)
-    options = tl.options.CaptureOptions(intervention_ready=True, seed=100)
+    options = tl.options.CaptureOptions(replayable=True, seed=100)
     log = tl.trace(model, x, capture=options)
     baseline = log["relu_1_2"].out
     donors = population(torch.stack([baseline + k for k in range(1, 6)]), origin="d")

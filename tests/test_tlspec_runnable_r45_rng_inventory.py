@@ -40,7 +40,7 @@ import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:

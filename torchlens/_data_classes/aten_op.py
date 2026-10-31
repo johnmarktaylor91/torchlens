@@ -106,13 +106,13 @@ class AtenOp:
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = dict.fromkeys(
         PRIMITIVE_OP_FIELD_ORDER, FieldPolicy.KEEP
     )
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         PRIMITIVE_OP_FIELD_ORDER,
         _PORTABLE_STATE_POLICY,
         schema_key="primitive_op",
     )
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
-        FIELD_POLICY
+        _FIELD_POLICY
     )
 
     def __tl_state_items__(self) -> Any:

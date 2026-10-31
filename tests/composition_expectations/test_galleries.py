@@ -104,7 +104,7 @@ def test_raw_fork_writes_reach_the_shared_storage() -> None:
     import torchlens as tl
 
     model, inputs = build_gallery_model("mlp")
-    trace = tl.trace(model, *inputs, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, *inputs, capture=tl.options.CaptureOptions(replayable=True))
     fork = trace.fork()
     try:
         before = trace_fingerprint(trace)

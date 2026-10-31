@@ -17,7 +17,7 @@ so this module is the MECHANISM instead:
    derived from the tree (by generated-file header marker), so a new generated
    file also cannot skip registration.
 3. **Runtime == declared.** Every attribute a live captured record actually
-   carries must be declared in that record's ``FIELD_POLICY``. This derivation
+   carries must be declared in that record's ``_FIELD_POLICY``. This derivation
    is SOURCE-FREE (no ``inspect.getsource``), so unlike the older
    ``test_internals.py::TestFieldOrderSync`` checks it cannot go red for
    environment reasons (stale bytecode, zipped/installed source, missing
@@ -71,7 +71,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 # ---------------------------------------------------------------------------
-# Authority 1: field catalogs (``*_FIELD_ORDER``) vs their owning FIELD_POLICY.
+# Authority 1: field catalogs (``*_FIELD_ORDER``) vs their owning _FIELD_POLICY.
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +84,7 @@ class Catalog:
     constant:
         Name of the catalog list in :mod:`torchlens._constants`.
     owner:
-        Record class whose ``FIELD_POLICY`` generates the catalog, or ``None``
+        Record class whose ``_FIELD_POLICY`` generates the catalog, or ``None``
         for a pure alias.
     alias_of:
         Name of the catalog this one is a compatibility alias for, or ``None``
@@ -185,7 +185,7 @@ def policy_catalog_diff(
     Parameters
     ----------
     policy:
-        Owning record's ``FIELD_POLICY`` table.
+        Owning record's ``_FIELD_POLICY`` table.
     catalog:
         Checked-in ordered field list.
 
@@ -204,14 +204,14 @@ _ALIAS_CATALOGS = tuple(c for c in CATALOGS if c.alias_of is not None)
 
 @pytest.mark.parametrize("catalog", _PRIMARY_CATALOGS, ids=lambda c: c.constant)
 def test_catalog_is_generated_from_its_owning_field_policy(catalog: Catalog) -> None:
-    """The checked-in catalog equals the view generated from ``FIELD_POLICY``."""
+    """The checked-in catalog equals the view generated from ``_FIELD_POLICY``."""
 
     assert catalog.owner is not None
     generated, declared = policy_catalog_diff(
-        catalog.owner.FIELD_POLICY, getattr(constants, catalog.constant)
+        catalog.owner._FIELD_POLICY, getattr(constants, catalog.constant)
     )
     assert generated == declared, (
-        f"{catalog.constant} drifted from {catalog.owner.__name__}.FIELD_POLICY; "
+        f"{catalog.constant} drifted from {catalog.owner.__name__}._FIELD_POLICY; "
         f"only in policy: {sorted(set(generated) - set(declared))}; "
         f"only in catalog: {sorted(set(declared) - set(generated))}"
     )
@@ -329,7 +329,7 @@ def _private_ordered_fields_by_tier(
     for catalog in catalogs:
         if catalog.owner is None:
             continue
-        policy = catalog.owner.FIELD_POLICY
+        policy = catalog.owner._FIELD_POLICY
         for name in getattr(constants, catalog.constant):
             if not name.startswith("_"):
                 continue
@@ -1017,7 +1017,7 @@ def undeclared_runtime_attributes(
     instance_attrs:
         Attribute names present in the instance ``__dict__``.
     policy:
-        The record class's declared ``FIELD_POLICY`` table.
+        The record class's declared ``_FIELD_POLICY`` table.
     allowed:
         Facade plumbing that legitimately owns no declared field.
 
@@ -1050,7 +1050,7 @@ _RECORD_NAMES = (
 )
 @pytest.mark.parametrize("record_name", _RECORD_NAMES)
 def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_name: str) -> None:
-    """Every attribute a captured record carries is declared in FIELD_POLICY.
+    """Every attribute a captured record carries is declared in _FIELD_POLICY.
 
     The derivation is runtime-only -- no source reading -- so this check is
     immune to the environment failure modes (stale bytecode, source-less
@@ -1065,10 +1065,10 @@ def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_n
     # yielded an empty set there, so an undeclared dynamic slot could never
     # have been caught. Every record family carries fields at runtime.
     assert runtime_names, f"{record_name}: runtime attribute derivation is vacuous"
-    undeclared = undeclared_runtime_attributes(runtime_names, type(record).FIELD_POLICY)
+    undeclared = undeclared_runtime_attributes(runtime_names, type(record)._FIELD_POLICY)
     assert not undeclared, (
         f"{record_name} carries undeclared attributes at runtime "
-        f"(add them to FIELD_POLICY): {sorted(undeclared)}"
+        f"(add them to _FIELD_POLICY): {sorted(undeclared)}"
     )
 
 
@@ -1079,7 +1079,7 @@ def test_runtime_attribute_derivation_catches_an_undeclared_op_slot(lockstep_tra
     names = runtime_attribute_names(op)
     assert len(names) > 100, "Op's stored-field universe must be enumerated, not vars()"
     assert "_source_trace_ref" in names, "dynamic slots are part of the runtime universe"
-    flagged = undeclared_runtime_attributes(names | {"a_new_dynamic_slot"}, Op.FIELD_POLICY)
+    flagged = undeclared_runtime_attributes(names | {"a_new_dynamic_slot"}, Op._FIELD_POLICY)
     assert flagged == {"a_new_dynamic_slot"}
 
 
@@ -1129,13 +1129,13 @@ def test_live_record_attributes_are_declared_on_every_capture_axis(axis_name: st
                     continue
                 undeclared = undeclared_runtime_attributes(
                     set(vars(instance)),
-                    type(instance).FIELD_POLICY,
+                    type(instance)._FIELD_POLICY,
                 )
                 if undeclared:
                     offenders.setdefault(family, set()).update(undeclared)
         assert not offenders, (
             f"capture axis {axis_name!r} carries undeclared attributes at "
-            f"runtime (add them to FIELD_POLICY): "
+            f"runtime (add them to _FIELD_POLICY): "
             f"{ {family: sorted(names) for family, names in sorted(offenders.items())} }"
         )
     finally:
@@ -1345,7 +1345,7 @@ class TestMechanismIsRedCapable:
         """A field present in the policy but missing from the catalog differs."""
 
         generated, declared = policy_catalog_diff(
-            Trace.FIELD_POLICY, constants.MODEL_LOG_FIELD_ORDER[:-1]
+            Trace._FIELD_POLICY, constants.MODEL_LOG_FIELD_ORDER[:-1]
         )
         assert generated != declared
 
@@ -1354,7 +1354,7 @@ class TestMechanismIsRedCapable:
 
         reordered = list(constants.MODEL_LOG_FIELD_ORDER)
         reordered[0], reordered[1] = reordered[1], reordered[0]
-        generated, declared = policy_catalog_diff(Trace.FIELD_POLICY, reordered)
+        generated, declared = policy_catalog_diff(Trace._FIELD_POLICY, reordered)
         assert generated != declared
 
     def test_private_ordered_ledger_detects_an_unledgered_field(self) -> None:
@@ -1441,7 +1441,7 @@ class TestMechanismIsRedCapable:
         """An attribute outside the policy and the allowance is reported."""
 
         undeclared = undeclared_runtime_attributes(
-            {"label", "_tl_core", "smuggled_field"}, dict(Op.FIELD_POLICY)
+            {"label", "_tl_core", "smuggled_field"}, dict(Op._FIELD_POLICY)
         )
         assert undeclared == {"smuggled_field"}
 
@@ -1475,7 +1475,7 @@ def test_field_policy_entries_declare_a_portable_policy() -> None:
 
     for catalog in _PRIMARY_CATALOGS:
         assert catalog.owner is not None
-        for name, item in catalog.owner.FIELD_POLICY.items():
+        for name, item in catalog.owner._FIELD_POLICY.items():
             assert isinstance(item.portable_policy, FieldPolicy), (
                 f"{catalog.owner.__name__}.{name} has a non-FieldPolicy portable policy"
             )

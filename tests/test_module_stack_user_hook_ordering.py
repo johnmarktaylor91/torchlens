@@ -88,8 +88,8 @@ def test_user_forward_hook_replacement_logged() -> None:
     assert relu_ops, "expected at least one relu op"
     assert any(op.is_module_output for op in relu_ops)
 
-    replacement_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
-    assert replacement_ops, "expected at least one intervention_replaced op"
+    replacement_ops = [op for op in trace.layer_list if getattr(op, "is_edited", False)]
+    assert replacement_ops, "expected at least one is_edited op"
     assert any(op.func_name == "__mul__" and op.modules == () for op in replacement_ops)
     linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
     assert any("mul" in parent for op in linear_ops for parent in op.parents)

@@ -179,7 +179,7 @@ class InterventionFacet:
     """
 
     intervention_fired: bool = False
-    intervention_replaced: bool = False
+    is_edited: bool = False
     fire_results: tuple[object, ...] = ()
 
 
@@ -543,10 +543,10 @@ class OpRecord:
         return self._facet_or_default("intervention").intervention_fired
 
     @property
-    def intervention_replaced(self) -> bool:
-        """Mirror ``intervention.intervention_replaced`` through the facet default (legacy flat name)."""
+    def is_edited(self) -> bool:
+        """Mirror ``intervention.is_edited`` through the facet default (legacy flat name)."""
 
-        return self._facet_or_default("intervention").intervention_replaced
+        return self._facet_or_default("intervention").is_edited
 
     @property
     def fire_results(self) -> tuple[object, ...]:
@@ -620,10 +620,10 @@ AMENDMENT_FAMILIES: dict[str, tuple[tuple[str, tuple[type, ...]], ...]] = {
         ("core.parents", (tuple,)),
         ("graph.parent_arg_positions", (dict,)),
     ),
-    "raw_hook_intervention": (("intervention.intervention_replaced", (bool,)),),
+    "raw_hook_intervention": (("intervention.is_edited", (bool,)),),
     "module_exit_intervention": (
         ("intervention.intervention_fired", (bool,)),
-        ("intervention.intervention_replaced", (bool,)),
+        ("intervention.is_edited", (bool,)),
         ("intervention.fire_results", (tuple,)),
     ),
     "module_boundary_retention": (
@@ -666,7 +666,7 @@ PATH_TO_FLAT: dict[str, str] = {
     "recording.capture_spec": "capture_spec",
     "recording.record_context": "record_context",
     "intervention.intervention_fired": "intervention_fired",
-    "intervention.intervention_replaced": "intervention_replaced",
+    "intervention.is_edited": "is_edited",
     "intervention.fire_results": "fire_results",
 }
 
@@ -810,11 +810,11 @@ def amend_graph_edge_insertion(
 
 
 def amend_raw_hook_intervention(
-    target_seq: int, target_label_raw: str, *, intervention_replaced: bool
+    target_seq: int, target_label_raw: str, *, is_edited: bool
 ) -> OpAmendment:
     """A raw forward hook replaced the module output."""
 
-    return _amendment("raw_hook_intervention", target_seq, target_label_raw, intervention_replaced)
+    return _amendment("raw_hook_intervention", target_seq, target_label_raw, is_edited)
 
 
 def amend_module_exit_intervention(
@@ -822,7 +822,7 @@ def amend_module_exit_intervention(
     target_label_raw: str,
     *,
     intervention_fired: bool,
-    intervention_replaced: bool,
+    is_edited: bool,
     fire_results: tuple[object, ...],
 ) -> OpAmendment:
     """A live-fire intervention observed at module exit."""
@@ -832,7 +832,7 @@ def amend_module_exit_intervention(
         target_seq,
         target_label_raw,
         intervention_fired,
-        intervention_replaced,
+        is_edited,
         fire_results,
     )
 
@@ -1044,10 +1044,10 @@ def op_record_from_event(event: Any) -> tuple[OpRecord, IngestExtras]:
     intervention = (
         InterventionFacet(
             intervention_fired=event.intervention_fired,
-            intervention_replaced=event.intervention_replaced,
+            is_edited=event.is_edited,
             fire_results=tuple(event.fire_results),
         )
-        if (event.intervention_fired or event.intervention_replaced or event.fire_results)
+        if (event.intervention_fired or event.is_edited or event.fire_results)
         else None
     )
 

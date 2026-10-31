@@ -317,7 +317,7 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
     log = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     _ = log.graph.edges
     for record in _all_record_instances(log):
@@ -778,7 +778,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             save_raw_input=raw_policy,

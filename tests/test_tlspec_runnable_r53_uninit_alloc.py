@@ -35,7 +35,7 @@ from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors.runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 @pytest.fixture(autouse=True)

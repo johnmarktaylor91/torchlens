@@ -251,7 +251,7 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
     origins (the preflight-equals-actual oracle is pinned by test) — beside
     the structural facts a user needs to price the run: the live lane always
     re-executes the FULL forward regardless of cone size, replay requires an
-    ``intervention_ready=True`` capture (a disclosed ~3x capture-time premium
+    ``replayable=True`` capture (a disclosed ~3x capture-time premium
     on CPU transformers), and reachability is NEVER numeric change (movers
     are a subset of the cone, not equal to it). No wall-clock number is ever
     predicted — a host-specific time band is the caller's own measurement.
@@ -283,11 +283,11 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
         "cone_size": len(planned),
         "total_ops": total_ops,
         "live_lane_ops": total_ops,
-        "replay_ready": bool(getattr(trace, "intervention_ready", False)),
+        "replay_ready": bool(getattr(trace, "is_replayable", False)),
         "notes": (
             "replay recomputes exactly the planned labels; the live lane "
             "re-executes the full forward regardless of cone size",
-            "intervention_ready=True capture costs a measured ~3x capture "
+            "replayable=True capture costs a measured ~3x capture "
             "wall-time premium on CPU transformers (disclose it in any "
             "replay journey)",
             "reachability is never numeric change: movers are a subset of "

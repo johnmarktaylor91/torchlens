@@ -56,10 +56,10 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
 
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace._PORTABLE_STATE_SPEC)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FIELD_FORK_POLICY)
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace._DEFAULT_FILL_STATE)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op._PORTABLE_STATE_SPEC)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.DEFAULT_FILL_STATE)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op._DEFAULT_FILL_STATE)
 
 
 def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:

@@ -4,7 +4,7 @@ Status: CONVERGED (round 2), now HISTORICAL. Basis tree `781a7559`. Every
 schema statement below is as-of that pre-v8 tree: the tlspec v8 coordinated bump has
 since shipped, so "no `TLSPEC_VERSION` bump" and "rows remain `RUNTIME`/DROP-gated"
 sentences describe the sprint's scope at the time, not the current tree — the runtime
-authority is `torchlens/_io/__init__.py` and the per-class `FIELD_POLICY` tables.
+authority is `torchlens/_io/__init__.py` and the per-class `_FIELD_POLICY` tables.
 This document is the
 architecture of record for the columnar re-plumbing sprint: it synthesizes the three
 independent round-1 designs and the three round-2 reconciles into ONE plan. Where the
@@ -199,7 +199,7 @@ implies a physical layout.
 The current derivation runs backwards (the policy table is built from the FIELD_ORDER
 literal at 10 sites). It is inverted with a byte-provable staged transition: the
 checked-in `constants.py` literals stay hand-written and authoritative as the declared
-schema, and `field_order_from_policy(cls.FIELD_POLICY) == LITERAL` is asserted for all
+schema, and `field_order_from_policy(cls._FIELD_POLICY) == LITERAL` is asserted for all
 12 classes, in both directions, before anything is generated. The twelfth class is the
 DROP-gated `primitive_op` row: its installed wave-0 bindings remain `RUNTIME`, while an
 isolated prerelease audit derives the intended `INTERNED`/`EDGE`/`SCALAR` bindings without
@@ -452,7 +452,7 @@ OUT (documented handoffs, never silent):
 - New physical columnar `.tlspec` (FORK-3); Arrow core dependency; global interning;
   `torchlens/projection/` package (the 26 declared steps' order is load-bearing; the substance —
   declared per-step read/write sets — lands without the relocation); UI regrouping
-  implementation (plan-only, FORK-2); `intervention_ready` rename (separate
+  implementation (plan-only, FORK-2); `replayable` rename (separate
   authorization).
 
 Any capacity cut happens at a completed wave boundary, named plainly — never mid-fan-out,

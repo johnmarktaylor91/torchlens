@@ -39,7 +39,7 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 

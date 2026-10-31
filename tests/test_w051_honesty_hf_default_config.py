@@ -1,10 +1,10 @@
 """Lane W051-HONESTY: default-config HuggingFace causal LM on live ``run()`` (AUD-HONESTY H1).
 
 The only pinned HF runnable test builds GPT-2 with ``use_cache=False`` AND captures
-with ``intervention_ready=True`` -- the configuration every user actually has (KV cache
+with ``replayable=True`` -- the configuration every user actually has (KV cache
 on, default capture) was never exercised by a ``run()`` test. The audit found that the
 default capture silently settled ``unverifiable`` + poisoned with no remedy and that
-``intervention_ready=True`` CRASHED with a bare ``ValueError`` ("Not enough leaves
+``replayable=True`` CRASHED with a bare ``ValueError`` ("Not enough leaves
 supplied for ContainerSpec") because the spec builder admitted the tensor-holding
 ``DynamicCache`` under ``past_key_values`` as a leaf the contract cannot rebuild.
 
@@ -91,7 +91,7 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
 
 
 def test_default_config_intervention_ready_capture_never_crashes(input_ids) -> None:
-    """H1 row 2 (the audit's crash): KV cache on + ``intervention_ready=True`` used to
+    """H1 row 2 (the audit's crash): KV cache on + ``replayable=True`` used to
     raise a bare ``ValueError`` from the container codec. It now settles the SAME typed
     ``opaque_leaf`` verdict with the ``use_cache=False`` remedy. Since W051-CAPT2 the
     spec builder records the tensor-holding ``DynamicCache`` holder as an OPAQUE
@@ -99,7 +99,7 @@ def test_default_config_intervention_ready_capture_never_crashes(input_ids) -> N
     fresh-forward proof's refusal rather than a dry leaf slot."""
 
     model = _tiny_gpt2(use_cache=True)
-    trace = _capture(model, input_ids, intervention_ready=True)
+    trace = _capture(model, input_ids, replayable=True)
     result = trace.run(inputs=input_ids)  # must not raise
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     check = _reconstruction_check(result.report)

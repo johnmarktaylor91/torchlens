@@ -91,7 +91,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
   with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
-  (or `default_grad` on `tl.record`, `intervention_ready` on `tl.trace`) asks for a backward, and
+  (or `default_grad` on `tl.record`, `replayable` on `tl.trace`) asks for a backward, and
   an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
@@ -421,7 +421,7 @@ also a selection (`__selection__`): an EDGE selection of the pre-norm input edge
 edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupted_graph` is the
 corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
 clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
-is one call; the trace needs `intervention_ready=True`.
+is one call; the trace needs `replayable=True`.
 
 `edge_scores(model, inputs, *, corrupted_input, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
@@ -867,7 +867,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `intervention_ready=True`; this flag supplies replay templates even when no intervention
+  must use `replayable=True`; this flag supplies replay templates even when no intervention
   is planned.
 
 **Readiness**
@@ -1099,7 +1099,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
   addressed pass and recompute every downstream pass; a bare label naming a multi-pass
   layer refuses `multipass_bare_label_ambiguous` (single-pass bare labels stay
-  accepted). Replay disclosures (`last_run` origins/cone, `replay_frontier` keys) spell
+  accepted). Replay disclosures (`last_run` origins/cone, `_replay_frontier` keys) spell
   multi-pass ops pass-qualified and keep bare labels for single-pass layers.
   Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
   chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
@@ -1194,7 +1194,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
   `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
   (`tl.func`) addressed specs run; finer address classes refuse
-  `harvest_address_class_ungated`, and every helper must declare `batch_independent=True`.
+  `harvest_address_class_ungated`, and every helper must declare `is_batch_independent=True`.
   Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
   block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
   ledgers each shard's fire receipt, and puts the intervention identity in the resume
@@ -2043,8 +2043,8 @@ default-keep); mask-application semantics documented-unstable*
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `kind`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `direction`, `batch_independent`,
-  `compatible_with_append` (an edit that may change the output shape is
+  disclosure a masked `do()` adds), `direction`, `is_batch_independent`,
+  `is_compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
   otherwise). The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC`
@@ -2091,7 +2091,7 @@ default-keep); mask-application semantics documented-unstable*
 **trace.graph.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
 : `trace.graph.edges` returns the dataflow edge family (one `EdgeUseRecord` per
-  parent→child occurrence; requires an `intervention_ready` capture, else
+  parent→child occurrence; requires an `replayable` capture, else
   `edge_provenance_unavailable`). The canonical occurrence address is
   `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
   selections (whole-edge granularity; `~` complements within the trace's
@@ -2170,7 +2170,7 @@ deprecation shim owed*
   registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
   substitutes the buffer's INITIAL version node, the value its consumers read,
   and replays the cone through the leaf-site path (needs an
-  `intervention_ready=True` capture); in-forward writes thread the edited
+  `replayable=True` capture); in-forward writes thread the edited
   value; the live buffer is never written.
 
 **TapObserver.values(masked=True)** — *unstable — no deprecation shim owed*
@@ -3613,7 +3613,7 @@ Members of classes whose public home changed, one entry per class.
 : One sample of a series. `SeriesPoint.observation`: the observation record; `SeriesPoint.step_hi`: last step of the span the sample covers; `SeriesPoint.step_lo`: first step of the span the sample covers.
 
 **`tl.types.PartialTrace`**
-: Thin wrapper around raw capture state from a failed forward pass. `PartialTrace.FIELD_POLICY`: the declared field policy, so field-declaration checks also cover failed partial captures; `PartialTrace.audit`: an evidence-backed health report for the partial capture; `PartialTrace.capability_card`: which family members work on this object; `PartialTrace.from_trace`: build the wrapper from a failed capture's internal state and its exception; `PartialTrace.original_exception`: the exception the failed capture raised; `PartialTrace.output_table`: typed refusal: a failed forward has no outputs; `PartialTrace.raw_layers`: the layer entries captured before the failure; `PartialTrace.to_agent_json`: typed refusal: the machine map needs finalized identities.
+: Thin wrapper around raw capture state from a failed forward pass. `PartialTrace._FIELD_POLICY`: the declared field policy, so field-declaration checks also cover failed partial captures; `PartialTrace.audit`: an evidence-backed health report for the partial capture; `PartialTrace.capability_card`: which family members work on this object; `PartialTrace.from_trace`: build the wrapper from a failed capture's internal state and its exception; `PartialTrace.original_exception`: the exception the failed capture raised; `PartialTrace.output_table`: typed refusal: a failed forward has no outputs; `PartialTrace.raw_layers`: the layer entries captured before the failure; `PartialTrace.to_agent_json`: typed refusal: the machine map needs finalized identities.
 
 **`tl.types.InputProvenance`**
 : Persistent provenance for how a capture's input came to exist. `InputProvenance.cache_key_version`: version of the input cache key, or `None`; `InputProvenance.cache_status`: whether the input came from the cache, or `None`; `InputProvenance.call_structure`: normalized call description: positional count, keyword names, and whether non-tensor arguments are present; `InputProvenance.caveats`: the rendered disclosure sentences; `InputProvenance.d8_meta`: metadata for the reserved meta-device rung, or `None`; `InputProvenance.evidence_grade`: `verified_exact`, `empirically_flexible`, `under_determined` or `unsupported`; `InputProvenance.execution_policy`: `"caller_mode"` (the caller's flags are kept) or `"eval_no_grad_restored"` (eval and no-grad are pinned, then restored); `InputProvenance.lazy_transitions`: module addresses whose lazy parameters materialized during the captured forward; `InputProvenance.rung`: the input ladder rung, 1 to 3.

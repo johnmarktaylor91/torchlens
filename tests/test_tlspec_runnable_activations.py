@@ -170,7 +170,7 @@ def _capture(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -466,7 +466,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
         include_activations=True,
     )
     loaded = tl.load(path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     layer = descriptor.payload_layers.activations
     first_member = layer.members[0]
@@ -540,7 +540,7 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
         torch.ones(2, 3),
         save=SaveOptions(activation_transform=lambda value: value.mean()),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

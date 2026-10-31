@@ -1,6 +1,6 @@
 """Declared Trace field-to-component ownership map (M10 decomposition).
 
-Every field in ``Trace.FIELD_POLICY`` (declared FIELD_ORDER surface plus
+Every field in ``Trace._FIELD_POLICY`` (declared FIELD_ORDER surface plus
 portable/runtime internals) is owned by exactly ONE lifecycle component of
 the decomposed Trace (docs/reference/trace_core_design.md section 3.7).
 A new Trace field must be added here with an owner, or the lockstep test
@@ -16,7 +16,7 @@ workspaces).
 Second map: ``TRACE_EXTERNAL_WRITE_EXEMPTIONS`` (b5 R50-1a). Backends,
 capture, validation, viz, and I/O still ATTACH private attributes to a Trace
 from outside ``data_classes/`` without declaring them anywhere -- neither in
-``Trace.FIELD_POLICY`` nor (for most of them) in ``_io/scrub.py``'s
+``Trace._FIELD_POLICY`` nor (for most of them) in ``_io/scrub.py``'s
 runtime-only allowance. Each such attribute is a field of the god object with
 no owner, no policy, and no schema row; SF-39 was one instance fixed by hand
 and nothing stopped the next. The exemption ledger below makes the class
@@ -121,7 +121,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_layers_logged": "capture_config",
     "_layers_saved": "capture_config",
     "keep_orphans": "capture_config",
-    "intervention_ready": "capture_config",
+    "is_replayable": "capture_config",
     "save_arg_templates": "capture_config",
     "raw_input": "graph",
     "input_preprocessor": "capture_config",
@@ -178,7 +178,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "capture_cache_hit": "graph",
     "capture_cache_key": "graph",
     "capture_cache_path": "graph",
-    "facet_registry_snapshot": "graph",
+    "facet_functions": "graph",
     "recording_kept": "graph",
     "_out_dedup_mode": "graph",
     "_out_identity_cache": "graph",
@@ -245,7 +245,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "state": "header",
     "is_appended": "header",
     "relationship_evidence": "graph",
-    "replay_frontier": "graph",
+    "_replay_frontier": "graph",
     "layer_list": "graph",
     "layer_dict_main_keys": "graph",
     "layer_dict_all_keys": "graph",

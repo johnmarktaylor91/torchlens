@@ -464,13 +464,11 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.trace(
-            model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        return lambda: tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     if operation == "tl_rerun":
         import torchlens as tl
 
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         state["rerun_policy"] = "steady_state"
         return lambda: trace.run(model, x)
     if operation in {"rerun_metadata_only", "rerun_no_save"}:

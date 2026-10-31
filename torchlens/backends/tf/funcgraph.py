@@ -1355,7 +1355,7 @@ def _base_event(
         is_scalar_bool=output.shape == () and output.dtype is not None and "bool" in output.dtype,
         bool_value=_bool_value(output.payload),
         intervention_fired=False,
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(),
         intervention_template_ref=None,
         record_context=record_context,

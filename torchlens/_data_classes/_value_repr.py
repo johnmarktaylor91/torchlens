@@ -123,7 +123,7 @@ def _edited_token(op: Any) -> str | None:
     flag or a tier-(ii) edge substitution on this record.
     """
 
-    if getattr(op, "intervention_replaced", False):
+    if getattr(op, "is_edited", False):
         return EDITED
     if getattr(op, "edge_substitutions", None):
         return EDITED

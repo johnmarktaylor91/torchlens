@@ -88,7 +88,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "compute_input_output_distances",
     "detach_saved_activations",
     "recurrence_detection",
-    "intervention_ready",
+    "replayable",
     "capture_container_structure",
     "hooks",
     "unwrap_when_done",
@@ -208,7 +208,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "compute_input_output_distances": "compute_input_output_distances",
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
-    "intervention_ready": "intervention_ready",
+    "replayable": "replayable",
     "capture_container_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
@@ -425,7 +425,7 @@ class CaptureOptions:
             multiplier matters (R33).
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
-        intervention_ready:
+        replayable:
             Whether replay-template metadata is captured for intervention APIs.
         capture_container_structure:
             Whether to persist input and output container structure without
@@ -442,7 +442,7 @@ class CaptureOptions:
             Whether capture wraps the user forward in ``torch.no_grad()``. When
             omitted, a capture entered under ``torch.no_grad()`` or
             ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
-            ``save_grads`` or ``intervention_ready`` asks for a backward; the
+            ``save_grads`` or ``replayable`` asks for a backward; the
             Trace reports the effective value. The implied value is cleared when
             the forward re-enables grad (``torch.enable_grad()`` inside it) and an
             output carries autograd history.
@@ -631,7 +631,7 @@ class CaptureOptions:
     compute_input_output_distances: bool = True
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
-    intervention_ready: bool = False
+    replayable: bool = False
     capture_container_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
@@ -686,7 +686,7 @@ class CaptureOptions:
         compute_input_output_distances: bool | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
         recurrence_detection: bool | MissingType = MISSING,
-        intervention_ready: bool | MissingType = MISSING,
+        replayable: bool | MissingType = MISSING,
         capture_container_structure: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
@@ -785,9 +785,7 @@ class CaptureOptions:
             "recurrence_detection": _resolve_option_value(
                 "recurrence_detection", recurrence_detection, True, specified_fields
             ),
-            "intervention_ready": _resolve_option_value(
-                "intervention_ready", intervention_ready, False, specified_fields
-            ),
+            "replayable": _resolve_option_value("replayable", replayable, False, specified_fields),
             "capture_container_structure": _resolve_option_value(
                 "capture_container_structure",
                 capture_container_structure,

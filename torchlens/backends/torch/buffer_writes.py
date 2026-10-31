@@ -551,7 +551,7 @@ _PARAM_BYTE_WITNESS_NOT_ARMED: weakref.WeakSet[Any] = weakref.WeakSet()
 
 The whole-storage param snapshot/reconcile tripwire (r18/r19-A) exists solely to feed the
 sparse-runnable host-escape verdict (``_HOST_ESCAPE_MUTABLE_WRITEBACK`` -> the descriptor
-builder's ``MUTABLE_WRITEBACK_ESCAPE`` gap), and a capture with ``intervention_ready=False``
+builder's ``MUTABLE_WRITEBACK_ESCAPE`` gap), and a capture with ``replayable=False``
 can never produce a passing runnable descriptor. Mirroring the numpy-RNG witness gate
 (``monitor_not_armed``): a disarmed capture is recorded here so any unforeseen descriptor
 build fails closed through the ``ESCAPE_OBSERVER_UNCERTAIN`` gap -- state-writeback coverage
@@ -568,7 +568,7 @@ def param_byte_witness_not_armed(trace: Any) -> bool:
 class _ParamBaselineMap(dict):  # dict[str, tuple[torch.Tensor | None, int | None]]
     """Param address -> (whole-storage uint8 baseline, version), with shared-clone slots.
 
-    W6 baseline coalescing: an ``intervention_ready`` capture already clones every
+    W6 baseline coalescing: an ``replayable`` capture already clones every
     ``state_dict`` tensor into ``trace._runnable.capture_state`` (the embedded runnable
     state snapshot, taken pre-forward). For a conservatively-eligible parameter -- one
     whose live tensor densely covers its whole storage and whose ``state_dict`` entry is
@@ -699,7 +699,7 @@ class BufferWriteTracker:
         # (``self.w.detach().numpy()[0] += 1``) is invisible to every op census and to the
         # embedded pre-forward state snapshot -- the exact buffer host-write-back tripwire,
         # mirrored onto params. address -> (whole-storage uint8 byte view/clone, tensor
-        # version). W6: armed only for ``intervention_ready`` captures (the witness's sole
+        # version). W6: armed only for ``replayable`` captures (the witness's sole
         # consumer is the runnable descriptor), with eligible baselines coalesced onto the
         # ``_runnable_capture_state`` clones -- see ``_ParamBaselineMap``.
         self.address_to_param_snapshot: _ParamBaselineMap = _ParamBaselineMap(trace)
@@ -886,7 +886,7 @@ class BufferWriteTracker:
         diagnostic baseline: it logs no graph node, so captured goldens are byte-unchanged.
 
         W6 witness gating (the RAM twin of the numpy-RNG ``monitor_not_armed`` gate): the
-        byte baselines are armed ONLY for ``intervention_ready`` captures -- the exact
+        byte baselines are armed ONLY for ``replayable`` captures -- the exact
         predicate for "this capture can produce a passing sparse runnable descriptor", and
         the descriptor builder is this witness verdict's only consumer. A plain trace skips
         the whole-storage clones (O(model weights) RAM) and the forward-end ``torch.equal``
@@ -903,7 +903,7 @@ class BufferWriteTracker:
         code runs, so the baseline bytes are the same pre-forward bytes.
         """
 
-        armed = bool(getattr(self.trace, "intervention_ready", False))
+        armed = bool(getattr(self.trace, "is_replayable", False))
         if not armed:
             _PARAM_BYTE_WITNESS_NOT_ARMED.add(self.trace)
         shared_state = _shareable_state_dict(model) if armed else None
@@ -1193,7 +1193,7 @@ class BufferWriteTracker:
         param access leaves the bytes unchanged and stays VERIFIED, so there is ~zero over-trigger on
         ordinary Linear/Conv/MLP/BatchNorm models (their params are untouched during the forward).
 
-        W6: on a disarmed (non-``intervention_ready``) capture the baseline map is empty, so
+        W6: on a disarmed (non-``replayable``) capture the baseline map is empty, so
         this sweep is a no-op -- the disarmed lane is covered by the fail-closed
         ``_PARAM_BYTE_WITNESS_NOT_ARMED`` stamp instead (see ``_refresh_param_index``).
         """

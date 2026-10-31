@@ -319,7 +319,7 @@ def _edit_record(model: nn.Module, selector: Any) -> torch.Tensor:
 def _intervention_ready(model: nn.Module) -> Any:
     """Capture an intervention-ready trace of the model."""
 
-    return tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _edit_fork_do(model: nn.Module, selector: Any) -> torch.Tensor:

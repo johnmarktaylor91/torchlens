@@ -171,7 +171,7 @@ def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
         inputs,
         capture=CaptureOptions(
             layers_to_save="all",
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

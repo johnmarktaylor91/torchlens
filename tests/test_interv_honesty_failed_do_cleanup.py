@@ -32,7 +32,7 @@ def _log() -> tl.Trace:
     return tl.trace(
         _ConvRelu().eval(),
         torch.randn(2, 1, 4, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 

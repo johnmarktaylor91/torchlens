@@ -43,7 +43,7 @@ def _fresh_session(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _ready() -> Any:
-    return tl.trace(_Net(), _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_Net(), _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _codes(caught: list[warnings.WarningMessage]) -> list[str]:

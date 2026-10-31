@@ -2,7 +2,7 @@
 
 ``Trace._intervention_spec`` is session-only (``FieldPolicy.DROP``): an
 ordinary save keeps the INTERVENED activations and their per-op provenance
-(``intervention_replaced``, fire records, ``intervention_audit``) but not the
+(``is_edited``, fire records, ``intervention_audit``) but not the
 recipe that produced them. The recipe travels separately through
 ``save_intervention``; the runnable save already refuses intervened captures
 (``user_intervention_not_replayable``) and names the analysis save as the door
@@ -40,7 +40,7 @@ def _carries_intervened_values(trace: Any) -> bool:
     """
 
     for layer in getattr(trace, "layer_list", None) or ():
-        if getattr(layer, "intervention_replaced", False) or getattr(layer, "interventions", None):
+        if getattr(layer, "is_edited", False) or getattr(layer, "interventions", None):
             return True
     return any(
         isinstance(row, dict) and row.get("status") not in _VALUE_NEUTRAL_AUDIT_STATUSES

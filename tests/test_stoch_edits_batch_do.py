@@ -35,7 +35,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _TwoBlock(),
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -145,7 +145,7 @@ def _trace64() -> tl.Trace:
     return tl.trace(
         _TwoBlock().double(),
         torch.randn(5, 4, dtype=torch.float64),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -178,7 +178,7 @@ def _fingerprint(log: tl.Trace) -> dict:
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
             tuple(repr(record) for record in op.interventions or ()),
-            bool(op.intervention_replaced),
+            bool(op.is_edited),
             tuple(sorted(repr(key) for key in store)),
         )
     return {

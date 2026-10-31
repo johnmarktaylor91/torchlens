@@ -59,7 +59,7 @@ from torchlens.errors import (
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
     seed=0,
@@ -371,7 +371,7 @@ class TestCorr21EventLedgerExhaustive:
     def test_raw_mutating_aten_is_incomplete_never_verified(self, tmp_path: Path) -> None:
         x = torch.tensor([-2.0, -0.5, 0.5, 2.0])
         loaded = _save_load(_RawMutation(), x.clone(), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
         verdict, attest = _verdict(loaded, x.clone())
@@ -403,7 +403,7 @@ class TestCorr21EventLedgerExhaustive:
             assert "unsupported_tensor_constant" in str(exc.fields.get("diagnostics", ""))
             return
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x.clone())
@@ -422,7 +422,7 @@ class TestCorr21EventLedgerExhaustive:
         path = tmp_path / "plain.tlspec"
         trace.save(path, level="runnable", include_weights=True)
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x)
@@ -435,7 +435,7 @@ class TestCorr21EventLedgerExhaustive:
         model = nn.Sequential(nn.Linear(4, 4), nn.BatchNorm1d(4)).eval()
         x = torch.randn(3, 4)
         loaded = _save_load(model, x, tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x)
@@ -610,7 +610,7 @@ class TestHon12HostRngChannels:
         self, label: str, draw: Any, tmp_path: Path
     ) -> None:
         loaded = _save_load(_branch_model(draw), torch.ones(4), tmp_path, acts=True)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True, label
         verdict, attest = _verdict(loaded, torch.ones(4), seed=0)
@@ -619,7 +619,7 @@ class TestHon12HostRngChannels:
 
     def test_model_attribute_generator_ceilings(self, tmp_path: Path) -> None:
         loaded = _save_load(_ModelAttrGenerator(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True
         verdict, _ = _verdict(loaded, torch.ones(4), seed=0)
@@ -632,7 +632,7 @@ class TestHon12HostRngChannels:
         loaded = _save_load(
             nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval(), torch.randn(2, 4), tmp_path
         )
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is False
         verdict, _ = _verdict(loaded, torch.randn(2, 4))
@@ -648,7 +648,7 @@ class TestHon12HostRngChannels:
                 return x * 2
 
         loaded = _save_load(_Holder(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is False
 
@@ -661,7 +661,7 @@ class TestHon12HostRngChannels:
 
         random.seed(0)
         loaded = _save_load(_GlobalBranch(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True
         assert descriptor.rng_profile.capture_seed == 0
@@ -785,7 +785,7 @@ class AddOne(nn.Module):
 x = torch.tensor([1.0, 2.0], device="cpu")
 torch.set_default_device("meta")
 trace = tl.trace(AddOne(), x, capture=CaptureOptions(
-    intervention_ready=True, capture_container_structure=True, cache=False))
+    replayable=True, capture_container_structure=True, cache=False))
 trace.save(sys.argv[1], level="runnable")
 """
 
@@ -957,7 +957,7 @@ class TestCudaStagingAndReadiness:
             model = nn.ConvTranspose2d(2, 2, 3).cuda().eval()
             x = torch.randn(1, 2, 5, 5, device="cuda")
             loaded = _save_load(model, x, tmp_path, acts=True)
-            descriptor = loaded.runnable_descriptor
+            descriptor = loaded._sparse_run_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
             result = loaded.run(inputs=x, on_divergence="return")
@@ -1017,7 +1017,7 @@ class TestHon14InferenceModeCapture:
         path = tmp_path / "inference.tlspec"
         trace.save(path, level="runnable", include_weights=True)
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert all(call.execution_context.inference_mode for call in descriptor.calls)
         before_inference = torch.is_inference_mode_enabled()

@@ -98,7 +98,7 @@ def _time_repeated(label: str, fn: Callable[[], object], repeats: int) -> tuple[
     return label, statistics.mean(samples)
 
 
-def _capture(model: nn.Module, x: torch.Tensor, *, intervention_ready: bool) -> tl.Trace:
+def _capture(model: nn.Module, x: torch.Tensor, *, replayable: bool) -> tl.Trace:
     """Capture a TorchLens log for the benchmark model.
 
     Parameters
@@ -107,7 +107,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, intervention_ready: bool) -> 
         Model to capture.
     x:
         Forward input.
-    intervention_ready:
+    replayable:
         Whether to capture replay metadata.
 
     Returns
@@ -120,7 +120,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, intervention_ready: bool) -> 
         model,
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=intervention_ready,
+            replayable=replayable,
             detach_saved_activations=True,
         ),
     )
@@ -208,17 +208,17 @@ def run_benchmarks() -> str:
         repeats=100,
     )
     nonready_label, nonready_s = _time_repeated(
-        "trace(intervention_ready=False)",
-        lambda: _capture(model, x, intervention_ready=False),
+        "trace(replayable=False)",
+        lambda: _capture(model, x, replayable=False),
         repeats=15,
     )
     ready_label, ready_s = _time_repeated(
-        "trace(intervention_ready=True)",
-        lambda: _capture(model, x, intervention_ready=True),
+        "trace(replayable=True)",
+        lambda: _capture(model, x, replayable=True),
         repeats=15,
     )
 
-    replay_log = _capture(model, x, intervention_ready=True)
+    replay_log = _capture(model, x, replayable=True)
     replay_label, replay_s = _time_repeated(
         "push(hook=zero relu)",
         lambda: replay_log.push(
@@ -227,7 +227,7 @@ def run_benchmarks() -> str:
         repeats=25,
     )
 
-    rerun_log = _capture(model, x, intervention_ready=True)
+    rerun_log = _capture(model, x, replayable=True)
     rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     rerun_label, rerun_s = _time_repeated(
         "run(model, x)",
@@ -235,7 +235,7 @@ def run_benchmarks() -> str:
         repeats=15,
     )
 
-    logs = [_capture(model, x + idx * 0.01, intervention_ready=True) for idx in range(4)]
+    logs = [_capture(model, x + idx * 0.01, replayable=True) for idx in range(4)]
     bundle = tl.Bundle({f"run_{idx}": log for idx, log in enumerate(logs)})
     first_relu_label = next(
         layer.layer_label for layer in logs[0].layer_list if layer.func_name == "relu"

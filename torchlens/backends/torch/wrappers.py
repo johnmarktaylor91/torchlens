@@ -1015,7 +1015,7 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     ptrs: Any = None
     if (
         _COW_ENABLED
-        and not getattr(trace, "intervention_ready", False)
+        and not getattr(trace, "is_replayable", False)
         and not getattr(trace, "backward_ready", False)
         and getattr(trace, "save_grads", None) in (None, False)
         and getattr(trace, "activation_transform", None) is None
@@ -1223,7 +1223,7 @@ def _propagate_mutation_label_to_storage_aliases(
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
     if (
-        getattr(trace, "intervention_ready", False)
+        getattr(trace, "is_replayable", False)
         or getattr(trace, "backward_ready", False)
         or getattr(trace, "save_grads", None) not in (None, False)
     ):
@@ -2068,7 +2068,7 @@ def torch_func_decorator(
 
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.
-        if getattr(trace, "intervention_ready", False):
+        if getattr(trace, "is_replayable", False):
             output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]
         else:
             output_tensors = _collect_output_tensors(out_orig)

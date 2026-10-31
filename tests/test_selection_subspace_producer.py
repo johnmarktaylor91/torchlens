@@ -220,7 +220,7 @@ def test_do_audit_record_carries_the_basis_origin(model):
     trace = tl.trace(
         model,
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.subspace(

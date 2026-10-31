@@ -1239,7 +1239,7 @@ _LIVE_FIELD_GETTER_PAIRS: tuple[tuple[str, Callable[[Trace, OpEvent], Any]], ...
     ("is_atomic_module", lambda trace, event: False),
     ("atomic_module_call", lambda trace, event: None),
     ("interventions", _live_interventions),
-    ("intervention_replaced", lambda trace, event: event.intervention_replaced),
+    ("is_edited", lambda trace, event: event.is_edited),
     ("func_config", lambda trace, event: dict(event.function.func_config)),
 )
 

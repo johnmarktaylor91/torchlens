@@ -86,9 +86,7 @@ class MidGraphContainerModel(nn.Module):
 def _trace(model: nn.Module) -> Any:
     """Trace a model with final-output structure enabled."""
 
-    return tl.trace(
-        model, torch.ones(2), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(model, torch.ones(2), capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:

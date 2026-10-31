@@ -413,9 +413,9 @@ def test_model_door_normalize_arm_matches_canonical_spelling(toy) -> None:
     spec = tl.when(tl.func("relu"), tl.zero_ablate())
     bound = spec.bind(model)
     with door_policy("normalize"):
-        via_door = tl.trace(bound, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        via_door = tl.trace(bound, x, capture=tl.options.CaptureOptions(replayable=True))
     canonical = tl.trace(
-        model, x, intervene=spec, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, x, intervene=spec, capture=tl.options.CaptureOptions(replayable=True)
     )
     door_rows = [r for r in via_door.intervention_audit if r.get("kind") != "event"]
     canon_rows = [r for r in canonical.intervention_audit if r.get("kind") != "event"]
@@ -498,7 +498,7 @@ def test_execution_effect_chokepoint_refuses_invalid(toy) -> None:
     model, x = toy
     from torchlens.intervention.audit import record_intervention_event
 
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     common: dict = {
         "lane": "bind",
         "door": "call",

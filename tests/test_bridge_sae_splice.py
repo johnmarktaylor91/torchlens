@@ -107,7 +107,7 @@ def test_splice_accepts_existing_trace_and_refuses_double_inputs(splice_setup) -
     """A ready trace works directly; passing inputs alongside it refuses."""
 
     model, x, sae = splice_setup
-    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     from_trace = sae_bridge.splice(clean, site="relu_1_2", sae=sae)
     from_model = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
     assert from_trace.reconstruction_mse == pytest.approx(from_model.reconstruction_mse, rel=1e-6)

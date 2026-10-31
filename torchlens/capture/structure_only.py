@@ -533,7 +533,7 @@ _L7B_ROW_TEACHING: Final[Mapping[str, str]] = {
         "late-bind posture (state slots declared at capture time, values "
         "bound at run time with mandatory byte digests) when its S2 "
         "StateSource amendment lands — this row's named flip event. Until "
-        "then, capture the real model with intervention_ready=True to "
+        "then, capture the real model with replayable=True to "
         "produce a runnable artifact."
     ),
     "live_replay": (

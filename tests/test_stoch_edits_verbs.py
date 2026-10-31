@@ -15,7 +15,7 @@ oracle-backed, deterministic):
   module -- ``per_firing`` pass draws differ, ``per_rule`` draws are equal,
   both byte-stable across a re-push.
 - A1/A1b analog: ``mean_fill`` axis semantics vs the legacy global scalar;
-  typo'd and named ``over=`` tokens refuse; ``batch_independent`` is derived.
+  typo'd and named ``over=`` tokens refuse; ``is_batch_independent`` is derived.
 - A8: eager derivation equality -- the recorded derived seed re-derives from
   the recorded coordinate.
 """
@@ -63,7 +63,7 @@ def _toy_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _Toy()
     x = torch.randn(5, 4)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_permute_batch_oracle_reproducibility_and_extent() -> None:
@@ -87,9 +87,7 @@ def test_permute_batch_oracle_reproducibility_and_extent() -> None:
     assert sampling_records(other)[-1]["permutation"] != permutation
     # Batch extent 1 refuses at fire.
     torch.manual_seed(0)
-    single = tl.trace(
-        _Toy(), torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    single = tl.trace(_Toy(), torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
     with pytest.raises(Exception) as excinfo:
         single.fork().do(tl.label("relu_1_2"), permute_batch(seed=1, axis=0))
     assert excinfo.value.fields["code"] == "permute_batch_extent_invalid"
@@ -143,7 +141,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     torch.manual_seed(0)
     model = _Tied()
     x = torch.randn(6, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     layer = next(lab for lab in log.layer_labels if lab.startswith("linear"))
     assert log[layer].num_passes == 2, "the fixture must be a real two-pass layer"
 
@@ -300,7 +298,7 @@ def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
 
 
 def test_mean_fill_axis_semantics_and_derived_flag() -> None:
-    """A1/A1b analog: real over= vocabulary; batch_independent DERIVED."""
+    """A1/A1b analog: real over= vocabulary; is_batch_independent DERIVED."""
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
@@ -322,9 +320,9 @@ def test_mean_fill_axis_semantics_and_derived_flag() -> None:
         mean_fill(dim="batch")
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
     # D18: derived, never tabled. Self-sourced reads the traced batch.
-    assert mean_fill(dim="all").batch_independent is False
+    assert mean_fill(dim="all").is_batch_independent is False
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
-    assert mean_fill(donors, dim="all").batch_independent is True
+    assert mean_fill(donors, dim="all").is_batch_independent is True
     # 'self' warns and maps to 'all' (one migration window).
     with pytest.warns(UserWarning, match="over='all'") as aliased_warnings:
         aliased = mean_fill(dim="self")

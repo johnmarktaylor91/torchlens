@@ -9,7 +9,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_capture_honesty.py",
   "has_default": true,
   "sites": 1,
@@ -273,7 +273,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_data_classes/_value_repr.py",
   "has_default": true,
   "sites": 1,
@@ -729,7 +729,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_io/injection_codec.py",
   "has_default": true,
   "sites": 1,
@@ -793,7 +793,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_io/runnable.py",
   "has_default": true,
   "sites": 2,
@@ -865,7 +865,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_io/scrub.py",
   "has_default": true,
   "sites": 1,
@@ -1169,7 +1169,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_ir/op_record.py",
   "has_default": false,
   "sites": 3,
@@ -1561,7 +1561,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_ir/op_record_scatter.py",
   "has_default": false,
   "sites": 1,
@@ -1921,7 +1921,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/_notebook/cards.py",
   "has_default": true,
   "sites": 1,
@@ -4033,7 +4033,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": false,
   "sites": 1,
@@ -4041,7 +4041,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": true,
   "sites": 1,
@@ -4713,7 +4713,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": true,
   "sites": 1,
@@ -5865,7 +5865,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/capture/projections.py",
   "has_default": false,
   "sites": 1,
@@ -6729,7 +6729,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/export/_netron_records.py",
   "has_default": true,
   "sites": 1,
@@ -6753,7 +6753,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/export/_report.py",
   "has_default": true,
   "sites": 1,
@@ -7041,7 +7041,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/intervention/_staged_spec_persistence.py",
   "has_default": true,
   "sites": 1,
@@ -7201,7 +7201,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/intervention/injection.py",
   "has_default": true,
   "sites": 1,
@@ -7321,7 +7321,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/intervention/replay.py",
   "has_default": false,
   "sites": 2,
@@ -9057,7 +9057,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/validation/_invariants_backward_flow.py",
   "has_default": true,
   "sites": 1,
@@ -9345,7 +9345,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/validation/_invariants_payloads.py",
   "has_default": true,
   "sites": 1,
@@ -9537,7 +9537,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/validation/core.py",
   "has_default": true,
   "sites": 1,

@@ -84,7 +84,7 @@ def _capture(model: nn.Module) -> tl.Trace:
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -156,7 +156,7 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -413,7 +413,7 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
         model,
         torch.ones(1, 2),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -421,7 +421,7 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
     path = tmp_path / "tied.tlspec"
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     tied_slots = [
         slot
@@ -461,9 +461,7 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     trace = tl.trace(
         model,
         torch.ones(2, 3),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "embedded.tlspec"
     trace.save(path, level="runnable", include_weights=True)

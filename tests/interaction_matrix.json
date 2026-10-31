@@ -238,7 +238,7 @@
    "status": "asymmetry",
    "asymmetry": "A04",
    "confidence": "medium",
-   "note": "fork().do needs an intervention_ready capture, which previews refuse via capture=."
+   "note": "fork().do needs an replayable capture, which previews refuse via capture=."
   },
   {
    "a": "backend",
@@ -1343,7 +1343,7 @@
    "status": "composes",
    "evidence": "tests/test_intervention_error_catalog.py::test_intervention_ready_composes_with_deferred_selective_grads",
    "confidence": "low",
-   "note": "do() needs an intervention_ready capture, which is heavier than a plain selective save."
+   "note": "do() needs an replayable capture, which is heavier than a plain selective save."
   },
   {
    "a": "fork_do",
@@ -1811,7 +1811,7 @@
     "backend",
     "fork_do"
    ],
-   "summary": "fork().do needs capture=CaptureOptions(intervention_ready=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
+   "summary": "fork().do needs capture=CaptureOptions(replayable=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
    "ruling": "pending"

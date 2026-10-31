@@ -420,7 +420,7 @@ def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
     save_grads = getattr(trace, "save_grads", None)
     return bool(
         getattr(trace, "save_arg_values", False)
-        or getattr(trace, "intervention_ready", False)
+        or getattr(trace, "is_replayable", False)
         or getattr(trace, "backward_ready", False)
         or save_grads not in (None, False)
         or getattr(trace, "_validation_active", False)

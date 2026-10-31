@@ -50,7 +50,7 @@ from torchlens.backends.torch.completeness_witness import (
 )
 from torchlens.options import CaptureOptions
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _gate_pos() -> torch.Tensor:

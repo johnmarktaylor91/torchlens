@@ -551,7 +551,7 @@ _runnable_ledger_armed: bool = False
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed only around a runnable-eligible (``intervention_ready``) capture forward so
+Armed only around a runnable-eligible (``replayable``) capture forward so
 the dispatch census can attribute raised / host-returning aten events to their
 exact wrapper owner even when both diagnostic shadow modes are off.
 """

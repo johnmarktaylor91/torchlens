@@ -148,7 +148,7 @@ forward on the same activations:
 import torchlens as tl
 from torchlens.bridge.sae import splice
 
-trace = tl.trace(vit, images, capture=tl.options.CaptureOptions(intervention_ready=True))
+trace = tl.trace(vit, images, capture=tl.options.CaptureOptions(replayable=True))
 result = splice(trace, site="blocks.1", sae=PrismaCodec(sae))
 with torch.no_grad():
     own_reconstruction, own_latents = sae(result.clean_site_out)[:2]

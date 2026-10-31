@@ -148,7 +148,7 @@ def test_edge_record_repr_designed() -> None:
     trace = tl.trace(
         _Viewy(),
         torch.randn(2, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     records = [e for op in trace.layer_list for e in (getattr(op, "edge_uses", ()) or ())]
     assert records

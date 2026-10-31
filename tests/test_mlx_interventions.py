@@ -72,7 +72,7 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     )
 
     relu_op = next(op for op in ablated.layer_list if op.layer_type == "relu")
-    assert relu_op.intervention_replaced is True
+    assert relu_op.is_edited is True
     assert np.allclose(np.asarray(relu_op.out), 0.0)
 
     # The substituted zeros flowed into the downstream linear: its output is
@@ -86,7 +86,7 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     non_intervened = [
         op for op in ablated.layer_list if op.layer_type != "relu" and not op.is_input
     ]
-    assert all(not op.intervention_replaced for op in non_intervened)
+    assert all(not op.is_edited for op in non_intervened)
 
     assert MLXBackend().validate_trace(ablated) is True
 
@@ -308,8 +308,8 @@ def test_mlx_in_module_intervention_site() -> None:
         intervene=tl.when(tl.in_module("encoder") & tl.func("linear"), tl.zero_ablate()),
     )
     encoder_op = next(op for op in trace.layer_list if op.layer_type == "linear")
-    assert encoder_op.intervention_replaced is True
+    assert encoder_op.is_edited is True
     assert np.allclose(np.asarray(encoder_op.out), 0.0)
     head_ops = [op for op in trace.layer_list if op.layer_type == "linear"]
-    assert not head_ops[-1].intervention_replaced
+    assert not head_ops[-1].is_edited
     assert MLXBackend().validate_trace(trace) is True

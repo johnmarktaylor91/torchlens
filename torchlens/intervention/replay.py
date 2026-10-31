@@ -271,14 +271,14 @@ def _run_differentiable_replay(
         "engine": "replay",
         "differentiable": True,
         "source_trace_label": getattr(log, "trace_label", None),
-        "frontier": tuple(replay_log.replay_frontier),
+        "frontier": tuple(replay_log._replay_frontier),
     }
     if replay_log.state_history and isinstance(replay_log.state_history[-1], dict):
         replay_log.state_history[-1].update(
             {
                 "differentiable": True,
                 "source_trace_label": getattr(log, "trace_label", None),
-                "frontier": tuple(replay_log.replay_frontier),
+                "frontier": tuple(replay_log._replay_frontier),
             }
         )
     return replay_log
@@ -341,7 +341,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log.saved_gradient_memory = Bytes(0)
     log.total_param_gradient_memory = Bytes(0)
     log.backward_memory_backend = "unknown"
-    log.replay_frontier = {}
+    log._replay_frontier = {}
     for op in getattr(log, "layer_list", ()):
         _clear_op_gradient_projection(op)
     for param_log in getattr(log, "param_logs", {}).values():
@@ -726,7 +726,7 @@ def _run_replay(
     )
     log._has_direct_writes = False
     if differentiable_frontier is not None:
-        log.replay_frontier = dict(differentiable_frontier)
+        log._replay_frontier = dict(differentiable_frontier)
     return log
 
 
@@ -1310,7 +1310,7 @@ def _commit_replay_updates(
                 "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
                 "interventions": list(site.interventions),
-                "intervention_replaced": site.intervention_replaced,
+                "is_edited": site.is_edited,
             }
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
@@ -1331,12 +1331,10 @@ def _commit_replay_updates(
                 # component (a user-injected tensor mints no FireRecord);
                 # preserve exactly that component across the replacement.
                 record_replaced_before = any(record.replaced for record in old_records)
-                nonrecord_component = bool(site.intervention_replaced) and (
-                    not record_replaced_before
-                )
+                nonrecord_component = bool(site.is_edited) and (not record_replaced_before)
                 site._internal_set("interventions", surviving + new_records)
                 site._internal_set(
-                    "intervention_replaced",
+                    "is_edited",
                     bool(
                         nonrecord_component
                         or any(record.replaced for record in surviving + new_records)
@@ -1385,8 +1383,8 @@ def _preflight_log(log: Trace) -> None:
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     if not getattr(log, "_tracing_finished", False):
         raise ReplayPreconditionError("replay requires a completed Trace")
-    if not getattr(log, "intervention_ready", False):
-        raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
+    if not getattr(log, "is_replayable", False):
+        raise ReplayPreconditionError("replay requires replayable=True capture metadata")
 
 
 def _preflight_group(group: Sequence[Op]) -> None:

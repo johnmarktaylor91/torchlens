@@ -209,10 +209,10 @@ class Param:
         "_derived_grad_payload": FieldPolicy.KEEP,
         "_derived_grad_record_path": FieldPolicy.KEEP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         PARAM_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="param"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     def __init__(
         self,
@@ -313,30 +313,6 @@ class Param:
         """
 
         return len(self.all_addresses) > 1
-
-    @property
-    def num_uses_by_ops(self) -> int:
-        """Return the number of distinct Op usages.
-
-        Returns
-        -------
-        int
-            Count of pass-qualified Op labels in ``used_by_ops``.
-        """
-
-        return len(self.used_by_ops)
-
-    @property
-    def num_uses_by_layers(self) -> int:
-        """Return the number of distinct Layer usages.
-
-        Returns
-        -------
-        int
-            Count of Layer labels in ``used_by_layers``.
-        """
-
-        return len(self.used_by_layers)
 
     @property
     def trace(self) -> Any:

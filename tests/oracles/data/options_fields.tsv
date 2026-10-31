@@ -14,7 +14,7 @@ CaptureOptions.emit_nvtx
 CaptureOptions.hooks
 CaptureOptions.inference_only
 CaptureOptions.input_transform
-CaptureOptions.intervention_ready
+CaptureOptions.replayable
 CaptureOptions.jax_control_flow
 CaptureOptions.jax_max_control_flow_unroll
 CaptureOptions.keep_orphans

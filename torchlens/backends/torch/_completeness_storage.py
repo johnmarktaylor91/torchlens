@@ -622,7 +622,7 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     belt and are deliberately excluded. This lightweight observer neither
     constructs witness state nor changes capture verification verdicts.
     """
-    if bool(getattr(trace, "intervention_ready", False)):
+    if bool(getattr(trace, "is_replayable", False)):
         yield
         return
     if bool(getattr(trace, "structure_only", False)):
@@ -630,8 +630,8 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
         # (structure_only_belt.structure_only_escape_belt), which raises typed
         # teaching refusals instead of aggregating a warning; installing this
         # record-and-warn belt underneath it would be dead weight. The
-        # intervention_ready early-exit above is UNREACHABLE in-mode (the
-        # structure_only + intervention_ready combination refuses at entry
+        # replayable early-exit above is UNREACHABLE in-mode (the
+        # structure_only + replayable combination refuses at entry
         # with structure_only_option_conflict), pinned by the entry tests.
         yield
         return

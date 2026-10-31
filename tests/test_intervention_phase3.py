@@ -212,9 +212,7 @@ def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
 
             return torch.relu(x)
 
-    log = tl.trace(
-        _Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    log = tl.trace(_Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(replayable=True))
 
     selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
 
@@ -423,7 +421,7 @@ def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
         _Model().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
         ),
     )
@@ -462,7 +460,7 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
         _Model().eval(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
         ),
     )
@@ -511,7 +509,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         _Model(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
         ),
     )
@@ -520,7 +518,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
 
     assert torch.equal(replacement.out, x * 2)
     assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
-    assert replacement.intervention_replaced is True
+    assert replacement.is_edited is True
     assert replacement.interventions[-1].replaced is True
     assert replacement.interventions[-1].helper_name == "splice_module"
     assert check_metadata_invariants(log) is True
@@ -566,7 +564,7 @@ def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
             _Model().eval(),
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={
                     tl.in_module("block") & tl.func("relu"): tl.splice_module(
                         _IdentityReplacement()
@@ -637,7 +635,7 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
         _Ops().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={
                 tl.func("add"): tl.splice_module(_AddReplacement()),
                 tl.func("where"): tl.splice_module(_WhereReplacement()),

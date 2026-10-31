@@ -306,7 +306,7 @@ class GradFnFired:
     pass_index: int
     grad_input_refs: object | None
     grad_output_refs: object | None
-    intervention_fire_ref: object | None
+    fire_record: object | None
     timestamp: float
     fire_started_monotonic: float | None = None
     fire_finished_monotonic: float | None = None
@@ -682,7 +682,7 @@ class OpEvent:
     is_scalar_bool: bool | None
     bool_value: bool | None
     intervention_fired: bool
-    intervention_replaced: bool
+    is_edited: bool
     fire_results: tuple[FireResult, ...]
     intervention_template_ref: InterventionTemplateRef | None
     record_context: object | None = None

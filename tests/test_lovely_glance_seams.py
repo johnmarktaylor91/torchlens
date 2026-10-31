@@ -92,7 +92,7 @@ def test_echo_mounts_and_stays_pure() -> None:
     echoed = tl.trace(
         _EchoModel().eval(),
         x.clone(),
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=observer),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=observer),
     )
     assert observer.lines and sink_lines == observer.lines
     assert " -> " in observer.lines[0] and "mean=" in observer.lines[0]

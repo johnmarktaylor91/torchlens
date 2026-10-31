@@ -99,13 +99,13 @@ class GradFnCall:
         "label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
-        "intervention_fire_ref": FieldPolicy.KEEP,
+        "fire_record": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
         "_time_started": FieldPolicy.KEEP,
         "_time_finished": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         GRAD_FN_PASS_LOG_FIELD_ORDER,
         {
             **_PORTABLE_STATE_SPEC,
@@ -113,7 +113,7 @@ class GradFnCall:
         },
         schema_key="grad_fn_call",
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     call_index: int
     ordinal: int | None = None
@@ -121,7 +121,7 @@ class GradFnCall:
     label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
-    intervention_fire_ref: object | None = None
+    fire_record: object | None = None
     timestamp: float | None = None
     _time_started: float | None = None
     _time_finished: float | None = None
@@ -170,7 +170,7 @@ class GradFnCall:
             "backward_pass_index": None,
             "grad_inputs": None,
             "grad_outputs": None,
-            "intervention_fire_ref": None,
+            "fire_record": None,
             "timestamp": None,
             "_time_started": None,
             "_time_finished": None,
@@ -248,7 +248,7 @@ class GradFnCall:
         return (
             _grad_fn_payload_equal(self.grad_inputs, other.grad_inputs)
             and _grad_fn_payload_equal(self.grad_outputs, other.grad_outputs)
-            and _grad_fn_payload_equal(self.intervention_fire_ref, other.intervention_fire_ref)
+            and _grad_fn_payload_equal(self.fire_record, other.fire_record)
         )
 
     def __hash__(self) -> int:
@@ -354,7 +354,7 @@ _GRAD_FN_CALL_STORED_FIELDS: tuple[str, ...] = (
     "label",
     "grad_inputs",
     "grad_outputs",
-    "intervention_fire_ref",
+    "fire_record",
     "timestamp",
     "_time_started",
     "_time_finished",

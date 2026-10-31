@@ -193,7 +193,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_fast_run_session": None,
     "_distributed_plane_p": None,
     "_buffer_persistence": {},
-    "intervention_ready": False,
+    "is_replayable": False,
     "save_arg_templates": False,
     "raw_input": None,
     "_transform": None,
@@ -259,7 +259,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "capture_cache_key": None,
     "capture_cache_path": None,
     "recording_kept": True,
-    "facet_registry_snapshot": None,
+    "facet_functions": None,
     "_out_dedup_mode": "identity",
     "_out_identity_cache": {},
     "_out_hash_cache": {},
@@ -270,7 +270,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "chunked_forward": False,
     "is_appended": False,
     "relationship_evidence": {},
-    "replay_frontier": {},
+    "_replay_frontier": {},
     "_ambiguous_lookup_keys": {},
     "total_gradient_memory": 0,
     "total_backward_memory": 0,
@@ -321,7 +321,7 @@ _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "append_history": [],
     "_last_hook_handle_ids": (),
     "relationship_evidence": {},
-    "replay_frontier": {},
+    "_replay_frontier": {},
     "layer_list": [],
     "layer_dict_main_keys": {},
     "layer_dict_all_keys": {},
@@ -833,7 +833,7 @@ class Trace(
         return cast("ReadinessReport | None", runnable_trace_state(self).readiness)
 
     @property
-    def runnable_descriptor(self) -> "SparseRunDescriptor | None":
+    def _sparse_run_descriptor(self) -> "SparseRunDescriptor | None":
         """Return the parsed sparse descriptor retained by a loaded artifact.
 
         Returns
@@ -1041,7 +1041,7 @@ class Trace(
     model_object_id: int | None
     input_signature_hash: str | None
     state_history: list[Any]
-    replay_frontier: dict[str, torch.Tensor]
+    _replay_frontier: dict[str, torch.Tensor]
     backward_ready: bool
     inference_only: bool
     chunked_forward: bool
@@ -1185,7 +1185,7 @@ class Trace(
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
         "keep_orphans": FieldPolicy.KEEP,
-        "intervention_ready": FieldPolicy.KEEP,
+        "is_replayable": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
         "raw_input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
@@ -1283,7 +1283,7 @@ class Trace(
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
         "recording_kept": FieldPolicy.KEEP,
-        "facet_registry_snapshot": FieldPolicy.DROP,
+        "facet_functions": FieldPolicy.DROP,
         "_out_dedup_mode": FieldPolicy.DROP,
         "_out_identity_cache": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
@@ -1349,7 +1349,7 @@ class Trace(
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
-        "replay_frontier": FieldPolicy.DROP,
+        "_replay_frontier": FieldPolicy.DROP,
         "_output_container_specs_by_raw_label": FieldPolicy.DROP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
@@ -1570,14 +1570,14 @@ class Trace(
         "_output_tokenizer": FieldPolicy.DROP,
         "_semantic_output_metadata": FieldPolicy.DROP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         MODEL_LOG_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
         fork_policy=MODEL_LOG_FIELD_FORK_POLICY,
         default_fill_state=_MODEL_LOG_DEFAULT_FILL,
         schema_key="trace",
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     def __init__(
         self,
@@ -1608,7 +1608,7 @@ class Trace(
         measure_python_peak_memory: bool = False,
         distributed_witness: str = "none",
         save_budget: SaveBudgetOption = "auto",
-        facet_registry_snapshot: Any | None = None,
+        facet_functions: Any | None = None,
         input_transform: Callable[[Any], Any] | None = None,
         raw_input: Any | None = None,
         save_raw_input: str | bool = "small",
@@ -1669,7 +1669,7 @@ class Trace(
                 ``None`` disables the guard. Crossing it raises
                 ``SaveBudgetExceededError`` mid-capture. Portable bundle load
                 restores the default ``"auto"``.
-            facet_registry_snapshot: Immutable facet recipe snapshot captured for
+            facet_functions: Immutable facet recipe snapshot captured for
                 this trace.
             input_transform: Optional callable used to convert raw user input into
                 model-ready input.
@@ -1740,7 +1740,7 @@ class Trace(
         self._layers_logged = False
         self._layers_saved = False
         self.keep_orphans = keep_orphans
-        self.intervention_ready = False
+        self.is_replayable = False
         self.save_arg_templates = False
         self.raw_input = raw_input
         self.input_preprocessor: ResolvedPreprocessing | None = None
@@ -1790,7 +1790,7 @@ class Trace(
         # Built once per capture; ``None`` when budgeting is disabled. Charged on
         # the hot path by the activation-save paths in the torch backend.
         self._save_budget_accountant = SaveBudget.from_option(save_budget)
-        self.facet_registry_snapshot = facet_registry_snapshot
+        self.facet_functions = facet_functions
         self.raise_on_nan: bool = False
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
@@ -1870,7 +1870,7 @@ class Trace(
             "input": Relationship.UNKNOWN,
             "graph": Relationship.UNKNOWN,
         }
-        self.replay_frontier: dict[str, torch.Tensor] = {}
+        self._replay_frontier: dict[str, torch.Tensor] = {}
         self._output_container_specs_by_raw_label: dict[str, Any] = {}
         self._out_writer: BundleStreamWriter | None = None
         self._keep_outs_in_memory: bool = True
@@ -2075,7 +2075,7 @@ class Trace(
         shape/dtype hypotheses. The report carries the source comparison
         digest, the evidence status, every checked site, and
         ``executable=False`` — checking a plan NEVER sets
-        ``intervention_ready``, arms, replays, or lifts the late-bind
+        ``replayable``, arms, replays, or lifts the late-bind
         refusal. Refuses typed on callables, value-derived selection, and
         REFUTED sources. Spelling DOCUMENTED-UNSTABLE (the public verb name
         belongs to the UI sprint).
@@ -3000,7 +3000,7 @@ class Trace(
         # 2026-08-26). Serialize to the loaded-artifact form (None);
         # `_snapshot_for_record` falls back to the live registry exactly as it
         # does for every tlspec-loaded Trace.
-        state["facet_registry_snapshot"] = None
+        state["facet_functions"] = None
         state["pinned_autograd_memory"] = None  # a pickled copy pins nothing
         state.pop("_uncalled_module_addresses", None)  # session-time: unknown once restored
         state.pop("_raw_graph_ws", None)
@@ -3733,7 +3733,7 @@ class Trace(
         # computed from the replaced activations and are invalidated; USER
         # ``annotate(data=...)`` blobs survive the same-shape refresh.
         self._annotation_blobs = self._user_annotation_blobs()
-        self.facet_registry_snapshot = getattr(new_log, "facet_registry_snapshot", None)
+        self.facet_functions = getattr(new_log, "facet_functions", None)
 
     def _copy_rerun_value(self, value: Any) -> Any:
         """Copy rerun metadata while keeping tensor payload identities.
@@ -3964,8 +3964,8 @@ class Trace(
         return _discharge(self, real_trace)
 
 
-Trace.FIELD_FORK_POLICY = fork_policy_from_policy(Trace.FIELD_POLICY)  # type: ignore[attr-defined]
-Trace.DEFAULT_FILL_STATE = default_fill_state_from_policy(Trace.FIELD_POLICY)  # type: ignore[attr-defined]
+Trace._FIELD_FORK_POLICY = fork_policy_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
+Trace._DEFAULT_FILL_STATE = default_fill_state_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
 
 # The tlspec v8 coordinated bump retired this class's S3 pre-release
 # registrations: every formerly gated Trace field above now declares its

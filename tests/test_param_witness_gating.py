@@ -2,7 +2,7 @@
 
 The named-parameter whole-storage byte-witness (r18/r19-A: forward-start snapshot +
 forward-end ``torch.equal`` reconcile in ``buffer_writes``) is armed ONLY for
-runnable-capable captures (``intervention_ready=True``) -- the exact predicate for
+runnable-capable captures (``replayable=True``) -- the exact predicate for
 "this capture can produce a passing sparse runnable descriptor", which is the witness
 verdict's only consumer. A disarmed capture must stamp the fail-closed
 ``_PARAM_BYTE_WITNESS_NOT_ARMED`` provenance so any unforeseen descriptor build
@@ -28,7 +28,7 @@ from torchlens.backends.torch.completeness_witness import host_escape_has_mutabl
 from torchlens.options import CaptureOptions
 
 _RUNNABLE_CAP = {
-    "intervention_ready": True,
+    "replayable": True,
     "capture_container_structure": True,
     "cache": False,
     "seed": 7,
@@ -125,7 +125,7 @@ def test_armed_baseline_coalesces_onto_capture_state_clone():
 
 def test_plain_trace_cannot_pass_runnable_preflight():
     # The gate predicate invariant: descriptor.preflight.passed implies
-    # trace.intervention_ready, so "was-witnessed" and "can-claim" never diverge.
+    # trace.is_replayable, so "was-witnessed" and "can-claim" never diverge.
     from torchlens._io.runnable import build_sparse_run_descriptor
 
     model = _PlainModel()

@@ -130,7 +130,7 @@ def test_chain_multipass_pass_qualified_edit_is_exact() -> None:
     torch.manual_seed(0)
     model = _Loop().eval()
     example = torch.randn(1, 4)
-    trace = tl.trace(model, example, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, example, capture=tl.options.CaptureOptions(replayable=True))
     try:
         tanh_layer = [label for label in trace.layer_labels if "tanh" in label][0]
         assert len(trace[tanh_layer].ops) == 3, "recurrence grouping lost the 3 passes"
@@ -170,7 +170,7 @@ def test_chain_slice_selection_feeds_do_on_the_source() -> None:
 
     import torchlens as tl
 
-    trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(replayable=True))
     try:
         labels = trace.layer_labels
         chain_slice = trace.between([labels[1]], [labels[-2]])

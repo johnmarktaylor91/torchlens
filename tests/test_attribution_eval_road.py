@@ -108,7 +108,7 @@ def test_noisy_steps_are_seeded_and_replay_to_their_scores() -> None:
     )
     assert torch.equal(curve.scores, again.scores)
     assert not torch.equal(curve.scores[1:], other.scores[1:])
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     for step in curve.steps:
         fork = trace.fork()
         try:

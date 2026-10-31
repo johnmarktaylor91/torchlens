@@ -120,7 +120,7 @@ def test_reader_returns_what_the_artifact_holds(tmp_path: Path, underscored: boo
 
 
 def _ready() -> Any:
-    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _positions() -> torch.Tensor:

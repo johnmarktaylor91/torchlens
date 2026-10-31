@@ -101,7 +101,7 @@ def test_deepcopy_records_under_an_intervention_ready_capture() -> None:
     trace = tl.trace(
         _DeepcopyBuffer(),
         torch.ones(4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         (copy_op,) = [op for op in trace.layer_list if op.func_name == "__deepcopy__"]

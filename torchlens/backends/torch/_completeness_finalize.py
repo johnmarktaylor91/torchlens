@@ -479,14 +479,14 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
 
     mode = _effective_mode()
     _init_witness_fields(trace, mode)
-    # A runnable-eligible (``intervention_ready``) capture always records
+    # A runnable-eligible (``replayable``) capture always records
     # tensor->host escape sources so the sparse descriptor can witness the escape
     # by its producing op, keyed on the ESCAPE EVENT. This is a passive observer:
     # it records raw op labels only and never alters a captured op, so goldens are
     # unchanged. The default (non-runnable) capture path installs nothing.
     from ._aten_capture import _aten_recording_requested
 
-    record_escapes = bool(getattr(trace, "intervention_ready", False))
+    record_escapes = bool(getattr(trace, "is_replayable", False))
     record_aten = _aten_recording_requested()
     plane_p = _plane_p_requested()
     event_stream = getattr(trace, "capture_events", None)

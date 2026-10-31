@@ -166,7 +166,7 @@ def test_capture_hooks_key_is_hashable_and_still_refuses_typed(attn, latent_setu
         tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True, hooks=hooks),
+            capture=tl.options.CaptureOptions(replayable=True, hooks=hooks),
         )
 
 

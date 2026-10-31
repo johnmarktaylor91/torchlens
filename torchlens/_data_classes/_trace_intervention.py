@@ -595,7 +595,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         One ``EdgeUseRecord`` per parent->child occurrence (parallel edges
         first-class), in execution order; rows are the identity-stable
         provenance records themselves (immutable finalized views). Requires
-        an ``intervention_ready`` capture — otherwise refuses typed
+        an ``replayable`` capture — otherwise refuses typed
         (``edge_provenance_unavailable``). DOCUMENTED-UNSTABLE spelling
         pending naming-session ratification.
         """

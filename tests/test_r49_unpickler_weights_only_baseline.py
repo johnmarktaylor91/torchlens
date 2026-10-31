@@ -51,7 +51,7 @@ from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

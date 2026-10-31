@@ -214,11 +214,11 @@ def _mlx_intermediate_loss(x: mx.array) -> mx.array:
 def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
 
-    with pytest.raises(BackendUnsupportedError, match="intervention_ready"):
+    with pytest.raises(BackendUnsupportedError, match="replayable"):
         tl.trace(
             TinyMLP(),
             _tiny_mlp_input(),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
 

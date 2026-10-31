@@ -4,7 +4,7 @@ torch 2.9 added per-backend ``torch.backends.*.fp32_precision`` knobs. The legac
 getters the v2 ambient record reads (``cudnn.allow_tf32``,
 ``cuda.matmul.allow_tf32``, ``get_float32_matmul_precision()``) RAISE when the
 per-backend state has no legacy equivalent, which used to crash every
-``intervention_ready`` capture and ``tl.debug.check_determinism``. Capture must
+``replayable`` capture and ``tl.debug.check_determinism``. Capture must
 succeed; a policy the record cannot represent must refuse runnable save typed
 (``execution_context_unavailable``), never persist a record that replays under a
 different TF32/bf16 policy; and a run transaction must restore the caller's
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
     reason="per-backend fp32_precision API needs torch >= 2.9",
 )
 
-_CAPTURE = CaptureOptions(intervention_ready=True)
+_CAPTURE = CaptureOptions(replayable=True)
 
 
 def _set(path: str, value: str) -> None:

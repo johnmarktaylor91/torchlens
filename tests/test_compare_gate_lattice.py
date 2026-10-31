@@ -23,7 +23,7 @@ import torchlens as tl
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
-_OPTS = tl.options.CaptureOptions(intervention_ready=True)
+_OPTS = tl.options.CaptureOptions(replayable=True)
 
 
 class _TwoLayer(nn.Module):

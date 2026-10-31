@@ -353,9 +353,7 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
     """Trace rerun accepts new raw text input when a tokenizer is attached."""
 
     model = TokenEmbeddingModel()
-    trace = tl.trace(
-        model, "hello world", capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(model, "hello world", capture=tl.options.CaptureOptions(replayable=True))
     try:
         trace.run("goodbye")
         assert model.tokenizer_calls == [("hello world", "pt"), ("goodbye", "pt")]

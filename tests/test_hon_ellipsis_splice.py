@@ -66,7 +66,7 @@ def test_ellipsis_is_stored_as_a_literal_on_gemma_class_indexing() -> None:
     """Every ``x[..., :n]`` getitem stores ``...`` literally; none is Unsupported."""
 
     model, ids = _tiny_gemma2(), torch.randint(0, 64, (1, 6))
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     stored_ellipses = 0
     for op in trace.layer_list:
         template = getattr(op, "args_template", None)
@@ -85,7 +85,7 @@ def test_gemma_class_splice_runs_end_to_end() -> None:
 
     model, ids = _tiny_gemma2(), torch.randint(0, 64, (1, 6))
     sae = _ToySAE(32).eval()
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     site = trace.modules["model.layers.0.mlp"].output_layers[0]
 
     result = sae_bridge.splice(trace, site=site, sae=sae)

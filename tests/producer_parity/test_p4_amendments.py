@@ -85,7 +85,7 @@ def test_append_stamps_folds_and_keeps_raw_lane_append_only(
     target = _target(journal)
 
     folded = journal.append_amendment(
-        amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
     )
 
     amendment = journal.op_amendments[0]
@@ -96,13 +96,13 @@ def test_append_stamps_folds_and_keeps_raw_lane_append_only(
     assert journal.event_seq == event_seq_before
     # Raw lane genuinely append-only: same objects at same positions.
     assert all(a is b for a, b in zip(journal.op_events, raw_before, strict=True))
-    assert not getattr(target, "intervention_replaced")
+    assert not getattr(target, "is_edited")
     # Reducer + one-record view + live index all present the folded state.
     view = journal.amended_op_records()
-    assert view[1] is not target and view[1].intervention_replaced
-    assert journal.amended_op_record(target.label_raw).intervention_replaced
-    assert journal.live_index.by_raw_label[target.label_raw].intervention_replaced
-    assert folded.intervention_replaced
+    assert view[1] is not target and view[1].is_edited
+    assert journal.amended_op_record(target.label_raw).is_edited
+    assert journal.live_index.by_raw_label[target.label_raw].is_edited
+    assert folded.is_edited
     # Unamended entries pass through by identity.
     assert view[0] is journal.op_events[0]
     if leg == "decomposed":
@@ -116,12 +116,12 @@ def test_last_wins_per_path_in_amendment_order(
     journal = _fresh_journal(leg_templates[leg])
     target = _target(journal)
     journal.append_amendment(
-        amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
     )
     journal.append_amendment(
-        amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=False)
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=False)
     )
-    assert journal.amended_op_record(target.label_raw).intervention_replaced is False
+    assert journal.amended_op_record(target.label_raw).is_edited is False
 
 
 @pytest.mark.smoke_cells("test_validation_refusals[decomposed]")
@@ -155,8 +155,8 @@ def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> N
                 target.label_raw,
                 "raw_hook_intervention",
                 (
-                    ("intervention.intervention_replaced", True),
-                    ("intervention.intervention_replaced", False),
+                    ("intervention.is_edited", True),
+                    ("intervention.is_edited", False),
                 ),
             )
         )
@@ -169,7 +169,7 @@ def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> N
                 target.seq,
                 target.label_raw,
                 "raw_hook_intervention",
-                (("intervention.intervention_replaced", "yes"),),
+                (("intervention.is_edited", "yes"),),
             )
         )
     # Identity fields are unpatchable even when forged into a known family's
@@ -187,14 +187,12 @@ def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> N
     # Fail-closed target resolution.
     with pytest.raises(AmendmentTargetError, match="unknown op"):
         journal.append_amendment(
-            amend_raw_hook_intervention(1, "nonexistent_1_1_raw", intervention_replaced=True)
+            amend_raw_hook_intervention(1, "nonexistent_1_1_raw", is_edited=True)
         )
     # Single-domain journals cross-check target_seq.
     with pytest.raises(AmendmentTargetError, match="single-seq-domain"):
         journal.append_amendment(
-            amend_raw_hook_intervention(
-                target.seq + 7, target.label_raw, intervention_replaced=True
-            )
+            amend_raw_hook_intervention(target.seq + 7, target.label_raw, is_edited=True)
         )
 
 
@@ -210,14 +208,14 @@ def test_absent_facet_materializes_from_defaults_with_planted_s5_violation(
         materialized = folded_record.intervention
         assert materialized is not None
         defaults = FACET_DEFAULTS["intervention"]()
-        assert materialized.intervention_replaced is True
+        assert materialized.is_edited is True
         for name in ("intervention_fired", "fire_results"):
             assert getattr(materialized, name) == getattr(defaults, name), (
                 f"materialized facet field {name!r} drifted from FACET_DEFAULTS"
             )
 
     journal.append_amendment(
-        amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
     )
     _assert_untouched_fields_are_defaults(journal.amended_op_record(target.label_raw))
 
@@ -229,7 +227,7 @@ def test_absent_facet_materializes_from_defaults_with_planted_s5_violation(
     planted = dict(op_record_module.FACET_DEFAULTS)
     planted["intervention"] = lambda: InterventionFacet(
         intervention_fired=True,  # wrong default
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(),
     )
     monkeypatch.setattr(op_record_module, "FACET_DEFAULTS", planted)
@@ -238,7 +236,7 @@ def test_absent_facet_materializes_from_defaults_with_planted_s5_violation(
         event for event in journal2.op_events if getattr(event, "intervention", None) is None
     )
     journal2.append_amendment(
-        amend_raw_hook_intervention(target2.seq, target2.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(target2.seq, target2.label_raw, is_edited=True)
     )
     with pytest.raises(AssertionError, match="drifted"):
         _assert_untouched_fields_are_defaults(journal2.amended_op_record(target2.label_raw))
@@ -254,18 +252,16 @@ def test_sealed_source_refuses_working_projection_accepts(
     journal.amendments_sealed = True
     with pytest.raises(SealedJournalAmendmentError):
         journal.append_amendment(
-            amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
+            amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
         )
     working = journal._copy_for_replay()
     assert working.amendments_sealed is False
     assert working.core_seal_watermark == journal.core_seal_watermark
     working_target = working.op_event_by_label_raw[target.label_raw]
     working.append_amendment(
-        amend_raw_hook_intervention(
-            working_target.seq, working_target.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(working_target.seq, working_target.label_raw, is_edited=True)
     )
-    assert working.amended_op_record(target.label_raw).intervention_replaced
+    assert working.amended_op_record(target.label_raw).is_edited
 
 
 @pytest.mark.parametrize("leg", _LEGS)
@@ -275,12 +271,12 @@ def test_watermark_filters_seeded_copies_only(
     journal = _fresh_journal(leg_templates[leg])
     first, second = journal.op_events[0], journal.op_events[1]
     journal.append_amendment(
-        amend_raw_hook_intervention(first.seq, first.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(first.seq, first.label_raw, is_edited=True)
     )
     folded_at_seal = list(journal.amended_op_records())
     journal.core_seal_watermark = journal.amendment_seq  # "seal" consumed #1
     journal.append_amendment(
-        amend_raw_hook_intervention(second.seq, second.label_raw, intervention_replaced=True)
+        amend_raw_hook_intervention(second.seq, second.label_raw, is_edited=True)
     )
 
     # Plain structural copy: the whole lane rides along.
@@ -292,7 +288,7 @@ def test_watermark_filters_seeded_copies_only(
     seeded = journal._copy_for_replay(projected_op_events=folded_at_seal)
     assert [a.seq for a in seeded.op_amendments] == [2]
     # And the surviving amendment still folds on the copy.
-    assert seeded.amended_op_record(second.label_raw).intervention_replaced
+    assert seeded.amended_op_record(second.label_raw).is_edited
 
 
 @pytest.mark.parametrize("leg", _LEGS)
@@ -309,16 +305,14 @@ def test_multi_domain_resolves_by_label_last_occurrence(
     # target_seq disagreement is NOT cross-checked in a multi-domain journal
     # (O-N6): resolution is by label.
     seeded.append_amendment(
-        amend_raw_hook_intervention(
-            target.seq + 12345, target.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(target.seq + 12345, target.label_raw, is_edited=True)
     )
     view = seeded.amended_op_records()
     positions = [index for index, event in enumerate(view) if event.label_raw == target.label_raw]
     assert len(positions) == 2
     first_occurrence, last_occurrence = positions
-    assert view[last_occurrence].intervention_replaced is True
-    assert view[first_occurrence].intervention_replaced is False
+    assert view[last_occurrence].is_edited is True
+    assert view[first_occurrence].is_edited is False
     # Single-domain journals DO cross-check (established by the refusal test).
 
 
@@ -343,16 +337,12 @@ def test_merged_multi_pass_journal_binds_amendments_by_seq(
     pass_one = _fresh_journal(leg_templates[leg], count=2)
     target_one = _target(pass_one)
     pass_one.append_amendment(
-        amend_raw_hook_intervention(
-            target_one.seq, target_one.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(target_one.seq, target_one.label_raw, is_edited=True)
     )
     pass_two = _fresh_journal(leg_templates[leg], count=2)
     target_two = _target(pass_two)
     pass_two.append_amendment(
-        amend_raw_hook_intervention(
-            target_two.seq, target_two.label_raw, intervention_replaced=False
-        )
+        amend_raw_hook_intervention(target_two.seq, target_two.label_raw, is_edited=False)
     )
 
     accumulator = CaptureEvents()
@@ -369,8 +359,8 @@ def test_merged_multi_pass_journal_binds_amendments_by_seq(
     assert len(positions) == 2
     first_occurrence, last_occurrence = positions
     # Each pass's amendment folds onto ITS OWN occurrence (seq-exact).
-    assert view[first_occurrence].intervention_replaced is True
-    assert view[last_occurrence].intervention_replaced is False
+    assert view[first_occurrence].is_edited is True
+    assert view[last_occurrence].is_edited is False
 
     # Re-concat of the merged journal: every amendment re-binds through the
     # merge seq map and appends cleanly (previously AmendmentTargetError).
@@ -383,8 +373,8 @@ def test_merged_multi_pass_journal_binds_amendments_by_seq(
         if event.label_raw == target_one.label_raw
     ]
     assert len(combined_positions) == 2
-    assert combined_view[combined_positions[0]].intervention_replaced is True
-    assert combined_view[combined_positions[1]].intervention_replaced is False
+    assert combined_view[combined_positions[0]].is_edited is True
+    assert combined_view[combined_positions[1]].is_edited is False
 
 
 @pytest.mark.parametrize("leg", _LEGS)
@@ -396,9 +386,7 @@ def test_concat_rebinds_target_seq_and_refolds(
     target_journal = _fresh_journal(leg_templates[leg], count=0)
     source_target = source.op_events[2]
     source.append_amendment(
-        amend_raw_hook_intervention(
-            source_target.seq, source_target.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(source_target.seq, source_target.label_raw, is_edited=True)
     )
     target_journal.concat(source)
     merged = target_journal.op_amendments
@@ -410,7 +398,7 @@ def test_concat_rebinds_target_seq_and_refolds(
     # target_seq rebound through the merge seq map onto the merged clone.
     merged_target = target_journal.op_event_by_label_raw[source_target.label_raw]
     assert merged_amendment.target_seq == merged_target.seq
-    assert target_journal.amended_op_record(source_target.label_raw).intervention_replaced
+    assert target_journal.amended_op_record(source_target.label_raw).is_edited
 
 
 class _RecordModel(nn.Module):
@@ -542,7 +530,7 @@ def test_sealed_journal_refusals_share_one_catchable_base(
         journal.append(_DummyEvent())
     with pytest.raises(SealedJournalWriteError):
         journal.append_amendment(
-            amend_raw_hook_intervention(target.seq, target.label_raw, intervention_replaced=True)
+            amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
         )
     assert issubclass(SealedJournalAppendError, SealedJournalWriteError)
     assert issubclass(SealedJournalAmendmentError, SealedJournalWriteError)
@@ -621,9 +609,7 @@ def test_concat_refuses_amendments_without_the_op_lane(
     source = _fresh_journal(leg_templates["decomposed"], count=3)
     source_target = source.op_events[2]
     source.append_amendment(
-        amend_raw_hook_intervention(
-            source_target.seq, source_target.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(source_target.seq, source_target.label_raw, is_edited=True)
     )
     target_journal = _fresh_journal(leg_templates["decomposed"], count=0)
     with pytest.raises(LaneMergePolicyError, match="without 'op_events'"):
@@ -647,9 +633,7 @@ def test_concat_refuses_an_unrebindable_amendment_target(
     source = _fresh_journal(leg_templates["decomposed"], count=3)
     source_target = source.op_events[2]
     source.append_amendment(
-        amend_raw_hook_intervention(
-            source_target.seq, source_target.label_raw, intervention_replaced=True
-        )
+        amend_raw_hook_intervention(source_target.seq, source_target.label_raw, is_edited=True)
     )
     # Forge a target_seq the merge map cannot possibly contain.
     source.op_amendments[0] = dataclasses.replace(source.op_amendments[0], target_seq=10_000)

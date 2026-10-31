@@ -247,7 +247,7 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     rebuilt = trace.reconstruct_output()
 
@@ -267,7 +267,7 @@ def test_container_repr_summary_uses_output_cross_references() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     output_container = trace.ops[trace.output_layers[0]].container
 
@@ -286,7 +286,7 @@ def test_trace_to_pandas_adds_output_role_column() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     frame = trace.to_pandas()
     roles = dict(zip(frame["layer_label"], frame["output_role"], strict=True))
@@ -307,7 +307,7 @@ def test_capture_container_structure_reconstructs_without_intervention_ready() -
     )
     rebuilt = trace.reconstruct_output()
 
-    assert trace.intervention_ready is False
+    assert trace.is_replayable is False
     assert isinstance(rebuilt, DemoModelOutput)
     assert torch.equal(rebuilt["logits"], torch.tensor([2.0]))
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
@@ -387,7 +387,7 @@ def test_custom_registered_container_reconstructs() -> None:
     trace = tl.trace(
         PairBoxModel(),
         torch.tensor([2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     rebuilt = trace.reconstruct_output()
 
@@ -402,7 +402,7 @@ def test_output_at_selects_nested_container_path() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     site = trace.resolve_sites(output_at(("past_key_values", 0, 1))).first()
 
@@ -416,7 +416,7 @@ def test_post_load_reconstruct_output_round_trips(tmp_path: Path) -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     path = tmp_path / "container.tlspec"
     trace.save(path)
@@ -435,7 +435,7 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
     trace = tl.trace(
         TupleModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     # The final-output snapshot is registered on every capture; a PATH-ONLY view is
     # what a final-output op exposes when no registry record backs it (a legacy

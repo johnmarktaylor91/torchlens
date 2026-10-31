@@ -102,7 +102,7 @@ OP_LABELS = {
     "tl_trace": "TL Trace, every-op capture",
     "tl_trace_profile": "TL Trace, phase profile",
     "trace_no_save": "TL Trace, metadata only (no saved outs)",
-    "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
+    "tl_trace_intervention_ready": "TL Trace, replayable=True",
     "tl_rerun": "Trace.run(model, x)",
     "rerun_metadata_only": "Trace.run(model, x), metadata-only save scope",
     "rerun_no_save": "Trace.run(model, x), metadata-only save scope (legacy alias)",

@@ -328,7 +328,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     :func:`capture_honesty_facts` must therefore carry the intervention evidence,
     or an agent reading a zero-ablated dump has no way to know the numbers are
     not the model's. Evidence is read from the persisted record, never inferred:
-    per-op ``intervention_replaced`` flags and ``FireRecord`` lists, plus the
+    per-op ``is_edited`` flags and ``FireRecord`` lists, plus the
     ``intervention_audit`` rows (fork-side ``do()`` / ``PARAM`` / ``EVENT`` kinds).
 
     Parameters
@@ -349,7 +349,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     for layer in getattr(log, "layer_list", None) or ():
         records = getattr(layer, "interventions", None) or ()
         fires += len(records)
-        if bool(getattr(layer, "intervention_replaced", False)):
+        if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)
             if isinstance(label, str):
                 replaced.append(label)

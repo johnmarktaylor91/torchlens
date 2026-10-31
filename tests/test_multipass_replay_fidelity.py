@@ -117,7 +117,7 @@ def _capture_looped(n_passes: int) -> tuple[LoopedCell, torch.Tensor, tl.Trace]:
     torch.manual_seed(0)
     model = LoopedCell(n_passes).eval()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     assert "linear_1_1" in log.layer_labels, (
         f"precondition: expected shared-cell layer label 'linear_1_1'; got {log.layer_labels}"
     )
@@ -293,7 +293,7 @@ def test_single_pass_bare_label_do_keeps_working() -> None:
     torch.manual_seed(0)
     model = SinglePassMLP().eval()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     assert log["relu_1_2"].num_passes == 1
     with torch.no_grad():
         hand_out = model.fc2(torch.zeros(2, 4))
@@ -479,7 +479,7 @@ def test_rnncell_loop_middle_pass_edit_per_pass_fidelity() -> None:
     torch.manual_seed(1)
     model = LoopedRNNCell(3).eval()
     x = torch.randn(2, 3, 3)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     cell_label = "rnntanhcell_1_3"
     assert cell_label in log.layer_labels, (
         f"precondition: expected RNN cell layer '{cell_label}'; got {log.layer_labels}"

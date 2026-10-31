@@ -1,7 +1,7 @@
 """Witness-gating regression suite.
 
 The host-nondeterminism channel monitor (``host_nondeterminism_monitor``) is armed
-ONLY for runnable-capable captures (``intervention_ready=True``) -- the exact
+ONLY for runnable-capable captures (``replayable=True``) -- the exact
 predicate for "this capture can produce a passing sparse runnable descriptor",
 which is the witness verdict's only consumer. A disarmed capture must stamp the
 fail-closed ``monitor_not_armed`` uncertainty so any unforeseen descriptor build
@@ -37,7 +37,7 @@ class _ProfileProbeModel(nn.Module):
 
 
 _RUNNABLE_CAP = {
-    "intervention_ready": True,
+    "replayable": True,
     "capture_container_structure": True,
     "cache": False,
     "seed": 7,
@@ -69,7 +69,7 @@ def test_intervention_ready_trace_arms_monitor_unchanged():
 
 def test_plain_trace_cannot_pass_runnable_preflight():
     # The gate predicate invariant: descriptor.preflight.passed implies
-    # trace.intervention_ready, so "was-witnessed" and "can-claim" never diverge.
+    # trace.is_replayable, so "was-witnessed" and "can-claim" never diverge.
     from torchlens._io.runnable import build_sparse_run_descriptor
 
     model = _ProfileProbeModel()

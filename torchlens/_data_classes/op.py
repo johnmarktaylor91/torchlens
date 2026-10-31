@@ -195,7 +195,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "func_id": None,
     "container_path": (),
     "multi_output_name": None,
-    "intervention_replaced": False,
+    "is_edited": False,
     "interventions": [],
     "container_spec": None,
     "args_template": None,
@@ -538,7 +538,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "has_output_descendant",
         "input_to_module_calls",
         "internal_source_parents",
-        "intervention_replaced",
+        "is_edited",
         "interventions",
         "io_role",
         "is_atomic_module",
@@ -1457,7 +1457,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         output_device: Any
         activation_transform: Any
         interventions: Any
-        intervention_replaced: Any
+        is_edited: Any
         detach_saved_activations: Any
         has_saved_args: Any
         saved_args: Any
@@ -1623,7 +1623,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "interventions": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
         "saved_args": FieldPolicy.BLOB_RECURSIVE,
@@ -1811,19 +1811,19 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_pending_transformed_grad_blob_id": FieldPolicy.DROP,
         # Lazily-populated facet-view cache slot: popped by __getstate__,
         # FORK_RECONSTRUCT on fork, disposable. Declared so the Op slot
-        # universe carries no shadow storage outside FIELD_POLICY.
+        # universe carries no shadow storage outside _FIELD_POLICY.
         "_facets_cache": FieldPolicy.DROP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
         fork_policy=LAYER_PASS_LOG_FIELD_FORK_POLICY,
         default_fill_state=_LAYER_PASS_LOG_DEFAULT_FILL,
         schema_key="op",
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
-    FIELD_FORK_POLICY = fork_policy_from_policy(FIELD_POLICY)
-    DEFAULT_FILL_STATE = default_fill_state_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
+    _FIELD_FORK_POLICY = fork_policy_from_policy(_FIELD_POLICY)
+    _DEFAULT_FILL_STATE = default_fill_state_from_policy(_FIELD_POLICY)
 
     def _slot(self, name: str, default: Any = None) -> Any:
         """Return one physical slot value, or ``default`` when it is unset."""
@@ -3419,13 +3419,13 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         resolver_status_was_present = "resolver_status" in state
         default_fill_state(
             state,
-            defaults=self.DEFAULT_FILL_STATE,
+            defaults=self._DEFAULT_FILL_STATE,
         )
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes
         # the same gap `Trace.__setstate__` already closes for its own fields.
-        coerce_container_typed_state(state, self.DEFAULT_FILL_STATE)
+        coerce_container_typed_state(state, self._DEFAULT_FILL_STATE)
         _clear_property_backed_state_fields(state)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = _dtype_ref_or_none(state.get("dtype"))
@@ -4730,4 +4730,4 @@ TensorLog = Op
 
 # The tlspec v8 coordinated bump retired this class's S3 pre-release
 # registrations (site_key, edge_substitutions, edge_replacement_stamps);
-# their persisting policies are declared directly in FIELD_POLICY above.
+# their persisting policies are declared directly in _FIELD_POLICY above.

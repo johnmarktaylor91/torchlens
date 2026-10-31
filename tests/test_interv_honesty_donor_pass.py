@@ -51,7 +51,7 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     torch.manual_seed(0)
     model = _TwoPass().eval()
     xa, xb = torch.randn(2, 4), torch.randn(2, 4)
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, xa, capture=capture)
     base = tl.trace(model, xb, capture=capture)
     return donor, base
@@ -131,7 +131,7 @@ def test_recurrent_model_donor_pin_shared_transformer_encoder() -> None:
     torch.manual_seed(0)
     model = _SharedEncoder().eval()
     xa, xb = torch.randn(5, 2, 16), torch.randn(5, 2, 16)
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, xa, capture=capture)
     base = tl.trace(model, xb, capture=capture)
 
@@ -174,7 +174,7 @@ def test_recurrent_model_donor_pin_albert_family() -> None:
     torch.manual_seed(1)
     other_ids = torch.randint_like(input_ids, low=5, high=int(input_ids.max()) + 1)
 
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, input_ids, capture=capture)
     base = tl.trace(model, other_ids, capture=capture)
 

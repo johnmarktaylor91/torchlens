@@ -34,9 +34,7 @@ from torchlens._utils.rng import (
 )
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(
-    intervention_ready=True, capture_container_structure=True, cache=False, seed=1
-)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False, seed=1)
 
 
 class _SystemRandomHolder(nn.Module):

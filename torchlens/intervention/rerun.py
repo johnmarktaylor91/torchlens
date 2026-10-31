@@ -139,7 +139,7 @@ def run(
         )
     _refuse_shifted_raw_index_resave(trace, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(trace, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(trace, "facet_functions", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
@@ -400,7 +400,7 @@ def _append_rerun(
             intervene_predicate=spec_plan.intervene_predicate,
         )
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(log, "facet_functions", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
@@ -564,23 +564,23 @@ def _validate_append_hook_plan(
         if helper is None:
             _warn_unknown_append_helper_once(log, helper_name)
             raise AppendBatchDependenceError(
-                f"helper {helper_name!r} does not declare batch_independent=True"
+                f"helper {helper_name!r} does not declare is_batch_independent=True"
             )
-        if not hasattr(helper, "batch_independent"):
+        if not hasattr(helper, "is_batch_independent"):
             _warn_unknown_append_helper_once(log, helper_name)
             raise AppendBatchDependenceError(
-                f"helper {helper_name!r} does not declare batch_independent=True"
+                f"helper {helper_name!r} does not declare is_batch_independent=True"
             )
-        if not bool(getattr(helper, "batch_independent", False)):
+        if not bool(getattr(helper, "is_batch_independent", False)):
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} is not batch-independent; append is unsafe"
             )
         force_shape_change = bool(entry.metadata.get("allow_shape_change", False)) or bool(
             dict(helper.kwargs).get("allow_shape_change", False)
         )
-        if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
+        if force_shape_change and not bool(getattr(helper, "is_compatible_with_append", False)):
             raise AppendMismatchError(
-                f"helper {helper_name!r} may change out shape and its compatible_with_append is False"
+                f"helper {helper_name!r} may change out shape and its is_compatible_with_append is False"
             )
 
 
@@ -599,7 +599,7 @@ def _warn_unknown_append_helper_once(log: Trace, helper_name: str) -> None:
     if helper_name in warned:
         return
     warnings.warn(
-        f"helper {helper_name!r} has no batch_independent flag; add it to enable append",
+        f"helper {helper_name!r} has no is_batch_independent flag; add it to enable append",
         UserWarning,
         stacklevel=3,
     )
@@ -996,7 +996,7 @@ def _capture_with_active_spec(
             # RNG monitor (most of a rerun's cost) and minted replay templates the
             # source never had. The rerun divergence detector
             # (``_raw_event_shape_hash``) is computed for every capture regardless.
-            intervention_ready=bool(getattr(log, "intervention_ready", False)),
+            replayable=bool(getattr(log, "is_replayable", False)),
             intervention_spec=intervention_spec,
             normalized_hook_plan=hook_plan,
             verbose=getattr(log, "verbose", False),

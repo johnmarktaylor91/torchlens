@@ -173,7 +173,7 @@ def set_affine_coordinates(weight: torch.Tensor, *, bias: torch.Tensor | None = 
         args=(weight,),
         kwargs={"bias": bias},
         factory=factory,
-        batch_independent=True,
+        is_batch_independent=True,
     )
 
 

@@ -159,7 +159,7 @@ def test_runnable_save_refuses_typed(chain, tmp_path) -> None:
     assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
     # an unlogged capture keeps its historical runnable behavior
     model, x = chain
-    plain = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    plain = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     plain.save(str(tmp_path / "plain_run.tlspec"), level="runnable")
 
 

@@ -703,7 +703,7 @@
       "input_to_modules": [
         "encoders.0:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -738,7 +738,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "encoders.0.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -778,7 +778,7 @@
       "input_to_modules": [
         "encoders.1:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -812,7 +812,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "encoders.1.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -852,7 +852,7 @@
       "input_to_modules": [
         "encoders.2:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -886,7 +886,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "encoders.2.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -924,7 +924,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -956,7 +956,7 @@
       "input_to_modules": [
         "decoders.0:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -990,7 +990,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "decoders.0.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1028,7 +1028,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1060,7 +1060,7 @@
       "input_to_modules": [
         "decoders.1:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1094,7 +1094,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "decoders.1.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1132,7 +1132,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1164,7 +1164,7 @@
       "input_to_modules": [
         "decoders.2:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1198,7 +1198,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "decoders.2.conv2d",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -1236,7 +1236,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,

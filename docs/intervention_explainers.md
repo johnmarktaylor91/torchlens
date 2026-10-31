@@ -39,7 +39,7 @@ live = tl.trace(model, x, save=head, intervene=spec)
 live_out = live.find_sites(head).first().out
 
 # do() with no model: edit a saved value and push it down the recorded graph.
-saved = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+saved = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 pushed = saved.fork("pushed")
 pushed.do(site, tl.zero_ablate())
 pushed_out = pushed.find_sites(head).first().out
@@ -94,7 +94,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 4)
-clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
@@ -162,7 +162,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 base = tl.trace(model, torch.randn(3, 4), capture=options)
 source = tl.trace(model, torch.randn(3, 4), capture=options)
 site = "linear_1_1"
@@ -236,7 +236,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
@@ -283,7 +283,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 x = torch.randn(3, 4, dtype=torch.float64)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]  # R, [d, k]
@@ -325,7 +325,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 tokens = torch.randn(1, 5, 4, dtype=torch.float64)  # [batch, positions, features]
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]

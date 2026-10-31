@@ -111,7 +111,7 @@ def test_do_accepts_find_sites_output():
     torch.manual_seed(0)
     model = ReusedReluNet()
     x = torch.rand(1, 2, 3, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = trace.fork()
     sites = trace.find_sites("conv2d_1_1")
     fork.do(sites, tl.zero_ablate())

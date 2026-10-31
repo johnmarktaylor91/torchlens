@@ -2207,7 +2207,7 @@ class MLXBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=bool(fire_results),
-            intervention_replaced=any(result.replaced for result in fire_results),
+            is_edited=any(result.replaced for result in fire_results),
             fire_results=fire_results,
             intervention_template_ref=None,
             record_context=self.build_record_context(

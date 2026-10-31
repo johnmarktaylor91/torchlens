@@ -349,7 +349,7 @@ def _event_identity(event: OpEvent) -> dict[str, Any]:
         "is_scalar_bool": event.is_scalar_bool,
         "bool_value": event.bool_value,
         "intervention_fired": event.intervention_fired,
-        "intervention_replaced": event.intervention_replaced,
+        "is_edited": event.is_edited,
     }
 
 

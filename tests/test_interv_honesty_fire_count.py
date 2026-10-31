@@ -26,7 +26,7 @@ class _ConvRelu(nn.Module):
 
 def _log(**capture_kwargs) -> tl.Trace:
     torch.manual_seed(0)
-    capture = tl.options.CaptureOptions(intervention_ready=True, **capture_kwargs)
+    capture = tl.options.CaptureOptions(replayable=True, **capture_kwargs)
     return tl.trace(_ConvRelu().eval(), torch.randn(2, 1, 4, 4), capture=capture)
 
 
@@ -69,7 +69,7 @@ def test_live_capture_records_survive_a_replay_push() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 1, 4, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
         intervene=tl.when(tl.func("relu"), tl.scale(2.0)),
     )
     live_before = [r for r in log["relu_1_2"].interventions if r.engine == "live"]

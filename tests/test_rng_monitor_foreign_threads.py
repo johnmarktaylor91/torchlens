@@ -124,7 +124,7 @@ def test_gate_pollution_pattern_capture_replays_verified(tmp_path: Path) -> None
         trace = tl.trace(
             _LinearNoBias().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
         seam = trace._runnable
         assert not seam.host_rng_unreplayable

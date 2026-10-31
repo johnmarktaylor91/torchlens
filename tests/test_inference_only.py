@@ -82,7 +82,7 @@ def test_default_capture_retains_saved_output_grad_fn() -> None:
     [
         ({"backward_ready": True}, "backward_ready"),
         ({"save_grads": True}, "save_grads"),
-        ({"intervention_ready": True}, "intervention_ready"),
+        ({"replayable": True}, "replayable"),
     ],
 )
 def test_inference_only_rejects_backward_related_capture_flags(

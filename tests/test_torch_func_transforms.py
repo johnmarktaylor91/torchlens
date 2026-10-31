@@ -748,7 +748,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         log = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
@@ -759,7 +759,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         fresh = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     fresh._intervention_spec = spec
     with pytest.warns(UserWarning, match="captured a vmap transform"):
@@ -1008,7 +1008,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
         capture=CaptureOptions(layers_to_save="all"),
         intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
     )
-    assert intervened.transforms[0].intervention_replaced is True
+    assert intervened.transforms[0].is_edited is True
 
 
 class _OneOperandVmapModel(nn.Module):

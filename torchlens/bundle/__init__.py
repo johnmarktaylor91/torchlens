@@ -1788,7 +1788,7 @@ class Bundle:
                 parts.append("baseline")
             if getattr(member, "is_pristine", None) is True:
                 parts.append("pristine")
-            parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
+            parts.append(f"replayable={getattr(member, 'is_replayable', False)}")
             parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
             if getattr(member, "_spec_revision", 0) != 0:
                 parts.append(f"spec_revision={getattr(member, '_spec_revision', 0)}")

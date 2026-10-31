@@ -28,7 +28,7 @@ from torchlens.options import CaptureOptions
 from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

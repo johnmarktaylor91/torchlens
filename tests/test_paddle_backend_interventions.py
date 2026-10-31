@@ -106,7 +106,7 @@ def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
 
     relu = _relu_op(ablated)
     assert float(relu.out.abs().max()) == 0.0
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
     fire_records = list(relu.interventions)
     assert fire_records and fire_records[0].replaced is True
     assert fire_records[0].helper_name == "zero_ablate"
@@ -239,7 +239,7 @@ def test_paddle_tamper_stripped_evidence_fails_validation() -> None:
     index = next(i for i, capture in enumerate(captures) if capture.intervention is not None)
     captures[index] = dataclasses.replace(captures[index], intervention=None)
     relu = _relu_op(trace)
-    relu.intervention_replaced = False
+    relu.is_edited = False
     relu.interventions = []
     assert PaddleBackend().validate_trace(trace) is False
 
@@ -257,7 +257,7 @@ def test_paddle_tamper_stripped_op_fire_records_fails_validation() -> None:
 
     trace = _ablated_trace()
     relu = _relu_op(trace)
-    relu.intervention_replaced = False
+    relu.is_edited = False
     relu.interventions = []
     assert PaddleBackend().validate_trace(trace) is False
 
@@ -370,7 +370,7 @@ def test_paddle_recipes_snapshot_dispatches() -> None:
         return {"is_relu": "relu" in str(getattr(record, "label", ""))}
 
     trace = tl.trace(_mlp, _inputs(), backend="paddle", facets=[recipe])
-    snapshot = trace.facet_registry_snapshot
+    snapshot = trace.facet_functions
     assert snapshot is not None
     assert any("recipe" in entry.public.name for entry in snapshot.functions)
 
@@ -410,6 +410,6 @@ def test_paddle_intervened_trace_round_trips_metadata(tmp_path: Any) -> None:
     trace.save(path)
     loaded = tl.load(path)
     relu = _relu_op(loaded)
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
     assert any(record.replaced for record in relu.interventions)
     assert float(relu.out.abs().max()) == 0.0

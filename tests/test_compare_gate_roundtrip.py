@@ -22,7 +22,7 @@ from torchlens.bundle._compare_gate import _MODEL_AXIS_RANK
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
-_OPTS = tl.options.CaptureOptions(intervention_ready=True)
+_OPTS = tl.options.CaptureOptions(replayable=True)
 
 
 class _TwoLayer(nn.Module):

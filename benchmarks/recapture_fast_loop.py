@@ -132,7 +132,7 @@ def _benchmark_model(
         inputs,
         save=selector,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

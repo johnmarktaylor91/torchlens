@@ -370,7 +370,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # permanently-unverifiable artifact whose cause is unfindable from the report.
     # Zero-fire selectors leave every op unreplaced and stay runnable.
     intervention_replaced_labels = tuple(
-        str(op.label) for op in ops if bool(getattr(op, "intervention_replaced", False))
+        str(op.label) for op in ops if bool(getattr(op, "is_edited", False))
     )
     if intervention_replaced_labels:
         diagnostics.append(
@@ -410,7 +410,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                 _diagnostic(
                     RunnableErrorCode.MISSING_CALLABLE_REF,
                     "Computational call has no cooked FunctionRegistryKey; capture with "
-                    "intervention_ready=True before saving level='runnable'.",
+                    "replayable=True before saving level='runnable'.",
                     affected_ops=tuple(str(op.label) for op in call_ops),
                     detection_stage="producer_callable",
                 )
@@ -2794,7 +2794,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     """
 
     for op in getattr(trace, "layer_list", ()) or ():
-        if not getattr(op, "intervention_replaced", False):
+        if not getattr(op, "is_edited", False):
             continue
         for record in getattr(op, "interventions", ()) or ():
             direction = getattr(record, "direction", None)

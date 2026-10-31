@@ -41,7 +41,7 @@ def two():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     try:
         yield model, x, trace

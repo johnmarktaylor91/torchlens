@@ -2,7 +2,7 @@
 
 grind-p3-fixplan T3 (fix-patching lane, tripwire-adjacent): when a raw
 ``register_forward_hook`` returned a traced tensor other than the module's own
-output, capture stamped the PRODUCING op ``intervention_replaced=True`` (a
+output, capture stamped the PRODUCING op ``is_edited=True`` (a
 correct intervened-capture disclosure -- the runnable-save refusal keys on it)
 AND minted a trace-level replacement-event ledger entry for that op's label.
 The ledger entry is exactly what corroborates the FUNCTIONLESS
@@ -69,7 +69,7 @@ def test_traced_return_keeps_disclosure_stamp_and_validates() -> None:
 
     # The capture IS intervened: the durable per-op disclosure must survive
     # (the runnable-save user_intervention_not_replayable refusal keys on it).
-    assert producing.intervention_replaced is True
+    assert producing.is_edited is True
     # The op still carries its real replayable function and full metadata.
     assert callable(producing.func)
     check_metadata_invariants(trace)
@@ -86,7 +86,7 @@ def test_traced_return_does_not_bless_functionless_op() -> None:
 
     trace = _traced_return_capture()
     producing = next(op for op in trace.layer_list if op.func_name == "linear")
-    assert producing.intervention_replaced is True
+    assert producing.is_edited is True
 
     producing.func = None
     producing.func_name = "intervention_replacement"

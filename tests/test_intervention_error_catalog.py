@@ -205,7 +205,7 @@ def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None
     return tl.trace(
         _ReluAdd() if model is None else model,
         torch.tensor([[-1.0, 2.0, 3.0]]) if x is None else x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -521,7 +521,7 @@ def test_intervention_ready_composes_with_deferred_selective_grads() -> None:
         _ReluAdd(),
         torch.randn(1, 3, requires_grad=True),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             save_grads=["relu"],
         ),
     )
@@ -537,7 +537,7 @@ def test_splice_module_device_error_raised_for_device_mismatch() -> None:
             _ReluAdd(),
             torch.randn(1, 3),
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): tl.splice_module(_MetaReturn())},
             ),
         )

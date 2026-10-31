@@ -116,12 +116,12 @@ class UnifiedPlainAttributeBufferModel(nn.Module):
         return x * self.scale
 
 
-def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
+def _captured_log(*, replayable: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
     Parameters
     ----------
-    intervention_ready:
+    replayable:
         Whether to include intervention replay metadata.
 
     Returns
@@ -135,7 +135,7 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=intervention_ready,
+            replayable=replayable,
             layers_to_save="all",
             seed=0,
         ),
@@ -602,7 +602,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -640,10 +640,10 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
 
     assert isinstance(loaded, tl.Trace)
     refs = [
-        call.intervention_fire_ref
+        call.fire_record
         for grad_fn in loaded.grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.intervention_fire_ref is not None
+        if call.fire_record is not None
     ]
     assert refs
     assert isinstance(refs[0], FireRecord)
@@ -722,7 +722,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
 def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Intervention saves now emit the full unified manifest field set."""
 
-    log = _captured_log(intervention_ready=True)
+    log = _captured_log(replayable=True)
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / f"intervention_{level}.tlspec"
 
@@ -1147,7 +1147,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
 
     trace.save(path)
     loaded = tl.load(path)
-    replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
+    replaced_ops = [op for op in loaded.layer_list if op.is_edited]
 
     assert replaced_ops
     assert any(

@@ -724,7 +724,7 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         raise SelectionError(
             f"buffer {node.name!r} has no recorded initial version with a saved value, so "
             "its consumers' operand cannot be substituted. Remedy: re-capture with "
-            "intervention_ready=True so buffer versions keep their values.",
+            "replayable=True so buffer versions keep their values.",
             code="param_substitution_occurrence_underivable",
             param_address=node.name,
         )

@@ -108,7 +108,7 @@ def _replacement_layers(log: tl.Trace) -> list[tl.Op]:
         Replacement-marked layer passes.
     """
 
-    return [layer for layer in log.layer_list if getattr(layer, "intervention_replaced", False)]
+    return [layer for layer in log.layer_list if getattr(layer, "is_edited", False)]
 
 
 def test_intervention_api_replaces_op_output_preserves_graph() -> None:
@@ -118,15 +118,13 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
     log = tl.trace(
         model,
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu"): _zero_hook}
-        ),
+        capture=tl.options.CaptureOptions(replayable=True, hooks={tl.func("relu"): _zero_hook}),
     )
 
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
     fc1_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_1"))
 
-    assert relu_layer.intervention_replaced is True
+    assert relu_layer.is_edited is True
     assert relu_layer.parents == (fc1_layer.layer_label,)
     assert len(relu_layer.interventions) == 1
     assert torch.count_nonzero(relu_layer.out) == 0
@@ -139,14 +137,14 @@ def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
         _DiscardedInplaceReturnModel(),
         torch.tensor([-2.0, 3.0]),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu_"): tl.zero_ablate()}
+            replayable=True, hooks={tl.func("relu_"): tl.zero_ablate()}
         ),
     )
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu_")
 
     assert torch.equal(log[log.output_layers[0]].out, torch.ones(2))
     assert torch.equal(relu_layer.out, torch.zeros(2))
-    assert relu_layer.intervention_replaced is True
+    assert relu_layer.is_edited is True
     assert relu_layer.interventions[-1].replaced is True
 
 
@@ -174,7 +172,7 @@ def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
     mul_layer = next(layer for layer in log.layer_list if layer.func_name == "__mul__")
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
 
-    assert mul_layer.intervention_replaced is True
+    assert mul_layer.is_edited is True
     assert mul_layer.parents == (relu_layer.layer_label,)
     assert log.layer_dict_main_keys[mul_layer.label] is mul_layer
 
@@ -187,7 +185,7 @@ def test_chain_of_interventions_preserves_graph() -> None:
         model,
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={
                 tl.func("relu"): _zero_hook,
                 tl.func("sigmoid"): _zero_hook,
@@ -199,8 +197,8 @@ def test_chain_of_interventions_preserves_graph() -> None:
     sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
     fc2_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_2"))
 
-    assert relu_layer.intervention_replaced is True
-    assert sigmoid_layer.intervention_replaced is True
+    assert relu_layer.is_edited is True
+    assert sigmoid_layer.is_edited is True
     assert sigmoid_layer.parents == (fc2_layer.layer_label,)
     assert len(_replacement_layers(log)) >= 2
 
@@ -212,13 +210,13 @@ def test_quantization_sensitivity_pattern() -> None:
         _HookedMlp(),
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("sigmoid"): _quantize_dequantize_hook}
+            replayable=True, hooks={tl.func("sigmoid"): _quantize_dequantize_hook}
         ),
     )
 
     sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
 
-    assert sigmoid_layer.intervention_replaced is True
+    assert sigmoid_layer.is_edited is True
     assert sigmoid_layer.parents
     assert sigmoid_layer.out is not None
 
@@ -251,14 +249,12 @@ def test_fresh_tensor_replacement_at_nested_boundary_and_model_output() -> None:
     nested_handle = model.block.register_forward_hook(nested_hook)
     root_handle = model.register_forward_hook(root_hook)
     try:
-        log = tl.trace(
-            model, torch.randn(3, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        log = tl.trace(model, torch.randn(3, 4), capture=tl.options.CaptureOptions(replayable=True))
     finally:
         nested_handle.remove()
         root_handle.remove()
 
     assert log.output_layers
     assert log[log.output_layers[0]].out is not None
-    assert any(getattr(layer, "intervention_replaced", False) for layer in log.layer_list)
+    assert any(getattr(layer, "is_edited", False) for layer in log.layer_list)
     assert all(getattr(layer, "layer_label", None) for layer in log.layer_list)

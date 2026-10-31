@@ -327,7 +327,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     """Return whether trace-level evidence corroborates a replacement stamp.
 
     Every ``intervention_replacement`` exemption used to trust per-op
-    attributes (``func_name``/``intervention_replaced``/``is_internal_source``)
+    attributes (``func_name``/``is_edited``/``is_internal_source``)
     that the placeholder synthesizer ITSELF writes, so a placeholder minted or
     forged during PLAIN capture passed validation -- defeating the 2026-06-02
     lesson that a placeholder op appearing during plain capture must STILL
@@ -493,7 +493,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # (the user substituted an opaque tensor for a module's output, so there is
     # no torch function -- hence no ``func_call_id`` -- to validate). Mirror the
     # deliberately NARROW predicate the ``op_log_fields`` invariant already uses
-    # (func_name + intervention_replaced + NOT internal_source), AND require the
+    # (func_name + is_edited + NOT internal_source), AND require the
     # trace-level replacement-event ledger to corroborate it
     # (``op_has_genuine_replacement_evidence``): the per-op attributes alone are
     # written by the placeholder synthesizer itself, so trusting them let a
@@ -502,7 +502,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # CLAUDE.md "Validation Integrity").
     if (
         getattr(layer, "func_name", "") == "intervention_replacement"
-        and getattr(layer, "intervention_replaced", False)
+        and getattr(layer, "is_edited", False)
         and not getattr(layer, "is_internal_source", False)
         and op_has_genuine_replacement_evidence(layer)
     ):

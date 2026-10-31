@@ -27,7 +27,7 @@ from torchlens.options import CaptureOptions
 def runnable_bundle(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     path = tmp_path / "runnable"
     trace.save(path, level="runnable")
     return path, model, x
@@ -51,7 +51,7 @@ def test_random_state_run_warns(runnable_bundle):
 def test_embedded_weights_run_does_not_warn(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     path = tmp_path / "runnable_weights"
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)

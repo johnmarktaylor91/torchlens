@@ -113,7 +113,7 @@ def test_logged_splice_keeps_a_latent_edit(setup) -> None:
 
 def test_logged_splice_refuses_a_trace_door_with_a_running_remedy(setup) -> None:
     model, x, sae = setup
-    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     with pytest.raises(InvalidArgumentError) as caught:
         tl.bridge.sae.splice(clean, site="fc1", sae=sae, log_latents=True)
     assert caught.value.fields["code"] == "sae_splice_logged_needs_live_model"
@@ -155,7 +155,7 @@ def test_transcoder_splices_keep_working_beside_a_logged_splice() -> None:
             model,
             x,
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="in")},
             ),
         )

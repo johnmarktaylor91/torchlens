@@ -57,7 +57,7 @@ for _path in (REPO_ROOT, REPO_ROOT / "tests"):
 import torchlens as tl  # noqa: E402
 import torchlens.mechinterp as mi  # noqa: E402
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {

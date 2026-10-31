@@ -70,7 +70,7 @@ def _capture_log() -> Trace:
     return tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -80,7 +80,7 @@ def test_field_lifecycle_matrix_modellog() -> None:
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
     assert ordered_fields <= set(Trace._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(MODEL_LOG_FIELD_FORK_POLICY)
-    assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Trace._DEFAULT_FILL_STATE)
 
 
 def test_field_lifecycle_matrix_op_log() -> None:
@@ -89,7 +89,7 @@ def test_field_lifecycle_matrix_op_log() -> None:
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
     assert ordered_fields <= set(Op._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert ordered_fields <= set(Op.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Op._DEFAULT_FILL_STATE)
 
 
 def test_construction_done_lifecycle() -> None:
@@ -133,9 +133,7 @@ def test_run_state_transitions() -> None:
     live = tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu"): _zero_hook}
-        ),
+        capture=tl.options.CaptureOptions(replayable=True, hooks={tl.func("relu"): _zero_hook}),
     )
     assert live.state is TraceState.LIVE_CAPTURED
 

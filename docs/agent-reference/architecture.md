@@ -214,7 +214,7 @@ Key entry points:
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
 - Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
-  dataflow edge family (EdgeUseRecords; requires an `intervention_ready`
+  dataflow edge family (EdgeUseRecords; requires an `replayable`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
@@ -354,7 +354,7 @@ torch_trace = tl.trace(
     model,
     x,
     backend="torch",
-    capture=tl.options.CaptureOptions(intervention_ready=True),
+    capture=tl.options.CaptureOptions(replayable=True),
 )
 tf_trace = tl.trace(tf_model, tf_x, backend="tf")
 relu_trace = tl.trace(model, x, save=tl.func("relu"))

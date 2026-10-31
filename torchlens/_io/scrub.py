@@ -298,7 +298,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
         op
         for op in (state.get("layer_list") or ())
         if getattr(op, "func_name", None) == "intervention_replacement"
-        or getattr(op, "intervention_replaced", False)
+        or getattr(op, "is_edited", False)
     ]
     if not scrubbed_ops:
         return

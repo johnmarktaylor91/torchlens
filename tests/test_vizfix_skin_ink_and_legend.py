@@ -233,7 +233,7 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
     trace = tl.trace(
         _NestedRes(),
         torch.randn(1, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     plain = trace.draw(
         vis_save_only=True,
@@ -342,7 +342,7 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
     trace = tl.trace(
         _NestedRes(),
         torch.randn(1, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = trace.fork("edited")
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())

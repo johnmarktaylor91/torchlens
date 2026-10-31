@@ -63,7 +63,7 @@ def _trace(coords: torch.Tensor = _COORDS) -> tl.Trace:
     return tl.trace(
         _Mlp().eval(),
         coords @ _H,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -163,7 +163,7 @@ def test_patch_from_is_the_das_interchange(rank: str) -> None:
         model.lin2.weight.copy_(torch.randn(3, 4, dtype=torch.float64))
     base = torch.randn(5, 4, dtype=torch.float64)
     source = torch.randn(5, 4, dtype=torch.float64)
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     target_log = tl.trace(model, base, capture=options)
     source_log = tl.trace(model, source, capture=options)
     fork = target_log.fork()
@@ -325,7 +325,7 @@ def test_gradient_reaches_upstream_through_the_component_edit(rank: str, verb: s
     basis = _BASES[rank]
     x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(7))
     source_x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(8))
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     model = _random_mlp()
     source = tl.trace(_random_mlp(), source_x, capture=options)
     edit = tl.scale(2.0) if verb == "scale" else tl.patch_from(source)

@@ -204,9 +204,7 @@ def test_backward_record_span_direction_enforced() -> None:
         tl.observers.span("fwd_only", direction="forward"),
         tl.observers.span("bwd_ok", direction="backward"),
     ):
-        trace = tl.trace(
-            model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap)
-        )
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=tap))
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     assert tap.records
@@ -228,7 +226,7 @@ def test_forward_record_span_direction_enforced() -> None:
         tl.observers.span("bwd_only", direction="backward"),
         tl.observers.span("fwd_ok", direction="forward"),
     ):
-        tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap))
+        tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=tap))
 
     assert tap.records
     record = tap.records[0]
@@ -250,7 +248,7 @@ def test_forward_tap_site_label_is_public_not_raw() -> None:
     x = torch.randn(2, 3)
     tap = tl.observers.tap(tl.func("relu"))
 
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=tap))
 
     assert tap.records
     site_label = tap.records[0].site_label

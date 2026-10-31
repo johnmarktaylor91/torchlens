@@ -1818,7 +1818,7 @@ def _fold_fired_events(
             label=grad_fn_record.label,
             grad_inputs=event.grad_input_refs,
             grad_outputs=event.grad_output_refs,
-            intervention_fire_ref=event.intervention_fire_ref,
+            fire_record=event.fire_record,
             timestamp=event.timestamp,
             _time_started=event.fire_started_monotonic,
             _time_finished=event.fire_finished_monotonic,
@@ -2169,7 +2169,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
                     pass_index=pass_index,
                     grad_input_refs=stored_grad_inputs,
                     grad_output_refs=stored_grad_outputs,
-                    intervention_fire_ref=fire_ref,
+                    fire_record=fire_ref,
                     timestamp=event_timestamp,
                     fire_started_monotonic=fire_started_monotonic,
                     fire_finished_monotonic=paired_finished_monotonic,
@@ -2240,7 +2240,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
                 pass_index=pass_index,
                 grad_input_refs=stored_grad_inputs,
                 grad_output_refs=stored_grad_outputs,
-                intervention_fire_ref=fire_ref,
+                fire_record=fire_ref,
                 timestamp=event_timestamp,
                 fire_started_monotonic=fire_started_monotonic,
                 fire_finished_monotonic=paired_finished_monotonic,
@@ -2389,7 +2389,7 @@ def _set_live_grad_fn_call_fire_ref(
     calls = getattr(grad_fn_handle, "calls", None)
     call = getattr(calls, "_dict", {}).get(call_index)
     if call is not None:
-        call.intervention_fire_ref = fire_ref
+        call.fire_record = fire_ref
 
 
 def _set_live_grad_fn_call_backward_pass_index(

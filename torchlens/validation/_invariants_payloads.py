@@ -329,7 +329,7 @@ def _check_op_log_fields(ml: Trace) -> None:
         # event) now fails this invariant, per the 2026-06-02 lesson.
         is_functionless_replacement = (
             lpl.func_name == "intervention_replacement"
-            and getattr(lpl, "intervention_replaced", False)
+            and getattr(lpl, "is_edited", False)
             and not getattr(lpl, "is_internal_source", False)
             and op_has_genuine_replacement_evidence(lpl, ml)
         )

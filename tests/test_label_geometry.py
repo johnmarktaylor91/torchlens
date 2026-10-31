@@ -209,7 +209,7 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
     trace = tl.trace(
         _ContainerLabelModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     gv_source = trace.draw(
         show_containers="labels",

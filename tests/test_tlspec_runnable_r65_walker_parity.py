@@ -101,7 +101,7 @@ class _ProbeBox:
 class _FakeTrace:
     """Minimal weak-referenceable Trace stand-in for standalone walker runs."""
 
-    intervention_ready = True
+    replayable = True
 
 
 def _w1_leaves(root: Any) -> tuple[tuple[object, tuple[Any, ...], Any], ...]:
@@ -398,7 +398,7 @@ def _capture_runnable(model: nn.Module, box: _LayoutBox, path: Path) -> Any:
         model,
         box,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -627,7 +627,7 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _EnumKeyedModel(),
         consumed,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -646,7 +646,7 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _StrKeyedModel(),
         sibling,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

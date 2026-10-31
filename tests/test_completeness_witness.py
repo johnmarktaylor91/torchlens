@@ -700,9 +700,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     assert hook_owners[0]["capture_accounted"] is True
     assert hook_owners[0]["in_replacement_hook"] is True
     assert "aten.mul.Tensor" in hook_owners[0]["aten_ops"]
-    assert any(
-        op.func_name == "intervention_replacement" and op.intervention_replaced for op in trace.ops
-    )
+    assert any(op.func_name == "intervention_replacement" and op.is_edited for op in trace.ops)
 
 
 def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
@@ -1404,7 +1402,7 @@ def test_witness_arm_install_failure_strands_no_patches(
     R07 regression: ~240 lines of process-global ``setattr``s ran BEFORE the
     ``try`` owning the yield, and that try had no except arm -- Python never
     calls ``__exit__`` when ``__enter__`` raises, so one Ctrl-C during an
-    ``intervention_ready`` capture stranded ~124 torch surfaces (the
+    ``replayable`` capture stranded ~124 torch surfaces (the
     ``torch._ops.*.__call__`` dispatch, the storage accessor surface, the
     scalar/predicate belt) permanently and monotonically: the next armed
     capture read the leaked wrapper as its "original" and re-installed over
@@ -1449,7 +1447,7 @@ def test_witness_arm_install_failure_strands_no_patches(
         tl.trace(
             Model(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True, cache=False),
+            capture=tl.options.CaptureOptions(replayable=True, cache=False),
         )
 
     leaked = {name for name, obj in _surface_snapshot().items() if obj is not baseline[name]}
@@ -1461,7 +1459,7 @@ def test_witness_arm_install_failure_strands_no_patches(
     trace = tl.trace(
         Model(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, cache=False),
+        capture=tl.options.CaptureOptions(replayable=True, cache=False),
     )
     assert trace is not None
     leaked_after = {name for name, obj in _surface_snapshot().items() if obj is not baseline[name]}

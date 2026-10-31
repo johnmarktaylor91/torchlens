@@ -663,7 +663,7 @@ def _mark_intervention_event(session: Any, label: str, fire_result: FireResult) 
             event.seq,
             label,
             intervention_fired=True,
-            intervention_replaced=fire_result.replaced,
+            is_edited=fire_result.replaced,
             fire_results=(*event.fire_results, fire_result),
         )
     )

@@ -43,7 +43,7 @@ def trace():
     log = tl.trace(
         _Net().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         yield log
@@ -117,7 +117,7 @@ def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
     other = tl.trace(
         _Net().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         label = trace.layer_list[3].label

@@ -1179,7 +1179,7 @@ def _record_module_entry_metadata(
         module_call_label=module_call_label_str,
     )
     should_capture_template = bool(
-        getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
+        getattr(trace, "is_replayable", False) or getattr(trace, "save_arg_templates", False)
     )
     forward_args_template = None
     forward_kwargs_template = None
@@ -1238,7 +1238,7 @@ def _record_module_entry_metadata(
             # An untagged tensor enters a module. A genuine raw
             # ``register_forward_hook`` output replacement is already tagged at
             # module exit by ``_make_user_forward_hook_wrapper`` (with
-            # intervention_replaced=True), so anything still untagged here is an
+            # is_edited=True), so anything still untagged here is an
             # internally generated tensor whose construction TorchLens could not
             # trace (e.g. an attention mask built inside ``torch.vmap``). Log it
             # as a clean graph source -- NOT a user intervention -- so it
@@ -1533,7 +1533,7 @@ def _ensure_module_output_tensor_logged(
 
     * ``kind="intervention_replacement"`` -- a genuine raw
       ``register_forward_hook`` that replaced a module's output with a fresh
-      tensor the user injected. The op is marked ``intervention_replaced`` and
+      tensor the user injected. The op is marked ``is_edited`` and
       is legitimately functionless (the user-supplied callable is opaque).
     * ``kind="internal_source"`` -- an internally generated tensor (e.g. an
       attention mask built inside ``torch.vmap``, whose construction TorchLens
@@ -1673,7 +1673,7 @@ def _ensure_module_output_tensor_logged(
             "activation_transform": trace.activation_transform,
             "annotations": {},
             "interventions": [],
-            "intervention_replaced": not is_internal_source,
+            "is_edited": not is_internal_source,
             "detach_saved_activations": trace.detach_saved_activations,
             "output_device": trace.output_device,
             "has_saved_args": False,
@@ -1833,13 +1833,13 @@ def _ensure_module_output_tensor_logged(
         fields_dict["interventions"] = [
             result.fire_record for result in fire_results if result.fire_record is not None
         ]
-        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
+        fields_dict["is_edited"] = any(result.replaced for result in fire_results)
         # Fire results only mint replacement-event evidence when the live-fire
         # machinery is actually armed for THIS capture; a stale
         # ``_tl_live_fire_results`` attribute leaked from an earlier intervened
         # trace stays unledgered, so validation refuses the placeholder it
         # would otherwise launder into a plain capture.
-        if fields_dict["intervention_replaced"] and _live_intervention_machinery_armed():
+        if fields_dict["is_edited"] and _live_intervention_machinery_armed():
             _note_replacement_event(trace, raw_label, origin="live_fire")
     trace.op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
@@ -1923,13 +1923,13 @@ def _make_user_forward_hook_wrapper(
                         amend_raw_hook_intervention(
                             replaced_event.seq,
                             replacement_label,
-                            intervention_replaced=True,
+                            is_edited=True,
                         )
                     )
                 # The hook returned an ALREADY-TRACED tensor: that REWIRES the
                 # module boundary to reuse an existing op's value, it does not
                 # replace that op's own computation. The durable
-                # ``intervention_replaced`` stamp above stays as the
+                # ``is_edited`` stamp above stays as the
                 # intervened-capture disclosure (runnable save keys its
                 # user_intervention_not_replayable refusal on it), but NO
                 # trace-level replacement-event ledger entry is minted here:
@@ -2093,7 +2093,7 @@ def _record_module_exit_metadata(
                             exit_event.seq,
                             tensor_label,
                             intervention_fired=True,
-                            intervention_replaced=any_replaced,
+                            is_edited=any_replaced,
                             fire_results=remaining_fire_results,
                         )
                     )

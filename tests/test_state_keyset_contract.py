@@ -134,7 +134,7 @@ def test_state_keysets_match_golden() -> None:
 
 @pytest.mark.smoke
 def test_declared_fields_dominate_op_state() -> None:
-    """Every state key on a live Op is a declared FIELD_POLICY field.
+    """Every state key on a live Op is a declared _FIELD_POLICY field.
 
     An Op slot outside the declared schema that carries live state would be
     invisible to the schema-driven columnar adapter; this fails first.
@@ -142,7 +142,7 @@ def test_declared_fields_dominate_op_state() -> None:
 
     torch.manual_seed(_SEED)
     trace = tl.trace(_AliasCNN(), torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4))
-    declared = set(Op.FIELD_POLICY)
+    declared = set(Op._FIELD_POLICY)
     for op in trace.ops.values():
         undeclared = {name for name, _ in state_items(op)} - declared
         assert not undeclared, f"live Op carries undeclared state: {sorted(undeclared)}"
@@ -150,7 +150,7 @@ def test_declared_fields_dominate_op_state() -> None:
 
 @pytest.mark.smoke
 def test_op_slot_universe_is_declared() -> None:
-    """Every Op slot is covered by FIELD_POLICY (no shadow storage)."""
+    """Every Op slot is covered by _FIELD_POLICY (no shadow storage)."""
 
-    undeclared_slots = set(_OP_SLOT_NAMES) - set(Op.FIELD_POLICY)
+    undeclared_slots = set(_OP_SLOT_NAMES) - set(Op._FIELD_POLICY)
     assert not undeclared_slots, sorted(undeclared_slots)

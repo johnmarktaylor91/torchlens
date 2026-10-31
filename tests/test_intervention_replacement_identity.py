@@ -107,7 +107,7 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), inplace_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
+    assert op.is_edited is True
     fire_records = list(op.interventions)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
@@ -138,7 +138,7 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), data_alias_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
+    assert op.is_edited is True
     fire_records = list(op.interventions)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())

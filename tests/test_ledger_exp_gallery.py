@@ -3,7 +3,7 @@
 The flagship head-ablation experiment on a config-built GPT-2 (the real HF
 ``from_dict`` parsing path, zero network): arm a file-backed ledger with
 hypothesis and metric declared BEFORE the first material step -> baseline
-capture (intervention_ready) -> site_sweep over one named block's heads
+capture (replayable) -> site_sweep over one named block's heads
 (candidates SCOPED, resolved_site_count == 1 asserted per candidate) ->
 effects table -> why(top member) -> explicit observation -> verdict with
 basis -> save -> reload -> serve over the read-only tools. The pretrained
@@ -67,7 +67,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
     )
     try:
         # ---- material phase -------------------------------------------------
-        baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+        baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
         candidates = head_ablation_candidates(baseline, module, heads=n_heads)
         bundle = sweep_sites(
             baseline,
@@ -164,7 +164,7 @@ def test_emission_overhead_is_bounded(tmp_path: Path) -> None:
         return float(member[member.output_layers[0]].out.sum().item())
 
     def one_sweep() -> None:
-        baseline = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        baseline = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         sweep_sites(
             baseline,
             candidates=["relu_1_2"],

@@ -304,7 +304,7 @@ def test_emission_one_step_per_operation(tmp_path: Path) -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
     x = torch.randn(2, 3)
-    baseline = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     def metric(member: tl.Trace) -> float:
         return float(member[member.output_layers[0]].out.sum().item())

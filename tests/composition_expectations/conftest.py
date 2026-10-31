@@ -113,7 +113,7 @@ def product_gallery(
     import torchlens as tl
 
     model, inputs = model_gallery["mlp"]
-    trace = tl.trace(model, *inputs, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, *inputs, capture=tl.options.CaptureOptions(replayable=True))
     recording = tl.record(model, *inputs, save=tl.func("relu"))
     products = {"trace": trace, "recording": recording}
     baseline = trace_fingerprint(trace)

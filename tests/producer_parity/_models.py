@@ -100,7 +100,7 @@ def _reference_trace(model: nn.Module, x: Any) -> Any:
 
 def _save_arg_values_trace(model: nn.Module, x: Any) -> Any:
     # The save_arg_values-only capture the DoR names as a parity case
-    # (templates facet gate: saved_args without intervention_ready).
+    # (templates facet gate: saved_args without replayable).
     return tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
 

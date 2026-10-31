@@ -1,6 +1,6 @@
 """Stored-field facts about TorchLens classes, for inventory member rows.
 
-A class's stored fields are declared in its ``FIELD_POLICY`` table or, for a record
+A class's stored fields are declared in its ``_FIELD_POLICY`` table or, for a record
 facade, in its row layout (``_TL_LAYOUT``). Module constants listing the same names are
 the field's tables, which the codemod renames with the field.
 """
@@ -21,7 +21,7 @@ def _in_package(module_name: str, package: str) -> bool:
 
 
 def policy_fields(cls: type) -> list[str]:
-    """Return the user-facing stored fields a class declares in its own ``FIELD_POLICY``.
+    """Return the user-facing stored fields a class declares in its own ``_FIELD_POLICY``.
 
     Parameters
     ----------
@@ -34,7 +34,7 @@ def policy_fields(cls: type) -> list[str]:
         Field names in table order; empty when the class has no such table.
     """
 
-    table = vars(cls).get("FIELD_POLICY")
+    table = vars(cls).get("_FIELD_POLICY")
     if not isinstance(table, Mapping):
         return []
     return [
@@ -67,14 +67,14 @@ def init_fields(cls: type) -> frozenset[str]:
 def field_tables(cls: type, package: str) -> list[str]:
     """Return the module constants that list a class's field order, as ``module:NAME``.
 
-    A constant counts when it is a list or tuple equal to the class's ``FIELD_POLICY``
+    A constant counts when it is a list or tuple equal to the class's ``_FIELD_POLICY``
     field order or its record-facade layout, and its module's source assigns it (an
     import of it does not count).
 
     Parameters
     ----------
     cls
-        A class with a ``FIELD_POLICY`` table.
+        A class with a ``_FIELD_POLICY`` table.
     package
         Top-level package name; only its imported modules are searched.
 

@@ -24,7 +24,7 @@ from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
-_READY = tl.options.CaptureOptions(intervention_ready=True)
+_READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _MLP(nn.Module):
@@ -527,7 +527,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     records = injected_ops(logged)
     assert records
-    host = next(op for op in logged.ops if getattr(op, "intervention_replaced", False))
+    host = next(op for op in logged.ops if getattr(op, "is_edited", False))
     assert "fc1:1" in host.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
@@ -549,7 +549,7 @@ def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     model, x = _seeded(_Nested)
     logged = tl.trace(model, x, intervene=tl.when(tl.module("blk"), tl.scale(0.5)), capture=_LOGGED)
     hosts = {record.host_label for record in injected_ops(logged)}
-    replaced = {op.label for op in logged.ops if getattr(op, "intervention_replaced", False)}
+    replaced = {op.label for op in logged.ops if getattr(op, "is_edited", False)}
     assert len(hosts) == 2 and hosts == replaced
     assert all(record.provenance.host_site_key for record in injected_ops(logged))
     logged.save(str(tmp_path / "blk.tlspec"))

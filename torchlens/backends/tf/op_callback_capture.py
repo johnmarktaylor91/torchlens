@@ -535,7 +535,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=record_context,
@@ -871,7 +871,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
         )

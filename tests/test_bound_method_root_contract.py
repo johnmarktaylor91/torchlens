@@ -217,7 +217,7 @@ def test_replay_engine_still_works_on_bound_captures() -> None:
     log = tl.trace(
         model.forward,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = log.fork()
     relu_label = next(op.label for op in log.layer_list if op.label.startswith("relu"))

@@ -98,13 +98,13 @@ class BackwardPass:
         "executed_flops_record": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         BACKWARD_PASS_FIELD_ORDER,
         _PORTABLE_STATE_POLICY,
         schema_key="backward_pass",
     )
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
-        FIELD_POLICY
+        _FIELD_POLICY
     )
 
     pass_index: int

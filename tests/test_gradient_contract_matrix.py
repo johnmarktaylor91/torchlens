@@ -102,7 +102,7 @@ _SOURCE: dict[str, Any] = {}
 def _source_trace() -> Any:
     if "trace" not in _SOURCE:
         _SOURCE["trace"] = tl.trace(
-            _fresh(), _X2, capture=tl.options.CaptureOptions(intervention_ready=True)
+            _fresh(), _X2, capture=tl.options.CaptureOptions(replayable=True)
         )
     return _SOURCE["trace"]
 
@@ -229,7 +229,7 @@ def _out(trace: Any) -> torch.Tensor:
 
 
 def _ready(model: nn.Module) -> Any:
-    return tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _door_capture(model: nn.Module, edit: Any) -> torch.Tensor:

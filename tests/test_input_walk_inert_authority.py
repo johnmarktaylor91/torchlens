@@ -228,7 +228,7 @@ def test_unset_init_false_dataclass_field_no_longer_kills_the_capture():
     assert "unset_declared_field" in _reasons(snapshot)
     assert snapshot["nodes"][0]["unset_fields"] == ["cache"]
     # The whole point: an intervention-ready capture completes instead of raising.
-    trace = tl.trace(_Model(), box, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(_Model(), box, capture=tl.options.CaptureOptions(replayable=True))
     assert trace.num_ops >= 1
 
 
@@ -467,7 +467,7 @@ def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
         model,
         box_a,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

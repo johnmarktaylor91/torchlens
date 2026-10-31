@@ -245,9 +245,7 @@ def test_rg07_replay_edit_through_cache_graph_matches_manual_ablation(
     model = lm["model"]
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     encoded["use_cache"] = True
-    trace = tl.trace(
-        model, (), dict(encoded), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(model, (), dict(encoded), capture=tl.options.CaptureOptions(replayable=True))
     try:
         target = None
         for label in trace.layer_labels:
@@ -404,9 +402,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
     model = lm["model"]
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
-    trace = tl.trace(
-        model, (), dict(encoded), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(model, (), dict(encoded), capture=tl.options.CaptureOptions(replayable=True))
     try:
         target = None
         for label in trace.layer_labels:

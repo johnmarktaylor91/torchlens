@@ -43,7 +43,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 881.2 | 881.2 | 881.2 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 4005.8 | 4005.8 | 4005.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 2773.8 | 2497.0 | 2953.8 | 289.9 | 1424.4 | N/A | N/A | ok |
-| TL Trace, intervention_ready=True | 2951.9 | 2601.6 | 3163.7 | 342.2 | 3462.3 | N/A | N/A | ok |
+| TL Trace, replayable=True | 2951.9 | 2601.6 | 3163.7 | 342.2 | 3462.3 | N/A | N/A | ok |
 | Trace.rerun(model, x) | 2984.4 | 2626.1 | 3205.0 | 399.4 | 5884.7 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 278.6 | 254.1 | 587.7 | 23.9 | 346.7 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 290.9 | 269.9 | 579.8 | 42.8 | N/A | N/A | N/A | ok |
@@ -69,7 +69,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 1125.8 | 1125.8 | 1125.8 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 4916.7 | 4916.7 | 4916.7 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 3273.9 | 2767.5 | 3841.6 | 520.9 | 838.9 | 3881.2 | 4540.0 | ok |
-| TL Trace, intervention_ready=True | 3293.8 | 2823.4 | 3728.9 | 448.9 | 976.9 | 5370.1 | 5944.0 | ok |
+| TL Trace, replayable=True | 3293.8 | 2823.4 | 3728.9 | 448.9 | 976.9 | 5370.1 | 5944.0 | ok |
 | Trace.rerun(model, x) | 3285.8 | 2830.4 | 3802.8 | 574.0 | 1313.6 | 7453.9 | 8312.0 | ok |
 | fastlog module-boundary metadata | 149.4 | 145.3 | 535.2 | 22.7 | 5.6 | 2441.9 | 2744.0 | ok |
 | fastlog 10% op selectivity | 146.4 | 141.7 | 509.0 | 20.0 | N/A | N/A | N/A | ok |
@@ -117,7 +117,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 488.8 | 488.8 | 488.8 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 1231.6 | 1231.6 | 1231.6 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 824.3 | 784.0 | 1022.0 | 100.7 | 1956.5 | N/A | N/A | ok |
-| TL Trace, intervention_ready=True | 829.1 | 793.0 | 981.7 | 56.6 | 2255.1 | N/A | N/A | ok |
+| TL Trace, replayable=True | 829.1 | 793.0 | 981.7 | 56.6 | 2255.1 | N/A | N/A | ok |
 | Trace.rerun(model, x) | 841.0 | 800.3 | 976.9 | 90.5 | 2899.3 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 106.3 | 99.2 | 238.1 | 13.0 | 959.7 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 115.5 | 104.4 | 242.8 | 19.1 | N/A | N/A | N/A | ok |
@@ -147,7 +147,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 683.2 | 683.2 | 683.2 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 1462.2 | 1462.2 | 1462.2 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 896.0 | 792.7 | 1195.1 | 252.7 | 613.0 | 2447.9 | 2566.0 | ok |
-| TL Trace, intervention_ready=True | 927.0 | 766.5 | 1300.4 | 274.0 | 488.1 | 2194.1 | 2264.0 | ok |
+| TL Trace, replayable=True | 927.0 | 766.5 | 1300.4 | 274.0 | 488.1 | 2194.1 | 2264.0 | ok |
 | Trace.rerun(model, x) | 912.5 | 771.9 | 1226.0 | 254.9 | 724.5 | 3342.2 | 3458.0 | ok |
 | fastlog module-boundary metadata | 43.9 | 41.8 | 245.7 | 2.8 | 4.0 | 1506.1 | 1556.0 | ok |
 | fastlog 10% op selectivity | 38.9 | 37.6 | 241.9 | 1.3 | N/A | N/A | N/A | ok |
@@ -177,7 +177,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 1437.5 | 1437.5 | 1437.5 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 353.9 | 353.9 | 353.9 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 14.3 | 13.1 | 16.8 | 0.7 | 1.0 | N/A | N/A | ok |
-| TL Trace, intervention_ready=True | 15.4 | 13.7 | 18.2 | 0.5 | 1.5 | N/A | N/A | ok |
+| TL Trace, replayable=True | 15.4 | 13.7 | 18.2 | 0.5 | 1.5 | N/A | N/A | ok |
 | Trace.rerun(model, x) | 16.4 | 15.3 | 22.4 | 2.6 | 2.1 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 4.6 | 4.4 | 5.1 | 0.3 | 1.0 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 4.9 | 3.8 | 5.2 | 0.6 | N/A | N/A | N/A | ok |
@@ -203,7 +203,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 1315.3 | 1315.3 | 1315.3 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 300.8 | 300.8 | 300.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 26.7 | 24.3 | 32.6 | 2.9 | 16.6 | N/A | N/A | ok |
-| TL Trace, intervention_ready=True | 28.0 | 26.0 | 41.1 | 2.9 | 18.1 | N/A | N/A | ok |
+| TL Trace, replayable=True | 28.0 | 26.0 | 41.1 | 2.9 | 18.1 | N/A | N/A | ok |
 | Trace.rerun(model, x) | 112.3 | 36.2 | 346.6 | 122.7 | 38.1 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 8.9 | 7.2 | 15.7 | 4.2 | 7.4 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 8.4 | 7.4 | 12.1 | 1.9 | N/A | N/A | N/A | ok |
@@ -233,7 +233,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | global-wrap-on-dummy startup | 1368.8 | 1368.8 | 1368.8 | 0.0 | N/A | N/A | N/A | ok |
 | first-capture-of-target-model startup | 473.8 | 473.8 | 473.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 30.0 | 28.4 | 32.9 | 1.4 | 7.3 | 26.7 | 40.0 | ok |
-| TL Trace, intervention_ready=True | 40.8 | 31.2 | 50.8 | 9.9 | 5.6 | 27.2 | 40.0 | ok |
+| TL Trace, replayable=True | 40.8 | 31.2 | 50.8 | 9.9 | 5.6 | 27.2 | 40.0 | ok |
 | Trace.rerun(model, x) | 38.3 | 31.4 | 42.7 | 9.6 | 12.2 | 44.5 | 58.0 | ok |
 | fastlog module-boundary metadata | 7.9 | 7.2 | 9.0 | 0.6 | 1.1 | 19.1 | 32.0 | ok |
 | fastlog 10% op selectivity | 6.3 | 6.0 | 7.0 | 0.4 | N/A | N/A | N/A | ok |

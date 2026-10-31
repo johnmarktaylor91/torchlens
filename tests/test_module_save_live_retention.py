@@ -236,7 +236,7 @@ def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
     assert set(expected) <= set(saved)
     for label in expected:
         assert torch.equal(saved[label].out, full[label].out)
-        assert saved[label].intervention_replaced
+        assert saved[label].is_edited
     assert counts["spills"] == 0
     # The per-op escrow copies about every op; this copies the ops inside block and head.
     assert counts["copies"] < len(log.layer_list) - 2

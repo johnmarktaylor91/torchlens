@@ -163,7 +163,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "func_name": func_name,
         "fx_call_index": op.fx_call_index,
         "fx_qualpath": op.fx_qualpath,
-        "intervention_replaced": getattr(op, "intervention_replaced", False),
+        "is_edited": getattr(op, "is_edited", False),
         "is_atomic_module": op.is_atomic_module,
         "is_internal_sink": op.is_internal_sink,
         "is_internal_source": op.is_internal_source,

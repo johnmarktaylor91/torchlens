@@ -49,7 +49,7 @@ def log():
     trace = tl.trace(
         _TwoConv(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         yield trace

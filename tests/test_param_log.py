@@ -145,8 +145,8 @@ class TestParamLogFields:
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
-        assert isinstance(pl.num_uses_by_ops, int)
-        assert isinstance(pl.num_uses_by_layers, int)
+        assert isinstance(len(pl.used_by_ops), int)
+        assert isinstance(len(pl.used_by_layers), int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):

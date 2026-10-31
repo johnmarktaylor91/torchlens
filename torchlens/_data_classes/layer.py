@@ -430,7 +430,7 @@ class Layer(_SelectionOperand):
         output_device: Any
         visualizer_path: Any
         activation_transform: Any
-        intervention_replaced: Any
+        is_edited: Any
         detach_saved_activations: Any
         save_grads: Any
         transformed_grad_shape: Any
@@ -522,7 +522,7 @@ class Layer(_SelectionOperand):
         "visualizer_path": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.DROP,
@@ -578,10 +578,10 @@ class Layer(_SelectionOperand):
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         LAYER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="layer"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     #: Aggregate-facade mirror contract (state-contract service): a pickled
     #: Layer's state carries the Op-shaped mirror fields the facade reads
@@ -1021,7 +1021,7 @@ class Layer(_SelectionOperand):
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
         # `grad_fn_handle` holds the live torch autograd `Node` (e.g.
-        # `AddmmBackward0`), which is not picklable. `Layer.FIELD_POLICY`
+        # `AddmmBackward0`), which is not picklable. `Layer._FIELD_POLICY`
         # declares it `FieldPolicy.DROP` for exactly this reason; enforce that
         # here (mirroring `Op.__getstate__`) so plain `pickle.dumps(trace)` of
         # any model with trainable params does not crash. `grad_fn` (a picklable

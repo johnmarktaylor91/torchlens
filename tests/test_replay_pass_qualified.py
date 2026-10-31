@@ -65,7 +65,7 @@ def recurrent():
     torch.manual_seed(0)
     model = _RecurrentCell()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -77,7 +77,7 @@ def single_pass():
     torch.manual_seed(1)
     model = _SinglePassCell()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -256,7 +256,7 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
     )
     assert replayed is not fork
     assert bool((replayed.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    for key in replayed.replay_frontier:
+    for key in replayed._replay_frontier:
         base = key.split("->")[0]
         if base.startswith(("relu_1_2", "linear_1_1")):
             assert ":" in base, f"multi-pass frontier key {key!r} is not pass-qualified"

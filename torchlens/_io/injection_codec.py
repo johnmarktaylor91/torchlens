@@ -499,9 +499,9 @@ def _validate_row_op_identity(row: Any, label: str) -> None:
                 f"injected-op row {label!r} carries illegal {field_name} {value!r}",
                 "record_func",
             )
-    if getattr(row, "intervention_replaced", None):
+    if getattr(row, "is_edited", None):
         _refuse_codec(
-            f"injected-op row {label!r} claims intervention_replaced",
+            f"injected-op row {label!r} claims is_edited",
             "record_func",
         )
     for relation in ("parents", "children"):

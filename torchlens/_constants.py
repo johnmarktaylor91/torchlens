@@ -7,7 +7,7 @@ each data class (Trace, Op, Layer, etc.).  They serve two purposes:
    to present fields in a consistent, human-readable order.
 2. **User-facing completeness contract** — every public/exported attribute a data
    class exposes must appear in its FIELD_ORDER.  Runtime-only and portable
-   internal state belongs in the class FIELD_POLICY / _PORTABLE_STATE_SPEC even
+   internal state belongs in the class _FIELD_POLICY / _PORTABLE_STATE_SPEC even
    when it is intentionally not exported as a user-facing column.
 
 **Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
@@ -32,7 +32,7 @@ from ._utils._torch_compat import get_torch_vf_namespace, get_variable_function_
 # Field-order definitions
 # ---------------------------------------------------------------------------
 # Each list defines the ordered user-facing/export fields for its data class.
-# Runtime-only state belongs in per-class FIELD_POLICY / _PORTABLE_STATE_SPEC.
+# Runtime-only state belongs in per-class _FIELD_POLICY / _PORTABLE_STATE_SPEC.
 
 _RAW_LABEL_SUFFIX = "_raw"
 
@@ -135,7 +135,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_layers_logged",
     "_layers_saved",
     "keep_orphans",
-    "intervention_ready",
+    "is_replayable",
     "save_arg_templates",
     "raw_input",
     "input_preprocessor",
@@ -186,7 +186,7 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_cache_hit",
     "capture_cache_key",
     "capture_cache_path",
-    "facet_registry_snapshot",
+    "facet_functions",
     "recording_kept",
     "_out_dedup_mode",
     "_out_identity_cache",
@@ -249,7 +249,7 @@ MODEL_LOG_FIELD_ORDER = [
     "state",
     "is_appended",
     "relationship_evidence",
-    "replay_frontier",
+    "_replay_frontier",
     # Model structure info (is_recurrent, max_layer_op_count,
     # is_branching, has_conditional_branching are computed @properties)
     # Layer tracking logs
@@ -373,7 +373,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "activation_transform",
     "annotations",
     "interventions",
-    "intervention_replaced",
+    "is_edited",
     "detach_saved_activations",
     "has_saved_args",
     "saved_args",
@@ -622,7 +622,7 @@ LAYER_LOG_FIELD_ORDER = [
     "visualizer_path",
     "activation_transform",
     "annotations",
-    "intervention_replaced",
+    "is_edited",
     "detach_saved_activations",
     "save_grads",
     "transformed_grad",
@@ -730,8 +730,6 @@ PARAM_LOG_FIELD_ORDER = [
     "num_calls",
     "used_by_ops",
     "used_by_layers",
-    "num_uses_by_ops",
-    "num_uses_by_layers",
     "co_parent_params",
     "has_grad",
     "grad_shape",
@@ -854,8 +852,6 @@ MODULE_LOG_FIELD_ORDER = [
     # Hierarchy — call-based
     "call_parent",
     "call_children",
-    "call_parent_module",
-    "call_children_modules",
     "call_depth",
     # Pass info
     "num_calls",
@@ -885,7 +881,6 @@ MODULE_LOG_FIELD_ORDER = [
     "num_recursive_param_tensors",
     "num_recursive_param_tensors_trainable",
     "num_recursive_param_tensors_frozen",
-    "recursive_param_addresses",
     "param_memory",
     "has_trainable_params",
     "has_frozen_params",
@@ -932,7 +927,7 @@ GRAD_FN_PASS_LOG_FIELD_ORDER = [
     "backward_duration",
     "grad_inputs",
     "grad_outputs",
-    "intervention_fire_ref",
+    "fire_record",
     "timestamp",
     "_time_started",
     "_time_finished",

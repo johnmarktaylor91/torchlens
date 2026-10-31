@@ -167,7 +167,7 @@ class Session:
             input_args,
             input_kwargs=input_kwargs,
             capture=torchlens.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 name=f"session_{index}",
             ),
         )

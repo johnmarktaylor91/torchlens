@@ -1785,7 +1785,7 @@ def _snapshot_for_record(record: Any) -> FacetRegistrySnapshot:
     trace = getattr(record, "trace", None)
     if trace is None:
         trace = getattr(record, "source_trace", None)
-    snapshot_value = getattr(trace, "facet_registry_snapshot", None)
+    snapshot_value = getattr(trace, "facet_functions", None)
     if isinstance(snapshot_value, FacetRegistrySnapshot):
         return snapshot_value
     return snapshot()

@@ -230,7 +230,7 @@ class CurveStep:
         ``tl.replace_with(<baseline>)``, so the selected elements take the
         baseline and the rest keep the input. Replay on a replay-ready trace
         of the original inputs: ``trace = tl.trace(model, x,
-        capture=tl.options.CaptureOptions(intervention_ready=True))``, then
+        capture=tl.options.CaptureOptions(replayable=True))``, then
         ``fork = trace.fork()`` and ``fork.do(selection, edit)`` for each
         pair; the fork's output scores ``score``. Empty when the step changes
         nothing. The first access traces the model once to name its input

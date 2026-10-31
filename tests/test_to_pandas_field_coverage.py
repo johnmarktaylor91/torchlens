@@ -194,12 +194,12 @@ def coverage_trace() -> Any:
 
 
 def _field_policy_desync(cls: type[Any]) -> list[str]:
-    """Return FIELD_POLICY entries marked KEEP but absent from FIELD_ORDER.
+    """Return _FIELD_POLICY entries marked KEEP but absent from FIELD_ORDER.
 
     Parameters
     ----------
     cls:
-        Record class exposing a ``FIELD_POLICY`` table built by
+        Record class exposing a ``_FIELD_POLICY`` table built by
         ``build_record_field_policy_table``.
 
     Returns
@@ -220,7 +220,7 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
         can be inspected on its own for auditing.
     """
 
-    table = cls.FIELD_POLICY
+    table = cls._FIELD_POLICY
     desynced = []
     for name, policy in table.items():
         if policy.user_facing or policy.portable_policy is not FieldPolicy.KEEP:
@@ -268,7 +268,7 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
         if name not in _KEEP_FIELD_DESYNC_EXCLUSIONS.get(cls, frozenset())
     ]
     assert desynced == [], (
-        f"{cls.__name__}.FIELD_POLICY marks {desynced} as FieldPolicy.KEEP but "
+        f"{cls.__name__}._FIELD_POLICY marks {desynced} as FieldPolicy.KEEP but "
         f"they are absent from {cls.__name__}'s FIELD_ORDER constant in "
         "constants.py. Add them to the FIELD_ORDER list next to their sibling "
         "fields so to_pandas() picks them up."

@@ -42,7 +42,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Op.FIELD_POLICY.get("edge_substitutions")
+    policy_entry = _Op._FIELD_POLICY.get("edge_substitutions")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return
@@ -82,7 +82,7 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Trace.FIELD_POLICY.get("distributed_scope")
+    policy_entry = _Trace._FIELD_POLICY.get("distributed_scope")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return

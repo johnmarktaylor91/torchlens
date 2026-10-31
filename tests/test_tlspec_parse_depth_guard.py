@@ -148,7 +148,7 @@ def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
     trace = tl.trace(
         _M().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     bundle = tmp_path / "deep.tlspec"
     trace.save(str(bundle), level="runnable", include_weights=True)
@@ -176,7 +176,7 @@ def test_normal_bundle_still_loads(tmp_path: Path) -> None:
     trace = tl.trace(
         _M().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     bundle = tmp_path / "clean.tlspec"
     trace.save(str(bundle), level="runnable", include_weights=True)

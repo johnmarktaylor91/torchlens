@@ -430,7 +430,7 @@ def _log_output_tensor_info(
                 session.register_annotation_copy(fields_dict["annotations"]["collective"])
     else:
         fields_dict["annotations"] = {}
-    fields_dict["intervention_replaced"] = False
+    fields_dict["is_edited"] = False
     fields_dict["fire_results"] = ()
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None

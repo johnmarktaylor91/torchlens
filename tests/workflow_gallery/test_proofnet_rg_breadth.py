@@ -95,7 +95,7 @@ def test_rg09_pass_qualified_patch_on_real_cross_layer_sharing(rg_loader: Any) -
     loaded = rg_loader("r1-albert-base-v2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
     encoded = dict(tokenizer(prompt("encoder-sentence-1")["text"], return_tensors="pt"))
-    trace = tl.trace(model, (), encoded, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, (), encoded, capture=tl.options.CaptureOptions(replayable=True))
     try:
         multi_pass = [label for label in trace.layer_labels if len(trace[label].ops) >= 12]
         assert multi_pass, "albert capture shows no 12-pass shared-layer sites"

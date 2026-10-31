@@ -54,7 +54,7 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
 
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     relu_site = log.find_sites(tl.func("relu")).first()
     assert relu_site.func_name == "relu"
 

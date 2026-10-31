@@ -778,7 +778,7 @@ def _trace_mlx_model(
     num_context_lines: int | MissingType,
     compute_input_output_distances: bool | MissingType,
     recurrence_detection: bool | MissingType,
-    intervention_ready: bool | MissingType,
+    replayable: bool | MissingType,
     hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
     save: SaveOptions | None,
@@ -834,7 +834,7 @@ def _trace_mlx_model(
         mark_layer_depths=MISSING,
         detach_saved_activations=MISSING,
         recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         hooks=hooks,
         unwrap_when_done=MISSING,
         verbose=verbose,
@@ -855,12 +855,12 @@ def _trace_mlx_model(
         save_raw_activations=save_raw_activations,
         save_raw_grads=save_raw_grads,
     )
-    if capture_options.intervention_ready:
+    if capture_options.replayable:
         raise BackendUnsupportedError(
-            "MLX backend does not support intervention_ready=True: post-capture "
+            "MLX backend does not support replayable=True: post-capture "
             "rerun readiness requires PyTorch autograd integration not present in "
             "MLX. Live static-label trace(intervene=tl.when(...)) IS supported; "
-            "omit intervention_ready or set False."
+            "omit replayable or set False."
         )
     if capture_options.hooks:
         raise BackendUnsupportedError(
@@ -960,7 +960,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # ``capture=CaptureOptions(...)`` call fail with "does not support:
     # capture" regardless of content; the real per-field support/rejection
     # already happens downstream in ``_trace_mlx_model`` (e.g.
-    # ``capture_options.intervention_ready``, ``capture_options.hooks``).
+    # ``capture_options.replayable``, ``capture_options.hooks``).
     reject_extra_trace_kwargs(
         {
             "lookback": kwargs["lookback"],
@@ -1045,7 +1045,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         num_context_lines=kwargs.get("num_context_lines", MISSING),
         compute_input_output_distances=kwargs.get("compute_input_output_distances", MISSING),
         recurrence_detection=kwargs.get("recurrence_detection", MISSING),
-        intervention_ready=kwargs.get("intervention_ready", MISSING),
+        replayable=kwargs.get("replayable", MISSING),
         hooks=kwargs.get("hooks", MISSING),
         capture=kwargs["capture"],
         save=save_options,
@@ -1097,7 +1097,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "compute_input_output_distances",
         "detach_saved_activations",
         "recurrence_detection",
-        "intervention_ready",
+        "replayable",
         "capture_container_structure",
         "track_device_memory",
         "measure_host_peak_memory",
@@ -1548,7 +1548,7 @@ def _run_model_and_save_specified_outs(
     grad_storage_path: str | Path | None = None,
     retain_grads_in_memory: bool = True,
     out_sink: Callable[[str, torch.Tensor], None] | None = None,
-    intervention_ready: bool = False,
+    replayable: bool = False,
     capture_container_structure: bool = False,
     hooks: Any | None = None,
     intervention_spec: Any | None = None,
@@ -1673,7 +1673,7 @@ def _run_model_and_save_specified_outs(
             backward finalization.
         out_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved out.
-        intervention_ready: If True, capture replay-template metadata and mark the
+        replayable: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
         capture_container_structure: If True, persist input and output container
@@ -1901,7 +1901,7 @@ def _run_model_and_save_specified_outs(
         _state.configure_capture_runtime_context(
             hook_plan=hook_plan,
             intervention_spec=intervention_spec,
-            capture_replay_templates=intervention_ready,
+            capture_replay_templates=replayable,
             model_object_id=model_object_id,
             model_class_qualname=model_class_qualname,
             weight_fingerprint=weight_fingerprint,
@@ -1952,7 +1952,7 @@ def _run_model_and_save_specified_outs(
             save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
-            facet_registry_snapshot=facets_mod.snapshot(recipes),
+            facet_functions=facets_mod.snapshot(recipes),
         )
         # One session field carries the capture's save request: the torch
         # backend reads its output-parent retention flag during the forward,
@@ -1990,7 +1990,7 @@ def _run_model_and_save_specified_outs(
         )
         forward_code = getattr(model.forward, "__code__", None)
         trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
-        trace.intervention_ready = intervention_ready
+        trace.is_replayable = replayable
         trace._capture_container_structure = capture_container_structure
         if hook_plan:
             trace.state = TraceState.LIVE_CAPTURED
@@ -2627,7 +2627,7 @@ def trace(
     capture:
         Grouped capture options (``CaptureOptions``). The one spelling for
         every capture knob (``layers_to_save``, ``random_seed``,
-        ``intervention_ready``, ``verbose``, ``structure_only``, ...); the
+        ``replayable``, ``verbose``, ``structure_only``, ...); the
         former flat kwargs are removed.
     intervene:
         Optional predicate returning an intervention decision for
@@ -2898,7 +2898,7 @@ def _trace_torch_model(
     save_outs_to: str | Path | None | MissingType = MISSING,
     keep_outs_in_memory: bool | MissingType = MISSING,
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
-    intervention_ready: bool | MissingType = MISSING,
+    replayable: bool | MissingType = MISSING,
     capture_container_structure: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
     unwrap_when_done: bool | MissingType = MISSING,
@@ -3028,7 +3028,7 @@ def _trace_torch_model(
         mark_layer_depths=mark_layer_depths,
         detach_saved_activations=detach_saved_activations,
         recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         capture_container_structure=capture_container_structure,
         capture_output_structure=capture_output_structure,
         hooks=hooks,
@@ -3264,7 +3264,7 @@ def _trace_torch_model(
     compute_input_output_distances = capture_options.compute_input_output_distances
     detach_saved_activations = capture_options.detach_saved_activations
     recurrence_detection = capture_options.recurrence_detection
-    intervention_ready = capture_options.intervention_ready
+    replayable = capture_options.replayable
     capture_container_structure = capture_options.capture_container_structure
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
@@ -3378,7 +3378,7 @@ def _trace_torch_model(
                 lookback_payload_policy=lookback_payload_policy,
                 raise_on_nan_value=capture_options.raise_on_nan,
                 track_nonfinite_value=capture_options.track_nonfinite,
-                intervention_ready=intervention_ready,
+                replayable=replayable,
                 should_save_grads=should_save_grads,
             ),
         )
@@ -3391,8 +3391,8 @@ def _trace_torch_model(
         inference_only_conflicts.append("backward_ready")
     if capture_options.is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if capture_options.is_field_explicit("intervention_ready") and intervention_ready is True:
-        inference_only_conflicts.append("intervention_ready")
+    if capture_options.is_field_explicit("replayable") and replayable is True:
+        inference_only_conflicts.append("replayable")
     backward_opted_in = (
         capture_options.is_field_explicit("save_grads")
         and should_save_grads
@@ -3429,7 +3429,7 @@ def _trace_torch_model(
     )
     inference_only_value = effective_inference_only(
         capture_options,
-        backward_requested=bool(train_mode_value or should_save_grads or intervention_ready),
+        backward_requested=bool(train_mode_value or should_save_grads or replayable),
     )
     chunk_plan = None
     if normalized_chunk_size is not None:
@@ -3544,11 +3544,11 @@ def _trace_torch_model(
             # Capability / payload-policy options that change WHAT is captured or
             # stored in the returned trace. Omitting any of these let a second
             # trace() with a different capability silently return an earlier cached
-            # trace built with the wrong capability (e.g. asked intervention_ready=True,
+            # trace built with the wrong capability (e.g. asked replayable=True,
             # got a cached False). Include them so a capability change misses the cache;
             # callables are repr-keyed (conservative -- a distinct object misses rather
             # than risking a false hit), matching how output_transform is keyed above.
-            "intervention_ready": intervention_ready,
+            "replayable": replayable,
             "structure_only": capture_options.structure_only,
             "track_device_memory": capture_options.track_device_memory,
             # A cached capture without the opt-in holds no CPU peak.
@@ -3663,7 +3663,7 @@ def _trace_torch_model(
             compute_input_output_distances=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             recurrence_detection=recurrence_detection,
-            intervention_ready=intervention_ready,
+            replayable=replayable,
             capture_container_structure=capture_container_structure,
             hooks=MISSING,
             unwrap_when_done=False,
@@ -3757,7 +3757,7 @@ def _trace_torch_model(
             save_outs_to=MISSING,
             keep_outs_in_memory=MISSING,
             out_sink=MISSING,
-            intervention_ready=MISSING,
+            replayable=MISSING,
             capture_container_structure=MISSING,
             hooks=MISSING,
             unwrap_when_done=MISSING,
@@ -3842,7 +3842,7 @@ def _trace_torch_model(
                 save_outs_to=MISSING,
                 keep_outs_in_memory=MISSING,
                 out_sink=MISSING,
-                intervention_ready=MISSING,
+                replayable=MISSING,
                 capture_container_structure=MISSING,
                 hooks=MISSING,
                 unwrap_when_done=MISSING,
@@ -3959,7 +3959,7 @@ def _trace_torch_model(
         grad_storage_path=grad_storage_path_value,
         retain_grads_in_memory=retain_grads_in_memory_value,
         out_sink=streaming_options.on_save,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         capture_container_structure=capture_container_structure,
         hooks=hooks,
         intervention_spec=None,

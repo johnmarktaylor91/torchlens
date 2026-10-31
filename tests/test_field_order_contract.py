@@ -102,7 +102,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "escape_detector_mode",
                 "escape_detector_verified",
                 "escape_diagnostics",
-                "facet_registry_snapshot",
+                "facet_functions",
                 "grad_transform",
                 # grouping/grouping_policy, distributed_scope,
                 # intervention_audit, and structure_only left this ledger at
@@ -116,7 +116,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
                 "pinned_autograd_memory",
-                "replay_frontier",
+                "_replay_frontier",
             }
         ),
     ),

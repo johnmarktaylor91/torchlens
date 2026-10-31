@@ -823,7 +823,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
         model,
         x,
         capture=CaptureOptions(
-            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
+            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
         ),
     )
     trace.log_backward(_output_loss(trace))
@@ -865,7 +865,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", intervention_ready=True, backward_ready=True),
+        capture=CaptureOptions(layers_to_save="all", replayable=True, backward_ready=True),
     )
     address, param_log = next(iter(trace.param_logs.items()))
     param_log._derived_grad_payload = torch.ones(1)

@@ -524,7 +524,7 @@ def save(
     if (peek_injection_state(trace) or {}).get("records"):
         refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
-    # product (its FIELD_POLICY declares both fields session-time DROP). Every
+    # product (its _FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
     # closes the hand-built wrapper-around-a-settled-trace residual, which
     # before the b1-opus-R06-1 outcome delegation fail-closed only by ACCIDENT
@@ -1770,7 +1770,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
 
     from .._runnable import RunProvider
 
-    if trace.runnable_descriptor is not None:
+    if trace._sparse_run_descriptor is not None:
         return "bind"
     readiness = trace._runnable.readiness
     if getattr(readiness, "provider", None) is RunProvider.LOADED_SPARSE:
@@ -1813,7 +1813,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
@@ -1903,7 +1903,7 @@ def _bind_embedded_weight_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     weight_entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
@@ -1986,7 +1986,7 @@ def _bind_archived_activation_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     activation_entries = {
         entry.blob_id: entry
         for entry in manifest.tensors

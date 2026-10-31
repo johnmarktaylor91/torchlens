@@ -108,7 +108,7 @@ def _build_col_offset_map(code: CodeType) -> dict[int, int | None]:
     unit, cache slots included, each carrying its owning instruction's
     position (the same per-unit stream ``dis`` consumes). It is a C iterator,
     so the build enters no Python frame. That matters because the map is
-    often first built inside an ``intervention_ready`` capture, where the RNG
+    often first built inside an ``replayable`` capture, where the RNG
     monitor's profile hook snapshots every Python frame entry: ``dis``-based
     disassembly entered several helper frames per instruction there and made
     one cold build cost seconds.

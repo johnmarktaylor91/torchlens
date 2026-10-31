@@ -41,7 +41,7 @@ def log():
     trace = tl.trace(
         _TwoConv(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         yield trace
@@ -94,7 +94,7 @@ def test_leaf_site_masked_edit_via_rf_intersection(log):
     # FireRecord disclosure matches the hook path
     records = list(fork["input_1"].interventions)
     assert records and records[0].helper_name == "zero_ablate" and records[0].replaced
-    assert fork["input_1"].intervention_replaced
+    assert fork["input_1"].is_edited
 
 
 def test_whole_site_short_circuit(log):

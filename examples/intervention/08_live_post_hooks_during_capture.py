@@ -33,12 +33,12 @@ def main() -> None:
     """Capture with a live zero-ablation hook."""
 
     x = torch.tensor([[-2.0, 3.0]])
-    clean = tl.trace(ReluAdd(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    clean = tl.trace(ReluAdd(), x, capture=tl.options.CaptureOptions(replayable=True))
     live = tl.trace(
         ReluAdd(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu"): tl.zero_ablate()}
+            replayable=True, hooks={tl.func("relu"): tl.zero_ablate()}
         ),
     )
 

@@ -37,9 +37,7 @@ def test_tap_records_without_modifying_output() -> None:
     x = torch.tensor([[-1.0, 2.0]])
     tap = tl.observers.tap(tl.func("relu"))
 
-    hooked = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap)
-    )
+    hooked = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=tap))
     plain = tl.trace(model, x)
 
     assert tap.values()

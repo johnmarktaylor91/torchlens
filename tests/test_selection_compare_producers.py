@@ -162,7 +162,7 @@ def test_changed_selects_what_the_intervention_moved(model):
     trace = tl.trace(
         model,
         torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = tl.units(_RELU, [(0, 0, 1, 1), (0, 1, 2, 2)])
@@ -609,7 +609,7 @@ def test_do_zero_ablates_top_movers(model):
     trace = tl.trace(
         model,
         torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     torch.manual_seed(5)
     reference = tl.trace(model, torch.randn(1, 1, 10, 10))
@@ -635,7 +635,7 @@ def test_do_zero_ablates_a_stable_unit_at_every_pass():
     trace = tl.trace(
         _Recurrent(),
         torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.stable_across_passes(_TANH, atol=1e-9)

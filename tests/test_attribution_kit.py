@@ -293,7 +293,7 @@ def test_occlusion_routes_named_baselines_through_selection_do() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.units(trace.input_ops[0].label, [(0, 0, 1, 1)])
@@ -323,7 +323,7 @@ def test_occlusion_rejects_an_implicit_or_invalid_baseline() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = trace.input_ops[0]

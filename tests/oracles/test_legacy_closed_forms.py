@@ -261,12 +261,18 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     assert int(trace.graph.max_ops_per_layer) == 2
     params = {param.address: param for param in trace.param_logs}
     for address in ("fc.weight", "fc.bias"):
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (
+            int(len(params[address].used_by_ops)),
+            int(len(params[address].used_by_layers)),
+        ) == (
             2,
             1,
         )
     for address in ("idle.weight", "idle.bias"):  # registered, never called
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (
+            int(len(params[address].used_by_ops)),
+            int(len(params[address].used_by_layers)),
+        ) == (
             0,
             0,
         )
@@ -276,8 +282,8 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
         assert int(loop.graph.max_ops_per_layer) == 3  # fc three times, one Layer
         params = {param.address: param for param in loop.param_logs}
         assert (
-            int(params["fc.weight"].num_uses_by_ops),
-            int(params["fc.weight"].num_uses_by_layers),
+            int(len(params["fc.weight"].used_by_ops)),
+            int(len(params["fc.weight"].used_by_layers)),
         ) == (3, 1)
     finally:
         loop.cleanup()

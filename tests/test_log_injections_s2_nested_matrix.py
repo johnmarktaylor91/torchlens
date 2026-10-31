@@ -121,7 +121,7 @@ def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), lambda out, *, hook: torch.sigmoid(out)),
-        capture=tl.options.CaptureOptions(log_injections=True, intervention_ready=True),
+        capture=tl.options.CaptureOptions(log_injections=True, replayable=True),
     )
     before = logged.injected_ops
     assert len(before) == 1

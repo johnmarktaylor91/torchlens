@@ -1336,7 +1336,7 @@ class JAXBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),

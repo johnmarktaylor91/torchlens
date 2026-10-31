@@ -565,9 +565,9 @@ def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() ->
     assert refused_again.value.fields["code"] == "run_staged_spec_unapplied"
 
 
-@pytest.mark.parametrize("intervention_ready", [False, True], ids=["default", "ready"])
+@pytest.mark.parametrize("replayable", [False, True], ids=["default", "ready"])
 def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
-    intervention_ready: bool,
+    replayable: bool,
 ) -> None:
     """A default-save trace reruns through capture, RNG-exact, inheriting readiness.
 
@@ -585,12 +585,12 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
         plain = model(x)
 
     torch.manual_seed(123)
-    if intervention_ready:
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    if replayable:
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     else:
         trace = tl.trace(model, x)
-    source_ready = trace.intervention_ready
-    assert source_ready is intervention_ready
+    source_ready = trace.is_replayable
+    assert source_ready is replayable
     captured = _output(trace).detach().clone()
     # The model is genuinely stochastic: an unseeded-equivalent forward differs.
     assert not torch.equal(captured, plain)
@@ -600,7 +600,7 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
 
     assert trace.last_run["engine"] == "rerun"
     assert torch.equal(_output(trace), captured)
-    assert trace.intervention_ready == source_ready
+    assert trace.is_replayable == source_ready
 
 
 def test_full_sequence_output_reruns_shape_varied_exactly() -> None:

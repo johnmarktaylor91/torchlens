@@ -75,7 +75,7 @@ def _trace_with_tap(tap: TapObserver) -> object:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
@@ -120,7 +120,7 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
     trace = tl.trace(
         _Identity(),
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
@@ -202,7 +202,7 @@ def test_record_span_backward_event_inside_active_span() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
 
@@ -247,7 +247,7 @@ def test_tap_per_call_vs_per_event_count() -> None:
     trace = tl.trace(
         _TinyRelu(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)

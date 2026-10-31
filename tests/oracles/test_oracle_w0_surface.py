@@ -163,7 +163,7 @@ def test_class_member_license_channels_are_alive() -> None:
         for cls_name, member, lic in walk_class_surface_classified(torchlens)
     }
     assert rows[("Recording", "to_trace")] == CLASS_BODY
-    assert rows[("Trace", "FIELD_FORK_POLICY")] == MODULE_ASSIGNED
+    assert rows[("Trace", "_FIELD_FORK_POLICY")] == MODULE_ASSIGNED
     assert rows[("Op", "gpu_kernels")] == INSTALLED_BY_PACKAGE
     assert rows[("Layer", "flops_forward")] == INSTALLED_BY_PACKAGE
     assert rows[("Flops", "bit_length")] == INHERITED_EXTERNAL

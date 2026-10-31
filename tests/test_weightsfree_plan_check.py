@@ -85,7 +85,7 @@ def test_plan_check_refuted_source_refuses() -> None:
 def test_plan_check_never_arms_the_capture() -> None:
     trace = _meta_trace()
     trace.check_plan([("relu_1_2", torch.empty(2, 4, device="meta"))])
-    assert not bool(getattr(trace, "intervention_ready", False))
+    assert not bool(getattr(trace, "is_replayable", False))
     # The runnable refusal is untouched by a successful plan check.
     with pytest.raises(Exception) as excinfo:
         trace.save("/tmp/never-written.tlspec", level="runnable")

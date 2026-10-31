@@ -282,7 +282,7 @@ def _collect() -> dict[str, list[tuple[str, str, str | None, str]]]:
     schema: dict[str, list[tuple[str, str, str | None, str]]] = {}
     for key, cls, container_defaults, pooled in classes:
         rows: list[tuple[str, str, str | None, str]] = []
-        for name, policy in cls.FIELD_POLICY.items():
+        for name, policy in cls._FIELD_POLICY.items():
             kind, mutability = _classify(key, cls, name, policy, container_defaults, pooled)
             rows.append((name, kind, _annotation_for(cls, name), mutability))
         schema[key] = rows
@@ -306,7 +306,7 @@ def collect_primitive_candidate_bindings() -> dict[str, str]:
     from torchlens._io import FieldPolicy
 
     candidate: dict[str, str] = {}
-    for name, policy in AtenOp.FIELD_POLICY.items():
+    for name, policy in AtenOp._FIELD_POLICY.items():
         promoted = replace(policy, portable_policy=FieldPolicy.KEEP)
         kind, _ = _classify(
             "primitive_op",

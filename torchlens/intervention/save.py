@@ -707,7 +707,7 @@ def _trace_fire_records(log: Any) -> list[FireRecord]:
         )
     for grad_fn in getattr(log, "grad_fn_logs", {}).values():
         for call in getattr(getattr(grad_fn, "calls", None), "_list", []):
-            records.extend(_flatten_fire_ref(getattr(call, "intervention_fire_ref", None)))
+            records.extend(_flatten_fire_ref(getattr(call, "fire_record", None)))
     return records
 
 
@@ -1116,8 +1116,8 @@ def _serialize_helper(
             "portability": "opaque_audit",
             "name": helper.name,
             "repr": repr(helper),
-            "batch_independent": bool(helper.batch_independent),
-            "compatible_with_append": bool(helper.compatible_with_append),
+            "is_batch_independent": bool(helper.is_batch_independent),
+            "is_compatible_with_append": bool(helper.is_compatible_with_append),
         }
 
     return {
@@ -1128,8 +1128,8 @@ def _serialize_helper(
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
-        "batch_independent": bool(helper.batch_independent),
-        "compatible_with_append": bool(helper.compatible_with_append),
+        "is_batch_independent": bool(helper.is_batch_independent),
+        "is_compatible_with_append": bool(helper.is_compatible_with_append),
     }
 
 

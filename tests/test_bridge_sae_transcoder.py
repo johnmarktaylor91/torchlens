@@ -61,7 +61,7 @@ def test_transcoder_spliced_with_input_in_equals_a_hand_forward(setup) -> None:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="in")},
         ),
     )
@@ -78,7 +78,7 @@ def test_transcoder_reads_the_mlp_input_not_its_output(setup) -> None:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="out")},
         ),
     )

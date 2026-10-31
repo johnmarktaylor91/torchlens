@@ -57,7 +57,7 @@ def _capture() -> tl.Trace:
     return tl.trace(
         _FusedThenAdd(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -124,7 +124,7 @@ class TestTinyGemma2:
             trace = tl.trace(
                 model,
                 torch.tensor([fx.TOKENS]),
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             )
         try:
             yield fx, model, trace

@@ -250,7 +250,7 @@ def test_parameter_input_replay_template_uses_parent_ref() -> None:
     model = _TinyStimulusModel()
     z = _parameter_stimulus()
 
-    trace = tl.trace(model, z, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, z, capture=tl.options.CaptureOptions(replayable=True))
     first_op = _first_non_boundary_op(trace)
 
     assert first_op.args_template is not None

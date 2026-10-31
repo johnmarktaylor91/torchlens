@@ -312,7 +312,7 @@ def _selection_fork() -> tl.Trace:
     trace = tl.trace(
         _TwoConv(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = trace.fork()
     fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate())
@@ -334,7 +334,7 @@ def _edge_fork() -> tl.Trace:
     trace = tl.trace(
         _EdgeNet(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()

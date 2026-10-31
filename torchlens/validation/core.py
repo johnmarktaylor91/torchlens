@@ -1424,7 +1424,7 @@ def validate_parents_of_saved_layer(
 def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     """Return whether a layer's out was intentionally replaced by a hook.
 
-    Round-26 W3-2 hardening: the per-op ``intervention_replaced`` /
+    Round-26 W3-2 hardening: the per-op ``is_edited`` /
     ``is_internal_source`` attributes are written by the same capture machinery
     whose failure this exemption must not mask, so they are no longer trusted
     alone. The claim must be corroborated by the trace-level replacement-event
@@ -1443,10 +1443,7 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
         Whether validation should treat the op as an intervention boundary.
     """
 
-    if not (
-        getattr(layer, "intervention_replaced", False)
-        and not getattr(layer, "is_internal_source", False)
-    ):
+    if not (getattr(layer, "is_edited", False) and not getattr(layer, "is_internal_source", False)):
         return False
     has_own_live_replacement = any(
         getattr(record, "replaced", False)

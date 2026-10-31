@@ -432,29 +432,29 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(
     "feature",
-    ["intervention_ready", "hooks_tap"],
-    ids=["intervention_ready", "hooks_tap"],
+    ["replayable", "hooks_tap"],
+    ids=["replayable", "hooks_tap"],
 )
 def test_selective_save_with_intervention_features(feature: str) -> None:
     """Legacy selective lists compose with readiness and live tap hooks."""
     x = torch.randn(2, 4)
-    if feature == "intervention_ready":
+    if feature == "replayable":
         trace = tl.trace(
             TinyLinear(),
             x,
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 layers_to_save=["relu"],
             ),
         )
-        assert trace.intervention_ready is True
+        assert trace.is_replayable is True
         assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
         linear_trace = tl.trace(
             TinyLinear(),
             x,
             capture=tl.options.CaptureOptions(
                 layers_to_save=["linear"],
-                intervention_ready=True,
+                replayable=True,
             ),
         )
         assert any(

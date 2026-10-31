@@ -347,7 +347,7 @@ def test_genuine_hook_replacement_still_validates() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x)
-    replaced = [op for op in trace.layer_list if op.intervention_replaced]
+    replaced = [op for op in trace.layer_list if op.is_edited]
     assert replaced, "expected a genuine intervention replacement op"
     assert _validate(model, x) is True
 

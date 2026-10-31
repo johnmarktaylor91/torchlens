@@ -67,7 +67,7 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
@@ -90,7 +90,7 @@ def test_repeated_appends_increment_sequence_id_and_history() -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
@@ -110,7 +110,7 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
@@ -133,7 +133,7 @@ def test_append_train_mode_no_helper_grad_message() -> None:
         model,
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             save_grads=True,
             backward_ready=True,
         ),

@@ -80,7 +80,7 @@ def _steered(model: nn.Module) -> tl.Trace:
 
 
 def _ready(model: nn.Module) -> tl.Trace:
-    return tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
 
 
 def _double(out: torch.Tensor) -> torch.Tensor:
@@ -172,7 +172,7 @@ def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
 
 def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     model = _model()
-    plain = tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
     fork = plain.fork("f")
     assert fork.is_pristine is True and plain.is_pristine is True
     fork.set(tl.module("block"), _double, confirm_mutation=True)
@@ -278,7 +278,7 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
         ("state", TraceState.DIRECT_WRITE_DIRTY),
         ("state", TraceState.REPLAY_PROPAGATED),
         ("state", TraceState.LIVE_CAPTURED),
-        ("layer_list", [SimpleNamespace(intervention_replaced=True)]),
+        ("layer_list", [SimpleNamespace(is_edited=True)]),
     ],
 )
 def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:

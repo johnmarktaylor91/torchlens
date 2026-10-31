@@ -54,7 +54,7 @@ def test_head_ablation_sugar_matches_hand_written_hook_oracle() -> None:
         label = member.output_layers[0]
         return float(member[label].out[0, -1, target_token].item())
 
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     candidates = head_ablation_candidates(baseline, module, heads=n_heads)
     assert list(candidates) == [f"h{i}" for i in range(n_heads)]
     bundle = sweep_sites(
@@ -107,7 +107,7 @@ def test_head_sugar_refuses_gqa_and_unresolved_module() -> None:
     model = _gpt2()
     torch.manual_seed(0)
     ids = torch.randint(0, 100, (1, 8))
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     with pytest.raises(BundleExperimentError) as excinfo:
         head_ablation_candidates(baseline, "transformer.h.9.attn", heads=2)
     assert excinfo.value.fields["code"] == "head_ablation_module_unresolved"
@@ -122,7 +122,7 @@ def test_unscoped_head_selector_is_refused_as_sweep_candidate() -> None:
     model = _gpt2()
     torch.manual_seed(0)
     ids = torch.randint(0, 100, (1, 8))
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
 
     def metric(member: tl.Trace) -> float:
         label = member.output_layers[0]

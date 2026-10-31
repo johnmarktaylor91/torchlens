@@ -152,7 +152,7 @@ def test_keep_grad_inside_a_subspace_checks_the_coordinates() -> None:
     """The component an interchange writes is the donor's (detached): the check fires."""
 
     model = _Net()
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     target = tl.trace(model, _X, capture=options)
     source = tl.trace(model, _X * 2.0, capture=options)
     basis = 0.5 * torch.tensor([[1.0, 1.0, 1.0, 1.0]], dtype=torch.float64)

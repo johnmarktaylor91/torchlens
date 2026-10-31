@@ -273,7 +273,7 @@ def _resolve_intervened_ids(log: Any, classified: _Classified) -> set[str]:
         ops = getattr(entry, "ops", None) or [entry]
         for op in ops:
             key = getattr(op, "site_key", None)
-            replaced = bool(getattr(op, "intervention_replaced", False))
+            replaced = bool(getattr(op, "is_edited", False))
             if replaced or (key is not None and str(key) in site_keys):
                 marked.add(classified.node_ids[id(entry)])
                 break

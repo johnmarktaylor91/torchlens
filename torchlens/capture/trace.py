@@ -1056,7 +1056,7 @@ def _record_runnable_input_literal_leaves(
         Normalized keyword model inputs.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
@@ -1124,7 +1124,7 @@ def _record_runnable_input_structure(
     diverges on any node mismatch. Analysis captures are unaffected.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import snapshot_input_boundary
@@ -1170,7 +1170,7 @@ def _record_runnable_input_tensor_sites(
         Normalized keyword model inputs.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import raw_mapping_key_component, walk_input_boundary
@@ -1807,7 +1807,7 @@ def run_and_log_inputs_through_model(
             device_str = ", ".join(sorted(devices)) if devices else "unknown"
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
-        if bool(getattr(self, "intervention_ready", False)):
+        if bool(getattr(self, "is_replayable", False)):
             from .._runnable_state import (
                 snapshot_capture_state,
                 snapshot_capture_state_signatures,
@@ -1874,7 +1874,7 @@ def run_and_log_inputs_through_model(
             _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
             _record_runnable_input_structure(self, input_args, input_kwargs)
             _record_runnable_module_training_modes(self, model)
-            if bool(getattr(self, "intervention_ready", False)):
+            if bool(getattr(self, "is_replayable", False)):
                 # r35 decision E: capture the ambient backend execution context the
                 # forward is about to run under (defaults, matmul precision,
                 # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
@@ -1924,7 +1924,7 @@ def run_and_log_inputs_through_model(
                             # completeness, never reads as no-consumption.
                             #
                             # The channel monitor is armed ONLY for runnable-capable
-                            # captures: ``intervention_ready`` is the exact predicate
+                            # captures: ``replayable`` is the exact predicate
                             # for "this capture can produce a passing sparse runnable
                             # descriptor" (the same predicate that gates the ambient
                             # execution-context snapshot above), and the descriptor
@@ -1949,7 +1949,7 @@ def run_and_log_inputs_through_model(
                                 "monitor_verdict_not_stamped",
                             )
                             _host_rng_before = snapshot_host_rng()
-                            if bool(getattr(self, "intervention_ready", False)):
+                            if bool(getattr(self, "is_replayable", False)):
                                 from .._utils.rng import host_nondeterminism_monitor
 
                                 with host_nondeterminism_monitor(model) as _rng_channels:

@@ -530,7 +530,7 @@ class TorchBackend:
         input_args, input_kwargs, input_copy_gaps = safe_copy_input_tree(
             input_args,
             input_kwargs,
-            require_distinct_tensor_sites=bool(getattr(session, "intervention_ready", False)),
+            require_distinct_tensor_sites=bool(getattr(session, "is_replayable", False)),
         )
         _record_input_semantics_gaps(
             session,
@@ -871,7 +871,7 @@ class TorchBackend:
         )
         # The per-op container_spec is only user-facing metadata when explicitly
         # opted into via capture_container_structure (or implied by
-        # intervention_ready); with the default OFF it must stay None on output
+        # replayable); with the default OFF it must stay None on output
         # layers. The container *path*, however, is always preserved so
         # forward-replay validation can slice multi-output containers back to the
         # right leaf, and the FINAL-output ContainerSpec is always registered as
@@ -879,7 +879,7 @@ class TorchBackend:
         # the exact tuple/dict/ModelOutput the model returned from that one
         # snapshot, so a default capture settles VERIFIED instead of the
         # remedy-only ``container_contract_unrecorded`` (W051-HONESTY H2).
-        persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
+        persist_container_spec = getattr(self_trace, "is_replayable", False) or getattr(
             self_trace, "_capture_container_structure", False
         )
         if output_entries:

@@ -44,6 +44,12 @@ _HERE = Path(__file__).parent
 SCHEMAS = _HERE.parent / "torchlens" / "schemas"
 V9_CONTRACT = SCHEMAS / "writer_contract_v9.json"
 V10_CONTRACT = SCHEMAS / "writer_contract_v10.json"
+V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
+
+#: SHA-256 of the frozen v10 contract of record (frozen since the v11 bump).
+V10_CONTRACT_SHA256 = (
+    "f49ae6370c46c171074c335a4ac2e6ce3734935bb7194668840672c2ea570fea"  # pragma: allowlist secret
+)
 
 #: SHA-256 of the frozen v9 contract of record. The v10 write must never touch
 #: its bytes: the v9 contract is a ledger digest input for every v9 artifact.
@@ -185,11 +191,22 @@ def test_v9_contract_of_record_is_byte_identical() -> None:
     )
 
 
+def test_v10_contract_of_record_is_byte_identical() -> None:
+    digest = hashlib.sha256(V10_CONTRACT.read_bytes()).hexdigest()
+    assert digest == V10_CONTRACT_SHA256, (
+        "writer_contract_v10.json changed; the v10 contract of record is frozen since "
+        "the v11 bump (regenerate only writer_contract_v11.json)"
+    )
+
+
 def test_contract_versions_floor_text_and_digests() -> None:
     v9 = _load(V9_CONTRACT)
     v10 = _load(V10_CONTRACT)
+    v11 = _load(V11_CONTRACT)
     assert v9["contract"]["tlspec_version"] == 9
-    assert v10["contract"]["tlspec_version"] == TLSPEC_VERSION == 10
+    assert v10["contract"]["tlspec_version"] == 10
+    assert v11["contract"]["tlspec_version"] == TLSPEC_VERSION == 11
+    assert v10["writer_contract_digest"] != v11["writer_contract_digest"]
     assert v9["contract"]["min_torchlens_version"] == "2.33", "v9 stays frozen"
     assert v10["contract"]["min_torchlens_version"] == "2.31.0"
     assert floor_metadata()["producer_floor_writer"] == MIN_TORCHLENS_VERSION_TEXT
@@ -211,8 +228,8 @@ def test_step_score_names_are_reserved_and_credited() -> None:
 def test_facet_snapshot_stays_a_drop_field() -> None:
     """R2-36: the facet snapshot never persists (pickle round-trip: test_fw2b_*)."""
 
-    trace_contract = _record_contracts(V10_CONTRACT)["trace"]
-    assert trace_contract["field_policies"]["facet_registry_snapshot"] == "drop"
+    trace_contract = _record_contracts(V11_CONTRACT)["trace"]
+    assert trace_contract["field_policies"]["facet_functions"] == "drop"
 
 
 def test_below_floor_refusal_names_the_corrected_floor() -> None:
@@ -238,7 +255,7 @@ def test_modellog_216_refusal_keeps_the_verified_reader_remedy() -> None:
 def test_future_version_refuses_on_state_and_producer_windows() -> None:
     with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": TLSPEC_VERSION + 1}, cls_name="Trace")
-    assert excinfo.value.fields["ceiling_tlspec_version"] == 10
+    assert excinfo.value.fields["ceiling_tlspec_version"] == TLSPEC_VERSION == 11
     assert pair_is_governed("2.36.0", 10)
     assert not pair_is_governed("2.35.0", 10), "v10 was never written before 2.36.0"
     assert pair_is_governed("2.34.1", 9)

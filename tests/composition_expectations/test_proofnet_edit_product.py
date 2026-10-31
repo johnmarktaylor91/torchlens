@@ -77,7 +77,7 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)
     ).eval()
     example = torch.randn(2, 4)
-    live = tl.trace(model, example, capture=tl.options.CaptureOptions(intervention_ready=True))
+    live = tl.trace(model, example, capture=tl.options.CaptureOptions(replayable=True))
     save_path = tmp_path_factory.mktemp("editmx") / "live.tlspec"
     live.save(str(save_path))
     products = {
@@ -136,7 +136,7 @@ def test_edit_cell_matches_declared_state(product_name: str, edit_products: dict
         private = tl_mod.trace(
             private_model,
             torch.randn(2, 4),
-            capture=tl_mod.options.CaptureOptions(intervention_ready=True),
+            capture=tl_mod.options.CaptureOptions(replayable=True),
         )
         try:
             with warnings.catch_warnings(record=True) as caught:
@@ -185,7 +185,7 @@ def test_selection_lane_edit_on_presenters_refuses_foreign_trace() -> None:
         torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)
     ).eval()
     example = torch.randn(2, 4)
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     first = tl.trace(model, example, capture=options)
     second = tl.trace(model, example, capture=options)
     try:

@@ -620,8 +620,8 @@ def test_save_budget_is_a_session_knob_not_a_portable_field() -> None:
     from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens._io import FieldPolicy
 
-    assert Trace.FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
-    assert Trace.FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP
+    assert Trace._FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
+    assert Trace._FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP
     assert "save_budget" not in MODEL_LOG_FIELD_ORDER
     assert "_save_budget_accountant" not in MODEL_LOG_FIELD_ORDER
 

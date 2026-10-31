@@ -38,7 +38,7 @@ def _check_edge_intervention_boundary(
       "exempted". A wrong stored output under a corroborated entry FAILS
       (skip-shaped acceptance is impossible by construction).
 
-    Node-level ``intervention_replaced`` corroboration never fires for edges:
+    Node-level ``is_edited`` corroboration never fires for edges:
     edge substitution replaces no node's output.
     """
 

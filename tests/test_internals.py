@@ -88,7 +88,7 @@ class TestFieldOrderSync:
     def test_trace_field_order_covers_init(self):
         """Every public Trace init attr is declared, and user-facing ones are ordered.
 
-        A public NAME does not imply a user-facing FIELD. ``FIELD_POLICY`` is the
+        A public NAME does not imply a user-facing FIELD. ``_FIELD_POLICY`` is the
         source of truth (``MODEL_LOG_FIELD_ORDER`` is generated from it -- see
         ``test_record_field_policy.py::test_record_field_policy_is_field_order_source``),
         and a session-time knob may be public-named yet deliberately non-user-facing:
@@ -106,10 +106,10 @@ class TestFieldOrderSync:
         init_attrs = self._init_assigned_attrs(Trace)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
 
-        undeclared = public_attrs - set(Trace.FIELD_POLICY)
-        assert not undeclared, f"Trace public fields absent from FIELD_POLICY: {undeclared}"
+        undeclared = public_attrs - set(Trace._FIELD_POLICY)
+        assert not undeclared, f"Trace public fields absent from _FIELD_POLICY: {undeclared}"
 
-        user_facing = {a for a in public_attrs if Trace.FIELD_POLICY[a].user_facing}
+        user_facing = {a for a in public_attrs if Trace._FIELD_POLICY[a].user_facing}
         missing = user_facing - set(MODEL_LOG_FIELD_ORDER)
         assert not missing, f"Trace user-facing fields missing from FIELD_ORDER: {missing}"
         non_user_facing = public_attrs - user_facing
@@ -144,9 +144,9 @@ class TestFieldOrderSync:
         # the L9 markers are KEEP-but-unordered per the v8 bump ruling (the
         # portable_only_fields ledger in test_field_order_contract.py).
         for name in session_knobs:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
         for name in portable_unordered:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
 
     def test_module_call_log_field_order_covers_init(self):
         from torchlens._data_classes.module import ModuleCall

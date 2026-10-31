@@ -69,7 +69,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
 
     log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
-    assert log.intervention_ready is False
+    assert log.is_replayable is False
     assert log.state is TraceState.PRISTINE
     assert log.num_ops == 2
     assert log.layer_list
@@ -103,12 +103,12 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        capture=CaptureOptions(intervention_ready=False),
+        capture=CaptureOptions(replayable=False),
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     assert stashed(baseline_log, "latest") is not None
@@ -130,7 +130,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
@@ -141,7 +141,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 
     followup_log = tl.trace(model, torch.randn(2, 3))
 
-    assert followup_log.intervention_ready is False
+    assert followup_log.is_replayable is False
     assert followup_log.state is TraceState.PRISTINE
     assert followup_log.layer_list
 
@@ -154,7 +154,7 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
             _TinyReluModel(),
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )

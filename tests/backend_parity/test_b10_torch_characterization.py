@@ -285,7 +285,7 @@ def test_intervention_ready_walks_nested_output_containers() -> None:
         trace = tl.trace(
             _ContainerOutputModel(),
             torch.ones(2, 2),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     output_paths = [trace[label].container_path for label in trace.output_layers]

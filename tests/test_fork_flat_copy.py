@@ -106,7 +106,7 @@ def test_everything_else_takes_the_deepcopy_path() -> None:
 def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.MonkeyPatch) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     original = trace_fork._flat_container_copy
     monkeypatch.setattr(trace_fork, "_flat_container_copy", lambda *_args: trace_fork._NO_FLAT_COPY)
     control, without = trace.fork(), trace.fork()

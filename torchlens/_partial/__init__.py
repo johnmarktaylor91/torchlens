@@ -99,7 +99,7 @@ class PartialTrace:
     # partial products instead of being structurally blind to them. Failed
     # partials never persist (`to_trace`/`Trace.save` refuse), so both fields
     # are session-time DROP.
-    FIELD_POLICY: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    _FIELD_POLICY: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
             "trace": FieldPolicy.DROP,
             "original_exception": FieldPolicy.DROP,

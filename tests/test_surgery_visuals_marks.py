@@ -31,7 +31,7 @@ from torchlens.visualization.surgery_visuals import (
 )
 from torchlens.viz import intervention_diff
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 #: The execution-removal verbs no surgery wording may ever contain (the F38
 #: lint's vocabulary; unrepresentable here by construction).
@@ -265,7 +265,7 @@ def test_live_lane_wording_never_borrows_replay_text() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     text = surgery_census(log).to_text()
     assert _LIVE_WORDING in text
@@ -282,7 +282,7 @@ def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
             model,
             x,
             intervene=tl.when(tl.func("sigmoid"), tl.zero_ablate()),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     text = surgery_census(log).to_text()
     assert "declared and never fired" in text
@@ -319,7 +319,7 @@ def test_injection_hosts_mark_and_census_count() -> None:
         x,
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.splice_module(splice)),
-        capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
+        capture=tl.options.CaptureOptions(replayable=True, log_injections=True),
     )
     facts = surgery_facts(log)
     host_marks = [mark for mark in facts.marks if mark.kind == "injection_host"]

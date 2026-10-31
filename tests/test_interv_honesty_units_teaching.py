@@ -22,9 +22,9 @@ class _ConvNet(nn.Module):
         return torch.relu(self.c1(x))
 
 
-def _log(*, intervention_ready: bool = False) -> tl.Trace:
+def _log(*, replayable: bool = False) -> tl.Trace:
     torch.manual_seed(0)
-    capture = tl.options.CaptureOptions(intervention_ready=intervention_ready)
+    capture = tl.options.CaptureOptions(replayable=replayable)
     return tl.trace(_ConvNet().eval(), torch.randn(2, 1, 4, 4), capture=capture)
 
 

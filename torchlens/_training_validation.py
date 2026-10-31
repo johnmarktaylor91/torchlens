@@ -66,7 +66,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
     capture_options:
         Resolved capture options for this call.
     backward_requested:
-        Whether ``backward_ready``, ``save_grads`` or ``intervention_ready``
+        Whether ``backward_ready``, ``save_grads`` or ``replayable``
         is in force.
 
     Returns

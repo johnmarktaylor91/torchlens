@@ -13,7 +13,7 @@ vocab/merges into an artifact the user believes is a graph.
 
 The pop block used to live ONLY on the normal forward-return arm, so the
 HALTED axis (and the failure/interrupt axes) exited with all four still
-pinned, and none of the four was declared in ``Trace.FIELD_POLICY`` /
+pinned, and none of the four was declared in ``Trace._FIELD_POLICY`` /
 ``MODEL_LOG_FIELD_ORDER`` -- which is why the runtime-declaration lockstep gate
 never saw them.
 """
@@ -176,7 +176,7 @@ def test_all_four_fields_are_declared_drop_on_trace() -> None:
 
     from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
-    policy = tl.Trace.FIELD_POLICY
+    policy = tl.Trace._FIELD_POLICY
     for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
         assert name in policy, name
         assert policy[name].portable_policy is FieldPolicy.DROP, name

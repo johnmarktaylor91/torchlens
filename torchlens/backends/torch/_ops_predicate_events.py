@@ -264,7 +264,7 @@ def _emit_predicate_operation_events(
                         ctx,
                         tensor=out,
                         trace=self,
-                        intervened=bool(getattr(committed_event, "intervention_replaced", False)),
+                        intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
                 state.append_context(ctx)
 

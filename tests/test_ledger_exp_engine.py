@@ -32,7 +32,7 @@ class _Tiny(nn.Module):
 
 
 def _baseline(x: torch.Tensor, model: nn.Module) -> tl.Trace:
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _output_metric(member: tl.Trace) -> float:

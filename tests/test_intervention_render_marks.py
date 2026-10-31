@@ -420,7 +420,7 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
     trace = tl.trace(
         _SharedLinearTwice(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         fork = trace.fork("edited")

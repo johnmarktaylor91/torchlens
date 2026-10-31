@@ -64,7 +64,7 @@ from torchlens._runnable_execution import (
 from torchlens._runnable_state import RunResourceCeiling, _byte_guarded_clone
 from torchlens.errors import RunCapabilityUnavailableError
 
-_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
+_CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
 
 
 # --------------------------------------------------------------------------- #

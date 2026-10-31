@@ -1,7 +1,7 @@
 """Regression tests for the lockstep inventory's coverage (``tools/name_lockstep/inventory.py``).
 
 The phase-4 dry run found names the inventory missed: stored fields declared only in a
-``FIELD_POLICY`` table, classes filed under a re-export shim, module constants of a
+``_FIELD_POLICY`` table, classes filed under a re-export shim, module constants of a
 namespace without ``__all__``, nested namespaces, a submodule shadowed by a root name,
 and variadic or underscore keywords. A synthetic package in ``tmp_path`` reproduces
 each; one slow test checks the real package.
@@ -118,7 +118,7 @@ FILES = {
         class Record:
             """A record."""
 
-            FIELD_POLICY = {
+            _FIELD_POLICY = {
                 **{name: _Policy(True) for name in RECORD_FIELD_ORDER},
                 "runtime_cache": _Policy(False),
             }
@@ -188,7 +188,7 @@ def field_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
 
 
 def test_policy_table_fields_are_members_with_their_field_tables(field_inventory: dict) -> None:
-    """F7 and F6: ``FIELD_POLICY`` fields are members and name the table listing them."""
+    """F7 and F6: ``_FIELD_POLICY`` fields are members and name the table listing them."""
 
     for name in ("depth", "label"):
         row = field_inventory[f"member:{PKG}.record:Record.{name}"]

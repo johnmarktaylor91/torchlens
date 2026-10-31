@@ -728,7 +728,7 @@
   value-dependent branches refuse DEVICE-NEUTRALLY with the user's exact
   source line (`value_dependent_branch_unsupported`; missing meta kernels
   refuse `meta_kernel_unavailable`). Option conflicts (`raise_on_nan`,
-  `intervention_ready`, not-provably-value-free `halt=`) refuse
+  `replayable`, not-provably-value-free `halt=`) refuse
   `structure_only_option_conflict` at entry. `trace.structure_only` mirrors
   the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
@@ -921,13 +921,13 @@
   door), and `align_to` + `tl.patch_from(source)` is the cross-run patching
   spelling the acceptance gallery pins.
 - EDGE SUBSTITUTION (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
-  dataflow edge family (EdgeUseRecords; intervention_ready-gated, refusal
+  dataflow edge family (EdgeUseRecords; replayable-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address
   `(child_func_call_id, arg_kind, arg_path)`. `do(edge_selection, edit)`
   replaces the value CONSUMED on the edge on the replay/push engine ONLY
   (rerun/set_only refuse `edge_intervention_engine_unsupported`; rerun-side
   design is an escalated named future) — the child re-executes from the
-  substituted input (node-level `intervention_replaced` never fires for
+  substituted input (node-level `is_edited` never fires for
   edges), the substituted value rides the tier-(ii) store
   `Op.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary
@@ -1012,7 +1012,7 @@
   Post-hoc `contains`/string addressing accepts pass-qualified needles
   (a needle containing `:` also matches `Op.label`), and the hook-context
   `layer_log` snapshot carries `label` + `pass_index`. Replay disclosures
-  (`last_run` origins/cone, `replay_frontier` keys) spell multi-pass ops
+  (`last_run` origins/cone, `_replay_frontier` keys) spell multi-pass ops
   pass-qualified and keep bare labels for single-pass layers. The
   param-substitution multi-pass refusal is NARROWED on this engine (tied /
   recurrently-reused params substitute at every consumption, staged
@@ -1343,7 +1343,7 @@
   or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes
   the `tl_counterfactual_harvest_v1` block plus per-shard fire receipts, and the intervention
   identity rides the signature's `model_mode` value (module and op-type address classes run;
-  finer ones refuse `harvest_address_class_ungated`; helpers must be `batch_independent`).
+  finer ones refuse `harvest_address_class_ungated`; helpers must be `is_batch_independent`).
   `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
   token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
   `TokenRows` (one row per token, with `stimulus_row` and `position`), and

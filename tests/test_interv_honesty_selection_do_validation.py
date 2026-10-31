@@ -37,7 +37,7 @@ def capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     try:
         yield trace
@@ -88,7 +88,7 @@ def test_full_shape_tensor_value_still_works_masked() -> None:
     torch.manual_seed(0)
     model = _Net().eval()
     x = torch.randn(1, 1, 12, 12)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
     replacement = torch.full_like(log["relu_1_2"].out, 7.0)
     fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), replacement)

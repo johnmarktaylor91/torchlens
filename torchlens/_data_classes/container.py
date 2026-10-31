@@ -513,7 +513,7 @@ def _container_from_registry(op: Op) -> Container | None:
         return None
     if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
         # A per-op spec is the opt-in metadata (capture_container_structure /
-        # intervention_ready); the FINAL-output snapshot is registered on every
+        # replayable); the FINAL-output snapshot is registered on every
         # capture (W051-HONESTY H2), so final-output ops read the registry even
         # when their own record carries no spec.
         return None

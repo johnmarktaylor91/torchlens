@@ -29,7 +29,7 @@ from torchlens.intervention.regions import RegionTarget, region
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 
 class _Chain(nn.Module):

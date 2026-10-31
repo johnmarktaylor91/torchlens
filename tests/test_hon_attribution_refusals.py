@@ -51,9 +51,7 @@ def test_occlusion_refuses_an_empty_selection_and_the_remedy_runs() -> None:
     """U20.5: zero selected elements refuse typed; one selected element scores."""
 
     inputs = torch.arange(1.0, 10.0).reshape(1, 1, 3, 3)
-    trace = tl.trace(
-        _ImageScale(), inputs, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(_ImageScale(), inputs, capture=tl.options.CaptureOptions(replayable=True))
     try:
         label = trace.input_ops[0].label
         empty = tl.units(label, [])

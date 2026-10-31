@@ -269,7 +269,7 @@ def test_pass_qualification_pin_on_albert_two_pass_adds():
     torch.manual_seed(SEED)
     model = _HiddenOnly(spec.build("sdpa")).eval()
     ids = spec.input_kwargs()["input_ids"]
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     sites = _multipass_add_sites(trace)
     assert len(sites) >= 2, (
         f"expected 2-pass residual-add sites on the 2-layer shared ALBERT, found {sites}"
@@ -329,7 +329,7 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     model = spec.build("sdpa")
     ids = spec.input_kwargs()["input_ids"]
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(replayable=True)
     )
     # grouping rule row 12: distilgpt2's residual adds are single-pass layers;
     # the container path needs only an edited hidden-state add, so any one serves.

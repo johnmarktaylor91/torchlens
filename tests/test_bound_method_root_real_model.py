@@ -140,7 +140,7 @@ def test_bound_capture_save_load(tmp_path) -> None:
         model.generate,
         ids,
         input_kwargs=_generate_kwargs(False),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     target = tmp_path / "gpt2_generate.tlspec"
     log.save(target)
@@ -158,7 +158,7 @@ def test_replay_engine_on_real_bound_capture() -> None:
     bert_log = tl.trace(
         bert.forward,
         _token_ids(),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = bert_log.fork()
     target_op = next(op for op in bert_log.layer_list if op.label.startswith("linear"))

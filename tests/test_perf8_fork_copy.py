@@ -541,7 +541,7 @@ def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
     return tl.trace(
         model_cls(),
         torch.randn(2, model_cls.width),  # type: ignore[attr-defined]
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
 

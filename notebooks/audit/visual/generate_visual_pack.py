@@ -104,13 +104,13 @@ def _intervened_trace(model_key: str):
     """Intervention-ready trace with a PLANNED zero intervention at every relu.
 
     The renderer marks planned intervention sites (trace.set on an
-    intervention_ready trace); live `intervene=` fire records are not what
+    replayable trace); live `intervene=` fire records are not what
     the site/cone styling visualizes.
     """
 
     def _build():
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
         trace.set(tl.func("relu"), torch.zeros(relu.shape))
         return trace
@@ -172,7 +172,7 @@ def _ablation_bundle(model_key: str):
         import warnings
 
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -233,11 +233,11 @@ def _raw_input_trace(model_key: str):
 
 
 def _container_trace(model_key: str):
-    """Trace with final-output container structure enabled (intervention_ready)."""
+    """Trace with final-output container structure enabled (replayable)."""
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        return tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
 
     return _build
 
@@ -1000,7 +1000,7 @@ SECTIONS: list[Section] = [
                 title="show_containers: labels / collapsed / nodes (and the cluster fallback)",
                 caption=(
                     "Container structure (dict/tuple inputs and outputs) is captured when the trace enables "
-                    "it (intervention_ready=True for final-output structure, capture_container_structure="
+                    "it (replayable=True for final-output structure, capture_container_structure="
                     "True for the full registry). 'labels' annotates edges into container leaves with their "
                     "key/index. 'collapsed' merges a HOMOGENEOUS container bigger than container_max_inline "
                     "into one dashed summary node ('tuple x4'). 'nodes' (renderer-internal mode, not yet in "

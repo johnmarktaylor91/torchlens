@@ -41,7 +41,7 @@ def _capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     return model, x, trace
 
@@ -163,7 +163,7 @@ def _recurrent_capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     return model, x, trace
 
@@ -249,7 +249,7 @@ def test_tied_multipass_matmul_substitutes_every_pass():
 
     model = Tied()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         param = next(p for p in trace.params if p.address == "w")
         assert list(param.used_by_ops) == ["matmul_1_1:1", "matmul_1_1:2"]
@@ -285,7 +285,7 @@ def test_tied_embedding_projection_substitutes_both_sites():
 
     model = TiedLM()
     idx = torch.tensor([[1, 3, 7]])
-    trace = tl.trace(model, idx, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, idx, capture=tl.options.CaptureOptions(replayable=True))
     try:
         replacement = torch.randn(10, 4)
         fork = trace.fork()

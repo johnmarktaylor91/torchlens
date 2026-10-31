@@ -246,7 +246,7 @@ _NON_NUMERIC_FIELDS = frozenset(
         "buffer_replay_validated",
         "has_input_ancestor",
         "is_atomic_module",
-        "intervention_replaced",
+        "is_edited",
         "detach_saved_activations",
         "save_grads",
         "edges_vary_across_ops",

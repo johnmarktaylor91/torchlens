@@ -129,7 +129,7 @@ def _build_shared_fields_dict(
     fields_dict["_construction_done"] = False
     fields_dict["interventions"] = []
     should_capture_template = bool(
-        getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
+        getattr(self, "is_replayable", False) or getattr(self, "save_arg_templates", False)
     )
     if should_capture_template:
         captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)

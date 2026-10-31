@@ -41,7 +41,7 @@ def loop():
     torch.manual_seed(0)
     model = _Loop().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:

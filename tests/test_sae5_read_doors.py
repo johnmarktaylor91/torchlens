@@ -44,7 +44,7 @@ from torchlens.intervention.errors import (
 )
 from torchlens.semantic.facets import Facet
 
-_READY = tl.options.CaptureOptions(intervention_ready=True)
+_READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _AttnModel(nn.Module):

@@ -108,7 +108,7 @@ def setup() -> Iterator[tuple[_Model, torch.Tensor, _HandSAE]]:
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _site_out(trace: tl.Trace) -> torch.Tensor:

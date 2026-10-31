@@ -343,7 +343,7 @@ def log_source_tensor_exhaustive(
         "activation_transform": self.activation_transform,
         "annotations": {},
         "interventions": [],
-        "intervention_replaced": False,
+        "is_edited": False,
         "detach_saved_activations": self.detach_saved_activations,
         "output_device": self.output_device,
         "has_saved_args": False,

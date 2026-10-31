@@ -24,7 +24,7 @@ _requires_gradient_edge = pytest.mark.skipif(
 )
 
 
-def _trace(intervention_ready: bool = True) -> tl.Trace:
+def _trace(replayable: bool = True) -> tl.Trace:
     """Trace the toy MLP with edge provenance on by default."""
 
     torch.manual_seed(0)
@@ -32,7 +32,7 @@ def _trace(intervention_ready: bool = True) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=intervention_ready),
+        capture=tl.options.CaptureOptions(replayable=replayable),
     )
 
 
@@ -69,11 +69,11 @@ class TestGradInputUseMap:
 
     @_requires_gradient_edge
     def test_provenance_gate_refuses_typed(self) -> None:
-        trace = _trace(intervention_ready=False)
+        trace = _trace(replayable=False)
         with pytest.raises(ob.ReadError) as excinfo:
             ob.mint_grad_input_use_map(trace)
         assert excinfo.value.fields["code"] == "read_edge_provenance_unavailable"
-        assert "intervention_ready" in excinfo.value.fields["remedy"]
+        assert "replayable" in excinfo.value.fields["remedy"]
 
 
 class TestPassOriginStamps:

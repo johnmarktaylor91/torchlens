@@ -338,7 +338,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     trace = tl.trace(
         _LinearModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     path = tmp_path / "intervention.tlspec"
     trace.save_intervention(path, level="audit")
@@ -573,7 +573,7 @@ def test_computed_record_fields_are_not_portable() -> None:
     }
     for record_type, field_names in expected_drops.items():
         for field_name in field_names:
-            assert record_type.FIELD_POLICY[field_name].portable_policy is FieldPolicy.DROP
+            assert record_type._FIELD_POLICY[field_name].portable_policy is FieldPolicy.DROP
 
 
 def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:

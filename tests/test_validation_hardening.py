@@ -172,7 +172,7 @@ def test_w32_forged_placeholder_in_plain_capture_fails() -> None:
 
     An op stamped with exactly the attributes the placeholder synthesizer
     writes (``func=None``, ``func_name='intervention_replacement'``,
-    ``intervention_replaced=True``) passed replay AND invariants on a PLAIN
+    ``is_edited=True``) passed replay AND invariants on a PLAIN
     capture before this hardening. With no replacement event in the
     trace-level ledger, both nets must now fail it.
     """
@@ -181,7 +181,7 @@ def test_w32_forged_placeholder_in_plain_capture_fails() -> None:
     relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
-    object.__setattr__(relu_op, "intervention_replaced", True)
+    object.__setattr__(relu_op, "is_edited", True)
     # No journal edit record exists for a plain capture: the forged per-op
     # stamps below have no corroborating InterventionAppliedEvent.
     assert not getattr(getattr(trace, "_capture_events", None), "intervention_events", ())
@@ -226,7 +226,7 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    replaced_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
+    replaced_ops = [op for op in trace.layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
     assert getattr(trace, "_intervention_spec", None) is not None
     assert any(
@@ -279,7 +279,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
         handle.remove()
 
     linear_op = next(op for op in trace.layer_list if op.func_name == "linear")
-    assert linear_op.intervention_replaced is False
+    assert linear_op.is_edited is False
     assert _is_intentional_intervention_replacement(linear_op) is False
 
 
@@ -290,7 +290,7 @@ def test_callable_op_needs_own_live_fire_to_use_replacement_exemption() -> None:
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
-    relu_op.intervention_replaced = True
+    relu_op.is_edited = True
     _note_replacement_event(trace, relu_op._label_raw)
 
     assert relu_op.func is not None
@@ -1858,7 +1858,7 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
-    object.__setattr__(relu_op, "intervention_replaced", True)
+    object.__setattr__(relu_op, "is_edited", True)
     bare_edit = InterventionAppliedEvent(
         label_raw=relu_op._label_raw,
         kind="replaced",
@@ -1883,7 +1883,7 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     relu_op2 = [op for op in trace2.layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op2, "func", None)
     object.__setattr__(relu_op2, "func_name", "intervention_replacement")
-    object.__setattr__(relu_op2, "intervention_replaced", True)
+    object.__setattr__(relu_op2, "is_edited", True)
     _plant_forged_intervention_edit(
         trace2,
         dataclasses.replace(
@@ -1939,7 +1939,7 @@ def test_cross_run_replayed_edit_does_not_bless_placeholder() -> None:
     relu_op = [op for op in trace_b.layer_list if op.func_name == "relu"][0]
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
-    object.__setattr__(relu_op, "intervention_replaced", True)
+    object.__setattr__(relu_op, "is_edited", True)
     _plant_forged_intervention_edit(
         trace_b, dataclasses.replace(genuine_edits[0], label_raw=relu_op._label_raw)
     )

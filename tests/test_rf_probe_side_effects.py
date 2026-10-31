@@ -82,22 +82,22 @@ def test_probe_does_not_mutate_the_class_level_field_policy_tables() -> None:
 
     The probe flag needs a portable scrub policy, but registering it from the
     probe mutated ``Trace._PORTABLE_STATE_SPEC`` process-globally and left it
-    desynchronized from the ``FIELD_POLICY`` table it is generated from. That
+    desynchronized from the ``_FIELD_POLICY`` table it is generated from. That
     made ``test_record_portable_spec_is_generated_from_policy[Trace]`` fail for
     every test collected after the first receptive-field gradient probe in the
     process, so the flag is declared statically on ``Trace`` instead.
     """
 
     before_spec = dict(Trace._PORTABLE_STATE_SPEC)
-    before_policy = dict(Trace.FIELD_POLICY)
+    before_policy = dict(Trace._FIELD_POLICY)
     assert "_tl_rf_probe_active" in before_spec
 
     _, trace, target, input_op = _conv_trace()
     gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
     assert dict(Trace._PORTABLE_STATE_SPEC) == before_spec
-    assert dict(Trace.FIELD_POLICY) == before_policy
-    assert portable_state_spec_from_policy(Trace.FIELD_POLICY) == Trace._PORTABLE_STATE_SPEC
+    assert dict(Trace._FIELD_POLICY) == before_policy
+    assert portable_state_spec_from_policy(Trace._FIELD_POLICY) == Trace._PORTABLE_STATE_SPEC
 
 
 def test_suppression_restores_exact_flag_state_when_probe_raises() -> None:

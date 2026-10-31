@@ -232,7 +232,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
 
     products: dict[str, Any] = {}
     products["trace_live"] = tl.trace(
-        model, example, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, example, capture=tl.options.CaptureOptions(replayable=True)
     )
     save_path = tmp_path_factory.mktemp("m1") / "live.tlspec"
     products["trace_live"].save(str(save_path))

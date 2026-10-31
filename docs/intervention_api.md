@@ -159,11 +159,11 @@ finally:
 If a raw hook returns a new tensor, TorchLens instruments that replacement, so
 downstream op-level graph structure remains available: torch ops the hook runs
 are traced as ordinary ops, and a tensor with no traceable provenance is
-recorded as an `interventionreplacement_*` op marked `intervention_replaced=True`.
+recorded as an `interventionreplacement_*` op marked `is_edited=True`.
 
 A capture-time module edit (`intervene=tl.when(tl.module("block"), ...)`) is
 always recorded as its own `interventionreplacement_*` op, with
-`intervention_replaced=True` and its fire records on `.interventions`, placed
+`is_edited=True` and its fire records on `.interventions`, placed
 between the module's last op and that op's consumers. The module's last op keeps
 the value it computed, before the edit. The edited value is the replacement
 op's `.out`, and it is what `tl.module("block")` reads as the module's output.

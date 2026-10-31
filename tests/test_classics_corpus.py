@@ -164,9 +164,7 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     readiness_trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     report, _attachments = preflight_sparse_run_descriptor(
         build_sparse_run_descriptor(readiness_trace)

@@ -2249,7 +2249,7 @@ def _backstop_op(
     *,
     transform_kind: str | None = None,
     func_name: str = "linear",
-    intervention_replaced: bool = False,
+    is_edited: bool = False,
     is_internal_source: bool = False,
 ) -> SimpleNamespace:
     """Build a minimal layer-op stand-in for the completeness backstop census."""
@@ -2258,7 +2258,7 @@ def _backstop_op(
         func_call_id=func_call_id,
         transform_kind=transform_kind,
         func_name=func_name,
-        intervention_replaced=intervention_replaced,
+        is_edited=is_edited,
         is_internal_source=is_internal_source,
     )
 
@@ -2479,7 +2479,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=True,
+                    is_edited=True,
                 ),
             ],
             [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=True)],
@@ -2498,7 +2498,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=True,
+                    is_edited=True,
                 ),
             ],
             [
@@ -2532,7 +2532,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=False,
+                    is_edited=False,
                 ),
             ],
             [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=False)],
@@ -5308,7 +5308,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         placeholder = trace[unselected_parent].ops[0]
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
-        placeholder.intervention_replaced = False
+        placeholder.is_edited = False
         placeholder.is_internal_source = False
 
         # Layer 1 of the tripwire: the metadata invariant itself still rejects
@@ -5958,7 +5958,7 @@ def test_param_deep_xref_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        used_params = [param for param in log.param_logs if param.num_uses_by_ops > 0]
+        used_params = [param for param in log.param_logs if len(param.used_by_ops) > 0]
         assert used_params
         assert any(param.used_by_layers for param in used_params)
         assert log.layers_with_params
@@ -5972,8 +5972,8 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
 
     log = _make_recurrent_log()
     try:
-        recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
-        assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
+        recurrent_param = next(param for param in log.param_logs if len(param.used_by_ops) > 1)
+        assert len(recurrent_param.used_by_ops) == len(recurrent_param.used_by_ops)
         assert len(recurrent_param.used_by_layers) == 1
         assert check_metadata_invariants(log) is True
     finally:
@@ -7565,7 +7565,7 @@ def test_param_xrefs_accept_used_param_whose_owner_module_is_never_entered() -> 
     ):
         log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
         try:
-            used = [param for param in log.param_logs if param.num_uses_by_ops]
+            used = [param for param in log.param_logs if len(param.used_by_ops)]
             assert used, "fixture no longer records used params"
             check_metadata_invariants(log)
         finally:
@@ -7870,7 +7870,7 @@ def _functionless_replacement_ops(log: "Trace") -> list:
         op
         for op in log.ops
         if getattr(op, "func_name", None) == "intervention_replacement"
-        and getattr(op, "intervention_replaced", False)
+        and getattr(op, "is_edited", False)
     ]
 
 
@@ -7890,7 +7890,7 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     # No genuine user intervention happened, so there must be zero functionless
     # intervention placeholders.
     assert _functionless_replacement_ops(log) == []
-    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+    assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
 
     # The mask is instead logged as a transform boundary node with a clean parent edge.
     transform_ops = [op for op in log.ops if getattr(op, "is_transform", False)]
@@ -7931,7 +7931,7 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
     log = trace_fn(model, [], {"input_ids": torch.randint(0, 100, (1, 16))})
 
     assert _functionless_replacement_ops(log) == []
-    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+    assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
     check_metadata_invariants(log)
 
 
@@ -8254,7 +8254,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay
     honest -- zero functionless ``intervention_replacement`` placeholders,
-    zero ``intervention_replaced`` ops -- even after the depth-2 fix above.
+    zero ``is_edited`` ops -- even after the depth-2 fix above.
     The fix must not make the tripwire pass silently on a genuine capture gap.
     """
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
@@ -8293,7 +8293,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
         log = trace_fn(model, [x], {})
     try:
         assert _functionless_replacement_ops(log) == []
-        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
@@ -8311,7 +8311,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     An untraceable raw-ATen module output combined with a purely observational
     forward hook (returns ``None``, never substitutes) must be logged as a clean
     ``internal_source`` -- NEVER a functionless ``intervention_replacement``
-    placeholder, and must NOT be marked ``intervention_replaced``. The old
+    placeholder, and must NOT be marked ``is_edited``. The old
     ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
     coupled hazard); reintroducing it makes this fail loudly.
     """
@@ -8323,9 +8323,9 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
         log = trace_fn(model, [x], {})
     try:
         # No genuine intervention happened -> zero functionless placeholders and
-        # zero intervention_replaced ops during plain capture.
+        # zero is_edited ops during plain capture.
         assert _functionless_replacement_ops(log) == []
-        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         # The untraceable output is an honest internal source (func_name "none").
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
@@ -8342,7 +8342,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     """The func_call_id exemption for ``intervention_replacement`` is NARROW.
 
     It must exempt ONLY the genuine functionless-replacement shape
-    (``func_name == "intervention_replacement"`` AND ``intervention_replaced``
+    (``func_name == "intervention_replacement"`` AND ``is_edited``
     AND NOT ``is_internal_source`` -- mirroring the ``op_log_fields`` invariant),
     and must NOT blanket-exempt any op merely named ``intervention_replacement``.
     A placeholder lacking that shape must stay non-exempt so the invariant stays
@@ -8354,7 +8354,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     base = {"is_input": False, "is_output": False, "is_buffer": False, "func": None}
     genuine = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=True,
+        is_edited=True,
         is_internal_source=False,
         **base,
     )
@@ -8363,7 +8363,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     # Same func_name but NOT flagged as replaced -> not a genuine replacement.
     not_replaced = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=False,
+        is_edited=False,
         is_internal_source=False,
         **base,
     )
@@ -8373,7 +8373,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     # user replacement (internal sources carry func_name "none" in practice).
     internal = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=True,
+        is_edited=True,
         is_internal_source=True,
         **base,
     )

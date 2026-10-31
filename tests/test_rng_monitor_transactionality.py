@@ -90,7 +90,7 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
@@ -116,7 +116,7 @@ def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
@@ -195,9 +195,7 @@ def test_patch_stacks_do_not_grow_across_captures():
 
     model = _tiny_model()
     for _ in range(3):
-        tl.trace(
-            model, torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
     assert rng_module._PATCH_STACKS == {}
 
 
@@ -370,7 +368,7 @@ def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     partial = getattr(excinfo.value, "partial_log", None)
     assert partial is not None, "the failed capture must still expose its partial trace"

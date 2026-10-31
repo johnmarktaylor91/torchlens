@@ -29,7 +29,7 @@ from torchlens.mechinterp._errors import MechInterpError
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 _ATOL = 1e-10
 
 

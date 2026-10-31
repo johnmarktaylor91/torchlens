@@ -329,7 +329,7 @@ def _class_body_names(cls: type) -> frozenset[str]:
 def _module_assigned_names(cls: type) -> frozenset[str]:
     """Return members statically assigned onto ``cls`` in its home module.
 
-    ``Trace.FIELD_FORK_POLICY = ...`` at the top level of ``trace.py`` is as
+    ``Trace._FIELD_FORK_POLICY = ...`` at the top level of ``trace.py`` is as
     conscious as a class-body declaration -- it is committed, reviewed source
     in the class's own defining module. Only TOP-LEVEL attribute assignments
     naming the class count (a setattr inside a function is a runtime act and

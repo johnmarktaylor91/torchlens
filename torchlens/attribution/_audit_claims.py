@@ -229,7 +229,7 @@ def _trace_once(request: _AuditRequest) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
 

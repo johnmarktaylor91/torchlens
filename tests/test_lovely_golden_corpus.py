@@ -113,7 +113,7 @@ def _elementwise_trace() -> tl.Trace:
     return tl.trace(
         _Elementwise().eval(),
         _arange(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 

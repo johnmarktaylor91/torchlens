@@ -50,7 +50,7 @@
  "intervention_fired": {
   "tests/producer_parity/_snapshot.py": 1
  },
- "intervention_replaced": {
+ "is_edited": {
   "tests/producer_parity/_snapshot.py": 1
  },
  "intervention_template_ref": {

@@ -145,7 +145,7 @@ class TestLazyBoundaries:
             tl.trace(
                 model,
                 torch.randn(1, 3, 16, 16),
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             )
         assert excinfo.value.fields["code"] == "state_baseline_unavailable"
         assert isinstance(model[4].weight, UninitializedParameter)
@@ -157,7 +157,7 @@ class TestLazyBoundaries:
         x = torch.randn(1, 3, 16, 16)
         with torch.no_grad():
             model(x)  # the taught self-prime
-        log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         assert log.num_params == sum(p.numel() for p in model.parameters())
 
     @pytest.mark.smoke

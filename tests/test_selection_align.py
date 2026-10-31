@@ -44,7 +44,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
 
 

@@ -560,7 +560,7 @@ def test_rng_and_escape_profile_detectors_coarm_without_lost_detection() -> None
             DualDetectionModel(),
             torch.randn(3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
                 seed=7,
@@ -772,7 +772,7 @@ def test_witness_internal_storage_read_does_not_self_trip_detector() -> None:
         Model(),
         torch.randn(3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             seed=7,
@@ -821,7 +821,7 @@ def test_user_call_into_witness_storage_helper_degrades_verification() -> None:
             CallsAuthorizedWitnessFrame(),
             torch.randn(3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -888,7 +888,7 @@ def test_forged_frame_metadata_cannot_impersonate_witness_authorization() -> Non
             ForgedFrameModel(),
             torch.randn(3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),

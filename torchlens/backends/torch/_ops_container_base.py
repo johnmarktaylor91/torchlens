@@ -134,7 +134,7 @@ def _op_record_from_log(
     parent_params = tuple(fields_dict["parent_params"])
     is_scalar_bool = fields_dict["is_scalar_bool"]
     bool_value = fields_dict["bool_value"]
-    intervention_replaced = fields_dict["intervention_replaced"]
+    is_edited = fields_dict["is_edited"]
     return OpRecord(
         core=core,
         function=_resolve_call_function_ref(fields_dict, call_ref_box),
@@ -234,10 +234,10 @@ def _op_record_from_log(
         intervention=(
             InterventionFacet(
                 intervention_fired=bool(fire_results),
-                intervention_replaced=intervention_replaced,
+                is_edited=is_edited,
                 fire_results=fire_results,
             )
-            if (bool(fire_results) or intervention_replaced or fire_results)
+            if (bool(fire_results) or is_edited or fire_results)
             else None
         ),
     )

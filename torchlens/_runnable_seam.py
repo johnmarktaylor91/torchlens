@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 RUNNABLE_TRACE_PUBLIC_MEMBERS = frozenset(
     {
         "readiness",
-        "runnable_descriptor",
         "archived_activations",
         "load_state_dict",
         "run",

@@ -73,7 +73,7 @@ def _loaded_runnable(tmp_path, model=None):
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
     log.save(str(path), level="runnable", include_weights=True)
@@ -214,7 +214,7 @@ def test_seeded_prefix_bug_still_fails_under_until(tmp_path: Path) -> None:
     from torchlens.errors import PathDivergenceError
 
     loaded, x = _loaded_runnable(tmp_path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     # Plant the contradiction INSIDE the guard machinery: retain the real
     # runtime input but forge the descriptor's recorded model-input shape.
@@ -345,7 +345,7 @@ def test_until_requires_full_inputs(tmp_path):
     log = tl.trace(
         model,
         [x, y],
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
     log.save(str(path), level="runnable", include_weights=True)

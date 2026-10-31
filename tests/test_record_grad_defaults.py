@@ -240,9 +240,9 @@ def test_trace_with_grad_enabled_is_not_inference_only() -> None:
         {"inference_only": False},
         {"backward_ready": True},
         {"save_grads": True},
-        {"intervention_ready": True},
+        {"replayable": True},
     ],
-    ids=["explicit_false", "backward_ready", "save_grads", "intervention_ready"],
+    ids=["explicit_false", "backward_ready", "save_grads", "replayable"],
 )
 def test_trace_under_no_grad_explicit_options_keep_inference_only_off(
     capture: dict[str, object],

@@ -41,7 +41,7 @@ from torchlens.options import CaptureOptions
 def _capture_options() -> CaptureOptions:
     """Return the standard runnable-capable capture options."""
 
-    return CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+    return CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class BranchModel(nn.Module):

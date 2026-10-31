@@ -123,7 +123,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
 
 def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
@@ -378,7 +378,7 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
     log = tl.trace(
         ReluAdd(),
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
         save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
     )
     relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")

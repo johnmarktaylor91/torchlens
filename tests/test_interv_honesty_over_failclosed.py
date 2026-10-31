@@ -1,11 +1,11 @@
 """Intervention honesty: ``mean_ablate(over=)`` fails closed and
-``batch_independent`` is DERIVED (edits memo rows 0a/0b, decisions D16/D18/D19).
+``is_batch_independent`` is DERIVED (edits memo rows 0a/0b, decisions D16/D18/D19).
 
 Pins, in both failure directions of the one line that shipped wrong:
 
 - A1b: an unknown ``over=`` token refuses typed at construction, so no typo can
-  flip ``batch_independent`` open and permit an unsound append.
-- A1c: ``mean_ablate(source=tensor)`` derives ``batch_independent=True`` (the
+  flip ``is_batch_independent`` open and permit an unsound append.
+- A1c: ``mean_ablate(source=tensor)`` derives ``is_batch_independent=True`` (the
   fill value never reads the traced batch; append is permitted), while the
   self-mean derives ``False`` (couples batch rows; append refuses).
 - 0b: ``source=``/``from_=`` both passed refuses typed instead of silently
@@ -40,7 +40,7 @@ def _traced_model() -> tuple[nn.Module, torch.Tensor, tl.Trace]:
     torch.manual_seed(0)
     model = _TwoLinear().eval()
     x = torch.randn(3, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     return model, x, log
 
 
@@ -69,26 +69,26 @@ def test_non_string_over_refuses_typed(token: object) -> None:
 
 def test_typo_can_never_flip_batch_independent_open() -> None:
     """A1b belt: no constructible spec with a bad token exists, so the append
-    gate can never see ``batch_independent=True`` from a typo."""
+    gate can never see ``is_batch_independent=True`` from a typo."""
 
     with pytest.raises(InvalidArgumentError):
         tl.mean_ablate(dim="btach")
     # The only constructible spellings derive fail-closed flags:
-    assert tl.mean_ablate().batch_independent is False
-    assert tl.mean_ablate(dim="self").batch_independent is False
+    assert tl.mean_ablate().is_batch_independent is False
+    assert tl.mean_ablate(dim="self").is_batch_independent is False
 
 
 def test_tensor_source_derives_batch_independent_true() -> None:
     """A1c: an external tensor source never reads the traced batch."""
 
     spec = tl.mean_ablate(source=torch.ones(8))
-    assert spec.batch_independent is True
+    assert spec.is_batch_independent is True
 
 
 def test_self_mean_derives_batch_independent_false() -> None:
     """A1c inverse: the self-mean couples batch rows."""
 
-    assert tl.mean_ablate().batch_independent is False
+    assert tl.mean_ablate().is_batch_independent is False
 
 
 def test_append_refuses_self_mean_and_permits_tensor_source() -> None:

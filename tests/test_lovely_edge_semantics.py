@@ -43,7 +43,7 @@ def zoo_trace():
     trace = tl.trace(
         _EdgeZoo().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     yield trace
     trace.cleanup()

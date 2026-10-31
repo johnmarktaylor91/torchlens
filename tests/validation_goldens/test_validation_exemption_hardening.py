@@ -1193,7 +1193,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
-    object.__setattr__(relu_op, "intervention_replaced", True)
+    object.__setattr__(relu_op, "is_edited", True)
     object.__setattr__(relu_op, "func_call_id", None)
 
     with pytest.raises(MetadataInvariantError, match="func_call_id"):
@@ -1225,7 +1225,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
-    replaced_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
+    replaced_ops = [op for op in trace.layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
     check_func_call_id_invariant(trace)
 
@@ -1234,9 +1234,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
     loaded = tl.load(path)
     assert getattr(loaded, "_loaded_from_bundle", False) is True
     check_func_call_id_invariant(loaded)
-    loaded_replaced = [
-        op for op in loaded.layer_list if getattr(op, "intervention_replaced", False)
-    ]
+    loaded_replaced = [op for op in loaded.layer_list if getattr(op, "is_edited", False)]
     assert loaded_replaced
     for op in loaded_replaced:
         stamp = (getattr(op, "annotations", None) or {}).get("replacement_evidence_v1")

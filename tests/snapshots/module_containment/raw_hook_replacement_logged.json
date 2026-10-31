@@ -276,7 +276,7 @@
       "input_to_modules": [
         "relu:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -311,7 +311,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "relu.relu",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -351,7 +351,7 @@
       "input_to_modules": [
         "proj:1"
       ],
-      "intervention_replaced": true,
+      "is_edited": true,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -385,7 +385,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "proj.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -423,7 +423,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,

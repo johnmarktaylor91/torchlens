@@ -278,7 +278,7 @@ def _build_ir_instances() -> dict[str, object]:
         is_scalar_bool=False,
         bool_value=None,
         intervention_fired=True,
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(fire_result,),
         intervention_template_ref=intervention_template_ref,
     )

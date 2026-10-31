@@ -233,7 +233,7 @@ def test_legacy_rerun_refreshes_the_fingerprint() -> None:
     torch.manual_seed(0)
     model = _seeded(_TwoLayer())
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     original = trace._raw_call_fingerprint  # noqa: SLF001
     trace._raw_call_fingerprint = (0, 0)  # noqa: SLF001
     new_x = torch.randn(2, 4)

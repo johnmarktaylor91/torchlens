@@ -208,7 +208,7 @@ def _capture(model: nn.Module, value: Any) -> tl.Trace:
         model,
         value,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -561,7 +561,7 @@ def test_runnable_mha_uncalled_out_proj_parameters_remain_bound(tmp_path: Path) 
     assert "attn.out_proj" not in trace.modules
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     bound_names = {
         slot.state_binding.state_dict_name

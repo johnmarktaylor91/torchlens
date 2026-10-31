@@ -52,7 +52,7 @@ def format_discoverability_summary(
         ),
         *_output_postprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
-        f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
+        f"  replayable: {bool(getattr(trace, 'is_replayable', False))}",
         f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
         "Run state:",
         f"  state: {_run_state_name(trace)}",
@@ -569,8 +569,8 @@ def _next_operation_hint(trace: Trace) -> str:
         return "direct writes present; replay() or rerun() will overlay recipe state"
     if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
         return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(trace, "intervention_ready", False):
-        return "not intervention-ready; recapture with intervention_ready=True for replay templates"
+    if not getattr(trace, "is_replayable", False):
+        return "not intervention-ready; recapture with replayable=True for replay templates"
     return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
 
 

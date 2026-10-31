@@ -93,9 +93,7 @@ class _LinearSum(torch.nn.Module):
 def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> None:
     """BLOCKER-1: annotating a diff-replay fork must not mutate the parent trace."""
 
-    log = tl.trace(
-        _ReluMul(), torch.randn(4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    log = tl.trace(_ReluMul(), torch.randn(4), capture=tl.options.CaptureOptions(replayable=True))
     log.annotate("input_1", data={"owner": "original"})
     parent_op = log.layer_dict_all_keys["input_1"]
     original_annotations = {"user": {"data": {"owner": "original"}}}
@@ -123,7 +121,7 @@ def test_fork_shares_optimizer_aliasing_live_params() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, optimizer=opt),
+        capture=tl.options.CaptureOptions(replayable=True, optimizer=opt),
     )
     assert getattr(log, "_optimizer", None) is opt
 
@@ -191,7 +189,7 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_grads="all"),
+        capture=tl.options.CaptureOptions(replayable=True, save_grads="all"),
     )
     branch0 = log.find_sites(output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"

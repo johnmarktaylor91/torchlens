@@ -73,7 +73,7 @@ def _capture(*, name: str | None = None) -> tl.Trace:
     return tl.trace(
         M(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True, name=name),
+        capture=tl.options.CaptureOptions(replayable=True, name=name),
     )
 
 
@@ -101,7 +101,7 @@ def test_huggingface_suffix_is_stripped_for_auto_name() -> None:
     log = tl.trace(
         BertForSequenceClassification(),
         torch.randn(1, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
     assert log.trace_label == "bert_1"

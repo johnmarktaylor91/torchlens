@@ -70,10 +70,10 @@ class Buffer:
         "_initial_value": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         BUFFER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="buffer"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     def __init__(
         self,
