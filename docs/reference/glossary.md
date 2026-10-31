@@ -3186,6 +3186,7 @@ describe each surface in depth.
 | `FacetFunction.qualnames` | Fully-qualified class names matched by this recipe |
 | `FacetFunction.target_scope` | Record scope the recipe targets |
 | `FacetRegistrySnapshot.functions` | Immutable active recipe entries |
+| `FacetRegistrySnapshot.provenance_id` | Stable digest of the recipe identities and their source tier |
 | `FacetSpec.apply_transforms` | Apply the transform chain to a value |
 | `FacetSpec.capability_class` | Weakest capability class of the transform chain |
 | `FacetSpec.capability_flags` | Weakest-link capability flags of the transform chain |
@@ -3203,6 +3204,8 @@ describe each surface in depth.
 | `FacetSpec.value_version` | Which home value version the spec reads |
 | `FacetSpec.write_mask` | Return a boolean mask of home positions written by this facet |
 | `FacetView.function_source` | Return recipe name provenance for this view |
+| `FacetView.get` | Return an available facet value, or a default when it is unavailable now |
+| `FacetView.has` | Whether a facet is available in the current trace |
 | `FacetView.invalidate` | Clear cached computed facet values |
 | `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
@@ -3218,6 +3221,11 @@ describe each surface in depth.
 | `LogitLens.is_validated` | Whether the reconstructed lens was numerically validated against the captured last-block ``resid_post`` -> logits pair |
 | `LogitLens.stacked` | Return all per-layer logits stacked on a new leading layer axis |
 | `LogitLensPrediction.token_ids` | Requested-token ids as given; empty when no tokens were requested |
+| `LogitLensPrediction.token_logits` | Requested-token logits, shaped `[batch, n_positions, n_tokens]` |
+| `LogitLensPrediction.token_probs` | Requested-token probabilities, shaped `[batch, n_positions, n_tokens]` |
+| `LogitLensPrediction.token_ranks` | One-based ranks of the requested tokens as int64; tie convention recorded on the parent result |
+| `LogitLensPrediction.top_ids` | Top-k token ids, shaped `[batch, n_positions, k]` |
+| `LogitLensPrediction.top_logits` | Top-k logit values, shaped `[batch, n_positions, k]` |
 | `LogitLensPredictions.is_validated` | Whether the reconstructed lens passed numeric validation |
 | `MissingGrad.raise_error` | Raise the missing-gradient tensor-use error |
 | `NarrationObserver.lines` | field of `NarrationObserver` |
@@ -3303,6 +3311,51 @@ describe each surface in depth.
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
 | `TrajectoryStats.num_positions` | Sequence length every batch shared |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
+#### `tl.recording.Recording`
+
+| Spelling | Meaning |
+| --- | --- |
+| `Recording.activation_transform_repr` | Canonical repr of the activation transform callable captured at recording time, if any |
+| `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
+| `Recording.by_address` | Map from module address to indexes of its retained records |
+| `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
+| `Recording.end_times` | Per-pass end timestamps of the recording |
+| `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
+| `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |
+| `Recording.error_traceback` | Traceback text of the error that ended a failed recording, or `None` |
+| `Recording.from_capture_events` | Build a lazy recording projection from a predicate capture session |
+| `Recording.grad_by_grad_fn_label` | Map from gradient function label to indexes into `grad_records` |
+| `Recording.grad_by_label` | Map from layer label to indexes into `grad_records` |
+| `Recording.grad_by_pass` | Map from pass index to indexes into `grad_records` |
+| `Recording.grad_records` | Retained gradient records, in capture order |
+| `Recording.history_size` | Number of earlier events kept for predicate history at recording time |
+| `Recording.keep_op_repr` | Repr of the keep-op predicate used at recording time, or `None` |
+| `Recording.last_event_func` | Function name of the last captured event on a failed recording, best effort |
+| `Recording.last_event_input_meta` | Input metadata of the last captured event on a failed recording, best effort |
+| `Recording.last_event_label` | Label of the last captured event on a failed recording, best effort |
+| `Recording.last_event_source_line` | Source line of the last captured event on a failed recording, best effort |
+| `Recording.last_successful_op_label` | Label of the last op committed before a failure, or `None` |
+| `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
+| `Recording.records` | Retained activation records, in capture order |
+| `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
+| `Recording.save_grads_repr` | Repr of the gradient-saving selector used at recording time, or `None` |
+| `Recording.start_times` | Per-pass start timestamps of the recording |
+
+#### `tl.recording.RecordingOptions`
+
+| Spelling | Meaning |
+| --- | --- |
+| `RecordingOptions.default_module` | Capture decision for module events the predicate does not decide |
+| `RecordingOptions.default_op` | Capture decision for operation events the predicate does not decide |
+| `RecordingOptions.echo` | Normalized live-narration options, or `None` |
+| `RecordingOptions.history_size` | Number of earlier events kept for predicate history; 0 to 1024 |
+| `RecordingOptions.include_source_events` | Whether source events appear in the predicate lookback of recent ops |
+| `RecordingOptions.lookback` | Number of earlier events exposed to predicates as lookback; 0 to 1024 |
+| `RecordingOptions.lookback_payload_policy` | How lookback events carry tensor payloads; default `"metadata_only"` |
+| `RecordingOptions.max_predicate_failures` | Maximum number of predicate failures stored on the recording; further ones are counted as overflow |
+| `RecordingOptions.on_predicate_error` | Predicate error handling: `"auto"`, `"accumulate"` or `"fail-fast"` |
+| `RecordingOptions.streaming` | Storage options for streaming retained records to disk, or `None` |
+
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
