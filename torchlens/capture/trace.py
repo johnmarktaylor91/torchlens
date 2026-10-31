@@ -1429,7 +1429,7 @@ def _settle_interrupted_halted_arm(
             capture_session,
             interrupt_exc,
             interrupted=True,
-            note=(
+            settlement_note=(
                 "interrupted during halted finalization after halt at "
                 f"{getattr(halt_exc, 'reason', '')!r}"
             ),
@@ -2130,7 +2130,7 @@ def run_and_log_inputs_through_model(
                     self,
                     capture_session,
                     secondary_exc,
-                    note=(
+                    settlement_note=(
                         "halted finalization failed after halt at "
                         f"{getattr(halt_exc, 'reason', '')!r}"
                     ),
@@ -2173,7 +2173,9 @@ def run_and_log_inputs_through_model(
                 self,
                 capture_session,
                 secondary_exc,
-                note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
+                settlement_note=(
+                    f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"
+                ),
             )
             _scrub_failed_capture_transients(self)
             raise
@@ -2252,7 +2254,7 @@ def run_and_log_inputs_through_model(
             # pre-settlement arms. The transient scrub runs after settlement
             # (R11/R32: the escaping partial must not pin live input tensors
             # or the payload-bearing event stream).
-            settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
+            settle_failed(self, capture_session, e, n_ops_committed=committed_ops)
             _scrub_failed_capture_transients(self)
         raise e
 
@@ -2292,7 +2294,7 @@ def run_and_log_inputs_through_model(
                     capture_session,
                     interrupt_exc,
                     interrupted=True,
-                    num_committed_ops=committed_ops,
+                    n_ops_committed=committed_ops,
                 )
                 _scrub_failed_capture_transients(self)
             except Exception as settle_exc:

@@ -1004,6 +1004,107 @@ class ExtractionReader:
         )
 
     # ------------------------------------------------------------------
+    # Training views
+    # ------------------------------------------------------------------
+
+    def shuffled_batches(  # noqa: PLR0913 - the view's knob surface (token rows add two keywords)
+        self,
+        batch_size: int,
+        *,
+        seed: int = 0,
+        keys: list[str] | None = None,
+        buffer_shards: int = 1,
+        tokens: bool = False,
+    ) -> Any:
+        """Yield shuffled training batches without thrashing shard handles.
+
+        Shard order is shuffled, then a buffer of ``buffer_shards``
+        consecutive shards is shuffled across rows; each shard is touched
+        exactly once.
+
+        Parameters
+        ----------
+        batch_size:
+            Rows per yielded batch (a positive integer).
+        seed:
+            Seed of the shard and row shuffle.
+        keys:
+            Output keys to serve; ``None`` serves every key.
+        buffer_shards:
+            Shards mixed together in the shuffle buffer (a positive integer).
+        tokens:
+            Serve token rows (:class:`TokenRows`) instead of stimulus rows.
+
+        Returns
+        -------
+        Any
+            Iterator of batch dicts.
+        """
+
+        from .views import shuffled_batches
+
+        return shuffled_batches(
+            self,
+            batch_size,
+            seed=seed,
+            keys=keys,
+            buffer_shards=buffer_shards,
+            tokens=tokens,
+        )
+
+    def feature_matrix(self, key: str, *, max_bytes: int | None = None) -> torch.Tensor:
+        """Materialize one dense key as a 2D ``[n_stimuli, features]`` matrix.
+
+        Parameters
+        ----------
+        key:
+            Dense output key.
+        max_bytes:
+            Optional byte budget for the materialized matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            The flattened feature matrix.
+        """
+
+        from .views import feature_matrix
+
+        return feature_matrix(self, key, max_bytes=max_bytes)
+
+    def to_torch_dataset(self, keys: list[str] | None = None) -> Any:
+        """Wrap the reader as a ``torch.utils.data.Dataset`` of per-row dicts.
+
+        Parameters
+        ----------
+        keys:
+            Output keys each row serves; ``None`` serves every key.
+
+        Returns
+        -------
+        Any
+            A map-style dataset.
+        """
+
+        from .views import as_torch_dataset
+
+        return as_torch_dataset(self, keys)
+
+    @property
+    def input_preprocessing(self) -> dict[str, Any]:
+        """The manifest's input-preprocessing block (legacy artifacts read as unknown).
+
+        Returns
+        -------
+        dict[str, Any]
+            The input-preprocessing block.
+        """
+
+        from .._extraction_provenance import input_preprocessing_of
+
+        return input_preprocessing_of(self.manifest)
+
+    # ------------------------------------------------------------------
     # Trusted-prefix monitoring
     # ------------------------------------------------------------------
 

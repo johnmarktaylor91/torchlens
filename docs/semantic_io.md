@@ -111,7 +111,7 @@ trace = tl.trace(
     model,
     "0.1,0.2,2.0,1.0",
     capture=tl.options.CaptureOptions(
-        transform=text_to_tensor,
+        input_transform=text_to_tensor,
         save_raw_input="small",
     ),
 )
@@ -167,7 +167,7 @@ trace = tl.trace(
     model,
     image_list,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         output_style="classification",
         save_raw_input=True,
     ),
@@ -196,7 +196,7 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),
@@ -304,7 +304,7 @@ trace = tl.trace(
     image_list,
     save=mds_layers,
     capture=tl.options.CaptureOptions(
-        transform=image_batch_to_tensor,
+        input_transform=image_batch_to_tensor,
         save_raw_input=True,
         output_style="classification",
     ),

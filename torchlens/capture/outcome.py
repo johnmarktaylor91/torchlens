@@ -1262,8 +1262,8 @@ def stamp_forked(fork: object, parent: object) -> CaptureOutcome:
     parent_status = "unsettled" if parent_outcome is None else parent_outcome.status.value
     derived = dataclass_replace(
         derived,
-        num_committed_ops=(None if parent_outcome is None else parent_outcome.num_committed_ops),
-        note=f"forked_from={parent_status}",
+        n_ops_committed=(None if parent_outcome is None else parent_outcome.num_committed_ops),
+        settlement_note=f"forked_from={parent_status}",
     )
     fork.__dict__["_capture_outcome"] = derived
     return derived

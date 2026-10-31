@@ -156,7 +156,7 @@ def coerce_input_preprocessing(
             if input_transform.transform is None:
                 raise InvalidArgumentError(
                     "input_transform received a declaration-only resolution "
-                    f"(source {input_transform.record.source!r}) that carries "
+                    f"(source {input_transform.preprocessing.source!r}) that carries "
                     "no callable, so there is nothing to apply.",
                     code="extraction_input_transform_missing_callable",
                     remedy=(
@@ -165,7 +165,7 @@ def coerce_input_preprocessing(
                         "your own transform and pass the resolution as "
                         "input_provenance= instead"
                     ),
-                    source=input_transform.record.source,
+                    source=input_transform.preprocessing.source,
                 )
             transform_callable = input_transform.transform
             report = _audit(input_transform, input_transform)
@@ -175,11 +175,11 @@ def coerce_input_preprocessing(
             unknown_reasons = list(report.unknown_reasons)
             identity = {
                 "kind": "resolved",
-                "source": input_transform.record.source,
-                "identifier": input_transform.record.identifier,
+                "source": input_transform.preprocessing.source,
+                "identifier": input_transform.preprocessing.identifier,
                 "config_digest": "sha256:"
                 + hashlib.sha256(
-                    _canonical_json(input_transform.record.config).encode()
+                    _canonical_json(input_transform.preprocessing.config).encode()
                 ).hexdigest(),
             }
         else:

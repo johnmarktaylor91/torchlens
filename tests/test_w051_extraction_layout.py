@@ -19,14 +19,11 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.ragged import RaggedBatch
 from torchlens._extraction.reader import open_extraction
-from torchlens.dataset_extraction import (
-    DatasetExtractionResumeError,
-    extract_dataset,
-    load_extraction,
-)
+from torchlens.dataset_extraction import DatasetExtractionResumeError, load_extraction
 
 
 class _Tok(nn.Module):

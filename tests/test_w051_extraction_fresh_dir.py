@@ -16,9 +16,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._extraction.reader import open_extraction
-from torchlens.dataset_extraction import extract_dataset, load_extraction
+from torchlens.dataset_extraction import load_extraction
 
 
 def _model() -> nn.Module:

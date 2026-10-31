@@ -56,7 +56,7 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
 def test_attached_torchvision_weights_are_discovered() -> None:
     model = torchvision.models.resnet18(weights=None)
     modules_before = [name for name, _ in model.named_modules()]
-    assert tlp.resolve(model=model).record.source == "unknown"
+    assert tlp.resolve(model=model).preprocessing.source == "unknown"
 
     assert tlp.attach_authority(model, _V1) is model
 
@@ -78,7 +78,7 @@ def test_attach_refuses_an_opaque_callable() -> None:
 def test_explicit_transform_that_is_an_authority_stamps_its_own_record() -> None:
     trace = _trace_with(_V1.transforms())
     record = trace.input_preprocessor
-    expected = tlp.resolve(_V1.transforms()).record
+    expected = tlp.resolve(_V1.transforms()).preprocessing
     assert record.source == "torchvision_preset" == expected.source
     assert record.config == expected.config
     assert tlp.status_of(record) == tlp.STATUS_AUTHORITATIVE
@@ -151,7 +151,7 @@ def test_check_card_on_an_opaque_record_is_unknown_not_a_match() -> None:
 
 
 def test_check_card_without_a_card_refuses() -> None:
-    record = tlp.resolve(_V1).record
+    record = tlp.resolve(_V1).preprocessing
     with pytest.raises(InvalidArgumentError) as info:
         tlp.check_card(record)
     assert info.value.fields["code"] == "preprocessing_card_unresolved"

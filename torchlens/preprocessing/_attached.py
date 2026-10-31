@@ -196,7 +196,7 @@ def record_for_transform(transform: Any) -> ResolvedPreprocessing | None:
 
     for adapter in _REGISTERED_ADAPTERS:
         if adapter.probe(transform):
-            return adapter.adapt(transform).record
+            return adapter.adapt(transform).preprocessing
     if probe_torchvision_preset(transform):
         return adapt_torchvision_preset(transform).record
     if _probe_hf_processor(transform):

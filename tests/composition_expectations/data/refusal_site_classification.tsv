@@ -394,8 +394,8 @@ torchlens.intervention.regions:region:RegionError::1	CONTRACTED	region_target_in
 torchlens.intervention.regions:region:RegionError::2	CONTRACTED	region_empty	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.regions:region:RegionError::3	CONTRACTED	region_not_convex	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.snoop._normalize:_refuse_finalized_selector:EchoConfigError::1	CONTRACTED	echo_selector_not_live	new F28 echo entry refusal contracted in its own change: typed teaching refusal, contract-doc row, post-hoc remedy (lane F28)
-torchlens.snoop._normalize:_coerce_echo_value:EchoConfigError::1	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (bad narrate= string spelling; lane F28)
-torchlens.snoop._normalize:_coerce_echo_value:EchoConfigError::2	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (unsupported narrate= type; lane F28)
+torchlens.snoop._normalize:_coerce_echo_value:EchoConfigError::1	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (bad echo= string spelling; lane F28)
+torchlens.snoop._normalize:_coerce_echo_value:EchoConfigError::2	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (unsupported echo= type; lane F28)
 torchlens.snoop._normalize:_validate_select:EchoConfigError::1	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (EchoOptions.select string; lane F28)
 torchlens.snoop._normalize:_validate_select:EchoConfigError::2	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (EchoOptions.select type; lane F28)
 torchlens.snoop._normalize:normalize_echo:EchoConfigError::1	CONTRACTED	echo_argument_invalid	new F28 echo entry refusal contracted in its own change (unknown stats rung; lane F28)

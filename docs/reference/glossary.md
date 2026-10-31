@@ -1161,8 +1161,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   token-axis activations. `ExtractionReader.token_batch(shard_index, keys=None)` and
   `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
   token as a `torchlens.dataset_extraction.TokenRows` (`values` per key, `stimulus_row`,
-  `position`, `n_tokens`); padding is never a token row.
-  `torchlens.dataset_extraction.shuffled_batches(reader, batch_size, *, seed=0,
+  `position`, `num_tokens`); padding is never a token row.
+  `ExtractionReader.shuffled_batches(batch_size, *, seed=0,
   keys=None, buffer_shards=1, tokens=False)` shuffles across `buffer_shards` shards at
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 

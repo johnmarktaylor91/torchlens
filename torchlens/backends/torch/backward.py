@@ -3012,7 +3012,7 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
 
     from ...fastlog.types import CaptureSpec
 
-    return value is True or (isinstance(value, CaptureSpec) and value.keep_grad)
+    return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
 
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:

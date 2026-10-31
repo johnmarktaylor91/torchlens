@@ -228,11 +228,11 @@ def validate_row_counts(context: BatchContext, processed: Mapping[str, torch.Ten
             observed = int(payload.shape[0]) if payload.ndim >= 1 else 0
         if observed is None:
             observed = -1
-        if observed != context.num_rows:
+        if observed != context.row_count:
             offenders[key] = int(observed)
     if offenders:
         raise InvalidArgumentError(
-            f"Batch {context.batch_index} collated {context.num_rows} "
+            f"Batch {context.batch_index} collated {context.row_count} "
             f"stimulus rows, but the stored payloads disagree: "
             f"{offenders} (observed rows per offending key). Row i of every "
             "shard must be stimulus i — a row-count drift after pooling or "
@@ -245,6 +245,6 @@ def validate_row_counts(context: BatchContext, processed: Mapping[str, torch.Ten
                 "collate row_count"
             ),
             batch_index=context.batch_index,
-            expected_rows=context.num_rows,
+            expected_rows=context.row_count,
             observed=offenders,
         )

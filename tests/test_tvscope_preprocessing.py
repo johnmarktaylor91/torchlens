@@ -157,7 +157,7 @@ class TestResolver:
 
         pp.register_authority_adapter("custom", probe, adapt)
         try:
-            assert pp.resolve(marker).record.source == "custom_adapter"
+            assert pp.resolve(marker).preprocessing.source == "custom_adapter"
         finally:
             from torchlens.preprocessing import _authorities
 

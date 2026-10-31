@@ -1331,7 +1331,7 @@
   `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
   token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
   `TokenRows` (one row per token, with `stimulus_row` and `position`), and
-  `shuffled_batches(reader, n, buffer_shards=k, tokens=True)` is the cross-shard mixing buffer.
+  `reader.shuffled_batches(n, buffer_shards=k, tokens=True)` is the cross-shard mixing buffer.
   `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
@@ -1405,7 +1405,7 @@
   continuation) plus `input_provenance=` (disk-only stamp), and every new manifest
   carries the `tl_input_preprocessing_v1` block (authority + audit + verdict +
   unknown reasons + versions; legacy artifacts read as unknown via
-  `input_preprocessing_of`/`LoadedExtraction.input_preprocessing`; resume never
+  `ExtractionReader.input_preprocessing`/`LoadedExtraction.input_preprocessing`; resume never
   grafts). Docs: `docs/neuroai/` (journey/loaders/BYO-alignment/demand ledger) +
   the rewritten `docs/migration/from_thingsvision.md`.
 - Per-unit streaming statistics (DOCUMENTED-UNSTABLE): `tl.stats.Quantile` and

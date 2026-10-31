@@ -29,7 +29,6 @@ from torch import nn
 from .. import _state
 
 if TYPE_CHECKING:
-    from ..capture.flops import register_op_rule
     from .arg_handling import (
         _model_expects_single_arg,
         _safe_copy_arg,
@@ -1175,7 +1174,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "normalize_input_args": ("torchlens.utils.arg_handling", "normalize_input_args"),
     "print_override": ("torchlens.utils.tensor_utils", "print_override"),
     "progress_bar": ("torchlens.utils.display", "progress_bar"),
-    "register_op_rule": ("torchlens.capture.flops", "register_op_rule"),
     "remove_attributes_with_prefix": (
         "torchlens.utils.introspection",
         "remove_attributes_with_prefix",
@@ -1283,7 +1281,6 @@ __all__ = [
     "print_override",
     "peek_graph",
     "progress_bar",
-    "register_op_rule",
     "remove_attributes_with_prefix",
     "remove_entry_from_list",
     "safe_copy",

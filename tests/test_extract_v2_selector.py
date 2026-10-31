@@ -17,8 +17,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset, open_extraction
+from torchlens.dataset_extraction import open_extraction
 
 
 class _TwoBlock(nn.Module):

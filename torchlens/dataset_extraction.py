@@ -51,16 +51,13 @@ from ._errors import InvalidArgumentError
 from ._extraction import (
     BatchEnvelope,
     RaggedBatch,
-    as_torch_dataset,
     export_extraction,
-    feature_matrix,
     hf_collate,
     is_selector_request,
     open_extraction,
     register_pure_module,
     resolve_dtype_policy,
     resolve_pool_policy,
-    shuffled_batches,
     validate_output_keys,
     validate_ragged_mode,
     validate_shard_format,
@@ -89,7 +86,6 @@ from ._extraction.token_store import (
     validate_store_input_ids,
 )
 from ._extraction_provenance import (
-    INPUT_PREPROCESSING_SCHEMA,
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
@@ -102,10 +98,6 @@ from .transforms import (
 
 #: Legacy v1 manifest schema id (still readable forever; superseded on write).
 MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1
-
-#: Native shard format recorded for legacy ``.pt`` artifacts (a manifest
-#: FIELD, so a later format change is a value change, not a layout break).
-NATIVE_FORMAT = "pt_shards_v1"
 
 
 def _coerce_transform_slot(
@@ -849,25 +841,17 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
 
 
 __all__ = [
-    "INPUT_PREPROCESSING_SCHEMA",
-    "MANIFEST_FILENAME",
     "MANIFEST_SCHEMA",
     "MANIFEST_SCHEMA_V2",
-    "NATIVE_FORMAT",
     "BatchEnvelope",
     "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
     "TokenRows",
-    "as_torch_dataset",
     "export_extraction",
-    "extract_dataset",
-    "feature_matrix",
     "hf_collate",
-    "input_preprocessing_of",
     "load_extraction",
     "open_extraction",
     "register_pure_module",
     "relabel_extraction",
-    "shuffled_batches",
 ]

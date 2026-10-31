@@ -326,7 +326,7 @@ class DiskStorageBackend:
             ("default_op", self.options.default_op),
             ("default_module", self.options.default_module),
         ):
-            if isinstance(default, CaptureSpec) and default.keep_grad:
+            if isinstance(default, CaptureSpec) and default.save_grad:
                 raise RecordingConfigError(
                     f"{name} cannot use keep_grad=True with disk-only fastlog storage"
                 )

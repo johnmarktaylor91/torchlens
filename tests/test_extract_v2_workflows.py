@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 import torch
 
+from torchlens import extract_dataset
 from torchlens.dataset_extraction import (
     BatchEnvelope,
     export_extraction,
-    extract_dataset,
     load_extraction,
     open_extraction,
 )

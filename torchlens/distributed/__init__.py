@@ -50,7 +50,6 @@ from ._lifecycle import (
 )
 from ._recognizer import (
     COLLECTIVE_NAMESPACES,
-    UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
     derive_collective_recognizer,
@@ -61,7 +60,6 @@ __all__ = [
     "AMBIGUOUS_GROUP_LIFETIME",
     "COLLECTIVE_NAMESPACES",
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
-    "UNCAPTURED_COLLECTIVE_OP",
     "AmbiguousGroupLifetimeError",
     "ArmingRecord",
     "GroupIdentity",

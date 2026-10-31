@@ -94,7 +94,7 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
         ("default_op", options.default_op),
         ("default_module", options.default_module),
     ):
-        if isinstance(default, CaptureSpec) and default.keep_grad:
+        if isinstance(default, CaptureSpec) and default.save_grad:
             raise RecordingConfigError(
                 f"{name} cannot use keep_grad=True with disk-only fastlog storage"
             )

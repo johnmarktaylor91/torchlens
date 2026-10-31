@@ -393,7 +393,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
                 interventions=False,
                 rng_replay=False,
                 payload_materialization=False,
-                has_streaming=False,
+                streaming=False,
             ),
         )
     )

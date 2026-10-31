@@ -461,7 +461,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
         error_ref=weakref.ref(latched),
     )
 
-    outcome = settle_failed(trace, None, unrelated, num_committed_ops=0)
+    outcome = settle_failed(trace, None, unrelated, n_ops_committed=0)
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.error_type == "torchlens.errors._base.CaptureError"
     assert outcome.reason == "event stream desync"
@@ -469,7 +469,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
     # The exact latched exception still classifies the clean abort.
     trace2 = SimpleNamespace()
     trace2.__dict__["_stop_requested"] = trace.__dict__["_stop_requested"]
-    aborted = settle_failed(trace2, None, latched, num_committed_ops=0)
+    aborted = settle_failed(trace2, None, latched, n_ops_committed=0)
     assert aborted.status is CaptureStatus.ABORTED_NONFINITE
     assert aborted.reason == "nan in relu_1_1"
 

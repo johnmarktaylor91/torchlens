@@ -245,7 +245,7 @@ def _matrix_from_extraction(loaded: Any, site: str) -> SiteMatrix:
         )
     ids = _extraction_row_ids(loaded)
     matrix, record = as_matrix(loaded.activations[site], row_ids=ids)
-    from torchlens.dataset_extraction import input_preprocessing_of
+    from torchlens._extraction_provenance import input_preprocessing_of
 
     return SiteMatrix(
         matrix=matrix,

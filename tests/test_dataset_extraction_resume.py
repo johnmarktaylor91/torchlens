@@ -22,8 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
+from torchlens._extraction.resume import MANIFEST_FILENAME
 from torchlens.dataset_extraction import (
-    MANIFEST_FILENAME,
     MANIFEST_SCHEMA_V2,
     DatasetExtractionResumeError,
     load_extraction,

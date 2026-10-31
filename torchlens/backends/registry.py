@@ -301,7 +301,7 @@ class BackendCapabilities:
     interventions: bool
     rng_replay: bool
     payload_materialization: bool
-    has_streaming: bool
+    streaming: bool
     structure_only_capture: bool = False
     intermediate_derived_grads: bool = False
     input_container_structure: Literal["none", "paths_only", "full_spec"] = "none"

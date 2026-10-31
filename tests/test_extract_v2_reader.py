@@ -19,17 +19,10 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._data_substrate import ExtractionArtifactError
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import (
-    as_torch_dataset,
-    export_extraction,
-    extract_dataset,
-    feature_matrix,
-    load_extraction,
-    open_extraction,
-    shuffled_batches,
-)
+from torchlens.dataset_extraction import export_extraction, load_extraction, open_extraction
 
 
 def _artifact(tmp_path: Path, *, n: int = 10, ids: bool = True, batch_size: int = 3) -> Path:
@@ -209,7 +202,7 @@ def test_shuffled_batches_cover_every_row_once(tmp_path: Path) -> None:
     reader = open_extraction(out)
     full = reader.materialize(["relu"])["relu"]
     seen = []
-    for batch in shuffled_batches(reader, 2, seed=7, keys=["relu"]):
+    for batch in reader.shuffled_batches(2, seed=7, keys=["relu"]):
         assert batch["relu"].shape[0] <= 2
         seen.extend(batch["relu"].tolist())
     assert len(seen) == 10
@@ -222,7 +215,7 @@ def test_shuffled_batches_batch_size_refuses(tmp_path: Path) -> None:
     out = _artifact(tmp_path)
     reader = open_extraction(out)
     with pytest.raises(InvalidArgumentError) as excinfo:
-        next(iter(shuffled_batches(reader, 0)))
+        next(iter(reader.shuffled_batches(0)))
     assert excinfo.value.fields["code"] == "extraction_reader_batch_size_invalid"
 
 
@@ -269,7 +262,7 @@ def test_feature_matrix_refuses_trimmed_keys(tmp_path: Path) -> None:
     )
     reader = open_extraction(out)
     with pytest.raises(InvalidArgumentError) as excinfo:
-        feature_matrix(reader, "h")
+        reader.feature_matrix("h")
     assert excinfo.value.fields["code"] == "extraction_reader_ragged_matrix_unsupported"
 
 
@@ -278,9 +271,9 @@ def test_feature_matrix_and_torch_dataset_views(tmp_path: Path) -> None:
 
     out = _artifact(tmp_path)
     reader = open_extraction(out)
-    matrix = feature_matrix(reader, "relu")
+    matrix = reader.feature_matrix("relu")
     assert matrix.shape == (10, 4)
-    dataset = as_torch_dataset(reader, keys=["logits"])
+    dataset = reader.to_torch_dataset(keys=["logits"])
     assert len(dataset) == 10
     row = dataset[3]
     assert set(row) == {"logits"}

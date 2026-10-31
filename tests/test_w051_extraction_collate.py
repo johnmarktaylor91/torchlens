@@ -15,8 +15,8 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset
 
 
 class _OneInput(nn.Module):

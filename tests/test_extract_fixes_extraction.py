@@ -27,8 +27,9 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset, load_extraction
+from torchlens.dataset_extraction import load_extraction
 from torchlens.errors._base import TorchLensWarning
 from torchlens.utils._torch_compat import TorchCapabilityWarning
 

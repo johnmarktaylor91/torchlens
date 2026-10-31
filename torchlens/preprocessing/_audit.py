@@ -230,7 +230,7 @@ class PreprocessingAudit:
     def to_json(self) -> dict[str, Any]:
         """Serialize the full report (the manifest-block payload shape)."""
 
-        record = self.authority.record
+        record = self.authority.preprocessing
         return {
             "schema": "tl_preprocessing_audit_v1",
             "authority": {

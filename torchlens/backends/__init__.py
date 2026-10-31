@@ -6,7 +6,6 @@ from __future__ import annotations
 from . import default_specs as _default_specs  # noqa: F401
 from ._protocol import CaptureBackend
 from .registry import (
-    GATED_CAPABILITY_FLAGS,
     TINYGRAD_BACKEND_NAME as TINYGRAD_BACKEND_NAME,
     TORCH_BACKEND_NAME as TORCH_BACKEND_NAME,
     BackendAmbiguityError,
@@ -30,7 +29,6 @@ from .registry import (
 )
 
 __all__ = [
-    "GATED_CAPABILITY_FLAGS",
     "BackendAmbiguityError",
     "BackendCapabilities",
     "BackendCapabilityConformanceError",

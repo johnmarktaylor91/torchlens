@@ -5,13 +5,14 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-import torchlens.utils as utils
 
 
 def test_register_op_rule_affects_flops() -> None:
     """Custom op rules are accepted by the utility registry."""
 
-    utils.register_op_rule("custom_test_op", lambda *_args: 123, None)
+    from torchlens.capture.flops import register_op_rule
+
+    register_op_rule("custom_test_op", lambda *_args: 123, None)
     from torchlens.capture.flops import compute_forward_flops
 
     assert compute_forward_flops("custom_test_op", (1,), [], (), {}) == 123

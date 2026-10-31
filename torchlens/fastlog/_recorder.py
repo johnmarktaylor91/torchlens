@@ -189,7 +189,7 @@ def _resolve_train_mode_default(
             "Remedy: pass CaptureSpec(keep_grad=True) or omit the default.",
             code="backward_ready_conflict",
         )
-    if isinstance(value, CaptureSpec) and not value.keep_grad:
+    if isinstance(value, CaptureSpec) and not value.save_grad:
         raise TrainingModeConfigError(
             f"backward_ready=True conflicts with {field_name}=CaptureSpec(keep_grad=False). "
             "Remedy: pass CaptureSpec(keep_grad=True) or omit the default.",
@@ -825,7 +825,7 @@ class Recorder:
             CaptureStatus.FAILED,
             CaptureStatus.ABORTED_NONFINITE,
         ):
-            stamped = dataclass_replace(settled, num_committed_ops=recording.num_committed_ops)
+            stamped = dataclass_replace(settled, n_ops_committed=recording.num_committed_ops)
         else:
             stamped = CaptureOutcome(
                 status=CaptureStatus.FAILED,
