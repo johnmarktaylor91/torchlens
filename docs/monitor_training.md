@@ -117,7 +117,7 @@ with stable identity. A reducer failure on one site records
 `capture_failed` for that site and your training step survives.
 
 Inside an ordinary loop, `watch(model, to=sink, signals=("activations",),
-grain="op", select=..., example_input=x, allow_forward_wrap=True)` drives
+grain="op", select=..., inputs=x, allow_forward_wrap=True)` drives
 the same collector without changing your `model(x)` call: it wraps the root
 forward (with your consent), calibrates and discloses that cost at attach,
 and removes the wrap at `close()` (see the trackers reference, tier O).

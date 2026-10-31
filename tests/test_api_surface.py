@@ -11,21 +11,17 @@ TARGET_ALL = [
     # L3 ATen profile facade (documented-unstable; exported at __all__ head).
     # Ratchet row repaired by L6 post-merge: the L1/L3 merge train landed the
     # export without this row, leaving main red on the frozen-surface test.
-    "AtenOp",
     "trace",
     "release_model",
     "clear_capture_cache",
     "export",
-    "hash",
-    "assert_unchanged",
+    "fingerprint",
     "fastlog",
     "facets",
     "record",
     "Recording",
     "ActivationLookup",
     "CapturedRun",
-    "JaxPayloadLoadHint",
-    "PayloadLoadHints",
     "load",
     "save",
     "do",
@@ -49,13 +45,7 @@ TARGET_ALL = [
     "ReentrantTraceError",
     "Trace",
     "Layer",
-    "Container",
     "Op",
-    "Quantity",
-    "Bytes",
-    "Duration",
-    "Flops",
-    "Macs",
     "Bundle",
     "add",
     "label",
@@ -73,7 +63,6 @@ TARGET_ALL = [
     "output",
     "output_at",
     "input_at",
-    "register_container",
     "preceded_by",
     "contains",
     "facet",
@@ -90,7 +79,6 @@ TARGET_ALL = [
     "replace_with",
     "scale",
     "splice_module",
-    "span",
     "steer",
     "direction_from_pairs",
     "sweep",
@@ -103,7 +91,6 @@ TARGET_ALL = [
     "grad_clamp",
     "grad_scale",
     "grad_zero",
-    "tap",
     "Selection",
     "ResolvedSelection",
     "units",
@@ -126,7 +113,7 @@ TARGET_ALL = [
     "pass_variance",
     "subspace",
     # F39 unhide (conflict-ledger row 8): tl.stats / tl.aggregate promoted
-    # from reachable-but-undeclared lazy names to declared surface = 116.
+    # from reachable-but-undeclared lazy names to declared surface.
     "stats",
     "aggregate",
 ]
@@ -216,7 +203,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     producer wave adds `subspace` (direction/subspace support selection with
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
     completeness work F39 unhide promotes the shipped streaming-stats
-    surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
+    surface `stats` and `aggregate` (conflict-ledger row 8) = 103.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

@@ -392,7 +392,7 @@ class TestTierM:
             signals=("activations", "gradients"),
             select=("transformer.h.0",),
             optimizer=opt,
-            example_input=example,
+            inputs=example,
             every=1,
         )
         with session, session.step(100):
@@ -418,7 +418,7 @@ class TestTierM:
                 to=trk.MemorySink(),
                 signals=("activations",),
                 select=("no.such.module",),
-                example_input=example,
+                inputs=example,
             )
         code = getattr(info.value, "fields", {}).get("code", "")
         assert code in ("watch_plan_empty", "watch_selector_matched_no_sites")

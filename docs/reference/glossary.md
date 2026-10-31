@@ -2312,7 +2312,7 @@ shim owed*
 : Op-grain (tier O) watching: per-op activations from the Route-B op-tier
   collector during ordinary training. Needs `signals=("activations",)`,
   `select=` (module path prefixes or a selector-algebra object) and
-  `example_input=`; refuses `watch_forward_wrap_consent_required` without
+  `inputs=`; refuses `watch_forward_wrap_consent_required` without
   `allow_forward_wrap=True`, the consent to wrap the root module's forward.
   Attach calibrates the wrap (plain vs wrapped forward, RNG and buffers
   restored) into `session.collector.calibration` and discloses it in

@@ -40,7 +40,7 @@ def _op_grain_row(model_a, model_b, step_fn, select, example, *, repeats, note):
             signals=("activations",),
             grain="op",
             select=select,
-            example_input=example,
+            inputs=example,
             allow_forward_wrap=True,
             every=1,
         )

@@ -221,7 +221,7 @@ def _model_hash(captured_model: Any, example_input: Any) -> str:
     return trace(captured_trace)
 
 
-def model(model: Any, example_input: Any) -> str:
+def model(model: Any, inputs: Any) -> str:
     """Capture a model cheaply and return its address-free structural hash.
 
     This provisional name may change after public API review. The metadata-only
@@ -233,7 +233,7 @@ def model(model: Any, example_input: Any) -> str:
     ----------
     model:
         Model or callable accepted by :func:`torchlens.trace`.
-    example_input:
+    inputs:
         Example positional input accepted by :func:`torchlens.trace`.
 
     Returns
@@ -242,10 +242,10 @@ def model(model: Any, example_input: Any) -> str:
         SHA-256 structural hash for the captured trace.
     """
 
-    return _model_hash(model, example_input)
+    return _model_hash(model, inputs)
 
 
-def assert_unchanged(model: Any, example_input: Any, expected: str | None) -> str:
+def assert_unchanged(model: Any, inputs: Any, expected: str | None) -> str:
     """Assert that a model still has a pinned address-free structural hash.
 
     This provisional name may change after public API review. Pass ``None`` to
@@ -255,7 +255,7 @@ def assert_unchanged(model: Any, example_input: Any, expected: str | None) -> st
     ----------
     model:
         Model or callable accepted by :func:`torchlens.trace`.
-    example_input:
+    inputs:
         Example positional input accepted by :func:`torchlens.trace`.
     expected:
         Previously pinned structural hash, or ``None`` to bootstrap one.
@@ -273,7 +273,7 @@ def assert_unchanged(model: Any, example_input: Any, expected: str | None) -> st
         If ``expected`` is neither a string nor ``None`` (a ``TypeError``).
     """
 
-    actual = _model_hash(model, example_input)
+    actual = _model_hash(model, inputs)
     if expected is None:
         # Bootstrap surface: disclose the fresh pin through the warning
         # machinery instead of an unconditional stdout write, so callers and

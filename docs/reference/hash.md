@@ -32,9 +32,9 @@ Output:
 
 ## `model` and `assert_unchanged`
 
-`tl.fingerprint.model(model, example_input)` performs an inference-only metadata capture with
+`tl.fingerprint.model(model, inputs)` performs an inference-only metadata capture with
 `layers_to_save=None`, then hashes it. This is the same capture policy used by
-`tl.fingerprint.assert_unchanged(model, example_input, expected)`.
+`tl.fingerprint.assert_unchanged(model, inputs, expected)`.
 
 ```python
 import torch

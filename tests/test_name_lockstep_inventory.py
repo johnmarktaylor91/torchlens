@@ -222,14 +222,14 @@ def test_constants_nested_namespaces_and_shadowed_submodules_are_exports(
     """F7: constants, nested namespace exports and a shadowed submodule's exports appear."""
 
     assert {
-        "export:tl._constants.RECORD_FIELD_ORDER",
-        "export:tl._constants.RAW_SUFFIX",
-        "export:tl._constants.helper",
+        "export:tl.constants.RECORD_FIELD_ORDER",
+        "export:tl.constants.RAW_SUFFIX",
+        "export:tl.constants.helper",
         "export:tl.experimental.inner",
         "export:tl.experimental.inner.draw",
         "export:tl.bundle.Bundle",
     } <= set(field_inventory)
-    assert "export:tl._constants.os" not in field_inventory
+    assert "export:tl.constants.os" not in field_inventory
     assert field_inventory["root:tl.bundle"]["subkind"] == "function"
 
 
@@ -304,9 +304,7 @@ def test_real_package_inventory_covers_field_tables_and_shims() -> None:
     assert "torchlens._constants:MODEL_LOG_FIELD_ORDER" in durations["field_tables"]
     assert {
         "member:torchlens._vocab.trace_state:TraceState.APPENDED",
-        "export:tl._constants.MODEL_LOG_FIELD_ORDER",
         "export:tl.bundle.Bundle",
         "export:tl.experimental.dagua.NodeSpec",
-        "param:_depth",
     } <= set(rows)
     assert rows["export:tl.io.TraceState"]["module"] == "torchlens._vocab.trace_state"

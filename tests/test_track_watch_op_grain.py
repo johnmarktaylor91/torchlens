@@ -42,7 +42,7 @@ def _watch_relu(model: nn.Module, sink: trk.MemorySink, **kwargs: object) -> trk
             signals=("activations",),
             grain="op",
             select=tl.func("relu"),
-            example_input=torch.randn(4, 8),
+            inputs=torch.randn(4, 8),
             allow_forward_wrap=True,
             every=1,
             **kwargs,
@@ -68,7 +68,7 @@ class TestConsent:
                 signals=("activations",),
                 grain="op",
                 select=tl.func("relu"),
-                example_input=torch.randn(4, 8),
+                inputs=torch.randn(4, 8),
             )
         assert info.value.fields["code"] == "watch_forward_wrap_consent_required"
         assert "allow_forward_wrap=True" in str(info.value.fields["remedy"])
@@ -172,7 +172,7 @@ class TestOpValues:
                 signals=("activations",),
                 grain="op",
                 select=tl.func("relu"),
-                example_input=torch.randn(4, 8),
+                inputs=torch.randn(4, 8),
                 allow_forward_wrap=True,
                 every=2,
             )
@@ -231,7 +231,7 @@ class TestCalibrationDisclosure:
                 signals=("activations",),
                 grain="op",
                 select=tl.func("relu"),
-                example_input=example,
+                inputs=example,
                 allow_forward_wrap=True,
             )
         codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
@@ -309,7 +309,7 @@ def _watch_relu_like(
             signals=("activations",),
             grain="op",
             select=tl.func("matmul"),
-            example_input=x,
+            inputs=x,
             allow_forward_wrap=True,
             facets=facets,  # type: ignore[arg-type]
             every=1,

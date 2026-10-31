@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 103 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -1108,6 +1108,10 @@
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
   facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
   with `format="json"`. Doc: `docs/for-ai-agents.md`.
+- STRUCTURAL FINGERPRINT (`tl.fingerprint`): `tl.fingerprint.model(model, inputs)`,
+  `tl.fingerprint.trace(trace)` and `tl.fingerprint.content(...)` compute address-free
+  structural hashes; `tl.fingerprint.assert_unchanged(...)` asserts a model still matches a
+  pinned hash.
 - TRANSFORMER PICTURES (`torchlens.transformer`; every spelling DOCUMENTED-UNSTABLE pending the
   naming session): the CircuitsVis/BertViz/Ecco/inspectus picture families on typed
   session-only display records -- `attention_views(trace, tokens=)` reads the semantic
@@ -1196,7 +1200,7 @@
   (`ds.attrs["module_state_variables"]` lists them). Save-all exports everything; the
   former buffer-layer refusal is removed.
   OP GRAIN (batch-2 U32.1/U34.1): `watch(..., signals=("activations",),
-  grain="op", select=<prefixes or selector>, example_input=x,
+  grain="op", select=<prefixes or selector>, inputs=x,
   allow_forward_wrap=True, facets=None)` drives the Route-B
   `OpTierCollector` through a consented root-forward wrap (no consent:
   `watch_forward_wrap_consent_required`; unknown grain: `watch_grain_invalid`);
