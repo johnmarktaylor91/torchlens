@@ -341,7 +341,7 @@ class RecordingState:
             f"fastlog predicate failed during recording{details}. "
             "Remedy: fix the predicate; exc.failures carries the accumulated tracebacks.",
             failures=list(self.predicate_failures),
-            total_count=len(self.predicate_failures) + self.predicate_failure_overflow_count,
+            num_failures=len(self.predicate_failures) + self.predicate_failure_overflow_count,
             overflow=self.predicate_failure_overflow_count,
             code="predicate_evaluation_failed",
         )
