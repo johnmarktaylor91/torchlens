@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
+
+from _harness import REPO_ROOT, run_checks
 
 
 def _repo_root() -> Path:
@@ -15,7 +18,7 @@ def _repo_root() -> Path:
         Absolute repository root path.
     """
 
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _grep_for_pattern(pattern: str, paths: list[str]) -> list[str]:
@@ -46,7 +49,7 @@ def _grep_for_pattern(pattern: str, paths: list[str]) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def test_not_mvp_features_not_in_public_surface() -> None:
+def check_not_mvp_features_not_in_public_surface() -> None:
     """Deferred features should not appear in public code, docs, or tests."""
 
     forbidden = [
@@ -59,7 +62,7 @@ def test_not_mvp_features_not_in_public_surface() -> None:
         r"bundle-of-bundles",
     ]
     paths = ["torchlens/", "README.md", "docs/", "tests/"]
-    allowlisted_files = {"tests/test_not_mvp_audit.py"}
+    allowlisted_files = {"scripts/checks/not_mvp_audit.py"}
     failures: list[str] = []
 
     for pattern in forbidden:
@@ -72,3 +75,16 @@ def test_not_mvp_features_not_in_public_surface() -> None:
             failures.append(f"{pattern}: {match}")
 
     assert failures == []
+
+
+CHECKS = (check_not_mvp_features_not_in_public_surface,)
+
+
+def main() -> int:
+    """Run every not_mvp_audit check and return the exit status."""
+
+    return run_checks("not_mvp_audit", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

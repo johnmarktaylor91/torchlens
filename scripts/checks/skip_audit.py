@@ -26,7 +26,7 @@ Three enforcement layers:
    ``UNCONDITIONAL_SKIP_LEDGER`` with a dated justification: no silent dead
    tests.
 
-Both scanners prove red-capability against planted offenders in ``tmp_path``.
+Both scanners prove red-capability against planted offenders in a temporary directory.
 """
 
 from __future__ import annotations
@@ -34,13 +34,12 @@ from __future__ import annotations
 import ast
 import importlib.util
 import subprocess
+import sys
+import tempfile
 from functools import cache
 from pathlib import Path
 
-import pytest
-
-TESTS_DIR = Path(__file__).resolve().parent
-REPO_ROOT = TESTS_DIR.parent
+from _harness import REPO_ROOT, TESTS_DIR, CheckSkipped, run_checks
 
 TEST_EXTRA = "test-extra"
 OPTIONAL_PREVIEW = "optional-preview"
@@ -401,18 +400,6 @@ _CONDITIONAL_ANCESTORS: tuple[type, ...] = tuple(
 )
 
 
-def warm_scan_caches() -> None:
-    """Pre-fill the per-file text/AST caches OUTSIDE any test's charged window.
-
-    Called from the root conftest's collection hook (uncharged time): the
-    whole-tree scans below otherwise charge their one-time ~5-7s parse cost to
-    whichever audit test runs first under randomized ordering.
-    """
-
-    for path in _iter_test_files(TESTS_DIR):
-        _parse_with_parents(str(path))
-
-
 def _iter_test_files(root: Path) -> list[Path]:
     """Every python file under ``root``, excluding bytecode caches."""
 
@@ -554,7 +541,7 @@ def collect_unconditional_skips(root: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def test_ledger_tiers_are_valid() -> None:
+def check_ledger_tiers_are_valid() -> None:
     """Every ledger row uses a closed tier vocabulary and a non-empty note."""
 
     for target, (tier, note) in IMPORTORSKIP_LEDGER.items():
@@ -564,7 +551,7 @@ def test_ledger_tiers_are_valid() -> None:
     assert sentinel_tier == TEST_EXTRA, "the full-extra sentinel must itself be test-extra"
 
 
-def test_importorskip_inventory_matches_ledger() -> None:
+def check_importorskip_inventory_matches_ledger() -> None:
     """Every importorskip target is ledgered; every ledger row is still used."""
 
     literal, _ = collect_importorskip_targets(TESTS_DIR)
@@ -574,7 +561,7 @@ def test_importorskip_inventory_matches_ledger() -> None:
     stale = ledgered - inventory
     assert not unledgered, (
         "New pytest.importorskip targets must be ledgered consciously in "
-        "IMPORTORSKIP_LEDGER (tests/test_skip_audit.py) with an availability tier:\n  "
+        "IMPORTORSKIP_LEDGER (scripts/checks/skip_audit.py) with an availability tier:\n  "
         + "\n  ".join(f"{t} (e.g. {literal[t][0]})" for t in sorted(unledgered))
     )
     assert not stale, (
@@ -583,7 +570,7 @@ def test_importorskip_inventory_matches_ledger() -> None:
     )
 
 
-def test_dynamic_importorskip_sites_are_allowlisted() -> None:
+def check_dynamic_importorskip_sites_are_allowlisted() -> None:
     """Non-literal importorskip calls stay confined to the known dynamic sites."""
 
     _, dynamic = collect_importorskip_targets(TESTS_DIR)
@@ -599,8 +586,15 @@ def test_dynamic_importorskip_sites_are_allowlisted() -> None:
     )
 
 
-def test_importorskip_scanner_is_red_capable(tmp_path: Path) -> None:
+def check_importorskip_scanner_is_red_capable() -> None:
     """The inventory scanner catches a planted unledgered target and dynamic site."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_importorskip_scanner_is_red_capable(Path(tmp))
+
+
+def _check_importorskip_scanner_is_red_capable(tmp_path: Path) -> None:
+    """Run the planted-offender body of check_importorskip_scanner_is_red_capable under ``tmp_path``."""
 
     planted = tmp_path / "test_planted_offender.py"
     planted.write_text(
@@ -614,7 +608,7 @@ def test_importorskip_scanner_is_red_capable(tmp_path: Path) -> None:
     assert dynamic == ["test_planted_offender.py"]
 
 
-def test_test_extra_targets_import_in_full_env() -> None:
+def check_test_extra_targets_import_in_full_env() -> None:
     """When the env claims the full [test] extra, every test-extra target resolves.
 
     The claim is the sentinel dep importing; a partial install (sentinel absent)
@@ -625,7 +619,7 @@ def test_test_extra_targets_import_in_full_env() -> None:
     """
 
     if importlib.util.find_spec(FULL_TEST_EXTRA_SENTINEL) is None:
-        pytest.skip(
+        raise CheckSkipped(
             f"environment does not claim the full [test] extra "
             f"(sentinel {FULL_TEST_EXTRA_SENTINEL!r} is absent)"
         )
@@ -648,7 +642,7 @@ def test_test_extra_targets_import_in_full_env() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_no_unledgered_unconditional_skips() -> None:
+def check_no_unledgered_unconditional_skips() -> None:
     """Every unconditional skip in tests/ is a consciously ledgered placeholder."""
 
     findings = collect_unconditional_skips(TESTS_DIR)
@@ -657,7 +651,7 @@ def test_no_unledgered_unconditional_skips() -> None:
     assert not unledgered, (
         "Unconditional skips make tests silently dead; either realize the test, "
         "delete it, or ledger it as a dated deliberate placeholder in "
-        "UNCONDITIONAL_SKIP_LEDGER (tests/test_skip_audit.py):\n  "
+        "UNCONDITIONAL_SKIP_LEDGER (scripts/checks/skip_audit.py):\n  "
         + "\n  ".join(f"{k}: {findings[k]}" for k in sorted(unledgered))
     )
     assert not stale, (
@@ -666,8 +660,15 @@ def test_no_unledgered_unconditional_skips() -> None:
     )
 
 
-def test_unconditional_skip_scanner_is_red_capable(tmp_path: Path) -> None:
+def check_unconditional_skip_scanner_is_red_capable() -> None:
     """The scanner catches all three planted offender shapes and no decoys."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_unconditional_skip_scanner_is_red_capable(Path(tmp))
+
+
+def _check_unconditional_skip_scanner_is_red_capable(tmp_path: Path) -> None:
+    """Run the planted-offender body of check_unconditional_skip_scanner_is_red_capable under ``tmp_path``."""
 
     planted = tmp_path / "test_planted_skips.py"
     planted.write_text(
@@ -864,6 +865,10 @@ def _repo_config_corpus() -> str:
 
     chunks: list[str] = []
     for rel in sorted(_tracked_repo_files()):
+        if rel.startswith("scripts/checks/"):
+            # The moved governance checks (and their planted env-var decoys)
+            # lived in tests/ before, outside this corpus; keep them out.
+            continue
         if rel.startswith((".github/", "scripts/", "tools/", "benchmarks/")) or rel in (
             "pyproject.toml",
             ".pre-commit-config.yaml",
@@ -950,7 +955,7 @@ def collect_repo_unsatisfiable_skipifs(root: Path, repo_root: Path) -> dict[str,
     return findings
 
 
-def test_no_unledgered_repo_unsatisfiable_skipifs() -> None:
+def check_no_unledgered_repo_unsatisfiable_skipifs() -> None:
     """Every provably-always-firing skipif is ledgered; no ledger row is stale."""
 
     findings = collect_repo_unsatisfiable_skipifs(TESTS_DIR, REPO_ROOT)
@@ -967,8 +972,15 @@ def test_no_unledgered_repo_unsatisfiable_skipifs() -> None:
     )
 
 
-def test_repo_unsatisfiable_skipif_scanner_is_red_capable(tmp_path: Path) -> None:
+def check_repo_unsatisfiable_skipif_scanner_is_red_capable() -> None:
     """Planted artifact/env gates are caught; satisfiable decoys are not."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_repo_unsatisfiable_skipif_scanner_is_red_capable(Path(tmp))
+
+
+def _check_repo_unsatisfiable_skipif_scanner_is_red_capable(tmp_path: Path) -> None:
+    """Run the planted-offender body of check_repo_unsatisfiable_skipif_scanner_is_red_capable under ``tmp_path``."""
 
     planted = tmp_path / "test_planted_skipifs.py"
     planted.write_text(
@@ -1147,7 +1159,7 @@ def collect_device_gated_skipifs(root: Path) -> dict[str, str]:
     return findings
 
 
-def test_no_unledgered_device_gated_skipifs() -> None:
+def check_no_unledgered_device_gated_skipifs() -> None:
     """Every CUDA-gated skip is ledgered as dark coverage; no row is stale."""
 
     findings = collect_device_gated_skipifs(TESTS_DIR)
@@ -1164,8 +1176,15 @@ def test_no_unledgered_device_gated_skipifs() -> None:
     )
 
 
-def test_device_gated_skipif_scanner_is_red_capable(tmp_path: Path) -> None:
+def check_device_gated_skipif_scanner_is_red_capable() -> None:
     """A planted CUDA gate is caught; a satisfiable device decoy is not."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_device_gated_skipif_scanner_is_red_capable(Path(tmp))
+
+
+def _check_device_gated_skipif_scanner_is_red_capable(tmp_path: Path) -> None:
+    """Run the planted-offender body of check_device_gated_skipif_scanner_is_red_capable under ``tmp_path``."""
 
     planted = tmp_path / "test_planted_cuda_skipifs.py"
     planted.write_text(
@@ -1307,7 +1326,7 @@ def _unresolved_tripwire_targets(targets: dict[str, str]) -> list[str]:
     )
 
 
-def test_unavailable_ok_targets_are_all_classified() -> None:
+def check_unavailable_ok_targets_are_all_classified() -> None:
     """Every unavailable-ok target is consciously tripwire XOR optional.
 
     A new ``unavailable-ok`` ledger row must land with a classification, so
@@ -1327,7 +1346,7 @@ def test_unavailable_ok_targets_are_all_classified() -> None:
     assert not unclassified, (
         "unavailable-ok importorskip targets must be consciously classified as "
         "TRIPWIRE_GUARD_TARGETS (absence disarms a correctness/honesty gate) or "
-        "OPTIONAL_INTEGRATION_TARGETS (breadth-only) in tests/test_skip_audit.py:\n  "
+        "OPTIONAL_INTEGRATION_TARGETS (breadth-only) in scripts/checks/skip_audit.py:\n  "
         + "\n  ".join(sorted(unclassified))
     )
     assert not stale, (
@@ -1338,7 +1357,7 @@ def test_unavailable_ok_targets_are_all_classified() -> None:
         assert reason.strip(), f"{target}: empty classification reason"
 
 
-def test_tripwire_guard_deps_resolve_in_full_env() -> None:
+def check_tripwire_guard_deps_resolve_in_full_env() -> None:
     """A full-[test]-extra box may not silently disarm a tripwire gate.
 
     The claim is the same sentinel the test-extra enforcement uses: a partial
@@ -1349,7 +1368,7 @@ def test_tripwire_guard_deps_resolve_in_full_env() -> None:
     """
 
     if importlib.util.find_spec(FULL_TEST_EXTRA_SENTINEL) is None:
-        pytest.skip(
+        raise CheckSkipped(
             f"environment does not claim the full [test] extra "
             f"(sentinel {FULL_TEST_EXTRA_SENTINEL!r} is absent)"
         )
@@ -1358,12 +1377,12 @@ def test_tripwire_guard_deps_resolve_in_full_env() -> None:
         "TRIPWIRE GATES ARE SILENTLY SKIPPING on this full-[test]-extra "
         "environment -- each absent dep below disarms a correctness/honesty "
         "gate that then reads green in every summary. Install the dep or "
-        "consciously reclassify it in tests/test_skip_audit.py:\n"
+        "consciously reclassify it in scripts/checks/skip_audit.py:\n"
         + "\n".join(f"  {target}: disarms {TRIPWIRE_GUARD_TARGETS[target]}" for target in missing)
     )
 
 
-def test_tripwire_resolution_check_is_red_capable() -> None:
+def check_tripwire_resolution_check_is_red_capable() -> None:
     """A planted unresolvable tripwire target is reported missing."""
 
     planted = {
@@ -1371,3 +1390,31 @@ def test_tripwire_resolution_check_is_red_capable() -> None:
         "pytest": "resolvable decoy (must NOT be reported)",
     }
     assert _unresolved_tripwire_targets(planted) == ["torchlens_planted_missing_dep_xyz"]
+
+
+CHECKS = (
+    check_ledger_tiers_are_valid,
+    check_importorskip_inventory_matches_ledger,
+    check_dynamic_importorskip_sites_are_allowlisted,
+    check_importorskip_scanner_is_red_capable,
+    check_test_extra_targets_import_in_full_env,
+    check_no_unledgered_unconditional_skips,
+    check_unconditional_skip_scanner_is_red_capable,
+    check_no_unledgered_repo_unsatisfiable_skipifs,
+    check_repo_unsatisfiable_skipif_scanner_is_red_capable,
+    check_no_unledgered_device_gated_skipifs,
+    check_device_gated_skipif_scanner_is_red_capable,
+    check_unavailable_ok_targets_are_all_classified,
+    check_tripwire_guard_deps_resolve_in_full_env,
+    check_tripwire_resolution_check_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every skip_audit check and return the exit status."""
+
+    return run_checks("skip_audit", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

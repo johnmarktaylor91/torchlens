@@ -18,9 +18,11 @@ Parsing is line/regex-based on purpose (tomllib is 3.11+; the suite runs a
 from __future__ import annotations
 
 import re
-from pathlib import Path
+import sys
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from _harness import REPO_ROOT, run_checks
+
+_PROJECT_ROOT = REPO_ROOT
 
 #: Flags that must read ``true`` under [tool.mypy]. GROW-ONLY: never remove an
 #: entry to make a gate pass — that is the silent ratchet-narrowing this test
@@ -64,7 +66,7 @@ def _flag_values(section: str) -> dict[str, str]:
     }
 
 
-def test_mypy_strictness_flags_never_narrow() -> None:
+def check_mypy_strictness_flags_never_narrow() -> None:
     """Every ratcheted strictness flag must remain ``true`` in [tool.mypy]."""
 
     section = _mypy_section((_PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -78,7 +80,7 @@ def test_mypy_strictness_flags_never_narrow() -> None:
     )
 
 
-def test_mypy_ratchet_lock_is_red_capable() -> None:
+def check_mypy_ratchet_lock_is_red_capable() -> None:
     """A planted narrowed config is flagged (red-capability self-test)."""
 
     planted = 'python_version = "3.11"\ncheck_untyped_defs = false\nstrict_equality = true\n'
@@ -87,3 +89,19 @@ def test_mypy_ratchet_lock_is_red_capable() -> None:
     assert "check_untyped_defs" in broken
     assert "no_implicit_optional" in broken  # missing entirely also trips
     assert "strict_equality" not in broken
+
+
+CHECKS = (
+    check_mypy_strictness_flags_never_narrow,
+    check_mypy_ratchet_lock_is_red_capable,
+)
+
+
+def main() -> int:
+    """Run every mypy_ratchet check and return the exit status."""
+
+    return run_checks("mypy_ratchet", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -21,12 +21,12 @@ from __future__ import annotations
 import ast
 import subprocess
 import sys
-from pathlib import Path
 
-import pytest
-from known_failures import KNOWN_FAILURES, duplicate_nodeids, stale_entries
+from _harness import REPO_ROOT, CheckSkipped, run_checks, use_test_helpers
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+use_test_helpers()
+
+from known_failures import KNOWN_FAILURES, duplicate_nodeids, stale_entries  # noqa: E402
 
 #: Every file the ledger names, derived from the entries themselves so this
 #: test never needs a second, hand-maintained file list to keep in sync.
@@ -58,20 +58,18 @@ def _collect_node_ids(target: str) -> set[str]:
     return ids
 
 
-@pytest.mark.smoke
-def test_known_failures_ledger_has_no_duplicate_nodeids() -> None:
+def check_known_failures_ledger_has_no_duplicate_nodeids() -> None:
     """Each tracked node id appears at most once (a second row would be dead code)."""
 
     duplicates = duplicate_nodeids()
     assert not duplicates, f"duplicate known_failures entries: {duplicates}"
 
 
-@pytest.mark.heavy
-def test_known_failures_match_collected_node_ids() -> None:
+def check_known_failures_match_collected_node_ids() -> None:
     """Every ledger entry must resolve to a node id pytest actually collects."""
 
     if not KNOWN_FAILURES:
-        pytest.skip("ledger is empty; nothing to cross-check")
+        raise CheckSkipped("ledger is empty; nothing to cross-check")
 
     collected: set[str] = set()
     for target in _LEDGER_FILES:
@@ -85,8 +83,7 @@ def test_known_failures_match_collected_node_ids() -> None:
     )
 
 
-@pytest.mark.smoke
-def test_known_failures_ledger_is_the_only_xfail_source_in_its_files() -> None:
+def check_known_failures_ledger_is_the_only_xfail_source_in_its_files() -> None:
     """No file the ledger names may decorate a test with ``xfail`` directly.
 
     The ledger (via ``tests/conftest.py::apply_xfail_marks``) is the only
@@ -112,3 +109,20 @@ def test_known_failures_ledger_is_the_only_xfail_source_in_its_files() -> None:
         "tests/known_failures.py so the ledger stays the single source:\n  "
         + "\n  ".join(offenders)
     )
+
+
+CHECKS = (
+    check_known_failures_ledger_has_no_duplicate_nodeids,
+    check_known_failures_match_collected_node_ids,
+    check_known_failures_ledger_is_the_only_xfail_source_in_its_files,
+)
+
+
+def main() -> int:
+    """Run every known_failures_ledger check and return the exit status."""
+
+    return run_checks("known_failures_ledger", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
