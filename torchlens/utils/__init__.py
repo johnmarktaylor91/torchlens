@@ -897,8 +897,8 @@ def peek_graph(
     )
     trace.draw(
         vis_mode=view,
-        vis_outpath=str(container_path),
-        vis_fileformat=file_format,
+        path=str(container_path),
+        file_format=file_format,
         vis_save_only=True,
     )
     return None

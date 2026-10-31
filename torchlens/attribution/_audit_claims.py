@@ -26,7 +26,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 from torchlens.attribution._site import SiteTarget, _select_unit, _target_spelling
 
 _AUDIT_DOCS_POINTER = "See docs/reference/attribution.md, section Auditing internal attributions."
@@ -129,7 +129,7 @@ class _AuditPlan:
         fork = self.trace.fork(name="attribution_causal_audit")
         try:
             with torch.no_grad():
-                for selection, edit in self.intervention(units):
+                for selection, edit in self.build_interventions(units):
                     fork.do(selection, edit)
                 return self.score(fork)
         finally:
@@ -283,13 +283,11 @@ def _claim_layer(request: _AuditRequest, trace: Any) -> tuple[str, str]:
     """Return the claim's module name and its site's op label, or refuse."""
 
     claim = request.claim
-    layer = (
-        getattr(claim, "extra", {}).get("layer") if isinstance(claim, AttributionResult) else None
-    )
+    layer = getattr(claim, "extra", {}).get("layer") if isinstance(claim, Attribution) else None
     if not isinstance(layer, str) or not isinstance(claim.values, Tensor):
         kind = (
             f"an input-level {claim.method!r} result"
-            if isinstance(claim, AttributionResult)
+            if isinstance(claim, Attribution)
             else f"a {type(claim).__name__}"
         )
         raise _unsupported_claim(request, trace, kind, code="attribution_audit_claim_unsupported")
@@ -309,12 +307,12 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
 
     target = request.target
     if isinstance(target, SiteTarget):
-        labels = _output_labels(trace, target.layer) if target.call in (None, 0) else None
+        labels = _output_labels(trace, target.module_address) if target.call in (None, 0) else None
         if labels is None or len(labels) != 1:
             raise _misaligned(
                 request,
                 layer,
-                f"the target site {target.layer!r} is not one module call here",
+                f"the target site {target.module_address!r} is not one module call here",
                 code="attribution_audit_claim_misaligned",
             )
         site = labels[0]

@@ -12,21 +12,21 @@ from PIL import Image, ImageDraw
 from ..visualization.bundle_diff import bundle_diff
 from . import batch_summary as _batch_summary
 from .batch_summary import montage, text_table
-from .feature_maps import _draw_more_marker, feature_map_evolution, feature_map_node_spec
-from .node_plots import render_heatmap, render_image_scatter, render_lineplot
+from .feature_maps import _draw_more_marker, feature_map_node_spec, feature_maps
+from .node_plots import image_scatter, lineplot, render_heatmap
 
 __all__ = [
     "bundle_diff",
     "causal_trace_heatmap",
     "channel_grid",
-    "feature_map_evolution",
+    "feature_maps",
     "feature_map_node_spec",
     "heatmap",
     "histogram",
     "montage",
     "render_heatmap",
-    "render_image_scatter",
-    "render_lineplot",
+    "image_scatter",
+    "lineplot",
     "text_table",
 ]
 

@@ -90,7 +90,7 @@ def test_site_target_unit_matches_hand_autograd(method_name: str) -> None:
     model, x = _mlp_and_input()
     target = SiteTarget("act", unit=_UNIT)
     if method_name == "integrated_gradients":
-        result = tl.attribution.integrated_gradients(model, x, target=target, n_steps=16)
+        result = tl.attribution.integrated_gradients(model, x, target=target, num_steps=16)
         expected = _hand_integrated_gradients(model, x, 16)
     else:
         result = getattr(tl.attribution, method_name)(model, x, target=target)
@@ -135,14 +135,14 @@ def test_site_target_on_integer_ids_matches_float_embedding_run() -> None:
     token_model, float_model, ids = _token_pair()
     target = SiteTarget("body.encoder", unit=2)
     from_ids = tl.attribution.layer_integrated_gradients(
-        token_model, ids, target=target, layer="body.encoder.norm1", n_steps=8
+        token_model, ids, target=target, layer="body.encoder.norm1", num_steps=8
     )
     from_floats = tl.attribution.layer_integrated_gradients(
         float_model,
         token_model.embed(ids).detach(),
         target=target,
         layer="body.encoder.norm1",
-        n_steps=8,
+        num_steps=8,
     )
     torch.testing.assert_close(from_ids.values, from_floats.values, atol=_ATOL, rtol=0)
     assert bool(from_ids.values.abs().sum() > 0)
@@ -167,7 +167,7 @@ def test_site_target_refuses_missing_site_and_its_remedy_runs() -> None:
     assert caught.value.fields.get("code") == "attribution_site_not_found"
     assert "'fc9'" in str(caught.value)
     remedy = _target_remedy(caught.value)
-    assert remedy.layer in {"fc1", "fc2"}
+    assert remedy.module_address in {"fc1", "fc2"}
     assert tuple(tl.attribution.saliency(model, x, target=remedy).values.shape) == (2, 5)
 
 

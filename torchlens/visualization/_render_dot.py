@@ -289,7 +289,7 @@ def _resolve_draw_request(
     )
     request = replace(
         request,
-        show_buffer_layers=show_buffer_layers,
+        show_buffers=show_buffer_layers,
         node_overlay=cast("str | OverlayScores | None", node_overlay),
         overrides=overrides,
     )
@@ -1367,7 +1367,7 @@ def draw(
     stack_channel_spec = resolve_stack_by(stack_by, vis_mode)
     request = ResolvedRenderRequest(
         vis_mode=vis_mode,
-        show_buffer_layers=cast(BufferVisibilityLiteral, show_buffer_layers),
+        show_buffers=cast(BufferVisibilityLiteral, show_buffer_layers),
         show_containers=show_containers,
         engine=vis_node_placement,
         skip_fn=skip_fn,
@@ -1464,12 +1464,12 @@ def draw(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=resolved_outpath,
+            path=resolved_outpath,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
-            vis_buffers=show_buffer_layers == "always",
+            file_format=vis_fileformat,
+            show_buffers=show_buffer_layers == "always",
             vis_direction=direction,
-            vis_theme=vis_theme,
+            theme=vis_theme,
         )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 

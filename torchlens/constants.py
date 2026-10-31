@@ -186,7 +186,7 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_cache_hit",
     "capture_cache_key",
     "capture_cache_path",
-    "facet_registry_snapshot",
+    "facet_functions",
     "recording_kept",
     "_out_dedup_mode",
     "_out_identity_cache",

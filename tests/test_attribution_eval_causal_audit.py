@@ -124,14 +124,14 @@ def test_measured_effects_equal_the_closed_form_on_a_linear_residual_model(ablat
         "baseline": (torch.full_like(hidden, 2.0), 2.0),
     }
     reference, spelling = values[ablation]
-    result = attribution.causal_audit(model, x, claim=claim, target=1, k=2, ablation=spelling)
+    result = attribution.causal_audit(model, x, claim=claim, target=1, k=2, edit=spelling)
     expected = _closed_form(model, x, 1, reference)
-    assert [row.unit for row in result.units] == [(index,) for index in range(6)]
-    assert [row.measured_effect for row in result.units] == expected.tolist()
+    assert [row.index for row in result.indices] == [(index,) for index in range(6)]
+    assert [row.measured_effect for row in result.indices] == expected.tolist()
     with torch.no_grad():
         assert result.original_score == float(model(x)[:, 1].sum())
     if ablation == "zero":
-        assert [row.claimed_effect for row in result.units] == expected.tolist()
+        assert [row.claimed_effect for row in result.indices] == expected.tolist()
         assert result.rank_agreement == 1.0
 
 
@@ -140,7 +140,7 @@ def test_a_shuffled_claim_scores_below_the_correct_claim() -> None:
 
     model, x = _linear_case()
     claim = attribution.layer_attribution(model, x, target=1, layer="fc1")
-    shuffled = attribution.AttributionResult(
+    shuffled = attribution.Attribution(
         method=claim.method,
         values=claim.values[:, torch.tensor([3, 0, 5, 1, 4, 2])],
         target_repr=claim.target_repr,
@@ -150,8 +150,8 @@ def test_a_shuffled_claim_scores_below_the_correct_claim() -> None:
     wrong = attribution.causal_audit(model, x, claim=shuffled, target=1, k=2)
     assert correct.rank_agreement == 1.0
     assert wrong.rank_agreement is not None and wrong.rank_agreement < correct.rank_agreement
-    assert [row.measured_effect for row in wrong.units] == [
-        row.measured_effect for row in correct.units
+    assert [row.measured_effect for row in wrong.indices] == [
+        row.measured_effect for row in correct.indices
     ]
 
 
@@ -160,18 +160,18 @@ def test_top_bottom_and_random_sets_add_up_on_the_linear_model() -> None:
 
     model, x = _linear_case()
     claim = attribution.layer_attribution(model, x, target=0, layer="fc1")
-    result = attribution.causal_audit(model, x, claim=claim, target=0, k=2, random_draws=3)
-    per_unit = {row.unit: row.measured_effect for row in result.units}
+    result = attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_random_draws=3)
+    per_unit = {row.index: row.measured_effect for row in result.indices}
     by_magnitude = sorted(per_unit, key=lambda unit: (-abs(per_unit[unit]), unit))
     assert [item.kind for item in result.sets] == ["top", "bottom", "random", "random", "random"]
     top, bottom = result.set_of("top")[0], result.set_of("bottom")[0]
-    assert top.units == tuple(by_magnitude[:2]) and bottom.units == tuple(by_magnitude[-2:])
+    assert top.indices == tuple(by_magnitude[:2]) and bottom.indices == tuple(by_magnitude[-2:])
     for item in result.sets:
-        assert item.measured_effect == math.fsum(per_unit[unit] for unit in item.units)
+        assert item.measured_effect == math.fsum(per_unit[unit] for unit in item.indices)
         assert item.claimed_effect == item.measured_effect
-    again = attribution.causal_audit(model, x, claim=claim, target=0, k=2, random_draws=3)
-    assert [item.units for item in again.set_of("random")] == [
-        item.units for item in result.set_of("random")
+    again = attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_random_draws=3)
+    assert [item.indices for item in again.set_of("random")] == [
+        item.indices for item in result.set_of("random")
     ]
     assert result.extra["random_measured_mean"] == pytest.approx(
         sum(item.measured_effect for item in result.set_of("random")) / 3, abs=1e-12
@@ -186,8 +186,8 @@ def test_a_claim_computed_against_a_site_target_is_audited_at_that_site() -> Non
     claim = attribution.layer_attribution(model, x, target=site, layer="fc1")
     result = attribution.causal_audit(model, x, claim=claim, target=site, k=1)
     expected = _closed_form(model, x, 2, torch.zeros(2, 6, dtype=torch.float64))
-    assert [row.measured_effect for row in result.units] == expected.tolist()
-    assert [row.claimed_effect for row in result.units] == expected.tolist()
+    assert [row.measured_effect for row in result.indices] == expected.tolist()
+    assert [row.claimed_effect for row in result.indices] == expected.tolist()
     assert result.rank_agreement == 1.0
 
 
@@ -217,13 +217,13 @@ def test_recorded_ablations_replay_to_their_measured_effects(case: str) -> None:
     else:
         model, x, layer = SmallCnn().eval(), torch.randn(2, 1, 4, 4), "conv"
     claim = attribution.layer_attribution(model, x, target=1, layer=layer)
-    result = attribution.causal_audit(model, x, claim=claim, target=1, k=3, random_draws=2)
+    result = attribution.causal_audit(model, x, claim=claim, target=1, k=3, num_random_draws=2)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     assert trace[result.site].out.shape == claim.values.shape
-    for point in (*result.units, *result.sets):
+    for point in (*result.indices, *result.sets):
         fork = trace.fork()
         try:
-            for selection, edit in point.intervention:
+            for selection, edit in point.build_interventions:
                 fork.do(selection, edit)
             replayed = float(fork[fork.output_layers[0]].out[..., 1].sum().detach())
         finally:
@@ -231,13 +231,13 @@ def test_recorded_ablations_replay_to_their_measured_effects(case: str) -> None:
         assert result.original_score - replayed == pytest.approx(
             point.measured_effect, abs=REPLAY_ATOL
         )
-        units = (point.unit,) if isinstance(point, attribution.CausalAuditUnit) else point.units
+        units = (point.index,) if isinstance(point, attribution.CausalAuditUnit) else point.indices
         mask = torch.zeros(claim.values.shape, dtype=torch.bool)
         for unit in units:
             mask[(slice(None), *unit)] = True
         hooked = _hook_ablated_score(model, x, layer, mask, 1)
         assert result.original_score - hooked == pytest.approx(point.measured_effect, abs=HOOK_ATOL)
-    assert len(result.units) == claim.values[0].numel()
+    assert len(result.indices) == claim.values[0].numel()
 
 
 def test_the_caller_model_and_random_state_are_untouched() -> None:
@@ -249,7 +249,7 @@ def test_the_caller_model_and_random_state_are_untouched() -> None:
     claim = attribution.layer_attribution(model, x, target=0, layer="conv")
     before = {name: value.detach().clone() for name, value in model.state_dict().items()}
     rng = torch.get_rng_state()
-    attribution.causal_audit(model, x, claim=claim, target=0, k=4, ablation="mean")
+    attribution.causal_audit(model, x, claim=claim, target=0, k=4, edit="mean")
     assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
     assert all(parameter.grad is None for parameter in model.parameters())
     assert model.training and all(module.training for module in model.modules())
@@ -276,7 +276,7 @@ def test_unsupported_claims_refuse_and_the_remedy_runs(kind: str) -> None:
         attribution.causal_audit(model, x, claim=claim, target=0, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult)
+    assert isinstance(fixed, attribution.CausalAudit)
 
 
 @pytest.mark.parametrize("kind", ["shape", "target"])
@@ -292,7 +292,7 @@ def test_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
         attribution.causal_audit(model, x, claim=claim, target=target, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
+    assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
 @pytest.mark.parametrize(
@@ -318,7 +318,7 @@ def test_bad_settings_refuse_and_the_remedy_runs(settings: dict[str, Any]) -> No
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "model": model, "x": x, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult)
+    assert isinstance(fixed, attribution.CausalAudit)
 
 
 def test_many_units_warn_once_and_name_per_unit_false(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -335,7 +335,7 @@ def test_many_units_warn_once_and_name_per_unit_false(monkeypatch: pytest.Monkey
     assert [w.message.fields["code"] for w in coded] == ["attribution_audit_units_many"]
     assert "per_unit=False" in str(coded[0].message)
     lean = attribution.causal_audit(model, x, claim=claim, target=0, k=2, per_unit=False)
-    assert lean.units == () and lean.rank_agreement is None
+    assert lean.indices == () and lean.rank_agreement is None
     assert [item.measured_effect for item in lean.sets] == [
         item.measured_effect for item in full.sets
     ]

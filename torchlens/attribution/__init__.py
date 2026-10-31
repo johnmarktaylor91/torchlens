@@ -3,20 +3,25 @@
 from torchlens.attribution import onebackward
 from torchlens.attribution._cam import grad_cam
 from torchlens.attribution._causal_audit import (
-    CausalAuditResult,
+    CausalAudit,
     CausalAuditSet,
     CausalAuditUnit,
     causal_audit,
 )
 from torchlens.attribution._core import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     input_x_grad,
     integrated_gradients,
     saliency,
     smoothgrad,
 )
-from torchlens.attribution._curves import CurveResult, CurveStep, deletion_curve, insertion_curve
+from torchlens.attribution._curves import (
+    CurveStep,
+    PerturbationCurve,
+    deletion_curve,
+    insertion_curve,
+)
 from torchlens.attribution._gradient_shap import gradient_shap
 from torchlens.attribution._guided import deconvolution, guided_backprop
 from torchlens.attribution._layer import (
@@ -24,18 +29,18 @@ from torchlens.attribution._layer import (
     layer_conductance,
     layer_integrated_gradients,
 )
-from torchlens.attribution._metrics import MetricResult, infidelity, sensitivity
+from torchlens.attribution._metrics import AttributionMetric, infidelity, sensitivity
 from torchlens.attribution._noise_tunnel import noise_tunnel
 from torchlens.attribution._occlusion import occlusion, occlusion_map
 from torchlens.attribution._randomization import (
-    RandomizationResult,
     RandomizationStep,
+    RandomizationTest,
     randomization_test,
 )
 from torchlens.attribution._road import road_curve
 from torchlens.attribution._site import SiteTarget
 from torchlens.attribution._stash import SiteStash
-from torchlens.attribution._text import TokenAttributionPayload, TokenAttributionResult, text
+from torchlens.attribution._text import TokenAttribution, TokenAttributionPayload, text
 from torchlens.attribution._viz import overlay
 from torchlens.attribution.graph import AttributionGraph, GraphNode, build_graph
 from torchlens.attribution.onebackward import (
@@ -51,12 +56,12 @@ from torchlens.attribution.onebackward import (
 __all__ = [
     "AttributionError",
     "AttributionGraph",
-    "AttributionResult",
-    "CausalAuditResult",
+    "Attribution",
+    "CausalAudit",
     "CausalAuditSet",
     "CausalAuditUnit",
     "causal_audit",
-    "CurveResult",
+    "PerturbationCurve",
     "CurveStep",
     "DEFAULT",
     "ReadError",
@@ -77,14 +82,14 @@ __all__ = [
     "infidelity",
     "layer_integrated_gradients",
     "load_read_table",
-    "MetricResult",
+    "AttributionMetric",
     "noise_tunnel",
     "occlusion",
     "occlusion_map",
     "onebackward",
     "overlay",
     "randomization_test",
-    "RandomizationResult",
+    "RandomizationTest",
     "RandomizationStep",
     "read",
     "road_curve",
@@ -96,5 +101,5 @@ __all__ = [
     "smoothgrad",
     "text",
     "TokenAttributionPayload",
-    "TokenAttributionResult",
+    "TokenAttribution",
 ]

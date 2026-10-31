@@ -584,7 +584,7 @@ class _RowBuilder:
             return
         self.rows = {
             key: replace(row, frozen_reached=(_label_of(row) in fired))
-            if row.frozen_resolved
+            if row.is_frozen_resolved
             else row
             for key, row in self.rows.items()
         }

@@ -158,11 +158,11 @@ class Direction:
         self,
         *,
         api_key: str,
-        scan: str,
-        vector_label: str,
+        model_id: str,
+        name: str,
         layer: int | None = None,
         hook_type: str = "resid_post",
-        steer_strength: float = 1.0,
+        default_steering_strength: float = 1.0,
     ) -> str:
         """Upload this vector to Neuronpedia and return its page's URL.
 
@@ -212,11 +212,11 @@ class Direction:
         return upload_vector(
             self.vector,
             api_key=api_key,
-            scan=scan,
+            model_id=model_id,
             layer=self.library_layer(layer),
             hook_type=hook_type,
-            vector_label=vector_label,
-            steer_strength=steer_strength,
+            name=name,
+            default_steering_strength=default_steering_strength,
         )
 
     def to_dialz(self, *, layer: int | None = None, model_type: str | None = None) -> Any:

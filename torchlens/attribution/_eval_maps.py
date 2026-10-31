@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section Evaluating attributions."
 
@@ -28,7 +28,7 @@ _SSIM_K1 = 0.01
 _SSIM_K2 = 0.03
 
 
-def _attribution_tensor(attribution: AttributionResult | Any) -> Tensor:
+def _attribution_tensor(attribution: Attribution | Any) -> Tensor:
     """Return the single attribution tensor of a result or raw value.
 
     Parameters
@@ -47,7 +47,7 @@ def _attribution_tensor(attribution: AttributionResult | Any) -> Tensor:
         If the values are not one tensor.
     """
 
-    values = attribution.values if isinstance(attribution, AttributionResult) else attribution
+    values = attribution.values if isinstance(attribution, Attribution) else attribution
     if not isinstance(values, Tensor):
         raise AttributionError(
             "attribution must be an AttributionResult holding one tensor, or a tensor; "
@@ -59,7 +59,7 @@ def _attribution_tensor(attribution: AttributionResult | Any) -> Tensor:
     return values.detach()
 
 
-def _input_space_map(attribution: AttributionResult | Any, leaf: Tensor, method: str) -> Tensor:
+def _input_space_map(attribution: Attribution | Any, leaf: Tensor, method: str) -> Tensor:
     """Align an attribution with the input it explains.
 
     An attribution of the input's own shape is used as is. A map with one
@@ -121,7 +121,7 @@ def _input_space_map(attribution: AttributionResult | Any, leaf: Tensor, method:
 
 
 def _input_space_maps(
-    attribution: AttributionResult | Any, leaves: tuple[Tensor, ...], method: str
+    attribution: Attribution | Any, leaves: tuple[Tensor, ...], method: str
 ) -> tuple[Tensor, ...]:
     """Align an attribution with every evaluated input leaf.
 
@@ -149,7 +149,7 @@ def _input_space_maps(
 
     if len(leaves) == 1:
         return (_input_space_map(attribution, leaves[0], method),)
-    values = attribution.values if isinstance(attribution, AttributionResult) else attribution
+    values = attribution.values if isinstance(attribution, Attribution) else attribution
     flat: list[Tensor] = []
 
     def _collect(tree: Any) -> None:

@@ -388,14 +388,14 @@ def tensor_stats_summary(tensor: Any) -> str:
         from ..stats._tensor_stats import tensor_stats
 
         stats = tensor_stats(tensor)
-        if stats.true_count is not None:
+        if stats.num_true is not None:
             # bool family: the truth rate IS the semantics (lovely D12).
-            return f"{prefix} true={stats.true_count}/{stats.numel}"
+            return f"{prefix} true={stats.num_true}/{stats.numel}"
         numel = stats.numel
-        nan_percent = 100.0 * stats.nan_count / numel
-        inf_percent = 100.0 * (stats.posinf_count + stats.neginf_count) / numel
-        zero_percent = 100.0 * (stats.zero_count or 0) / numel
-        mean_value, std_value = stats.mean, stats.sd
+        nan_percent = 100.0 * stats.num_nan / numel
+        inf_percent = 100.0 * (stats.num_posinf + stats.num_neginf) / numel
+        zero_percent = 100.0 * (stats.num_zero or 0) / numel
+        mean_value, std_value = stats.mean, stats.std
         min_value, max_value = stats.finite_min, stats.finite_max
     except (RuntimeError, TypeError, ValueError):
         return prefix
@@ -405,7 +405,7 @@ def tensor_stats_summary(tensor: Any) -> str:
     # ruling C02 carried as a residual): ~50% on 60% of real float lines,
     # and the exact count cost a full extra traversal for a fact the
     # sparkline already shows on the core grammar surfaces.
-    mean_label, std_label = ("|mean|", "|std|") if stats.magnitude_basis else ("mean", "std")
+    mean_label, std_label = ("|mean|", "|std|") if stats.is_magnitude_based else ("mean", "std")
     summary = (
         f"{prefix} {mean_label}={_format_number(mean_value)} "
         f"{std_label}={_format_number(std_value)} "

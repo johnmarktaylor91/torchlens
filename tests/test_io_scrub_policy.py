@@ -413,8 +413,8 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # Plain draw AND an encoding-channel draw: the channel path is the
         # one that populated `_last_encoding_state` (fail-before case).
         "draw": lambda t: (
-            t.draw(vis_outpath=str(out / "graph")),
-            t.draw(vis_outpath=str(out / "graph_encoded"), color_by="time"),
+            t.draw(path=str(out / "graph")),
+            t.draw(path=str(out / "graph_encoded"), color_by="time"),
         ),
         "collapse_plan": lambda t: t.collapse_plan(),
         "collapse_schedule": lambda t: t.collapse_schedule(),
@@ -464,9 +464,9 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # over resolve_sites + recorded geometry; executable=False always.
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
-        "show": lambda t: t.show(method="graph", vis_outpath=str(out / "shown")),
-        "draw_backward": lambda t: t.draw_backward(vis_outpath=str(out / "bwd")),
-        "draw_combined": lambda t: t.draw_combined(vis_outpath=str(out / "cmb")),
+        "show": lambda t: t.show(method="graph", path=str(out / "shown")),
+        "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
+        "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
         "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),
     }
 
@@ -503,7 +503,7 @@ def _module_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out = tmp_path / "method_sweep"
     out.mkdir(exist_ok=True)
     return {
-        "draw": lambda m: m.draw(vis_outpath=str(out / f"module_{id(m)}")),
+        "draw": lambda m: m.draw(path=str(out / f"module_{id(m)}")),
         "show_call_tree": lambda m: m.show_call_tree(file=sink),
         "to_pandas": lambda m: m.to_pandas(),
         "walk_descendants": lambda m: list(m.walk_descendants()),
@@ -719,7 +719,7 @@ def test_draw_then_save_and_pickle_regression(tmp_path: Path) -> None:
     """
 
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
-    log.draw(vis_outpath=str(tmp_path / "graph"), color_by=lambda node: 1.0)
+    log.draw(path=str(tmp_path / "graph"), color_by=lambda node: 1.0)
     tl.save(log, str(tmp_path / "after_draw.tlspec"))
     pickle.dumps(log)
 

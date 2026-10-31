@@ -66,7 +66,7 @@ def test_backward_column_conserves_the_executed_count(case: str) -> None:
             if not row.row_id.startswith("::backward::")
         ]
         assert forward_cells == [(r.row_id, r.self_flops, r.subtree_flops) for r in before.rows]
-        for view in (cost_tree(trace, top_k=1), cost_tree(trace, max_depth=0)):
+        for view in (cost_tree(trace, k=1), cost_tree(trace, max_depth=0)):
             assert sum(row.self_backward_flops for row in view.rows) == executed
         assert "executed backward:" in str(tree) and "fwd MAC+bwd" in str(tree)
     finally:

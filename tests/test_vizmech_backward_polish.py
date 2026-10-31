@@ -62,9 +62,7 @@ def test_uniform_rows_suppressed_and_key_present(tmp_path: Path) -> None:
     """First-order single-pass render: no uniform rows, key on by default."""
 
     trace = _backward_trace()
-    dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "bwd"), vis_save_only=True, vis_fileformat="svg"
-    )
+    dot = trace.draw_backward(path=str(tmp_path / "bwd"), vis_save_only=True, file_format="svg")
     assert "grad N/A" not in dot  # uniform on every node -> suppressed
     assert "order 1" not in dot  # no higher-order node -> suppressed
     assert ">bwd 1<" not in dot  # single-pass -> suppressed
@@ -78,9 +76,9 @@ def test_key_suppressed_with_show_legend_false(tmp_path: Path) -> None:
 
     trace = _backward_trace()
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "bwd_nokey"),
+        path=str(tmp_path / "bwd_nokey"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         show_legend=False,
     )
     assert "backward key" not in dot
@@ -90,9 +88,7 @@ def test_double_backprop_keeps_order_rows_and_key_row(tmp_path: Path) -> None:
     """A second-order node un-suppresses order rows and earns its key row."""
 
     trace = _double_backprop_trace()
-    dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "bwd2"), vis_save_only=True, vis_fileformat="svg"
-    )
+    dot = trace.draw_backward(path=str(tmp_path / "bwd2"), vis_save_only=True, file_format="svg")
     assert "order 2" in dot
     assert "order 1" in dot  # mixed orders: the row is information again
     assert "grad-of-grad" in dot  # the cream=order-2 key row
@@ -103,7 +99,7 @@ def test_accum_edges_carry_target_identity(tmp_path: Path) -> None:
 
     trace = _backward_trace()
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "bwd_accum"), vis_save_only=True, vis_fileformat="svg"
+        path=str(tmp_path / "bwd_accum"), vis_save_only=True, file_format="svg"
     )
     tooltips = re.findall(r'tooltip="(accum -> [^"]+)"', dot)
     assert tooltips, "accum edges must carry their target identity"
@@ -118,9 +114,9 @@ def test_single_call_titles_drop_pass_suffix(tmp_path: Path) -> None:
 
     trace = _backward_trace()
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "bwd_unrolled"),
+        path=str(tmp_path / "bwd_unrolled"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_mode="unrolled",
     )
     assert not re.search(r":1</", dot), "single-call grad_fn titles must not carry ':1'"

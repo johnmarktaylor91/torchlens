@@ -145,7 +145,7 @@ group, read by several query heads, so a grid over that site
 query heads. Pass the grouping and the receipt becomes a kv-group receipt:
 
 ```python
-gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
+gqa = tviz.GqaInfo(n_query_heads=14, num_kv_heads=2)
 receipt = tviz.receipt_from_patch_grid(
     v_grid, layer="model.layers.0.self_attn", negative_control=neg,
     positive_control=pos, joint_effect=joint, kv_groups=gqa,

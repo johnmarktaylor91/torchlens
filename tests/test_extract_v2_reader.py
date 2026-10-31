@@ -79,7 +79,7 @@ def test_reader_iter_batches_serves_ledger_order(tmp_path: Path) -> None:
     for payload in reader.iter_batches(keys=["logits"]):
         assert set(payload) == {"logits"}
         rows += payload["logits"].shape[0]
-    assert rows == reader.n_stimuli == 10
+    assert rows == reader.num_stimuli == 10
     with pytest.raises(InvalidArgumentError) as excinfo:
         next(iter(reader.iter_batches(keys=["nope"])))
     assert excinfo.value.fields["code"] == "extraction_reader_key_unknown"

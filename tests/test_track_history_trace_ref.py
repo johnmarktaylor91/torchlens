@@ -20,9 +20,9 @@ from torchlens.observability import (
     HistoryReader,
     HistoryWriter,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
 )
 from torchlens.observability._errors import HistorySchemaError
@@ -30,7 +30,7 @@ from torchlens.observability._op_tier import OpTierCollector
 
 
 def _committed(step: int, trace_ref: str | None) -> CommittedBlock:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([1.0, -2.0, 0.0]))
     observation = ObservationRecord(
         global_step=step,

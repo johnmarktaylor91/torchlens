@@ -101,23 +101,23 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
         "finite_max": stats.finite_max,
         "mean": stats.mean,
         "sd": stats.sd,
-        "zero_count": stats.zero_count,
+        "zero_count": stats.num_zero,
         "nan_count": stats.nan_count,
         "posinf_count": stats.posinf_count,
         "neginf_count": stats.neginf_count,
-        "magnitude_basis": stats.magnitude_basis,
+        "magnitude_basis": stats.is_magnitude_based,
         "evidence": {
             "nonfinite": evidence_token(stats.nonfinite_evidence),
             "extrema": evidence_token(stats.extrema_evidence),
             "mean": evidence_token(stats.mean_evidence),
-            "sd": evidence_token(stats.sd_evidence),
+            "sd": evidence_token(stats.std_evidence),
             "histogram": evidence_token(stats.histogram_evidence),
         },
     }
 
 
 @dataclass
-class EchoObserver:
+class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
@@ -130,7 +130,7 @@ class EchoObserver:
     """
 
     site: Any = None
-    direction: Literal["forward", "backward", "both"] = "forward"
+    signal: Literal["forward", "backward", "both"] = "forward"
     sink: Callable[[str], None] | None = None
     style: Literal["ascii", "unicode"] = "ascii"
     lines: list[str] = field(default_factory=list)
@@ -173,18 +173,18 @@ class EchoObserver:
         return getattr(layer_log, "label", None) or getattr(layer_log, "layer_label", None)
 
 
-def echo(
+def narrate(
     site: Any,
     *,
     sink: Callable[[str], None] | None = None,
     direction: Literal["forward", "backward", "both"] = "forward",
     style: Literal["ascii", "unicode"] = "ascii",
-) -> EchoObserver:
+) -> NarrationObserver:
     """Create an echo observer (the live line density) for one site.
 
     Mounts on the shipped hook surface exactly like ``tl.tap``::
 
-        obs = tl.stats.echo(tl.func("relu"), sink=print)
+        obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
                      intervention_ready=True, hooks=obs))
@@ -207,4 +207,4 @@ def echo(
         Callable observer for the ``hooks=`` surface.
     """
 
-    return EchoObserver(site=site, direction=direction, sink=sink, style=style)
+    return NarrationObserver(site=site, signal=direction, sink=sink, style=style)

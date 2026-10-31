@@ -94,7 +94,7 @@ def episode_log():
     trace = tl.trace(
         runner,
         torch.tensor([[1, 2]]),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model, num_steps=N_STEPS),
     )
     try:
         yield trace

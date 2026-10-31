@@ -53,13 +53,13 @@ def tlens_agreement_demo() -> dict[str, Any]:
 
     scores = mi.head_scores(log, kind="induction")
     print("induction heads on the FUSED default-loaded model (no eager reload):")
-    for name, score in scores.top(3):
+    for name, score in scores.topk(3):
         print(f"  {name}: {score:.3f}")
 
     results: dict[str, Any] = {
         "decomposition_rows": len(dec),
-        "dla_top": dla.top(5),
-        "induction_top": scores.top(3),
+        "dla_top": dla.topk(5),
+        "induction_top": scores.topk(3),
     }
 
     try:

@@ -1435,9 +1435,9 @@ def _vis_grad(
     log.draw(
         vis_mode=vis_mode,
         vis_call_depth=depth,
-        vis_outpath=opj(VIS_DIR, filename),
+        path=opj(VIS_DIR, filename),
         vis_save_only=True,
-        vis_fileformat="pdf",
+        file_format="pdf",
         direction=direction,
     )
     _assert_generated_pdf(pdf_path)
@@ -1577,8 +1577,8 @@ class TestVisualizationBugfixes:
         try:
             log.draw(
                 vis_save_only=True,
-                vis_outpath=str(outpath),
-                vis_fileformat="pdf",
+                path=str(outpath),
+                file_format="pdf",
             )
 
             assert outpath.with_suffix(".pdf").exists()
@@ -1617,8 +1617,8 @@ class TestVisualizationBugfixes:
             with pytest.raises(GraphvizRenderError):
                 log.draw(
                     vis_save_only=True,
-                    vis_outpath=str(outpath),
-                    vis_fileformat="pdf",
+                    path=str(outpath),
+                    file_format="pdf",
                 )
 
             # On failure the DOT source (saved at vis_outpath) is KEPT for debugging,
@@ -1641,7 +1641,7 @@ class TestVisualizationBugfixes:
                 log,
                 vis_call_depth=0,
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
+                path=opj(VIS_DIR, "test_call_depth_0"),
             )
         except ImportError:
             pytest.skip("graphviz not available")
@@ -1667,14 +1667,14 @@ class TestVisualizationBugfixes:
         try:
             node_mark = log.draw(
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_intervention_node_mark"),
-                vis_fileformat="dot",
+                path=opj(VIS_DIR, "test_intervention_node_mark"),
+                file_format="dot",
                 vis_intervention_mode="node_mark",
             )
             as_node = log.draw(
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_intervention_as_node"),
-                vis_fileformat="dot",
+                path=opj(VIS_DIR, "test_intervention_as_node"),
+                file_format="dot",
                 vis_intervention_mode="as_node",
             )
             assert "#7B1FA2" in node_mark and "tl_edited" in node_mark
@@ -1694,7 +1694,7 @@ class TestVisualizationBugfixes:
         try:
             from torchlens.visualization._render_dot import draw
 
-            dot = draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_selective_save"))
+            dot = draw(log, vis_save_only=True, path=opj(VIS_DIR, "test_selective_save"))
         except ImportError:
             pytest.skip("graphviz not available")
         # A no-op renderer would return "" and write nothing; assert real output.
@@ -1726,7 +1726,7 @@ class TestVisModuleListFormat:
         log = trace_fn(model, torch.randn(2, 10))
         pdf_path = Path(VIS_DIR) / "test_nested_modules.pdf"
         pdf_path.unlink(missing_ok=True)
-        dot = log.draw(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))
+        dot = log.draw(vis_save_only=True, path=opj(VIS_DIR, "test_nested_modules"))
         # A no-op renderer would return "" and write nothing; assert real output.
         assert isinstance(dot, str) and "digraph" in dot
         _assert_generated_pdf(pdf_path)

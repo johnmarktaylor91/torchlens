@@ -24,7 +24,7 @@ def test_preview_fastlog_renders_on_mlp(tmp_path: Path) -> None:
     trace = tl.trace(_mlp(), torch.randn(1, 4))
     dot = trace.preview_fastlog(
         keep_op=lambda ctx: ctx.layer_type == "linear",
-        vis_outpath=str(tmp_path / "preview"),
+        path=str(tmp_path / "preview"),
         vis_save_only=True,
     )
     assert "digraph" in dot
@@ -49,7 +49,7 @@ def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> N
         trace,
         predicate=bad_predicate,
         color_predicate_error="#FF7AB6",
-        vis_outpath=str(tmp_path / "preview_error"),
+        path=str(tmp_path / "preview_error"),
         vis_save_only=True,
     )
     assert "#FF7AB6" in dot

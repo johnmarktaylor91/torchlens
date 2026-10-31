@@ -40,14 +40,14 @@ Exposed as `tl.viz` through the lazy attribute map in `torchlens/__init__.py`
   live there, not in `_render_common.py`).
 
 ## feature_maps.py
-- `feature_map_evolution()` renders per-layer activation feature-map grids;
+- `feature_maps()` renders per-layer activation feature-map grids;
   `feature_map_node_spec()` returns a node-spec function for `Trace.draw()`.
 - Channel selection/aggregation helpers: `_select_maps()`,
   `_aggregate_channels()`, `_top_channel_indices()`.
 
 ## node_plots.py
-- PIL-only render primitives: `render_heatmap()`, `render_lineplot()`,
-  `render_image_scatter()`.
+- PIL-only render primitives: `render_heatmap()`, `lineplot()`,
+  `image_scatter()`.
 - Consumed outside the package by `repgeom/__init__.py` and
   `receptive_field/_viz.py`; treat their signatures as shared surface.
 

@@ -48,7 +48,7 @@ class SiteTarget:
         DOCUMENTED-UNSTABLE.
     """
 
-    layer: str
+    module_address: str
     _: KW_ONLY
     unit: int | tuple[int, ...] | None = None
     call: int | None = None
@@ -57,27 +57,27 @@ class SiteTarget:
     def __post_init__(self) -> None:
         """Validate the selection types; ranges are checked against the activation."""
 
-        if not isinstance(self.layer, str):
+        if not isinstance(self.module_address, str):
             raise AttributionError(
-                f"SiteTarget layer must be a module name string; got {type(self.layer).__name__}. "
+                f"SiteTarget layer must be a module name string; got {type(self.module_address).__name__}. "
                 "Remedy: pass a name from dict(model.named_modules()), e.g. "
                 f"tl.attribution.SiteTarget('fc1'). {_DOCS_POINTER}",
                 code="attribution_site_not_found",
             )
         if not _is_unit(self.unit):
             raise _unit_invalid(
-                self.layer,
+                self.module_address,
                 f"unit must be None, an int or a tuple of ints; got {self.unit!r}",
-                SiteTarget(self.layer, call=self.call, sae=self.sae)
+                SiteTarget(self.module_address, call=self.call, sae=self.sae)
                 if _is_call(self.call)
                 else None,
                 code="attribution_site_unit_invalid",
             )
         if not _is_call(self.call):
             raise _firing_invalid(
-                self.layer,
+                self.module_address,
                 f"call must be None or a call index of at least 0; got {self.call!r}",
-                SiteTarget(self.layer, unit=self.unit, sae=self.sae),
+                SiteTarget(self.module_address, unit=self.unit, sae=self.sae),
                 code="attribution_site_firing_invalid",
             )
         if self.sae is not None and not (
@@ -85,9 +85,9 @@ class SiteTarget:
             and callable(getattr(self.sae, "decode", None))
         ):
             raise AttributionError(
-                f"SiteTarget for layer {self.layer!r}: sae= must expose encode(...) and "
+                f"SiteTarget for layer {self.module_address!r}: sae= must expose encode(...) and "
                 f"decode(...); got {type(self.sae).__name__}. Remedy: pass the SAE object "
-                f"trained on the layer, e.g. tl.attribution.SiteTarget({self.layer!r}, sae=sae, "
+                f"trained on the layer, e.g. tl.attribution.SiteTarget({self.module_address!r}, sae=sae, "
                 f"unit=0), or drop sae= to attribute the layer itself. {_DOCS_POINTER}",
                 code="attribution_site_sae_invalid",
             )
@@ -95,7 +95,7 @@ class SiteTarget:
     def __repr__(self) -> str:
         """Return the constructor spelling of this site target."""
 
-        parts = [repr(self.layer)]
+        parts = [repr(self.module_address)]
         if self.unit is not None:
             parts.append(f"unit={self.unit!r}")
         if self.call is not None:
@@ -279,7 +279,7 @@ def _require_input_dependence(
         else "attribute the model output with an int or callable target"
     )
     raise AttributionError(
-        f"SiteTarget layer {target.layer!r} does not depend on the attributed inputs: its "
+        f"SiteTarget layer {target.module_address!r} does not depend on the attributed inputs: its "
         "output is computed without them, so every attribution to it is zero. "
         f"Remedy: {remedy}. {_DOCS_POINTER}",
         code="attribution_site_independent_of_input",
@@ -287,7 +287,7 @@ def _require_input_dependence(
 
 
 def _resolve_site(model: Module, target: SiteTarget) -> _SiteRoute:
-    """Resolve ``target.layer`` to a module of ``model``.
+    """Resolve ``target.module_address`` to a module of ``model``.
 
     Raises
     ------
@@ -296,15 +296,15 @@ def _resolve_site(model: Module, target: SiteTarget) -> _SiteRoute:
     """
 
     named = dict(model.named_modules())
-    if target.layer in named:
-        return _SiteRoute(target=target, module=named[target.layer])
+    if target.module_address in named:
+        return _SiteRoute(target=target, module=named[target.module_address])
     names = [name for name in named if name]
-    close = difflib.get_close_matches(target.layer, names, n=1)
+    close = difflib.get_close_matches(target.module_address, names, n=1)
     suggestion = close[0] if close else (names[0] if names else "")
     fixed = SiteTarget(suggestion, call=target.call)
     shown = ", ".join(names[:8]) or "<no named child modules>"
     raise AttributionError(
-        f"SiteTarget layer {target.layer!r} is not a module of this model (modules include: "
+        f"SiteTarget layer {target.module_address!r} is not a module of this model (modules include: "
         f"{shown}). Remedy: name a module from dict(model.named_modules()), e.g. "
         f"target={_spelling(fixed)}. {_DOCS_POINTER}",
         code="attribution_site_not_found",
@@ -361,7 +361,7 @@ def _sae_latents(activation: Tensor, target: SiteTarget) -> Tensor:
     latents = target.sae.encode(activation)
     if not isinstance(latents, Tensor):
         raise AttributionError(
-            f"SiteTarget for layer {target.layer!r}: sae.encode(...) returned a "
+            f"SiteTarget for layer {target.module_address!r}: sae.encode(...) returned a "
             f"{type(latents).__name__}, not a tensor. Remedy: pass an SAE whose encode returns "
             f"its latents as a tensor, or drop sae= to attribute the layer itself. {_DOCS_POINTER}",
             code="attribution_site_sae_invalid",
@@ -373,8 +373,8 @@ def _first_unit(target: SiteTarget, shape: tuple[int, ...]) -> SiteTarget:
     """Return the same site selecting unit 0, or the whole output when no unit axis exists."""
 
     if len(shape) < 2 or shape[-1] == 0:
-        return SiteTarget(target.layer, call=target.call, sae=target.sae)
-    return SiteTarget(target.layer, unit=0, call=target.call, sae=target.sae)
+        return SiteTarget(target.module_address, call=target.call, sae=target.sae)
+    return SiteTarget(target.module_address, unit=0, call=target.call, sae=target.sae)
 
 
 def _site_unsupported(method: str, target: SiteTarget, *, code: str) -> AttributionError:

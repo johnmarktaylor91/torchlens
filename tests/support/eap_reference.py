@@ -193,7 +193,7 @@ class TreeGPT2:
         total: dict[str, torch.Tensor] = {}
         for point in points:
             with torch.enable_grad():
-                _values, logits, leaves = self.forward(clean, embedding=point, grads=True)
+                _values, logits, leaves = self.forward(clean, embedding_module=point, grads=True)
                 metric(logits).sum().backward()
             missing = sorted(name for name, leaf in leaves.items() if leaf.grad is None)
             assert not missing, f"receivers with no gradient: {missing[:6]}"

@@ -99,12 +99,12 @@ def test_montage_tiles_images_and_validates_inputs() -> None:
     """montage() centers thumbnails on a square grid and refuses bad inputs."""
 
     with pytest.raises(ValueError, match="at least 1"):
-        tl.viz.montage([Image.new("RGB", (4, 4))], max_n=0)
+        tl.viz.montage([Image.new("RGB", (4, 4))], max_items=0)
     with pytest.raises(ValueError, match="at least one image"):
-        tl.viz.montage([], max_n=3)
+        tl.viz.montage([], max_items=3)
 
     images = [Image.new("RGB", (10, 10), color) for color in ("red", "green", "blue")]
-    grid = tl.viz.montage(images, max_n=2, max_size=20)
+    grid = tl.viz.montage(images, max_items=2, max_size=20)
     assert isinstance(grid, Image.Image)
     # Two images tile as 2 columns x 1 row of 10px cells.
     assert grid.size == (20, 10)
@@ -114,14 +114,14 @@ def test_montage_tiles_images_and_validates_inputs() -> None:
 def test_text_table_escapes_truncates_and_counts_overflow() -> None:
     """text_table() escapes markup, truncates long items, and adds a +N row."""
 
-    label = tl.viz.text_table(["a<b>", "x" * 100, "third", "fourth"], max_n=2)
+    label = tl.viz.text_table(["a<b>", "x" * 100, "third", "fourth"], max_items=2)
     assert label.startswith("<<TABLE")
     assert "a&lt;b&gt;" in label
     assert ("x" * 57 + "...") in label
     assert "x" * 58 not in label
     assert "+2 more" in label
 
-    exact = tl.viz.text_table(["one"], max_n=1)
+    exact = tl.viz.text_table(["one"], max_items=1)
     assert "more" not in exact
 
 

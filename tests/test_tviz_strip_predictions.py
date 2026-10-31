@@ -115,7 +115,7 @@ def _predictions() -> LogitLensPredictions:
         k=3,
         facet="resid_post",
         lens_source="model_head",
-        validated=True,
+        is_validated=True,
     )
 
 
@@ -174,7 +174,7 @@ class TestPredictionPictures:
             k=3,
             facet="resid_post",
             lens_source="model_head",
-            validated=True,
+            is_validated=True,
         )
         with pytest.raises(tviz.TvizError) as excinfo:
             tviz.prediction_table(projected_only)

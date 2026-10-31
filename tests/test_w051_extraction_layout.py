@@ -126,7 +126,7 @@ def test_mask_shaped_from_batch_zero_stores_trimmed_and_reads_every_row(tmp_path
     reader = open_extraction(tmp_path)
     carrier = reader.materialize()["h"]
     assert isinstance(carrier, RaggedBatch)
-    assert carrier.row_count == len(_SEQS) == reader.n_stimuli
+    assert carrier.row_count == len(_SEQS) == reader.num_stimuli
     loaded = load_extraction(tmp_path).activations["h"]
     assert isinstance(loaded, RaggedBatch) and loaded.row_count == len(_SEQS)
 

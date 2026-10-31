@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens.tviz as tviz
-from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
+from torchlens.semantic.logit_lens import LogitLens, LogitLensEntry
 from torchlens.tviz._lens_heatmap import (
     MAX_HEATMAP_POSITIONS,
     _clip,
@@ -31,7 +31,7 @@ class _Tokenizer:
         return [f"w{token_id}" if token_id != 3 else "averyverylongtoken" for token_id in ids]
 
 
-def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> LogitLensResult:
+def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> LogitLens:
     """Deterministic synthetic lens with a sharpening answer across layers."""
 
     generator = torch.Generator().manual_seed(0)
@@ -44,11 +44,11 @@ def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> Logit
                 address=f"h.{layer}", layer_index=layer, facet="resid_post", logits=logits
             )
         )
-    return LogitLensResult(
+    return LogitLens(
         entries=tuple(entries),
         facet="resid_post",
         lens_source="model_head",
-        validated=validated,
+        is_validated=validated,
         final_logits=None,
     )
 
@@ -170,11 +170,11 @@ def test_positionless_lens_refuses(tmp_path: Path) -> None:
     entry = LogitLensEntry(
         address="h.0", layer_index=0, facet="resid_post", logits=torch.randn(1, 5)
     )
-    result = LogitLensResult(
+    result = LogitLens(
         entries=(entry,),
         facet="resid_post",
         lens_source="classifier_head",
-        validated=True,
+        is_validated=True,
         final_logits=None,
     )
     with pytest.raises(tviz.TvizError, match="needs \\[batch, positions, vocab\\]"):

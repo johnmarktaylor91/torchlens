@@ -29,30 +29,30 @@ from ._edge_patch import patch_edges
 from ._edges import (
     ComponentEdge,
     ComponentGraph,
-    ComponentNode,
     ComponentReceiver,
+    ComponentSender,
     component_graph,
 )
 from ._errors import MechInterpError
 from ._factored import FactoredMatrix
 from ._faithfulness import circuit_model_difference, circuit_performance_ratio
-from ._grids import PatchGrid, grid, patch_heads_grid, patch_residual_grid
+from ._grids import PatchGrid, patch_grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._kv_heads import patch_query_heads_grid
-from ._lowered import LoweredResult, lowered_counterfactual
+from ._lowered import PatchedRun, patch_head
 from ._neurons import mlp_neuron_contributions
 from ._params import HeadWeightViews, ProjectionSource, head_weight_views, ov_circuit, qk_circuit
 from ._prompts import PromptInspection, inspect_prompt, test_prompt
 from ._records import ComponentRow, ComponentStack, ContributionScores, Coordinate
 from ._residual import residual_accumulation, residual_decomposition
-from ._retention import RetentionPlan, retention_plan
-from ._scores import FixedPeriodInduction, HeadScoreResult, head_scores
+from ._retention import SavePlan, retention_plan
+from ._scores import FixedPeriodInduction, HeadScores, head_scores
 
 __all__ = [
     "AliasResolution",
     "ComponentEdge",
     "ComponentGraph",
-    "ComponentNode",
+    "ComponentSender",
     "ComponentReceiver",
     "ComponentRow",
     "ComponentStack",
@@ -60,14 +60,14 @@ __all__ = [
     "Coordinate",
     "FactoredMatrix",
     "FixedPeriodInduction",
-    "HeadScoreResult",
+    "HeadScores",
     "HeadWeightViews",
-    "LoweredResult",
+    "PatchedRun",
     "MechInterpError",
     "PatchGrid",
     "ProjectionSource",
     "PromptInspection",
-    "RetentionPlan",
+    "SavePlan",
     "alias_report",
     "apply_norm_scale",
     "attention_head_contributions",
@@ -77,11 +77,11 @@ __all__ = [
     "direct_logit_contributions",
     "edge_scores",
     "full_decomposition",
-    "grid",
+    "patch_grid",
     "head_scores",
     "head_weight_views",
     "inspect_prompt",
-    "lowered_counterfactual",
+    "patch_head",
     "mlp_neuron_contributions",
     "ov_circuit",
     "patch_edges",

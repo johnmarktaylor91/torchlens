@@ -2527,7 +2527,7 @@ def render(*args: Any, **kwargs: Any) -> Any:
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
     buffers restored), rendered with the facade default ``collapse="auto"``
     (``Trace.draw`` keeps ``"none"``). Detached
-    :class:`torchlens.quickstart.RenderResult`; never auto-opens a viewer.
+    :class:`torchlens.quickstart.Drawing`; never auto-opens a viewer.
     See :func:`torchlens.quickstart.render` for the parameters.
     """
 
@@ -2558,7 +2558,7 @@ def trace(
     storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
     profile: bool | MissingType = MISSING,
-    recipes: (
+    facets: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
         | None
@@ -2595,7 +2595,7 @@ def trace(
 
     - ``'all'`` (default) - save outs for every layer.
     - ``'none'`` / ``None`` / ``[]`` - save no outs (metadata only).
-    - ``'stats'`` - fold every out into a ``Spine``, keep no payload (``tl.stats.site_spines``).
+    - ``'stats'`` - fold every out into a ``Spine``, keep no payload (``tl.stats.site_stats``).
     - A predicate selector, e.g. ``tl.func("relu")``, ``tl.in_module("encoder")``,
       or combinators such as ``tl.func("conv2d") & tl.followed_by(tl.func("relu"))``.
     - A list containing any mix of:
@@ -2830,7 +2830,7 @@ def trace(
                 "storage": storage,
                 "streaming": streaming,
                 "profile": profile,
-                "recipes": recipes,
+                "recipes": facets,
                 "episode": episode,
                 "grouping": grouping,
                 "echo": echo,

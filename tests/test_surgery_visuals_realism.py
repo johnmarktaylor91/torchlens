@@ -53,8 +53,8 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     outpath = str(tmp_path / stem)
     render_surgery(
         trace,
-        vis_outpath=outpath,
-        vis_fileformat="svg",
+        path=outpath,
+        file_format="svg",
         vis_save_only=True,
     )
     svg = (tmp_path / f"{stem}.svg").read_text()
@@ -79,7 +79,7 @@ def test_distilgpt2_live_lane_census_and_splice_box(tmp_path) -> None:
         intervene=tl.when(tl.in_module("transformer.h.0") & tl.func("tanh"), tl.scale(0.5)),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    census_text = surgery_census(log).to_text()
+    census_text = surgery_census(log).to_markdown()
     assert "lane capture: 1 transaction(s)" in census_text
     assert _LIVE_WORDING in census_text
     assert _REPLAY_WORDING not in census_text
@@ -106,7 +106,7 @@ def test_distilgpt2_replay_fork_census_and_splice_box(tmp_path) -> None:
     fork = log.fork()
     tanh_label = next(label for label in fork.op_labels if label.startswith("tanh"))
     fork.do(tl.units(tanh_label, [(0, 0, 0)]).resolve(fork), tl.zero_ablate())
-    census_text = surgery_census(fork).to_text()
+    census_text = surgery_census(fork).to_markdown()
     assert "lane replay: 1 transaction(s)" in census_text
     assert _REPLAY_WORDING in census_text
     assert _LIVE_WORDING not in census_text
@@ -146,7 +146,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
     assert all(mark.basis == "fact" for mark in splice_rows)
     host_marks = [mark for mark in facts.marks if mark.kind == "injection_host"]
     assert host_marks, "the spliced module's own ops must be recorded as injected"
-    census_text = surgery_census(log).to_text()
+    census_text = surgery_census(log).to_markdown()
     assert "splice_module" in census_text
     assert _LIVE_WORDING in census_text
     assert _REPLAY_WORDING not in census_text

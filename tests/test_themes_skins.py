@@ -194,8 +194,8 @@ def test_neutral_collapsed_fill_under_active_channel(tmp_path: Any) -> None:
         # else in the same picture.
         graph = log.draw(
             **resolution.draw_kwargs,
-            vis_outpath=str(tmp_path / "neutral"),
-            vis_fileformat="svg",
+            path=str(tmp_path / "neutral"),
+            file_format="svg",
             vis_save_only=True,
             return_graph=True,
         )

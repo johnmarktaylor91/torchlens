@@ -61,7 +61,7 @@ class AbsenceReason:
     """
 
     status: AbsenceStatus
-    save_hint: str | None = None
+    remedy: str | None = None
     detail: str | None = None
 
 
@@ -104,7 +104,7 @@ class FacetMenuItem:
 
 
 @dataclass(frozen=True)
-class FacetRecipe:
+class FacetFunction:
     """Registered facet recipe metadata.
 
     Parameters
@@ -121,7 +121,7 @@ class FacetRecipe:
         Record scope the recipe targets.
     """
 
-    recipe_name: str
+    name: str
     class_names: tuple[str, ...]
     qualnames: tuple[str, ...]
     has_predicate: bool
@@ -133,7 +133,7 @@ class FacetRecipe:
 class _RegisteredRecipe:
     """Internal recipe registration entry."""
 
-    public: FacetRecipe
+    public: FacetFunction
     func: RecipeFunc
     predicate: PredicateFunc | None
     declared_facets: tuple[str, ...]
@@ -156,7 +156,7 @@ class FacetRegistrySnapshot:
 
     version: int
     provenance_id: str
-    recipes: tuple[_RegisteredRecipe, ...]
+    functions: tuple[_RegisteredRecipe, ...]
 
 
 @dataclass(frozen=True)
@@ -393,8 +393,8 @@ class FacetSpec(_SelectionOperand):
     capability_flags: FacetCapabilityFlags = field(default_factory=FacetCapabilityFlags)
     value_version: ValueVersion = "raw_out"
     conflict_alias_group: str | None = None
-    recipe_id: str | None = None
-    recipe_version: str | None = None
+    function_id: str | None = None
+    function_version: str | None = None
     home: Any | None = field(default=None, compare=False, repr=False)
 
     @classmethod
@@ -403,8 +403,8 @@ class FacetSpec(_SelectionOperand):
         home: Any,
         *,
         home_kind: HomeKind = "op",
-        recipe_id: str | None = None,
-        recipe_version: str | None = None,
+        function_id: str | None = None,
+        function_version: str | None = None,
     ) -> FacetSpec:
         """Create a spec anchored to a runtime home object.
 
@@ -434,8 +434,8 @@ class FacetSpec(_SelectionOperand):
             call_index=getattr(home, "call_index", None),
             output_path=tuple(getattr(home, "container_path", ()) or ()),
             capability_flags=flags,
-            recipe_id=recipe_id,
-            recipe_version=recipe_version,
+            function_id=function_id,
+            function_version=function_version,
             conflict_alias_group=getattr(home, "label", None),
             home=home,
         )
@@ -443,10 +443,10 @@ class FacetSpec(_SelectionOperand):
     @classmethod
     def computed(
         cls,
-        value_func: Callable[[], Any],
+        value_fn: Callable[[], Any],
         *,
-        recipe_id: str | None = None,
-        recipe_version: str | None = None,
+        function_id: str | None = None,
+        function_version: str | None = None,
     ) -> FacetSpec:
         """Create a read-only computed facet spec.
 
@@ -469,9 +469,9 @@ class FacetSpec(_SelectionOperand):
             home_kind="computed",
             capability_class="computed",
             capability_flags=_CAPABILITY_FLAGS_BY_CLASS["computed"],
-            recipe_id=recipe_id,
-            recipe_version=recipe_version,
-            home=value_func,
+            function_id=function_id,
+            function_version=function_version,
+            home=value_fn,
         )
 
     def __getitem__(self, key: Any) -> FacetSpec:
@@ -517,19 +517,19 @@ class FacetSpec(_SelectionOperand):
     def read(self) -> Any:
         """Read the facet value from its runtime home."""
 
-        return self.apply(self._home_value("out"))
+        return self.apply_transforms(self._home_value("out"))
 
     def grad(self) -> Any:
         """Read the facet gradient from its runtime home or return ``MissingGradient``."""
 
         if not self.capability_flags.grad or self.home_kind != "op":
-            return MissingGradient(self._missing_gradient_reason("facet is not grad-capable"))
+            return MissingGrad(self._missing_gradient_reason("facet is not grad-capable"))
         grad_value = self._home_value("grad")
         if grad_value is None:
-            return MissingGradient(self._missing_gradient_reason("home op has no saved gradient"))
-        return self.apply(grad_value)
+            return MissingGrad(self._missing_gradient_reason("home op has no saved gradient"))
+        return self.apply_transforms(grad_value)
 
-    def apply(self, value: Any) -> Any:
+    def apply_transforms(self, value: Any) -> Any:
         """Apply the transform chain to a value."""
 
         result = value
@@ -581,7 +581,7 @@ class FacetSpec(_SelectionOperand):
             # disconnected tensor and silently no-op the intervention -- refuse
             # instead, mirroring the identical guard in write_mask().
             raise RuntimeError(
-                f"Facet {self.recipe_id!r} did not produce a writable view of home "
+                f"Facet {self.function_id!r} did not produce a writable view of home "
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
         if view_part is not self:  # a codec writes the decoder-space delta of its edit
@@ -617,7 +617,7 @@ class FacetSpec(_SelectionOperand):
         target.fill_(True)
         if not bool(mask.any()):
             raise RuntimeError(
-                f"Facet {self.recipe_id!r} did not produce a writable view of home "
+                f"Facet {self.function_id!r} did not produce a writable view of home "
                 f"{self.home_label or self.home_address or '<unknown>'!r}."
             )
         return mask
@@ -644,7 +644,7 @@ class FacetSpec(_SelectionOperand):
         """Return a runtime value from the home object."""
 
         if self.home is None:
-            raise RuntimeError(f"FacetSpec {self.recipe_id!r} has no runtime home object.")
+            raise RuntimeError(f"FacetSpec {self.function_id!r} has no runtime home object.")
         if self.home_kind == "parameter":
             parameter_value = getattr(self.home, "value", None)
             if parameter_value is None:
@@ -863,11 +863,13 @@ class MissingFacetError(KeyError):
         name = self.name
         if self.reason.status == "declared_not_produced":
             detail = self.reason.detail or "declared by a matching recipe but not produced"
-            hint = self.reason.save_hint or "inspect facets.menu() for the full declaration status"
+            hint = (
+                self.reason.save_hint or "inspect facets.declared() for the full declaration status"
+            )
             return f"Facet {name!r} is unavailable: {detail}. Unknown cause; {hint}."
         if self.reason.status == "structurally_absent":
             detail = self.reason.detail or "this record has no such facet"
-            hint = self.reason.save_hint or "inspect facets.menu() for the facets it declares"
+            hint = self.reason.save_hint or "inspect facets.declared() for the facets it declares"
             return f"Facet {name!r} is not available here: {detail}. To add it, {hint}."
         hint = self.reason.save_hint or "re-run with save=... including the required activation"
         detail = self.reason.detail or "required payload was not captured"
@@ -886,7 +888,7 @@ def _owning_module_class_name(record: Any) -> str:
     return str(owner_class) if owner_class else type(record).__name__
 
 
-class MissingGradient:
+class MissingGrad:
     """Sentinel for a known facet gradient that is not currently saved."""
 
     def __init__(self, reason: str) -> None:
@@ -922,7 +924,7 @@ class MissingGradient:
         """Raise when the sentinel is used as a torch value."""
 
         for arg in args:
-            if isinstance(arg, MissingGradient):
+            if isinstance(arg, MissingGrad):
                 arg.raise_error()
         raise RuntimeError("MissingGradient used as a torch value.")
 
@@ -1093,11 +1095,11 @@ class FacetView(Mapping[FacetKey, Any]):
         self._structural = _structural_facets(record)
 
     @property
-    def recipe_source(self) -> str | tuple[str, ...] | None:
+    def function_source(self) -> str | tuple[str, ...] | None:
         """Return recipe name provenance for this view."""
 
         names = tuple(
-            recipe.public.recipe_name
+            recipe.public.name
             for recipe in sorted(
                 self._recipes, key=lambda item: _recipe_sort_key(item, self._record)
             )
@@ -1144,7 +1146,7 @@ class FacetView(Mapping[FacetKey, Any]):
         except KeyError:
             return default
 
-    def menu(self) -> dict[FacetKey, FacetMenuItem]:
+    def declared(self) -> dict[FacetKey, FacetMenuItem]:
         """Return the provisional full declared facet menu with availability status."""
 
         if not self._computed:
@@ -1193,7 +1195,7 @@ class FacetView(Mapping[FacetKey, Any]):
             f"register a recipe with @torchlens.semantic.register(class_name={class_name!r}) "
             f"on a function returning {{{str(name)!r}: ...}}"
         )
-        return AbsenceReason(status="structurally_absent", save_hint=hint, detail=detail)
+        return AbsenceReason(status="structurally_absent", remedy=hint, detail=detail)
 
     def __getattr__(self, name: str) -> Any:
         """Return a facet value by attribute name."""
@@ -1251,10 +1253,10 @@ class FacetView(Mapping[FacetKey, Any]):
                 missing_reason = AbsenceReason(
                     status="declared_not_produced",
                     detail=(
-                        f"{recipe.public.recipe_name!r} declared this facet but did not produce "
+                        f"{recipe.public.name!r} declared this facet but did not produce "
                         "a value or absence reason"
                     ),
-                    save_hint="try a broader save= predicate or inspect the recipe implementation",
+                    remedy="try a broader save= predicate or inspect the recipe implementation",
                 )
                 _merge_missing(
                     name,
@@ -1272,13 +1274,13 @@ class FacetView(Mapping[FacetKey, Any]):
                     if previous_tier == tier:
                         warnings.warn(
                             f"Facet {name!r} has ambiguous same-tier recipes; "
-                            f"{recipe.public.recipe_name!r} wins by deterministic order.",
+                            f"{recipe.public.name!r} wins by deterministic order.",
                             UserWarning,
                             stacklevel=2,
                         )
                 values[name] = value
                 missing.pop(name, None)
-                menu[name] = FacetMenuItem(status="available_now", recipe=recipe.public.recipe_name)
+                menu[name] = FacetMenuItem(status="available_now", recipe=recipe.public.name)
                 facet_tiers[name] = tier
             for name, reason in contribution.missing.items():
                 _merge_missing(
@@ -1336,8 +1338,8 @@ _FACET_VIEW_RESERVED_NAMES = frozenset(
         "head",
         "items",
         "keys",
-        "menu",
-        "recipe_source",
+        "declared",
+        "function_source",
         "values",
     }
 )
@@ -1355,7 +1357,7 @@ _TRANSFORMERLENS_ALIAS_TO_NATIVE = {
 }
 
 
-def enable_transformerlens_aliases(enabled: bool = True) -> None:
+def enable_transformer_lens_aliases(enabled: bool = True) -> None:
     """Enable or disable opt-in TransformerLens-style facet aliases.
 
     Parameters
@@ -1454,8 +1456,8 @@ def register(
         with _REGISTRY_LOCK:
             _REGISTRY.append(
                 _RegisteredRecipe(
-                    public=FacetRecipe(
-                        recipe_name=func.__name__,
+                    public=FacetFunction(
+                        name=func.__name__,
                         class_names=class_names,
                         qualnames=qualnames,
                         has_predicate=predicate is not None,
@@ -1484,7 +1486,7 @@ def reset() -> None:
 
 
 @contextlib.contextmanager
-def using(*recipes: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
+def adding(*facets: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
     """Temporarily add recipes to snapshots constructed in this context.
 
     Parameters
@@ -1498,7 +1500,7 @@ def using(*recipes: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
         Context body where new trace captures include the supplied recipes.
     """
 
-    flattened = _flatten_recipe_args(recipes)
+    flattened = _flatten_recipe_args(facets)
     entries = tuple(_entry_for_recipe(func) for func in flattened)
     token = _CONTEXT_RECIPES.set((*_CONTEXT_RECIPES.get(), *entries))
     try:
@@ -1507,7 +1509,9 @@ def using(*recipes: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
         _CONTEXT_RECIPES.reset(token)
 
 
-def list(scope: str | None = None, class_name: str | None = None) -> builtins.list[FacetRecipe]:
+def functions(
+    scope: str | None = None, class_name: str | None = None
+) -> builtins.list[FacetFunction]:
     """List registered recipes, optionally filtered by scope and class-name glob."""
 
     return [
@@ -1527,7 +1531,7 @@ def info(class_name: str) -> dict[str, builtins.list[str]]:
     for recipe in _REGISTRY:
         if not _class_filter_matches(recipe.public.class_names, class_name):
             continue
-        recipes.append(recipe.public.recipe_name)
+        recipes.append(recipe.public.name)
         for facet_name in recipe.declared_facets:
             if facet_name not in seen:
                 facets.append(facet_name)
@@ -1556,7 +1560,7 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module 'torchlens.semantic.facets' has no attribute {name!r}")
 
 
-def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistrySnapshot:
+def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistrySnapshot:
     """Return an immutable active recipe snapshot for a new trace.
 
     Parameters
@@ -1570,7 +1574,7 @@ def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistry
         Frozen recipe snapshot with version and provenance metadata.
     """
 
-    extra_entries = tuple(_entry_for_recipe(func) for func in (extra_recipes or ()))
+    extra_entries = tuple(_entry_for_recipe(func) for func in (extra_facets or ()))
     with _REGISTRY_LOCK:
         # Atomic (recipes, version) pair: an unlocked read could pair new
         # recipes with an old version (or vice versa) across a register()/
@@ -1580,7 +1584,7 @@ def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistry
     recipes = (*registry_entries, *_CONTEXT_RECIPES.get(), *extra_entries)
     digest = hashlib.sha256()
     for recipe in recipes:
-        digest.update(recipe.public.recipe_name.encode("utf-8"))
+        digest.update(recipe.public.name.encode("utf-8"))
         digest.update(repr(recipe.public.class_names).encode("utf-8"))
         digest.update(repr(recipe.public.qualnames).encode("utf-8"))
         digest.update(str(recipe.public.has_predicate).encode("utf-8"))
@@ -1589,7 +1593,7 @@ def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistry
     return FacetRegistrySnapshot(
         version=registry_version,
         provenance_id=digest.hexdigest()[:16],
-        recipes=tuple(recipes),
+        functions=tuple(recipes),
     )
 
 
@@ -1646,7 +1650,7 @@ def _merge_missing(
     if name in missing and previous_tier == tier:
         warnings.warn(
             f"Facet {name!r} has ambiguous same-tier absences; "
-            f"{recipe.public.recipe_name!r} wins by deterministic order.",
+            f"{recipe.public.name!r} wins by deterministic order.",
             UserWarning,
             stacklevel=2,
         )
@@ -1654,7 +1658,7 @@ def _merge_missing(
     facet_tiers[name] = tier
     menu[name] = FacetMenuItem(
         status=_menu_status_from_absence(reason),
-        recipe=recipe.public.recipe_name,
+        recipe=recipe.public.name,
         save_hint=reason.save_hint,
         detail=reason.detail,
     )
@@ -1706,7 +1710,7 @@ def _matching_recipes(
 ) -> builtins.list[_RegisteredRecipe]:
     """Return recipes whose matchers all pass for a record."""
 
-    return [recipe for recipe in snapshot_value.recipes if _recipe_matches(recipe, record)]
+    return [recipe for recipe in snapshot_value.functions if _recipe_matches(recipe, record)]
 
 
 def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
@@ -1773,7 +1777,7 @@ def _recipe_sort_key(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int, 
     """Return deterministic low-to-high recipe sort key."""
 
     specificity, source = _recipe_priority(recipe, record)
-    return (specificity, source, recipe.order, recipe.public.recipe_name)
+    return (specificity, source, recipe.order, recipe.public.name)
 
 
 def _snapshot_for_record(record: Any) -> FacetRegistrySnapshot:
@@ -1805,8 +1809,8 @@ def _entry_for_recipe(func: RecipeFunc) -> _RegisteredRecipe:
         if recipe.func is func:
             return recipe
     return _RegisteredRecipe(
-        public=FacetRecipe(
-            recipe_name=getattr(func, "__name__", type(func).__name__),
+        public=FacetFunction(
+            name=getattr(func, "__name__", type(func).__name__),
             class_names=(),
             qualnames=(),
             has_predicate=False,
@@ -1853,7 +1857,7 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
     names = _primary_structural_names(output_records)
     facets: dict[FacetKey, Any] = {}
     for op, name_value in zip(output_records, names, strict=True):
-        spec = FacetSpec.from_home(op, home_kind="op", recipe_id="structural_outputs")
+        spec = FacetSpec.from_home(op, home_kind="op", function_id="structural_outputs")
         if name_value is not None:
             facets[name_value] = spec
         path_key = tuple(getattr(op, "container_path", ()) or ())
@@ -1865,7 +1869,9 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
     if len(output_records) == 1:
         facets.setdefault(
             "out",
-            FacetSpec.from_home(output_records[0], home_kind="op", recipe_id="structural_outputs"),
+            FacetSpec.from_home(
+                output_records[0], home_kind="op", function_id="structural_outputs"
+            ),
         )
     return facets
 
@@ -1873,7 +1879,7 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
 def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
     """Build structural output facets for one operation record."""
 
-    spec = FacetSpec.from_home(record, home_kind="op", recipe_id="structural_outputs")
+    spec = FacetSpec.from_home(record, home_kind="op", function_id="structural_outputs")
     facets: dict[FacetKey, Any] = {"out": spec}
     name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
     if name is not None:
@@ -1978,19 +1984,19 @@ __all__ = [
     "AbsenceReason",
     "AttentionHeadView",
     "Facet",
-    "FacetRecipe",
+    "FacetFunction",
     "FacetRegistrySnapshot",
     "FacetSpec",
     "FacetView",
     "MissingFacet",
     "MissingFacetError",
-    "MissingGradient",
-    "enable_transformerlens_aliases",
+    "MissingGrad",
+    "enable_transformer_lens_aliases",
     "info",
-    "list",
+    "functions",
     "register",
     "reset",
     "snapshot",
     "transformer_lens_aliases_enabled",
-    "using",
+    "adding",
 ]

@@ -37,10 +37,10 @@ def _graph_and_counters(model, transcoders, n_layers, chunk, monkeypatch):
     graph = build_module._build(
         _trace(model),
         transcoders,
-        embedding="embed",
+        embedding_module="embed",
         target=None,
-        max_n_logits=2,
-        desired_logit_prob=0.99,
+        max_num_logits=2,
+        logit_probability_coverage=0.99,
         demeaned_logits=True,
         logits_at=None,
         frozen=fx.frozen_names(n_layers),
@@ -57,7 +57,7 @@ def _assert_same_graph(left, right) -> None:
     for one, other in pairs:
         assert torch.allclose(one, other, rtol=0, atol=0, equal_nan=True)
     assert torch.equal(left.error_vectors, right.error_vectors)
-    assert torch.equal(left.activation_values, right.activation_values)
+    assert torch.equal(left.feature_activations, right.feature_activations)
 
 
 class TestChunkedAssembly:

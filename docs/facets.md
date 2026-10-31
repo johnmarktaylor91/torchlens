@@ -42,7 +42,7 @@ the unified named access layer. If a module was called more than once,
 `keys()`, iteration, `in`, `has(name)`, and item/attribute access are
 available-now surfaces: recipes run once and only facets readable in the current
 capture appear. `.get(name, default)` returns `default` for any facet that is not
-available now. Use the provisional `menu()` accessor for declaration-level
+available now. Use the provisional `declared()` accessor for declaration-level
 discovery; it reports every structural and declared recipe facet with status
 `available_now`, `structurally_absent`, `needs_capture`, or
 `declared_not_produced`, including any enabled aliases.
@@ -132,13 +132,13 @@ the global registry changes later.
 Per-trace and context additions are also capture-time only:
 
 ```python
-log = tl.trace(model, x, recipes=[my_attention])
+log = tl.trace(model, x, facets=[my_attention])
 
-with tl.facets.using(my_attention):
+with tl.facets.adding(my_attention):
     log = tl.trace(model, x)
 ```
 
-`tl.facets.reset()` restores the process registry to built-ins. `tl.facets.list()`
+`tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.info(class_name)` expose registry metadata.
 
 Conflict resolution is deterministic: `class_qualname` is more specific than
@@ -332,7 +332,7 @@ result            sum per-head W_O contributions and compare to output projectio
 
 GQA/MQA uses PyTorch SDPA's `enable_gqa` repeat-interleave convention. Causal
 masks and boolean/additive tensor masks are supported. Nonzero SDPA dropout is
-fail-closed for now; the facet is marked `needs_capture` in `facets.menu()` and
+fail-closed for now; the facet is marked `needs_capture` in `facets.declared()` and
 item or attribute access raises `MissingFacetError` naming dropout/RNG as the
 missing prerequisite rather than serving an unvalidated value.
 
@@ -435,7 +435,7 @@ entropy, KL to the final output, cross-entropy and rank along the trajectory in
 one call, see `tl.stats.measure_trajectory` in
 [docs/reference/stats.md](reference/stats.md).
 
-It shares `facet=` / `layers=` / `lens=` / `validate=` semantics (and the
+It shares `facet=` / `layers=` / `lens=` / `verify=` semantics (and the
 fail-closed lens validation) with `logit_lens`. Probabilities always use the
 full-vocabulary softmax denominator. `include_native=True` (the default)
 appends a row served directly from the model's CAPTURED output logits,
@@ -516,7 +516,7 @@ TransformerLens hook-name aliases are off by default. Enable them once per
 process:
 
 ```python
-tl.facets.enable_transformerlens_aliases()
+tl.facets.enable_transformer_lens_aliases()
 ```
 
 When enabled, aliases such as `hook_pattern`, `hook_z`, `hook_result`,
@@ -612,10 +612,10 @@ written; P2 provides no public policy and refuses these writes by default.
 Conflict policy: same-home facet writes compose in attach order when their write
 masks do not overlap; overlapping writes raise before rerun.
 
-`recipes=`: `tl.trace` argument for additive per-trace facet recipes captured in
+`facets=`: `tl.trace` argument for additive per-trace facet recipes captured in
 that trace's registry snapshot.
 
-`using()`: `tl.facets.using(...)` context manager for additive context-local
+`using()`: `tl.facets.adding(...)` context manager for additive context-local
 recipes used only by traces captured inside the context.
 
 `reset()`: `tl.facets.reset()` restores the process registry to built-in recipes.

@@ -110,9 +110,9 @@ def test_step_batching_matches_sequential_input_ig(chunk: int) -> None:
 
     model = _SmoothMlp()
     inputs = torch.tensor([[0.4, -0.3, 0.2]], dtype=torch.float64)
-    sequential = attribution.integrated_gradients(model, inputs, target=1, n_steps=12)
+    sequential = attribution.integrated_gradients(model, inputs, target=1, num_steps=12)
     batched = attribution.integrated_gradients(
-        model, inputs, target=1, n_steps=12, step_batch_size=chunk, step_audit_seed=0
+        model, inputs, target=1, num_steps=12, step_batch_size=chunk, step_audit_seed=0
     )
     torch.testing.assert_close(batched.values, sequential.values, rtol=1e-4, atol=1e-9)
     assert batched.extra["step_batch_size"] == chunk
@@ -140,9 +140,9 @@ def test_step_batching_callable_target_tree_split() -> None:
         assert output.shape == (2, 2)
         return output[:, 0].sum()
 
-    sequential = attribution.integrated_gradients(model, inputs, target=scorer, n_steps=8)
+    sequential = attribution.integrated_gradients(model, inputs, target=scorer, num_steps=8)
     batched = attribution.integrated_gradients(
-        model, inputs, target=scorer, n_steps=8, step_batch_size=4, step_audit_seed=1
+        model, inputs, target=scorer, num_steps=8, step_batch_size=4, step_audit_seed=1
     )
     torch.testing.assert_close(batched.values, sequential.values, rtol=1e-4, atol=1e-9)
 
@@ -159,7 +159,7 @@ def test_step_batching_unsplittable_callable_target_refuses() -> None:
             _ScalarOut(),
             torch.ones(2, 3, dtype=torch.float64),
             target=lambda out: out,
-            n_steps=4,
+            num_steps=4,
             step_batch_size=2,
             step_audit="off",
         )
@@ -205,7 +205,7 @@ def test_audit_catches_rows_tail_coupling_adversary() -> None:
             model,
             inputs,
             target=0,
-            n_steps=6,
+            num_steps=6,
             step_batch_size=6,
             step_audit_seed=detecting_seed,
         )
@@ -224,7 +224,7 @@ def test_audit_catches_row_mean_coupling_positive_control() -> None:
             model,
             inputs,
             target=0,
-            n_steps=8,
+            num_steps=8,
             step_batch_size=4,
             step_audit="per_chunk",
             step_audit_seed=3,
@@ -238,7 +238,7 @@ def test_audit_off_is_disclosed_not_silent() -> None:
     model = _SmoothMlp()
     inputs = torch.tensor([[0.2, 0.1, -0.3]], dtype=torch.float64)
     result = attribution.integrated_gradients(
-        model, inputs, target=0, n_steps=4, step_batch_size=2, step_audit="off"
+        model, inputs, target=0, num_steps=4, step_batch_size=2, step_audit="off"
     )
     assert result.extra["step_audit"]["mode"] == "off"
     assert result.extra["step_audit"]["audited_pairs"] == []
@@ -252,7 +252,7 @@ def test_step_batching_matches_sequential_layer_ig_and_conductance(chunk: int) -
     model = _SmoothMlp()
     inputs = torch.tensor([[0.25, -0.15, 0.35]], dtype=torch.float64)
     for method in (attribution.layer_integrated_gradients, attribution.layer_conductance):
-        sequential = method(model, inputs, target=1, layer="hidden", n_steps=12)
+        sequential = method(model, inputs, target=1, layer="hidden", num_steps=12)
         batched = method(
             model,
             inputs,
@@ -272,7 +272,7 @@ def test_layer_completeness_fields_present_with_caveat() -> None:
     model = _SmoothMlp()
     inputs = torch.tensor([[0.6, -0.2, 0.4]], dtype=torch.float64)
     for method in (attribution.layer_integrated_gradients, attribution.layer_conductance):
-        result = method(model, inputs, target=0, layer="hidden", n_steps=64)
+        result = method(model, inputs, target=0, layer="hidden", num_steps=64)
         for key in (
             "attribution_sum",
             "target_delta",
@@ -295,7 +295,7 @@ def test_input_ig_residual_rel_and_delta_disclosure() -> None:
 
     model = _SmoothMlp()
     inputs = torch.tensor([[0.45, -0.3, 0.15]], dtype=torch.float64)
-    result = attribution.integrated_gradients(model, inputs, target=1, n_steps=128)
+    result = attribution.integrated_gradients(model, inputs, target=1, num_steps=128)
     assert result.extra["residual_rel"] < 1e-3
     assert result.extra["target_delta_abs"] > 0.0
     residual = float(result.extra["completeness_residual"].abs())

@@ -25,7 +25,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from ._errors import HistorySchemaError
-from ._kernels import HistogramDescriptor, HistogramResult, SpineResult, StatKernelError
+from ._kernels import HistogramDescriptor, HistogramResult, RunningStatsResult, StatKernelError
 
 __tl_layer__ = "L5"
 
@@ -249,7 +249,7 @@ class ObservationRecord:
     stream: str
     phase: str
     presence: str
-    spine: SpineResult | None = None
+    spine: RunningStatsResult | None = None
     sketch: HistogramResult | None = None
     grad_scale: str | None = None
     estimated: bool = False
@@ -300,7 +300,7 @@ class ObservationRecord:
         return (self.global_step, self.site_id, self.stream, self.phase)
 
 
-def merge_spine_results(a: SpineResult, b: SpineResult) -> SpineResult:
+def merge_spine_results(a: RunningStatsResult, b: RunningStatsResult) -> RunningStatsResult:
     """Merge two finalized spines; integer counts EXACT, floats stable.
 
     Moments merge with Chan's parallel algorithm; sums add pairwise. The
@@ -337,7 +337,7 @@ def merge_spine_results(a: SpineResult, b: SpineResult) -> SpineResult:
     reduction_dtype = (
         "float64" if "float64" in (a.reduction_dtype, b.reduction_dtype) else a.reduction_dtype
     )
-    return SpineResult(
+    return RunningStatsResult(
         count_total=a.count_total + b.count_total,
         count_finite=total_finite,
         count_zero=a.count_zero + b.count_zero,

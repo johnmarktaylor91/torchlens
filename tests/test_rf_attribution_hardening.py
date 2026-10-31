@@ -267,7 +267,7 @@ def test_repeated_reference_integrated_gradients_stays_on_the_aliased_path() -> 
     model = IdentityBranchModel()
     t = torch.ones(3)
 
-    result = attribution.integrated_gradients(model, (t, t), target=0, n_steps=8)
+    result = attribution.integrated_gradients(model, (t, t), target=0, num_steps=8)
 
     slot_a, slot_b = result.values
     torch.testing.assert_close(slot_a, torch.full((3,), 3.0))
@@ -280,7 +280,7 @@ def test_repeated_reference_smoothgrad_shares_one_noise_draw_per_object() -> Non
     model = IdentityBranchModel()
     t = torch.ones(3)
 
-    result = attribution.smoothgrad(model, (t, t), target=0, n_samples=4, seed=7)
+    result = attribution.smoothgrad(model, (t, t), target=0, num_samples=4, seed=7)
 
     slot_a, slot_b = result.values
     torch.testing.assert_close(slot_a, torch.full((3,), 3.0))
@@ -368,7 +368,7 @@ def test_reused_layer_integrated_gradients_satisfies_completeness() -> None:
     model = SharedLinearModel()
     x = torch.tensor([[1.0]])
 
-    result = attribution.layer_integrated_gradients(model, x, target=0, layer="f", n_steps=16)
+    result = attribution.layer_integrated_gradients(model, x, target=0, layer="f", num_steps=16)
 
     with torch.no_grad():
         target_delta = model(x)[..., 0].sum() - model(torch.zeros_like(x))[..., 0].sum()
@@ -382,7 +382,7 @@ def test_reused_layer_conductance_satisfies_completeness() -> None:
     model = SharedLinearModel()
     x = torch.tensor([[1.0]])
 
-    result = attribution.layer_conductance(model, x, target=0, layer="f", n_steps=16)
+    result = attribution.layer_conductance(model, x, target=0, layer="f", num_steps=16)
 
     torch.testing.assert_close(result.values.sum(), torch.tensor(6.0))
 

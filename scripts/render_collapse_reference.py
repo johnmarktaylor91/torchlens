@@ -100,8 +100,8 @@ def _draw(trace: Any, output: Path, **kwargs: object) -> None:
     """
 
     trace.draw(
-        vis_outpath=str(output.with_suffix("")),
-        vis_fileformat="svg",
+        path=str(output.with_suffix("")),
+        file_format="svg",
         vis_save_only=True,
         show_containers=False,
         **kwargs,

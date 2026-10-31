@@ -117,7 +117,7 @@ class TestRendererDoor:
         from torchlens._errors import InvalidArgumentError
 
         with pytest.raises(InvalidArgumentError) as excinfo:
-            traced.draw(vis_renderer="nonexistent", vis_save_only=True, vis_outpath="/tmp/x")
+            traced.draw(vis_renderer="nonexistent", vis_save_only=True, path="/tmp/x")
         assert excinfo.value.fields["code"] == "visualization_renderer_invalid"
         assert "graphviz" in str(excinfo.value)
 

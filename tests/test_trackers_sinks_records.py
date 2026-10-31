@@ -18,9 +18,9 @@ from torchlens.observability import (
     Histogram,
     HistogramDescriptor,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
 )
 from torchlens.observability._artifact import CommittedBlock
@@ -36,7 +36,7 @@ _requires_gradscaler = pytest.mark.skipif(
 def _spine_of(values: torch.Tensor):
     """Reduce one tensor through the C06 spine kernel."""
 
-    kernel = Spine()
+    kernel = RunningStats()
     kernel.update(values)
     return kernel.result()
 

@@ -78,7 +78,7 @@ def test_distilbert_ffn_current_class_populates_facets() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules["ffn"].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)
     assert view.down_out.shape == (2, 3, 8)
@@ -99,7 +99,7 @@ def test_distilbert_ffn_legacy_class_still_populates_facets() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules["ffn"].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)
     assert view.down_out.shape == (2, 3, 8)
@@ -140,7 +140,7 @@ def test_real_distilbert_ffn_facets_populate() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules[ffn_addrs[0]].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.ndim == 3 and view.up_out.shape[0] == 1
     assert view.intermediate.shape == view.up_out.shape
     assert view.down_out.ndim == 3 and view.down_out.shape[0] == 1

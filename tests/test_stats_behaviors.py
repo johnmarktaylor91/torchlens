@@ -22,15 +22,15 @@ def test_mean_and_norm_handle_empty_updates_and_report_nan_when_unfed() -> None:
     """Empty batches are ignored and unfed accumulators report NaN."""
 
     mean = tl.stats.Mean()
-    assert math.isnan(mean.result())
+    assert math.isnan(mean.compute())
     mean.update(torch.empty(0))
-    assert math.isnan(mean.result())
+    assert math.isnan(mean.compute())
     mean.update([1.0, 3.0])
-    assert mean.result() == pytest.approx(2.0)
+    assert mean.compute() == pytest.approx(2.0)
 
     norm = tl.stats.Norm()
     norm.update(torch.empty(0))
-    assert math.isnan(norm.result())
+    assert math.isnan(norm.compute())
 
 
 @pytest.mark.smoke
@@ -38,11 +38,11 @@ def test_quantile_reservoir_stays_bounded_and_estimates_within_range() -> None:
     """A tiny reservoir keeps streaming and estimates stay inside the data range."""
 
     quantile = tl.stats.Quantile(quantiles=(0.5,), reservoir_size=4)
-    assert math.isnan(quantile.result()[0.5])
+    assert math.isnan(quantile.compute()[0.5])
 
     values = [float(i) for i in range(50)]
     quantile.update(torch.tensor(values))
-    estimate = quantile.result()[0.5]
+    estimate = quantile.compute()[0.5]
     assert min(values) <= estimate <= max(values)
 
 
@@ -51,24 +51,24 @@ def test_topk_with_nonpositive_k_stays_empty() -> None:
 
     top = tl.stats.TopK(k=0)
     top.update(torch.tensor([5.0, 1.0]))
-    assert top.result() == []
+    assert top.compute() == []
 
 
 def test_covariance_accepts_one_dimensional_rows_and_degenerate_counts() -> None:
     """1-d updates count as single rows; <2 rows produce empty/zero results."""
 
     empty = tl.stats.Covariance()
-    assert empty.result().shape == (0, 0)
+    assert empty.compute().shape == (0, 0)
 
     single = tl.stats.Covariance()
     single.update(torch.tensor([1.0, 2.0]))
-    assert torch.equal(single.result(), torch.zeros((2, 2), dtype=torch.float64))
+    assert torch.equal(single.compute(), torch.zeros((2, 2), dtype=torch.float64))
 
     streamed = tl.stats.Covariance()
     streamed.update(torch.tensor([1.0, 2.0]))
     streamed.update(torch.tensor([3.0, 5.0]))
     stacked = torch.tensor([[1.0, 2.0], [3.0, 5.0]], dtype=torch.float64)
-    assert torch.allclose(streamed.result(), torch.cov(stacked.T))
+    assert torch.allclose(streamed.compute(), torch.cov(stacked.T))
 
 
 @pytest.mark.smoke
@@ -76,13 +76,13 @@ def test_cross_covariance_edge_semantics() -> None:
     """Scalar inputs refuse, 1-d rows unsqueeze, and feature widths are pinned."""
 
     cross = tl.stats.CrossCovariance()
-    assert cross.result().shape == (0, 0)
+    assert cross.compute().shape == (0, 0)
 
     with pytest.raises(ValueError, match="at least one dimension"):
         cross.update(torch.tensor(1.0), torch.tensor(2.0))
 
     cross.update(torch.tensor([1.0, 2.0]), torch.tensor([3.0, 4.0, 5.0]))
-    assert torch.equal(cross.result(), torch.zeros((2, 3), dtype=torch.float64))
+    assert torch.equal(cross.compute(), torch.zeros((2, 3), dtype=torch.float64))
 
     with pytest.raises(ValueError, match="feature dimensions cannot change"):
         cross.update(torch.ones(1, 5), torch.ones(1, 3))
@@ -98,7 +98,7 @@ def test_streaming_cka_zero_variance_is_nan_and_one_shot_rejects_mismatched_rows
     streaming.update(torch.ones(3, 2), torch.ones(3, 4))
     streaming.update(torch.ones(3, 2), torch.ones(3, 4))
     with pytest.warns(UserWarning, match="zero variance"):
-        assert math.isnan(streaming.result())
+        assert math.isnan(streaming.compute())
 
     with pytest.raises(ValueError, match="matched row counts"):
         tl.stats.cka(torch.ones(3, 2), torch.ones(4, 2))
@@ -108,7 +108,7 @@ def test_pca_without_updates_returns_empty_shapes() -> None:
     """An unfed PCA reports empty components and variances."""
 
     pca = tl.stats.PCA(n_components=2)
-    result = pca.result()
+    result = pca.compute()
     assert result["components"].shape == (0, 0)
     assert result["explained_variance"].shape == (0,)
 
@@ -119,7 +119,7 @@ def test_aggregator_disambiguates_duplicate_stat_keys() -> None:
 
     aggregator = tl.stats.Aggregator(tl.stats.Mean(), tl.stats.Mean())
     aggregator.update(torch.tensor([2.0]))
-    result = aggregator.result()
+    result = aggregator.compute()
     assert set(result) == {"Mean", "Mean_1"}
     assert result["Mean"] == pytest.approx(2.0)
     assert result["Mean_1"] == pytest.approx(2.0)

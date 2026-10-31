@@ -17,9 +17,9 @@ from torchlens.observability import (
     HistoryWriter,
     ObservationRecord,
     RamRing,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
     coarsen_pair,
 )
@@ -34,7 +34,7 @@ def _site(site_id: str = "module:enc.0") -> SiteRecord:
 
 
 def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> CommittedBlock:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([value, -value, 0.0]))
     sketch = None
     if with_sketch:

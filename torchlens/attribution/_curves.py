@@ -12,7 +12,7 @@ the area over the most-relevant-first perturbation curve of Samek et al.
 (2017): the mean, over the steps, of the score change from the unperturbed
 start.
 
-Each step is a recorded intervention: ``CurveStep.intervention`` holds
+Each step is a recorded intervention: ``CurveStep.build_interventions`` holds
 ``(tl.units(<input layer>, <baseline mask>), tl.replace_with(<baseline>))``
 pairs, so ``trace.fork().do(selection, edit)`` on a replay-ready trace of the
 original inputs reproduces the step's score. The scores themselves come from
@@ -52,7 +52,7 @@ from torchlens.attribution._curve_settings import (
     _validated_steps,
 )
 from torchlens.attribution._eval_maps import _DOCS_POINTER, _input_space_maps
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 _DEFAULT_STEPS = 20
 _DEFAULT_PATCH = 8
@@ -198,31 +198,31 @@ class CurveStep:
 
     index: int
     fraction: float
-    n_features: int
+    num_features: int
     score: Tensor
     _plan: _CurvePlan = field(repr=False, compare=False)
 
     @property
-    def inputs(self) -> Any:
+    def build_inputs(self) -> Any:
         """The perturbed inputs of this step, shaped like the caller's ``inputs``."""
 
-        return _rebuild_inputs(self._plan.prepared, self._plan.step_leaves(self.n_features))[0]
+        return _rebuild_inputs(self._plan.prepared, self._plan.step_leaves(self.num_features))[0]
 
     @property
     def input_kwargs(self) -> dict[str, Any]:
         """The keyword arguments of this step, perturbed where they were evaluated."""
 
-        return _rebuild_inputs(self._plan.prepared, self._plan.step_leaves(self.n_features))[1]
+        return _rebuild_inputs(self._plan.prepared, self._plan.step_leaves(self.num_features))[1]
 
     @property
-    def baseline_mask(self) -> Any:
+    def build_baseline_mask(self) -> Any:
         """Which input elements hold the baseline at this step (``True``)."""
 
-        masks = self._plan.baseline_masks(self.n_features)
+        masks = self._plan.baseline_masks(self.num_features)
         return masks[0] if len(masks) == 1 else masks
 
     @property
-    def intervention(self) -> tuple[tuple[Any, Any], ...]:
+    def build_interventions(self) -> tuple[tuple[Any, Any], ...]:
         """The recorded edits of this step, as ``(selection, edit)`` pairs.
 
         One pair per evaluated input that holds any baseline value:
@@ -237,14 +237,14 @@ class CurveStep:
         layers.
         """
 
-        masks = self._plan.baseline_masks(self.n_features)
+        masks = self._plan.baseline_masks(self.num_features)
         return _step_intervention(
-            self._plan, masks, self._plan.step_baselines(self.n_features, masks)
+            self._plan, masks, self._plan.step_baselines(self.num_features, masks)
         )
 
 
 @dataclass(frozen=True)
-class CurveResult:
+class PerturbationCurve:
     """A deletion or insertion curve, its area and AOPC.
 
     Attributes
@@ -273,7 +273,7 @@ class CurveResult:
         and the attribution method name (``attribution_method``).
     """
 
-    metric: str
+    kind: str
     fractions: Tensor
     scores: Tensor
     area: float
@@ -286,7 +286,7 @@ class CurveResult:
         """Compact representation without dumping tensors."""
 
         return (
-            f"CurveResult(metric={self.metric!r}, area={self.area:.6g}, aopc={self.aopc:.6g}, "
+            f"CurveResult(metric={self.kind!r}, area={self.area:.6g}, aopc={self.aopc:.6g}, "
             f"steps={len(self.steps)}, settings_keys={sorted(self.settings)!r})"
         )
 
@@ -444,7 +444,7 @@ class _CurveRequest:
     """The keyword arguments of one curve call (see :func:`deletion_curve`)."""
 
     target: _AttributionTarget
-    attribution: AttributionResult | Any
+    attribution: Attribution | Any
     baseline: CurveBaseline
     n_steps: int
     features: CurveFeatures
@@ -459,7 +459,7 @@ def _curve(
     inputs: Any,
     input_kwargs: InputKwargs,
     request: _CurveRequest,
-) -> CurveResult:
+) -> PerturbationCurve:
     """Shared body of :func:`deletion_curve` and :func:`insertion_curve`.
 
     Parameters
@@ -522,8 +522,8 @@ def _curve(
         CurveStep(index, float(fractions[index]), count, scores_table[index], plan)
         for index, count in enumerate(counts)
     )
-    return CurveResult(
-        metric=kind,
+    return PerturbationCurve(
+        kind=kind,
         fractions=fractions,
         scores=scores_table,
         area=float(areas.mean()),
@@ -546,7 +546,7 @@ def _curve(
             "area_per_example": tuple(float(value) for value in areas),
             "aopc_per_example": tuple(float(value) for value in aopcs),
             "attribution_method": (
-                attribution.method if isinstance(attribution, AttributionResult) else None
+                attribution.method if isinstance(attribution, Attribution) else None
             ),
         },
     )
@@ -558,12 +558,12 @@ def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation sett
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    attribution: AttributionResult | Any,
+    attribution: Attribution | Any,
     baseline: CurveBaseline = "zeros",
-    n_steps: int = _DEFAULT_STEPS,
+    num_steps: int = _DEFAULT_STEPS,
     features: CurveFeatures = "auto",
     patch_size: int | tuple[int, int] = _DEFAULT_PATCH,
-) -> CurveResult:
+) -> PerturbationCurve:
     """Remove the most-attributed features first and record the target score.
 
     Follows the most-relevant-first perturbation curve and AOPC of Samek et
@@ -571,7 +571,7 @@ def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation sett
     ranked per example by their summed attribution, highest first (ties keep
     feature order); at step ``k`` the top ``floor(k * F / n_steps)`` features
     hold the baseline. Every step is a recorded intervention
-    (``CurveStep.intervention``) that replays to its score.
+    (``CurveStep.build_interventions``) that replays to its score.
 
     Parameters
     ----------
@@ -622,7 +622,7 @@ def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation sett
         model,
         inputs,
         input_kwargs,
-        _CurveRequest(target, attribution, baseline, n_steps, features, patch_size),
+        _CurveRequest(target, attribution, baseline, num_steps, features, patch_size),
     )
 
 
@@ -632,12 +632,12 @@ def insertion_curve(  # noqa: PLR0913 - mirrors deletion_curve one-to-one
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    attribution: AttributionResult | Any,
+    attribution: Attribution | Any,
     baseline: CurveBaseline = "zeros",
-    n_steps: int = _DEFAULT_STEPS,
+    num_steps: int = _DEFAULT_STEPS,
     features: CurveFeatures = "auto",
     patch_size: int | tuple[int, int] = _DEFAULT_PATCH,
-) -> CurveResult:
+) -> PerturbationCurve:
     """Reveal the most-attributed features first onto a baseline.
 
     Follows the insertion metric of Petsiuk et al. (2018); AOPC is reported
@@ -662,5 +662,5 @@ def insertion_curve(  # noqa: PLR0913 - mirrors deletion_curve one-to-one
         model,
         inputs,
         input_kwargs,
-        _CurveRequest(target, attribution, baseline, n_steps, features, patch_size),
+        _CurveRequest(target, attribution, baseline, num_steps, features, patch_size),
     )

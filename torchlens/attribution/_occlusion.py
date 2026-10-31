@@ -26,8 +26,8 @@ from torch import Tensor
 from torch.nn import Module
 
 from torchlens.attribution._core import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _call_model,
@@ -183,7 +183,7 @@ def occlusion(
     score: _OcclusionScore,
     baseline: _OcclusionBaseline = "zeros",
     blur_kernel_size: int = 3,
-) -> AttributionResult:
+) -> Attribution:
     """Score the effect of explicitly occluding one resolved activation region.
 
     The result is ``score(original) - score(occluded)``. ``baseline`` is
@@ -249,7 +249,7 @@ def occlusion(
     finally:
         fork.cleanup()
     delta = original_score - occluded_score
-    return AttributionResult(
+    return Attribution(
         method="occlusion",
         values=delta,
         target_repr="trace score",
@@ -501,7 +501,7 @@ def occlusion_map(
     overlap: Literal["average", "sum"] = "average",
     occlude_leaf: int = 0,
     max_passes: int = _DIRECT_MAX_PASSES,
-) -> AttributionResult:
+) -> Attribution:
     """Sweep an occlusion window over one input leaf and map the score deltas.
 
     The direct engine: eval/no-grad forwards, one per window, on copies of the
@@ -641,7 +641,7 @@ def occlusion_map(
             coverage[full_region] += 1
         total_seconds = time.perf_counter() - start
     values = accumulator / coverage.clamp(min=1) if overlap == "average" else accumulator
-    return AttributionResult(
+    return Attribution(
         method="occlusion_map",
         values=values,
         target_repr=_target_repr(target),

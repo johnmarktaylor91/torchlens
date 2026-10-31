@@ -319,7 +319,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
             layer=LAYERS[0],
             negative_control=0.0,
             positive_control=clean - corrupted,
-            kv_groups=tviz.GqaInfo(n_query_heads=4, n_kv_heads=2),
+            kv_groups=tviz.GqaInfo(n_query_heads=4, num_kv_heads=2),
         )
     assert excinfo.value.fields["code"] == "tv_receipt_invalid"
 
@@ -332,7 +332,7 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
 
     log = tl.trace(model, CLEAN, **_trace_kwargs(None))
     facets = log.modules[LAYERS[0]].facets
-    gqa = tviz.GqaInfo(n_query_heads=facets.get("n_q_heads"), n_kv_heads=facets.get("n_kv_heads"))
+    gqa = tviz.GqaInfo(n_query_heads=facets.get("n_q_heads"), num_kv_heads=facets.get("n_kv_heads"))
     log.cleanup()
     joint = joint_grid
     receipt = tviz.receipt_from_patch_grid(

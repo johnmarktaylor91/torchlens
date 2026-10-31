@@ -404,7 +404,7 @@ def _analysis_runners(
             matrix,
             target,
             alphas=settings["ridge_alphas"],
-            n_folds=settings["n_folds"],
+            num_folds=settings["n_folds"],
             seed=settings["seed"],
         )
         point = _mean_column_r(predicted, target)
@@ -441,7 +441,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     rdm_metric: str = "correlation",
     rsa_method: str = "spearman",
     ridge_alphas: Sequence[float] = DEFAULT_RIDGE_ALPHAS,
-    n_folds: int = 5,
+    num_folds: int = 5,
     n_resamples: int | None = None,
     seed: int = 0,
     confidence: float = 0.95,
@@ -514,7 +514,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
 
     analyses = tuple(analyses)
     alphas = tuple(float(a) for a in ridge_alphas)
-    _check_settings(analyses, rsa_method, alphas, n_folds)
+    _check_settings(analyses, rsa_method, alphas, num_folds)
     bootstrap = (
         None
         if n_resamples is None
@@ -522,9 +522,9 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     )
     target_matrix = _as_rows(target, "target")
     n_stimuli = target_matrix.shape[0]
-    if n_stimuli < max(3, n_folds + 2):
+    if n_stimuli < max(3, num_folds + 2):
         raise ValueError(
-            f"neuro.compare needs at least max(3, n_folds + 2) = {max(3, n_folds + 2)} "
+            f"neuro.compare needs at least max(3, n_folds + 2) = {max(3, num_folds + 2)} "
             f"stimuli; the target has {n_stimuli}."
         )
     matrices = _site_matrices(source, sites)
@@ -538,7 +538,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
         "rdm_metric": rdm_metric,
         "rsa_method": rsa_method,
         "ridge_alphas": alphas,
-        "n_folds": n_folds,
+        "n_folds": num_folds,
         "seed": int(seed),
         "n_resamples": n_resamples,
         "confidence": float(confidence),

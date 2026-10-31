@@ -38,14 +38,14 @@ from ..observability._kernels import (  # noqa: E402
     Histogram,
     HistogramDescriptor,
     HistogramResult,
-    Spine,
-    SpineResult,
+    RunningStats,
+    RunningStatsResult,
 )
 
 # Reduce-and-discard capture (tl.trace(..., save="stats")) reads back through
 # site_spines; measure_trajectory folds logit-lens trajectory statistics over
 # batches. Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
-from ._capture_stats import site_spines  # noqa: E402
+from ._capture_stats import site_stats  # noqa: E402
 from ._fitted import (  # noqa: E402
     FittedArtifactError,
     FittedPCA,
@@ -58,7 +58,7 @@ from ._glance import glance  # noqa: E402
 # Quantile and TopK, with UnitTopK carrying example ids and positions.
 # Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 from ._per_unit import Quantile, TopK, UnitTopK  # noqa: E402
-from ._seams import EchoObserver, echo, summary_cell, treescope_card_fields  # noqa: E402
+from ._seams import NarrationObserver, narrate, summary_cell, treescope_card_fields  # noqa: E402
 from ._stats_render import (  # noqa: E402
     GLYPH_RAMP_ASCII,
     GLYPH_RAMP_UNICODE,
@@ -84,7 +84,7 @@ __all__ = [
     "CKA",
     "Covariance",
     "CrossCovariance",
-    "EchoObserver",
+    "NarrationObserver",
     "FamilyEvidence",
     "FittedArtifactError",
     "FittedPCA",
@@ -98,8 +98,8 @@ __all__ = [
     "PCA",
     "Quantile",
     "SimilarityScore",
-    "Spine",
-    "SpineResult",
+    "RunningStats",
+    "RunningStatsResult",
     "StreamingStat",
     "TENSOR_STATS_SCHEMA_VERSION",
     "TensorStats",
@@ -109,14 +109,14 @@ __all__ = [
     "aggregate",
     "cka",
     "degrade",
-    "echo",
+    "narrate",
     "format_sig",
     "glance",
     "load_fitted",
     "measure_trajectory",
     "render_core_line",
     "save_fitted",
-    "site_spines",
+    "site_stats",
     "summary_cell",
     "tensor_stats",
     "treescope_card_fields",

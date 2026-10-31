@@ -98,7 +98,7 @@ class CausalAuditUnit:
         the site of a read row, the edge of an EDGE row (``"a0.h1->m2"``).
     """
 
-    unit: tuple[int, ...]
+    index: tuple[int, ...]
     claimed_effect: float
     measured_effect: float
     site: str = ""
@@ -106,7 +106,7 @@ class CausalAuditUnit:
     _plan: _Plan | None = field(default=None, repr=False, compare=False)
 
     @property
-    def intervention(self) -> tuple[tuple[Any, Any], ...]:
+    def build_interventions(self) -> tuple[tuple[Any, Any], ...]:
         """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``.
 
         Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace
@@ -114,13 +114,13 @@ class CausalAuditUnit:
         """
 
         assert self._plan is not None  # noqa: S101 - every audit row carries its plan
-        return self._plan.intervention((self.unit,))
+        return self._plan.intervention((self.index,))
 
     def __repr__(self) -> str:
         """Compact representation."""
 
         return (
-            f"CausalAuditUnit(unit={self.unit}, component={self.component!r}, "
+            f"CausalAuditUnit(unit={self.index}, component={self.component!r}, "
             f"claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
         )
 
@@ -135,7 +135,7 @@ class CausalAuditSet:
         ``"top"`` (largest claimed magnitude), ``"bottom"`` (smallest claimed
         magnitude) or ``"random"`` (a seeded draw).
     units
-        The ablated units, indexed as :attr:`CausalAuditUnit.unit`.
+        The ablated units, indexed as :attr:`CausalAuditUnit.index`.
     claimed_effect
         Sum of the claimed scores of ``units`` (what the claim predicts if
         effects add).
@@ -148,29 +148,29 @@ class CausalAuditSet:
     """
 
     kind: str
-    units: tuple[tuple[int, ...], ...]
+    indices: tuple[tuple[int, ...], ...]
     claimed_effect: float
     measured_effect: float
-    draw: int
+    draw_index: int
     _plan: _Plan = field(repr=False, compare=False)
 
     @property
-    def intervention(self) -> tuple[tuple[Any, Any], ...]:
+    def build_interventions(self) -> tuple[tuple[Any, Any], ...]:
         """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``."""
 
-        return self._plan.intervention(self.units)
+        return self._plan.intervention(self.indices)
 
     def __repr__(self) -> str:
         """Compact representation."""
 
         return (
-            f"CausalAuditSet(kind={self.kind!r}, k={len(self.units)}, "
+            f"CausalAuditSet(kind={self.kind!r}, k={len(self.indices)}, "
             f"claimed_effect={self.claimed_effect:.6g}, measured_effect={self.measured_effect:.6g})"
         )
 
 
 @dataclass(frozen=True)
-class CausalAuditResult:
+class CausalAudit:
     """The outcome of a causal audit of one internal attribution.
 
     Attributes
@@ -215,7 +215,7 @@ class CausalAuditResult:
         were patched on; the recorded patches replay on its forks).
     """
 
-    layer: str | None
+    module_address: str | None
     site: str | None
     original_score: float
     units: tuple[CausalAuditUnit, ...]
@@ -234,7 +234,7 @@ class CausalAuditResult:
 
         top = self.set_of("top")
         return (
-            f"CausalAuditResult(layer={self.layer!r}, units={len(self.units)}, "
+            f"CausalAuditResult(layer={self.module_address!r}, units={len(self.indices)}, "
             f"rank_agreement={self.rank_agreement!r}, "
             f"top_measured_effect={top[0].measured_effect if top else None!r})"
         )
@@ -247,16 +247,16 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     *,
     claim: Any,
     target: Any = None,
-    corrupted: Any = None,
+    corrupted_input: Any = None,
     metric: Callable[[Tensor], Tensor] | None = None,
     edges: Any = None,
     k: int = 5,
-    ablation: str | float | Tensor = "zero",
+    edit: str | float | Tensor = "zero",
     controls: tuple[str, ...] = ("bottom", "random"),
-    random_draws: int = 10,
+    num_random_draws: int = 10,
     per_unit: bool = True,
     seed: int = 0,
-) -> CausalAuditResult:
+) -> CausalAudit:
     """Ablate the units an internal attribution ranks and measure each effect.
 
     Four claim kinds are audited. A layer attribution (``layer_attribution``,
@@ -349,11 +349,11 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         claim=claim,
         target=target,
         k=k,
-        ablation=ablation,
+        edit=edit,
         controls=controls,
-        random_draws=random_draws,
+        num_random_draws=num_random_draws,
         seed=seed,
-        corrupted=corrupted,
+        corrupted_input=corrupted_input,
         metric=metric,
         edges=edges,
     )
@@ -368,8 +368,8 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     measured = torch.tensor([row.measured_effect for row in rows], dtype=torch.float64)
     agreement = _spearman(claimed, measured) if len(rows) > 1 else None
     random_effects = [item.measured_effect for item in sets if item.kind == "random"]
-    return CausalAuditResult(
-        layer=plan.layer,
+    return CausalAudit(
+        module_address=plan.module_address,
         site=plan.label,
         original_score=original,
         units=rows,
@@ -379,7 +379,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
             "k": k,
             "ablation": plan.ablation_name,
             "controls": tuple(controls),
-            "random_draws": random_draws,
+            "random_draws": num_random_draws,
             "per_unit": per_unit,
             "seed": seed,
             "target": plan.target_repr,
@@ -460,11 +460,11 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
         One row per unit, in index order.
     """
 
-    if len(plan.units) > _PER_UNIT_WARN_COUNT:
+    if len(plan.indices) > _PER_UNIT_WARN_COUNT:
         warnings.warn(
             AttributionWarning(
-                f"causal_audit is ablating each of the {len(plan.units)} units of "
-                f"{plan.layer or 'the claim'!r} alone ({len(plan.units)} replays). Remedy: "
+                f"causal_audit is ablating each of the {len(plan.indices)} units of "
+                f"{plan.module_address or 'the claim'!r} alone ({len(plan.indices)} replays). Remedy: "
                 f"{EDGES_REMEDY if plan.claim_kind == 'edge_table' else _PER_UNIT_REMEDY}. "
                 f"{_AUDIT_DOCS_POINTER}",
                 code="attribution_audit_units_many",
@@ -474,14 +474,14 @@ def _unit_rows(plan: _Plan, original: float) -> tuple[CausalAuditUnit, ...]:
     scores = plan.unit_scores()
     return tuple(
         CausalAuditUnit(
-            unit=unit,
+            index=unit,
             claimed_effect=plan.claimed_of(unit),
             measured_effect=plan.effect(original, scores[unit]),
             site=plan.site_of(unit),
             component=plan.component_of(unit),
             _plan=plan,
         )
-        for unit in plan.units
+        for unit in plan.indices
     )
 
 
@@ -508,7 +508,7 @@ def _ablated_sets(
     """
 
     order = sorted(
-        plan.units, key=lambda unit: (-abs(plan.claimed_of(unit)), plan.units.index(unit))
+        plan.indices, key=lambda unit: (-abs(plan.claimed_of(unit)), plan.indices.index(unit))
     )
     chosen: list[tuple[str, int, tuple[tuple[int, ...], ...]]] = [
         ("top", 0, tuple(order[: request.k]))
@@ -541,10 +541,10 @@ def _ablated_sets(
         measured.append(
             CausalAuditSet(
                 kind=kind,
-                units=units,
+                indices=units,
                 claimed_effect=claimed,
                 measured_effect=plan.effect(original, plan.ablated_score(units)),
-                draw=draw,
+                draw_index=draw,
                 _plan=plan,
             )
         )

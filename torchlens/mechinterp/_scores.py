@@ -35,7 +35,7 @@ from .._errors import PayloadUnavailableError
 from ._errors import refuse
 from ._heads import _attention_modules
 
-__all__ = ["FixedPeriodInduction", "HeadScoreResult", "head_scores"]
+__all__ = ["FixedPeriodInduction", "HeadScores", "head_scores"]
 
 _KINDS = ("previous_token", "duplicate_token", "induction")
 _MEASURES = ("mul", "abs")
@@ -76,7 +76,7 @@ class FixedPeriodInduction:
 
 
 @dataclass(frozen=True)
-class HeadScoreResult:
+class HeadScores:
     """Per-head taxonomy scores.
 
     ``scores[layer_index][head]`` is the score; ``eligible_rows`` counts the
@@ -87,16 +87,16 @@ class HeadScoreResult:
 
     kind: str
     measure: str
-    layer_addresses: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     scores: tuple[tuple[float | None, ...], ...]
     eligible_rows: tuple[int, ...]
     provenance: dict[str, Any]
 
-    def top(self, k: int = 5) -> tuple[tuple[str, float], ...]:
+    def topk(self, k: int = 5) -> tuple[tuple[str, float], ...]:
         """Return the ``k`` highest-scoring heads as ``(address.headN, score)``."""
 
         pairs = []
-        for address, layer_scores in zip(self.layer_addresses, self.scores, strict=True):
+        for address, layer_scores in zip(self.module_addresses, self.scores, strict=True):
             for head, score in enumerate(layer_scores):
                 if score is not None:
                     pairs.append((f"{address}.head{head}", score))
@@ -187,7 +187,7 @@ def head_scores(
     measure: str = "mul",
     layers: Any = None,
     pattern_source: Any = None,
-) -> HeadScoreResult:
+) -> HeadScores:
     """Score every head against one taxonomy mask (mikit section 8).
 
     Parameters
@@ -274,10 +274,10 @@ def head_scores(
             continue
         all_scores.append(_score_layer(pattern, mask, row_eligible, n_heads, measure))
 
-    return HeadScoreResult(
+    return HeadScores(
         kind=kind,
         measure=measure,
-        layer_addresses=tuple(addresses),
+        module_addresses=tuple(addresses),
         scores=tuple(all_scores),
         eligible_rows=tuple(eligible_counts),
         provenance={

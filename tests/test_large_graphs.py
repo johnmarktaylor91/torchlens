@@ -441,8 +441,8 @@ class TestRankEngineRendering:
                 torch.randn(2, 64),
                 vis_node_placement="auto",
                 vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "auto_dot"),
+                file_format="svg",
+                path=str(tmp_path / "auto_dot"),
             )
         assert "digraph" in source
         assert not any("auto-selected rank layout" in str(w.message) for w in caught)
@@ -475,8 +475,8 @@ class TestRankEngineRendering:
                 torch.randn(2, 64),
                 vis_node_placement="auto",
                 vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "auto_rank"),
+                file_format="svg",
+                path=str(tmp_path / "auto_rank"),
             )
         assert calls == ["rank"]
         assert source == "digraph { rank_path }"
@@ -502,8 +502,8 @@ class TestRankEngineRendering:
                 trace.draw(
                     vis_node_placement="auto",
                     vis_save_only=True,
-                    vis_fileformat="svg",
-                    vis_outpath=str(tmp_path / "rank_decision"),
+                    file_format="svg",
+                    path=str(tmp_path / "rank_decision"),
                 )
             decision = trace._last_sibling_ordering_decision
         finally:
@@ -534,8 +534,8 @@ class TestRankEngineRendering:
                 torch.randn(2, 64),
                 vis_node_placement="dot",
                 vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "manual_dot"),
+                file_format="svg",
+                path=str(tmp_path / "manual_dot"),
             )
         assert "digraph" in source
 
@@ -563,8 +563,8 @@ class TestRankEngineRendering:
                 torch.randn(2, 64),
                 vis_node_placement="rank",
                 vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "manual_rank"),
+                file_format="svg",
+                path=str(tmp_path / "manual_rank"),
             )
         assert calls == ["rank"]
         assert source == "digraph { manual_rank }"
@@ -581,8 +581,8 @@ class TestRankEngineRendering:
                     torch.randn(2, 64),
                     vis_node_placement=removed,
                     vis_save_only=True,
-                    vis_fileformat="svg",
-                    vis_outpath=str(tmp_path / f"removed_{removed}"),
+                    file_format="svg",
+                    path=str(tmp_path / f"removed_{removed}"),
                 )
 
     def test_rank_svg_contains_labels_and_module_boxes(self, tmp_path: Any) -> None:
@@ -595,8 +595,8 @@ class TestRankEngineRendering:
             torch.randn(2, 64),
             vis_node_placement="rank",
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(outpath),
+            file_format="svg",
+            path=str(outpath),
         )
         svg = outpath.with_suffix(".svg").read_text(encoding="utf-8")
         assert "input" in svg
@@ -612,8 +612,8 @@ class TestRankEngineRendering:
         source = trace.draw(
             vis_mode="unrolled",
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "placement_test"),
+            file_format="svg",
+            path=str(tmp_path / "placement_test"),
             vis_node_placement="dot",
         )
         assert "digraph" in source
@@ -726,7 +726,7 @@ class TestDotThresholdBenchmark:
                 trace.draw(
                     vis_mode="unrolled",
                     vis_save_only=True,
-                    vis_outpath=str(tmp_path / f"bench_{target}"),
+                    path=str(tmp_path / f"bench_{target}"),
                     vis_node_placement="dot",
                 )
                 elapsed = time.time() - start

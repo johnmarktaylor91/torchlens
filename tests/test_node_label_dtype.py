@@ -57,8 +57,8 @@ def test_dtype_token_reaches_the_drawn_graph(half_log: tl.Trace, tmp_path: Path)
     pytest.importorskip("graphviz")
     dot = half_log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         node_label_fields=["name", "dtype"],
     )
     assert "float16" in dot

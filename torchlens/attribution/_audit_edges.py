@@ -109,7 +109,7 @@ class _EdgesPlan(_SitesPlan):
         from torchlens.mechinterp import patch_edges
 
         with torch.no_grad():
-            return patch_edges(self.trace, self._edges(keys), corrupt=self.corrupt)
+            return patch_edges(self.trace, self._edges(keys), corrupted_graph=self.corrupt)
 
     def ablated_score(self, keys: tuple[tuple[int, ...], ...]) -> float:
         """Score a fork of the trace with the edges of ``keys`` patched together.
@@ -444,6 +444,6 @@ def _plan_edge_audit(request: _AuditRequest) -> _EdgesPlan:
             "trace": trace,
         },
         graph=graph,
-        corrupt=corrupt,
+        corrupted_graph=corrupt,
         names=names,
     )

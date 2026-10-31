@@ -13,8 +13,8 @@ from torch.nn import Module
 
 from torchlens.attribution._entry import _detect_entry_route, _EntryRoute, _tensor_leaves
 from torchlens.attribution._result import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     AttributionValueTree,
     _summarize_attribution_tree,
 )
@@ -37,7 +37,7 @@ InputKwargs: TypeAlias = dict[str, Any] | None
 
 __all__ = [
     "AttributionError",
-    "AttributionResult",
+    "Attribution",
     "AttributionValueTree",
     "InputKwargs",
     "_summarize_attribution_tree",
@@ -974,7 +974,7 @@ def saliency(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-) -> AttributionResult:
+) -> Attribution:
     """Compute absolute input gradients for a scalar target.
 
     Saliency is UNSIGNED: every value is ``|d target / d input|``, so it says
@@ -1017,7 +1017,7 @@ def saliency(
         input_leaves = _make_input_leaves(prepared_inputs)
         gradients, _scalar = _gradient_for_inputs(model, prepared_inputs, input_leaves, target)
     values = tuple(gradient.detach().abs() for gradient in gradients)
-    return AttributionResult(
+    return Attribution(
         method="saliency",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
@@ -1031,7 +1031,7 @@ def input_x_grad(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-) -> AttributionResult:
+) -> Attribution:
     """Compute gradient times input for a scalar target.
 
     The result is SIGNED: under the local linear approximation, a positive
@@ -1073,7 +1073,7 @@ def input_x_grad(
         (gradient * input_leaf).detach()
         for gradient, input_leaf in zip(gradients, input_leaves, strict=True)
     )
-    return AttributionResult(
+    return Attribution(
         method="input_x_grad",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
@@ -1228,12 +1228,12 @@ def integrated_gradients(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    n_steps: int = 50,
+    num_steps: int = 50,
     baseline: Any | None = None,
     step_batch_size: int | None = None,
     step_audit: str | None = None,
     step_audit_seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Compute Integrated Gradients along a straight baseline-to-input path.
 
     The default baseline is ``torch.zeros_like`` for each attributed leaf.
@@ -1306,7 +1306,7 @@ def integrated_gradients(
         _validate_step_batch_size,
     )
 
-    _validate_positive_int("n_steps", n_steps)
+    _validate_positive_int("n_steps", num_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(
@@ -1319,7 +1319,7 @@ def integrated_gradients(
             prepared_inputs.attributed_leaves, baseline_tensors, strict=True
         )
     )
-    alphas = _midpoint_alphas(n_steps)
+    alphas = _midpoint_alphas(num_steps)
     chunks = _chunk_steps(alphas, chunk_size)
     auditor = _StepAuditor(
         audit_mode, len(chunks), [len(chunk) for chunk in chunks], seed=step_audit_seed
@@ -1385,14 +1385,14 @@ def integrated_gradients(
     )
     attribution_sum = sum((value.sum() for value in values), start=torch.zeros_like(input_scalar))
     target_delta = input_scalar - baseline_scalar
-    return AttributionResult(
+    return Attribution(
         method="integrated_gradients",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
         extra={
-            "n_steps": n_steps,
+            "n_steps": num_steps,
             "baseline": _value_tree_from_leaves(prepared_inputs, baseline_tensors),
-            "path_evaluations_logical": n_steps,
+            "path_evaluations_logical": num_steps,
             "physical_forward_calls": physical_calls,
             "step_batch_size": chunk_size,
             "step_audit": auditor.record().to_extra(),
@@ -1407,10 +1407,10 @@ def smoothgrad(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    n_samples: int = 25,
+    num_samples: int = 25,
     noise_level: float = 0.1,
     seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Average saliency over Gaussian-noised copies of an input.
 
     Like :func:`saliency`, the result is unsigned: each sample is
@@ -1447,7 +1447,7 @@ def smoothgrad(
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
     """
 
-    _validate_positive_int("n_samples", n_samples)
+    _validate_positive_int("n_samples", num_samples)
     if noise_level <= 0:
         # zero noise averages n_samples identical saliency maps -- a
         # pointless loop dressed as SmoothGrad -- so it refuses with negatives.
@@ -1473,14 +1473,14 @@ def smoothgrad(
         method=saliency,
         model=model,
         target=target,
-        n_samples=n_samples,
+        num_samples=num_samples,
         stdevs=noise_level,
         seed=seed,
         aggregation="mean",
     )
-    return AttributionResult(
+    return Attribution(
         method="smoothgrad",
         values=tunneled.values,
         target_repr=tunneled.target_repr,
-        extra={"n_samples": n_samples, "noise_level": noise_level, "seed": seed},
+        extra={"n_samples": num_samples, "noise_level": noise_level, "seed": seed},
     )

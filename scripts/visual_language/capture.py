@@ -207,7 +207,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         from torchlens.visualization._surgery_diff import _build_diff_dot
 
         diff = surgery_diff(fork, trace)
-        diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
+        diff.draw(str(outpath), file_format="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
     if panel.call == "bundle_graph":
@@ -301,12 +301,12 @@ def probe_export(raw: Path) -> dict[str, str]:
     base = {"direction": "leftright", "vis_save_only": True}
     for dpi in (96, 192):
         path = raw / f"export-png-{dpi}"
-        trace.draw(vis_outpath=str(path), vis_fileformat="png", dpi=dpi, **base)
+        trace.draw(path=str(path), file_format="png", dpi=dpi, **base)
         png = path.with_suffix(".png") if path.with_suffix(".png").exists() else Path(f"{path}.png")
         width, height = _png_size(png)
         facts[f'vis_fileformat="png", dpi={dpi}'] = f"{width} x {height} pixels"
     svg_path = raw / "export-svg"
-    trace.draw(vis_outpath=str(svg_path), vis_fileformat="svg", **base)
+    trace.draw(path=str(svg_path), file_format="svg", **base)
     svg_file = svg_path.with_suffix(".svg") if svg_path.with_suffix(".svg").exists() else None
     svg_file = svg_file or Path(f"{svg_path}.svg")
     view = re.search(r'viewBox="([^"]+)"', svg_file.read_text())
@@ -314,7 +314,7 @@ def probe_export(raw: Path) -> dict[str, str]:
         f"vector, viewBox {view.group(1) if view else '?'} (pt); dpi has no effect"
     )
     facts["vis_fileformat"] = f"default {defaults['vis_fileformat'].default!r}"
-    graph = trace.draw(return_graph=True, vis_outpath=str(raw / "export-graph"), **base)
+    graph = trace.draw(return_graph=True, path=str(raw / "export-graph"), **base)
     facts["return_graph=True"] = f"returns a {type(graph).__module__}.{type(graph).__name__} object"
     facts["vis_save_only"] = (
         f"default {defaults['vis_save_only'].default!r}; True saves without opening a viewer"
@@ -323,7 +323,7 @@ def probe_export(raw: Path) -> dict[str, str]:
     facts['view="none"'] = f"draws nothing and returns {trace.draw(view='none')!r}"
     refused = 'view="sideways"'
     try:
-        trace.draw(view="sideways", vis_outpath=str(raw / "export-refused"), **base)
+        trace.draw(view="sideways", path=str(raw / "export-refused"), **base)
         facts[refused] = "accepted (unexpected)"
     except InvalidArgumentError as exc:  # the refusal is the measurement
         # The message without its remedy sentence, which repeats the allowed values.

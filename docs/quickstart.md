@@ -105,7 +105,7 @@ renders through the existing renderer with `collapse="auto"` as its default.
 This facade is the only place auto-collapse is a default: `Trace.draw()`
 keeps `collapse="none"`.
 
-The result is detached (`RenderResult`): it owns the DOT source, the
+The result is detached (`Drawing`): it owns the DOT source, the
 rendered bytes or written path, the input provenance, and `save(path)`
 re-renders without retaining the capture. In notebooks it displays inline
 and writes nothing; in a plain script a bare call writes a collision-safe

@@ -355,8 +355,8 @@ def test_domain_node_style_presets_refuse(tmp_path: Path) -> None:
         log.draw(
             node_mode="vision",  # type: ignore[arg-type]
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / "graph"),
+            file_format="dot",
+            path=str(tmp_path / "graph"),
         )
     assert callable(node_styles.vision_node_mode)
     assert callable(node_styles.attention_node_mode)

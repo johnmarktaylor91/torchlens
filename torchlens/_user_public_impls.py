@@ -724,14 +724,14 @@ def draw_backward(
         node_mode = cast(VisNodeModeLiteral, node_style)
 
     return trace.draw_backward(
-        vis_outpath=container_path,
+        path=container_path,
         vis_graph_overrides=graph_overrides,
         node_spec_fn=node_spec_fn,
         collapsed_node_spec_fn=collapsed_node_spec_fn,
         vis_node_mode=node_mode,
         vis_edge_overrides=edge_overrides,
         vis_save_only=save_only,
-        vis_fileformat=file_format,
+        file_format=file_format,
         vis_direction=direction,
         code_panel=code_panel,
         vis_mode=vis_mode,
@@ -746,7 +746,7 @@ def draw_combined(
     backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
     vis_mode: VisModeLiteral = "unrolled",
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
+    show_buffers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
     visualization: VisualizationOptions | None = None,
 ) -> str:
@@ -795,24 +795,24 @@ def draw_combined(
         edge_overrides = visualization.edge_overrides
 
     return trace.draw_combined(
-        vis_outpath=container_path,
+        path=container_path,
         vis_graph_overrides=graph_overrides,
         node_spec_fn=node_spec_fn,
         backward_node_spec_fn=backward_node_spec_fn,
         vis_edge_overrides=edge_overrides,
         vis_save_only=save_only,
-        vis_fileformat=file_format,
+        file_format=file_format,
         vis_direction=direction,
         vis_mode=vis_mode,
         intervening_cluster=intervening_cluster,
-        show_buffer_layers=show_buffer_layers,
+        show_buffers=show_buffers,
         bwd=bwd,
     )
 
 
 def show_bundle_graph(
     bundle: Any,
-    vis_outpath: str = "bundle_modelgraph",
+    path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
     direction: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
@@ -820,7 +820,7 @@ def show_bundle_graph(
     vis_node_overrides: dict[str, Any] | None = None,
     vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
     vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
+    file_format: str = "pdf",
     nodes: Literal["ops", "members"] = "ops",
     theme: str = "torchlens",
     show_legend: bool | None = None,
@@ -888,7 +888,7 @@ def show_bundle_graph(
     from .visualization._render_utils import direction_to_rankdir
 
     options = BundlePictureOptions(
-        outpath=vis_outpath,
+        outpath=path,
         vis_mode=vis_mode,
         direction=direction,
         rankdir=direction_to_rankdir(vis_direction),
@@ -896,7 +896,7 @@ def show_bundle_graph(
         node_overrides=vis_node_overrides,
         edge_overrides=vis_edge_overrides,
         save_only=vis_save_only,
-        fileformat=vis_fileformat,
+        fileformat=file_format,
         nodes=nodes,
         theme_name=theme,
         show_legend=show_legend is True,

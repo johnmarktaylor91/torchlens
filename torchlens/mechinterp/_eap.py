@@ -386,7 +386,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
     model: Any,
     inputs: Any,
     *,
-    corrupted: Any,
+    corrupted_input: Any,
     metric: Callable[[torch.Tensor], torch.Tensor],
     method: str = "eap_ig",
     steps: int | None = None,
@@ -434,7 +434,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
     clean_trace = _capture(model, inputs)
     clean = component_graph(clean_trace)
     _refuse_shared_norms(clean)
-    corrupt = component_graph(_capture(model, corrupted))
+    corrupt = component_graph(_capture(model, corrupted_input))
     deltas = _node_deltas(clean, corrupt)
     total: dict[str, torch.Tensor | None] = {}
     if method == "eap":

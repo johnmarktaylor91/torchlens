@@ -271,7 +271,7 @@ def _condition_absence(module: Any, row: dict[str, Any] | None) -> str | None:
 def _status_for(module: Any, facet: str) -> tuple[str, str | None]:
     """Return (status, remedy) for one facet on one module."""
 
-    menu = module.facets.menu()
+    menu = module.facets.declared()
     item = menu.get(facet)
     if item is None:
         return (

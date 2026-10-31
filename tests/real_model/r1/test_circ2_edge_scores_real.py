@@ -79,7 +79,7 @@ def test_edge_scores_match_the_independent_reference_on_gpt2_small(r1_loader, tm
     for method, steps in cases:
         extra = {} if method == "eap" else {"steps": steps}
         table = torchlens.mechinterp.edge_scores(
-            model, clean, corrupted=corrupt, metric=logit_difference, method=method, **extra
+            model, clean, corrupted_input=corrupt, metric=logit_difference, method=method, **extra
         )
         got = {address[0]: row.score for (_t, _k, address), row in table.items()}
         bias = [name for name in got if name.startswith("b")]

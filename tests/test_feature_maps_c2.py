@@ -17,8 +17,8 @@ import torchlens as tl
 from torchlens.viz.feature_maps import (
     _feature_map_payload_for_node,
     _render_feature_map_grid,
-    feature_map_evolution,
     feature_map_node_spec,
+    feature_maps,
 )
 
 
@@ -164,8 +164,8 @@ def _single_feature_node(trace: tl.Trace) -> Any:
 def test_aggregate_default_stores_maps_ids_and_counts() -> None:
     """Default feature maps should store aggregate maps and exact metadata."""
 
-    trace = _conv_trace(n_stimuli=3)
-    maps_by_key = feature_map_evolution(trace)
+    trace = _conv_trace(num_stimuli=3)
+    maps_by_key = feature_maps(trace)
 
     assert list(maps_by_key) == ["layer:conv2d_1_1"]
     stored = trace._annotation_blobs
@@ -188,8 +188,8 @@ def test_aggregate_default_stores_maps_ids_and_counts() -> None:
 def test_explicit_and_top_channels_store_deterministic_ids() -> None:
     """Explicit and top channel modes should store deterministic channel ids."""
 
-    trace = _conv_trace(n_stimuli=2)
-    feature_map_evolution(trace, channels=[2, 0], max_channels=2)
+    trace = _conv_trace(num_stimuli=2)
+    feature_maps(trace, channels=[2, 0], max_channels=2)
     stored = trace._annotation_blobs
     assert stored is not None
     assert torch.equal(
@@ -202,7 +202,7 @@ def test_explicit_and_top_channels_store_deterministic_ids() -> None:
     )
 
     tie_trace = tl.trace(_TieConv().eval(), _input_batch(2), save=tl.func("conv2d"))
-    feature_map_evolution(tie_trace, channels="top", top_k=3, max_channels=3)
+    feature_maps(tie_trace, channels="top", k=3, max_channels=3)
 
     assert torch.equal(
         tie_trace._annotation_blobs["featmap:layer:conv2d_1_1:channels"],
@@ -219,10 +219,10 @@ def test_non_spatial_selection_raises_and_mixed_selection_skips_dense() -> None:
 
     dense_trace = tl.trace(_DenseOnly().eval(), torch.ones(2, 4), save=tl.func("linear"))
     with pytest.raises(ValueError, match=r"spatial \[N, C, H, W\].*saw layer:linear.*save=.*conv"):
-        feature_map_evolution(dense_trace)
+        feature_maps(dense_trace)
 
-    mixed_trace = _conv_trace(save=tl.func("conv2d") | tl.func("linear"), n_stimuli=2)
-    maps = feature_map_evolution(mixed_trace)
+    mixed_trace = _conv_trace(save=tl.func("conv2d") | tl.func("linear"), num_stimuli=2)
+    maps = feature_maps(mixed_trace)
 
     assert list(maps) == ["layer:conv2d_1_1"]
     assert mixed_trace._annotation_blobs is not None
@@ -234,14 +234,14 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
 ) -> None:
     """Node spec should render one contained image and support overlay fallback."""
 
-    trace = _conv_trace(n_stimuli=3)
+    trace = _conv_trace(num_stimuli=3)
     trace.raw_input = _pil_stimuli(3)
-    feature_map_evolution(trace, max_stimuli=2)
+    feature_maps(trace, max_stimuli=2)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(max_stimuli=2, max_channels=1),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "feature_graph"),
+        file_format="svg",
+        path=str(tmp_path / "feature_graph"),
     )
 
     image_paths = list((Path(trace._visualizer_dir) / "feature_maps").glob("*.png"))
@@ -304,8 +304,8 @@ def test_feature_map_node_spec_alpha_default_and_passthrough() -> None:
 def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) -> None:
     """Feature-map tensors should survive portable save/load and render after load."""
 
-    trace = _conv_trace(n_stimuli=2)
-    feature_map_evolution(trace)
+    trace = _conv_trace(num_stimuli=2)
+    feature_maps(trace)
     original = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"].clone()
     bundle_path = tmp_path / "feature_maps.tlspec"
 
@@ -317,8 +317,8 @@ def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) 
     dot = restored.draw(
         node_spec_fn=feature_map_node_spec(),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "restored_feature_graph"),
+        file_format="svg",
+        path=str(tmp_path / "restored_feature_graph"),
     )
     assert "feature_maps" in dot
 
@@ -328,18 +328,18 @@ def test_default_draw_without_hook_is_byte_identical_and_plain_trace_has_no_blob
 ) -> None:
     """Default draw should not change when no feature-map hook is installed."""
 
-    trace = _conv_trace(n_stimuli=1)
+    trace = _conv_trace(num_stimuli=1)
     assert trace._annotation_blobs is None
 
     first = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "first"),
+        file_format="svg",
+        path=str(tmp_path / "first"),
     )
     second = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "second"),
+        file_format="svg",
+        path=str(tmp_path / "second"),
     )
 
     assert trace._annotation_blobs is None
@@ -406,7 +406,7 @@ def test_evolution_preserves_nan_from_activations() -> None:
     poisoned = _input_batch(2)
     poisoned[0, 0, 1, 1] = float("nan")
     trace = tl.trace(_TinyConv().eval(), poisoned, save=tl.func("conv2d"))
-    feature_map_evolution(trace, save=tl.func("conv2d"), channels=[0])
+    feature_maps(trace, save=tl.func("conv2d"), channels=[0])
 
     stored = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"]
     assert torch.isnan(stored[0, 0, 1, 1])
@@ -439,13 +439,13 @@ def test_heatmap_cells_mark_nonfinite_and_keep_finite_scale() -> None:
 def test_node_spec_tooltip_discloses_per_cell_normalization(tmp_path: Path) -> None:
     """Every grid cell is independently min-max scaled; the tooltip says so."""
 
-    trace = _conv_trace(n_stimuli=2)
-    feature_map_evolution(trace)
+    trace = _conv_trace(num_stimuli=2)
+    feature_maps(trace)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "norm_disclosure"),
+        file_format="svg",
+        path=str(tmp_path / "norm_disclosure"),
     )
 
     assert "cells independently normalized" in dot
@@ -481,13 +481,13 @@ def test_tooltip_reports_true_totals_not_capped_counts(tmp_path: Path) -> None:
     with torch.no_grad():
         wide[0].weight.copy_(torch.arange(1.0, 9.0).reshape(8, 1, 1, 1))
     trace = tl.trace(wide, _input_batch(6), save=tl.func("conv2d"))
-    feature_map_evolution(trace, channels="top", top_k=8, max_stimuli=4, max_channels=4)
+    feature_maps(trace, channels="top", k=8, max_stimuli=4, max_channels=4)
 
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "true_totals"),
+        file_format="svg",
+        path=str(tmp_path / "true_totals"),
     )
 
     assert "4 of 6 stimuli" in dot
@@ -499,13 +499,13 @@ def test_tooltip_reports_true_totals_not_capped_counts(tmp_path: Path) -> None:
 def test_aggregate_labels_report_actual_reduction(tmp_path: Path) -> None:
     """A max-projection is captioned max, never avg (reduce_id is honored)."""
 
-    trace = _conv_trace(n_stimuli=2)
-    feature_map_evolution(trace, reduce="max")
+    trace = _conv_trace(num_stimuli=2)
+    feature_maps(trace, reduce="max")
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "reduce_label"),
+        file_format="svg",
+        path=str(tmp_path / "reduce_label"),
     )
 
     assert "aggregate (max)" in dot
@@ -553,14 +553,14 @@ def test_rolled_draw_with_annotations_survives_multipass_layers(tmp_path: Path) 
     """
 
     trace = tl.trace(_RecurrentBlockModel().eval(), _input_batch(2), save=tl.in_module("stem"))
-    feature_map_evolution(trace, save=tl.in_module("stem"))
+    feature_maps(trace, save=tl.in_module("stem"))
 
     dot = trace.draw(
         vis_mode="rolled",
         node_spec_fn=feature_map_node_spec(),
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rolled_annotated"),
+        file_format="svg",
+        path=str(tmp_path / "rolled_annotated"),
     )
     assert "Feature maps for" in dot
 

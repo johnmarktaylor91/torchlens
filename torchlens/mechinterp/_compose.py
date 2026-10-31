@@ -22,7 +22,7 @@ __all__ = ["apply_norm_scale", "full_decomposition", "stack_facet"]
 
 def apply_norm_scale(
     trace: Any,
-    stack: ComponentStack,
+    components: ComponentStack,
     *,
     norm: str = "final",
     scale: str = "frozen",
@@ -54,7 +54,7 @@ def apply_norm_scale(
         )
     reconstruction = _norm_reconstruction_for(trace, norm)
     rows = []
-    for row in stack.rows:
+    for row in components.rows:
         value = row.value.to(torch.float32)
         if scale == "frozen":
             folded = reconstruction.apply_frozen(value)
@@ -88,7 +88,7 @@ def apply_norm_scale(
             "norm": reconstruction.module_address,
             "kind": reconstruction.kind,
         }
-        diagnostic = stack.diagnostic_only
+        diagnostic = components.diagnostic_only
     else:
         receipt = {
             "check": "per_component_recompute",
@@ -100,8 +100,8 @@ def apply_norm_scale(
         diagnostic = True
     return ComponentStack(
         tuple(rows),
-        grading=stack.grading if scale == "frozen" else "closed_unresolved",
-        target_coordinate=stack.target_coordinate,
+        grading=components.grading if scale == "frozen" else "closed_unresolved",
+        target_coordinate=components.target_coordinate,
         target_value=None,
         identity_receipt=receipt,
         diagnostic_only=diagnostic,

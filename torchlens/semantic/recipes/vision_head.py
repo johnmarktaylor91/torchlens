@@ -388,7 +388,7 @@ def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:
             f"module output leaf {role!r} op {getattr(op, 'label', '<unknown>')!r} was not saved",
             f"save=... including {getattr(op, 'label', role)!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id="vision_head")
+    return FacetSpec.from_home(op, home_kind="op", function_id="vision_head")
 
 
 @register(class_name="CLIPModel", target_scope="module", facets=_CONTRASTIVE_HEAD_FACETS)

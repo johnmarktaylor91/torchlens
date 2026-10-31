@@ -702,9 +702,9 @@ def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: 
     output_path = tmp_path / "scatter_contained.svg"
 
     trace.draw(
-        vis_outpath=str(output_path),
+        path=str(output_path),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
     )
 
@@ -738,9 +738,9 @@ def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path)
     output_path = tmp_path / "scatter.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
+        path=str(output_path),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
     )
 
@@ -765,9 +765,9 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     output_path = tmp_path / "rdm.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
+        path=str(output_path),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         node_spec_fn=repgeom.rdm_node_spec(max_stimuli=8),
     )
 
@@ -804,9 +804,9 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     output_path = tmp_path / "scree.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
+        path=str(output_path),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         node_spec_fn=repgeom.scree_node_spec(max_components=8),
     )
 
@@ -853,9 +853,9 @@ def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
 
     output_path = tmp_path / "scatter_cap.svg"
     trace.draw(
-        vis_outpath=str(output_path),
+        path=str(output_path),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         node_spec_fn=hook,
     )
     assert "+5 more" in output_path.read_text(encoding="utf-8")
@@ -890,8 +890,8 @@ def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> 
     first_path = tmp_path / "default_first.svg"
     second_path = tmp_path / "default_second.svg"
 
-    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
-    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
 
     assert first_path.read_bytes() == second_path.read_bytes()
 
@@ -906,8 +906,8 @@ def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
     second_path = tmp_path / "plain_default_second.svg"
 
     assert trace._annotation_blobs is None
-    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
-    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
 
     assert trace._annotation_blobs is None
     assert first_path.read_bytes() == second_path.read_bytes()

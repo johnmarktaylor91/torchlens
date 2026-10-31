@@ -219,9 +219,9 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
         output_path = tmp_path / "rf_cone.svg"
         trace.draw(
             node_spec_fn=node_spec(target),
-            vis_fileformat="svg",
+            file_format="svg",
             vis_save_only=True,
-            vis_outpath=str(output_path),
+            path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")
         assert "RF " in svg

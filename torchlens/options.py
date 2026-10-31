@@ -1191,7 +1191,7 @@ class VisualizationOptions:
     show_legend: bool | None = None
     color_by: str | Callable[[Any], Any] | None = None
     size_by: str | Callable[[Any], Any] | None = None
-    scale: str | None = None
+    size_scale: str | None = None
     stack_by: str | bool | Callable[[Any], Any] | None = None
     show_redundant_args: bool = False
     font_size: int | None = None
@@ -1348,7 +1348,7 @@ class VisualizationOptions:
             )
             return object.__getattribute__(self, name)
 
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
 
         return {field_name: getattr(self, field_name) for field_name in _VISUALIZATION_FIELDS}
@@ -1780,11 +1780,11 @@ def merge_visualization_options(
     """Merge the canonical flat visualization kwargs into a grouped options object."""
 
     if visualization is None:
-        values = VisualizationOptions().as_dict()
+        values = VisualizationOptions().to_dict()
         values["view"] = function_default_mode
         specified_fields: frozenset[str] = frozenset()
     else:
-        values = visualization.as_dict()
+        values = visualization.to_dict()
         specified_fields = _explicit_fields(visualization)
         if "view" not in specified_fields:
             # The grouped object's non-explicit view default ("none") must not

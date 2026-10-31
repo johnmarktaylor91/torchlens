@@ -458,7 +458,7 @@ def render_combined_graph(
     )
     context = RenderContext(
         vis_mode="unrolled",
-        show_buffer_layers=show_buffer_layers,
+        show_buffers=show_buffer_layers,
         node_spec_fn=node_spec_fn,
         overrides=overrides,
         direction=direction,
@@ -491,7 +491,7 @@ def render_combined_graph(
                 edges_used,
                 "unrolled",
                 collapsed_modules,
-                show_buffer_layers=show_buffer_layers,
+                show_buffers=show_buffer_layers,
                 overrides=overrides,
                 node_spec_fn=node_spec_fn,
                 edge_map=edge_map,

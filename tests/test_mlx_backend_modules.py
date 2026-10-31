@@ -252,9 +252,9 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["l1:1"].to_pandas()) == 1
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "mlx_object_graph"),
+        path=str(tmp_path / "mlx_object_graph"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
     )
     assert isinstance(dot, str)
 

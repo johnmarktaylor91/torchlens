@@ -59,7 +59,7 @@ class EmbedFedLM(TrajLM):
 
 def _block_recipe(module: Any) -> dict[str, Any]:
     op = module.trace.ops[module.calls[0].output_ops[0]]
-    return {"resid_post": FacetSpec.from_home(op, recipe_id="traj_toy_block")}
+    return {"resid_post": FacetSpec.from_home(op, function_id="traj_toy_block")}
 
 
 def _head_recipe(module: Any) -> dict[str, Any]:
@@ -70,7 +70,7 @@ def _head_recipe(module: Any) -> dict[str, Any]:
     norm = trace.modules["ln_f"]
     head_out = trace.ops[head.calls[0].output_ops[0]]
     result: dict[str, Any] = {
-        "logits": FacetSpec.from_home(head_out, recipe_id="traj_toy_head"),
+        "logits": FacetSpec.from_home(head_out, function_id="traj_toy_head"),
         "unembed_weight": parameter_spec(head, "weight", "traj_toy_head"),
         "final_norm_kind": "layer_norm",
         "final_norm_gamma": parameter_spec(norm, "weight", "traj_toy_head"),
@@ -166,7 +166,7 @@ def _hand_loop(model: nn.Module, batches: list[Any], *, mask: bool) -> dict[str,
     """Per-batch capture + logit lens + hand statistics, folded by hand."""
 
     sums: dict[str, torch.Tensor] = {}
-    spines: dict[str, dict[str, tl.stats.Spine]] = {}
+    spines: dict[str, dict[str, tl.stats.RunningStats]] = {}
     examples = 0
     for ids, targets in batches:
         result = logit_lens(_capture(model, ids))
@@ -179,7 +179,9 @@ def _hand_loop(model: nn.Module, batches: list[Any], *, mask: bool) -> dict[str,
             for name, value in _hand_values(logits, final, targets).items():
                 sums.setdefault(name, torch.zeros(len(result.entries), SEQ, dtype=torch.float64))
                 sums[name][row] += value.sum(dim=0)
-                spine = spines.setdefault(name, {}).setdefault(entry.address, tl.stats.Spine())
+                spine = spines.setdefault(name, {}).setdefault(
+                    entry.address, tl.stats.RunningStats()
+                )
                 spine.update(value)
         examples += int(ids.shape[0])
     return {"means": {k: v / examples for k, v in sums.items()}, "spines": spines, "n": examples}
@@ -193,13 +195,13 @@ def test_trajectory_equals_hand_loop_float64(mask: bool) -> None:
     got = tl.stats.measure_trajectory(model, batches, mask_input=mask)
     want = _hand_loop(model, batches, mask=mask)
     assert got.statistics == tl.stats._trajectory.TRAJECTORY_STATISTICS
-    assert got.examples == want["n"] == 6 and got.positions == SEQ
-    assert got.layers == ("b0", "b1") and got.validated and got.mask_input is mask
+    assert got.num_examples == want["n"] == 6 and got.num_positions == SEQ
+    assert got.module_addresses == ("b0", "b1") and got.validated and got.is_input_masked is mask
     for name in got.statistics:
         assert got.position_means[name].dtype == torch.float64
         assert torch.equal(got.position_means[name], want["means"][name]), name
-        for layer in got.layers:
-            assert got.spines[name][layer].result() == want["spines"][name][layer].result()
+        for layer in got.module_addresses:
+            assert got.running_stats[name][layer].result() == want["spines"][name][layer].result()
 
 
 def test_trajectory_default_statistics_without_targets() -> None:
@@ -209,10 +211,10 @@ def test_trajectory_default_statistics_without_targets() -> None:
     ids = [batch[0] for batch in _batches(2)]
     got = tl.stats.measure_trajectory(model, ids)
     assert got.statistics == ("entropy", "kl_to_final", "max_prob")
-    assert set(got.summary("entropy")) == {"b0", "b1"}
+    assert set(got.compute_stats("entropy")) == {"b0", "b1"}
     assert "2 layers x 5 positions" in repr(got)
     single = tl.stats.measure_trajectory(model, ids[0], statistics=["entropy"])
-    assert single.examples == 2 and single.statistics == ("entropy",)
+    assert single.num_examples == 2 and single.statistics == ("entropy",)
 
 
 def test_masked_tokens_carry_zero_probability() -> None:
@@ -369,6 +371,6 @@ def test_trajectory_spines_save_and_reload(tmp_path: Any) -> None:
     """The result's Spines are ordinary accumulators: they save and reload."""
 
     got = tl.stats.measure_trajectory(_model(), _batches(1))
-    spine = got.spines["entropy"]["b1"]
+    spine = got.running_stats["entropy"]["b1"]
     path = tl.stats.save_fitted(spine, tmp_path / "entropy-b1.safetensors")
     assert tl.stats.load_fitted(path).result() == spine.result()

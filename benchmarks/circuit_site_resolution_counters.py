@@ -261,7 +261,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
         edges = case["edges"](graph)
         profiler = cProfile.Profile()
         profiler.enable()
-        patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+        patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
         profiler.disable()
         report: dict[str, Any] = {
             "case": case_name,
@@ -278,7 +278,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
             kinds: Counter[str] = Counter()
             with _counting_selector_kinds(kinds):
                 started = time.perf_counter()
-                mi.patch_edges(clean, edges, corrupt=corrupt)
+                mi.patch_edges(clean, edges, corrupted_graph=corrupt)
                 report["wall_s_unprofiled"] = round(time.perf_counter() - started, 2)
             report["resolved_selector_kinds"] = dict(sorted(kinds.items()))
     finally:

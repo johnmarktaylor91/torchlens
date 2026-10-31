@@ -66,18 +66,18 @@ def test_noiseless_road_curve_equals_the_closed_form_on_a_linear_model(ranking: 
     x = torch.randint(-4, 5, (1, 1, 4, 4), generator=generator).double()
     scores_map = torch.randperm(16, generator=generator).double().reshape(1, 1, 4, 4)
     curve = attribution_kit.road_curve(
-        model, x, target=0, attribution=scores_map, ranking=ranking, n_steps=16, noise_std=0.0
+        model, x, target=0, attribution=scores_map, ranking=ranking, num_steps=16, noise_std=0.0
     )
     order = torch.argsort(scores_map.reshape(-1), descending=ranking == "most_relevant_first")
-    assert curve.metric == "road" and curve.settings["ranking"] == ranking
+    assert curve.kind == "road" and curve.settings["ranking"] == ranking
     for step in curve.steps:
         removed = torch.zeros(16, dtype=torch.bool)
-        removed[order[: step.n_features]] = True
+        removed[order[: step.num_features]] = True
         imputed = _dense_imputation(x[0, 0], removed.reshape(4, 4))
         with torch.no_grad():
             expected = model(imputed.reshape(1, 1, 4, 4))[0, 0]
         assert float(step.score[0]) == pytest.approx(float(expected), abs=CLOSED_FORM_ATOL)
-        assert torch.equal(step.baseline_mask, removed.reshape(1, 1, 4, 4))
+        assert torch.equal(step.build_baseline_mask, removed.reshape(1, 1, 4, 4))
 
 
 class SmallCnn(nn.Module):
@@ -101,23 +101,25 @@ def test_noisy_steps_are_seeded_and_replay_to_their_scores() -> None:
     model = SmallCnn().eval()
     x = torch.randn(1, 3, 6, 6)
     saliency = attribution_kit.input_x_grad(model, x, target=2)
-    curve = attribution_kit.road_curve(model, x, target=2, attribution=saliency, n_steps=6)
-    again = attribution_kit.road_curve(model, x, target=2, attribution=saliency, n_steps=6)
-    other = attribution_kit.road_curve(model, x, target=2, attribution=saliency, n_steps=6, seed=1)
+    curve = attribution_kit.road_curve(model, x, target=2, attribution=saliency, num_steps=6)
+    again = attribution_kit.road_curve(model, x, target=2, attribution=saliency, num_steps=6)
+    other = attribution_kit.road_curve(
+        model, x, target=2, attribution=saliency, num_steps=6, seed=1
+    )
     assert torch.equal(curve.scores, again.scores)
     assert not torch.equal(curve.scores[1:], other.scores[1:])
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     for step in curve.steps:
         fork = trace.fork()
         try:
-            for selection, edit in step.intervention:
+            for selection, edit in step.build_interventions:
                 fork.do(selection, edit)
             replayed = fork[fork.output_layers[0]].out[0, 2].detach()
         finally:
             fork.cleanup()
         assert float(replayed) == pytest.approx(float(step.score[0]), abs=REPLAY_ATOL)
-        kept = ~step.baseline_mask
-        assert torch.equal(step.inputs[kept], x[kept])
+        kept = ~step.build_baseline_mask
+        assert torch.equal(step.build_inputs[kept], x[kept])
 
 
 def _remedy(message: str) -> str:

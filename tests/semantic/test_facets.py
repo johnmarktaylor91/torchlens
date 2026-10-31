@@ -13,11 +13,11 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import SiteResolutionError
 from torchlens.semantic import (
-    FacetRecipe,
+    FacetFunction,
     FacetSpec,
     FacetView,
     MissingFacetError,
-    MissingGradient,
+    MissingGrad,
     facets as facets_mod,
 )
 from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
@@ -121,7 +121,7 @@ def test_empty_facet_view() -> None:
     assert not view.has("x")
     assert list(view) == []
     assert len(view) == 0
-    assert view.recipe_source is None
+    assert view.function_source is None
 
 
 def test_multi_recipe_merge_warns_and_last_wins() -> None:
@@ -140,7 +140,7 @@ def test_multi_recipe_merge_warns_and_last_wins() -> None:
         return {"x": 3, "z": 4}
 
     view = FacetView(_Record())
-    assert view.recipe_source == ("first_recipe", "second_recipe")
+    assert view.function_source == ("first_recipe", "second_recipe")
     with pytest.warns(UserWarning, match="ambiguous same-tier recipes"):
         assert view.x == 3
     assert view.y == 2
@@ -204,12 +204,12 @@ def test_trace_recipes_and_using_are_capture_time_additive() -> None:
     per_trace = tl.trace(
         model,
         x,
-        recipes=[local_recipe],
+        facets=[local_recipe],
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     assert per_trace.modules["self"].facets.local_value == "present"
 
-    with tl.facets.using(local_recipe):
+    with tl.facets.adding(local_recipe):
         contextual = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     assert contextual.modules["self"].facets.local_value == "present"
 
@@ -354,7 +354,7 @@ def test_keys_has_get_are_available_now_for_unsaved_op_backed_facets() -> None:
     assert "normalized" not in facets
     assert not facets.has("normalized")
     assert facets.get("normalized", "default") == "default"
-    assert facets.menu()["normalized"].status == "needs_capture"
+    assert facets.declared()["normalized"].status == "needs_capture"
     with pytest.raises(MissingFacetError, match="save=.*including"):
         facets["normalized"]
     with pytest.raises(MissingFacetError, match="save=.*including"):
@@ -400,7 +400,7 @@ def test_structurally_absent_declared_facet_raises_plain_keyerror() -> None:
 
     assert "beta" not in facets.keys()
     assert "beta" not in facets
-    assert facets.menu()["beta"].status == "structurally_absent"
+    assert facets.declared()["beta"].status == "structurally_absent"
     with pytest.raises(KeyError) as exc_info:
         facets["beta"]
     assert not isinstance(exc_info.value, MissingFacetError)
@@ -462,7 +462,7 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
     log = tl.trace(
         Tiny(), torch.randn(4, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
@@ -471,7 +471,7 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
 
     assert torch.equal(facet, log.modules["linear"].out[..., 0])
     missing = facet.grad
-    assert isinstance(missing, MissingGradient)
+    assert isinstance(missing, MissingGrad)
     assert "backward_ready=True" in missing.reason
     assert "save_grads" in missing.reason
     assert "home_label='linear_1_1:1'" in repr(facet)
@@ -502,7 +502,7 @@ def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
     log = tl.trace(
         Tiny(),
@@ -539,7 +539,7 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
     log = tl.trace(
         Tiny(),
@@ -549,7 +549,7 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
     log.log_backward(log[log.output_layers[0]].out.sum())
     missing = log.modules["linear"].facets["first_feature"].grad
 
-    assert isinstance(missing, MissingGradient)
+    assert isinstance(missing, MissingGrad)
     assert "home op has no saved gradient" in missing.reason
 
 
@@ -582,7 +582,7 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     assert gamma.spec.capability_flags.grad is False
     assert torch.equal(gamma, model.norm.weight)
     assert torch.equal(beta, model.norm.bias)
-    assert isinstance(gamma.grad, MissingGradient)
+    assert isinstance(gamma.grad, MissingGrad)
 
 
 def test_builtin_capability_inventory_is_recorded_as_data() -> None:
@@ -614,10 +614,10 @@ def test_list_info_glob_and_recipe_record() -> None:
 
         return {"q": 1}
 
-    recipes = tl.facets.list(class_name="Unit*")
+    recipes = tl.facets.functions(class_name="Unit*")
     assert len(recipes) == 1
-    assert isinstance(recipes[0], FacetRecipe)
-    assert recipes[0].recipe_name == "discovery_recipe"
+    assert isinstance(recipes[0], FacetFunction)
+    assert recipes[0].name == "discovery_recipe"
     assert tl.facets.info("UnitFacetRecord") == {
         "recipes": ["discovery_recipe"],
         "facets": ["q"],
@@ -831,7 +831,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
     k_head = log.modules["attn"].facets.head(3).k
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])
-    assert not isinstance(k_head.grad, MissingGradient)
+    assert not isinstance(k_head.grad, MissingGrad)
     assert torch.equal(k_head.grad, k_head.spec.apply(k_head.spec.home.grad))
 
     edited = log.fork("gqa_refuse")
@@ -876,7 +876,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
         """Return a facet marked as a non-raw value version."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        spec = FacetSpec.from_home(op, recipe_id="unsafe_version").select(-1, 0)
+        spec = FacetSpec.from_home(op, function_id="unsafe_version").select(-1, 0)
         return {"unsafe": replace(spec, value_version="out_versions_by_child")}
 
     log = tl.trace(
@@ -940,7 +940,7 @@ def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:
         "q",
         AbsenceReason(
             status="payload_not_saved",
-            save_hint="save=tl.in_module('attn')",
+            remedy="save=tl.in_module('attn')",
             detail="attention payloads were not retained",
         ),
     )

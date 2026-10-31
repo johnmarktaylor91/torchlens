@@ -28,7 +28,7 @@
   (interim posture; replay engines unaffected). Other callables refuse `model_type_unsupported`
   teaching the ruled spelling.
 - EPISODE CAPTURE (torch-only, spellings DOCUMENTED-UNSTABLE): `tl.trace(episode_root, x,
-  episode=tl.options.EpisodeSpec(stepped_module=model, n_steps=N))` captures one wrapped
+  episode=tl.options.EpisodeSpec(stepped_module=model, num_steps=N))` captures one wrapped
   multi-step generation run as ONE product with a per-step status ledger at
   `trace.annotations["episode"]` (disclosure, never a settlement authority; persists
   plainly as of the tlspec v8 coordinated bump, load-validated fail-closed). Cross-step

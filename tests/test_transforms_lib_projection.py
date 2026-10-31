@@ -145,7 +145,7 @@ def test_pca_result_carries_the_fitted_payload_facts() -> None:
     fitted, x = _fit()
     estimator = PCA(5)
     estimator.update(x)
-    result = estimator.result()
+    result = estimator.compute()
     assert set(result) == {
         "components",
         "explained_variance",
@@ -194,7 +194,7 @@ def test_fitted_sidecar_round_trips_and_digest_checks(tmp_path: Path) -> None:
     assert torch.equal(loaded.components, fitted.components)
     assert torch.equal(loaded.mean, fitted.mean)
     assert loaded.fit_scope == "test fit"
-    assert loaded.n_samples == 60 and loaded.n_features == 20
+    assert loaded.num_samples == 60 and loaded.num_features == 20
     raw = bytearray(path.read_bytes())
     raw[-3] ^= 0xFF
     path.write_bytes(bytes(raw))
@@ -301,8 +301,8 @@ def test_project_params_and_payload_validation() -> None:
         components=fitted.components + 1.0,
         mean=fitted.mean,
         explained_variance=fitted.explained_variance,
-        n_samples=fitted.n_samples,
-        n_features=fitted.n_features,
+        num_samples=fitted.num_samples,
+        num_features=fitted.num_features,
         fit_scope=fitted.fit_scope,
         digest=fitted.digest,
     )

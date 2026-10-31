@@ -75,7 +75,7 @@ _VALUE_CHANNEL_SOURCES = frozenset({"magnitude", "grad_norm"})
 
 
 @dataclass
-class RenderResult:
+class Drawing:
     """Detached one-call render result (memo D13). Always returned, never None.
 
     Owns the detached DOT source, the rendered bytes (when rendered to
@@ -112,11 +112,11 @@ class RenderResult:
 
     dot: str
     data: bytes | None
-    format: str
+    file_format: str
     path: Path | None
     provenance: InputProvenance
     receipt: ExecutionReceipt
-    total_ops: int | None
+    num_ops: int | None
     policy: dict[str, Any] = field(default_factory=dict)
     trace: Any | None = None
 
@@ -129,7 +129,7 @@ class RenderResult:
         """
 
         target = Path(path)
-        fileformat = format or (target.suffix.lstrip(".") or self.format)
+        fileformat = format or (target.suffix.lstrip(".") or self.file_format)
         payload = _render_dot_source(self.dot, fileformat)
         tmp = target.with_name(target.name + ".tl-partial")
         tmp.write_bytes(payload)
@@ -141,7 +141,7 @@ class RenderResult:
 
         self.trace = None
 
-    def __enter__(self) -> RenderResult:
+    def __enter__(self) -> Drawing:
         """Enter the context manager (returns self)."""
 
         return self
@@ -154,16 +154,16 @@ class RenderResult:
     def _repr_svg_(self) -> str | None:
         """Inline SVG for notebook display (None when not rendered as SVG)."""
 
-        if self.data is not None and self.format == "svg":
+        if self.data is not None and self.file_format == "svg":
             return self.data.decode("utf-8", errors="replace")
         return None
 
     def __repr__(self) -> str:
         """Return a one-line summary naming the artifact and its provenance."""
 
-        where = str(self.path) if self.path is not None else f"in-memory {self.format}"
+        where = str(self.path) if self.path is not None else f"in-memory {self.file_format}"
         return (
-            f"RenderResult({where}, ops={self.total_ops}, "
+            f"RenderResult({where}, ops={self.num_ops}, "
             f"input={self.provenance.origin}, collapse={self.policy.get('collapse')!r})"
         )
 
@@ -260,7 +260,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     view: bool = False,
     return_trace: bool = False,
     **draw_kwargs: Any,
-) -> RenderResult:
+) -> Drawing:
     """One-call model picture: resolve input, capture metadata-only, render.
 
     The three input rungs (memo D2/D4)::
@@ -372,7 +372,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     format: str | None,
     view: bool,
     draw_kwargs: dict[str, Any],
-) -> RenderResult:
+) -> Drawing:
     """Drive ``Trace.draw`` for the facade and package the detached result."""
 
     resolved_collapse = "auto" if collapse is None else collapse
@@ -416,14 +416,14 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
         if view:
             _open_viewer(target)
 
-    result = RenderResult(
+    result = Drawing(
         dot=dot,
         data=data,
-        format=fileformat,
+        file_format=fileformat,
         path=target,
         provenance=provenance,
         receipt=receipt,
-        total_ops=getattr(trace, "num_tensors", None),
+        num_ops=getattr(trace, "num_tensors", None),
         policy={
             "theme": theme,
             "collapse": resolved_collapse,

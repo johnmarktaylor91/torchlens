@@ -129,7 +129,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
         trace,
         entries,
         vis_mode="unrolled",
-        show_buffer_layers="meaningful",
+        show_buffers="meaningful",
         skip_fn=_skip_activations,
     )
     _render_flow._enumerate_base_rendered_node_emissions(
@@ -138,7 +138,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
         skipped_labels=skipped_labels,
         vis_mode="unrolled",
         vis_call_depth=1000,
-        show_buffer_layers="meaningful",
+        show_buffers="meaningful",
         collapse_fn=None,
         repeat_folds=None,
         show_containers=False,

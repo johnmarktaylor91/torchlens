@@ -2683,7 +2683,7 @@ def _own_ops_segment_is_legal(state: _OptimizerState, own_ops: tuple[str, ...]) 
 
     if len(own_ops) < 3:
         return False
-    if state.total_ops > 0 and len(own_ops) / state.total_ops > 0.75:
+    if state.num_ops > 0 and len(own_ops) / state.num_ops > 0.75:
         return False
     op_by_label = {str(op.label): op for op in state.trace.layer_list}
     previous_stack: tuple[str, ...] | None = None
@@ -2767,7 +2767,7 @@ def _legal_component_segment_run(
         graph,
         state.analysis,
         state.hidden_counts,
-        state.total_ops,
+        state.num_ops,
         dominance_limit=0.75,
     )
 
@@ -3414,7 +3414,7 @@ def _box_cost(trace: Trace, signal: ModuleCollapseSignals, state: _OptimizerStat
     trunk = 1.0 if _is_trunk_collapse(trace, signal) else 0.0
     module = cast("Module", trace.modules[signal.address])
     generic = 1.0 if str(getattr(module, "class_name", "")) in GENERIC_CONTAINER_CLASSES else 0.0
-    dominance = _dominance(n, state.total_ops)
+    dominance = _dominance(n, state.num_ops)
     salience = _branch_salience(signal.address, state) / max(float(signal.peer_count), 1.0)
     cost = (
         state.weights.w_grain * grain

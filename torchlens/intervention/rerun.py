@@ -139,7 +139,7 @@ def run(
         )
     _refuse_shifted_raw_index_resave(log, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(log, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=log
     )
@@ -400,7 +400,7 @@ def _append_rerun(
             intervene_predicate=spec_plan.intervene_predicate,
         )
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(log, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)

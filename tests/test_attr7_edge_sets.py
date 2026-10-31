@@ -124,33 +124,41 @@ def test_fixture_sets_across_receivers_match_the_reference_and_replay(monkeypatc
     """On the float64 fixture, every set (one receiver or several) is measured and replays."""
 
     model = Fixture().eval()
-    table = torchlens.mechinterp.edge_scores(model, CLEAN, corrupted=CORRUPT, metric=fixture_metric)
-    audit = attribution.causal_audit(
-        model, CLEAN, claim=table, corrupted=CORRUPT, metric=fixture_metric, k=2, random_draws=4
+    table = torchlens.mechinterp.edge_scores(
+        model, CLEAN, corrupted_input=CORRUPT, metric=fixture_metric
     )
-    assert len(audit.units) == 5 and len(audit.sets) == 6
+    audit = attribution.causal_audit(
+        model,
+        CLEAN,
+        claim=table,
+        corrupted_input=CORRUPT,
+        metric=fixture_metric,
+        k=2,
+        num_random_draws=4,
+    )
+    assert len(audit.indices) == 5 and len(audit.sets) == 6
     graph = torchlens.mechinterp.component_graph(audit.extra["trace"])
     case = _Case(model, _fixture_spec(model, graph), CLEAN, CORRUPT, fixture_metric)
     with monkeypatch.context() as patched:
         patched.setattr(torchlens.mechinterp, "patch_edges", _refuse_patching)
-        recorded = [item.intervention for item in (*audit.units, *audit.sets)]
+        recorded = [item.build_interventions for item in (*audit.indices, *audit.sets)]
     assert _check_sets(audit, case, table) >= 1
-    for item, pairs in zip((*audit.units, *audit.sets), recorded, strict=True):
-        assert [value.tolist() for _, value in item.intervention] == [
+    for item, pairs in zip((*audit.indices, *audit.sets), recorded, strict=True):
+        assert [value.tolist() for _, value in item.build_interventions] == [
             value.tolist() for _, value in pairs
         ]
     every = attribution.causal_audit(
         model,
         CLEAN,
         claim=table,
-        corrupted=CORRUPT,
+        corrupted_input=CORRUPT,
         metric=fixture_metric,
         k=5,
         controls=(),
         per_unit=False,
     )
     (whole,) = every.sets
-    assert len(whole.intervention) == 3  # m0, m1 and logits, written in that order
+    assert len(whole.build_interventions) == 3  # m0, m1 and logits, written in that order
     assert _check_sets(every, case, table) == 1
 
 
@@ -193,10 +201,12 @@ def test_tiny_gpt2_sets_across_receivers_match_the_reference_and_replay() -> Non
 
     model, clean, corrupt = _tiny_gpt2()
     table = torchlens.mechinterp.edge_scores(
-        model, clean, corrupted=corrupt, metric=_logit_difference, method="eap"
+        model, clean, corrupted_input=corrupt, metric=_logit_difference, method="eap"
     )
     common = {"claim": table, "corrupted": corrupt, "metric": _logit_difference, "edges": EDGES}
-    audit = attribution.causal_audit(model, clean, k=3, random_draws=2, per_unit=False, **common)
+    audit = attribution.causal_audit(
+        model, clean, k=3, num_random_draws=2, per_unit=False, **common
+    )
     case = _Case(model, gpt2_spec(model), clean, corrupt, _logit_difference)
     assert len(audit.sets) == 4
     assert _check_sets(audit, case, table) >= 1

@@ -131,7 +131,7 @@ def test_gpt2_lens_pictures_and_decomposition(gpt2_logs, tmp_path) -> None:
 
     paris = tokenizer(" Paris").input_ids[0]
     predictions = logit_lens_predictions(log_eager, tokens=[paris])
-    assert predictions.validated
+    assert predictions.is_validated
     trajectory = tviz.prediction_trajectory(predictions, tokenizer=tokenizer, target_token_id=paris)
     assert trajectory.provenance[-1] == "native output"
     assert all(p == "projected through final norm/head" for p in trajectory.provenance[:-1])

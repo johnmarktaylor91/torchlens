@@ -96,7 +96,7 @@ image_log.model_profile
 image_log.output_table(top_n=5)
 tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
 tl.repgeom.rdm_evolution(image_log, save=mds_layers)
-tl.viz.feature_map_evolution(image_log, save=mds_layers)
+tl.viz.feature_maps(image_log, save=mds_layers)
 tl.repgeom.scree_evolution(image_log, save=mds_layers)
 image_log.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 image_log.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))

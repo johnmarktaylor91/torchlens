@@ -275,7 +275,7 @@ def test_integrated_gradients_completeness_on_smooth_mlp() -> None:
         inputs,
         target=1,
         baseline=baseline,
-        n_steps=256,
+        num_steps=256,
     )
 
     with torch.no_grad():
@@ -303,7 +303,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=123,
     )
@@ -311,7 +311,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=123,
     )
@@ -319,7 +319,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=456,
     )
@@ -362,7 +362,7 @@ def test_integrated_gradients_two_input_shapes_and_completeness() -> None:
         (first, second),
         target=lambda output: output.sum(),
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
 
     assert isinstance(result.values, tuple)

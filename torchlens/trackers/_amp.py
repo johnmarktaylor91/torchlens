@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from ..observability import CommittedBlock, HistogramResult, SpineResult
+from ..observability import CommittedBlock, HistogramResult, RunningStatsResult
 from ._errors import TrackersError
 
 __tl_layer__ = "L8"
@@ -166,7 +166,7 @@ def _divide(value: float | None, factor: float) -> float | None:
     return None if value is None else value / factor
 
 
-def correct_spine(spine: SpineResult, scale: float) -> SpineResult:
+def correct_spine(spine: RunningStatsResult, scale: float) -> RunningStatsResult:
     """Apply the closed-form unscale correction to one spine record.
 
     Counts (total/finite/zero/negative/nonfinite) are invariant under a

@@ -127,7 +127,7 @@ def _input_facet(trace: Any, io_role: str) -> FacetSpec:
     """Return a facet spec homed on the input op recorded at ``io_role``."""
 
     home = next(op for op in trace.input_ops if getattr(op, "io_role", None) == io_role)
-    return FacetSpec.from_home(home, recipe_id="test_input_leaf_patching")
+    return FacetSpec.from_home(home, function_id="test_input_leaf_patching")
 
 
 def mixed_leaf_reader(module: Any) -> dict[str, Any]:

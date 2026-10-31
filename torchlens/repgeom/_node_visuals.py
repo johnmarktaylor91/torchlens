@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 
 from ..utils._multipass_access import get_multipass_attr
 from ..utils.display import ensure_trace_visualizer_dir
-from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
+from ..viz.node_plots import image_scatter, lineplot, render_heatmap
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
     EffectiveDimensionalityInfo,
@@ -105,7 +105,7 @@ def mds_scatter_node_spec(
         fallback_reason = (
             None if images is not None else "points fallback: raw PIL image batch unavailable"
         )
-        scatter = render_image_scatter(
+        scatter = image_scatter(
             coords,
             images=images,
             max_items=max_thumbnails,
@@ -441,7 +441,7 @@ def _render_scree_image(
         variance = np.pad(variance, (0, n_components - variance.shape[0]))
         cumulative = np.pad(cumulative, (0, n_components - cumulative.shape[0]))
     threshold = np.full(n_components, variance_threshold, dtype=np.float64)
-    plot = render_lineplot(
+    plot = lineplot(
         np.vstack([variance, cumulative, threshold]),
         x_values=x_values,
         labels=("variance", "cumulative", "threshold"),

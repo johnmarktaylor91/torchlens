@@ -590,7 +590,7 @@ class TestVisualizationParams:
         mh = trace_fn(model, x)
         dot_source = mh.draw(
             vis_mode=vis_mode,
-            vis_outpath=outpath,
+            path=outpath,
             vis_save_only=True,
             vis_call_depth=vis_call_depth,
         )

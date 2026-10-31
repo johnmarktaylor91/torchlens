@@ -75,7 +75,7 @@ def test_kwargs_first_masked_lm_grades_the_ids_not_the_mask() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=3),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=3),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "continuous", "continuous"]
@@ -116,7 +116,7 @@ def test_timestep_first_denoiser_grades_the_sample() -> None:
     log = tl.trace(
         model,
         torch.randn(1, 4),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=3, step_output_kind="none"),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=3, step_output_kind="none"),
     )
     envelope = _envelope(log)
     assert envelope["entry_basis"] == {"1": "positional[1]", "2": "positional[1]"}
@@ -128,7 +128,7 @@ def test_timestep_first_denoiser_grades_the_sample() -> None:
     log2 = tl.trace(
         replaced,
         torch.randn(1, 4),
-        episode=EpisodeSpec(stepped_module=replaced.step, n_steps=3, step_output_kind="none"),
+        episode=EpisodeSpec(stepped_module=replaced.step, num_steps=3, step_output_kind="none"),
     )
     envelope2 = _envelope(log2)
     assert envelope2["entry_basis"] == {"1": "positional[1]", "2": "positional[1]"}
@@ -144,7 +144,7 @@ def test_timestep_first_denoiser_grades_the_sample() -> None:
             strict,
             torch.randn(1, 4),
             episode=EpisodeSpec(
-                stepped_module=strict.step, n_steps=3, step_output_kind="none", feed="closed"
+                stepped_module=strict.step, num_steps=3, step_output_kind="none", feed="closed"
             ),
         )
     assert info.value.fields["code"] == "episode_feed_closed_violation"

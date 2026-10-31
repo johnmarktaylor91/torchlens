@@ -53,10 +53,10 @@ def _graph(name: str) -> tl.attribution.graph.AttributionGraph:
     return tl.attribution.build_graph(
         tl.trace(model, torch.tensor([fx.TOKENS])),
         transcoders,
-        embedding="embed",
+        embedding_module="embed",
         frozen=fx.frozen_names(n_layers),
-        max_n_logits=2,
-        desired_logit_prob=0.99,
+        max_num_logits=2,
+        logit_probability_coverage=0.99,
     )
 
 
@@ -70,7 +70,7 @@ def graphs() -> Iterator[dict[str, tl.attribution.graph.AttributionGraph]]:
 
 
 def _export(graph, **kwargs) -> dict:
-    return graph.to_neuronpedia(slug="fixture", scan="tiny", tokenizer=TOKENIZER, **kwargs)
+    return graph.to_neuronpedia(slug="fixture", model_id="tiny", tokenizer=TOKENIZER, **kwargs)
 
 
 # ---------------------------------------------------------------- independent answer key
@@ -84,13 +84,13 @@ def _expected_ids(graph) -> list[str]:
     for index, node in enumerate(graph.nodes):
         if node.kind == "feature":
             layer = graph.transcoder_sites.index(node.site)
-            ids.append(f"{layer}_{node.feature}_{node.position}")
+            ids.append(f"{layer}_{node.feature_index}_{node.position}")
         elif node.kind == "error":
             ids.append(f"{graph.error_sites.index(node.site)}_-1_{node.position}")
         elif node.kind == "token":
-            ids.append(f"E_{node.token}_{node.position}")
+            ids.append(f"E_{node.token_id}_{node.position}")
         else:
-            ids.append(f"{n_layers + 1}_{node.token}_{node.position}")
+            ids.append(f"{n_layers + 1}_{node.token_id}_{node.position}")
         assert index == len(ids) - 1
     return ids
 
@@ -119,7 +119,9 @@ def _numpy_threshold(scores: np.ndarray, share: float) -> float:
     return float(ordered[min(index, len(ordered) - 1)])
 
 
-def _numpy_kept(graph, node_threshold=0.8, edge_threshold=0.98) -> tuple[set, set]:
+def _numpy_kept(
+    graph, node_influence_coverage=0.8, edge_influence_coverage=0.98
+) -> tuple[set, set]:
     """Kept node ids and (source, target) id pairs by the pruning rule, in numpy."""
 
     influence = _numpy_influence(graph)[0]
@@ -129,14 +131,14 @@ def _numpy_kept(graph, node_threshold=0.8, edge_threshold=0.98) -> tuple[set, se
     n_inner = n - len(graph.node_indices("token")) - len(graph.node_indices("logit"))
     weights = np.zeros(n)
     weights[n - len(graph.node_indices("logit")) :] = graph.logit_probabilities.numpy()
-    node_mask = influence >= _numpy_threshold(influence, node_threshold)
+    node_mask = influence >= _numpy_threshold(influence, node_influence_coverage)
     node_mask[n_inner:] = True
     pruned = adjacency * node_mask[:, None] * node_mask[None, :]
     absolute = np.abs(pruned)
     normalized = absolute / np.maximum(absolute.sum(axis=1, keepdims=True), 1e-10)
     reach = weights @ (np.linalg.inv(np.eye(n) - normalized) - np.eye(n)) + weights
     scores = normalized * reach[:, None]
-    edge_mask = scores >= _numpy_threshold(scores.flatten(), edge_threshold)
+    edge_mask = scores >= _numpy_threshold(scores.flatten(), edge_influence_coverage)
     while True:
         before = node_mask.copy()
         edge_mask &= node_mask[:, None] & node_mask[None, :]
@@ -220,16 +222,16 @@ def test_node_fields_follow_the_reference_layout(graphs) -> None:
     for i in graph.node_indices("feature"):
         node = graph.nodes[i]
         layer = graph.transcoder_sites.index(node.site)
-        got = by_id.get(f"{layer}_{node.feature}_{node.position}")
+        got = by_id.get(f"{layer}_{node.feature_index}_{node.position}")
         if got is None:
             continue
-        assert got["feature"] == (layer + node.feature) * (layer + node.feature + 1) // 2 + (
-            node.feature
-        )
+        assert got["feature"] == (layer + node.feature_index) * (
+            layer + node.feature_index + 1
+        ) // 2 + (node.feature_index)
         assert (got["layer"], got["ctx_idx"]) == (str(layer), node.position)
         assert got["feature_type"] == "cross layer transcoder"
-        assert got["jsNodeId"] == f"{layer}_{node.feature}-0"
-        assert got["activation"] == graph.activation_values[i].item()
+        assert got["jsNodeId"] == f"{layer}_{node.feature_index}-0"
+        assert got["activation"] == graph.feature_activations[i].item()
     for i in graph.node_indices("token"):
         node = graph.nodes[i]
         got = by_id[f"E_{node.token}_{node.position}"]
@@ -293,7 +295,9 @@ def test_bos_position_nodes_are_exported(graphs) -> None:
                 if not node.startswith("E_") and int(node.rsplit("_", 1)[1]) == 0
             }
             exported = _export(
-                graphs[name], node_threshold=node_threshold, edge_threshold=edge_threshold
+                graphs[name],
+                node_influence_coverage=node_threshold,
+                edge_influence_coverage=edge_threshold,
             )
             got = {
                 node["node_id"]

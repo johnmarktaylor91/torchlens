@@ -56,7 +56,7 @@ def test_mean_streams_10k_batches_under_memory_bound() -> None:
         stat.update(torch.tensor([float(index % 10)]))
     _current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    assert stat.result() == pytest.approx(4.5)
+    assert stat.compute() == pytest.approx(4.5)
     assert peak < 200 * 1024 * 1024
 
 
@@ -85,12 +85,12 @@ def test_streaming_aggregators_smoke() -> None:
     expected_covariance = _manual_covariance(values)
     expected_eigenvalues, _expected_eigenvectors = torch.linalg.eigh(expected_covariance)
     expected_explained_variance = torch.flip(expected_eigenvalues, dims=(0,))[:2]
-    pca_result = pca.result()
+    pca_result = pca.compute()
 
-    assert mean.result() == pytest.approx(float(values.to(dtype=torch.float64).mean().item()))
-    assert quantile.result() == {0.5: pytest.approx(1.0)}
-    assert topk.result() == [4.0, 3.0, 2.0]
-    assert torch.allclose(covariance.result(), expected_covariance)
+    assert mean.compute() == pytest.approx(float(values.to(dtype=torch.float64).mean().item()))
+    assert quantile.compute() == {0.5: pytest.approx(1.0)}
+    assert topk.compute() == [4.0, 3.0, 2.0]
+    assert torch.allclose(covariance.compute(), expected_covariance)
     assert torch.allclose(pca_result["explained_variance"], expected_explained_variance)
     assert pca_result["components"].shape == (2, values.shape[1])
     projected_covariance = (
@@ -100,7 +100,7 @@ def test_streaming_aggregators_smoke() -> None:
         torch.diag(projected_covariance),
         expected_explained_variance,
     )
-    assert aggregator.result() == {"mean": pytest.approx(1.4166666666666667), "top": [4.0]}
+    assert aggregator.compute() == {"mean": pytest.approx(1.4166666666666667), "top": [4.0]}
 
 
 def test_aggregate_smoke_on_small_dataloader() -> None:
@@ -173,9 +173,9 @@ def test_norm_is_mean_of_per_update_tensor_norms() -> None:
     )
     expected_split = float(torch.linalg.vector_norm(rows[0].to(dtype=torch.float64)).item())
 
-    assert batched.result() == pytest.approx(expected_batched)
-    assert split.result() == pytest.approx(expected_split)
-    assert batched.result() != pytest.approx(split.result())
+    assert batched.compute() == pytest.approx(expected_batched)
+    assert split.compute() == pytest.approx(expected_split)
+    assert batched.compute() != pytest.approx(split.compute())
 
 
 def test_quantile_uses_private_seeded_rng_not_the_global_stream() -> None:
@@ -198,7 +198,7 @@ def test_quantile_uses_private_seeded_rng_not_the_global_stream() -> None:
         global_random.seed(seed)
         stat = tl.stats.Quantile(quantiles=(0.5,), reservoir_size=256)
         stat.update(data)
-        return stat.result()[0.5]
+        return stat.compute()[0.5]
 
     assert run_with_global_seed(1) == run_with_global_seed(2)
 
@@ -215,7 +215,7 @@ def test_quantile_uses_private_seeded_rng_not_the_global_stream() -> None:
     second = tl.stats.Quantile(quantiles=(0.5,), reservoir_size=256, seed=7)
     first.update(data)
     second.update(data)
-    assert first.result() == second.result()
+    assert first.compute() == second.compute()
 
 
 def test_topk_batched_update_matches_reference_semantics() -> None:
@@ -232,7 +232,7 @@ def test_topk_batched_update_matches_reference_semantics() -> None:
         stat.update(chunk)
     everything = torch.cat(chunks)
     expected = sorted((float(v) for v in everything.tolist() if v == v), reverse=True)[:5]
-    assert stat.result() == expected
+    assert stat.compute() == expected
 
 
 def test_covariance_batched_update_matches_torch_cov_across_uneven_chunks() -> None:
@@ -243,7 +243,7 @@ def test_covariance_batched_update_matches_torch_cov_across_uneven_chunks() -> N
     stat = tl.stats.Covariance()
     for chunk in torch.split(data, [1, 4, 17, 2, 13]):
         stat.update(chunk)
-    assert torch.allclose(stat.result(), torch.cov(data.T), atol=1e-12)
+    assert torch.allclose(stat.compute(), torch.cov(data.T), atol=1e-12)
 
     cross = tl.stats.CrossCovariance()
     other = torch.randn(37, 5, dtype=torch.float64)
@@ -254,4 +254,4 @@ def test_covariance_batched_update_matches_torch_cov_across_uneven_chunks() -> N
     centered_a = data - data.mean(dim=0)
     centered_b = other - other.mean(dim=0)
     expected_cross = centered_a.T @ centered_b / (data.shape[0] - 1)
-    assert torch.allclose(cross.result(), expected_cross, atol=1e-12)
+    assert torch.allclose(cross.compute(), expected_cross, atol=1e-12)

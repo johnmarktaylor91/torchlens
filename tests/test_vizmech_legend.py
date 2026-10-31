@@ -45,8 +45,8 @@ def _draw_dot(tmp_path: Path, name: str, **kwargs: object) -> str:
     trace = tl.trace(_Nested(), torch.randn(1, 3))
     return trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
         **kwargs,
     )
 
@@ -178,8 +178,8 @@ def test_rank_path_key_rides_the_header(tmp_path: Path) -> None:
 
     trace = tl.trace(nn.Sequential(nn.Linear(2, 2), nn.ReLU()), torch.ones(1, 2))
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "rank_key"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "rank_key"),
+        file_format="svg",
         vis_save_only=True,
         vis_node_placement="rank",
         show_legend=True,

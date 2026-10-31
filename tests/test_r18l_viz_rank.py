@@ -29,8 +29,8 @@ import torchlens as tl
 from torchlens.viz.node_plots import (
     _lineplot_point,
     _normalize_finite,
+    lineplot,
     render_heatmap,
-    render_lineplot,
 )
 
 
@@ -42,7 +42,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
     trace._has_direct_writes = True
     out = str(tmp_path / "h10")
     # Must not raise GraphvizRenderError.
-    src = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=out)
+    src = trace.draw(vis_save_only=True, file_format="svg", path=out)
     assert isinstance(src, str)
     # The FONT element must be properly closed and the direct-writes line present.
     assert "</FONT>" in src
@@ -53,7 +53,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
 def test_h10_caption_no_direct_writes_still_closes_font(tmp_path):
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     out = str(tmp_path / "h10b")
-    src = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=out)
+    src = trace.draw(vis_save_only=True, file_format="svg", path=out)
     assert "</FONT>" in src
     assert "Direct writes detected" not in src
 
@@ -89,13 +89,13 @@ def test_m8_no_finite_pair_raises():
     xs = np.asarray([np.nan, 0.0])
     ys = np.asarray([1.0, np.nan])  # finite y and finite x at disjoint indices
     with pytest.raises(ValueError, match=r"finite \(x, y\) point"):
-        render_lineplot(ys, x_values=xs)
+        lineplot(ys, x_values=xs)
 
 
 def test_m8_one_finite_pair_ok():
     xs = np.asarray([0.0, np.nan])
     ys = np.asarray([1.0, 5.0])  # one drawable pair at index 0
-    img = render_lineplot(ys, x_values=xs)
+    img = lineplot(ys, x_values=xs)
     assert img.size[0] > 0 and img.size[1] > 0
 
 
@@ -173,7 +173,7 @@ def test_m5_feature_map_evolution_recurrent_error_vocabulary():
 
     trace = tl.trace(RecurConv(), torch.ones(2, 2, 4, 4))
     with pytest.raises(ValueError) as excinfo:
-        tl.viz.feature_map_evolution(trace)
+        tl.viz.feature_maps(trace)
     message = str(excinfo.value)
     assert "mds_evolution" not in message
     assert "MDS" not in message
@@ -238,8 +238,8 @@ def _rank_model():
 def test_m7_rank_engine_emits_legend(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m7rank"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "m7rank"),
+        file_format="svg",
         vis_save_only=True,
         vis_node_placement="rank",
         show_legend=True,
@@ -254,8 +254,8 @@ def test_m7_rank_engine_emits_legend(tmp_path):
 def test_m7_rank_engine_no_legend_by_default(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m7rank_off"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "m7rank_off"),
+        file_format="svg",
         vis_save_only=True,
         vis_node_placement="rank",
         show_legend=False,
@@ -269,8 +269,8 @@ def test_m7_rank_engine_no_legend_by_default(tmp_path):
 def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m10rank"),
-        vis_fileformat="png",
+        path=str(tmp_path / "m10rank"),
+        file_format="png",
         vis_save_only=True,
         vis_node_placement="rank",
         dpi=123,
@@ -281,8 +281,8 @@ def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     assert "bgcolor=" in src and "lightyellow" in src
     # ...and is DROPPED on a vector target (svg): raster-only, vizmech D23.
     src_svg = trace.draw(
-        vis_outpath=str(tmp_path / "m10rank_svg"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "m10rank_svg"),
+        file_format="svg",
         vis_save_only=True,
         vis_node_placement="rank",
         dpi=123,
@@ -308,8 +308,8 @@ def test_rank_engine_creates_missing_output_directory(tmp_path):
     assert not outdir.exists()
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     trace.draw(
-        vis_outpath=str(outdir / "graph"),
-        vis_fileformat="svg",
+        path=str(outdir / "graph"),
+        file_format="svg",
         vis_save_only=True,
         vis_node_placement="rank",
     )

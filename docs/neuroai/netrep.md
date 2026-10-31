@@ -5,7 +5,7 @@ representations") computes distances between representations that are true
 metrics: Procrustes distance, CCA distance, and the family between them, plus
 an angular form of linear CKA. TorchLens supplies the representations: it
 extracts activations at named sites on a fixed stimulus set, in stimulus
-order, and this page flattens them to the `(n_stimuli, n_features)` matrices
+order, and this page flattens them to the `(num_stimuli, num_features)` matrices
 netrep expects. TorchLens does not implement these metrics.
 
 ```text

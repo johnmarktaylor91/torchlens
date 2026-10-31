@@ -519,7 +519,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
             code="extraction_stimulus_ids_cardinality",
             remedy="pass exactly one identifier per stimulus row, in order",
             n_ids=len(ids),
-            n_stimuli=int(stimuli.shape[0]),
+            num_stimuli=int(stimuli.shape[0]),
         )
 
     selector_pipeline: TransformPipeline | None = None
@@ -811,7 +811,7 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
             code="extraction_relabel_invalid",
             remedy="pass exactly one identifier per stimulus row, in order",
             n_ids=len(ids),
-            n_stimuli=totals["n_stimuli"],
+            num_stimuli=totals["n_stimuli"],
         )
     import json
     import os

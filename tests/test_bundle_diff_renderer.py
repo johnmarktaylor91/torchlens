@@ -152,7 +152,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     bundle = _canonical_bundle()
     outpath = tmp_path / "bundle_diff_clean_vs_zero_relu"
-    dot_source = bundle.show_diff(vis_outpath=str(outpath), vis_save_only=True)
+    dot_source = bundle.show_diff(path=str(outpath), vis_save_only=True)
     candidate_svg = outpath.with_suffix(".svg")
 
     assert dot_source.startswith("// TorchLens bundle diff")
@@ -214,7 +214,7 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     dot_source = bundle.show_diff(
         left="base",
         right="patched",
-        vis_outpath=str(outpath),
+        path=str(outpath),
         vis_save_only=True,
     )
     svg_text = outpath.with_suffix(".svg").read_text(encoding="utf-8")

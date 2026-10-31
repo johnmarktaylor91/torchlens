@@ -39,7 +39,7 @@ from torchlens.attribution._core import (
     _validate_positive_int,
     _value_tree_from_leaves,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 from torchlens.attribution._sampling import (
     _NoiseSource,
     _scalar_distribution,
@@ -350,12 +350,12 @@ def gradient_shap(
     *,
     target: _AttributionTarget,
     baselines: Any,
-    n_samples: int = 25,
+    num_samples: int = 25,
     stdevs: float = 0.0,
     seed: int | None = None,
     draw_bank: dict[str, Any] | None = None,
     store_draws: bool = False,
-) -> AttributionResult:
+) -> Attribution:
     """Estimate expected gradients against a baseline pool (GradientShap).
 
     Parameters
@@ -403,7 +403,7 @@ def gradient_shap(
         On pool/draw-bank misalignment or invalid sampling parameters.
     """
 
-    _validate_positive_int("n_samples", n_samples)
+    _validate_positive_int("n_samples", num_samples)
     if isinstance(stdevs, bool) or not isinstance(stdevs, (int, float)) or stdevs < 0:
         raise AttributionError(
             "stdevs must be a nonnegative float (absolute noise scale). "
@@ -422,7 +422,7 @@ def gradient_shap(
                 "leading example axis. Remedy: batch the inputs consistently.",
                 code="gradient_shap_pool_invalid",
             )
-    _validate_draw_bank(draw_bank, n_samples, batch_size, pool_size)
+    _validate_draw_bank(draw_bank, num_samples, batch_size, pool_size)
 
     generator = torch.Generator()
     if seed is not None:
@@ -438,7 +438,7 @@ def gradient_shap(
     physical_calls = 0
 
     with _temporarily_eval(model):
-        for sample_index in range(n_samples):
+        for sample_index in range(num_samples):
             if draw_bank is not None:
                 alphas = draw_bank["alphas"][sample_index].to(torch.float64)
                 indices = draw_bank["pool_indices"][sample_index]
@@ -542,7 +542,7 @@ def gradient_shap(
     mean_sum = sum(sample_sums) / len(sample_sums)
     mean_delta = sum(sample_deltas) / len(sample_deltas)
     extra: dict[str, Any] = {
-        "n_samples": n_samples,
+        "n_samples": num_samples,
         "stdevs": float(stdevs),
         "seed": seed,
         "pool_size": pool_size,
@@ -571,7 +571,7 @@ def gradient_shap(
             "pool_indices": torch.stack(drawn_indices),
             "noise": drawn_noise if stdevs > 0 else None,
         }
-    return AttributionResult(
+    return Attribution(
         method="gradient_shap",
         values=_value_tree_from_leaves(prepared, values),
         target_repr=_target_repr(target),

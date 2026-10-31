@@ -96,7 +96,7 @@ def _fixture_scores(**kwargs) -> dict[str, float]:
 
     model = Fixture().eval()
     table = torchlens.mechinterp.edge_scores(
-        model, CLEAN, corrupted=CORRUPT, metric=fixture_metric, **kwargs
+        model, CLEAN, corrupted_input=CORRUPT, metric=fixture_metric, **kwargs
     )
     graph = torchlens.mechinterp.component_graph(tl.trace(model, CLEAN))
     names = {node.name: node.module_address or "input" for node in graph.nodes.values()}
@@ -181,7 +181,7 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
     for method, steps in cases:
         extra = {} if method == "eap" else {"steps": steps}
         table = torchlens.mechinterp.edge_scores(
-            model, clean, corrupted=corrupt, metric=_logit_difference, method=method, **extra
+            model, clean, corrupted_input=corrupt, metric=_logit_difference, method=method, **extra
         )
         got = {address[0]: row.score for (_t, _k, address), row in table.items()}
         for edge, value in want[(method, steps)].items():
@@ -195,7 +195,7 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
     table = torchlens.mechinterp.edge_scores(
         Fixture().eval(),
         torch.tensor([[0], [0]]),
-        corrupted=torch.tensor([[1], [1]]),
+        corrupted_input=torch.tensor([[1], [1]]),
         metric=fixture_metric,
         method="eap",
         example_reduction="sum",

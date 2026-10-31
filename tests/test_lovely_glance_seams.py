@@ -14,8 +14,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.stats import (
     degrade,
-    echo,
     glance,
+    narrate,
     render_core_line,
     summary_cell,
     tensor_stats,
@@ -63,7 +63,7 @@ def test_treescope_fields_carry_no_invented_numbers() -> None:
     stats = tensor_stats(torch.arange(1000, dtype=torch.float32))
     fields = treescope_card_fields(stats)
     assert fields["line_ascii"] == degrade(fields["line_unicode"])
-    assert fields["mean"] == stats.mean and fields["sd"] == stats.sd
+    assert fields["mean"] == stats.mean and fields["sd"] == stats.std
     assert fields["evidence"]["mean"] == "exact"
     if fields["sparkline_ascii"] is not None:
         assert fields["sparkline_ascii"] == degrade(fields["sparkline_unicode"])
@@ -90,7 +90,7 @@ def test_echo_mounts_and_stays_pure() -> None:
     control.cleanup()
 
     sink_lines: list[str] = []
-    observer = echo(tl.func("relu"), sink=sink_lines.append)
+    observer = narrate(tl.func("relu"), sink=sink_lines.append)
     echoed = tl.trace(
         _EchoModel().eval(),
         x.clone(),

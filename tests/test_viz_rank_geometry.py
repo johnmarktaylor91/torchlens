@@ -62,8 +62,8 @@ def _rank_dot_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         vis_mode="unrolled",
         vis_node_placement="rank",
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_geometry"),
+        file_format="svg",
+        path=str(tmp_path / "rank_geometry"),
         show_containers=False,
     )
     return captured["source"]

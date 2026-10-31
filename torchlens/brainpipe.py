@@ -176,11 +176,11 @@ class PlanSite:
     dtype: str
     bytes_fixed: int
     bytes_per_stimulus: float
-    batch_invariant: bool
+    is_batch_invariant: bool
     transformed_shape: tuple[int, ...] | None
     transformed_bytes: int | None
     transform_seconds: float | None
-    included: bool
+    is_included: bool
     exclusion_reason: str | None
 
     def bytes_at_batch(self, batch_size: int) -> int:
@@ -189,11 +189,11 @@ class PlanSite:
         if self.transformed_bytes is not None:
             # Transform output measured at the probe batch; scale by ratio
             # unless batch-invariant.
-            if self.batch_invariant:
+            if self.is_batch_invariant:
                 return self.transformed_bytes
             per_stimulus = self.transformed_bytes / max(self.shape[0], 1)
             return int(per_stimulus * batch_size)
-        if self.batch_invariant:
+        if self.is_batch_invariant:
             return self.bytes_fixed
         return int(self.bytes_fixed + self.bytes_per_stimulus * batch_size)
 
@@ -211,7 +211,7 @@ class ExtractionPlan:
 
     sites: tuple[PlanSite, ...]
     batch_size: int
-    n_stimuli: int
+    num_stimuli: int
     input_signature: tuple[Any, ...]
     transform_repr: str | None
     engine: str
@@ -229,13 +229,13 @@ class ExtractionPlan:
     def included_sites(self) -> tuple[PlanSite, ...]:
         """Return the sites in the run's save set."""
 
-        return tuple(site for site in self.sites if site.included)
+        return tuple(site for site in self.sites if site.is_included)
 
     @property
     def planned_passes(self) -> int:
         """Return exact planned forwards: warm-up + two probes (already run) + batches."""
 
-        return 3 + math.ceil(self.n_stimuli / self.batch_size)
+        return 3 + math.ceil(self.num_stimuli / self.batch_size)
 
     @property
     def retained_bytes_per_batch(self) -> int:
@@ -248,7 +248,7 @@ class ExtractionPlan:
         """Return fitted final artifact bytes across all stimuli."""
 
         per_stimulus = self.retained_bytes_per_batch / max(self.batch_size, 1)
-        return int(per_stimulus * self.n_stimuli)
+        return int(per_stimulus * self.num_stimuli)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the stable dict form of the plan (object-first surface)."""
@@ -260,19 +260,19 @@ class ExtractionPlan:
                     "site_key": site.site_key,
                     "shape": list(site.shape),
                     "dtype": site.dtype,
-                    "batch_invariant": site.batch_invariant,
+                    "batch_invariant": site.is_batch_invariant,
                     "bytes_at_batch": site.bytes_at_batch(self.batch_size),
                     "transformed_shape": (
                         list(site.transformed_shape) if site.transformed_shape else None
                     ),
                     "transform_seconds": site.transform_seconds,
-                    "included": site.included,
+                    "included": site.is_included,
                     "exclusion_reason": site.exclusion_reason,
                 }
                 for site in self.sites
             ],
             "batch_size": self.batch_size,
-            "n_stimuli": self.n_stimuli,
+            "n_stimuli": self.num_stimuli,
             "planned_passes": self.planned_passes,
             "engine": self.engine,
             "transform": self.transform_repr,
@@ -316,11 +316,11 @@ class ExtractionPlan:
         lines = [header, "-" * len(header)]
         for site in self.sites:
             flags: list[str] = []
-            if site.batch_invariant:
+            if site.is_batch_invariant:
                 flags.append("batch-invariant")
             if site.transformed_shape is not None:
                 flags.append("transformed")
-            if not site.included:
+            if not site.is_included:
                 flags.append(f"EXCLUDED: {site.exclusion_reason}")
             lines.append(
                 f"{site.label:<28} {str(tuple(site.shape)):<20} {site.dtype:<10} "
@@ -348,11 +348,11 @@ class ExtractionPlan:
                 f"{_format_bytes(self.predicted_peak_bytes)}",
                 f"retained per batch: {_format_bytes(self.retained_bytes_per_batch)}",
                 f"total output: {_format_bytes(self.total_output_bytes)} "
-                f"across {self.n_stimuli} stimuli",
+                f"across {self.num_stimuli} stimuli",
                 f"memory budget: {_format_bytes(self.memory_budget_bytes)} "
                 f"(safety margin {self.safety_margin:.0%})",
-                f"batch-invariant sites: {sum(1 for s in self.sites if s.batch_invariant)}",
-                f"excluded sites: {sum(1 for s in self.sites if not s.included)}",
+                f"batch-invariant sites: {sum(1 for s in self.sites if s.is_batch_invariant)}",
+                f"excluded sites: {sum(1 for s in self.sites if not s.is_included)}",
             ]
         )
         return "\n".join(lines)
@@ -545,11 +545,11 @@ def _build_plan_sites(
                     dtype="unknown",
                     bytes_fixed=0,
                     bytes_per_stimulus=0.0,
-                    batch_invariant=False,
+                    is_batch_invariant=False,
                     transformed_shape=None,
                     transformed_bytes=None,
                     transform_seconds=None,
-                    included=False,
+                    is_included=False,
                     exclusion_reason=(
                         "site not observed on the probe forward (check the label "
                         "or capture with save= covering it)"
@@ -570,11 +570,11 @@ def _build_plan_sites(
                 dtype=fact_1["dtype"],
                 bytes_fixed=intercept,
                 bytes_per_stimulus=slope,
-                batch_invariant=batch_invariant,
+                is_batch_invariant=batch_invariant,
                 transformed_shape=fact_1["transformed_shape"],
                 transformed_bytes=fact_1["transformed_bytes"],
                 transform_seconds=fact_1["transform_seconds"],
-                included=True,
+                is_included=True,
                 exclusion_reason=None,
             )
         )
@@ -586,7 +586,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
     probe_inputs: torch.Tensor,
     *,
     sites: Any = "all",
-    n_stimuli: int,
+    num_stimuli: int,
     batch_size: int,
     transform: Any = None,
     memory_budget: Any = None,
@@ -657,9 +657,9 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
             code="extraction_probe_invalid",
             remedy="pass one real probe batch, e.g. stimuli[:4]",
         )
-    if batch_size <= 0 or n_stimuli <= 0:
+    if batch_size <= 0 or num_stimuli <= 0:
         raise InvalidArgumentError(
-            f"batch_size and n_stimuli must be positive; got {batch_size} and {n_stimuli}.",
+            f"batch_size and n_stimuli must be positive; got {batch_size} and {num_stimuli}.",
             code="extraction_probe_invalid",
             remedy="pass positive batch_size and n_stimuli",
         )
@@ -718,7 +718,7 @@ def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surfa
     plan = ExtractionPlan(
         sites=tuple(plan_sites),
         batch_size=batch_size,
-        n_stimuli=n_stimuli,
+        num_stimuli=num_stimuli,
         input_signature=signature,
         transform_repr=repr(transform) if transform is not None else None,
         engine=engine,

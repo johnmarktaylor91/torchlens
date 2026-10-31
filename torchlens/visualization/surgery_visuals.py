@@ -614,7 +614,7 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     if len(lines) > _MAX_CAPTION_LINES:
         lines = lines[: _MAX_CAPTION_LINES - 1] + (
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
-            "see the .census.txt sidecar or surgery_census(trace).to_text()",
+            "see the .census.txt sidecar or surgery_census(trace).to_markdown()",
         )
     return make_surgery_mark_spec_fn(trace, facts), lines
 
@@ -646,7 +646,7 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
             outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"
         with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
-            census_file.write(surgery_census(trace).to_text())
+            census_file.write(surgery_census(trace).to_markdown())
     return result
 
 

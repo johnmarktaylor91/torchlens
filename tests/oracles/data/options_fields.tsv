@@ -103,7 +103,7 @@ VisualizationOptions.order_siblings
 VisualizationOptions.renderer
 VisualizationOptions.return_graph
 VisualizationOptions.save_only
-VisualizationOptions.scale
+VisualizationOptions.size_scale
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
 VisualizationOptions.show_legend

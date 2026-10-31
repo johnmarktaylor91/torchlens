@@ -277,12 +277,12 @@ class PrismNet(nn.Module):
         self.mode = mode
         h_p, h_k = 2, 5
         if mode == "pu":
-            self.n_features = 5
+            self.num_features = 5
         elif mode == "seq":
-            self.n_features = 4
+            self.num_features = 4
             h_p, h_k = 1, 3
         elif mode == "str":
-            self.n_features = 1
+            self.num_features = 1
             h_p, h_k = 0, 1
         else:
             raise "mode error"
@@ -292,7 +292,7 @@ class PrismNet(nn.Module):
         self.se = SEBlock(base_channel)
         self.res2d = ResidualBlock2D(base_channel, kernel_size=(11, h_k), padding=(5, h_p))
         self.res1d = ResidualBlock1D(base_channel * 4)
-        self.avgpool = nn.AvgPool2d((1, self.n_features))
+        self.avgpool = nn.AvgPool2d((1, self.num_features))
         self.gpool = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(base_channel * 4 * 8, 1)
         self._initialize_weights()

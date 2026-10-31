@@ -117,9 +117,9 @@ def test_row_integrated_gradients_riemann_middle(shared_case: tuple[nn.Module, T
         settings={"n_steps": 32, "baseline": "zeros", "captum_method": "riemann_middle"},
         dtype="float64",
     )
-    ours = attribution.integrated_gradients(model, x, target=1, n_steps=32)
+    ours = attribution.integrated_gradients(model, x, target=1, num_steps=32)
     theirs = captum_attr.IntegratedGradients(model).attribute(
-        x, target=1, n_steps=32, method="riemann_middle"
+        x, target=1, num_steps=32, method="riemann_middle"
     )
     torch.testing.assert_close(ours.values, theirs, rtol=0, atol=0)
     assert row["captum"] == "0.9.0" or row["captum"] >= "0.7"
@@ -237,7 +237,7 @@ def test_row_noise_tunnel_zero_noise_degenerate(shared_case: tuple[nn.Module, Te
         dtype="float64",
     )
     ours = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=1, n_samples=3, stdevs=0.0
+        x, method=attribution.saliency, model=model, target=1, num_samples=3, stdevs=0.0
     )
     theirs = captum_attr.NoiseTunnel(captum_attr.Saliency(model)).attribute(
         x, target=1, nt_type="smoothgrad", nt_samples=3, stdevs=1e-12
@@ -267,7 +267,7 @@ def test_row_infidelity_identical_stored_perturbations(
         return fixed, inputs - fixed
 
     ours = attribution.infidelity(
-        model, x, target=1, attribution=attribution_values, perturb=ours_perturb, n_samples=2
+        model, x, target=1, attribution=attribution_values, perturb=ours_perturb, num_samples=2
     )
     from captum.metrics import infidelity as captum_infidelity
 
@@ -359,7 +359,7 @@ def test_row_gpt2_text_vs_captum_layer_integrated_gradients() -> None:
         dtype="float32",
     )
     ours = attribution.text(
-        model, tokenizer, prompt, target=" Paris", n_steps=32, steps_per_batch=1
+        model, tokenizer, prompt, target=" Paris", num_steps=32, steps_per_batch=1
     )
 
     def forward_scores(input_ids: Tensor) -> Tensor:

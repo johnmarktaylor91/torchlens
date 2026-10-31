@@ -73,12 +73,12 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     try:
         log.draw(
             vis_renderer="dagua",
-            vis_theme="torchlens",
+            theme="torchlens",
             vis_mode="unrolled",
             direction="leftright",
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(out),
+            file_format="svg",
+            path=str(out),
         )
         assert out.exists()
         assert "svg" in out.read_text().lower()

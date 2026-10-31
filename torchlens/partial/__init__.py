@@ -234,7 +234,7 @@ class PartialTrace:
 
         return audit_trace(self)
 
-    def draw(self, vis_outpath: str | None = None, **_: Any) -> str:
+    def draw(self, path: str | None = None, **_: Any) -> str:
         """Render the failed capture as minimal Graphviz DOT source.
 
         Parameters

@@ -506,9 +506,7 @@ def _guard_render_value(guard: VacuousDemoGuard, side: str, kwargs: dict[str, An
     trace = get_trace(guard.model_key, trace_variant, trace_builder)
     stem = _PAGES_DIR / "_vacuous_demo_guards" / f"{guard.axis}_{side}"
     fileformat = "png" if guard.file_bytes else "dot"
-    source = trace.draw(
-        vis_outpath=str(stem), vis_fileformat=fileformat, vis_save_only=True, **kwargs
-    )
+    source = trace.draw(path=str(stem), file_format=fileformat, vis_save_only=True, **kwargs)
     if guard.file_bytes:
         rendered = pathlib.Path(f"{stem}.png")
         if not rendered.exists():
@@ -2447,7 +2445,7 @@ def _render_panel(page: Page, panel: Panel, idx: int) -> tuple[str, pathlib.Path
             fn = functools.partial(tl.viz.bundle_diff, trace)
         else:
             fn = getattr(trace, panel.method)
-        fn(vis_outpath=str(stem), vis_fileformat="png", vis_save_only=True, **kwargs)
+        fn(path=str(stem), file_format="png", vis_save_only=True, **kwargs)
         png = pathlib.Path(str(stem) + ".png")
         if not png.exists():
             raise FileNotFoundError(f"expected {png}")

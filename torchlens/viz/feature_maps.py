@@ -32,13 +32,13 @@ _LABEL_OUTLINE = (95, 103, 117)
 _NONFINITE_COLOR = (235, 235, 235)
 
 
-def feature_map_evolution(
+def feature_maps(
     trace: Any,
     save: Any | None = None,
     *,
     stimuli: int | Sequence[int] | None = None,
     channels: FeatureMapChannels = None,
-    top_k: int = 4,
+    k: int = 4,
     reduce: FeatureMapReduce = "mean",
     max_stimuli: int = 4,
     max_channels: int = 4,
@@ -83,7 +83,7 @@ def feature_map_evolution(
     """
 
     _validate_feature_map_options(
-        top_k=top_k,
+        top_k=k,
         reduce=reduce,
         max_stimuli=max_stimuli,
         max_channels=max_channels,
@@ -108,7 +108,7 @@ def feature_map_evolution(
                 "covering the MDS layers before calling mds_evolution",
                 "covering the feature-map layers before calling feature_map_evolution",
             )
-            .replace("mds_evolution", "feature_map_evolution")
+            .replace("mds_evolution", "feature_maps")
         )
         if recast != str(exc):
             raise ValueError(recast) from exc
@@ -127,7 +127,7 @@ def feature_map_evolution(
             tensor,
             stimulus_indices=stimulus_indices,
             channels=channels,
-            top_k=top_k,
+            top_k=k,
             reduce=reduce,
             max_channels=max_channels,
         )
@@ -1031,4 +1031,4 @@ def _write_feature_map_image(trace: Any, key: str, image: Image.Image) -> Path:
     return image_path
 
 
-__all__ = ["feature_map_evolution", "feature_map_node_spec"]
+__all__ = ["feature_maps", "feature_map_node_spec"]

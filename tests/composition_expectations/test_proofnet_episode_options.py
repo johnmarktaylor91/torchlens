@@ -329,7 +329,7 @@ def test_episode_module_root_requires_stepped_module(episode_rig: dict[str, Any]
         lambda: tl.trace(
             rig["root"],
             rig["example"],
-            episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+            episode=tl.options.EpisodeSpec(num_steps=3, step_output_kind="digest"),
         ),
     )
 
@@ -363,7 +363,7 @@ def test_bound_method_episode_defaults_stepped_module_to_owner() -> None:
     trace = tl.trace(
         generator.generate,
         example,
-        episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+        episode=tl.options.EpisodeSpec(num_steps=3, step_output_kind="digest"),
     )
     classification, _ = _expect("bound_method_default_owner")
     assert classification == COUPLED
@@ -402,7 +402,7 @@ def test_episode_declared_steps_that_never_run_quarantine_typed() -> None:
         lambda: tl.trace(
             generator.generate,
             torch.randn(1, 4),
-            episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+            episode=tl.options.EpisodeSpec(num_steps=3, step_output_kind="digest"),
         ),
     )
 

@@ -57,8 +57,8 @@ from ._kernels import (
     Histogram,
     HistogramDescriptor,
     HistogramResult,
-    Spine,
-    SpineResult,
+    RunningStats,
+    RunningStatsResult,
     spine_vector_fused,
 )
 from ._kineto import ExtractionResult, NormalizedEvent, extract_events
@@ -186,8 +186,8 @@ __all__ = [
     "SpanError",
     "SpanRecord",
     "SpanRegistry",
-    "Spine",
-    "SpineResult",
+    "RunningStats",
+    "RunningStatsResult",
     "StatKernelError",
     "StepBlockRecord",
     "StepTruth",

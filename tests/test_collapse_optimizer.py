@@ -1518,9 +1518,9 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "max_floor_rep_stats"),
+                path=str(tmp_path / "max_floor_rep_stats"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="max",
             )
@@ -1718,7 +1718,7 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
         dot = fresh.draw(
             collapse="max",
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     assert dot  # uncollapsed render still ships
@@ -1764,7 +1764,7 @@ def test_collapse_ceiling_warning_category_and_attribution(
         fresh.draw(
             collapse="max",
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     declines = [w for w in caught if "skipping smart collapse" in str(w.message)]

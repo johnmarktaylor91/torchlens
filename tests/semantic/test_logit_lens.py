@@ -104,7 +104,7 @@ def test_lm_head_recipe_exposes_unembedding_facets() -> None:
     assert view.unembed_weight.value.shape == (11, 8)
     assert view.final_norm_gamma.value.shape == (8,)
     assert view.logits.value.shape == (2, 3, 11)
-    assert view.menu()["unembed_bias"].status == "structurally_absent"
+    assert view.declared()["unembed_bias"].status == "structurally_absent"
 
 
 @_requires_rmsnorm
@@ -117,7 +117,7 @@ def test_lm_head_recipe_classifies_rms_norm_without_beta() -> None:
     view = log.modules["self"].facets
 
     assert view.final_norm_kind == "rms_norm"
-    assert view.menu()["final_norm_beta"].status == "structurally_absent"
+    assert view.declared()["final_norm_beta"].status == "structurally_absent"
 
 
 def test_logit_lens_validates_and_matches_real_logits_layer_norm() -> None:
@@ -129,7 +129,7 @@ def test_logit_lens_validates_and_matches_real_logits_layer_norm() -> None:
     result = logit_lens(log)
 
     assert result.lens_source == "model_head"
-    assert result.validated is True
+    assert result.is_validated is True
     assert [entry.address for entry in result.entries] == [
         "transformer.h.0",
         "transformer.h.1",
@@ -146,7 +146,7 @@ def test_logit_lens_validates_rms_norm_and_head_bias() -> None:
     x = torch.randn(2, 3, 8)
     rms_model = TinyLM(norm=nn.RMSNorm(8)).eval()
     rms_result = logit_lens(_capture(rms_model, x))
-    assert rms_result.validated is True
+    assert rms_result.is_validated is True
     assert torch.allclose(
         rms_result.entries[-1].logits, rms_result.final_logits, rtol=1e-4, atol=1e-5
     )
@@ -167,8 +167,8 @@ def test_logit_lens_refuses_nonstandard_norm_scaling() -> None:
 
     with pytest.raises(LogitLensError, match="failed validation"):
         logit_lens(log)
-    unvalidated = logit_lens(log, validate=False)
-    assert unvalidated.validated is False
+    unvalidated = logit_lens(log, verify=False)
+    assert unvalidated.is_validated is False
 
 
 def test_logit_lens_user_lens_and_layer_selection() -> None:
@@ -180,7 +180,7 @@ def test_logit_lens_user_lens_and_layer_selection() -> None:
 
     result = logit_lens(log, lens=lambda hidden: hidden @ torch.zeros(8, 11))
     assert result.lens_source == "user"
-    assert result.validated is False
+    assert result.is_validated is False
     assert torch.equal(result.entries[0].logits, torch.zeros(2, 3, 11))
 
     subset = logit_lens(log, layers=["transformer.h.0"])

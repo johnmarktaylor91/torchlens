@@ -52,7 +52,7 @@ GAP-049	cache_key_coverage	VisualizationOptions.order_siblings	2026-08-26	oracle
 GAP-050	cache_key_coverage	VisualizationOptions.renderer	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-051	cache_key_coverage	VisualizationOptions.return_graph	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-052	cache_key_coverage	VisualizationOptions.save_only	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
-GAP-053	cache_key_coverage	VisualizationOptions.scale	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-053	cache_key_coverage	VisualizationOptions.size_scale	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-054	cache_key_coverage	VisualizationOptions.show_buffers	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-055	cache_key_coverage	VisualizationOptions.show_cone	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-056	cache_key_coverage	VisualizationOptions.show_legend	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row

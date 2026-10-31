@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
-from ..observability._kernels import Spine, SpineResult
+from ..observability._kernels import RunningStats, RunningStatsResult
 
 __all__ = ["TRAJECTORY_STATISTICS", "TrajectoryStats", "measure_trajectory"]
 
@@ -72,37 +72,37 @@ class TrajectoryStats:
         How ``target_rank`` breaks ties.
     """
 
-    layers: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     statistics: tuple[str, ...]
     position_means: Mapping[str, torch.Tensor]
-    spines: Mapping[str, Mapping[str, Spine]]
-    examples: int
-    positions: int
+    running_stats: Mapping[str, Mapping[str, RunningStats]]
+    num_examples: int
+    num_positions: int
     facet: str
     lens_source: str
     validated: bool
-    mask_input: bool
+    is_input_masked: bool
     tie_convention: str = _TIE_CONVENTION
 
-    def summary(self, statistic: str) -> dict[str, SpineResult]:
+    def compute_stats(self, statistic: str) -> dict[str, RunningStatsResult]:
         """Return ``{layer: SpineResult}`` for one statistic (count, min, max, mean, ...)."""
 
-        if statistic not in self.spines:
+        if statistic not in self.running_stats:
             raise InvalidArgumentError(
-                f"TrajectoryStats.summary({statistic!r}) names a statistic this result "
+                f"TrajectoryStats.compute_stats({statistic!r}) names a statistic this result "
                 f"did not measure; it holds {list(self.statistics)}",
                 code="stats_trajectory_statistic_unknown",
-                remedy=f"use one of them, for example result.summary({self.statistics[0]!r})",
+                remedy=f"use one of them, for example result.compute_stats({self.statistics[0]!r})",
                 statistic=statistic,
             )
-        return {layer: spine.result() for layer, spine in self.spines[statistic].items()}
+        return {layer: spine.result() for layer, spine in self.running_stats[statistic].items()}
 
     def __repr__(self) -> str:
         """Bounded identity card: never dump the tensors."""
 
         return (
-            f"TrajectoryStats({len(self.layers)} layers x {self.positions} positions, "
-            f"{self.examples} examples, statistics={list(self.statistics)}, "
+            f"TrajectoryStats({len(self.module_addresses)} layers x {self.num_positions} positions, "
+            f"{self.num_examples} examples, statistics={list(self.statistics)}, "
             f"lens_source={self.lens_source!r})"
         )
 
@@ -116,7 +116,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     layers: Sequence[str] | None = None,
     lens: Any = None,
     mask_input: bool = False,
-    validate: bool = True,
+    verify: bool = True,
 ) -> TrajectoryStats:
     """Trace each batch and fold its logit-lens trajectory statistics.
 
@@ -154,7 +154,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         and layer.
     """
 
-    _check_flags(mask_input=mask_input, validate=validate)
+    _check_flags(mask_input=mask_input, validate=verify)
     batches = [data] if isinstance(data, torch.Tensor) else data
     if not isinstance(batches, Iterable):
         raise ArgumentTypeError(
@@ -165,7 +165,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         )
     from ..semantic.logit_lens import _LensRequest
 
-    request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=validate)
+    request = _LensRequest(facet=facet, layers=layers, lens=lens, verify=verify)
     folder = _TrajectoryFolder(statistics)
     for batch in batches:
         folder.fold_batch(model, _split_batch(batch), request, mask_input)
@@ -224,11 +224,11 @@ class _TrajectoryFolder:
         else:
             self.requested = None
         self.names: tuple[str, ...] | None = None
-        self.layers: tuple[str, ...] | None = None
-        self.positions: int | None = None
-        self.examples = 0
+        self.module_addresses: tuple[str, ...] | None = None
+        self.num_positions: int | None = None
+        self.num_examples = 0
         self.sums: dict[str, torch.Tensor] = {}
-        self.spines: dict[str, dict[str, Spine]] = {}
+        self.running_stats: dict[str, dict[str, RunningStats]] = {}
         self.lens_source = ""
         self.validated = False
         self.checked = False
@@ -300,7 +300,7 @@ class _TrajectoryFolder:
         elif self.layers != addresses:
             raise InvalidArgumentError(
                 "tl.stats.measure_trajectory: a later batch exposes different layers "
-                f"({list(addresses)}) than the first ({list(self.layers)})",
+                f"({list(addresses)}) than the first ({list(self.module_addresses)})",
                 code="stats_trajectory_layers_changed",
                 remedy="pass layers= explicitly so every batch projects the same blocks",
                 layers=list(addresses),
@@ -309,15 +309,15 @@ class _TrajectoryFolder:
     def _fold_layer(self, address: str, values: dict[str, torch.Tensor]) -> None:
         """Fold one layer's ``{statistic: [batch, positions]}`` values."""
 
-        row = (self.layers or ()).index(address)
+        row = (self.module_addresses or ()).index(address)
         for name, value in values.items():
             positions = int(value.shape[-1])
-            if self.positions is None:
-                self.positions = positions
-            elif positions != self.positions:
+            if self.num_positions is None:
+                self.num_positions = positions
+            elif positions != self.num_positions:
                 raise InvalidArgumentError(
                     f"tl.stats.measure_trajectory: a batch has {positions} positions after "
-                    f"batches of {self.positions}",
+                    f"batches of {self.num_positions}",
                     code="stats_trajectory_positions_changed",
                     remedy="pad or truncate every batch to one sequence length",
                     positions=positions,
@@ -325,34 +325,36 @@ class _TrajectoryFolder:
             column_sum = value.to(torch.float64).sum(dim=0)
             if name not in self.sums:
                 self.sums[name] = torch.zeros(
-                    len(self.layers or ()), positions, dtype=torch.float64
+                    len(self.module_addresses or ()), positions, dtype=torch.float64
                 )
             self.sums[name][row] += column_sum.cpu()
-            spine = self.spines.setdefault(name, {}).setdefault(address, Spine(name=name))
+            spine = self.running_stats.setdefault(name, {}).setdefault(
+                address, RunningStats(name=name)
+            )
             spine.update(value)
 
     def result(self, *, facet: str, mask_input: bool) -> TrajectoryStats:
         """Freeze the folded state into a ``TrajectoryStats``."""
 
-        if self.layers is None or self.names is None or self.examples == 0:
+        if self.module_addresses is None or self.names is None or self.num_examples == 0:
             raise InvalidArgumentError(
                 "tl.stats.measure_trajectory folded no examples (empty data or no layers)",
                 code="stats_trajectory_empty",
                 remedy="pass at least one batch, e.g. tl.stats.measure_trajectory(model, [ids])",
-                examples=self.examples,
+                examples=self.num_examples,
             )
-        means = {name: self.sums[name] / self.examples for name in self.names}
+        means = {name: self.sums[name] / self.num_examples for name in self.names}
         return TrajectoryStats(
-            layers=self.layers,
+            module_addresses=self.module_addresses,
             statistics=self.names,
             position_means=means,
-            spines={name: dict(self.spines[name]) for name in self.names},
-            examples=self.examples,
-            positions=int(self.positions or 0),
+            running_stats={name: dict(self.running_stats[name]) for name in self.names},
+            num_examples=self.num_examples,
+            num_positions=int(self.num_positions or 0),
             facet=facet,
             lens_source=self.lens_source,
             validated=self.validated,
-            mask_input=mask_input,
+            is_input_masked=mask_input,
         )
 
 

@@ -82,7 +82,7 @@ catalogued implementation of that variant), in these docs and in the
 result's provenance where the result has any: `rdm_evolution(...)
 .similarity_repository_id`, the `similarity_repository_id` descriptor of
 `tl.neuro.rdms` source mode, `tl.stats.CKA.similarity_repository_id`, the
-`SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.result()` return (a
+`SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.compute()` return (a
 `float` with `similarity_repository_id`; `to_dict()` keeps it), and
 `tl.repgeom.cka_interval(...).similarity_repository_id` (also in its
 `to_dict()`).

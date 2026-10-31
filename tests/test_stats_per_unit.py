@@ -198,7 +198,7 @@ def test_quantile_per_unit_rank_error_beyond_reservoir() -> None:
     stat = tl.stats.Quantile((0.1, 0.5, 0.9), reservoir_size=reservoir_size, unit_axis=-1)
     for batch in _batches(stream, 700):
         stat.update(batch)
-    estimates = stat.result()
+    estimates = stat.compute()
     for q, values in estimates.items():
         bound = 4 * math.sqrt(q * (1 - q) / reservoir_size)
         for unit in range(3):
@@ -217,7 +217,7 @@ def test_per_unit_same_seed_identical_twice() -> None:
         for batch in _batches(stream, 128):
             quantile.update(batch)
             top.update(batch)
-        return quantile.result(), top.result()
+        return quantile.compute(), top.compute()
 
     first, second, other = run(4), run(4), run(5)
     for q in first[0]:
@@ -238,9 +238,9 @@ def test_topk_per_unit_nan_matches_pooled() -> None:
         per_unit.update(batch)
         for unit, stat in enumerate(pooled):
             stat.update(batch[:, unit])
-    result = per_unit.result()
+    result = per_unit.compute()
     for unit, stat in enumerate(pooled):
-        expected = stat.result()
+        expected = stat.compute()
         kept = result.values[unit][~result.values[unit].isnan()].tolist()
         assert kept == expected
     assert result.example_ids[3].tolist() == [-1, -1, -1]
@@ -253,7 +253,7 @@ def test_topk_explicit_example_ids_tie_break() -> None:
     stat = tl.stats.TopK(k=3, unit_axis=-1)
     stat.update(first, example_ids=[10, 3, 7])
     stat.update(second, example_ids=torch.tensor([1, 20]))
-    result = stat.result()
+    result = stat.compute()
     # Unit 0: three 2.0 values from ids 3, 7 and 1; the lowest ids win.
     assert result.values[0].tolist() == [2.0, 2.0, 2.0]
     assert result.example_ids[0].tolist() == [1, 3, 7]
@@ -262,7 +262,7 @@ def test_topk_explicit_example_ids_tie_break() -> None:
     # Batch boundaries do not matter: one batch gives the same answer.
     whole = tl.stats.TopK(k=3, unit_axis=-1)
     whole.update(torch.cat([first, second]), example_ids=[10, 3, 7, 1, 20])
-    assert torch.equal(whole.result().example_ids, result.example_ids)
+    assert torch.equal(whole.compute().example_ids, result.example_ids)
 
 
 def test_pooled_behaviour_unchanged_without_unit_axis() -> None:
@@ -271,14 +271,14 @@ def test_pooled_behaviour_unchanged_without_unit_axis() -> None:
     quantile = tl.stats.Quantile([0.5])
     top.update(data)
     quantile.update(torch.tensor([1.0, 2.0, 3.0]))
-    assert top.result() == [5.0, 4.0, 3.0]
-    assert quantile.result() == {0.5: 2.0}
+    assert top.compute() == [5.0, 4.0, 3.0]
+    assert quantile.compute() == {0.5: 2.0}
     with pytest.raises(tl.errors.TorchLensError) as info:
         top.update(data, example_ids=[0, 1, 2])
     assert info.value.fields["code"] == "stats_example_ids_without_unit_axis"
     shifted = tl.stats.TopK(2, encoder=lambda v: v * 2)
     shifted.update(torch.tensor([1.0, 3.0, 2.0]))
-    assert shifted.result() == [6.0, 4.0]
+    assert shifted.compute() == [6.0, 4.0]
 
 
 def test_state_size_warning_once_names_cheaper_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -305,8 +305,8 @@ def test_state_size_warning_once_names_cheaper_spelling(monkeypatch: pytest.Monk
         fewer = tl.stats.Quantile(unit_axis=-1, reservoir_size=64, encoder=eval(narrow.group(1)))  # noqa: S307
         fewer.update(batch)
     assert not [w for w in again if getattr(w.message, "fields", {}).get("code")]
-    assert cheaper.result()[0.5].shape == (4,)
-    assert fewer.result()[0.5].shape == (1,)
+    assert cheaper.compute()[0.5].shape == (4,)
+    assert fewer.compute()[0.5].shape == (1,)
 
 
 @pytest.mark.parametrize(
@@ -360,4 +360,4 @@ def test_per_unit_construction_and_layout_refusals(case: str, code: str) -> None
 def test_unit_topk_repr_summarizes_shape() -> None:
     stat = tl.stats.TopK(k=2, unit_axis=-1)
     stat.update(torch.arange(12.0).reshape(2, 2, 3))
-    assert repr(stat.result()) == "UnitTopK(units=3, k=2, position_axes=1, unit_axis=-1)"
+    assert repr(stat.compute()) == "UnitTopK(units=3, k=2, position_axes=1, unit_axis=-1)"

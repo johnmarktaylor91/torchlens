@@ -12,7 +12,7 @@ real fixture in its declared state.
 |---|---|---|---|---|
 | `trace.summary()` | Orient me: what model ran, its layers, parameters, and totals. | MODEL | SHAPE | metadata_only |
 | `tl.report.explain(trace)` | Narrate this capture: what ran, its health states, and anything unusual. | CAPTURE | NARRATIVE | metadata_only |
-| `trace.profile(sort_by=..., top_k=...)` | Rank me: which ops/modules cost the most time, FLOPs, or memory. | RUN-RESOURCES | RANK | metadata_only |
+| `trace.profile(sort_by=..., k=...)` | Rank me: which ops/modules cost the most time, FLOPs, or memory. | RUN-RESOURCES | RANK | metadata_only |
 | `tl.report.cost_tree(trace)` | Show compute as the module tree with exact self/subtree conservation and fwd/bwd/total FLOPs columns. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.flops_report(trace_or_model, ...)` | The one-call paper number: analytic forward FLOPs with coverage and params. | RUN-RESOURCES | SHAPE | metadata_only |
 | `trace.stats_table()` | Observations of ONE captured batch per site: mean/std/zero/NaN fractions. | RUN-VALUES | SHAPE | payload_scan |

@@ -110,7 +110,7 @@ class InputProvenance:
 
     origin: str
     rung: int
-    values_semantic: bool
+    has_semantic_values: bool
     call_structure: dict[str, Any]
     tensors: tuple[TensorFacts, ...]
     recipes: tuple[dict[str, Any], ...] | None = None
@@ -188,10 +188,10 @@ def provenance_for_plan(  # noqa: PLR0913 -- each kwarg is one NAMED evidence fi
     return InputProvenance(
         origin=ORIGIN_BY_RUNG[plan.rung],
         rung=plan.rung,
-        values_semantic=gold,
+        has_semantic_values=gold,
         call_structure=_call_structure(plan),
         tensors=_tensor_facts(plan),
-        recipes=recipes,
+        facets=recipes,
         strategy=strategy,
         attempts=attempts,
         constraining_op=constraining_op,

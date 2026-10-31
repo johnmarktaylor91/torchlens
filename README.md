@@ -500,7 +500,7 @@ instead of just saying "measured":
 
 ```python
 prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
-print(prof_log.profile(level='module', sort_by='flops', top_k=8))
+print(prof_log.profile(level='module', sort_by='flops', k=8))
 print(prof_log.profile().honesty())
 
 # Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;

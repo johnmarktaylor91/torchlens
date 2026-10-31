@@ -187,7 +187,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     views = mi.head_weight_views(gpt2_trace, "transformer.h.0.attn")
     assert views.sources["q"].orientation == "in_out"  # Conv1D law (F5)
-    assert views.sources["q"].fused_qkv
+    assert views.sources["q"].has_fused_qkv
     assert views.sources["q"].slice_cols == (0, 64)
     assert views.sources["v"].slice_cols == (128, 192)
     assert views.sources["q"].verification == "payload_verified"
@@ -195,7 +195,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     gqa = mi.head_weight_views(llama_trace, "model.layers.0.self_attn")
     assert gqa.sources["q"].orientation == "out_in"  # Linear law
-    assert (gqa.n_q_heads, gqa.n_kv_heads) == (4, 2)
+    assert (gqa.num_q_heads, gqa.num_kv_heads) == (4, 2)
     assert tuple(gqa.w_k.shape)[0] == 2  # KV-group count, never repeated
 
 

@@ -81,7 +81,7 @@ def test_episode_x_intervene_couples_with_the_evidence_bar_met():
     log = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
         intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
     )
     header = log.annotations["episode"]["header"]
@@ -101,7 +101,7 @@ def test_step_ceiling_refuses_at_declaration_and_override_admits():
     over = EPISODE_DECLARED_STEP_CEILING + 1
 
     with pytest.raises(EpisodeDeclarationError) as excinfo:
-        resolve_episode_declaration(EpisodeSpec(stepped_module=model.step, n_steps=over), model)
+        resolve_episode_declaration(EpisodeSpec(stepped_module=model.step, num_steps=over), model)
     assert excinfo.value.fields["code"] == "episode_step_ceiling_exceeded"
     assert "acknowledge_step_cost" in str(excinfo.value)
 
@@ -115,14 +115,14 @@ def test_step_ceiling_refuses_at_declaration_and_override_admits():
 
     # At the ceiling: admitted without the override.
     at_ceiling = resolve_episode_declaration(
-        EpisodeSpec(stepped_module=model.step, n_steps=EPISODE_DECLARED_STEP_CEILING),
+        EpisodeSpec(stepped_module=model.step, num_steps=EPISODE_DECLARED_STEP_CEILING),
         model,
     )
     assert at_ceiling.n_steps == EPISODE_DECLARED_STEP_CEILING
 
     # Beyond the ceiling with the explicit acknowledgement: admitted.
     acknowledged = resolve_episode_declaration(
-        EpisodeSpec(stepped_module=model.step, n_steps=over, acknowledge_step_cost=True),
+        EpisodeSpec(stepped_module=model.step, num_steps=over, acknowledge_step_cost=True),
         model,
     )
     assert acknowledged.n_steps == over
@@ -148,7 +148,7 @@ def test_entry_refusal_via_trace_keeps_root_unexecuted():
                 torch.tensor([[1]]),
                 episode=EpisodeSpec(
                     stepped_module=model.step,
-                    n_steps=EPISODE_DECLARED_STEP_CEILING + 1,
+                    num_steps=EPISODE_DECLARED_STEP_CEILING + 1,
                 ),
             )
     finally:
@@ -176,7 +176,7 @@ def test_settlement_count_mismatch_carries_partial_log():
         tl.trace(
             model,
             torch.tensor([[1]]),
-            episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS + 1),
+            episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS + 1),
         )
     assert excinfo.value.fields["code"] == "episode_ledger_incoherent"
     _assert_settlement_refusal_keeps_product(excinfo)
@@ -196,7 +196,7 @@ def test_float_root_under_tokens_kind_teaches_digest_and_keeps_product():
         tl.trace(
             model,
             torch.tensor([[1]]),
-            episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+            episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "step_output_kind='digest'" in str(excinfo.value)
@@ -217,13 +217,13 @@ def test_prompt_plus_completion_matches_emitted_only_column():
     full_trace = tl.trace(
         generate_shaped,
         prompt,
-        episode=EpisodeSpec(stepped_module=generate_shaped.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=generate_shaped.step, num_steps=N_STEPS),
     )
     emitted_only = _Greedy()
     emitted_trace = tl.trace(
         emitted_only,
         prompt,
-        episode=EpisodeSpec(stepped_module=emitted_only.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=emitted_only.step, num_steps=N_STEPS),
     )
     full_ledger = full_trace.episode
     emitted_ledger = emitted_trace.episode
@@ -246,7 +246,7 @@ def test_capture_kind_and_public_step_access():
     episode_trace = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
     )
     assert episode_trace.capture_kind == "episode"
     ledger = episode_trace.episode

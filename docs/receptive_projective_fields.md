@@ -191,7 +191,7 @@ unit = op.receptive_field.center_unit(batch_index=0)
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
     vis_save_only=True,
-    vis_fileformat="svg",
+    file_format="svg",
 )
 
 # Save the source image overlay and the empirical gradient heatmap together.

@@ -70,7 +70,7 @@ def episode_log() -> Any:
     log = tl.trace(
         root,
         torch.randint(0, 16, (1, 2)),
-        episode=tl.options.EpisodeSpec(stepped_module=stepped, n_steps=3),
+        episode=tl.options.EpisodeSpec(stepped_module=stepped, num_steps=3),
     )
     try:
         yield log

@@ -55,10 +55,10 @@ def test_read_element_units_run_in_one_sweep_and_equal_their_own_fork(monkeypatc
     audit = attribution.causal_audit(model, X, claim=_read(model, reduce=None), target=_seed(), k=3)
     assert audit.extra["grain"] == "element"
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.units) > len({row.site for row in audit.units})
+    assert len(candidates) == len(audit.indices) > len({row.site for row in audit.indices})
     assert all(not isinstance(selection, str) for selection in candidates.values())
     members = _members(effects)
-    assert len(members) == len(audit.units)
+    assert len(members) == len(audit.indices)
     assert {member.status for member in members} == {"released"}
     _assert_each_unit_equals_its_own_fork(audit)
 
@@ -70,7 +70,7 @@ def test_read_mean_and_baseline_units_keep_their_own_forks(monkeypatch, ablation
     spy = _Spy(monkeypatch)
     model = LinearNet().eval().double()
     audit = attribution.causal_audit(
-        model, X, claim=_read(model, reduce=None), target=_seed(), k=3, ablation=ablation
+        model, X, claim=_read(model, reduce=None), target=_seed(), k=3, edit=ablation
     )
     assert spy.calls == []
     _assert_each_unit_equals_its_own_fork(audit)
@@ -83,9 +83,9 @@ def test_layer_units_run_in_one_sweep_and_equal_their_own_fork(monkeypatch, abla
     spy = _Spy(monkeypatch)
     model, x = _linear_case()
     claim = attribution.layer_attribution(model, x, target=1, layer="fc1")
-    audit = attribution.causal_audit(model, x, claim=claim, target=1, k=2, ablation=ablation)
+    audit = attribution.causal_audit(model, x, claim=claim, target=1, k=2, edit=ablation)
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.units) == 6
+    assert len(candidates) == len(audit.indices) == 6
     assert len(_members(effects)) == 6
     _assert_each_unit_equals_its_own_fork(audit)
 
@@ -97,8 +97,8 @@ def test_layer_units_with_several_element_axes_equal_their_own_fork(monkeypatch)
     torch.manual_seed(0)
     model, x = SmallCnn().eval().double(), torch.randn(2, 1, 4, 4, dtype=torch.float64)
     claim = attribution.layer_attribution(model, x, target=1, layer="conv")
-    audit = attribution.causal_audit(model, x, claim=claim, target=1, k=3, random_draws=2)
+    audit = attribution.causal_audit(model, x, claim=claim, target=1, k=3, num_random_draws=2)
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.units) == claim.values[0].numel()
-    assert len(_members(effects)) == len(audit.units)
+    assert len(candidates) == len(audit.indices) == claim.values[0].numel()
+    assert len(_members(effects)) == len(audit.indices)
     _assert_each_unit_equals_its_own_fork(audit)

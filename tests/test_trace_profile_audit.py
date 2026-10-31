@@ -131,7 +131,7 @@ def test_trace_profile_top_k_truncates_after_sorting() -> None:
 
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
     full = trace.profile(sort_by="activation_memory").to_pandas()
-    bottlenecks = trace.profile(sort_by="activation_memory", top_k=3).to_pandas()
+    bottlenecks = trace.profile(sort_by="activation_memory", k=3).to_pandas()
 
     assert len(bottlenecks) == 3
     assert bottlenecks["name"].tolist() == full["name"].tolist()[:3]

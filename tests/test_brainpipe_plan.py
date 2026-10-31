@@ -68,15 +68,15 @@ def test_two_probe_plan_measures_sites_and_prices_passes() -> None:
     linear_site = next(s for s in plan.sites if s.label == "linear_1_1")
     # 5 stimuli x 32 features x 4 bytes at the run batch.
     assert linear_site.bytes_at_batch(5) == 5 * 32 * 4
-    assert not linear_site.batch_invariant
+    assert not linear_site.is_batch_invariant
 
 
 def test_batch_invariant_site_is_detected_not_total_scaled() -> None:
     """D-15: a site whose bytes ignore batch is flagged and priced flat."""
 
     model = _BatchInvariantModel().eval()
-    plan = bp.extraction_plan(model, torch.randn(4, 16), n_stimuli=64, batch_size=16)
-    invariant = [site for site in plan.sites if site.batch_invariant]
+    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=64, batch_size=16)
+    invariant = [site for site in plan.sites if site.is_batch_invariant]
     assert invariant, "the broadcast-constant site must be detected"
     site = invariant[0]
     assert site.bytes_at_batch(16) == site.bytes_at_batch(4)
@@ -112,7 +112,7 @@ def test_signature_mismatch_refuses_typed() -> None:
     """D-15: a drifted run request refuses; it never silently over-runs."""
 
     model = _model()  # held alive: the signature door is under test here
-    plan = bp.extraction_plan(model, torch.randn(4, 16), n_stimuli=20, batch_size=5)
+    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
     with pytest.raises(Exception) as excinfo:
         plan.run(torch.randn(20, 17), progress=False)
     assert excinfo.value.fields["code"] == "extraction_plan_signature_mismatch"
@@ -136,7 +136,7 @@ def test_plan_run_executes_through_the_artifact_runner() -> None:
     plan = bp.extraction_plan(
         model,
         torch.randn(4, 16),
-        n_stimuli=20,
+        num_stimuli=20,
         batch_size=5,
         transform=lambda t: t.mean(dim=-1, keepdim=True),
     )
@@ -157,7 +157,7 @@ def test_plan_holds_model_weakly() -> None:
     import weakref
 
     model = _model()
-    plan = bp.extraction_plan(model, torch.randn(4, 16), n_stimuli=20, batch_size=5)
+    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
     assert isinstance(plan._model_ref, weakref.ref)
     assert plan._model_ref() is model
 
@@ -167,8 +167,8 @@ def test_unknown_requested_site_is_excluded_actionably() -> None:
 
     plan = _plan(sites=["linear_1_1", "nonexistent_9"])
     by_label = {site.label: site for site in plan.sites}
-    assert by_label["linear_1_1"].included
-    assert not by_label["nonexistent_9"].included
+    assert by_label["linear_1_1"].is_included
+    assert not by_label["nonexistent_9"].is_included
     assert "not observed" in by_label["nonexistent_9"].exclusion_reason
 
 
@@ -246,10 +246,10 @@ def test_probe_invalid_refusals_are_typed() -> None:
 
     model = _model()
     with pytest.raises(Exception) as excinfo:
-        bp.extraction_plan(model, "not a tensor", n_stimuli=8, batch_size=4)
+        bp.extraction_plan(model, "not a tensor", num_stimuli=8, batch_size=4)
     assert excinfo.value.fields["code"] == "extraction_probe_invalid"
     with pytest.raises(Exception) as excinfo:
-        bp.extraction_plan(model, torch.randn(4, 16), n_stimuli=8, batch_size=0)
+        bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=8, batch_size=0)
     assert excinfo.value.fields["code"] == "extraction_probe_invalid"
 
 
@@ -269,7 +269,7 @@ def test_dead_model_run_refuses_extraction_plan_model_gone() -> None:
     plan = bp.ExtractionPlan(
         sites=(),
         batch_size=4,
-        n_stimuli=8,
+        num_stimuli=8,
         input_signature=((16,), "torch.float32", 4, None, "_Ephemeral"),
         transform_repr=None,
         engine="trace",

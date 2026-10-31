@@ -42,7 +42,7 @@ def _build(model, transcoders, n_layers, **kwargs):
     return tl.attribution.build_graph(
         _trace(model),
         transcoders,
-        embedding="embed",
+        embedding_module="embed",
         frozen=fx.frozen_names(n_layers),
         **kwargs,
     )
@@ -68,12 +68,12 @@ def _source_injection(graph, node, model, frozen, transcoders):
     assert node.kind == "feature"
     reader = transcoders[node.site]
     x = frozen.mlp_in[_layer(node.site)][node.position]
-    act = torch.relu(x @ reader.W_enc.double() + reader.b_enc.double())[node.feature]
+    act = torch.relu(x @ reader.W_enc.double() + reader.b_enc.double())[node.feature_index]
     writes = {}
     decoders = reader.W_dec if isinstance(reader.W_dec, dict) else {node.site: reader.W_dec}
     for site, decoder in decoders.items():
         write = zero.clone()
-        write[node.position] = act * decoder.double()[node.feature]
+        write[node.position] = act * decoder.double()[node.feature_index]
         writes[_layer(site)] = write
     return zero, writes
 
@@ -99,7 +99,7 @@ def _readout(graph, node, ins, logits, transcoders):
 
     if node.kind == "feature":
         reader = transcoders[node.site]
-        return ins[_layer(node.site)][node.position] @ reader.W_enc.double()[:, node.feature]
+        return ins[_layer(node.site)][node.position] @ reader.W_enc.double()[:, node.feature_index]
     direction = torch.zeros(fx.VOCAB, dtype=torch.float64)
     direction[node.token] = 1.0
     if graph.demeaned_logits:
@@ -141,11 +141,11 @@ def _key(graph, model, transcoders):
         constants["other"][t] = _readout(graph, node, other_ins, other_logits, transcoders)
         if node.kind == "feature":
             reader = transcoders[node.site]
-            b_enc = reader.b_enc.double()[node.feature]
+            b_enc = reader.b_enc.double()[node.feature_index]
             constants["encoder_bias"][t] = b_enc
             values[t] = (
                 frozen.mlp_in[_layer(node.site)][node.position]
-                @ reader.W_enc.double()[:, node.feature]
+                @ reader.W_enc.double()[:, node.feature_index]
                 + b_enc
             )
         else:
@@ -177,7 +177,7 @@ class TestPerLayerFixture:
     def test_every_edge_and_node_matches_the_closed_form(self) -> None:
         model = fx.build_model(2)
         transcoders = fx.exact_transcoders(model)
-        graph = _build(model, transcoders, 2, max_n_logits=2, desired_logit_prob=0.99)
+        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
         _assert_against_key(graph, model, transcoders, F1_COUNTS)
         assert graph.error_vectors.abs().max().item() <= EDGE_TOL
         assert graph.capture_outcome == "COMPLETE"
@@ -186,20 +186,20 @@ class TestPerLayerFixture:
     def test_node_order_and_fields(self) -> None:
         model = fx.build_model(2)
         graph = _build(
-            model, fx.exact_transcoders(model), 2, max_n_logits=2, desired_logit_prob=0.99
+            model, fx.exact_transcoders(model), 2, max_num_logits=2, logit_probability_coverage=0.99
         )
         kinds = [node.kind for node in graph.nodes]
         assert kinds == ["feature"] * 12 + ["error"] * 6 + ["token"] * 3 + ["logit"] * 2
-        assert graph.active_features.tolist() == [
+        assert graph.active_feature_indices.tolist() == [
             [layer, pos, feat] for layer in (0, 1) for pos in range(3) for feat in (0, 2)
         ]
-        assert graph.input_tokens.tolist() == list(fx.TOKENS)
+        assert graph.input_token_ids.tolist() == list(fx.TOKENS)
         assert [graph.nodes[i].token for i in graph.node_indices("token")] == list(fx.TOKENS)
         assert graph.transcoder_sites == ("blocks.0.mlp", "blocks.1.mlp")
         assert graph.error_sites == ("blocks.0.mlp", "blocks.1.mlp")
         probs = torch.softmax(fx.plain_forward(model).logits[-1], dim=-1)
         top = torch.topk(probs, 2)
-        assert graph.logit_tokens.tolist() == top.indices.tolist()
+        assert graph.logit_token_ids.tolist() == top.indices.tolist()
         assert (graph.logit_probabilities - top.values).abs().max().item() <= TOTAL_TOL
         assert graph.adjacency_matrix[graph.node_indices("error")].abs().sum().item() == 0.0
         assert graph.adjacency_matrix[:, graph.node_indices("logit")].abs().sum().item() == 0.0
@@ -222,7 +222,7 @@ class TestPerLayerFixture:
 
         model = fx.build_model(2)
         graph = _build(
-            model, fx.exact_transcoders(model), 2, max_n_logits=2, desired_logit_prob=0.99
+            model, fx.exact_transcoders(model), 2, max_num_logits=2, logit_probability_coverage=0.99
         )
         for t in graph.node_indices("feature"):
             target = graph.nodes[t]
@@ -238,7 +238,7 @@ class TestPerLayerFixture:
     def test_float32_edges_within_the_registered_tolerance(self) -> None:
         model = fx.build_model(2, dtype=torch.float32)
         transcoders = fx.exact_transcoders(model)
-        graph = _build(model, transcoders, 2, max_n_logits=2, desired_logit_prob=0.99)
+        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
         assert graph.adjacency_matrix.dtype == torch.float32
         adjacency, _values, _constants, _frozen = _key(graph, model, transcoders)
         gap = (graph.adjacency_matrix.double() - adjacency).abs()
@@ -252,11 +252,11 @@ class TestPerLayerFixture:
         trace = _trace(model)
         by_op = [str(trace.modules[name].output_ops[0]) for name in fx.frozen_names(2)]
         graph = tl.attribution.build_graph(
-            trace, transcoders, embedding="embed", frozen=by_op, target=[0]
+            trace, transcoders, embedding_module="embed", frozen=by_op, target=[0]
         )
         by_name = _build(model, transcoders, 2, target=[0])
         assert torch.equal(graph.adjacency_matrix, by_name.adjacency_matrix)
-        assert graph.frozen == by_name.frozen
+        assert graph.frozen_sites == by_name.frozen_sites
 
 
 class TestErrorNodeFixture:
@@ -265,7 +265,7 @@ class TestErrorNodeFixture:
     def test_error_nodes_carry_the_unexplained_mlp_output(self) -> None:
         model = fx.build_model(2)
         transcoders = fx.lossy_transcoders(model)
-        graph = _build(model, transcoders, 2, max_n_logits=2, desired_logit_prob=0.99)
+        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
         frozen = _assert_against_key(graph, model, transcoders, F1_COUNTS)
         key_errors = torch.stack(_key_errors(model, frozen, transcoders))
         assert (graph.error_vectors - key_errors).abs().max().item() <= EDGE_TOL
@@ -290,7 +290,7 @@ class TestCrossLayerFixture:
     def test_cross_layer_edges_match_the_closed_form(self) -> None:
         model = fx.build_model(3)
         transcoders = fx.cross_layer_transcoders(model)
-        graph = _build(model, transcoders, 3, max_n_logits=2, desired_logit_prob=0.99)
+        graph = _build(model, transcoders, 3, max_num_logits=2, logit_probability_coverage=0.99)
         _assert_against_key(graph, model, transcoders, F3_COUNTS)
         first = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.0.mlp"]
         last = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.2.mlp"]
@@ -307,7 +307,7 @@ class TestRefusals:
         model = fx.build_model(2)
         with pytest.raises(tl.attribution.AttributionError) as excinfo:
             tl.attribution.build_graph(
-                _trace(model), fx.exact_transcoders(model), embedding="embed"
+                _trace(model), fx.exact_transcoders(model), embedding_module="embed"
             )
         assert self._code(excinfo) == "attribution_graph_frozen_required"
         assert "frozen=()" in str(excinfo.value)
@@ -316,7 +316,7 @@ class TestRefusals:
         model = fx.build_model(2)
         with pytest.raises(tl.attribution.AttributionError) as excinfo:
             tl.attribution.build_graph(
-                _trace(model), fx.exact_transcoders(model), embedding="embedding", frozen=()
+                _trace(model), fx.exact_transcoders(model), embedding_module="embedding", frozen=()
             )
         assert self._code(excinfo) == "attribution_graph_site_not_found"
 
@@ -324,7 +324,7 @@ class TestRefusals:
         model = fx.build_model(2)
         with pytest.raises(tl.attribution.AttributionError) as excinfo:
             tl.attribution.build_graph(
-                _trace(model), {"blocks.0.mlp": object()}, embedding="embed", frozen=()
+                _trace(model), {"blocks.0.mlp": object()}, embedding_module="embed", frozen=()
             )
         assert self._code(excinfo) == "attribution_graph_transcoder_invalid"
 
@@ -333,7 +333,7 @@ class TestRefusals:
         trace = tl.trace(model, torch.tensor([fx.TOKENS, fx.TOKENS]))
         with pytest.raises(tl.attribution.AttributionError) as excinfo:
             tl.attribution.build_graph(
-                trace, fx.exact_transcoders(model), embedding="embed", frozen=()
+                trace, fx.exact_transcoders(model), embedding_module="embed", frozen=()
             )
         assert self._code(excinfo) == "attribution_graph_input_unsupported"
 

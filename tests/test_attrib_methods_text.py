@@ -130,8 +130,8 @@ def test_two_liner_runs_and_disches_everything() -> None:
 
     model = _TinyForCausalLM()
     tokenizer = _FakeTokenizer()
-    result = attribution.text(model, tokenizer, "the eiffel tower is in", n_steps=64)
-    assert result.n_steps == 64
+    result = attribution.text(model, tokenizer, "the eiffel tower is in", num_steps=64)
+    assert result.num_steps == 64
     assert len(result.scores) == 5
     assert result.values.shape == (5, 8)
     assert result.baseline["policy"] == "zeros_all"
@@ -161,7 +161,7 @@ def test_auto_ladder_certifies_on_smooth_model() -> None:
 
     model = _TinyForCausalLM(curvature=0.5)
     tokenizer = _FakeTokenizer()
-    result = attribution.text(model, tokenizer, "the cat sat", n_steps="auto")
+    result = attribution.text(model, tokenizer, "the cat sat", num_steps="auto")
     assert result.converged is True
     assert result.convergence["grid_pair"] == (64, 128)
     assert result.convergence["grids_evaluated"] == [64, 128]
@@ -175,7 +175,7 @@ def test_auto_ladder_cap_hit_is_first_class(recwarn: pytest.WarningsRecorder) ->
 
     model = _TinyForCausalLM(curvature=3000.0)
     tokenizer = _FakeTokenizer()
-    result = attribution.text(model, tokenizer, "the cat sat is in", n_steps="auto")
+    result = attribution.text(model, tokenizer, "the cat sat is in", num_steps="auto")
     assert result.converged is False
     assert result.convergence["grids_evaluated"] == [64, 128, 256, 512]
     payload = result.show()
@@ -216,7 +216,7 @@ def test_bare_int_warn_band() -> None:
     tokenizer = _FakeTokenizer()
     prompt = "the cat sat"  # 3 tokens; vocab has 10 entries
     with pytest.warns(AttributionWarning) as captured:
-        ambiguous = attribution.text(model, tokenizer, prompt, target=2, n_steps=8)
+        ambiguous = attribution.text(model, tokenizer, prompt, target=2, num_steps=8)
     assert any(
         warning.message.fields.get("code") == "text_bare_int_target_ambiguous"
         for warning in captured
@@ -226,7 +226,7 @@ def test_bare_int_warn_band() -> None:
 
     with warnings_module.catch_warnings():
         warnings_module.simplefilter("error", AttributionWarning)
-        unambiguous = attribution.text(model, tokenizer, prompt, target=7, n_steps=8)
+        unambiguous = attribution.text(model, tokenizer, prompt, target=7, num_steps=8)
     assert "logits[0, 2, 7]" in unambiguous.target_repr
 
 
@@ -237,13 +237,13 @@ def test_target_spellings() -> None:
     model = _TinyForCausalLM()
     tokenizer = _FakeTokenizer()
     prompt = "the eiffel tower is in"
-    tuple_result = attribution.text(model, tokenizer, prompt, target=(4, 6), n_steps=8)
+    tuple_result = attribution.text(model, tokenizer, prompt, target=(4, 6), num_steps=8)
     assert "logits[0, 4, 6]" in tuple_result.target_repr
-    string_result = attribution.text(model, tokenizer, prompt, target="paris", n_steps=8)
+    string_result = attribution.text(model, tokenizer, prompt, target="paris", num_steps=8)
     assert "logits[0, 4, 6]" in string_result.target_repr
     torch.testing.assert_close(string_result.scores, tuple_result.scores)
     contrastive = attribution.text(
-        model, tokenizer, prompt, target={"target": "paris", "foil": "france"}, n_steps=8
+        model, tokenizer, prompt, target={"target": "paris", "foil": "france"}, num_steps=8
     )
     assert "contrastive" in contrastive.target_repr
 
@@ -252,10 +252,10 @@ def test_target_spellings() -> None:
 
         return logits[0, -1, 6] - logits[0, -1, 7]
 
-    callable_result = attribution.text(model, tokenizer, prompt, target=scorer, n_steps=8)
+    callable_result = attribution.text(model, tokenizer, prompt, target=scorer, num_steps=8)
     assert callable_result.target_repr == "scorer"
     with pytest.raises(AttributionError) as multi:
-        attribution.text(model, tokenizer, prompt, target="the cat", n_steps=8)
+        attribution.text(model, tokenizer, prompt, target="the cat", num_steps=8)
     assert multi.value.fields["code"] == "text_target_unresolvable"
 
 
@@ -266,27 +266,29 @@ def test_explicit_baseline_spellings_and_refusals() -> None:
     model = _TinyForCausalLM()
     tokenizer = _FakeTokenizer()
     prompt = "the cat sat"
-    zeros = attribution.text(model, tokenizer, prompt, baseline="zeros", n_steps=16)
+    zeros = attribution.text(model, tokenizer, prompt, baseline="zeros", num_steps=16)
     assert zeros.baseline["policy"] == "zeros_all"
-    pad = attribution.text(model, tokenizer, prompt, baseline="pad_token", n_steps=16)
+    pad = attribution.text(model, tokenizer, prompt, baseline="pad_token", num_steps=16)
     assert pad.baseline["policy"] == "pad_content_plus_scaffold"
     assert pad.baseline["baseline_ids"] == [0, 0, 0]
-    ids = attribution.text(model, tokenizer, prompt, baseline=[0, 0, 0], n_steps=16)
+    ids = attribution.text(model, tokenizer, prompt, baseline=[0, 0, 0], num_steps=16)
     torch.testing.assert_close(ids.scores, pad.scores)
     tensor_baseline = torch.zeros(1, 3, 8, dtype=torch.float64)
-    tensor_result = attribution.text(model, tokenizer, prompt, baseline=tensor_baseline, n_steps=16)
+    tensor_result = attribution.text(
+        model, tokenizer, prompt, baseline=tensor_baseline, num_steps=16
+    )
     torch.testing.assert_close(tensor_result.scores, zeros.scores)
 
     padless = _FakeTokenizer(pad_token_id=None)
     with pytest.raises(AttributionError) as no_pad:
-        attribution.text(model, padless, prompt, baseline="pad_token", n_steps=8)
+        attribution.text(model, padless, prompt, baseline="pad_token", num_steps=8)
     assert no_pad.value.fields["code"] == "text_baseline_unresolvable"
     assert "never guessed" in str(no_pad.value)
     with pytest.raises(AttributionError) as bad_ids:
-        attribution.text(model, tokenizer, prompt, baseline=[0, 0], n_steps=8)
+        attribution.text(model, tokenizer, prompt, baseline=[0, 0], num_steps=8)
     assert bad_ids.value.fields["code"] == "text_baseline_unresolvable"
     with pytest.raises(AttributionError) as bad_spelling:
-        attribution.text(model, tokenizer, prompt, baseline=3.5, n_steps=8)
+        attribution.text(model, tokenizer, prompt, baseline=3.5, num_steps=8)
     assert bad_spelling.value.fields["code"] == "text_baseline_unresolvable"
 
 
@@ -296,7 +298,7 @@ def test_explicit_baseline_residual_warning() -> None:
     model = _TinyForCausalLM(curvature=60.0)
     tokenizer = _FakeTokenizer()
     with pytest.warns(AttributionWarning) as captured:
-        attribution.text(model, tokenizer, "the cat sat is in", baseline="zeros", n_steps=8)
+        attribution.text(model, tokenizer, "the cat sat is in", baseline="zeros", num_steps=8)
     assert any(
         warning.message.fields.get("code") == "text_residual_above_tolerance"
         for warning in captured
@@ -311,7 +313,7 @@ def test_truncation_is_explicit_and_disclosed() -> None:
     tokenizer = _FakeTokenizer()
     with pytest.warns(AttributionWarning) as captured:
         result = attribution.text(
-            model, tokenizer, "the eiffel tower is in paris", max_length=4, n_steps=8
+            model, tokenizer, "the eiffel tower is in paris", max_length=4, num_steps=8
         )
     assert any(warning.message.fields.get("code") == "text_input_truncated" for warning in captured)
     assert result.truncation == {
@@ -330,14 +332,14 @@ def test_input_beyond_the_position_limit_refuses_and_max_length_runs() -> None:
     tokenizer = _FakeTokenizer()
     text = "the eiffel tower is in paris"
     with pytest.raises(AttributionError) as info:
-        attribution.text(model, tokenizer, text, n_steps=8)
+        attribution.text(model, tokenizer, text, num_steps=8)
     assert info.value.fields["code"] == "text_input_exceeds_position_limit"
     assert "max_length=4" in str(info.value)
 
     with pytest.warns(AttributionWarning):
-        result = attribution.text(model, tokenizer, text, max_length=4, n_steps=8)
+        result = attribution.text(model, tokenizer, text, max_length=4, num_steps=8)
     assert result.truncation is not None and result.truncation["retained_length"] == 4
-    within = attribution.text(model, tokenizer, "the eiffel tower is", n_steps=8)
+    within = attribution.text(model, tokenizer, "the eiffel tower is", num_steps=8)
     assert len(within.scores) == 4
 
 
@@ -356,7 +358,7 @@ def test_payload_escapes_hostile_tokens() -> None:
     assert "<script>" not in rendered
     assert "&lt;script&gt;" in rendered
     assert "&lt;b&gt;" in rendered
-    text_fallback = payload.to_text()
+    text_fallback = payload.to_markdown()
     assert "ok" in text_fallback and "target:" in text_fallback
 
 
@@ -365,5 +367,5 @@ def test_zero_curvature_ig_is_exact() -> None:
 
     model = _TinyForCausalLM(curvature=0.01)
     tokenizer = _FakeTokenizer()
-    result = attribution.text(model, tokenizer, "the cat sat", n_steps=16)
+    result = attribution.text(model, tokenizer, "the cat sat", num_steps=16)
     assert result.completeness["residual_rel"] < 1e-4

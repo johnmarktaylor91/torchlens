@@ -117,7 +117,7 @@ def test_a_circuit_runs_as_one_call_and_matches_plain_hooks(tiny) -> None:
     model, clean_ids, corrupt_ids, clean, graph, corrupt = tiny
     edges = _outside_random_circuit(graph, keep=0.4)
     assert len({edge.receiver.name for edge in edges}) == len(graph.receivers)
-    patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     want = _reference(model, gpt2_spec(model), clean_ids, corrupt_ids, edges)
     got = {
         "ln_f": patched.modules["transformer.ln_f"].out,
@@ -137,12 +137,14 @@ def test_upstream_patches_reach_downstream_senders(tiny) -> None:
 
     model, clean_ids, corrupt_ids, clean, graph, corrupt = tiny
     edges = [graph.edges["input->a0.h0<v>"], graph.edges["input->logits"]]
-    patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     want = _reference(model, gpt2_spec(model), clean_ids, corrupt_ids, edges)
     got = patched.modules["transformer.ln_f"].out
     torch.testing.assert_close(got, want["ln_f"], rtol=0, atol=_ATOL)
     # Summing the two single-receiver patches' clean-value deltas gives a different answer.
-    alone = mi.patch_edges(clean, edges[1:], corrupt=corrupt).modules["transformer.ln_f"].out
+    alone = (
+        mi.patch_edges(clean, edges[1:], corrupted_graph=corrupt).modules["transformer.ln_f"].out
+    )
     assert float((got - alone).abs().max()) > 1e-6
 
 
@@ -150,8 +152,8 @@ def test_upstream_patches_reach_downstream_senders(tiny) -> None:
 def test_one_receiver_through_the_multi_path_is_bitwise_the_single_path(tiny, receiver) -> None:
     _model, _c, _x, clean, graph, corrupt = tiny
     edges = [edge for edge in graph.edges.values() if edge.receiver.name == receiver][:3]
-    new = mi.patch_edges(clean, edges, corrupt=corrupt)
-    old = _patch_edges_single_receiver(clean, edges, corrupt=corrupt)
+    new = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
+    old = _patch_edges_single_receiver(clean, edges, corrupted_graph=corrupt)
     for op in clean.ops:
         a, b = new.ops[op.label].out, old.ops[op.label].out
         if isinstance(a, torch.Tensor):
@@ -160,7 +162,7 @@ def test_one_receiver_through_the_multi_path_is_bitwise_the_single_path(tiny, re
 
 def test_no_edges_returns_an_unpatched_fork(tiny) -> None:
     _model, _c, _x, clean, _graph, corrupt = tiny
-    fork = mi.patch_edges(clean, [], corrupt=corrupt)
+    fork = mi.patch_edges(clean, [], corrupted_graph=corrupt)
     assert fork is not clean
     assert torch.equal(fork.modules["lm_head"].out, clean.modules["lm_head"].out)
 
@@ -170,10 +172,10 @@ def test_a_repeated_edge_refuses_and_the_remedy_runs(tiny) -> None:
     edge = graph.edges["m0->logits"]
     edges = [edge, graph.edges["input->m1"], edge]
     with pytest.raises(MechInterpError) as excinfo:
-        mi.patch_edges(clean, edges, corrupt=corrupt)
+        mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     assert excinfo.value.fields["code"] == "mi_edge_patch_edge_repeated"
-    fixed = mi.patch_edges(clean, list(dict.fromkeys(edges)), corrupt=corrupt)
-    once = mi.patch_edges(clean, edges[:2], corrupt=corrupt)
+    fixed = mi.patch_edges(clean, list(dict.fromkeys(edges)), corrupted_graph=corrupt)
+    once = mi.patch_edges(clean, edges[:2], corrupted_graph=corrupt)
     assert torch.equal(fixed.modules["lm_head"].out, once.modules["lm_head"].out)
 
 
@@ -216,7 +218,7 @@ def test_nonlinear_fixture_matches_plain_hooks(plan) -> None:
         for item in plan:
             sender, receiver = item.split("->")
             edges.append(graph.edges[f"{rename[sender]}->{rename[receiver]}"])
-        patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+        patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
         want = _reference(model, spec, CLEAN, CORRUPT, edges)
         torch.testing.assert_close(
             patched.modules["lm_head"].out, want["lm_head"], rtol=0, atol=_ATOL

@@ -291,7 +291,7 @@ def compose_page(
                 ax.imshow(img)
                 ax.set_xticks([])
                 ax.set_yticks([])
-                for spine in ax.spines.values():
+                for spine in ax.running_stats.values():
                     spine.set_color("#c9ced4")
                     spine.set_linewidth(0.6)
             else:

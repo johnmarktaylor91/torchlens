@@ -60,7 +60,7 @@ def _backward_trace() -> tl.Trace:
 def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render the backward graph to DOT and return the source."""
     return trace.draw_backward(
-        vis_outpath=str(tmp_path / name), vis_save_only=True, vis_fileformat="dot", **kwargs
+        path=str(tmp_path / name), vis_save_only=True, file_format="dot", **kwargs
     )
 
 

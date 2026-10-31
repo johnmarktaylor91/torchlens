@@ -118,8 +118,8 @@ def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
     )
 
@@ -739,7 +739,7 @@ def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
 
     from torchlens.visualization.themes import resolve_theme
 
-    _draw(mlp_log, tmp_path, color_by="bytes", vis_theme="dark")
+    _draw(mlp_log, tmp_path, color_by="bytes", theme="dark")
     state = _state(mlp_log)
     dark = resolve_theme("dark")
     assert state.ramp == (dark.ramp[0], dark.ramp[2])

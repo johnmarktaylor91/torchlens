@@ -125,8 +125,8 @@ def test_draw_color_by_device_time(mlp_log, tmp_path: Path) -> None:
     _synthetic_join_for(mlp_log)
     mlp_log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         color_by="device_time",
     )
     state = mlp_log._last_encoding_state
@@ -141,8 +141,8 @@ def test_draw_color_by_device_time_refuses_without_join(mlp_log, tmp_path: Path)
     with pytest.raises(TorchLensError) as excinfo:
         mlp_log.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "graph"),
+            file_format="svg",
+            path=str(tmp_path / "graph"),
             color_by="device_time",
         )
     assert excinfo.value.fields["code"] == "device_time_unavailable"
@@ -155,8 +155,8 @@ def test_draw_size_by_device_time(mlp_log, tmp_path: Path) -> None:
     _synthetic_join_for(mlp_log)
     mlp_log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         size_by="device_time",
     )
     state = mlp_log._last_encoding_state

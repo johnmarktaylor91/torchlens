@@ -30,7 +30,7 @@ incomplete and biased toward GPT-2/Llama-era decoder LMs.
    recipe-classified modules from structural-only ones and carry typed absence
    reasons.
 
-2. The registered-recipe inventory: `tl.facets.list()` and
+2. The registered-recipe inventory: `tl.facets.functions()` and
    `torchlens.semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`.
 
 ## Hunt axes (cover ALL of them)

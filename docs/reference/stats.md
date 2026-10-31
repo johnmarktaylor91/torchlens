@@ -24,7 +24,7 @@ Every accumulator implements the `tl.stats.StreamingStat` protocol --
 | `tl.stats.CKA()` | `SimilarityScore` (a float) | Paired `update(a, b)`; exact full-data linear CKA; the result names its variant in `similarity_repository_id` |
 | `tl.stats.PCA(n_components)` | dict | Streaming PCA; `.fitted()` freezes a transform |
 | `tl.stats.Histogram(...)` | histogram | Fixed signed-log2 bins (observability kernel) |
-| `tl.stats.Spine(...)` | scalar spine | Always-on scalar summary (observability kernel) |
+| `tl.stats.RunningStats(...)` | scalar spine | Always-on scalar summary (observability kernel) |
 | `tl.stats.Aggregator(*stats)` | dict | Fans one stream out to several accumulators |
 
 `tl.stats.CKA` is exact: it retains only feature-sized covariance terms, so
@@ -76,12 +76,12 @@ one top-k list, per unit. Axis 0 of every batch is the example axis; every
 axis other than the example and unit axes is a position axis (a token
 position, a spatial location).
 
-- `Quantile(..., unit_axis=-1).result()` maps each quantile to a `float64
+- `Quantile(..., unit_axis=-1).compute()` maps each quantile to a `float64
   [units]` tensor: a quantile vector per unit. It is exact while each unit has
   seen at most `reservoir_size` values; beyond that the rank-space error is
   about `sqrt(q * (1 - q) / reservoir_size)`, from a private seeded stream, so
   the same seed gives the same result.
-- `TopK(k, unit_axis=-1).result()` is a `tl.stats.UnitTopK`: `values`
+- `TopK(k, unit_axis=-1).compute()` is a `tl.stats.UnitTopK`: `values`
   (`float64 [units, k]`, descending), `example_ids` (`int64 [units, k]`) and
   `positions` (`int64 [units, k, position_axes]`, one column per position
   axis). Under `tl.aggregate` an example id is the example's index in the
@@ -148,7 +148,7 @@ for batch in [torch.rand(2, 3, 16, 16) for _ in range(3)]:
         log["conv2d_1_1"].out.flatten(1),
         log["relu_1_2"].out.flatten(1),
     )
-print(0.0 <= similarity.result() <= 1.0)
+print(0.0 <= similarity.compute() <= 1.0)
 ```
 
 ## Fitted PCA as a persisted transform
@@ -217,7 +217,7 @@ with tempfile.TemporaryDirectory() as folder:
     resumed = tl.stats.load_fitted(path)
     for batch in acts[2:]:
         resumed.update(batch)
-    print(torch.equal(resumed.result().example_ids, whole.result().example_ids))
+    print(torch.equal(resumed.compute().example_ids, whole.compute().example_ids))
 
     # A rerun of the same run reads the cache and skips the forward passes.
     batches = [torch.rand(2, 3, 16, 16) for _ in range(3)]
@@ -235,11 +235,11 @@ with tempfile.TemporaryDirectory() as folder:
 ## Reduce and discard: `save="stats"`
 
 `tl.trace(model, x, save="stats")` is a save level beside `"all"` and
-`"none"`: each op's out is folded into a `tl.stats.Spine` while the forward
+`"none"`: each op's out is folded into a `tl.stats.RunningStats` while the forward
 runs, and no activation payload is kept. The capture logs the same graph as a
 full capture (the reducer's own torch calls never enter it), makes no raw
 copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
-op whatever the batch size. `tl.stats.site_spines(trace)` returns
+op whatever the batch size. `tl.stats.site_stats(trace)` returns
 `{op label: Spine}` in capture order. For a float64 out the counts, the
 extrema, the sum and the mean equal `Spine().update(out)` on the full
 capture's out exactly. The reducer folds each out in chunks of 2^16 values,
@@ -254,22 +254,22 @@ them.
 
 A stats trace keeps nothing to read back or replay from, so it refuses
 instead of answering with an empty value: reading an op's `out` refuses
-`activation_reduced_to_stats` (the remedy names `site_spines` and
+`activation_reduced_to_stats` (the remedy names `site_stats` and
 `save="all"`), and replay or validation on the trace (`run`,
 `validate_forward_pass`, `save_new_outs`, `push`, `push_from`) refuses
 `stats_capture_not_replayable`; `tl.validate(model, x, scope="forward")`
-still works because it runs its own full capture. `site_spines` on a trace captured any other
+still works because it runs its own full capture. `site_stats` on a trace captured any other
 way refuses `stats_capture_not_reduced`.
 
 ```python
 x = torch.rand(2, 3, 16, 16)
 reduced = tl.trace(model, x, save="stats")
-spines = tl.stats.site_spines(reduced)
+spines = tl.stats.site_stats(reduced)
 label = next(iter(spines))
 print(label, spines[label].result().count_total, spines[label].result().mean)
 
 full = tl.trace(model, x)
-reference = tl.stats.Spine()
+reference = tl.stats.RunningStats()
 reference.update(full[label].out)
 print(reference.result() == spines[label].result())
 ```
@@ -289,7 +289,7 @@ distribution to the layer's), `max_prob`, and, when a batch is
 token (rank 1 is the top token; tied logits share the smallest rank). The
 result is a `tl.stats.TrajectoryStats`: `position_means[statistic]` is a
 float64 `[layers, positions]` tensor of means over every example, and
-`spines[statistic][layer]` is a `Spine` pooled over examples and positions
+`running_stats[statistic][layer]` is a `Spine` pooled over examples and positions
 (`summary(statistic)` returns their results). `mask_input=True` bans each
 row's own input tokens before every reduction, final output included; the
 same knob on `logit_lens_predictions` masks before its top-k and
@@ -342,7 +342,7 @@ data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
 traj = tl.stats.measure_trajectory(lm, data, mask_input=False)
 print(traj)
 print(traj.position_means["entropy"].shape)    # [layers, positions]
-print(traj.summary("target_rank")["blocks.1"].mean)
+print(traj.compute_stats("target_rank")["blocks.1"].mean)
 ```
 
 ## Where it sits

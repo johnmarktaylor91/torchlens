@@ -153,7 +153,7 @@ def test_layer_integrated_gradients_baseline_ids_match_embedded_baseline() -> No
     token_model, float_model, ids = _token_pair()
     baseline_ids = torch.zeros_like(ids)
     from_ids = tl.attribution.layer_integrated_gradients(
-        token_model, ids, target=2, layer="body.encoder", baseline=baseline_ids, n_steps=8
+        token_model, ids, target=2, layer="body.encoder", baseline=baseline_ids, num_steps=8
     )
     from_floats = tl.attribution.layer_integrated_gradients(
         float_model,
@@ -161,7 +161,7 @@ def test_layer_integrated_gradients_baseline_ids_match_embedded_baseline() -> No
         target=2,
         layer="body.encoder",
         baseline=token_model.embed(baseline_ids).detach(),
-        n_steps=8,
+        num_steps=8,
     )
     torch.testing.assert_close(from_ids.values, from_floats.values, atol=_ATOL, rtol=0)
     torch.testing.assert_close(
@@ -227,7 +227,7 @@ def test_layer_path_refuses_integer_inputs_without_an_embedding_and_its_remedy_r
     model = _CastModel().eval()
     ids = torch.randint(0, 5, (2, 6))
     with pytest.raises(AttributionError) as caught:
-        tl.attribution.layer_integrated_gradients(model, ids, target=0, layer="fc", n_steps=4)
+        tl.attribution.layer_integrated_gradients(model, ids, target=0, layer="fc", num_steps=4)
     assert caught.value.fields.get("code") == "layer_path_no_embedding"
     spelling = _remedy(caught.value, r"e\.g\. (tl\.attribution\.\w+\(.*?\)), or")
     assert spelling == "tl.attribution.layer_attribution(model, inputs, target=0, layer='fc')"
@@ -242,7 +242,7 @@ def test_layer_path_refuses_baseline_ids_that_do_not_mirror_inputs() -> None:
     token_model, _float_model, ids = _token_pair()
     with pytest.raises(AttributionError) as caught:
         tl.attribution.layer_integrated_gradients(
-            token_model, ids, target=1, layer="body.encoder", baseline=ids[:, :3], n_steps=4
+            token_model, ids, target=1, layer="body.encoder", baseline=ids[:, :3], num_steps=4
         )
     assert caught.value.fields.get("code") == "layer_path_baseline_ids_invalid"
     spelling = _remedy(caught.value, r"e\.g\. (baseline=torch\.zeros_like\(inputs\))")

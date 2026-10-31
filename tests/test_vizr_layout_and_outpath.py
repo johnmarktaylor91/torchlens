@@ -89,9 +89,9 @@ def test_rightleft_forward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
     try:
         dot = trace.draw(
             direction="rightleft",
-            vis_outpath=str(tmp_path / "rl"),
+            path=str(tmp_path / "rl"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_node_placement="dot",
         )
     finally:
@@ -111,9 +111,9 @@ def test_rightleft_backward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
         dot = trace.draw_backward(
             vis_direction="rightleft",
-            vis_outpath=str(tmp_path / "bwd_rl"),
+            path=str(tmp_path / "bwd_rl"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     finally:
         trace.cleanup()
@@ -139,10 +139,10 @@ def test_two_bare_draws_write_two_files_and_print_both(
     assert not trace.verbose
     try:
         with _shipped_draw_default():
-            trace.draw(vis_save_only=True, vis_fileformat="svg")
+            trace.draw(vis_save_only=True, file_format="svg")
             first_out = capsys.readouterr().out
             first_mtime = os.path.getmtime(tmp_path / "modelgraph.svg")
-            trace.draw(vis_save_only=True, vis_fileformat="svg")
+            trace.draw(vis_save_only=True, file_format="svg")
             second_out = capsys.readouterr().out
     finally:
         trace.cleanup()
@@ -167,8 +167,8 @@ def test_explicit_outpath_is_exact_and_quiet(
     trace = _trace()
     target = tmp_path / "named"
     try:
-        trace.draw(vis_outpath=str(target), vis_save_only=True, vis_fileformat="svg")
-        trace.draw(vis_outpath=str(target), vis_save_only=True, vis_fileformat="svg")
+        trace.draw(path=str(target), vis_save_only=True, file_format="svg")
+        trace.draw(path=str(target), vis_save_only=True, file_format="svg")
     finally:
         trace.cleanup()
     assert (tmp_path / "named.svg").is_file()

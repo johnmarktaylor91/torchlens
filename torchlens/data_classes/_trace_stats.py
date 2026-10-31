@@ -672,7 +672,7 @@ class TraceStatsMixin(_TraceMixinBase):
         *,
         sort_by: Literal["time", "flops", "activation_memory", "param_count"] = "time",
         ascending: bool = False,
-        top_k: int | None = None,
+        k: int | None = None,
         group_by: Literal["source_line"] | None = None,
     ) -> "TraceProfile":
         """Return a unified resource profile assembled from this trace.
@@ -710,7 +710,7 @@ class TraceStatsMixin(_TraceMixinBase):
             level=level,
             sort_by=sort_by,
             ascending=ascending,
-            top_k=top_k,
+            k=k,
             group_by=group_by,
         )
 

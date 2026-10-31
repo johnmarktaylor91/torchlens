@@ -516,7 +516,7 @@ class TokenAttributionPayload:
 
         return self.to_html()
 
-    def to_text(self) -> str:
+    def to_markdown(self) -> str:
         """Render a plain-text fallback table with the footer lines."""
 
         rows = [
@@ -527,7 +527,7 @@ class TokenAttributionPayload:
 
 
 @dataclass(frozen=True)
-class TokenAttributionResult:
+class TokenAttribution:
     """Frozen result of the token-attribution two-liner (attrib memo D28).
 
     Attributes
@@ -584,7 +584,7 @@ class TokenAttributionResult:
     values: Tensor
     target_repr: str
     baseline: dict[str, Any]
-    n_steps: int
+    num_steps: int
     converged: bool | None
     convergence: dict[str, Any]
     completeness: dict[str, Any]
@@ -600,7 +600,7 @@ class TokenAttributionResult:
             f"target: {self.target_repr}",
             "method: integrated_gradients (midpoint Riemann) over inputs_embeds",
             f"baseline: {self.baseline['policy']} -- {self.baseline['reason']}",
-            f"n_steps: {self.n_steps}",
+            f"n_steps: {self.num_steps}",
             f"|target_delta|: {self.completeness['target_delta_abs']:.6g}",
             f"residual_rel: {self.completeness['residual_rel']:.4%}",
         ]
@@ -654,7 +654,7 @@ class TokenAttributionResult:
         """Return the displayable payload (escaped-table fallback).
 
         In a notebook the returned payload renders as the escaped HTML
-        table; elsewhere print ``.to_text()``.
+        table; elsewhere print ``.to_markdown()``.
         """
 
         return self.payload()
@@ -664,7 +664,7 @@ class TokenAttributionResult:
 
         return (
             f"TokenAttributionResult(tokens={len(self.raw_tokens)}, "
-            f"n_steps={self.n_steps}, converged={self.converged}, "
+            f"n_steps={self.num_steps}, converged={self.converged}, "
             f"residual_rel={self.completeness['residual_rel']:.4%}, "
             f"target={self.target_repr!r})"
         )
@@ -798,11 +798,11 @@ def text(
     *,
     target: Any = None,
     baseline: Any = "auto",
-    n_steps: int | str = 128,
+    num_steps: int | str = 128,
     steps_per_batch: int | None = 8,
     keep_special_tokens: bool = True,
     max_length: int | None = None,
-) -> TokenAttributionResult:
+) -> TokenAttribution:
     """Per-token attribution for a text input: the two-liner (memo D22-D28).
 
     Parameters
@@ -864,8 +864,8 @@ def text(
             "text() requires a non-empty string. Remedy: pass the input text.",
             code="text_input_invalid",
         )
-    if n_steps != "auto" and (
-        isinstance(n_steps, bool) or not isinstance(n_steps, int) or n_steps <= 0
+    if num_steps != "auto" and (
+        isinstance(num_steps, bool) or not isinstance(num_steps, int) or num_steps <= 0
     ):
         raise AttributionError(
             "n_steps must be a positive int or 'auto'. Remedy: keep the "
@@ -948,7 +948,7 @@ def text(
             (),
             {"inputs_embeds": embeddings, **fixed_kwargs},
             target=scorer,
-            n_steps=grid,
+            num_steps=grid,
             baseline={
                 "inputs": (),
                 "input_kwargs": {
@@ -975,7 +975,7 @@ def text(
     converged: bool | None
     physical_calls = 0
 
-    if n_steps == "auto":
+    if num_steps == "auto":
         previous_scores: Tensor | None = None
         values_by_grid: Tensor | None = None
         extra_by_grid: dict[str, Any] = {}
@@ -1006,11 +1006,11 @@ def text(
         final_values, final_extra = values_by_grid, extra_by_grid
         final_grid = grids_evaluated[-1]
     else:
-        final_values, final_extra = _run(int(n_steps))
+        final_values, final_extra = _run(int(num_steps))
         physical_calls += int(final_extra.get("physical_forward_calls", 0))
-        grids_evaluated.append(int(n_steps))
+        grids_evaluated.append(int(num_steps))
         residuals.append(float(final_extra["residual_rel"]))
-        final_grid = int(n_steps)
+        final_grid = int(num_steps)
         converged = None
 
     scores = final_values.sum(dim=-1)
@@ -1036,7 +1036,7 @@ def text(
     if offsets_available and "offset_mapping" in encoding:
         offsets = [tuple(pair) for pair in encoding["offset_mapping"][0].tolist()]
 
-    result = TokenAttributionResult(
+    result = TokenAttribution(
         text=text,
         input_ids=input_ids[0].tolist(),
         raw_tokens=list(raw_tokens),
@@ -1047,10 +1047,10 @@ def text(
         values=final_values,
         target_repr=target_representation,
         baseline=baseline_disclosure,
-        n_steps=final_grid,
+        num_steps=final_grid,
         converged=converged,
         convergence={
-            "requested": n_steps,
+            "requested": num_steps,
             "grids_evaluated": grids_evaluated,
             "residual_rel_by_grid": residuals,
             "stability": stability,
@@ -1089,4 +1089,4 @@ def _transformers_version() -> str | None:
         return None
 
 
-__all__ = ["TokenAttributionPayload", "TokenAttributionResult", "text"]
+__all__ = ["TokenAttributionPayload", "TokenAttribution", "text"]

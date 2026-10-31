@@ -321,7 +321,7 @@ outside capture logging (they do not appear as graph ops). Decisions are forward
 (`direction="backward"` refuses), intervention predicates and `halt=` may be value-dependent
 callables (the eager `RecordContext` carries real `tensor_requires_grad` / `is_scalar_bool` /
 `bool_value`), `halt=` finalizes an honest partial trace at the matched frontier without executing
-past it, and `recipes=` attaches per-trace facet recipes. `grad_options` cannot combine with
+past it, and `facets=` attaches per-trace facet recipes. `grad_options` cannot combine with
 `intervene=`/`halt=` because the derived-gradient replay re-runs the forward without
 interventions.
 

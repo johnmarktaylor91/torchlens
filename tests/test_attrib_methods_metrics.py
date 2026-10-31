@@ -142,7 +142,7 @@ def test_infidelity_callable_escape_contract() -> None:
         return (dx,), (leaves[0] - dx,)
 
     result = attribution.infidelity(
-        model, x, target=0, attribution=exact, perturb=fixed_perturb, n_samples=2
+        model, x, target=0, attribution=exact, perturb=fixed_perturb, num_samples=2
     )
     assert result.value == pytest.approx(0.0, abs=1e-20)
     assert "callable" in result.settings["perturb"]
@@ -214,7 +214,7 @@ def test_sensitivity_seeded_stochastic_passes_structurally() -> None:
         model=model,
         target=0,
         method_kwargs={"seed": 11, "n_samples": 3},
-        n_samples=3,
+        num_samples=3,
         seed=6,
     )
     assert result.metric == "sensitivity_max"
@@ -228,14 +228,14 @@ def test_sensitivity_rung2_refuses_disclosed_unseeded_provenance() -> None:
 
     model = _Linear()
 
-    def opaque(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def opaque(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Unseeded smoothgrad hidden behind a closed callable."""
 
         return attribution.smoothgrad(model, inputs, input_kwargs, target=0)
 
     with pytest.raises(AttributionError) as excinfo:
         attribution.sensitivity(
-            torch.zeros(1, 4, dtype=torch.float64), attribute=opaque, n_samples=2
+            torch.zeros(1, 4, dtype=torch.float64), attribute=opaque, num_samples=2
         )
     assert excinfo.value.fields["code"] == "metric_determinism_unfrozen"
 
@@ -246,23 +246,23 @@ def test_sensitivity_rung3_behavioral_probe() -> None:
 
     model = _Linear()
 
-    def noisy(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def noisy(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Opaque callable with UNDISCLOSED randomness (the probe's quarry)."""
 
         del input_kwargs
         values = model.head.weight[0].reshape(1, 4) + 0.01 * torch.randn(1, 4, dtype=torch.float64)
-        return attribution.AttributionResult(
+        return attribution.Attribution(
             method="mystery", values=values, target_repr="index=0", extra={}
         )
 
     with pytest.raises(AttributionError) as excinfo:
         attribution.sensitivity(
-            torch.zeros(1, 4, dtype=torch.float64), attribute=noisy, n_samples=2
+            torch.zeros(1, 4, dtype=torch.float64), attribute=noisy, num_samples=2
         )
     assert excinfo.value.fields["code"] == "metric_determinism_probe_failed"
     assert excinfo.value.fields["observed_relative_difference"] > 1e-6
 
-    def clean(inputs: Tensor, input_kwargs: dict | None) -> attribution.AttributionResult:
+    def clean(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
         """Deterministic opaque callable."""
 
         return attribution.saliency(model, inputs, input_kwargs, target=0)
@@ -270,7 +270,7 @@ def test_sensitivity_rung3_behavioral_probe() -> None:
     result = attribution.sensitivity(
         torch.tensor([[0.1, 0.2, 0.3, 0.4]], dtype=torch.float64),
         attribute=clean,
-        n_samples=2,
+        num_samples=2,
         seed=7,
     )
     assert result.extra["determinism_probe"] == "passed_not_proven"
@@ -294,10 +294,10 @@ def test_sensitivity_nonzero_on_nonlinear_model_and_reproducible() -> None:
     model = _Tanh()
     x = torch.tensor([[0.4, -0.3, 0.2, 0.6]], dtype=torch.float64)
     first = attribution.sensitivity(
-        x, method=attribution.saliency, model=model, target=0, n_samples=5, seed=9
+        x, method=attribution.saliency, model=model, target=0, num_samples=5, seed=9
     )
     second = attribution.sensitivity(
-        x, method=attribution.saliency, model=model, target=0, n_samples=5, seed=9
+        x, method=attribution.saliency, model=model, target=0, num_samples=5, seed=9
     )
     assert first.value > 0
     assert first.value == second.value

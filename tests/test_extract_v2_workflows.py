@@ -56,7 +56,7 @@ def test_rg10_shape_resnet18_memory_disk_reload_export_agree(tmp_path: Path) -> 
     assert len(paths) == 3
     loaded = load_extraction(out)
     reader = open_extraction(out)
-    assert reader.n_stimuli == 6
+    assert reader.num_stimuli == 6
     assert reader.stimulus_ids() == ids
     for key in layers:
         assert torch.equal(in_memory[key], loaded.activations[key]), key

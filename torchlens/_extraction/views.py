@@ -218,7 +218,7 @@ def as_torch_dataset(reader: Any, keys: list[str] | None = None) -> Any:
         def __len__(self) -> int:
             """Return the artifact's trusted row count."""
 
-            return int(reader.n_stimuli)
+            return int(reader.num_stimuli)
 
         def __getitem__(self, index: int) -> dict[str, Any]:
             """Return one row across the selected keys.

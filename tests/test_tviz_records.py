@@ -169,7 +169,7 @@ class TestGqa:
     def test_group_header_wording(self) -> None:
         """Shared-heads wording names the group and its query-head span."""
 
-        gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
+        gqa = tviz.GqaInfo(n_query_heads=14, num_kv_heads=2)
         assert gqa.group_of(0) == 0
         assert gqa.group_of(7) == 1
         header = gqa.header(3)
@@ -180,7 +180,7 @@ class TestGqa:
         """Non-dividing grouping is a config error."""
 
         with pytest.raises(tviz.TvizError):
-            tviz.GqaInfo(n_query_heads=14, n_kv_heads=4)
+            tviz.GqaInfo(n_query_heads=14, num_kv_heads=4)
 
 
 class TestAnnotationKinds:

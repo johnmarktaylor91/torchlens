@@ -221,17 +221,17 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
     bundle = _bundle()
     rolled_source = tl.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "rolled_bundle"),
+        path=str(tmp_path / "rolled_bundle"),
         vis_mode="rolled",
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     backward_source = tl.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle"),
+        path=str(tmp_path / "backward_bundle"),
         direction="backward",
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert rolled_source is not None
@@ -247,10 +247,10 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     bundle = _bundle()
     source = tl.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle_regression"),
+        path=str(tmp_path / "backward_bundle_regression"),
         direction="backward",
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert source is not None
@@ -265,10 +265,10 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
     bundle = _bundle()
     source = tl.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle_no_supergraph"),
+        path=str(tmp_path / "backward_bundle_no_supergraph"),
         direction="backward",
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert source is not None
@@ -284,11 +284,11 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
     first_edge = next(iter(bundle.supergraph.edges))
     source = tl.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "styled_bundle"),
+        path=str(tmp_path / "styled_bundle"),
         vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
         vis_edge_overrides={first_edge: {"color": "#0072B2"}},
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     trace_path = tl.export.chrome_trace_diff(bundle, tmp_path / "trace_diff.json")

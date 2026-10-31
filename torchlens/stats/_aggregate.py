@@ -53,7 +53,7 @@ class Aggregator:
         for stat in self.stats:
             stat.update(value)
 
-    def result(self) -> dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         """Return each child statistic result.
 
         Returns
@@ -67,7 +67,7 @@ class Aggregator:
             key = stat.name or type(stat).__name__
             if key in results:
                 key = f"{key}_{index}"
-            results[key] = stat.result()
+            results[key] = stat.compute()
         return results
 
 
@@ -609,7 +609,7 @@ def _aggregate_loop(
                     stat.update(_metric_grad_from_log(log, metric_name))
             finally:
                 log.cleanup()
-        return {name: stat.result() for name, stat in metrics.items()}
+        return {name: stat.compute() for name, stat in metrics.items()}
 
     # target == "out": trace the structure once, then execute a compiled sparse
     # measurement per batch. Any surprise -- unstable structure, non-eval
@@ -672,4 +672,4 @@ def _aggregate_loop(
         if saved_gc_thresholds is not None:
             gc.collect(1)
             gc.set_threshold(*saved_gc_thresholds)
-    return {name: stat.result() for name, stat in metrics.items()}
+    return {name: stat.compute() for name, stat in metrics.items()}

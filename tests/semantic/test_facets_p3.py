@@ -183,7 +183,7 @@ def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
     facets = log.modules["attn"].facets
 
     assert "pattern" not in facets.keys()
-    assert facets.menu()["pattern"].status == "needs_capture"
+    assert facets.declared()["pattern"].status == "needs_capture"
     with pytest.raises(MissingFacetError, match="save_arg_values=True"):
         facets.pattern
 
@@ -294,7 +294,7 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
     try:
         log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
         view = log.modules["attn"].facets
-        menu = view.menu()
+        menu = view.declared()
 
         assert "pattern" not in view.keys()
         assert "hook_pattern" not in view.keys()

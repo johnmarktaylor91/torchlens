@@ -359,7 +359,7 @@ def test_layer_integrated_gradients_completeness_and_shape() -> None:
         target=1,
         layer="hidden",
         baseline=baseline,
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():
@@ -398,7 +398,7 @@ def test_layer_conductance_completeness_and_shape() -> None:
         target=lambda output: output[..., 0].sum(),
         layer="hidden",
         baseline=baseline,
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():
@@ -451,7 +451,7 @@ def test_layer_path_methods_support_multi_input_model_call() -> None:
         target=lambda output: output.sum(),
         layer="hidden",
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
     conductance_result = attribution.layer_conductance(
         model,
@@ -459,7 +459,7 @@ def test_layer_path_methods_support_multi_input_model_call() -> None:
         target=lambda output: output.sum(),
         layer="hidden",
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
 
     with torch.no_grad():

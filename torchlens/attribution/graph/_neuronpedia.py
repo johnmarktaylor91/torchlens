@@ -234,7 +234,7 @@ def _schema_node(
     node = graph.nodes[index]
     position = node.position
     if index < layout.error:
-        layer, _position, feature = (int(v) for v in graph.active_features[index].tolist())
+        layer, _position, feature = (int(v) for v in graph.active_feature_indices[index].tolist())
         return _node(
             f"{layer}_{feature}_{position}",
             _cantor(layer, feature),
@@ -243,7 +243,7 @@ def _schema_node(
             "cross layer transcoder",
             f"{layer}_{feature}-0",
             influence=influence,
-            activation=float(graph.activation_values[index]),
+            activation=float(graph.feature_activations[index]),
         )
     if index < layout.token:
         layer = graph.error_sites.index(node.site)
@@ -272,7 +272,7 @@ def _schema_node(
 def _logit_node(graph: AttributionGraph, k: int, layer: str, tokenizer: Any) -> dict:
     """The schema node for the ``k``-th logit target (no influence, as the reference)."""
 
-    vocab = int(graph.logit_tokens[k])
+    vocab = int(graph.logit_token_ids[k])
     position = graph.nodes[-1].position
     probability = float(graph.logit_probabilities[k])
     return _node(
@@ -365,7 +365,7 @@ def _check_graph(graph: AttributionGraph) -> None:
             code="attribution_graph_export_unsupported",
         )
     if not bool(torch.isfinite(graph.adjacency_matrix).all()) or not bool(
-        torch.isfinite(graph.activation_values).all()
+        torch.isfinite(graph.feature_activations).all()
     ):
         raise _export_refusal(
             "The graph's adjacency or feature activations hold NaN or infinite values, "
@@ -547,9 +547,9 @@ def graph_to_neuronpedia(  # noqa: PLR0913 -- the method's keywords, passed thro
 
     _check_arguments(slug, scan, tokenizer, node_threshold, edge_threshold)
     _check_graph(graph)
-    prompt_tokens = [_decode(tokenizer, token) for token in graph.input_tokens.tolist()]
+    prompt_tokens = [_decode(tokenizer, token) for token in graph.input_token_ids.tolist()]
     if prompt is None:
-        prompt = str(tokenizer.decode([int(t) for t in graph.input_tokens.tolist()]))
+        prompt = str(tokenizer.decode([int(t) for t in graph.input_token_ids.tolist()]))
     pruned = _prune(graph, float(node_threshold), float(edge_threshold))
     nodes, links = _nodes_and_links(graph, pruned, tokenizer)
     exported = {

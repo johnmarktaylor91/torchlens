@@ -20,9 +20,9 @@ from torchlens.observability import (
     HistoryCollector,
     HistoryView,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
     StepTruth,
     WatchRenderError,
@@ -49,7 +49,7 @@ def _observed(
     with_sketch: bool = True,
     grad_scale: str | None = None,
 ) -> ObservationRecord:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(tensor)
     sketch = None
     if with_sketch:

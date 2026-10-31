@@ -124,7 +124,7 @@ def _prompt() -> torch.Tensor:
 def _capture_episode(n_steps: int = 4, **trace_kwargs):
     model = TinyLM()
     runner = GreedyRunner(model, n_steps)
-    spec = EpisodeSpec(stepped_module=model, n_steps=n_steps)
+    spec = EpisodeSpec(stepped_module=model, num_steps=n_steps)
     log = tl.trace(runner, _prompt(), episode=spec, **trace_kwargs)
     return log
 
@@ -182,7 +182,7 @@ def test_flat_tally_nested_loops():
 
     model = TinyLM()
     runner = NestedLoopRunner(model, outer=2, inner=3)
-    log = tl.trace(runner, _prompt(), episode=EpisodeSpec(stepped_module=model, n_steps=6))
+    log = tl.trace(runner, _prompt(), episode=EpisodeSpec(stepped_module=model, num_steps=6))
     ledger = episode_ledger_for(log)
     assert ledger is not None
     assert ledger.steps_completed == 6
@@ -197,7 +197,7 @@ def test_flat_tally_nested_loops():
 
 def test_entry_seed_recorded_and_sampled_episode_reproduces():
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=4)
+    spec = EpisodeSpec(stepped_module=model, num_steps=4)
     capture = tl.options.CaptureOptions(random_seed=1234)
     first = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
     second = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
@@ -213,7 +213,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
 def test_teacher_forcing_is_disclosed_non_verifying():
     model = TinyLM()
     runner = GreedyRunner(model, 3)
-    spec = EpisodeSpec(stepped_module=model, n_steps=3, forced_tokens=(5, 6, 7))
+    spec = EpisodeSpec(stepped_module=model, num_steps=3, forced_tokens=(5, 6, 7))
     log = tl.trace(runner, _prompt(), episode=spec)
     ledger = episode_ledger_for(log)
     assert ledger is not None
@@ -227,7 +227,7 @@ def test_forced_tokens_must_cover_declared_steps():
         tl.trace(
             GreedyRunner(model, 3),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=3, forced_tokens=(5,)),
+            episode=EpisodeSpec(stepped_module=model, num_steps=3, forced_tokens=(5,)),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -342,7 +342,7 @@ def test_halted_episode_ledger_discloses_truncation():
         runner,
         _prompt(),
         halt=halt_after_two,
-        episode=EpisodeSpec(stepped_module=model, n_steps=5),
+        episode=EpisodeSpec(stepped_module=model, num_steps=5),
     )
     assert log.outcome.status.name == "HALTED"
     ledger = episode_ledger_for(log)
@@ -357,7 +357,7 @@ def test_halted_episode_ledger_discloses_truncation():
 def test_failed_episode_attaches_partial_ledger():
     stepped = BombAtStep(bomb_call=3)
     runner = GreedyRunner(stepped, 5)
-    spec = EpisodeSpec(stepped_module=stepped, n_steps=5)
+    spec = EpisodeSpec(stepped_module=stepped, num_steps=5)
     with pytest.raises(RuntimeError, match="injected step failure") as excinfo:
         tl.trace(runner, _prompt(), episode=spec)
     partial = tl.partial.from_failed_capture(excinfo.value)

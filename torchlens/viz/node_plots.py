@@ -200,7 +200,7 @@ def render_heatmap(
     return canvas
 
 
-def render_lineplot(
+def lineplot(
     series: Any,
     *,
     x_values: Any | None = None,
@@ -376,7 +376,7 @@ def render_lineplot(
     return canvas.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def render_image_scatter(
+def image_scatter(
     coords: Any,
     *,
     images: Sequence[Image.Image] | None = None,

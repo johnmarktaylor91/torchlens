@@ -529,8 +529,8 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         assert module_call_label not in module_call.call_children
     rendered = log.draw(
         collapse="none",
-        vis_outpath=str(tmp_path / "module_splice"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "module_splice"),
+        file_format="svg",
         vis_save_only=True,
     )
     assert rendered is not None

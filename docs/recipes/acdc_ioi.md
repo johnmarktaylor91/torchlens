@@ -66,7 +66,7 @@ def kl_to_full(logits):
 
 def circuit_kl(pruned):
     """Patch every pruned edge to its corrupted sender in one call; return the KL."""
-    patched = torchlens.mechinterp.patch_edges(clean, pruned, corrupt=corrupt)
+    patched = torchlens.mechinterp.patch_edges(clean, pruned, corrupted_graph=corrupt)
     return kl_to_full(patched.modules["lm_head"].out)
 
 

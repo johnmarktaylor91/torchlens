@@ -99,7 +99,7 @@ def _prompt() -> torch.Tensor:
 
 
 def _episode(model: nn.Module, **spec_kwargs) -> tl.Trace:
-    spec = EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, **spec_kwargs)
+    spec = EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS, **spec_kwargs)
     return tl.trace(model, _prompt(), episode=spec)
 
 
@@ -142,7 +142,7 @@ def test_none_kind_status_only_ledger_admits_value_free_save():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, step_output_kind="none"),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"),
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
     ledger = trace.episode
@@ -229,7 +229,7 @@ def test_value_free_save_still_refuses_for_evidence_kinds():
             model,
             _prompt(),
             episode=EpisodeSpec(
-                stepped_module=model.step, n_steps=N_STEPS, step_output_kind="digest"
+                stepped_module=model.step, num_steps=N_STEPS, step_output_kind="digest"
             ),
             capture=tl.options.CaptureOptions(layers_to_save="none"),
         )
@@ -251,7 +251,7 @@ def test_capture_digest_minted_and_recomputable_from_the_product():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
         capture=tl.options.CaptureOptions(random_seed=1234),
     )
     ledger = trace.episode
@@ -289,7 +289,7 @@ def test_capture_digest_differs_across_seeds():
         return tl.trace(
             model,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+            episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
             capture=tl.options.CaptureOptions(random_seed=seed),
         )
 
@@ -386,7 +386,7 @@ def test_cross_grammar_quarantine_through_the_real_load_path():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
     )
     trace.annotations["episode"] = _v1_payload()
     with warnings.catch_warnings(record=True) as caught:
@@ -418,7 +418,7 @@ def test_cache_len_never_reappears_in_the_grammar():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeSpec(stepped_module=model.step, num_steps=N_STEPS),
     )
     payload = trace.annotations["episode"]
     ledger = EpisodeLedger.from_payload(payload)

@@ -26,7 +26,7 @@ from torchlens.observability import (
     HistoryCollector,
     HistoryView,
     ObservationRecord,
-    Spine,
+    RunningStats,
     StepTruth,
     merge_observations,
     render_contact_sheet,
@@ -210,7 +210,7 @@ class TestCrossSiteRollupRefused:
 
     def test_merge_across_sites_refuses(self) -> None:
         def observed(site: str) -> ObservationRecord:
-            spine = Spine()
+            spine = RunningStats()
             spine.update(torch.randn(8))
             sketch = Histogram()
             sketch.update(torch.randn(8))

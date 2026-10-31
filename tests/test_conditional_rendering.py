@@ -186,9 +186,9 @@ def _render_dot_source(
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(
             vis_mode=vis_mode,
-            vis_outpath=outpath,
+            path=outpath,
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     return dot_source, trace
 

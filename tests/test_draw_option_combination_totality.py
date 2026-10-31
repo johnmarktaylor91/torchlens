@@ -273,8 +273,8 @@ def _draw(trace: Any, tmp_path: Path, kwargs: dict[str, Any]) -> None:
         warnings.simplefilter("always")
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / "graph"),
+            file_format="dot",
+            path=str(tmp_path / "graph"),
             **kwargs,
         )
 

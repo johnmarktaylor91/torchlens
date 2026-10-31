@@ -73,10 +73,10 @@ def _graph(model, transcoders, trace: tl.Trace | None = None):
     return tl.attribution.build_graph(
         trace,
         transcoders,
-        embedding="model.embed_tokens",
+        embedding_module="model.embed_tokens",
         logits_at=tl.attribution.SiteTarget("lm_head"),
-        max_n_logits=3,
-        desired_logit_prob=0.99,
+        max_num_logits=3,
+        logit_probability_coverage=0.99,
         frozen=_frozen_ops(trace),
     )
 
@@ -130,12 +130,12 @@ class TestOpLabelReadSite:
 
         def identity(graph, mapping):
             return [
-                (n.kind, mapping.get(n.site, n.site), n.position, n.feature, n.token)
+                (n.kind, mapping.get(n.site, n.site), n.position, n.feature_index, n.token)
                 for n in graph.nodes
             ]
 
         assert identity(by_op, to_module) == identity(by_module, {})
-        assert torch.equal(by_op.active_features, by_module.active_features)
+        assert torch.equal(by_op.active_feature_indices, by_module.active_feature_indices)
         _close(by_op.adjacency_matrix, by_module.adjacency_matrix)
         for name in ("node_values", "activation_values", "error_vectors"):
             _close(getattr(by_op, name), getattr(by_module, name))
@@ -168,7 +168,7 @@ class TestOpLabelReadSite:
         tc = _transcoders()["model.layers.0.mlp"]
         with pytest.raises(tl.attribution.AttributionError) as info:
             tl.attribution.build_graph(
-                trace, {"mul_999_999": tc}, embedding="model.embed_tokens", frozen=()
+                trace, {"mul_999_999": tc}, embedding_module="model.embed_tokens", frozen=()
             )
         assert _code(info) == "attribution_graph_site_not_found"
         message = str(info.value)

@@ -153,9 +153,7 @@ def test_edited_node_dot(tmp_path: Path) -> None:
 
     trace = _traced()
     try:
-        dot = trace.draw(
-            vis_save_only=True, vis_fileformat="dot", vis_outpath=str(tmp_path / "toy")
-        )
+        dot = trace.draw(vis_save_only=True, file_format="dot", path=str(tmp_path / "toy"))
     finally:
         trace.cleanup()
     relu_line = next(line for line in dot.splitlines() if "tl_edited" in line)
@@ -174,9 +172,9 @@ def test_dark_skin_uses_its_tint(tmp_path: Path) -> None:
     try:
         dot = trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / "dark"),
-            vis_theme="dark",
+            file_format="dot",
+            path=str(tmp_path / "dark"),
+            theme="dark",
         )
     finally:
         trace.cleanup()
@@ -239,15 +237,15 @@ def test_highlighter_in_svg_on_both_engines(tmp_path: Path, placement: str) -> N
     try:
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / f"cone_{placement}"),
+            file_format="svg",
+            path=str(tmp_path / f"cone_{placement}"),
             vis_show_cone=True,
             vis_node_placement=placement,
         )
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / f"plain_{placement}"),
+            file_format="svg",
+            path=str(tmp_path / f"plain_{placement}"),
             vis_node_placement=placement,
         )
     finally:
@@ -267,10 +265,10 @@ def test_highlighter_dark_opacity(tmp_path: Path) -> None:
     try:
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "dark"),
+            file_format="svg",
+            path=str(tmp_path / "dark"),
             vis_show_cone=True,
-            vis_theme="dark",
+            theme="dark",
         )
     finally:
         trace.cleanup()
@@ -287,8 +285,8 @@ def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
         for fileformat in ("pdf", "png"):
             trace.draw(
                 vis_save_only=True,
-                vis_fileformat=fileformat,
-                vis_outpath=str(tmp_path / "cone"),
+                file_format=fileformat,
+                path=str(tmp_path / "cone"),
                 vis_show_cone=True,
             )
     finally:
@@ -313,8 +311,8 @@ def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> No
         with pytest.warns(TorchLensWarning) as record:
             trace.draw(
                 vis_save_only=True,
-                vis_fileformat="jpg",
-                vis_outpath=str(tmp_path / "cone"),
+                file_format="jpg",
+                path=str(tmp_path / "cone"),
                 vis_show_cone=True,
             )
     finally:
@@ -331,8 +329,8 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     try:
         dot = trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / "as_node"),
+            file_format="dot",
+            path=str(tmp_path / "as_node"),
             vis_intervention_mode="as_node",
         )
     finally:
@@ -397,9 +395,9 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         assert [mark.short for mark in marks[second.label]] == ["bwd_hook(named_backward)"]
         dot = trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_mode="unrolled",
-            vis_outpath=str(tmp_path / "shared"),
+            path=str(tmp_path / "shared"),
         )
     finally:
         trace.cleanup()
@@ -428,16 +426,16 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
         fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
         dot = fork.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_mode="unrolled",
             vis_show_cone=True,
-            vis_outpath=str(tmp_path / "shared_fwd"),
+            path=str(tmp_path / "shared_fwd"),
         )
         rolled = fork.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_mode="rolled",
-            vis_outpath=str(tmp_path / "shared_fwd_rolled"),
+            path=str(tmp_path / "shared_fwd_rolled"),
         )
     finally:
         trace.cleanup()

@@ -927,7 +927,7 @@ def _run_rank_layout(
         return _run_neato_with_fallbacks(
             rendered_path=path,
             source_path=source_path,
-            vis_fileformat=fileformat,
+            file_format=fileformat,
             spline_mode=spline_mode,
             render_timeout=render_timeout,
         )
@@ -1065,7 +1065,7 @@ def _run_neato_with_fallbacks(
         result = _run_neato(
             rendered_path=rendered_path,
             source_path=source_path,
-            vis_fileformat=vis_fileformat,
+            file_format=vis_fileformat,
             spline_mode=spline_mode,
             render_timeout=render_timeout,
         )
@@ -1082,7 +1082,7 @@ def _run_neato_with_fallbacks(
         result = _run_neato(
             rendered_path=rendered_path,
             source_path=source_path,
-            vis_fileformat=vis_fileformat,
+            file_format=vis_fileformat,
             spline_mode="line",
             render_timeout=render_timeout,
         )
@@ -1105,7 +1105,7 @@ def _run_neato_with_fallbacks(
             result = _run_neato(
                 rendered_path=rendered_path,
                 source_path=source_path,
-                vis_fileformat=vis_fileformat,
+                file_format=vis_fileformat,
                 spline_mode="line",
                 render_timeout=render_timeout,
             )

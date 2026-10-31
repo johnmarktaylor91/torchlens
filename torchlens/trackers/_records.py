@@ -36,9 +36,9 @@ from ..observability import (
     HISTORY_SCHEMA_VERSION,
     CommittedBlock,
     HistogramResult,
+    RunningStatsResult,
     RunRecord,
     SiteRecord,
-    SpineResult,
 )
 from ._errors import TagGrammarError
 
@@ -245,7 +245,7 @@ class TagGrammar:
         return assert_tag_safe(f"{self._root('torchlens')}/check/{check_name}", site=check_name)
 
 
-def spine_scalars(spine: SpineResult) -> dict[str, float]:
+def spine_scalars(spine: RunningStatsResult) -> dict[str, float]:
     """Derive the portable scalar statistics from one spine record.
 
     ``std`` comes from the stable Chan moments (``m2 / count_finite``);
@@ -270,7 +270,7 @@ def spine_scalars(spine: SpineResult) -> dict[str, float]:
     return out
 
 
-def nonfinite_scalars(spine: SpineResult) -> dict[str, float]:
+def nonfinite_scalars(spine: RunningStatsResult) -> dict[str, float]:
     """The nonfinite-family series: NaN / +-inf counts, exact integers."""
 
     return {
@@ -305,7 +305,7 @@ def histogram_points(sketch: HistogramResult) -> tuple[tuple[int, ...], tuple[fl
     return (counts, edges)
 
 
-def _histogram_summary(spine: SpineResult) -> dict[str, float]:
+def _histogram_summary(spine: RunningStatsResult) -> dict[str, float]:
     """The TB histogram-proto summary fields, from the paired spine."""
 
     summary: dict[str, float] = {"num": float(spine.count_finite)}

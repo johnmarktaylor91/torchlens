@@ -80,7 +80,7 @@ def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
     model, x = _linear_model()
     result = attribution.input_x_grad(model, x, target=0)
     curve_fn = attribution.deletion_curve if kind == "deletion" else attribution.insertion_curve
-    curve = curve_fn(model, x, target=0, attribution=result, n_steps=6)
+    curve = curve_fn(model, x, target=0, attribution=result, num_steps=6)
 
     contributions = (model.weight[0] * x[0]).detach()
     order = torch.sort(contributions, descending=True, stable=True).indices
@@ -103,7 +103,7 @@ def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
     assert curve.area == pytest.approx(expected_area, abs=1e-12)
     assert curve.settings["features"] == "elements"
     assert curve.extra["n_features"] == 6
-    assert [step.n_features for step in curve.steps] == list(range(7))
+    assert [step.num_features for step in curve.steps] == list(range(7))
 
 
 @pytest.mark.parametrize("kind", ["deletion", "insertion"])
@@ -115,22 +115,22 @@ def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
     x = torch.randn(1, 3, 8, 8)
     result = attribution.saliency(model, x, target=1)
     curve_fn = attribution.deletion_curve if kind == "deletion" else attribution.insertion_curve
-    curve = curve_fn(model, x, target=1, attribution=result, n_steps=8, baseline=0.5)
+    curve = curve_fn(model, x, target=1, attribution=result, num_steps=8, baseline=0.5)
 
     assert curve.settings["features"] == "pixels"
     assert len(curve.steps) == 9
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     for step in curve.steps:
         fork = trace.fork()
-        for selection, edit in step.intervention:
+        for selection, edit in step.build_interventions:
             fork.do(selection, edit)
         output = fork[fork.output_layers[0]].out
         assert torch.allclose(output[:, 1].to(torch.float64), step.score, atol=1e-6)
-        assert len(step.intervention) == (1 if bool(step.baseline_mask.any()) else 0)
+        assert len(step.build_interventions) == (1 if bool(step.build_baseline_mask.any()) else 0)
         fork.cleanup()
-        direct = model(step.inputs)[:, 1].detach().to(torch.float64)
+        direct = model(step.build_inputs)[:, 1].detach().to(torch.float64)
         assert torch.allclose(direct, step.score, atol=1e-6)
-        held = step.baseline_mask
+        held = step.build_baseline_mask
         assert torch.all(step.inputs[held] == 0.5)
         assert torch.equal(step.inputs[~held], x[~held])
 
@@ -143,17 +143,17 @@ def test_attribution_aopc_beats_random_ranking_when_true_ranking_is_known() -> N
     model = SquareSum(weight)
     x = torch.randn(1, 16)
     result = attribution.input_x_grad(model, x, target=0)
-    curve = attribution.deletion_curve(model, x, target=0, attribution=result, n_steps=16)
+    curve = attribution.deletion_curve(model, x, target=0, attribution=result, num_steps=16)
     for seed in range(10):
         generator = torch.Generator().manual_seed(seed)
         random_map = torch.rand(1, 16, generator=generator)
         random_curve = attribution.deletion_curve(
-            model, x, target=0, attribution=random_map, n_steps=16
+            model, x, target=0, attribution=random_map, num_steps=16
         )
         assert curve.aopc > random_curve.aopc
-    insertion = attribution.insertion_curve(model, x, target=0, attribution=result, n_steps=16)
+    insertion = attribution.insertion_curve(model, x, target=0, attribution=result, num_steps=16)
     random_insertion = attribution.insertion_curve(
-        model, x, target=0, attribution=torch.rand(1, 16), n_steps=16
+        model, x, target=0, attribution=torch.rand(1, 16), num_steps=16
     )
     assert insertion.aopc > random_insertion.aopc
 
@@ -194,12 +194,12 @@ def test_curves_accept_grad_cam_results(family: str) -> None:
         assert cam.extra["grid_route"] == "derived"
 
     for curve_fn in (attribution.deletion_curve, attribution.insertion_curve):
-        curve = curve_fn(model, x, target=target, attribution=cam, n_steps=4, features="patches")
+        curve = curve_fn(model, x, target=target, attribution=cam, num_steps=4, features="patches")
         assert curve.scores.shape == (5, 1)
         assert curve.extra["attribution_method"] == "grad_cam"
-        start = curve.steps[0].inputs
-        end = curve.steps[-1].inputs
-        unperturbed, baseline = (start, end) if curve.metric == "deletion" else (end, start)
+        start = curve.steps[0].build_inputs
+        end = curve.steps[-1].build_inputs
+        unperturbed, baseline = (start, end) if curve.kind == "deletion" else (end, start)
         assert torch.equal(unperturbed, x)
         assert torch.equal(baseline, torch.zeros_like(x))
 
@@ -212,13 +212,13 @@ def test_patch_and_token_grouping_counts_features() -> None:
     x = torch.randn(2, 3, 10, 8)
     result = attribution.saliency(model, x, target=0)
     curve = attribution.deletion_curve(
-        model, x, target=0, attribution=result, features="patches", patch_size=4, n_steps=6
+        model, x, target=0, attribution=result, features="patches", patch_size=4, num_steps=6
     )
     assert curve.extra["n_features"] == 3 * 2
     assert curve.settings["patch_size"] == (4, 4)
     assert curve.scores.shape == (7, 2)
     assert len(curve.extra["aopc_per_example"]) == 2
-    patch_mask = curve.steps[1].baseline_mask
+    patch_mask = curve.steps[1].build_baseline_mask
     assert int(patch_mask[0, 0].sum()) in (16, 8)
     assert torch.equal(patch_mask[:, 0], patch_mask[:, 2])
 
@@ -226,11 +226,11 @@ def test_patch_and_token_grouping_counts_features() -> None:
     sequence = torch.randn(1, 5, 4)
     token_result = attribution.saliency(tokens, sequence, target=1)
     token_curve = attribution.insertion_curve(
-        tokens, sequence, target=1, attribution=token_result, n_steps=5
+        tokens, sequence, target=1, attribution=token_result, num_steps=5
     )
     assert token_curve.settings["features"] == "tokens"
     assert token_curve.extra["n_features"] == 5
-    revealed = ~token_curve.steps[2].baseline_mask
+    revealed = ~token_curve.steps[2].build_baseline_mask
     assert torch.equal(revealed.all(dim=-1), revealed.any(dim=-1))
     assert int(revealed.all(dim=-1).sum()) == 2
 
@@ -245,12 +245,12 @@ def test_curve_over_two_inputs_ranks_features_jointly() -> None:
     x = torch.ones(1, 3, dtype=torch.float64)
     y = torch.ones(1, 2, dtype=torch.float64)
     result = attribution.input_x_grad(model, (x, y), target=0)
-    curve = attribution.deletion_curve(model, (x, y), target=0, attribution=result, n_steps=5)
+    curve = attribution.deletion_curve(model, (x, y), target=0, attribution=result, num_steps=5)
     # contributions 1, 4, -2 | 3, 0.5: removed in the order 4, 3, 1, 0.5, -2
     expected = torch.tensor([6.5, 2.5, -0.5, -1.5, -2.0, 0.0], dtype=torch.float64)
     assert torch.equal(curve.scores[:, 0], expected)
-    assert len(curve.steps[2].intervention) == 2
-    step_x, step_y = curve.steps[2].inputs
+    assert len(curve.steps[2].build_interventions) == 2
+    step_x, step_y = curve.steps[2].build_inputs
     assert torch.equal(step_x, torch.tensor([[1.0, 0.0, 1.0]], dtype=torch.float64))
     assert torch.equal(step_y, torch.tensor([[0.0, 1.0]], dtype=torch.float64))
 
@@ -274,7 +274,7 @@ def test_curve_refuses_misaligned_attribution_and_its_remedy_runs() -> None:
     message = str(excinfo.value)
     assert "(1, 3, 8, 8)" in message
     fixed = eval(_remedy(message), {"tl": tl, "model": model, "x": x})  # noqa: S307
-    assert isinstance(fixed, attribution.AttributionResult)
+    assert isinstance(fixed, attribution.Attribution)
     curve = attribution.deletion_curve(model, x, target=0, attribution=fixed)
     assert curve.extra["attribution_method"] == "saliency"
 
@@ -304,7 +304,7 @@ def test_curve_refuses_bad_settings_and_remedies_run(setting: str, value: Any) -
     fixed = eval(  # noqa: S307
         _remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x, "result": result}
     )
-    assert isinstance(fixed, attribution.CurveResult)
+    assert isinstance(fixed, attribution.PerturbationCurve)
 
 
 class _TraceWithForeignInput:
@@ -332,13 +332,13 @@ def test_curve_step_refuses_unmatched_input_layer_and_its_remedy_runs(
     model = SmallCnn().eval()
     x = torch.randn(1, 3, 8, 8)
     result = attribution.saliency(model, x, target=1)
-    curve = attribution.deletion_curve(model, x, target=1, attribution=result, n_steps=2)
+    curve = attribution.deletion_curve(model, x, target=1, attribution=result, num_steps=2)
     step = curve.steps[1]
     monkeypatch.setattr(tl, "trace", lambda *args, **kwargs: _TraceWithForeignInput())
     with pytest.raises(attribution.AttributionError) as excinfo:
-        _ = step.intervention
+        _ = step.build_interventions
     assert excinfo.value.fields.get("code") == "attribution_curve_input_unmatched"
-    found = re.search(r"e\.g\. (model\(step\.inputs\))\.", str(excinfo.value))
+    found = re.search(r"e\.g\. (model\(step\.build_inputs\))\.", str(excinfo.value))
     assert found is not None, str(excinfo.value)
     output = eval(found.group(1), {"model": model, "step": step})  # noqa: S307
     assert torch.allclose(output[:, 1].detach().to(torch.float64), step.score, atol=1e-6)

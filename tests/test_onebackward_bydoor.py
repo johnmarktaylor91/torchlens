@@ -165,7 +165,7 @@ class TestByDoorContract:
         with pytest.raises(SelectionError) as excinfo:
             tl.top_k(k=1, by=table).resolve(trace)
         assert excinfo.value.fields["reason"] == "by_table_multi_target"
-        narrowed = tl.top_k(k=1, by=table.for_target("t0")).resolve(trace)
+        narrowed = tl.top_k(k=1, by=table.target("t0")).resolve(trace)
         assert any(entry.selected_count for entry in narrowed)
         folded_table = table.aggregate_targets(lambda scores: max(scores), name="max")
         folded = tl.top_k(k=1, by=folded_table).resolve(trace)

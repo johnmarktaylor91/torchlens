@@ -35,10 +35,10 @@ def _build(name: str) -> tuple[object, tl.attribution.graph.AttributionGraph]:
     graph = tl.attribution.build_graph(
         trace,
         transcoders,
-        embedding="embed",
+        embedding_module="embed",
         frozen=fx.frozen_names(n_layers),
-        max_n_logits=2,
-        desired_logit_prob=0.99,
+        max_num_logits=2,
+        logit_probability_coverage=0.99,
     )
     return trace, graph
 
@@ -103,7 +103,7 @@ def test_graph_overlay_colours_exactly_the_node_sites(built, name) -> None:
 @pytest.mark.parametrize("name", ["F1", "F3"])
 def test_graph_overlay_activation_colours_feature_sites(built, name) -> None:
     trace, graph = built[name]
-    activations = graph.activation_values.numpy()
+    activations = graph.feature_activations.numpy()
     expected: dict[str, float] = {}
     for index in graph.node_indices("feature"):
         site = graph.nodes[index].site

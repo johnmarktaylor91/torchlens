@@ -48,7 +48,7 @@ material record, never duplicates it).
 retain=, engine="live_hook", model=, x=)` runs ONE candidate engine (the
 occlusion loop generalized): preflight once, serial execution in stable
 order, EXTRACT BEFORE CLEANUP, retain/release under policy (`"all"`,
-`"none"`, `top_k(k)` rolling by |effect|; `retain_ceiling_bytes=` arms the
+`"none"`, `k(k)` rolling by |effect|; `retain_ceiling_bytes=` arms the
 BEFORE-the-first-candidate byte preflight over the lower-bound aggregation
 in `torchlens.experiment.retained_bytes`). `edit=`, `metric=`, and `retain=`
 are REQUIRED — which ablation is sound, what to measure, and what evidence

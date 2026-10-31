@@ -91,7 +91,7 @@ def test_missing_graphviz_binary_refuses_typed(
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
     monkeypatch.setenv("PATH", "/nonexistent")
     with pytest.raises(GraphvizRenderError, match="apt install graphviz"):
-        log.draw(vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+        log.draw(vis_save_only=True, path=str(tmp_path / "modelgraph"))
 
 
 def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
@@ -105,5 +105,5 @@ def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
 
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
     with pytest.raises(InvalidArgumentError, match="rolled") as exc_info:
-        log.draw(vis_mode="bogus", vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+        log.draw(vis_mode="bogus", vis_save_only=True, path=str(tmp_path / "modelgraph"))
     assert exc_info.value.fields["code"] == "visualization_mode_invalid"

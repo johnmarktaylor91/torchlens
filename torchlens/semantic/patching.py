@@ -16,7 +16,7 @@ from ..errors._base import TorchLensError, TorchLensWarning
 from ..intervention.selectors import facet
 from ..options import CaptureOptions
 from ..user_funcs import trace
-from .facets import Facet, MissingGradient
+from .facets import Facet, MissingGrad
 
 Metric = Callable[[Any], torch.Tensor]
 
@@ -1294,7 +1294,7 @@ def _facet_grad_tensor(value: Any, *, address: str, facet_name: str) -> torch.Te
     """Return a tensor gradient from a facet-like object or raise clearly."""
 
     grad = value.grad if isinstance(value, Facet) else getattr(value, "grad", None)
-    if isinstance(grad, MissingGradient):
+    if isinstance(grad, MissingGrad):
         raise RuntimeError(
             f"Attribution patching requires grad capture for facet {facet_name!r} "
             f"on module {address!r}. {grad.reason}"

@@ -472,7 +472,7 @@ def run_cached(  # noqa: PLR0913 -- aggregate's subject arguments plus its keywo
         _refuse_unkeyable(reason)
     entry = _cache_root(cache_dir) / f"{key}.safetensors"
     if _restore_hit(entry, metrics):
-        return {name: stat.result() for name, stat in metrics.items()}
+        return {name: stat.compute() for name, stat in metrics.items()}
     hashing = _HashingLoader(dataloader)
     results = loop(hashing)
     if hashing.hasher.hexdigest() != data_digest:

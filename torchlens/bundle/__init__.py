@@ -1766,7 +1766,7 @@ class Bundle:
         self,
         baseline: str | Trace | None = None,
         *,
-        top_k: int = 10,
+        k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
     ) -> list[tuple[str, float]]:
         """Rank sites by out distance from a baseline (the SITE axis).
@@ -1844,7 +1844,7 @@ class Bundle:
             if distances:
                 scored.append((str(site.layer_label), sum(distances) / len(distances)))
         scored.sort(key=lambda row: row[1], reverse=True)
-        return scored[:top_k]
+        return scored[:k]
 
     def diff_pair(self, a: Any, b: Any) -> Any:
         """Return out differences between two members or at one site.

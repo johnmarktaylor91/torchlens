@@ -867,7 +867,7 @@ def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, A
         raise _unresolvable(
             "by_table_multi_target",
             f"the `by=` ReadTable carries {len(target_ids)} targets; ranking "
-            "needs one. Narrow with table.for_target(id) or fold explicitly "
+            "needs one. Narrow with table.target(id) or fold explicitly "
             "with table.aggregate_targets(reducer) -- there is no implicit "
             "mean/max/sum.",
             code="by_score_invalid",

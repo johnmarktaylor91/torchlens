@@ -266,7 +266,7 @@ def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
 
     tracker = TopK(k, unit_axis=-1)
     tracker.update(dense)
-    return tracker.result()
+    return tracker.compute()
 
 
 def _warn_large_dashboard(latents: int, k: int, sequence: int) -> None:

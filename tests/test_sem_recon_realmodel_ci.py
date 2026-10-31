@@ -105,7 +105,7 @@ def test_logit_lens_default_route_settles_typed_or_validated(gpt2_log: Any) -> N
         assert "final_norm_kind" in str(exc)
         assert "lens=" in str(exc)  # the teaching remedy is named
     else:
-        assert result.validated
+        assert result.is_validated
         assert result.entries and result.entries[-1].logits.shape[-1] == 512
 
 
@@ -118,7 +118,7 @@ def test_logit_lens_user_lens_route_projects_real_numbers(gpt2: Any, gpt2_log: A
     """
 
     result = logit_lens(gpt2_log, lens=_user_lens(gpt2))
-    assert result.lens_source == "user" and not result.validated
+    assert result.lens_source == "user" and not result.is_validated
     assert [entry.address for entry in result.entries] == [
         "transformer.h.0",
         "transformer.h.1",

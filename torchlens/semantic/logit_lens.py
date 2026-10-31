@@ -47,7 +47,7 @@ __all__ = [
     "LogitLensError",
     "LogitLensPrediction",
     "LogitLensPredictions",
-    "LogitLensResult",
+    "LogitLens",
     "logit_lens",
     "logit_lens_predictions",
 ]
@@ -128,7 +128,7 @@ class LogitLensEntry:
 
 
 @dataclass(frozen=True)
-class LogitLensResult:
+class LogitLens:
     """Result of a :func:`logit_lens` sweep across transformer blocks.
 
     Parameters
@@ -154,7 +154,7 @@ class LogitLensResult:
     entries: tuple[LogitLensEntry, ...]
     facet: str
     lens_source: str
-    validated: bool
+    is_validated: bool
     final_logits: torch.Tensor | None
 
     def stacked(self) -> torch.Tensor:
@@ -321,7 +321,7 @@ class LogitLensPredictions:
     k: int
     facet: str
     lens_source: str
-    validated: bool
+    is_validated: bool
     tie_convention: str = TIE_CONVENTION
 
 
@@ -331,10 +331,10 @@ def logit_lens(
     facet: str = "resid_post",
     layers: Sequence[str] | None = None,
     lens: LensFunc | Mapping[str, LensFunc] | None = None,
-    validate: bool = True,
+    verify: bool = True,
     rtol: float = 1e-4,
     atol: float = 1e-5,
-) -> LogitLensResult:
+) -> LogitLens:
     """Project per-block hidden states through the model's output head.
 
     Parameters
@@ -384,19 +384,17 @@ def logit_lens(
 
     setup = _prepare_lens(
         trace,
-        _LensRequest(
-            facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
-        ),
+        _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify, rtol=rtol, atol=atol),
     )
     entries = [
         LogitLensEntry(address=address, layer_index=layer_index, facet=facet, logits=logits)
         for layer_index, address, logits in _iter_layer_logits(trace, setup)
     ]
-    return LogitLensResult(
+    return LogitLens(
         entries=tuple(entries),
         facet=facet,
         lens_source=setup.lens_source,
-        validated=setup.validated,
+        is_validated=setup.is_validated,
         final_logits=setup.final_logits,
     )
 
@@ -410,7 +408,7 @@ def logit_lens_predictions(
     facet: str = "resid_post",
     layers: Sequence[str] | None = None,
     lens: LensFunc | Mapping[str, LensFunc] | None = None,
-    validate: bool = True,
+    verify: bool = True,
     rtol: float = 1e-4,
     atol: float = 1e-5,
     include_native: bool = True,
@@ -467,9 +465,7 @@ def logit_lens_predictions(
         )
     setup = _prepare_lens(
         trace,
-        _LensRequest(
-            facet=facet, layers=layers, lens=lens, validate=validate, rtol=rtol, atol=atol
-        ),
+        _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify, rtol=rtol, atol=atol),
     )
     head, final_logits = setup.head, setup.final_logits
     token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
@@ -522,7 +518,7 @@ def logit_lens_predictions(
         k=k,
         facet=facet,
         lens_source=setup.lens_source,
-        validated=setup.validated,
+        is_validated=setup.is_validated,
     )
 
 
@@ -582,7 +578,7 @@ def _prepare_lens(trace: Any, request: _LensRequest) -> _LensSetup:
     :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
     """
 
-    facet, layers, lens = request.facet, request.layers, request.lens
+    facet, layers, lens = request.facet, request.module_addresses, request.lens
     validate, rtol, atol = request.validate, request.rtol, request.atol
 
     head = _find_default_head(trace)

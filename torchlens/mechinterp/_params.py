@@ -80,7 +80,7 @@ class ProjectionSource:
     module_address: str
     class_name: str
     orientation: str
-    fused_qkv: bool
+    has_fused_qkv: bool
     slice_cols: tuple[int, int] | None
     verification: str
 
@@ -104,8 +104,8 @@ class HeadWeightViews:
     b_k: torch.Tensor | None
     b_v: torch.Tensor | None
     b_o: torch.Tensor | None
-    n_q_heads: int
-    n_kv_heads: int
+    num_q_heads: int
+    num_kv_heads: int
     d_head: int
     module_address: str
     sources: dict[str, ProjectionSource]
@@ -496,7 +496,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
             module_address=str(getattr(proj_module, "address", "")),
             class_name=class_name,
             orientation=orientation,
-            fused_qkv=fused,
+            has_fused_qkv=fused,
             slice_cols=slice_cols,
             verification=verification,
         )
@@ -516,7 +516,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
         module_address=str(getattr(o_module, "address", "")),
         class_name=o_class,
         orientation=o_orientation,
-        fused_qkv=False,
+        has_fused_qkv=False,
         slice_cols=None,
         verification=o_source,
     )
@@ -530,8 +530,8 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
         b_k=biases["b_k"],
         b_v=biases["b_v"],
         b_o=b_o,
-        n_q_heads=n_q_heads,
-        n_kv_heads=n_kv_heads,
+        num_q_heads=n_q_heads,
+        num_kv_heads=n_kv_heads,
         d_head=d_head,
         module_address=address,
         sources=sources,
@@ -559,19 +559,19 @@ def _kv_for_query_heads(views: HeadWeightViews, weight: torch.Tensor) -> torch.T
     head's K/V weight. MHA (equal counts) is the identity mapping.
     """
 
-    if views.n_kv_heads == views.n_q_heads:
+    if views.num_kv_heads == views.num_q_heads:
         return weight
-    if views.n_kv_heads <= 0 or views.n_q_heads % views.n_kv_heads != 0:
+    if views.num_kv_heads <= 0 or views.num_q_heads % views.num_kv_heads != 0:
         refuse(
             code="mi_head_geometry_unavailable",
-            message=f"{views.n_q_heads} query heads do not group evenly over "
-            f"{views.n_kv_heads} KV heads at {views.module_address!r}.",
+            message=f"{views.num_q_heads} query heads do not group evenly over "
+            f"{views.num_kv_heads} KV heads at {views.module_address!r}.",
             remedy="report the attention class; uneven KV grouping has no defined "
             "per-query-head circuit",
-            n_q_heads=views.n_q_heads,
+            num_q_heads=views.num_q_heads,
             n_kv_heads=views.n_kv_heads,
         )
-    return weight.repeat_interleave(views.n_q_heads // views.n_kv_heads, dim=0)
+    return weight.repeat_interleave(views.num_q_heads // views.n_kv_heads, dim=0)
 
 
 def _views_for(trace: Any, attention: Any) -> HeadWeightViews:

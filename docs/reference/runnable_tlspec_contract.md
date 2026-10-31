@@ -95,7 +95,7 @@ recipe.
 | Node | Exact fields | Constraint |
 |---|---|---|
 | `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, `str`, or `ellipsis`; value has exactly that Python type (`None` for `none` and for `ellipsis` -- the atom KIND, not the wire value, disambiguates a real `None` index from a `...` index) |
-| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `slice(start, stop, step)` |
+| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `plane(start, stop, step)` |
 | `LiteralTorchSymbol` | `qualname` | non-callable symbol below an explicitly allowlisted stock torch root |
 | `LiteralSequence` | `kind`, `items` | kind is `list` or `tuple`; items are ordered literal nodes |
 | `LiteralMapping` | `entries` | ordered `LiteralMappingEntry` nodes; duplicate keys invalid |
@@ -103,7 +103,7 @@ recipe.
 | `LiteralTupleKey` | `items` | ordered `LiteralAtom` or `LiteralTupleKey` nodes only |
 
 Floats round-trip without coercion, including non-finite values. Booleans are not integers. Dict
-order, tuple versus list, key types, nesting, and `None` are preserved. A Python `slice` (e.g. the
+order, tuple versus list, key types, nesting, and `None` are preserved. A Python `plane` (e.g. the
 key of `x[:, 3:]`), a bare `Ellipsis` (`x[..., 0]`), and a bare `None` newaxis index (`x[:, None]`)
 are inert value types with no callables or imports, so they round-trip exactly through the
 `LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
@@ -144,11 +144,11 @@ every recursive `NonTensorLiteral` edge routes through -- `LiteralSlice` start/s
 `_encode_literal`, `LiteralMapping` keys and `LiteralTupleKey` items via the classifier-backed
 `encode_mapping_key`. It is both implementation authority and a future-kind meta-test: a new
 composite node without a declared component policy REDs. secA-F1 (an `IntEnum` /  int-subclass
-`slice` component laundering into a plain `int` because `_encode_slice_component` gated only
+`plane` component laundering into a plain `int` because `_encode_slice_component` gated only
 `isinstance(int)`) is closed: the encoder classifies first, the snapshot preflight applies the
-component policy to composite `slice` leaves (the SAME `semantic_scalar_type` refusal at save
+component policy to composite `plane` leaves (the SAME `semantic_scalar_type` refusal at save
 and in the symmetric runtime snapshot), and `_literal_leaf_equal` compares slices
-component-by-component through the scalar rules -- `slice.__eq__` (value-only) is never the
+component-by-component through the scalar rules -- `plane.__eq__` (value-only) is never the
 authority.
 
 No runnable-save input-boundary path may fail untyped: every producer-preflight refusal
@@ -3065,10 +3065,10 @@ the entire channel from the artifact (the live `Trace` is untouched). Values are
 or partially scrubbed -- the channel ships verbatim or not at all, because a save that silently
 mutates documented metadata values is worse than the disclosure problem it would paper over.
 Every save writes a `custom_attributes_disclosure` entry in `manifest.json` naming the channel:
-the effective `included` flag, the count of modules carrying attributes, and the bounded sorted
+the effective `is_included` flag, the count of modules carrying attributes, and the bounded sorted
 union of top-level key names (names only, never values). Sparse runnable cores always drop the
 field regardless of the flag (it is in the sparse DROP set), and their disclosure records
-`included: false`.
+`is_included: false`.
 
 ### Captured pre-forward buffer values and `include_buffer_values` (privacy disclosure)
 
@@ -3080,7 +3080,7 @@ so the channel gets the same belt as custom attributes: `include_buffer_values: 
 `tl.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
 channel from the artifact, values are never rewritten or partially scrubbed, and the live `Trace`
 is untouched. Every save writes a `buffer_values_disclosure` entry in `manifest.json` (the
-effective `included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
+effective `is_included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
 never values), and a save that actually embeds captured buffer values warns the saver. Sparse
 runnable cores always drop the field regardless of the flag; used non-persistent buffers ship
 there separately as the REQUIRED, independently disclosed `runnable_nonpersistent_buffer_v1`

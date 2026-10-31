@@ -72,7 +72,7 @@ def _accumulators() -> dict[str, Callable[[], Any]]:
         ),
         "topk_latents": lambda: tl.stats.TopK(3, unit_axis=-1, encoder=SAE.encode),
         "histogram": tl.stats.Histogram,
-        "spine": tl.stats.Spine,
+        "spine": tl.stats.RunningStats,
     }
 
 
@@ -128,7 +128,7 @@ def test_resume_matches_uninterrupted(batch_size: int, tmp_path: Path) -> None:
         for batch in batches[half:]:
             resumed.update(batch)
         assert _state(resumed) == _state(whole), name
-        _assert_same(resumed.result(), whole.result())
+        _assert_same(resumed.compute(), whole.compute())
 
 
 def test_resume_two_input_accumulators(tmp_path: Path) -> None:
@@ -144,7 +144,7 @@ def test_resume_two_input_accumulators(tmp_path: Path) -> None:
         for a, b in zip(a_batches[1:], b_batches[1:], strict=True):
             resumed.update(a, b)
         assert _state(resumed) == _state(whole)
-        _assert_same(resumed.result(), whole.result())
+        _assert_same(resumed.compute(), whole.compute())
 
 
 def test_resume_aggregator(tmp_path: Path) -> None:
@@ -168,7 +168,7 @@ def test_resume_aggregator(tmp_path: Path) -> None:
     for batch in batches[2:]:
         resumed.update(batch)
     assert _state(resumed) == _state(whole)
-    _assert_same(resumed.result(), whole.result())
+    _assert_same(resumed.compute(), whole.compute())
 
 
 @pytest.mark.parametrize(

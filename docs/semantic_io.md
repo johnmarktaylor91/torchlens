@@ -233,8 +233,8 @@ The low-level primitives live under `tl.viz`:
 
 ```python
 heatmap_image = tl.viz.render_heatmap(array)
-lineplot_image = tl.viz.render_lineplot(series)
-scatter_image = tl.viz.render_image_scatter(coords, images=image_list)
+lineplot_image = tl.viz.lineplot(series)
+scatter_image = tl.viz.image_scatter(coords, images=image_list)
 ```
 
 They return bounded `PIL.Image.Image` objects directly. Matplotlib is
@@ -260,11 +260,11 @@ Feature and activation map annotations live under `tl.viz` because they are
 activation displays, not representation-geometry numerics:
 
 ```python
-feature_maps = tl.viz.feature_map_evolution(trace, save=mds_layers)
+feature_maps = tl.viz.feature_maps(trace, save=mds_layers)
 trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
 ```
 
-`feature_map_evolution(...)` requires saved spatial activations with shape
+`feature_maps(...)` requires saved spatial activations with shape
 `[N, C, H, W]`; capture the convolutional layers you want to inspect before
 calling it. Non-spatial sites are skipped, and the call raises only when no
 selected site has spatial activations. By default, `feature_map_node_spec()`

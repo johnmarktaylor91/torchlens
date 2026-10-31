@@ -151,7 +151,7 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
         lens = sem.logit_lens(trace)
-        assert lens.validated, "logit_lens self-validation did not run/pass"
+        assert lens.is_validated, "logit_lens self-validation did not run/pass"
         final = lens.final_logits
         assert torch.allclose(final, native, atol=1e-4), (
             "lens-at-final-layer != the model's own logits (the flagship"
@@ -304,7 +304,7 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
         (ids,),
         {"max_new_tokens": 4, "do_sample": False},
         episode=tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         ),
     )
     try:
@@ -342,7 +342,7 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
 
     def episode_spec() -> Any:
         return tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         )
 
     steered = tl.trace(
