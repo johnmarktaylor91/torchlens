@@ -1379,6 +1379,23 @@ def _add_edges_for_node(
                 _register_arg_midpoint_edge(
                     deduped_edge_registry, tail_name, head_name, edge_dict, emitted_index
                 )
+        if (
+            vis_mode == "rolled"
+            and not edge_has_boundary
+            and parent_segment is None
+            and child_segment is None
+            and ellipsis_fold is None
+            and not parent_is_collapsed_module
+            and not child_is_collapsed_module
+        ):
+            _place_rolled_endpoints_in_pass_scope(
+                _base_node_for_metadata(parent_node),
+                _base_node_for_metadata(child_node),
+                ((parent_node, tail_name), (child_node, head_name)),
+                edge_module_key,
+                vis_call_depth,
+                module_edge_dict,
+            )
         # r-b6 R19-4: input-connectivity marks EVERY module containing a
         # connected endpoint, for every edge. The historical loop broke after
         # the first entry (its guard compared a name to itself, so it was
@@ -1427,6 +1444,87 @@ def _add_edges_for_node(
                 forward_tail_name=rendered_parent_name,
                 forward_head_name=head_name,
             )
+
+
+def _rolled_module_path(node: Union["Op", "Layer"]) -> list[str]:
+    """Return a node's module path with the pass suffixes stripped."""
+
+    return [module.split(":")[0] for module in node.modules]
+
+
+def _passes_share_module_path(layer: "Layer") -> bool:
+    """Whether every pass of ``layer`` runs inside the layer's own module path."""
+
+    own_path = _rolled_module_path(layer)
+    return all(_rolled_module_path(op) == own_path for op in layer.ops.values())
+
+
+def _rolled_edge_pass_scopes(
+    parent: "Layer",
+    child: "Layer",
+    vis_call_depth: int,
+) -> list[str]:
+    """Return the pass-stripped innermost modules holding each pass pair of a rolled edge.
+
+    A rolled edge stands for every (parent pass, child pass) pair it joins. When a
+    layer's passes run under different parents (one module instance shared by two
+    parents), the layer-level module path is only the first pass's, so the pair
+    that runs in a later pass's parent has its own, different scope.
+    """
+
+    # ``Op.children`` holds lookup labels: the bare layer label for a single-pass
+    # layer, the pass-qualified op label otherwise.
+    child_ops = {
+        (op.layer_label if op.num_passes == 1 else op.label): op for op in child.ops.values()
+    }
+    scopes: list[str] = []
+    for parent_op in parent.ops.values():
+        for child_label in parent_op.children:
+            child_op = child_ops.get(child_label)
+            if child_op is None:
+                continue
+            scope = _get_lowest_module_for_two_nodes(parent_op, child_op, False, vis_call_depth)
+            if scope == -1:
+                continue
+            stripped = cast(str, scope).split(":")[0]
+            if stripped not in scopes:
+                scopes.append(stripped)
+    return scopes
+
+
+def _place_rolled_endpoints_in_pass_scope(
+    parent: BaseGraphNode,
+    child: BaseGraphNode,
+    endpoints: tuple[tuple[GraphNode, str], ...],
+    edge_module_key: str | int,
+    vis_call_depth: int,
+    module_edge_dict: Dict[str, Any],
+) -> None:
+    """Put rolled endpoints into the module frame their pass pair runs in.
+
+    Rolled frames are filled by the edges emitted inside them. An edge whose
+    endpoints are drawn under different parents is emitted above both, so an
+    endpoint whose only in-module edge is such a pass pair was left outside its
+    own module's frame. This queues that endpoint as a node of the pass pair's
+    module, the cluster an in-module edge would have pulled it into. Layers whose
+    passes all share one module path are untouched.
+    """
+
+    if not isinstance(parent, Layer) or not isinstance(child, Layer):
+        return
+    if _passes_share_module_path(parent) and _passes_share_module_path(child):
+        return
+    drawn_key = None if edge_module_key == -1 else str(edge_module_key)
+    for scope in _rolled_edge_pass_scopes(parent, child, vis_call_depth):
+        if drawn_key is not None and (scope == drawn_key or drawn_key.startswith(f"{scope}.")):
+            continue
+        queued = module_edge_dict[scope].setdefault("nodes", [])
+        queued_names = {node_args.get("name") for node_args in queued}
+        for endpoint, name in endpoints:
+            base = _base_node_for_metadata(endpoint)
+            if scope in _rolled_module_path(base) and name not in queued_names:
+                queued.append({"name": name})
+                queued_names.add(name)
 
 
 def _projected_antiparallel_edge_attrs() -> dict[str, str]:
