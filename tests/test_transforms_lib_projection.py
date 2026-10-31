@@ -106,8 +106,8 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
 
     generator = torch.Generator().manual_seed(0)
     pilot = torch.randn(12, 300, generator=generator)
-    first = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
-    second = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
+    first = srp_fidelity_probe(pilot, num_components=(16, 64), seed=7)
+    second = srp_fidelity_probe(pilot, num_components=(16, 64), seed=7)
     assert first.to_dict() == second.to_dict()
     assert first.corpus == "user_pilot_batch"
     assert first.distance_claim == "empirical_only"
@@ -126,15 +126,15 @@ def test_probe_refusals_are_typed() -> None:
     """Too-few rows, non-float input, empty widths, constant rows refuse."""
 
     with pytest.raises(TransformContractError) as excinfo:
-        srp_fidelity_probe(torch.randn(3, 10), n_components=(4,))
+        srp_fidelity_probe(torch.randn(3, 10), num_components=(4,))
     assert excinfo.value.fields["code"] == "transform_params_invalid"
     with pytest.raises(TransformContractError):
-        srp_fidelity_probe(torch.randint(0, 5, (8, 10)), n_components=(4,))
+        srp_fidelity_probe(torch.randint(0, 5, (8, 10)), num_components=(4,))
     with pytest.raises(TransformContractError):
-        srp_fidelity_probe(torch.randn(8, 10), n_components=())
+        srp_fidelity_probe(torch.randn(8, 10), num_components=())
     constant = torch.ones(6, 12)
     with pytest.raises(TransformContractError) as excinfo:
-        srp_fidelity_probe(constant, n_components=(4,))
+        srp_fidelity_probe(constant, num_components=(4,))
     assert "zero variance" in str(excinfo.value)
 
 

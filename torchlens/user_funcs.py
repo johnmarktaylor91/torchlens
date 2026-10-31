@@ -2730,7 +2730,7 @@ def trace(
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
             ladder_kwargs = locals().copy()
-            for consumed in ("model", "input_args", "input_kwargs", "input_size"):
+            for consumed in ("model", "input_args", "input_kwargs", "input_shape"):
                 ladder_kwargs.pop(consumed)
             from ._quickstart._ladder import _trace_via_ladder
 
@@ -2749,7 +2749,7 @@ def trace(
         _reject_extra_positional_input(grad_transform)
         public_trace_kwargs = locals().copy()
         public_trace_kwargs.pop("backend")
-        public_trace_kwargs.pop("input_size")  # ladder-consumed; always None here
+        public_trace_kwargs.pop("input_shape")  # ladder-consumed; always None here
         # Settled by the zero_fire_policy_scope above, never a backend option.
         public_trace_kwargs.pop("on_zero_fire")
         # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.

@@ -107,7 +107,7 @@ def test_streaming_cka_zero_variance_is_nan_and_one_shot_rejects_mismatched_rows
 def test_pca_without_updates_returns_empty_shapes() -> None:
     """An unfed PCA reports empty components and variances."""
 
-    pca = tl.stats.PCA(n_components=2)
+    pca = tl.stats.PCA(num_components=2)
     result = pca.compute()
     assert result["components"].shape == (0, 0)
     assert result["explained_variance"].shape == (0,)

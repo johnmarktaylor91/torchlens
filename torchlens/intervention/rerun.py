@@ -894,7 +894,7 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
             "run(..., inputs=None) cannot recover the original input",
             code="run_input_missing",
             remedy="pass the forward input explicitly as log.run(model, x)",
-            argument="x",
+            argument="inputs",
         )
     from ..user_funcs import _reject_opaque_wrappers
 

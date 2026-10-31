@@ -854,7 +854,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         from .._errors import InvalidArgumentError
 
         one_call_only = {
-            "input_size": input_shape,
+            "input_shape": input_shape,
             "execution_mode": execution_mode,
             "grad_mode": grad_mode,
         }

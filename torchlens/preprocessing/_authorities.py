@@ -436,7 +436,7 @@ def _adapt_timm_config(authority: Mapping[str, Any]) -> Resolution:
         identifier,
         declared=declared,
         description=(
-            f"timm data config: input_shape={authority.get('input_size')} "
+            f"timm data config: input_size={authority.get('input_size')} "
             f"crop_pct={authority.get('crop_pct')}"
         ),
         transform=transform,

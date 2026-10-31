@@ -1199,6 +1199,12 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     (
+        "torchlens/_data_classes/_trace_viz.py",
+        '"input_size": input_size,',
+        "input_size",
+        0,
+    ): "apply",
+    (
         "torchlens/_data_classes/op.py",
         "for fid, name in enumerate(store.layout.names):",
         "layout",
@@ -1392,6 +1398,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "input_size",
         0,
     ): "apply",
+    ("torchlens/_user_public_impls.py", 'argument="input_size",', "input_size", 0): "apply",
     (
         "torchlens/_user_public_impls.py",
         "needs ``input_size=`` or meta inputs. Requires ``transformers``; the",
@@ -1479,6 +1486,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "layout",
         -1,
     ): "skip",
+    ("torchlens/intervention/rerun.py", 'argument="x",', "x", 0): "apply",
     ("torchlens/intervention/rerun.py", "value.layout is torch.strided", "layout", -1): "skip",
     (
         "torchlens/options.py",
@@ -1504,12 +1512,18 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "f\"timm data config: input_size={authority.get('input_size')} \"",
         "input_size",
         0,
-    ): "apply",
+    ): "skip",
     (
         "torchlens/receptive_field/AGENTS.md",
         "`gradient()`, and `show()`; `show(gradient=True)` recomputes WITHOUT retain_graph",
         "gradient",
         1,
+    ): "apply",
+    (
+        "torchlens/receptive_field/_gradient_forward.py",
+        "support, None if descriptor is None else descriptor.layout",
+        "layout",
+        -1,
     ): "apply",
     (
         "torchlens/receptive_field/_types.py",
@@ -1559,6 +1573,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "gradient",
         0,
     ): "apply",
+    ("torchlens/repgeom/_geometry.py", '"n_components": n_components,', "n_components", 0): "skip",
     (
         "torchlens/report/_summary_hub.py",
         '``tl.summary("gpt2", input_size=(1, 8))`` fetches the model\'s CONFIG only,',
@@ -1577,12 +1592,14 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "layer",
         -1,
     ): "skip",
+    ("torchlens/transforms/_helpers.py", '"n_components": int(k),', "n_components", 0): "skip",
     (
         "torchlens/transforms/_helpers.py",
         "Converts to ``int`` (feeds ``srp(n_components=...)`` directly); the",
         "n_components",
         0,
     ): "apply",
+    ("torchlens/transforms/_srp.py", '"n_components": n_components,', "n_components", 0): "skip",
     (
         "torchlens/transforms/_srp.py",
         '``srp(n_components=REQUIRED, seed=0, density="auto",',
@@ -1997,6 +2014,8 @@ class Scope:
                 return self.index.method_return(base.name, name)
             if base is not None:
                 return None
+            if not (isinstance(func.value, ast.Name) and not _is_bound(self, func.value.id)):
+                return None  # a method of an unknown receiver, not a module function
         callee = self.lookup(name) if isinstance(func, ast.Name) else None
         if callee is not None and callee.kind == "cls":
             return T("inst", callee.name)
@@ -2230,6 +2249,18 @@ class Collector:
             for row in PARAM_BY_OLD.get(kw.arg, []):
                 verdict, why = self._param_call_verdict(call, scope, row)
                 self._at(kw.lineno, kw.col_offset, row_id(row), row.old, row.new, verdict, why)
+            value = kw.value
+            if kw.arg == "argument" and isinstance(value, ast.Constant):
+                for row in PARAM_BY_OLD.get(str(value.value), []):
+                    self._at(
+                        value.lineno,
+                        value.col_offset + 1,
+                        row_id(row),
+                        row.old,
+                        row.new,
+                        "undecided",
+                        "argument= may name a renamed keyword",
+                    )
         name = _terminal(call.func)
         if name in ("getattr", "hasattr", "setattr") and len(call.args) >= 2:
             arg = call.args[1]
@@ -2400,7 +2431,41 @@ class Collector:
                     "apply",
                     "parameter use",
                 )
+            for const in ast.walk(fn):
+                if isinstance(const, ast.Constant) and const.value == row.old:
+                    verdict, why = self._name_string_verdict(const)
+                    if verdict:
+                        self._at(
+                            const.lineno,
+                            const.col_offset + 1,
+                            row_id(row),
+                            row.old,
+                            row.new,
+                            verdict,
+                            why,
+                        )
             self._docstring(fn, row_id(row), row.old, row.new)
+
+    def _name_string_verdict(self, const: ast.Constant) -> tuple[str, str]:
+        """Classify a string equal to a renamed parameter inside its own function.
+
+        ``locals()`` snapshots are trimmed by name (``kwargs.pop("x")``, a ``for`` over a
+        tuple of names) and must follow the rename. A dict key could be a payload or spec
+        field that keeps its spelling, so it goes to hand review. Anything else is ignored.
+        """
+
+        parent = self.parents.get(const)
+        if isinstance(parent, ast.Call) and _terminal(parent.func) == "pop":
+            return "apply", "locals() key popped by name"
+        if isinstance(parent, (ast.Tuple, ast.List)) and isinstance(
+            self.parents.get(parent), (ast.For, ast.comprehension)
+        ):
+            return "apply", "locals() key in a name loop"
+        if isinstance(parent, ast.keyword) and parent.arg == "argument":
+            return "apply", "argument= names the parameter"
+        if isinstance(parent, ast.Dict) and const in parent.keys:
+            return "undecided", "dict key spelled like the parameter"
+        return "", ""
 
 
 def _is_bound(scope: Scope | None, name: str) -> bool:
@@ -2693,7 +2758,9 @@ def classify(
             print(f"warning: {src.path}: {exc!r}", file=sys.stderr)
     unique: dict[tuple[str, object, int, str], Site] = {}
     for site in sites:
-        unique.setdefault((site.path, site.loc, site.col, site.old), site)
+        prior = unique.get((site.path, site.loc, site.col, site.old))
+        if prior is None or (site.verdict == "apply" and prior.verdict != "apply"):
+            unique[(site.path, site.loc, site.col, site.old)] = site
     for path, text in texts.items():
         if not any(tok in text for tok in tokens):
             continue

@@ -446,7 +446,7 @@ def _maybe_weightsfree_summary(
                 "pass input_shape= (declared shapes; e.g. input_shape=(1, 8)) "
                 "or explicit meta inputs (torch.zeros(..., device='meta'))"
             ),
-            argument="input_size",
+            argument="input_shape",
         )
     return _weightsfree_summary_facade(model, input_args, input_kwargs, input_size, summary_kwargs)
 
