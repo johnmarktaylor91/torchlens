@@ -579,7 +579,7 @@ class HookSpec:
         return FrozenHookSpec(
             site_target=self.site_target.freeze(),
             hook=self.hook,
-            helper=self.edit,
+            helper=self.helper,
             handle=self.handle,
             metadata=tuple(sorted(self.metadata.items())),
         )
@@ -739,7 +739,7 @@ class InterventionSpec:
 
         return FrozenInterventionSpec(
             targets=tuple(target.freeze() for target in self.targets),
-            helper=self.edit,
+            helper=self.helper,
             value=self.value,
             hook=self.hook,
             target_value_specs=tuple(value_spec.freeze() for value_spec in self.target_value_specs),

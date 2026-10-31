@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
-from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention.errors import BundleMemberError
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ def _distance_value(
 
     metric_fn = resolve_metric(metric)
     value = (
-        relative_l1_scalar(reference, candidate)
+        relative_l1(reference, candidate)
         if is_scalar_like(reference) and is_scalar_like(candidate)
         else metric_fn(reference, candidate)
     )

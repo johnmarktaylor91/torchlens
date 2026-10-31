@@ -74,8 +74,8 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
     pass_a = next(iter(_capture_tiny_log()))
     pass_b = next(iter(_capture_tiny_log()))
-    pass_a.edits.append({"op": "sentinel"})
-    assert pass_b.edits == []
+    pass_a.interventions.append({"op": "sentinel"})
+    assert pass_b.interventions == []
     assert LAYER_PASS_LOG_FIELD_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
 
 

@@ -129,9 +129,9 @@ class CouplingSession:
                     site=str(
                         getattr(record, "site_label", None) or getattr(record, "target_label", "")
                     ),
-                    edit=getattr(record, "helper_name", None),
+                    helper=getattr(record, "edit_name", None),
                     timing=getattr(record, "timing", None),
-                    direction=getattr(record, "direction", None),
+                    direction=getattr(record, "signal", None),
                     replaced=bool(getattr(record, "replaced", False)),
                 )
             )
@@ -197,7 +197,7 @@ def mint_intervention_digest(session: CouplingSession) -> str:
             "schema": INTERVENTION_DIGEST_SCHEMA,
             "rules": [list(row) for row in session.rule_identity],
             "fires": [
-                [fire.step, fire.site, fire.edit, fire.timing, fire.signal, fire.replaced]
+                [fire.step, fire.site, fire.helper, fire.timing, fire.direction, fire.replaced]
                 for fire in session.fires
             ],
             "outside_step_fires": session.outside_step_fires,

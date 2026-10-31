@@ -71,7 +71,7 @@ def test_save_x_intervene_saves_the_edited_value() -> None:
     log = tl.trace(LinearReluLinear(), X, save=tl.func("relu"), intervene=ZERO_RELU)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.zeros(1, 4))
-    assert relu.is_edited
+    assert relu.intervention_replaced
 
 
 def test_save_x_rerun_refills_the_selected_sites() -> None:
@@ -91,13 +91,13 @@ def test_intervene_x_rerun_applies_the_edit_once() -> None:
     log.run(model, X2)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.zeros(1, 4))
-    assert len(relu.edits) == 1
+    assert len(relu.interventions) == 1
 
 
 def test_fork_do_x_index_edits_the_fork_only() -> None:
     """``fork().do`` on an indexed op edits the fork and leaves the parent intact."""
 
-    log = tl.trace(LinearReluLinear(), X, capture=CaptureOptions(replayable=True))
+    log = tl.trace(LinearReluLinear(), X, capture=CaptureOptions(intervention_ready=True))
     label = _relu_op(log).label
     fork = log.fork()
     fork.do(fork[label], tl.zero_ablate())

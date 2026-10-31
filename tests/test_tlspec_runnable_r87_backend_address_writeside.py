@@ -52,7 +52,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
-_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
 
 def _buffer_ops(trace: Any) -> list[Any]:

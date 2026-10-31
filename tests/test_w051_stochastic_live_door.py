@@ -14,8 +14,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import OneDatum, population, sample_from, sampling_records
-from torchlens.intervention.stochastic import _mint_donor_group_id
+from torchlens.intervention import population, sample_from
+from torchlens.intervention.population import OneDatum
+from torchlens.intervention.stochastic import _mint_donor_group_id, sampling_records
 
 
 class _TwoBlock(nn.Module):

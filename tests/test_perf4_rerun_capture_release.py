@@ -37,7 +37,7 @@ def _capture() -> tuple[_Net, torch.Tensor, Any]:
     torch.manual_seed(0)
     model = _Net()
     x = torch.randn(2, 4)
-    return model, x, tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    return model, x, tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
 def _rerun_fork(trace: Any, model: nn.Module, x: torch.Tensor) -> Any:

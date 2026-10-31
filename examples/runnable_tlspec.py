@@ -41,7 +41,7 @@ def main() -> None:
         inputs,
         capture=CaptureOptions(
             layers_to_save="all",
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

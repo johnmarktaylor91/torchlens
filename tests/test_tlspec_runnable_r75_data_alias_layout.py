@@ -5,7 +5,7 @@ on unlabeled receivers: the C-level ``.data`` getter destroyed labels and ``_bas
 ``(x * 2).data.is_contiguous(channels_last)`` recorded nothing and a channels-last twin
 replayed the captured arm as a false VERIFIED. The r75 origin/storage ladder below remains
 the defense-in-depth attribution path. TorchLens now additionally captures the getter's real
-``aten.detach`` dispatch as the canonical replayable ``Tensor.detach`` op, preserving direct
+``aten.detach`` dispatch as the canonical intervention_ready ``Tensor.detach`` op, preserving direct
 graph ancestry for ordinary captures without admitting the unsafe descriptor itself.
 
 The r75 closure makes the layout-trio fall-through FAIL-CLOSED BY CONSTRUCTION -- no rung
@@ -48,7 +48,9 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
 
 

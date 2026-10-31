@@ -65,7 +65,7 @@ def _capture() -> tuple[_Net, torch.Tensor, Trace]:
     torch.manual_seed(0)
     model = _Net()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
     return model, x, trace
 
 
@@ -250,7 +250,7 @@ def test_every_trace_and_fork_refuses_a_changed_live_parameter() -> None:
         for stale in (trace, push_fork, rerun_fork):
             with pytest.raises(ReplayPreconditionError, match="changed since capture"):
                 _push(stale, fc1)
-        fresh = tl.trace(model, x, capture=CaptureOptions(replayable=True))
+        fresh = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
         fresh_fork = fresh.fork().do(
             relu, tl.scale(2.0), intervention=InterventionOptions(engine="replay")
         )

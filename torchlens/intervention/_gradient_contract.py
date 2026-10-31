@@ -49,7 +49,7 @@ _FIXED_REMEDY = (
 def _site_label(hook: Any) -> str:
     """Return the user's label for the firing site."""
 
-    layer_log = getattr(hook, "layer_log", None) or {}
+    layer_log = getattr(hook, "op", None) or {}
     label = layer_log.get("layer_label") or layer_log.get("label")
     return str(label or getattr(hook, "name", None) or "<site>")
 

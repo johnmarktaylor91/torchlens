@@ -589,7 +589,7 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     else:
         trace = tl.trace(model, x)
-    source_ready = trace.is_replayable
+    source_ready = trace.intervention_ready
     assert source_ready is intervention_ready
     captured = _output(trace).detach().clone()
     # The model is genuinely stochastic: an unseeded-equivalent forward differs.
@@ -600,7 +600,7 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
 
     assert trace.last_run["engine"] == "rerun"
     assert torch.equal(_output(trace), captured)
-    assert trace.is_replayable == source_ready
+    assert trace.intervention_ready == source_ready
 
 
 def test_full_sequence_output_reruns_shape_varied_exactly() -> None:

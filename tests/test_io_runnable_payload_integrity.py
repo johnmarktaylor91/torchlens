@@ -28,7 +28,7 @@ from torchlens.runnable import NumericAttestationStatus
 from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
 
 _CAP = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
 )

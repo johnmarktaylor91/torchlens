@@ -79,7 +79,7 @@ def main() -> None:
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.scale(0.5)),
     )
-    print("intervened relu count:", sum(op.is_edited for op in patched.layer_list))
+    print("intervened relu count:", sum(op.intervention_replaced for op in patched.layer_list))
 
     recording = tl.record(model, x, save=tl.func("conv2d"))
     print("recorded ops:", len(recording.records))

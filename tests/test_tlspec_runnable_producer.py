@@ -208,7 +208,7 @@ def _capture(model: nn.Module, value: Any) -> tl.Trace:
         model,
         value,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

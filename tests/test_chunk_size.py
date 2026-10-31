@@ -396,7 +396,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
                 backward_capture=False,
                 validation_replay=False,
                 fastlog=False,
-                can_intervene=False,
+                interventions=False,
                 rng_replay=False,
                 payload_materialization=False,
                 streaming=False,

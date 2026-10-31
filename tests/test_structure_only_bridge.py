@@ -132,7 +132,7 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
         tl.trace(
             _NonPersistentBufferModel(),
             torch.randn(2, 3),
-            capture=CaptureOptions(structure_only=True, replayable=True),
+            capture=CaptureOptions(structure_only=True, intervention_ready=True),
         )
     message = str(excinfo.value)
     assert "runnable_ready_composition" in message
@@ -239,7 +239,9 @@ def loaded_runnable_trace(tmp_path):
     trace = tl.trace(
         model,
         torch.tensor([1.0, 2.0, 3.0]),
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
     path = tmp_path / "bridge.tlspec"
     import warnings

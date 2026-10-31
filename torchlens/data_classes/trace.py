@@ -1271,7 +1271,7 @@ class Trace(
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
         "keep_orphans": FieldPolicy.KEEP,
-        "is_replayable": FieldPolicy.KEEP,
+        "intervention_ready": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
         "raw_input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
@@ -1826,7 +1826,7 @@ class Trace(
         self._layers_logged = False
         self._layers_saved = False
         self.keep_orphans = keep_orphans
-        self.is_replayable = False
+        self.intervention_ready = False
         self.save_arg_templates = False
         self.raw_input = raw_input
         self.input_preprocessor: ResolvedPreprocessing | None = None

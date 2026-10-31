@@ -165,7 +165,7 @@ class EchoObserver:
     def _address(hook: Any) -> str | None:
         """Best-effort site address from the hook context."""
 
-        layer_log = getattr(hook, "layer_log", None)
+        layer_log = getattr(hook, "op", None)
         if layer_log is None:
             return None
         if hasattr(layer_log, "get"):

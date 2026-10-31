@@ -36,10 +36,10 @@ def test_two_sequential_edits_yield_two_records_and_the_chained_value() -> None:
     log = _log()
     fork = log.fork()
     fork.do("relu_1_2", tl.scale(2.0))
-    assert len(fork["relu_1_2"].edits) == 1
+    assert len(fork["relu_1_2"].interventions) == 1
 
     fork.do("relu_1_2", tl.scale(0.5))
-    records = fork["relu_1_2"].edits
+    records = fork["relu_1_2"].interventions
     assert len(records) == 2
     assert all(record.engine == "replay" for record in records)
     # Both sticky hooks fired on the final push: 2.0 * 0.5 == identity.
@@ -52,13 +52,13 @@ def test_unrelated_upstream_edit_does_not_grow_downstream_fire_count() -> None:
     log = _log()
     fork = log.fork()
     fork.do("relu_1_2", tl.scale(3.0))
-    assert len(fork["relu_1_2"].edits) == 1
+    assert len(fork["relu_1_2"].interventions) == 1
 
     fork.do("conv2d_1_1", tl.scale(1.0))
     # The conv edit recomputed the relu site and re-fired its sticky hook:
     # still ONE record describing the current value's single fire.
-    assert len(fork["relu_1_2"].edits) == 1
-    assert len(fork["conv2d_1_1"].edits) == 1
+    assert len(fork["relu_1_2"].interventions) == 1
+    assert len(fork["conv2d_1_1"].interventions) == 1
 
 
 def test_live_capture_records_survive_a_replay_push() -> None:
@@ -72,11 +72,11 @@ def test_live_capture_records_survive_a_replay_push() -> None:
         capture=tl.options.CaptureOptions(intervention_ready=True),
         intervene=tl.when(tl.func("relu"), tl.scale(2.0)),
     )
-    live_before = [r for r in log["relu_1_2"].edits if r.engine == "live"]
+    live_before = [r for r in log["relu_1_2"].interventions if r.engine == "live"]
     assert live_before
 
     fork = log.fork()
     fork.do("relu_1_2", tl.scale(0.5))
-    records = fork["relu_1_2"].edits
+    records = fork["relu_1_2"].interventions
     assert [r for r in records if r.engine == "live"] == live_before
     assert sum(1 for r in records if r.engine == "replay") >= 1

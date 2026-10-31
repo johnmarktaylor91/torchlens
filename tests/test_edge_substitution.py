@@ -228,9 +228,9 @@ def test_edge_substitution_storage_fork_honesty(capture):
     assert not (parent_op.out_versions_by_child or {})
 
     # per-edge intervened marker; node-level key correctly never fires
-    edge_records = [r for r in child.edits if r.edge_address]
+    edge_records = [r for r in child.interventions if r.edge_address]
     assert edge_records and edge_records[0].edge_address == edge_address_of(edge)
-    assert not child.is_edited
+    assert not child.intervention_replaced
 
     # audit disclosure
     audit = fork.intervention_audit[-1]
@@ -289,7 +289,7 @@ def test_validation_positive_invariant_strip_fire_record(capture):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
     child = fork["conv2d_2_3"].ops[0]
-    child._internal_set("interventions", [r for r in child.edits if not r.edge_address])
+    child._internal_set("interventions", [r for r in child.interventions if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
     assert verdict.reason == "edge_substitution_uncorroborated"
@@ -320,7 +320,7 @@ def test_validation_captured_native_via_capture_surface_fails(capture: Any) -> N
     child._internal_set("edge_substitutions", {})
     child._internal_set("edge_replacement_stamps", {})
     child._internal_set(
-        "interventions", [record for record in child.edits if not record.edge_address]
+        "interventions", [record for record in child.interventions if not record.edge_address]
     )
     # Present the substituted value as capture-native in ONE persisted
     # consumed-value surface. The untouched saved_args twin contradicts it.

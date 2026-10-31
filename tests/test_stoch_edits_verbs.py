@@ -28,19 +28,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention import (
-    OneDatum,
-    PerRowDatums,
-    make_hook_context,
-    mean_fill,
-    mean_from,
     permute_batch,
     population,
     resample_rows_from,
     sample_from,
-    sampling_records,
     set_direction_mean,
 )
-from torchlens.intervention.stochastic import _derived_seed
+from torchlens.intervention.hooks import make_hook_context
+from torchlens.intervention.population import OneDatum, PerRowDatums
+from torchlens.intervention.stochastic import _derived_seed, mean_fill, mean_from, sampling_records
 
 
 class _Toy(nn.Module):
@@ -231,7 +227,7 @@ def test_mask_equivariance_law() -> None:
     expected = baseline.clone()
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
-    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
+    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
     assert fire.edit is not None
     metadata = dict(fire.edit.metadata)
     assert "selection_mask_digest" in metadata
@@ -432,7 +428,7 @@ def test_fire_record_carries_the_sampling_note_via_one_builder() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), permute_batch(seed=11, axis=0))
-    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
+    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
     note = fire.determinism_note or ""
     assert "sampling[permute_batch]" in note
     assert "base_seed=11" in note

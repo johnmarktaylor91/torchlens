@@ -32,7 +32,7 @@ def _runnable_descriptor(tmp_path: Path) -> dict:
     trace = tl.trace(
         _SlotModel(),
         torch.randn(2, 4),
-        capture=CaptureOptions(replayable=True, cache=False),
+        capture=CaptureOptions(intervention_ready=True, cache=False),
     )
     path = tmp_path / "sparse.tlspec"
     trace.save(path, level="runnable")

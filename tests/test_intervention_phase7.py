@@ -123,7 +123,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
 def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
@@ -165,7 +165,7 @@ def test_rerun_with_hook_updates_downstream_out() -> None:
     assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
     assert torch.equal(log[log.output_layers[0]].out, torch.ones_like(original_output))
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert relu_site.edits[-1].engine == "live"
+    assert relu_site.interventions[-1].engine == "live"
     assert log.last_run["hooks_fired"] >= 1
     assert log.last_run["hooks_unfired"] == 0
 

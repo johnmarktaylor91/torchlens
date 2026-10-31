@@ -54,7 +54,7 @@ def _runnable_artifact(model: nn.Module, inputs: torch.Tensor, path: Path) -> Pa
             model,
             inputs,
             capture=CaptureOptions(
-                replayable=True,
+                intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -116,7 +116,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
             LayoutPredicateModel(),
             original,
             capture=CaptureOptions(
-                replayable=True,
+                intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -414,7 +414,7 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             model,
             inputs,
             capture=CaptureOptions(
-                replayable=True,
+                intervention_ready=True,
                 layers_to_save="all",
                 cache=False,
             ),
@@ -543,7 +543,7 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
             model,
             box_a(t=tensor),
             capture=CaptureOptions(
-                replayable=True,
+                intervention_ready=True,
                 capture_container_structure=True,
                 cache=False,
             ),

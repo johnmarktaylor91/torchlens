@@ -104,7 +104,7 @@ _requires_safe_weights_only_load = pytest.mark.skipif(
 )
 
 _CAP = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
 )

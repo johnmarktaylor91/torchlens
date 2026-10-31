@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
     reason="per-backend fp32_precision API needs torch >= 2.9",
 )
 
-_CAPTURE = CaptureOptions(replayable=True)
+_CAPTURE = CaptureOptions(intervention_ready=True)
 
 
 def _set(path: str, value: str) -> None:

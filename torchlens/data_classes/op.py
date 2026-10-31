@@ -144,7 +144,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
         "transformed_out",
         "grad",
         "transformed_grad",
-        "edits",
+        "interventions",
     }
 )
 # ``Op.__getattribute__``/``__setattr__`` run on EVERY attribute touch during
@@ -195,8 +195,8 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "func_id": None,
     "container_path": (),
     "multi_output_name": None,
-    "is_edited": False,
-    "edits": [],
+    "intervention_replaced": False,
+    "interventions": [],
     "container_spec": None,
     "args_template": None,
     "kwargs_template": None,
@@ -405,7 +405,7 @@ _UNPOOLED_SLOTS = frozenset(
         "out_versions_by_child",
         "func_rng_states",
         "activation_transform",
-        "edits",
+        "interventions",
         # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
         # slot): a mutable mapping distinct per injected op, never a shared
         # internable value. None on every model op until F01 writes it.
@@ -464,7 +464,7 @@ _POOL_MAX_DEPTH = 2
 _POOLED_CONTAINER_FIELDS = frozenset(
     {
         "annotations",
-        "edits",
+        "interventions",
         "var_names",
         "_grad_records",
         "out_versions_by_child",
@@ -538,8 +538,8 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "has_output_descendant",
         "input_to_module_calls",
         "internal_source_parents",
-        "is_edited",
-        "edits",
+        "intervention_replaced",
+        "interventions",
         "io_role",
         "is_atomic_module",
         "is_buffer",
@@ -1622,8 +1622,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "output_device": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "edits": FieldPolicy.KEEP,
-        "is_edited": FieldPolicy.KEEP,
+        "interventions": FieldPolicy.KEEP,
+        "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
         "saved_args": FieldPolicy.BLOB_RECURSIVE,

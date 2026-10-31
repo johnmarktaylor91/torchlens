@@ -41,7 +41,7 @@ def _capture() -> tuple[_Net, torch.Tensor, Trace]:
     torch.manual_seed(0)
     model = _Net().eval()
     x = torch.randn(2, 4)
-    return model, x, tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    return model, x, tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
 @pytest.fixture
@@ -121,7 +121,7 @@ def test_a_flipped_sign_bit_is_not_shared(fresh_reruns: list[Trace]) -> None:
     with torch.no_grad():
         model.fc2.bias.zero_()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
     with torch.no_grad():
         model.fc2.bias.neg_()  # 0.0 -> -0.0: equal values, different bytes
     _rerun(trace, model, x)

@@ -34,6 +34,7 @@ __tl_layer__ = "FACADE"
 # tl.stats Histogram gap -- tl.aggregate gets dataset-mode histograms free.
 # One implementation home (torchlens/observability/_kernels.py); spellings
 # DOCUMENTED-UNSTABLE pending naming-session ratification.
+from ..intervention._metrics import cosine_distance, relative_l1, relative_l2  # noqa: E402
 from ..observability._kernels import (  # noqa: E402
     Histogram,
     HistogramDescriptor,
@@ -108,12 +109,15 @@ __all__ = [
     "UnitTopK",
     "aggregate",
     "cka",
+    "cosine_distance",
     "degrade",
     "echo",
     "format_sig",
     "glance",
     "load_fitted",
     "measure_trajectory",
+    "relative_l1",
+    "relative_l2",
     "render_core_line",
     "save_fitted",
     "site_spines",

@@ -38,7 +38,7 @@ import torchlens as tl
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
-    VERDICT_STEERING_WITNESS_FAMILIES,
+    _VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
     WITNESS_GAP_REGISTRY,
     ControlWitnessKind,
@@ -49,7 +49,7 @@ from torchlens.runnable import (
     derive_required_witness_members,
 )
 
-_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, inputs: Any) -> tl.Trace:
@@ -299,7 +299,7 @@ def test_r71_registry_closure_meta() -> None:
         "a direct ControlWitnessKind has no registry-v2 row -- register it with an "
         "independent anchor before shipping"
     )
-    assert direct_kinds | shape_families == VERDICT_STEERING_WITNESS_FAMILIES
+    assert direct_kinds | shape_families == _VERDICT_STEERING_WITNESS_FAMILIES
     assert claim_families == {"inert_sink", "unbound_state_inert"}
     assert set(WITNESS_FAMILY_REGISTRY) == direct_kinds | shape_families | claim_families
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
@@ -441,7 +441,7 @@ _THIRD_LEG_FAMILIES = frozenset(
 )
 
 
-@pytest.mark.parametrize("family", sorted(VERDICT_STEERING_WITNESS_FAMILIES))
+@pytest.mark.parametrize("family", sorted(_VERDICT_STEERING_WITNESS_FAMILIES))
 def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
     """(a) single witness strip, (b) lockstep witness+member, (c) 3-way lockstep with
     the owner-record leg, (d) all of those with witness_completeness left "complete"

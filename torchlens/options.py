@@ -86,7 +86,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "compute_input_output_distances",
     "detach_saved_activations",
     "recurrence_detection",
-    "replayable",
+    "intervention_ready",
     "capture_container_structure",
     "hooks",
     "unwrap_when_done",
@@ -206,7 +206,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "compute_input_output_distances": "compute_input_output_distances",
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
-    "replayable": "intervention_ready",
+    "intervention_ready": "intervention_ready",
     "capture_container_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
@@ -703,7 +703,7 @@ class CaptureOptions:
     compute_input_output_distances: bool = True
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
-    replayable: bool = False
+    intervention_ready: bool = False
     capture_container_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False

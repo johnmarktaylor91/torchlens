@@ -20,7 +20,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import population, sample_from, sampling_records
+from torchlens.intervention import population, sample_from
+from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -113,7 +114,8 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     import torch
     from torch import nn
     import torchlens as tl
-    from torchlens.intervention import reference, sample_from, sampling_records
+    from torchlens.intervention import reference, sample_from
+    from torchlens.intervention.stochastic import sampling_records
 
     class TwoBlock(nn.Module):
         def __init__(self):

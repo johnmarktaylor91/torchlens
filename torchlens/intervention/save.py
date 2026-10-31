@@ -756,7 +756,7 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
         record.edit_name,
         _helper_identity(record.edit),
         record.timing,
-        record.backward_pass_index,
+        record.backward_pass_number,
         record.call_index,
         record.grad_kind,
         record.tuple_index,

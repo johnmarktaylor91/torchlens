@@ -13,6 +13,8 @@ import torch
 import torch.nn.modules.module as torch_module
 from torch import nn
 
+from torchlens.ir.events import PreHookProvenanceEvent
+
 from ... import _state
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module import HookInfo
@@ -22,7 +24,6 @@ from ...data_classes.prehook import (
     TensorInputObservation,
     TypedInputPath,
 )
-from ...ir import PreHookProvenanceEvent
 from ._tl import get_tensor_label
 
 if TYPE_CHECKING:
@@ -574,7 +575,7 @@ def bind_invocation(
                     inputs_before_pre_hooks=None,
                     inputs_after_pre_hooks=_snapshot_with_reasons(snapshot, reasons),
                     effects=(),
-                    is_capture_complete=False,
+                    capture_complete=False,
                     incomplete_reasons=reasons,
                 )
             )
@@ -610,7 +611,7 @@ def _emit_token_event(
             inputs_before_pre_hooks=before_snapshot,
             inputs_after_pre_hooks=after_snapshot if call_index is not None else None,
             effects=tuple(token.effects),
-            is_capture_complete=not reasons,
+            capture_complete=not reasons,
             incomplete_reasons=reasons,
         )
     )
@@ -868,14 +869,14 @@ def _compare_observations(
             kinds.add("structure")
             paths.add(path)
             continue
-        if left.python_object_id != right.python_object_id:
+        if left.object_id != right.python_object_id:
             kinds.add("identity")
             paths.add(path)
             continue
         if (
-            left.mutation_version is not None
-            and right.mutation_version is not None
-            and left.mutation_version != right.mutation_version
+            left.version is not None
+            and right.version is not None
+            and left.version != right.mutation_version
         ):
             kinds.add("in_place_tensor")
             paths.add(path)
@@ -901,8 +902,8 @@ def _fingerprint(observation: _StateObservation) -> tuple[Any, ...]:
     tensor_bits = tuple(
         (
             state.path,
-            state.python_object_id,
-            state.mutation_version,
+            state.object_id,
+            state.version,
             state.shape,
             state.dtype,
             state.device,
@@ -927,7 +928,7 @@ def _snapshot_state(
     tensor_copies: dict[int, Any] = {}
     payload_origins: dict[int, str] = {}
     copy_failures: set[int] = set()
-    states_by_id = {state.python_object_id: state for state in observation.tensors}
+    states_by_id = {state.object_id: state for state in observation.tensors}
 
     def clone(value: Any) -> Any:
         """Clone tensors and recursively preserve supported input containers."""
@@ -966,16 +967,16 @@ def _snapshot_state(
     tensor_observations: list[TensorInputObservation] = []
     reasons = set(observation.incomplete_reasons)
     for state in observation.tensors:
-        alias_group = alias_groups.setdefault(state.python_object_id, len(alias_groups) + 1)
-        payload = tensor_copies.get(state.python_object_id)
-        if state.python_object_id in copy_failures:
+        alias_group = alias_groups.setdefault(state.object_id, len(alias_groups) + 1)
+        payload = tensor_copies.get(state.object_id)
+        if state.object_id in copy_failures:
             reasons.add("tensor_payload_copy_failed")
         tensor_observations.append(
             TensorInputObservation(
                 path=state.path,
                 source_op=state.source_op,
-                python_object_id=state.python_object_id,
-                mutation_version=state.mutation_version,
+                python_object_id=state.object_id,
+                mutation_version=state.version,
                 shape=state.shape,
                 dtype=state.dtype,
                 device=state.device,
@@ -984,9 +985,7 @@ def _snapshot_state(
                 payload=payload,
                 payload_status="saved" if payload is not None else "unsaved",
                 alias_group=alias_group,
-                payload_origin=payload_origins.get(
-                    state.python_object_id, "dedicated_pre_hook_snapshot"
-                ),
+                payload_origin=payload_origins.get(state.object_id, "dedicated_pre_hook_snapshot"),
             )
         )
     return ModuleInputSnapshot(

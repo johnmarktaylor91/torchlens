@@ -42,7 +42,9 @@ def _save(model: nn.Module, x: Any, path: Path, **save_kwargs: Any) -> Path:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
     with pytest.warns(UserWarning, match="NON-persistent") if _fresh_warning() else _null():
         tl.save(trace, str(path), level="runnable", **save_kwargs)
@@ -157,7 +159,7 @@ def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None
     trace = tl.trace(
         _UnusedBufferModel().eval(),
         x,
-        capture=CaptureOptions(replayable=True, cache=False),
+        capture=CaptureOptions(intervention_ready=True, cache=False),
     )
     path = tmp_path / "unused.tlspec"
     tl.save(trace, str(path), level="runnable")

@@ -1452,7 +1452,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "capture-entry _tl attribute-collision guard; plain AttributeError outside the "
         "taxonomy — flagged for future taxonomy adoption"
     ),
-    "torchlens.backends.tf.edits.TFInterventionSiteUnreachableError": (
+    "torchlens.backends.tf.interventions.TFInterventionSiteUnreachableError": (
         "TF preview refusal catchable via its registered parent BackendUnsupportedError"
     ),
     "torchlens.ir.predicate.MLXValueUnavailableError": (

@@ -312,7 +312,7 @@ assert partial.halted
 
 Intervention semantics on Paddle are honest by construction. The intervened op keeps its real
 identity; its recorded payload is the replacement that actually flowed downstream, stamped with
-`op.is_edited` and hook-minted `FireRecord` entries, and replay validation checks the
+`op.intervention_replaced` and hook-minted `FireRecord` entries, and replay validation checks the
 original callable against the recorded pre-hook value through a narrow corroborated carve-out — a
 replacement value presented as captured-native FAILS validation. Builtin helpers with Paddle
 adapters are `tl.zero_ablate`, `tl.scale`, `tl.add`, and `tl.replace_with`; other helpers refuse

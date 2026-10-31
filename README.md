@@ -394,7 +394,7 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`replayable=True` and use `log.fork()` + `log.push()` /
+`intervention_ready=True` and use `log.fork()` + `log.push()` /
 `log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)

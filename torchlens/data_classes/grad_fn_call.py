@@ -99,7 +99,7 @@ class GradFnCall:
         "label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
-        "fire_record": FieldPolicy.KEEP,
+        "intervention_fire_ref": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
         "_time_started": FieldPolicy.KEEP,
         "_time_finished": FieldPolicy.KEEP,
@@ -121,7 +121,7 @@ class GradFnCall:
     label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
-    fire_record: object | None = None
+    intervention_fire_ref: object | None = None
     timestamp: float | None = None
     _time_started: float | None = None
     _time_finished: float | None = None
@@ -248,7 +248,7 @@ class GradFnCall:
         return (
             _grad_fn_payload_equal(self.grad_inputs, other.grad_inputs)
             and _grad_fn_payload_equal(self.grad_outputs, other.grad_outputs)
-            and _grad_fn_payload_equal(self.fire_record, other.fire_record)
+            and _grad_fn_payload_equal(self.intervention_fire_ref, other.intervention_fire_ref)
         )
 
     def __hash__(self) -> int:
@@ -354,7 +354,7 @@ _GRAD_FN_CALL_STORED_FIELDS: tuple[str, ...] = (
     "label",
     "grad_inputs",
     "grad_outputs",
-    "fire_record",
+    "intervention_fire_ref",
     "timestamp",
     "_time_started",
     "_time_finished",

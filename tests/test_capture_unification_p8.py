@@ -16,9 +16,9 @@ from torchlens.fastlog.types import CaptureSpec, RecordContext
 from torchlens.ir import (
     _DEFERRED_VALUE,
     CaptureEvents,
-    FunctionEventInput,
     MLXValueUnavailableError,
 )
+from torchlens.ir.intervention import FunctionEventInput
 
 
 def _minimal_context(**updates: Any) -> RecordContext:

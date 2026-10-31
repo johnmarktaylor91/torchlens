@@ -244,7 +244,7 @@ ablate = tl.intervention.subspace_ablate(basis, dim=1)  # x - P x on the span
 assert isinstance(ablate, tl.Edit)
 # tl.intervention.subspace_interchange(basis, source_trace) writes the source trace's
 # in-span component over the target's instead.
-first_token = tl.intervention.at_positions(tl.scale(0.0), [0])  # token axis 1 by default
+first_token = tl.positions(tl.scale(0.0), [0])  # token axis 1 by default
 assert isinstance(first_token, tl.Edit)
 # Namespaces are imported, not root attributes: import torchlens.mechinterp first.
 import torchlens.mechinterp

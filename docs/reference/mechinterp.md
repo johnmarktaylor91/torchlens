@@ -202,7 +202,7 @@ recomputed locally (only the norm and projection ops run on the
 substituted input, with no fork). A circuit over all 445 GPT-2 small
 receivers therefore costs 25 replays, 24 graph builds and one fork. No edges returns an unpatched fork; an
 edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
-trace captured with `replayable=True`.
+trace captured with `intervention_ready=True`.
 
 ## Edge attribution patching and circuit faithfulness
 

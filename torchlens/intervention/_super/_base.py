@@ -9,7 +9,7 @@ import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
 from ...errors.episode import CheckpointSeriesLiveParamsError
-from .._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from .._metrics import is_scalar_like, relative_l1, resolve_metric
 
 T = TypeVar("T")
 S = TypeVar("S", bound="Super[Any]")
@@ -691,7 +691,7 @@ class _TensorBearing:
                 if i == j:
                     continue
                 value = (
-                    relative_l1_scalar(left, right)
+                    relative_l1(left, right)
                     if is_scalar_like(left) and is_scalar_like(right)
                     else metric_fn(left, right)
                 )
@@ -728,7 +728,7 @@ class _TensorBearing:
             if idx == ref_idx:
                 continue
             value = (
-                relative_l1_scalar(ref, tensor)
+                relative_l1(ref, tensor)
                 if is_scalar_like(ref) and is_scalar_like(tensor)
                 else metric_fn(ref, tensor)
             )

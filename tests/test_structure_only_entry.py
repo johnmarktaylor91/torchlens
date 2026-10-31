@@ -134,7 +134,7 @@ def test_intervention_ready_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, replayable=True),
+            capture=CaptureOptions(structure_only=True, intervention_ready=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
     assert "intervention_ready" in excinfo.value.fields["arguments"]

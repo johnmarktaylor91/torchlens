@@ -216,7 +216,7 @@ def subspace_interchange(
 
     The target keeps its component orthogonal to the span; the in-span
     component comes from ``source`` at the same site (same-site donor
-    resolution as :func:`torchlens.intervention.patch_from`), which is the
+    resolution as :func:`torchlens.patch_from`), which is the
     k-dimensional basis interchange used by distributed alignment search
     with a learned rotation the user trained elsewhere.
 

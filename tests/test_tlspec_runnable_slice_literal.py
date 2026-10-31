@@ -112,7 +112,7 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
         model,
         capture_input,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -220,7 +220,7 @@ def test_callable_literal_argument_still_refuses_with_unsupported_literal(
         model,
         capture_input,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -314,7 +314,9 @@ def _b_capture(model: nn.Module, inputs: Any) -> tl.Trace:
     return tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
 
 

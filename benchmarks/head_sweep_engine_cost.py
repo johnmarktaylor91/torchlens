@@ -182,7 +182,7 @@ def capture_baseline(model: nn.Module, x: Any) -> tl.Trace:
         Baseline trace.
     """
 
-    return tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
 def ablate(baseline: tl.Trace, site: Any, engine: str, model: nn.Module, x: Any) -> tl.Trace:

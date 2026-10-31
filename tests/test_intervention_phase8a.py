@@ -49,7 +49,7 @@ def _capture() -> Any:
     return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
-        capture=CaptureOptions(replayable=True),
+        capture=CaptureOptions(intervention_ready=True),
     )
 
 
@@ -275,7 +275,7 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     """Successful rerun advances the out recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(replayable=True))
+    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(intervention_ready=True))
 
     log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
     assert log._out_recipe_revision == 0

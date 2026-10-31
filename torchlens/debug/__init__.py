@@ -17,8 +17,8 @@ from ._compile_counter import (
 from ._cost import hot_path, hot_path_rows
 from ._determinism import DeterminismReport, check_determinism
 from ._dtype_range import DTypeRangeAudit, dtype_range_audit
-from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
-from ._flops_vs_dispatch import FlopsCrossCheck, flops_vs_dispatch
+from ._first_bad import FirstBadThing
+from ._flops_vs_dispatch import FlopsCrossCheck
 from ._grad_fn_walk import (
     GradFnNode,
     GradFnSketch,
@@ -74,7 +74,6 @@ __all__ = [
     "NanReport",
     "ParamAudit",
     "TraceAudit",
-    "amp_scaled_gradients_hint",
     "audit_params",
     "audit_trace",
     "bisect_nan",
@@ -91,7 +90,6 @@ __all__ = [
     "dead_neurons_rows",
     "dtype_range_audit",
     "first_divergence",
-    "flops_vs_dispatch",
     "isolated_capture",
     "preserved_rng_state",
     "walk_grad_fn",

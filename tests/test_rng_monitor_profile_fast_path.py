@@ -151,7 +151,7 @@ def test_verdicts_match_the_base_on_capture_and_rerun(
     model = cls()
     model.train(name == "dropout_train")
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
     assert _verdict(trace) == expected
     fresh: list[dict[str, Any]] = []
     original = rerun_module._capture_with_active_spec
@@ -207,7 +207,7 @@ def test_classifiers_entered_only_past_their_own_first_exits(
     monkeypatch.setattr(monitor_cls, "_classify_c_call", recording_c_call)
     monkeypatch.setattr(monitor_cls, "_snapshot_returned_numpy_rngs", recording_return)
     model = _NumpyReturned()
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(replayable=True))
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
     assert _verdict(trace) == EXPECTED["numpy_returned"][1]
     assert c_call_entries
     inert = rng._INERT_PROFILE_C_CALL_RECEIVER_TYPES

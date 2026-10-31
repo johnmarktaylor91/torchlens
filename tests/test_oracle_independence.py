@@ -482,7 +482,9 @@ def _save_runnable_tanh(tmp_path) -> tuple:
     trace = trace_fn(
         _TanhRunnable().eval(),
         x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     del tl

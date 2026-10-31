@@ -24,7 +24,7 @@ import torch
 import torchlens as tl
 from torchlens.intervention._metrics import (
     cosine_distance,
-    relative_l1_scalar,
+    relative_l1,
 )
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
@@ -221,10 +221,10 @@ def test_relative_l1_scalar_rejects_numel_mismatch(
 ) -> None:
     """The scalar fallback rejects both mismatch orientations without truncation."""
     with pytest.raises(ValueError, match="equal element counts"):
-        relative_l1_scalar(left, right)
+        relative_l1(left, right)
 
     if check_scalar_control:
-        assert float(relative_l1_scalar(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
+        assert float(relative_l1(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
 
 
 def test_diff_row_scalar_vs_vector_member_raises_not_truncates() -> None:

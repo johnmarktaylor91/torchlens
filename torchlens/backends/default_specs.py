@@ -646,7 +646,7 @@ def _tf_interventions_implementation() -> object:
         ``trace(intervene=...)`` sites.
     """
 
-    from .tf.edits import normalize_tf_interventions
+    from .tf.interventions import normalize_tf_interventions
 
     return normalize_tf_interventions
 
@@ -804,7 +804,7 @@ def _paddle_interventions_implementation() -> object:
         the module defers the paddle import to apply time.
     """
 
-    from .paddle.edits import PaddleInterventionRuntime
+    from .paddle.interventions import PaddleInterventionRuntime
 
     return PaddleInterventionRuntime
 
@@ -1047,7 +1047,7 @@ def _mlx_interventions_implementation() -> object:
         ``trace(intervene=...)`` / ``trace(halt=...)`` sites.
     """
 
-    from .mlx.edits import resolve_mlx_intervention_plan
+    from .mlx.interventions import resolve_mlx_intervention_plan
 
     return resolve_mlx_intervention_plan
 
@@ -1110,7 +1110,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=True,
                 validation_replay=True,
                 fastlog=True,
-                can_intervene=True,
+                interventions=True,
                 rng_replay=True,
                 payload_materialization=True,
                 streaming=True,
@@ -1152,7 +1152,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 validation_replay=True,
                 fastlog=False,
-                can_intervene=True,
+                interventions=True,
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
@@ -1186,7 +1186,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 validation_replay=True,
                 fastlog=False,
-                can_intervene=False,
+                interventions=False,
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
@@ -1217,7 +1217,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 validation_replay=True,
                 fastlog=False,
-                can_intervene=False,
+                interventions=False,
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
@@ -1249,7 +1249,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 validation_replay=True,
                 fastlog=False,
-                can_intervene=True,
+                interventions=True,
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
@@ -1285,7 +1285,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 validation_replay=True,
                 fastlog=False,
-                can_intervene=True,
+                interventions=True,
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,

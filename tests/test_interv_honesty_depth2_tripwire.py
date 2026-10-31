@@ -127,7 +127,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
     child._internal_set("edge_replacement_stamps", stamps)
 
     records = []
-    for record in child.edits:
+    for record in child.interventions:
         if record.edge_address:
             records.append(
                 dataclasses.replace(

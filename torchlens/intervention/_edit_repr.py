@@ -58,8 +58,8 @@ def render_edit_repr(spec: Edit) -> str:
         fields.append(f"kind={spec.kind!r}")
     if spec.portability != "builtin":
         fields.append(f"portability={spec.portability!r}")
-    if spec.direction is not None:
-        fields.append(f"direction={spec.direction!r}")
+    if spec.signal is not None:
+        fields.append(f"signal={spec.signal!r}")
     if spec.args:
         fields.append(f"args=({', '.join(_render_value(value) for value in spec.args)},)")
     if spec.kwargs:

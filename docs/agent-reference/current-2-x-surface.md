@@ -715,7 +715,7 @@
   value-dependent branches refuse DEVICE-NEUTRALLY with the user's exact
   source line (`value_dependent_branch_unsupported`; missing meta kernels
   refuse `meta_kernel_unavailable`). Option conflicts (`raise_on_nan`,
-  `replayable`, not-provably-value-free `halt=`) refuse
+  `intervention_ready`, not-provably-value-free `halt=`) refuse
   `structure_only_option_conflict` at entry. `trace.structure_only` mirrors
   the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
@@ -914,7 +914,7 @@
   replaces the value CONSUMED on the edge on the replay/push engine ONLY
   (rerun/set_only refuse `edge_intervention_engine_unsupported`; rerun-side
   design is an escalated named future) — the child re-executes from the
-  substituted input (node-level `is_edited` never fires for
+  substituted input (node-level `intervention_replaced` never fires for
   edges), the substituted value rides the tier-(ii) store
   `Op.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary

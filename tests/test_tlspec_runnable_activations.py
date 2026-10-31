@@ -171,7 +171,7 @@ def _capture(
         model,
         inputs,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -541,7 +541,7 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
         torch.ones(2, 3),
         save=SaveOptions(activation_transform=lambda value: value.mean()),
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

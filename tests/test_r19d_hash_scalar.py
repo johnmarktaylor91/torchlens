@@ -187,7 +187,7 @@ def test_scalar_input_runnable_manifest_records_input_hash(tmp_path) -> None:
     log = tl.trace(
         _ScalarInputNet(),
         torch.tensor(1.5),
-        capture=CaptureOptions(replayable=True),
+        capture=CaptureOptions(intervention_ready=True),
     )
     dest = tmp_path / "run.tlspec"
     tl.save(log, str(dest), level="runnable")

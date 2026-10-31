@@ -40,7 +40,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
     random_seed=0,

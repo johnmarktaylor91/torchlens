@@ -16,8 +16,9 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import at_step, steer_generate
+from torchlens.intervention import at_step
 from torchlens.intervention.errors import SelectorCapabilityError
+from torchlens.intervention.steering import steer_generate
 
 transformers = pytest.importorskip("transformers")
 

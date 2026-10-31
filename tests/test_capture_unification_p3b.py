@@ -447,7 +447,7 @@ def test_selective_save_with_intervention_features(feature: str) -> None:
                 layers_to_save=["relu"],
             ),
         )
-        assert trace.is_replayable is True
+        assert trace.intervention_ready is True
         assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
         linear_trace = tl.trace(
             TinyLinear(),

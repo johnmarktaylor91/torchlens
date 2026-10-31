@@ -452,7 +452,7 @@ OUT (documented handoffs, never silent):
 - New physical columnar `.tlspec` (FORK-3); Arrow core dependency; global interning;
   `torchlens/projection/` package (the 26 declared steps' order is load-bearing; the substance —
   declared per-step read/write sets — lands without the relocation); UI regrouping
-  implementation (plan-only, FORK-2); `replayable` rename (separate
+  implementation (plan-only, FORK-2); `intervention_ready` rename (separate
   authorization).
 
 Any capacity cut happens at a completed wave boundary, named plainly — never mid-fan-out,

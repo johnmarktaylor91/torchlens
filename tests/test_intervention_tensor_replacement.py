@@ -126,9 +126,9 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
     fc1_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_1"))
 
-    assert relu_layer.is_edited is True
+    assert relu_layer.intervention_replaced is True
     assert relu_layer.parents == (fc1_layer.layer_label,)
-    assert len(relu_layer.edits) == 1
+    assert len(relu_layer.interventions) == 1
     assert torch.count_nonzero(relu_layer.out) == 0
 
 
@@ -146,8 +146,8 @@ def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
 
     assert torch.equal(log[log.output_layers[0]].out, torch.ones(2))
     assert torch.equal(relu_layer.out, torch.zeros(2))
-    assert relu_layer.is_edited is True
-    assert relu_layer.edits[-1].replaced is True
+    assert relu_layer.intervention_replaced is True
+    assert relu_layer.interventions[-1].replaced is True
 
 
 def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
@@ -174,7 +174,7 @@ def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
     mul_layer = next(layer for layer in log.layer_list if layer.func_name == "__mul__")
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
 
-    assert mul_layer.is_edited is True
+    assert mul_layer.intervention_replaced is True
     assert mul_layer.parents == (relu_layer.layer_label,)
     assert log.layer_dict_main_keys[mul_layer.label] is mul_layer
 
@@ -199,8 +199,8 @@ def test_chain_of_interventions_preserves_graph() -> None:
     sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
     fc2_layer = next(layer for layer in log.layer_list if layer.layer_label.startswith("linear_2"))
 
-    assert relu_layer.is_edited is True
-    assert sigmoid_layer.is_edited is True
+    assert relu_layer.intervention_replaced is True
+    assert sigmoid_layer.intervention_replaced is True
     assert sigmoid_layer.parents == (fc2_layer.layer_label,)
     assert len(_replacement_layers(log)) >= 2
 
@@ -218,7 +218,7 @@ def test_quantization_sensitivity_pattern() -> None:
 
     sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
 
-    assert sigmoid_layer.is_edited is True
+    assert sigmoid_layer.intervention_replaced is True
     assert sigmoid_layer.parents
     assert sigmoid_layer.out is not None
 

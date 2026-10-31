@@ -98,7 +98,7 @@ def _max_abs(a: torch.Tensor, b: torch.Tensor) -> float:
 def _assert_head_sweep_parity(model: nn.Module, ids: torch.Tensor) -> int:
     """Check every head; return the number of heads checked."""
 
-    baseline = tl.trace(model, ids, capture=CaptureOptions(replayable=True))
+    baseline = tl.trace(model, ids, capture=CaptureOptions(intervention_ready=True))
     base_logits = _logits(baseline)
     n_layer, n_head = model.config.n_layer, model.config.n_head
     checked = 0
@@ -174,7 +174,7 @@ class _Mlp12(nn.Module):
 def _mlp_case() -> tuple[nn.Module, torch.Tensor, tl.Trace, str]:
     model = _Mlp12().eval()
     x = torch.randn(2, 16, generator=torch.Generator().manual_seed(0))
-    baseline = tl.trace(model, x, capture=CaptureOptions(replayable=True))
+    baseline = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
     relu_sites = baseline.find_sites(tl.func("relu"), max_fanout=32)
     label = str(baseline.find_sites(relu_sites[5].layer_label)[0].layer_label)
     return model, x, baseline, label

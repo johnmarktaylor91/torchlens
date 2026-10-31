@@ -38,7 +38,7 @@ from torchlens._io._safe_unpickle import SafeBundleUnpickler, _torch_type_denied
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
 )

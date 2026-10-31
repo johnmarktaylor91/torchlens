@@ -116,7 +116,7 @@ def test_runnable_capture_uses_existing_witness_without_plain_warning() -> None:
         trace = tl.trace(
             _ItemScale(),
             torch.ones(2),
-            capture=CaptureOptions(replayable=True),
+            capture=CaptureOptions(intervention_ready=True),
         )
 
     assert not [record for record in warning_records if record.category is ScalarEscapeWarning]

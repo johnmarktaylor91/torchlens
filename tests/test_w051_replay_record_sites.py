@@ -74,9 +74,9 @@ def test_do_op_record_edits_exactly_its_pass(loop) -> None:
     fork.do(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {2}))
     assert torch.equal(fork["relu_1_2:1"].out, trace["relu_1_2:1"].out)
-    fires = fork["relu_1_2:2"].ops[0].edits
+    fires = fork["relu_1_2:2"].ops[0].interventions
     assert fires and all(r.call_label == "relu_1_2:2" for r in fires)
-    assert not fork["relu_1_2:3"].ops[0].edits
+    assert not fork["relu_1_2:3"].ops[0].interventions
 
 
 def test_do_single_pass_getitem_record(loop) -> None:

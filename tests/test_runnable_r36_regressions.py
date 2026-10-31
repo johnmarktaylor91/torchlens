@@ -59,7 +59,7 @@ from torchlens.runnable import (
 )
 
 _CAPTURE = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
     random_seed=0,

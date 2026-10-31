@@ -372,7 +372,7 @@ def _capture_options_like(baseline: Trace) -> Any:
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(replayable=True)
+    return CaptureOptions(intervention_ready=True)
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:

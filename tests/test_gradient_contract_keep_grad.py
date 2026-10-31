@@ -15,17 +15,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import add, replace_with, scale, zero_ablate, zero_grad
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
-    InterventionDecision,
-    add,
     compose,
     keep_grad,
-    replace_with,
-    scale,
-    zero_ablate,
-    zero_grad,
 )
+from torchlens.intervention.types import InterventionDecision
 
 _SITE = "linear_1_1"
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(0), dtype=torch.float64)

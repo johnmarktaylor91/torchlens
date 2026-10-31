@@ -413,7 +413,7 @@ def _hook_directions(
     """
 
     if helper_spec is not None and requested_direction in {"forward", "backward"}:
-        intrinsic_direction = helper_spec.direction or helper_spec.kind
+        intrinsic_direction = helper_spec.signal or helper_spec.kind
         if intrinsic_direction != "both" and intrinsic_direction != requested_direction:
             raise HelperMountError(
                 f"{helper_spec.name} is intrinsically {intrinsic_direction!r} and cannot be "
@@ -423,10 +423,10 @@ def _hook_directions(
         return ("forward", "backward")
     if requested_direction in {"forward", "backward"}:
         return (cast(HookDirection, requested_direction),)
-    if helper_spec is not None and helper_spec.direction == "both":
+    if helper_spec is not None and helper_spec.signal == "both":
         return ("forward", "backward")
-    if helper_spec is not None and helper_spec.direction in {"forward", "backward"}:
-        return (cast(HookDirection, helper_spec.direction),)
+    if helper_spec is not None and helper_spec.signal in {"forward", "backward"}:
+        return (cast(HookDirection, helper_spec.signal),)
     if helper_spec is not None:
         return (helper_spec.kind,)
     direction = getattr(hook_like, "direction", "forward")
@@ -555,8 +555,8 @@ def _adapt_tensor_backward_hook(
             context = make_hook_context(
                 name=helper_name,
                 direction="backward",
-                layer_log=_backward_context_op(grad_fn_handle),
-                run_ctx=run_ctx,
+                op=_backward_context_op(grad_fn_handle),
+                run_context=run_ctx,
                 args=(grad,),
                 kwargs={
                     "grad_output": grad_output,

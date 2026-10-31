@@ -684,7 +684,7 @@ def _consider_op(
             name=plan.display_name,
             timing="post",
             direction="forward",
-            layer_log={
+            op={
                 "label": raw_label,
                 "layer_type": layer_type,
                 "func_name": func_name,
@@ -692,7 +692,7 @@ def _consider_op(
                 "pass_index": max(session.root_passes, 1),
             },
             ctx=session.rule_scratch[session.rule_ids[id(rule)]],
-            run_ctx=session.run_ctx,
+            run_context=session.run_ctx,
         )
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
@@ -912,13 +912,13 @@ def _make_boundary_hook(
                 name=plan.display_name,
                 timing="post",
                 direction="forward",
-                layer_log={
+                op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,
                     "pass_index": pass_index,
                 },
                 ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
-                run_ctx=session.run_ctx,
+                run_context=session.run_ctx,
             )
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
             session.record_fire(

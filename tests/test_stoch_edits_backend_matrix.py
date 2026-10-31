@@ -26,13 +26,13 @@ import torch
 
 from torchlens.intervention import (
     compose,
-    mean_fill,
     permute_batch,
     population,
     resample_rows_from,
     sample_from,
     set_direction_mean,
 )
+from torchlens.intervention.stochastic import mean_fill
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -127,8 +127,7 @@ def test_mlx_live_leg_refuses_new_family() -> None:
 
     mlx = pytest.importorskip("mlx.core")
     del mlx
-    from torchlens.backends.mlx.edits import resolve_helper_applier
-
+    from torchlens.backends.mlx.interventions import resolve_helper_applier
     from torchlens.errors import BackendUnsupportedError
 
     with pytest.raises(BackendUnsupportedError):

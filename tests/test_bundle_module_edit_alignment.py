@@ -65,7 +65,7 @@ def test_module_edit_is_recorded_as_its_own_op(clean_and_ablated) -> None:
     clean, ablated, module_out, expected_ablated_output = clean_and_ablated
     edits = _edit_ops(ablated)
     assert len(edits) == 1
-    assert edits[0].is_edited is True
+    assert edits[0].intervention_replaced is True
     assert torch.equal(edits[0].out, torch.zeros_like(module_out))
     assert len(edits[0].parents) == 1
     module_last_op = ablated[edits[0].parents[0]]

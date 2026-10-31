@@ -22,7 +22,7 @@ nothing mutates a trace or the capture pipeline.
   (attrs included). It never forwards DataFrame methods. The `*_rows` helpers stay
   the pandas-free core.
 - Not reports: the context managers (`isolated_capture`, `preserved_rng_state`,
-  `count_compiles`), `clone_input_tree`, `amp_scaled_gradients_hint` (a string),
+  `count_compiles`), `clone_input_tree`, `amp_scaled_grads_hint` (a string),
   `first_divergence` (a dict or None), and `_grad_fn_walk.py` (VIZ-R).
 
 ## _nan.py

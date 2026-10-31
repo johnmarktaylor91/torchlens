@@ -214,7 +214,7 @@ Key entry points:
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
 - Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.edges` is the
-  dataflow edge family (EdgeUseRecords; requires an `replayable`
+  dataflow edge family (EdgeUseRecords; requires an `intervention_ready`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
@@ -296,7 +296,7 @@ Key entry points:
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases. Live
   `trace(intervene=...)` runs on torch, on the eager Paddle preview
-  (`torchlens/backends/paddle/edits.py`; forward-only, builtin helper adapters
+  (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters
   `zero_ablate`/`scale`/`add`/`replace_with`, corroborated validation carve-out), and on the
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(halt=...)` runs on torch and Paddle; the remaining previews

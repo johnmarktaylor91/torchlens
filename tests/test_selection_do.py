@@ -92,9 +92,9 @@ def test_leaf_site_masked_edit_via_rf_intersection(log):
     assert torch.equal(patched[~mask], log["input_1"].out[~mask])
     assert not torch.equal(fork["output_1"].out, log["output_1"].out)
     # FireRecord disclosure matches the hook path
-    records = list(fork["input_1"].edits)
+    records = list(fork["input_1"].interventions)
     assert records and records[0].helper_name == "zero_ablate" and records[0].replaced
-    assert fork["input_1"].is_edited
+    assert fork["input_1"].intervention_replaced
 
 
 def test_whole_site_short_circuit(log):

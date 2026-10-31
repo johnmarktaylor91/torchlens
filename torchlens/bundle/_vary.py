@@ -146,7 +146,7 @@ def _apply_member_specs(
             spec_digests[name] = value.digest
         except Exception as exc:  # noqa: BLE001 - disclosed partial outcome
             outcomes[name] = "failed"
-            spec_digests[name] = getattr(value, "spec_digest", None)
+            spec_digests[name] = getattr(value, "digest", None)
             failure = (name, exc)
             break
     return outcomes, spec_digests, failure

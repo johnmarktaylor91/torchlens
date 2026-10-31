@@ -132,7 +132,7 @@ class _SitesPlan:
         own fork.
         """
 
-        from torchlens.intervention import zero_ablate
+        from torchlens.intervention.helpers import zero_ablate
 
         swept = (
             _swept_scores(
@@ -197,7 +197,7 @@ def _site_edits(
     activation broadcast to each site.
     """
 
-    from torchlens.intervention import zero_ablate
+    from torchlens.intervention.helpers import zero_ablate
     from torchlens.intervention.predicates import replace_with
 
     if isinstance(ablation, str) and ablation == "zero":

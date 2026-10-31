@@ -745,7 +745,7 @@ class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
 
     _sites: tuple[Site, ...]
-    query: Any | None = None
+    selector: Any | None = None
 
     def __len__(self) -> int:
         """Return the number of resolved sites.
@@ -784,7 +784,7 @@ class SiteTable:
         """
 
         if isinstance(idx, slice):
-            return SiteTable(self._sites[idx], selector=self.query)
+            return SiteTable(self._sites[idx], selector=self.selector)
         return self._sites[idx]
 
     def __repr__(self) -> str:
@@ -822,7 +822,7 @@ class SiteTable:
         """
 
         return SiteTable(
-            tuple(site for site in self._sites if predicate(site)), selector=self.query
+            tuple(site for site in self._sites if predicate(site)), selector=self.selector
         )
 
     def first(self) -> Site:

@@ -278,7 +278,7 @@ def _fire_marks(trace: Any) -> list[SurgeryMark]:
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
         for record in getattr(op, "interventions", None) or ():
-            helper = getattr(record, "helper_name", None) or "user_hook"
+            helper = getattr(record, "edit_name", None) or "user_hook"
             engine = getattr(record, "engine", None) or "unknown"
             verb = "spliced" if helper == "splice_module" else "edited"
             marks.append(
@@ -300,7 +300,7 @@ def _region_marks(trace: Any, regions: tuple[RegionFact, ...]) -> list[SurgeryMa
     marks: list[SurgeryMark] = []
     for region_fact in regions:
         wording, _source = effect_wording("replay", region_fact.execution_effect)
-        for member in region_fact.labels:
+        for member in region_fact.members:
             marks.append(
                 _mark_for_recorded_label(
                     trace,
@@ -468,7 +468,7 @@ def splice_box_lines(facts: SurgeryFacts) -> tuple[str, ...]:
         wording, source = effect_wording("replay", region_fact.execution_effect)
         lines.append(
             f"[surgery region lane=replay] edit={region_fact.edit} "
-            f"members={len(region_fact.labels)} exits={len(region_fact.exit_parents)}: "
+            f"members={len(region_fact.members)} exits={len(region_fact.exit_parents)}: "
             f"{wording} ({source})"
         )
     return tuple(lines)

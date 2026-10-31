@@ -1008,7 +1008,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
         capture=CaptureOptions(layers_to_save="all"),
         intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
     )
-    assert intervened.transforms[0].is_edited is True
+    assert intervened.transforms[0].intervention_replaced is True
 
 
 class _OneOperandVmapModel(nn.Module):

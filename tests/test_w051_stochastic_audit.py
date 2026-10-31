@@ -7,7 +7,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import PerRowDatums, population, resample_rows_from, sampling_records
+from torchlens.intervention import population, resample_rows_from
+from torchlens.intervention.population import PerRowDatums
+from torchlens.intervention.stochastic import sampling_records
 
 
 class _OneBlock(nn.Module):

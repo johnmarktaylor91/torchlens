@@ -71,7 +71,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
   with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
-  (or `default_grad` on `tl.record`, `replayable` on `tl.trace`) asks for a backward, and
+  (or `default_grad` on `tl.record`, `intervention_ready` on `tl.trace`) asks for a backward, and
   an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
@@ -401,7 +401,7 @@ also a selection (`__selection__`): an EDGE selection of the pre-norm input edge
 edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupt` is the
 corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
 clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
-is one call; the trace needs `replayable=True`.
+is one call; the trace needs `intervention_ready=True`.
 
 `edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
@@ -572,7 +572,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`edit_detached_from_graph` at fire time when the written values carry no graph). `False`, the
   default, checks nothing. MLX refuses `keep_grad=True`.
 
-**torchlens.intervention.at_positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
+**torchlens.positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
   (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
   `(batch,)` index tensor, or `"first"` / `"last"`, the first or last REAL token of each row
@@ -826,7 +826,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `replayable=True`; this flag supplies replay templates even when no intervention
+  must use `intervention_ready=True`; this flag supplies replay templates even when no intervention
   is planned.
 
 **Readiness**
@@ -2025,7 +2025,7 @@ default-keep); mask-application semantics documented-unstable*
 **trace.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
 : `trace.edges` returns the dataflow edge family (one `EdgeUseRecord` per
-  parent→child occurrence; requires an `replayable` capture, else
+  parent→child occurrence; requires an `intervention_ready` capture, else
   `edge_provenance_unavailable`). The canonical occurrence address is
   `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
   selections (whole-edge granularity; `~` complements within the trace's
@@ -2104,7 +2104,7 @@ deprecation shim owed*
   registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
   substitutes the buffer's INITIAL version node, the value its consumers read,
   and replays the cone through the leaf-site path (needs an
-  `replayable=True` capture); in-forward writes thread the edited
+  `intervention_ready=True` capture); in-forward writes thread the edited
   value; the live buffer is never written.
 
 **TapObserver.values(masked=True)** — *unstable — no deprecation shim owed*

@@ -25,36 +25,37 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import (
-    InterventionDecision,
-    _gradient_contract,
+from torchlens import (
     add,
     add_noise,
     clamp,
-    compose,
-    keep_grad,
     mean_ablate,
-    mean_fill,
-    mean_from,
     patch_from,
-    permute_batch,
-    population,
     project_onto,
     project_out,
     replace_with,
-    resample_rows_from,
     scale,
-    scramble_elements,
-    set_affine_coordinates,
-    set_direction_mean,
     splice_module,
     steer,
-    subspace_ablate,
-    subspace_interchange,
     swap_with,
     zero_ablate,
 )
+from torchlens.intervention import (
+    _gradient_contract,
+    compose,
+    keep_grad,
+    permute_batch,
+    population,
+    resample_rows_from,
+    scramble_elements,
+    set_affine_coordinates,
+    set_direction_mean,
+    subspace_ablate,
+    subspace_interchange,
+)
 from torchlens.intervention._position_edits import at_positions
+from torchlens.intervention.stochastic import mean_fill, mean_from
+from torchlens.intervention.types import InterventionDecision
 
 _PAGE = Path(__file__).resolve().parent.parent / "docs" / "gradient_contract.md"
 _SITE = "linear_1_1"

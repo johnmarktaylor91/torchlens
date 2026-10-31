@@ -191,7 +191,9 @@ def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]
     """One fork read twice: by the former code, then (its copies dropped) by this code."""
 
     torch.manual_seed(0)
-    trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
+    trace = tl.trace(
+        model_cls(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True)
+    )
     store = trace._trace_core.ops
     assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
     fork = trace.fork()
@@ -244,7 +246,9 @@ def test_reading_every_fork_cell_stays_cheap(model_cls: type[nn.Module], bar: in
     """Profiler events for one full read of a fresh fork's op cells."""
 
     torch.manual_seed(0)
-    trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
+    trace = tl.trace(
+        model_cls(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True)
+    )
     view = trace.fork()._trace_core.ops
     n_fields = view.base.layout.n_fields
     rows = range(len(view))

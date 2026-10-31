@@ -42,7 +42,7 @@ def _capture(model: nn.Module, x: Any) -> Any:
         model,
         x,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

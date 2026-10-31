@@ -87,7 +87,7 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             remedy=conflict_remedy,
             arguments=("structure_only", "track_nonfinite"),
         )
-    if facts.replayable:
+    if facts.intervention_ready:
         raise StructureOnlyOptionConflictError(
             "structure_only=True cannot combine with intervention_ready=True: "
             "runnable eligibility disables the plain escape belt and runnable "

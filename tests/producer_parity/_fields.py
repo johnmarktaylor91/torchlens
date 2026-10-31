@@ -399,7 +399,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordingFacet.record_context": R_JOURNAL,
     "RecordingFacet.capture_spec": R_JOURNAL,
     "InterventionFacet.intervention_fired": "F",
-    "InterventionFacet.is_edited": "F",
+    "InterventionFacet.intervention_replaced": "F",
     "InterventionFacet.fire_results": "F",
     "OpRecord.core": "F",
     "OpRecord.function": "F",

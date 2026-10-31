@@ -100,7 +100,7 @@ def _intervention_ready_trace(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.ones(1, 3),
-        capture=CaptureOptions(replayable=True, cache=False),
+        capture=CaptureOptions(intervention_ready=True, cache=False),
     )
 
 

@@ -1150,7 +1150,7 @@ class MLXBackend:
         halt_selector = None
         if intervene is not None or halt is not None:
             spec = get_backend_spec("mlx")
-            if not spec.capabilities.can_intervene:
+            if not spec.capabilities.interventions:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares interventions=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
@@ -1796,7 +1796,7 @@ class MLXBackend:
         intervention_appliers: tuple[tuple[int, Any], ...] = ()
         halt_label: str | None = None
         if plan is not None or halt_selector is not None:
-            from .edits import selector_matches_capture_context
+            from .interventions import selector_matches_capture_context
 
             replacements: dict[int, Any] = {}
             slots: list[tuple[int, str]] = []

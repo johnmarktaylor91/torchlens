@@ -73,7 +73,7 @@ def _loaded_runnable(tmp_path, model=None):
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True),
+        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
     tl.save(log, str(path), level="runnable", include_weights=True)
@@ -345,7 +345,7 @@ def test_until_requires_full_inputs(tmp_path):
     log = tl.trace(
         model,
         [x, y],
-        capture=CaptureOptions(replayable=True, capture_container_structure=True),
+        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
     tl.save(log, str(path), level="runnable", include_weights=True)

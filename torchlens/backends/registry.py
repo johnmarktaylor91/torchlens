@@ -298,7 +298,7 @@ class BackendCapabilities:
     backward_capture: bool
     validation_replay: bool
     fastlog: bool
-    can_intervene: bool
+    interventions: bool
     rng_replay: bool
     payload_materialization: bool
     streaming: bool

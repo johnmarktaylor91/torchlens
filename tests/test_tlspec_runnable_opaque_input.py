@@ -81,7 +81,7 @@ def _save_runnable(model: nn.Module, capture_inputs: list, path: Path) -> Path:
         model,
         list(capture_inputs),
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

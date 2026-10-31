@@ -54,7 +54,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 from torchlens.utils import make_random_barcode
 
-_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:

@@ -37,7 +37,7 @@ def _make_trace() -> Any:
     return tl.trace(
         model,
         torch.randn(1, 4),
-        capture=CaptureOptions(replayable=True),
+        capture=CaptureOptions(intervention_ready=True),
     )
 
 

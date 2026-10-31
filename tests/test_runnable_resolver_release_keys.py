@@ -97,7 +97,7 @@ def _capture(model: nn.Module, inputs: torch.Tensor) -> Any:
         model,
         inputs,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

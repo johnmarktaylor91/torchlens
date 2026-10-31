@@ -703,7 +703,7 @@ def _scrub_intervention_fields_after_removal(
         if hasattr(layer_entry, "_internal_set"):
             layer_entry._internal_set("interventions", interventions)
         else:
-            layer_entry.edits = interventions
+            layer_entry.interventions = interventions
 
     self.state_history = [
         record

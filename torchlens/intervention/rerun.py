@@ -566,12 +566,12 @@ def _validate_append_hook_plan(
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} does not declare batch_independent=True"
             )
-        if not hasattr(helper, "batch_independent"):
+        if not hasattr(helper, "is_batch_independent"):
             _warn_unknown_append_helper_once(log, helper_name)
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} does not declare batch_independent=True"
             )
-        if not bool(getattr(helper, "batch_independent", False)):
+        if not bool(getattr(helper, "is_batch_independent", False)):
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} is not batch-independent; append is unsafe"
             )
@@ -1517,8 +1517,8 @@ def _reconcile_rerun_hook_fires(
         fallback_fired.update(
             str(record.edit_name)
             for record in (getattr(op, "interventions", None) or ())
-            if getattr(record, "direction", None) == "forward"
-            and getattr(record, "helper_name", None) is not None
+            if getattr(record, "signal", None) == "forward"
+            and getattr(record, "edit_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
     unfired: list[str] = []

@@ -1632,8 +1632,8 @@ class TraceInterventionMixin(_TraceMixinBase):
                 name=helper_name,
                 timing="post",
                 direction="forward",
-                layer_log=op,
-                run_ctx={},
+                op=op,
+                run_context={},
                 args=(saved,),
                 kwargs={},
             )

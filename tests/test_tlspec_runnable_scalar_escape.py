@@ -81,7 +81,7 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
         model,
         capture_input,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -184,7 +184,9 @@ def test_dead_scalar_sink_not_over_triggered(tmp_path: Path) -> None:
     trace = tl.trace(
         DeadScalarSink(),
         torch.tensor([1.0, 2.0]),
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
     from torchlens._io.runnable import build_sparse_run_descriptor
 
@@ -209,7 +211,9 @@ def test_item_scale_descriptor_emits_tensor_derived_scalar_witness(tmp_path: Pat
     trace = tl.trace(
         DDScale(),
         torch.tensor([2.0, 2.0]),
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
     )
     descriptor = build_sparse_run_descriptor(trace)
 

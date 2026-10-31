@@ -5332,7 +5332,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         placeholder = trace[unselected_parent].ops[0]
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
-        placeholder.is_edited = False
+        placeholder.intervention_replaced = False
         placeholder.is_internal_source = False
 
         # Layer 1 of the tripwire: the metadata invariant itself still rejects

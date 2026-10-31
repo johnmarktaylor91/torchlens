@@ -22,11 +22,7 @@ from torchlens.ir import (
     DeferredRef,
     DeviceRef,
     DtypeRef,
-    FireResult,
     FunctionCallRef,
-    FunctionEventInput,
-    InterventionState,
-    InterventionTemplateRef,
     ModuleCaptureWorkspace,
     ModuleEnterEvent,
     ModuleExitEvent,
@@ -36,13 +32,14 @@ from torchlens.ir import (
     OutputRef,
     ParamRef,
     ParentEdge,
-    PreHookProvenanceEvent,
     RawGraphWorkspace,
     RecordContext,
     ReservedLabel,
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens.ir.events import InterventionState, PreHookProvenanceEvent
+from torchlens.ir.intervention import FireResult, FunctionEventInput, InterventionTemplateRef
 
 
 def _assert_frozen_and_slotted(instance: object) -> None:

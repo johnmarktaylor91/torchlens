@@ -193,7 +193,7 @@ class _StubRecord:
 
 class _StubLayer:
     def __init__(self, records: list[_StubRecord]) -> None:
-        self.edits = records
+        self.interventions = records
 
 
 class _StubPatchedLog:

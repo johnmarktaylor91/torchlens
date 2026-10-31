@@ -73,7 +73,7 @@ def _boundary_capture(hook: Any) -> Any:
         TwoLinear(),
         torch.randn(2, 4),
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             hooks={tl.module("fc1"): hook},
         ),
     )
@@ -104,9 +104,9 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     boundary = next(
         op for op in log.layer_list if str(op.layer_label).startswith("interventionreplacement")
     )
-    assert boundary.edits
-    assert boundary.is_edited
-    assert any(record.replaced for record in boundary.edits)
+    assert boundary.interventions
+    assert boundary.intervention_replaced
+    assert any(record.replaced for record in boundary.interventions)
     # Replaced-parent provenance (fc1's real output) survived the rejection.
     assert tuple(boundary.parents)
     # The replacement is never laundered into an untraceable internal source.
@@ -129,7 +129,7 @@ def test_rejecting_and_plain_replacements_classify_identically() -> None:
         return [
             (
                 str(op.layer_label),
-                bool(op.edits),
+                bool(op.interventions),
                 bool(getattr(op, "intervention_replaced", False)),
             )
             for op in log.layer_list

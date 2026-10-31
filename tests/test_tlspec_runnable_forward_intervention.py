@@ -46,7 +46,7 @@ def _capture(model: nn.Module, value: torch.Tensor, **kwargs: object) -> tl.Trac
         model,
         value,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
             layers_to_save="all",

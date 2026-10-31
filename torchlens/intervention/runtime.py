@@ -173,7 +173,7 @@ def _execute_hook(
     out: torch.Tensor,
     hook_context: HookContext,
     *,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> torch.Tensor:
     """Run and validate one hook callable under ``pause_logging()``.
 
@@ -185,7 +185,7 @@ def _execute_hook(
         Current out tensor at the hook site.
     hook_context:
         Metadata snapshot passed as the keyword-only ``hook`` argument.
-    force_shape_change:
+    allow_shape_change:
         Escape hatch allowing dtype, device, and shape changes.
 
     Returns
@@ -246,7 +246,7 @@ def _execute_hook(
         result,
         out,
         hook_context=hook_context,
-        allow_shape_change=force_shape_change,
+        allow_shape_change=allow_shape_change,
     )
 
 
@@ -314,7 +314,7 @@ def validate_hook_output(
     out: torch.Tensor,
     *,
     hook_context: HookContext | None = None,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> torch.Tensor:
     """Validate a hook return value against the input out metadata.
 
@@ -326,7 +326,7 @@ def validate_hook_output(
         Original out tensor.
     hook_context:
         Optional context for error messages.
-    force_shape_change:
+    allow_shape_change:
         If true, allow dtype, device, and shape changes.
 
     Returns
@@ -367,7 +367,7 @@ def validate_hook_output(
         raise _payload_refusal("returned None", "torch.Tensor", None)
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
-    if force_shape_change:
+    if allow_shape_change:
         result = _copy_reused_live_hook_result(out, result)
         _copy_tl_replacement_attrs(out, result)
         return result
@@ -509,8 +509,8 @@ def _apply_live_hooks(
             name=_hook_display_name(normalized_entry),
             timing="post",
             direction="forward",
-            layer_log=site,
-            run_ctx=_live_run_ctx(),
+            op=site,
+            run_context=_live_run_ctx(),
             args=hook_args or (current_out,),
             kwargs=hook_kwargs,
         )

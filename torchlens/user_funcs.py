@@ -854,7 +854,7 @@ def _trace_mlx_model(
         save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
     )
-    if capture_options.replayable:
+    if capture_options.intervention_ready:
         raise BackendUnsupportedError(
             "MLX backend does not support intervention_ready=True: post-capture "
             "rerun readiness requires PyTorch autograd integration not present in "
@@ -959,7 +959,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # ``capture=CaptureOptions(...)`` call fail with "does not support:
     # capture" regardless of content; the real per-field support/rejection
     # already happens downstream in ``_trace_mlx_model`` (e.g.
-    # ``capture_options.replayable``, ``capture_options.hooks``).
+    # ``capture_options.intervention_ready``, ``capture_options.hooks``).
     reject_extra_trace_kwargs(
         {
             "lookback": kwargs["lookback"],
@@ -2016,7 +2016,7 @@ def _run_model_and_save_specified_outs(
         )
         forward_code = getattr(model.forward, "__code__", None)
         trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
-        trace.is_replayable = intervention_ready
+        trace.intervention_ready = intervention_ready
         trace._capture_container_structure = capture_container_structure
         if hook_plan:
             trace.state = TraceState.LIVE_CAPTURED
@@ -3290,7 +3290,7 @@ def _trace_torch_model(
     compute_input_output_distances = capture_options.compute_input_output_distances
     detach_saved_activations = capture_options.detach_saved_activations
     recurrence_detection = capture_options.recurrence_detection
-    intervention_ready = capture_options.replayable
+    intervention_ready = capture_options.intervention_ready
     capture_container_structure = capture_options.capture_container_structure
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
@@ -3689,7 +3689,7 @@ def _trace_torch_model(
             compute_input_output_distances=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             recurrence_detection=recurrence_detection,
-            replayable=intervention_ready,
+            intervention_ready=intervention_ready,
             capture_container_structure=capture_container_structure,
             hooks=MISSING,
             unwrap_when_done=False,

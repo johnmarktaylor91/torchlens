@@ -22,7 +22,7 @@ from .data_classes.module import Module, ModuleCall
 from .data_classes.op import TensorLog
 from .data_classes.param import Param
 from .data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
-from .intervention import SaveLevel, SiteTable, SpecCompat, TargetManifestDiff, TensorSliceSpec
+from .intervention import SiteTable, SpecCompat, TargetManifestDiff
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
 
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -53,11 +53,9 @@ __all__ = [
     "Param",
     "PreHookEffect",
     "Quantity",
-    "SaveLevel",
     "SiteTable",
     "SpecCompat",
     "TargetManifestDiff",
     "TensorLog",
     "TensorInputObservation",
-    "TensorSliceSpec",
 ]

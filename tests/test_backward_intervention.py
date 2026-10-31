@@ -249,7 +249,7 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     result = hook((torch.ones(1),), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.signal == "backward"
     assert record.call_index == 1
@@ -288,7 +288,7 @@ def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -324,7 +324,7 @@ def test_grad_fn_hook_data_alias_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -348,7 +348,7 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
 
         assert isinstance(result, tuple), repr(selector)
         assert torch.equal(result[0], torch.zeros(1))
-        assert isinstance(grad_fn_handle.calls[0].fire_record, FireRecord)
+        assert isinstance(grad_fn_handle.calls[0].intervention_fire_ref, FireRecord)
 
 
 def test_composite_grad_output_selector_matches_real_live_backward_hook() -> None:
@@ -493,7 +493,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
 
     assert result is None
     assert counter["fires"] == 1
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.replaced is False
     assert spec.records == [record]
@@ -535,7 +535,7 @@ def test_backward_invalid_replacement_tuple_raises_before_recording_success() ->
     with pytest.raises(HookValueError, match="shape"):
         hook((torch.ones(1),), (torch.ones(1),))
 
-    assert grad_fn_handle.calls[0].fire_record is None
+    assert grad_fn_handle.calls[0].intervention_fire_ref is None
     assert spec.records == []
 
 
@@ -571,10 +571,10 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
     assert x.grad is not None
     assert torch.equal(x.grad, torch.zeros_like(x.grad))
     records = [
-        call.fire_record
+        call.intervention_fire_ref
         for grad_fn in trace.grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.fire_record is not None
+        if call.intervention_fire_ref is not None
     ]
     assert records
     assert isinstance(records[0], FireRecord)
@@ -602,8 +602,8 @@ def test_grad_fn_hook_call_index_targeting() -> None:
 
     assert first is None
     assert isinstance(second, tuple)
-    assert grad_fn_handle.calls[0].fire_record is None
-    assert isinstance(grad_fn_handle.calls[1].fire_record, FireRecord)
+    assert grad_fn_handle.calls[0].intervention_fire_ref is None
+    assert isinstance(grad_fn_handle.calls[1].intervention_fire_ref, FireRecord)
 
 
 def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror() -> None:
@@ -704,7 +704,7 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     post_hook((), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
     assert record.signal == "backward"
@@ -739,7 +739,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     assert pre_hook((torch.ones(1),)) is None
     post_hook((), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].fire_record
+    record = grad_fn_handle.calls[0].intervention_fire_ref
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
     assert record.replaced is False
@@ -759,7 +759,7 @@ def test_accumulategrad_pending_records_clear_between_passes() -> None:
     post_hook((), (torch.ones(1),))
 
     assert not hasattr(trace_stub, "_tl_pending_accumulate_grad_fire_records")
-    assert grad_fn_handle.calls[0].fire_record is None
+    assert grad_fn_handle.calls[0].intervention_fire_ref is None
 
 
 def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:

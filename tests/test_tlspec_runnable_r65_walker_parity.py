@@ -399,7 +399,7 @@ def _capture_runnable(model: nn.Module, box: _LayoutBox, path: Path) -> Any:
         model,
         box,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -630,7 +630,7 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _EnumKeyedModel(),
         consumed,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -649,7 +649,7 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _StrKeyedModel(),
         sibling,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

@@ -30,7 +30,7 @@ from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
-_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
 
 class _MetaBranch(nn.Module):

@@ -112,7 +112,7 @@ def test_intervene_shape_change_applies() -> None:
     assert float(_output_out(log)) == pytest.approx(8.0)
     relu = _relu_layer(log)
     assert tuple(relu.out.shape) == (1, 8)
-    assert relu.is_edited is True
+    assert relu.intervention_replaced is True
 
 
 def test_hooks_kwarg_shape_change_applies() -> None:

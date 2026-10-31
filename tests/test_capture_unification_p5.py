@@ -152,14 +152,14 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         )
         assert torch.equal(_linear_op(log).out, captured[0])
         assert torch.equal(_linear_op(log).out, _linear_op(rerun).out)
-        assert _linear_op(log).is_edited
+        assert _linear_op(log).intervention_replaced
     elif entrypoint == "capture_options_hooks":
         model = _ReluReturnModel()
         log = tl.trace(
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                replayable=True,
+                intervention_ready=True,
                 hooks={tl.func("relu"): _zero_hook},
             ),
         )
@@ -169,9 +169,9 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         assert relu_layer.out is not None
         assert torch.equal(stashed(log, "latest"), relu_layer.out)
         assert torch.count_nonzero(relu_layer.out) == 0
-        assert len(relu_layer.edits) == 1
-        assert relu_layer.edits[0].timing == "post"
-        assert relu_layer.edits[0].direction == "forward"
+        assert len(relu_layer.interventions) == 1
+        assert relu_layer.interventions[0].timing == "post"
+        assert relu_layer.interventions[0].direction == "forward"
     else:
         output, recording = cast(
             tuple[torch.Tensor, Recording],
@@ -203,7 +203,7 @@ def test_intervene_and_save_compose_with_downstream_saved_child() -> None:
     linear = _linear_op(log)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.relu(linear.out))
-    assert linear.is_edited
+    assert linear.intervention_replaced
 
 
 def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
@@ -222,7 +222,7 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
     assert isinstance(output, torch.Tensor)
     assert torch.equal(output, torch.zeros_like(output))
     assert not _linear_op(log).has_saved_activation
-    assert _linear_op(log).is_edited
+    assert _linear_op(log).intervention_replaced
 
 
 def test_conditional_intervention_uses_live_index_lookback() -> None:
@@ -239,8 +239,8 @@ def test_conditional_intervention_uses_live_index_lookback() -> None:
     linear = _linear_op(log)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.relu(linear.out) * 0.5)
-    assert relu.is_edited
-    assert not linear.is_edited
+    assert relu.intervention_replaced
+    assert not linear.intervention_replaced
 
 
 def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:

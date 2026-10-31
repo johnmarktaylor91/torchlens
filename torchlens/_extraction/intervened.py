@@ -97,7 +97,7 @@ class InterventionPlan:
             "policy": "intervened",
             "engine": INTERVENTION_ENGINE,
             "address_class": self.address_class,
-            "spec_digest": self.digest,
+            "spec_digest": self.spec_digest,
             "rules": [dict(rule) for rule in self.rules],
         }
 

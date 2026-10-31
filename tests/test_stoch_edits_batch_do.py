@@ -16,7 +16,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import population, sample_from, sampling_records
+from torchlens.intervention import population, sample_from
+from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -176,8 +177,8 @@ def _fingerprint(log: tl.Trace) -> dict:
         store = op.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
-            tuple(repr(record) for record in op.edits or ()),
-            bool(op.is_edited),
+            tuple(repr(record) for record in op.interventions or ()),
+            bool(op.intervention_replaced),
             tuple(sorted(repr(key) for key in store)),
         )
     return {

@@ -118,7 +118,7 @@ def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> No
     """A fork's post-hoc module edit refuses the fast door until a legacy rerun records it."""
 
     model = _model()
-    ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
+    ready = tl.trace(model, _inputs(0), capture=CaptureOptions(intervention_ready=True))
     fork = ready.fork()
     fork.attach_hooks(tl.module("fc1"), tl.zero_ablate(), confirm_mutation=True)
 
@@ -135,7 +135,7 @@ def test_fast_door_refuses_a_function_target_typed() -> None:
     """A ``tl.func`` target has no module boundary for the fast engine and refuses."""
 
     model = _model()
-    ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
+    ready = tl.trace(model, _inputs(0), capture=CaptureOptions(intervention_ready=True))
     fork = ready.fork()
     fork.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 

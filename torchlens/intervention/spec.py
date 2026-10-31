@@ -406,7 +406,7 @@ class Recipe:
         """The sole rule's WHERE term (``None`` on multi-clause specs)."""
 
         if len(self.rules) == 1:
-            return self.rules[0].where
+            return self.rules[0].target
         return None
 
     @property

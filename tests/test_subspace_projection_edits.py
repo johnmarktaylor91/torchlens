@@ -18,23 +18,19 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import mean_ablate, project_onto, project_out, splice_module, zero_grad
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
-    mean_ablate,
-    mean_from,
     population,
-    project_onto,
-    project_out,
     scramble_elements,
     set_direction_mean,
-    splice_module,
     subspace_ablate,
     subspace_interchange,
-    zero_grad,
 )
 from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
+from torchlens.intervention.stochastic import mean_from
 
 _H = 0.5 * torch.tensor(
     [[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]], dtype=torch.float64

@@ -37,7 +37,7 @@ the `BackendSpec` in `../default_specs.py` is the only capability truth.
   `tlc_` scope-label prefixes that thread module identity through the jaxpr.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `edits=False`,
+- Registry-backed re-exports only. Per the registry: `interventions=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `payload_policy="array_payloads"`.
 

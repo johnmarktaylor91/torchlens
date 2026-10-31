@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
-from torchlens.intervention import Recipe
 from torchlens.intervention.spec import classify_where
 
 

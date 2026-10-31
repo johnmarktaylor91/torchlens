@@ -43,7 +43,7 @@ from torchlens.options import CaptureOptions
 from torchlens.utils._callable_safety import is_inert_first_party_callable
 
 _CAP = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
 )

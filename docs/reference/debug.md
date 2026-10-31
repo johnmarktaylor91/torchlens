@@ -427,7 +427,7 @@ follow another stochastic path.
 
 ## `flops_vs_dispatch`
 
-`tl.debug.flops_vs_dispatch(model, x)` is the PyTorch dispatch-formula
+`tl.report.flops_vs_dispatch(model, x)` is the PyTorch dispatch-formula
 cross-check (never "measured FLOPs"): one detached TorchLens capture, a
 state/RNG restore, one raw run under
 `torch.utils.flop_counter.FlopCounterMode(display=False)`, an output
@@ -668,9 +668,9 @@ time-bounded and atomically published) and returns the DOT source. `path` follow
 torchviz/graphviz convention (`path.<file_format>` is written; `None` skips file
 rendering), and `view=True` opens the managed viewer, never a raw `Popen`.
 
-## `amp_scaled_gradients_hint`
+## `amp_scaled_grads_hint`
 
-`tl.debug.amp_scaled_gradients_hint(all_nonfinite=False)` returns the ONE shared
+`tl.report.amp_scaled_grads_hint(all_nonfinite=False)` returns the ONE shared
 AMP/GradScaler disclosure text used by the backward diagnostics: gradients captured
 under `torch.amp.GradScaler` carry the loss scale (~2**16 at the default `init_scale`),
 so magnitude verdicts accept `grad_scale=scaler.get_scale()` and non-finite verdicts

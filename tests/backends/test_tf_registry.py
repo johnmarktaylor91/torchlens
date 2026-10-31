@@ -49,7 +49,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     assert spec.capabilities.backward_capture == tf_capabilities.supports_backward_capture
     assert spec.capabilities.validation_replay == tf_capabilities.supports_validation_replay
     assert spec.capabilities.fastlog == tf_capabilities.supports_fastlog
-    assert spec.capabilities.can_intervene == tf_capabilities.supports_intervention
+    assert spec.capabilities.interventions == tf_capabilities.supports_intervention
     assert (
         spec.capabilities.intermediate_derived_grads
         == tf_capabilities.supports_intermediate_derived_grads

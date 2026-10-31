@@ -45,7 +45,7 @@ def test_validate_backward_on_stacked_trace_warns() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(replayable=True),
+        capture=CaptureOptions(intervention_ready=True),
     )
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 

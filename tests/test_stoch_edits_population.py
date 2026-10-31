@@ -10,7 +10,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.intervention import OneDatum, PerRowDatums, population
+from torchlens.intervention import population
+from torchlens.intervention.population import OneDatum, PerRowDatums
 
 
 def test_origin_is_required_and_nonempty() -> None:

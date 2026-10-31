@@ -1068,7 +1068,7 @@ def _helper_spec(
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
     direction: HelperDirection | None = None,
-    batch_independent: bool = False,
+    is_batch_independent: bool = False,
     compatible_with_append: bool = False,
 ) -> Edit:
     """Build a Edit with stable tuple metadata.
@@ -1091,7 +1091,7 @@ def _helper_spec(
         Extra helper metadata.
     direction:
         Optional default signal direction requested by legacy helpers.
-    batch_independent:
+    is_batch_independent:
         Whether this helper can be applied independently to each batch item.
     compatible_with_append:
         Whether this helper opts into append when it changes out shape.
@@ -1111,7 +1111,7 @@ def _helper_spec(
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
         signal=direction,
-        is_batch_independent=batch_independent,
+        is_batch_independent=is_batch_independent,
         compatible_with_append=compatible_with_append,
     )
 
@@ -1518,7 +1518,7 @@ def _align_direction(
     direction: torch.Tensor,
     out: torch.Tensor,
     *,
-    feature_axis: int | None,
+    dim: int | None,
 ) -> torch.Tensor:
     """Align a direction tensor with an out tensor.
 
@@ -1528,7 +1528,7 @@ def _align_direction(
         Direction tensor.
     out:
         Activation tensor.
-    feature_axis:
+    dim:
         Axis receiving a vector direction.
 
     Returns
@@ -1540,11 +1540,11 @@ def _align_direction(
     if tuple(direction.shape) == tuple(out.shape):
         return direction
     if direction.ndim == 1 and out.ndim > 1:
-        if feature_axis is None:
+        if dim is None:
             raise AxisAmbiguityError(
-                "vector directions require explicit feature_axis to avoid axis ambiguity"
+                "vector directions require explicit dim to avoid axis ambiguity"
             )
-        normalized_axis = feature_axis % out.ndim
+        normalized_axis = dim % out.ndim
         if direction.shape[0] != out.shape[normalized_axis]:
             raise HookValueError(
                 f"direction length {direction.shape[0]} does not match "

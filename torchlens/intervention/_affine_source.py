@@ -156,7 +156,7 @@ def set_affine_coordinates(weight: torch.Tensor, *, bias: torch.Tensor | None = 
             """Return ``out @ weight.T + bias``; refuse a whole-site call."""
 
             if not isinstance(hook, SourceCall):
-                layer_log = getattr(hook, "layer_log", None) or {}
+                layer_log = getattr(hook, "op", None) or {}
                 raise needs_subspace(
                     str(layer_log.get("layer_label") or "<unknown site>"),
                     code="affine_source_needs_subspace",

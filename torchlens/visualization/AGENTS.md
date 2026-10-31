@@ -179,7 +179,7 @@ pure-Python rank layout above 20,000 cost units.
 - Buffer visibility has multiple modes; use `_normalize_buffer_visibility()`.
 - Intervention node rendering keys on the trace's `_intervention_spec`
   (`node_spec.py`) and the `vis_intervention_mode` render option
-  (`_render_dot.py`) — NOT on the deprecated `replayable` name.
+  (`_render_dot.py`) — NOT on the deprecated `intervention_ready` name.
 - Bundle diff rendering is SVG-string based; compare snapshots after visual changes.
 
 ## Tests to Run After Changes

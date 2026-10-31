@@ -116,7 +116,7 @@ def _intervention_case(
     torch.manual_seed(0)
     model = model_cls().eval()
     inputs = _inputs(0)
-    baseline = tl.trace(model, inputs, capture=CaptureOptions(replayable=True))
+    baseline = tl.trace(model, inputs, capture=CaptureOptions(intervention_ready=True))
     # The relu that reads the second input: a change to that input changes it.
     label = _relu_pass_labels(baseline)[-1]
     return model, inputs, baseline, label

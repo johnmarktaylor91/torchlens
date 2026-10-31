@@ -58,7 +58,7 @@ def _config(**changes: Any) -> dict[str, Any]:
     config: dict[str, Any] = {
         "intervention_constant_sources": [True],
         "intervention_dimensions": [_D],
-        "intervention_types": ["<class 'pyreft.edits.LoreftIntervention'>"],
+        "intervention_types": ["<class 'pyreft.interventions.LoreftIntervention'>"],
         "mode": "parallel",
         "representations": [[8, "block_output", "pos", 1, _RANK] + [None] * 9],
         "sorted_keys": [_KEY],
@@ -189,7 +189,7 @@ def _two_interventions(directory: Path) -> None:
 
 
 def _not_loreft(directory: Path) -> None:
-    _write(directory, intervention_types=["<class 'pyreft.edits.NoreftIntervention'>"])
+    _write(directory, intervention_types=["<class 'pyreft.interventions.NoreftIntervention'>"])
 
 
 def _no_config(directory: Path) -> None:

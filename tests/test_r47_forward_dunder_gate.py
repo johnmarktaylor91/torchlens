@@ -303,7 +303,7 @@ def test_forward_dunder_model_runnable_round_trip_verified(tmp_path: Path) -> No
         model,
         inputs,
         capture=CaptureOptions(
-            replayable=True,
+            intervention_ready=True,
             capture_container_structure=True,
             cache=False,
         ),

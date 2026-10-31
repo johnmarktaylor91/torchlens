@@ -12,7 +12,7 @@ TensorFlow preview backend. Tier-1 standalone spec (no `capture_backend`); the
   capture; the static path refuses each.
 - `halt=` and `recipes=` refuse typed as deferred on TF (NOT torch-only
   elsewhere: Paddle's preview ships both `halt=` and `recipes=`), even though
-  the registry `edits` flag admits them through the shared option
+  the registry `interventions` flag admits them through the shared option
   gate.
 - `_finish_trace(recurrence_detection=...)` runs the shared neutral grouper via
   `.._finalize.finalize_single_pass_trace`; the eager path passes the user's

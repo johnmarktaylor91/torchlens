@@ -708,8 +708,8 @@ def _evaluate_instance(
             name="splice_module",
             timing="post",
             direction="forward",
-            layer_log=graph.ops[instance.exit_labels[0]],
-            run_ctx={"region": region_target.region_digest, "instance": instance.index},
+            op=graph.ops[instance.exit_labels[0]],
+            run_context={"region": region_target.region_digest, "instance": instance.index},
         )
         return _validated_exit_values(
             instance, exit_values, results, validate_hook_output, splice_context
@@ -722,8 +722,8 @@ def _evaluate_instance(
             name=helper_name,
             timing="post",
             direction="forward",
-            layer_log=graph.ops[label],
-            run_ctx={"region": region_target.region_digest, "instance": instance.index},
+            op=graph.ops[label],
+            run_context={"region": region_target.region_digest, "instance": instance.index},
         )
         replaced = hook_callable(exit_values[label], hook=context)
         # The SAME payload gate every other edit door runs (node-level do,
@@ -746,8 +746,8 @@ def _evaluate_instance(
         name=getattr(edit, "__name__", "region_edit"),
         timing="post",
         direction="forward",
-        layer_log=graph.ops[instance.exit_labels[0]],
-        run_ctx={"region": region_target.region_digest, "instance": instance.index},
+        op=graph.ops[instance.exit_labels[0]],
+        run_context={"region": region_target.region_digest, "instance": instance.index},
     )
     ordered = tuple(exit_values[label] for label in instance.exit_labels)
     result = edit(ordered, hook=context)

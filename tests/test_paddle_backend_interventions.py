@@ -94,7 +94,7 @@ def test_paddle_capability_lift_is_real() -> None:
     """The lifted flag binds a resolvable implementing surface."""
 
     spec = get_backend_spec("paddle")
-    assert spec.capabilities.can_intervene is True
+    assert spec.capabilities.interventions is True
     implementation = require_capability_implementation(spec, "interventions")
     assert implementation is not None
 
@@ -107,8 +107,8 @@ def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
 
     relu = _relu_op(ablated)
     assert float(relu.out.abs().max()) == 0.0
-    assert relu.is_edited is True
-    fire_records = list(relu.edits)
+    assert relu.intervention_replaced is True
+    fire_records = list(relu.interventions)
     assert fire_records and fire_records[0].replaced is True
     assert fire_records[0].helper_name == "zero_ablate"
 
@@ -240,8 +240,8 @@ def test_paddle_tamper_stripped_evidence_fails_validation() -> None:
     index = next(i for i, capture in enumerate(captures) if capture.intervention is not None)
     captures[index] = dataclasses.replace(captures[index], intervention=None)
     relu = _relu_op(trace)
-    relu.is_edited = False
-    relu.edits = []
+    relu.intervention_replaced = False
+    relu.interventions = []
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -258,8 +258,8 @@ def test_paddle_tamper_stripped_op_fire_records_fails_validation() -> None:
 
     trace = _ablated_trace()
     relu = _relu_op(trace)
-    relu.is_edited = False
-    relu.edits = []
+    relu.intervention_replaced = False
+    relu.interventions = []
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -411,6 +411,6 @@ def test_paddle_intervened_trace_round_trips_metadata(tmp_path: Any) -> None:
     tl.save(trace, path)
     loaded = tl.load(path)
     relu = _relu_op(loaded)
-    assert relu.is_edited is True
-    assert any(record.replaced for record in relu.edits)
+    assert relu.intervention_replaced is True
+    assert any(record.replaced for record in relu.interventions)
     assert float(relu.out.abs().max()) == 0.0

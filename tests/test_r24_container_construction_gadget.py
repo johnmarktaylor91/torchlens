@@ -41,7 +41,7 @@ from torchlens.ir.container import (
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    replayable=True,
+    intervention_ready=True,
     capture_container_structure=True,
     cache=False,
 )

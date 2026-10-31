@@ -2797,7 +2797,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
         if not getattr(op, "intervention_replaced", False):
             continue
         for record in getattr(op, "interventions", ()) or ():
-            direction = getattr(record, "direction", None)
+            direction = getattr(record, "signal", None)
             if bool(getattr(record, "replaced", False)) and direction == "forward":
                 return True
     return False
