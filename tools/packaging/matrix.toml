@@ -158,7 +158,9 @@ extras = ["mlx"]
 group = "extended"
 
 [sets.jax]
+# flax requires treescope (measured).
 extras = ["jax"]
+present_gates = ["treescope"]
 group = "extended"
 
 [sets.tinygrad]
@@ -191,7 +193,9 @@ extras = ["shap"]
 group = "extended"
 
 [sets.inseq]
+# inseq requires treescope (measured).
 extras = ["inseq"]
+present_gates = ["treescope"]
 group = "extended"
 
 [sets.steering]
