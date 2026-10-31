@@ -343,13 +343,13 @@ def _with_vector(vector: torch.Tensor) -> tl.intervention.Direction:
         (lambda: _with_vector(torch.tensor([1.0, float("nan")])), {}),
         (lambda: _with_vector(torch.zeros(24577)), {}),
         (_direction, {"hook_type": "attn_out"}),
-        (_direction, {"steer_strength": 250.0}),
-        (_direction, {"vector_label": ""}),
+        (_direction, {"default_steering_strength": 250.0}),
+        (_direction, {"name": ""}),
     ],
-    ids=["non_finite", "too_long", "hook_type", "steer_strength", "vector_label"],
+    ids=["non_finite", "too_long", "hook_type", "default_steering_strength", "name"],
 )
 def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction, settings) -> None:
-    arguments = {"api_key": KEY, "scan": "tiny", "vector_label": "v", **settings}
+    arguments = {"api_key": KEY, "model_id": "tiny", "name": "v", **settings}
     with pytest.raises(tl.errors.AttributionError) as excinfo:
         direction().upload_to_neuronpedia(**arguments)
     assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"

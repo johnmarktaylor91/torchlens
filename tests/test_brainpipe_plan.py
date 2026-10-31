@@ -39,7 +39,7 @@ def _model() -> nn.Module:
 
 
 def _plan(**overrides):
-    kwargs = {"n_stimuli": 20, "batch_size": 5}
+    kwargs = {"num_stimuli": 20, "batch_size": 5}
     kwargs.update(overrides)
     return bp.plan_extraction(_model(), torch.randn(4, 16), **kwargs)
 

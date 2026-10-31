@@ -200,7 +200,7 @@ def _plan_read_audit(request: _AuditRequest, trace: Any) -> _SitesPlan:
     name, edits = _site_edits(
         request.ablation,
         sites,
-        remedy=f"tl.attribution.causal_audit(model, x, claim=claim, target={seed}, ablation=0.0)",
+        remedy=f"tl.attribution.causal_audit(model, x, claim=claim, target={seed}, edit=0.0)",
     )
     grain = audited[0][1].grain if audited else "site"
     return _SitesPlan(

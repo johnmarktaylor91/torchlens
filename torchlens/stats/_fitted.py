@@ -140,7 +140,7 @@ class FittedPCA:
 
         k = int(self.components.shape[0]) if self.components.dim() >= 1 else 0
         return (
-            f"FittedPCA(k={k}, n_features={self.num_features}, n_samples={self.num_samples}, "
+            f"FittedPCA(k={k}, num_features={self.num_features}, num_samples={self.num_samples}, "
             f"fit_scope={self.fit_scope!r}, digest={self.digest!r})"
         )
 

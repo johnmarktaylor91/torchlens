@@ -136,14 +136,14 @@ def test_fixture_sets_across_receivers_match_the_reference_and_replay(monkeypatc
         k=2,
         num_random_draws=4,
     )
-    assert len(audit.indices) == 5 and len(audit.sets) == 6
+    assert len(audit.units) == 5 and len(audit.sets) == 6
     graph = torchlens.mechinterp.component_graph(audit.extra["trace"])
     case = _Case(model, _fixture_spec(model, graph), CLEAN, CORRUPT, fixture_metric)
     with monkeypatch.context() as patched:
         patched.setattr(torchlens.mechinterp, "patch_edges", _refuse_patching)
-        recorded = [item.build_interventions for item in (*audit.indices, *audit.sets)]
+        recorded = [item.build_interventions for item in (*audit.units, *audit.sets)]
     assert _check_sets(audit, case, table) >= 1
-    for item, pairs in zip((*audit.indices, *audit.sets), recorded, strict=True):
+    for item, pairs in zip((*audit.units, *audit.sets), recorded, strict=True):
         assert [value.tolist() for _, value in item.build_interventions] == [
             value.tolist() for _, value in pairs
         ]

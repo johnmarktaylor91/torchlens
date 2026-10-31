@@ -47,17 +47,15 @@ from torchlens.attribution._result import AttributionError
 # The reductions ``edge_scores`` records, mapped to the reduction over examples.
 _REDUCTIONS = {"sum_positions_mean_examples": "mean", "sum_positions_sum_examples": "sum"}
 _METHODS = ("eap", "eap_ig")
-_AUDIT_CALL = (
-    "tl.attribution.causal_audit(model, x, claim=claim, corrupted=corrupted, metric=metric, k=1)"
-)
+_AUDIT_CALL = "tl.attribution.causal_audit(model, x, claim=claim, corrupted_input=corrupted, metric=metric, k=1)"
 _RESCORED_CALL = (
     "tl.attribution.causal_audit(model, x, claim=torchlens.mechinterp.edge_scores(model, x, "
-    "corrupted=corrupted, metric=metric), corrupted=corrupted, metric=metric, k=1)"
+    "corrupted_input=corrupted, metric=metric), corrupted_input=corrupted, metric=metric, k=1)"
 )
 #: The cheaper spelling the many-units warning names for an EDGE table.
 EDGES_REMEDY = (
     "pass per_unit=False to measure only the sets, or edges= to audit the largest rows only, "
-    "e.g. tl.attribution.causal_audit(model, x, claim=claim, corrupted=corrupted, "
+    "e.g. tl.attribution.causal_audit(model, x, claim=claim, corrupted_input=corrupted, "
     "metric=metric, edges=[row.address[0] for row in sorted((row for row in claim.rows() "
     "if row.status == 'ok'), key=lambda row: -abs(row.score))[:200]])"
 )
@@ -364,7 +362,7 @@ def _chosen(request: _AuditRequest, ok: dict[str, int]) -> set[str] | None:
             if unknown
             else "edges= is empty",
             "pass names of the table's ok rows, e.g. tl.attribution.causal_audit(model, x, "
-            "claim=claim, corrupted=corrupted, metric=metric, k=1, edges=[row.address[0] for "
+            "claim=claim, corrupted_input=corrupted, metric=metric, k=1, edges=[row.address[0] for "
             "row in claim.rows() if row.status == 'ok'][:2])",
             code="attribution_eval_setting_invalid",
         )

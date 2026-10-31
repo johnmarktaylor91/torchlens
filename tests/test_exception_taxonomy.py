@@ -551,6 +551,9 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "CheckConfigError": (),
     "CheckLifecycleError": (),
     "CheckViolationError": (),
+    "AttributionError": ("ValueError",),
+    "LogitLensError": ("RuntimeError",),
+    "MissingFacetError": ("KeyError",),
     "ReadError": ("ValueError",),
     "ReadInternalError": ("RuntimeError",),
     "GradFnWalkError": (),
@@ -1426,12 +1429,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.receptive_field._errors.ReceptiveFieldValidationError": (
         "public home is the lazy tl.receptive_field submodule"
     ),
-    "torchlens.attribution._result.AttributionError": (
-        "public home is torchlens.attribution.__all__; now based on "
-        "ConfigurationError + ValueError (F06 rebase for the S-17 coded-refusal "
-        "contract) but its registration home stays that surface's own review "
-        "decision"
-    ),
     "torchlens.attribution._result.AttributionWarning": (
         "public home is the torchlens.attribution surface; a TorchLensWarning "
         "subclass carrying the S-18 coded metric/text disclosures (F06)"
@@ -1439,9 +1436,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.bundle.AmbiguousLabelError": (
         "public home is torchlens.bundle/torchlens.intervention.bundle __all__; plain "
         "KeyError outside the taxonomy — rebase/registration is that surface's decision"
-    ),
-    "torchlens.semantic.facets.MissingFacetError": (
-        "public home is torchlens.errors (provisional surface); plain KeyError outside the taxonomy"
     ),
     "torchlens.utils._multipass_access.MultiPassAmbiguityError": (
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
@@ -1472,10 +1466,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "(extraction_resume_* / extraction_manifest_invalid); defined in the F18 "
         "resume module, re-exported by torchlens.dataset_extraction; registration "
         "deferred to the UI/API naming slate"
-    ),
-    "torchlens.semantic.logit_lens.LogitLensError": (
-        "logit_lens refusal (it refuses rather than mislabel a non-standard final "
-        "norm); registration deferred to the UI/API naming slate"
     ),
     "torchlens.semantic.patching.PatchApplicationError": (
         "activation-patching ineffective-rerun refusal (patch_ineffective); "

@@ -146,7 +146,7 @@ class LogitLens:
         Whether the reconstructed lens was numerically validated against the
         captured last-block ``resid_post`` -> logits pair. Always ``False``
         for user lenses (TorchLens has no oracle for them; see the identity
-        check under ``logit_lens(validate=...)``).
+        check under ``logit_lens(verify=...)``).
     final_logits:
         The model's captured real output logits when readable, else ``None``.
     """

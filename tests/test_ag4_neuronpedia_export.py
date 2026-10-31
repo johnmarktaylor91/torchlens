@@ -312,15 +312,15 @@ def test_bos_position_nodes_are_exported(graphs) -> None:
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"node_threshold": 1.5},
-        {"edge_threshold": -0.1},
+        {"node_influence_coverage": 1.5},
+        {"edge_influence_coverage": -0.1},
         {"slug": ""},
         {"tokenizer": object()},
     ],
-    ids=["node_threshold", "edge_threshold", "slug", "tokenizer"],
+    ids=["node_influence_coverage", "edge_influence_coverage", "slug", "tokenizer"],
 )
 def test_refuses_invalid_arguments(graphs, kwargs) -> None:
-    settings = {"slug": "fixture", "scan": "tiny", "tokenizer": TOKENIZER, **kwargs}
+    settings = {"slug": "fixture", "model_id": "tiny", "tokenizer": TOKENIZER, **kwargs}
     with pytest.raises(tl.errors.AttributionError) as excinfo:
         graphs["F1"].to_neuronpedia(**settings)
     assert excinfo.value.fields["code"] == "attribution_graph_export_argument_invalid"

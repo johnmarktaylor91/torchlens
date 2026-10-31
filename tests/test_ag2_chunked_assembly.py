@@ -37,10 +37,10 @@ def _graph_and_counters(model, transcoders, n_layers, chunk, monkeypatch):
     graph = build_module._build(
         _trace(model),
         transcoders,
-        embedding_module="embed",
+        embedding="embed",
         target=None,
-        max_num_logits=2,
-        logit_probability_coverage=0.99,
+        max_n_logits=2,
+        desired_logit_prob=0.99,
         demeaned_logits=True,
         logits_at=None,
         frozen=fx.frozen_names(n_layers),

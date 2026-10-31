@@ -1362,7 +1362,7 @@ def _check_ids_complete(plan: _RunPlan, n_stimuli: int) -> None:
             code="extraction_stimulus_ids_cardinality",
             remedy="pass exactly one identifier per stimulus, in order",
             n_ids=len(plan.stimulus_ids),
-            num_stimuli=n_stimuli,
+            n_stimuli=n_stimuli,
         )
 
 

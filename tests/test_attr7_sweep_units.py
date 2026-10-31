@@ -44,7 +44,7 @@ def _members(effects: Any) -> list[Any]:
 def _assert_each_unit_equals_its_own_fork(audit: Any) -> None:
     plan = audit.units[0]._plan
     for row in audit.units:
-        assert row.measured_effect == audit.original_score - plan.ablated_score((row.unit,)), row
+        assert row.measured_effect == audit.original_score - plan.ablated_score((row.index,)), row
 
 
 def test_read_element_units_run_in_one_sweep_and_equal_their_own_fork(monkeypatch) -> None:
@@ -55,10 +55,10 @@ def test_read_element_units_run_in_one_sweep_and_equal_their_own_fork(monkeypatc
     audit = attribution.causal_audit(model, X, claim=_read(model, reduce=None), target=_seed(), k=3)
     assert audit.extra["grain"] == "element"
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.indices) > len({row.site for row in audit.indices})
+    assert len(candidates) == len(audit.units) > len({row.site for row in audit.units})
     assert all(not isinstance(selection, str) for selection in candidates.values())
     members = _members(effects)
-    assert len(members) == len(audit.indices)
+    assert len(members) == len(audit.units)
     assert {member.status for member in members} == {"released"}
     _assert_each_unit_equals_its_own_fork(audit)
 
@@ -85,7 +85,7 @@ def test_layer_units_run_in_one_sweep_and_equal_their_own_fork(monkeypatch, abla
     claim = attribution.layer_attribution(model, x, target=1, layer="fc1")
     audit = attribution.causal_audit(model, x, claim=claim, target=1, k=2, edit=ablation)
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.indices) == 6
+    assert len(candidates) == len(audit.units) == 6
     assert len(_members(effects)) == 6
     _assert_each_unit_equals_its_own_fork(audit)
 
@@ -99,6 +99,6 @@ def test_layer_units_with_several_element_axes_equal_their_own_fork(monkeypatch)
     claim = attribution.layer_attribution(model, x, target=1, layer="conv")
     audit = attribution.causal_audit(model, x, claim=claim, target=1, k=3, num_random_draws=2)
     ((candidates, effects),) = spy.calls
-    assert len(candidates) == len(audit.indices) == claim.values[0].numel()
-    assert len(_members(effects)) == len(audit.indices)
+    assert len(candidates) == len(audit.units) == claim.values[0].numel()
+    assert len(_members(effects)) == len(audit.units)
     _assert_each_unit_equals_its_own_fork(audit)

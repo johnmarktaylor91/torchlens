@@ -3502,7 +3502,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         cache = self._slot("_facets_cache")
         if cache is None:
-            from ..semantic import FacetView
+            from ..semantic.facets import FacetView
 
             cache = FacetView(self)
             object.__setattr__(self, "_facets_cache", cache)

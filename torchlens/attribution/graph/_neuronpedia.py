@@ -144,7 +144,7 @@ def _prune(graph: AttributionGraph, node_threshold: float, edge_threshold: float
             "No node of the graph influences its logits (every edge into the logits, "
             "or every logit probability, is zero), so no node can be kept by its share "
             "of influence. Remedy: build the graph with targets the prompt reaches, "
-            "tl.attribution.build_graph(trace, transcoders, embedding=..., target=[token_id]).",
+            "tl.attribution.build_graph(trace, transcoders, embedding_module=..., target=[token_id]).",
             code="attribution_graph_export_unsupported",
         )
     node_mask = node_influence >= _threshold(node_influence, node_threshold)
@@ -352,7 +352,7 @@ def _check_graph(graph: AttributionGraph) -> None:
             "The graph's token nodes carry no token ids (the embedding input was not "
             "integer ids), so the schema's prompt tokens and token node ids cannot be "
             "written. Remedy: build the graph from integer token ids, "
-            'tl.attribution.build_graph(tl.trace(model, input_ids), transcoders, embedding="...").',
+            'tl.attribution.build_graph(tl.trace(model, input_ids), transcoders, embedding_module="...").',
             code="attribution_graph_export_unsupported",
         )
     if len(graph.transcoder_sites) != len(graph.error_sites):

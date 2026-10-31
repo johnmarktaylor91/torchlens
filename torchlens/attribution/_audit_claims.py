@@ -348,7 +348,7 @@ def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[
             f"the ablation baseline of shape {tuple(baseline.shape)} does not broadcast to "
             f"the site output of shape {tuple(site.shape)}",
             "tl.attribution.causal_audit(model, x, claim=claim, "
-            f"{_target_spelling(request.target)}, ablation=0.0)",
+            f"{_target_spelling(request.target)}, edit=0.0)",
             code="attribution_eval_setting_invalid",
         ) from exc
     return "baseline", lambda: replace_with(value.clone())

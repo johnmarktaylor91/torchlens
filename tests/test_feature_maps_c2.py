@@ -164,7 +164,7 @@ def _single_feature_node(trace: tl.Trace) -> Any:
 def test_aggregate_default_stores_maps_ids_and_counts() -> None:
     """Default feature maps should store aggregate maps and exact metadata."""
 
-    trace = _conv_trace(num_stimuli=3)
+    trace = _conv_trace(n_stimuli=3)
     maps_by_key = feature_maps(trace)
 
     assert list(maps_by_key) == ["layer:conv2d_1_1"]
@@ -188,7 +188,7 @@ def test_aggregate_default_stores_maps_ids_and_counts() -> None:
 def test_explicit_and_top_channels_store_deterministic_ids() -> None:
     """Explicit and top channel modes should store deterministic channel ids."""
 
-    trace = _conv_trace(num_stimuli=2)
+    trace = _conv_trace(n_stimuli=2)
     feature_maps(trace, channels=[2, 0], max_channels=2)
     stored = trace._annotation_blobs
     assert stored is not None
@@ -234,7 +234,7 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
 ) -> None:
     """Node spec should render one contained image and support overlay fallback."""
 
-    trace = _conv_trace(num_stimuli=3)
+    trace = _conv_trace(n_stimuli=3)
     trace.raw_input = _pil_stimuli(3)
     feature_maps(trace, max_stimuli=2)
     dot = trace.draw(
@@ -304,7 +304,7 @@ def test_feature_map_node_spec_alpha_default_and_passthrough() -> None:
 def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) -> None:
     """Feature-map tensors should survive portable save/load and render after load."""
 
-    trace = _conv_trace(num_stimuli=2)
+    trace = _conv_trace(n_stimuli=2)
     feature_maps(trace)
     original = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"].clone()
     bundle_path = tmp_path / "feature_maps.tlspec"
@@ -328,7 +328,7 @@ def test_default_draw_without_hook_is_byte_identical_and_plain_trace_has_no_blob
 ) -> None:
     """Default draw should not change when no feature-map hook is installed."""
 
-    trace = _conv_trace(num_stimuli=1)
+    trace = _conv_trace(n_stimuli=1)
     assert trace._annotation_blobs is None
 
     first = trace.draw(
@@ -439,7 +439,7 @@ def test_heatmap_cells_mark_nonfinite_and_keep_finite_scale() -> None:
 def test_node_spec_tooltip_discloses_per_cell_normalization(tmp_path: Path) -> None:
     """Every grid cell is independently min-max scaled; the tooltip says so."""
 
-    trace = _conv_trace(num_stimuli=2)
+    trace = _conv_trace(n_stimuli=2)
     feature_maps(trace)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
@@ -499,7 +499,7 @@ def test_tooltip_reports_true_totals_not_capped_counts(tmp_path: Path) -> None:
 def test_aggregate_labels_report_actual_reduction(tmp_path: Path) -> None:
     """A max-projection is captioned max, never avg (reduce_id is honored)."""
 
-    trace = _conv_trace(num_stimuli=2)
+    trace = _conv_trace(n_stimuli=2)
     feature_maps(trace, reduce="max")
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),

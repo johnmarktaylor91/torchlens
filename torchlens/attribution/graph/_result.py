@@ -11,7 +11,7 @@ import torch
 __all__ = ["AttributionGraph", "GraphNode", "NODE_KINDS"]
 
 #: The four node kinds, in the adjacency's node order.
-NODE_KINDS: tuple[str, ...] = ("feature_index", "error", "token", "logit")
+NODE_KINDS: tuple[str, ...] = ("feature", "error", "token", "logit")
 
 
 @dataclass(frozen=True)

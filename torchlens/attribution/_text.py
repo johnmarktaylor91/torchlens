@@ -664,7 +664,7 @@ class TokenAttribution:
 
         return (
             f"TokenAttributionResult(tokens={len(self.raw_tokens)}, "
-            f"n_steps={self.num_steps}, converged={self.converged}, "
+            f"num_steps={self.num_steps}, converged={self.converged}, "
             f"residual_rel={self.completeness['residual_rel']:.4%}, "
             f"target={self.target_repr!r})"
         )

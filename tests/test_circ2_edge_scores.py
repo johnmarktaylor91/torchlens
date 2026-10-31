@@ -220,13 +220,13 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
         ({"steps": 0}, "mi_edge_scores_setting_invalid"),
         ({"example_reduction": "median"}, "mi_edge_scores_setting_invalid"),
         ({"metric": lambda logits: logits[:, -1]}, "mi_edge_scores_metric_invalid"),
-        ({"corrupted": torch.tensor([[1, 1]])}, "mi_edge_scores_inputs_mismatched"),
+        ({"corrupted_input": torch.tensor([[1, 1]])}, "mi_edge_scores_inputs_mismatched"),
     ],
 )
 def test_bad_settings_refuse_typed(kwargs, code) -> None:
     """Unknown method, steps with EAP, bad steps or reduction, a non-scalar metric, shapes."""
 
-    call = {"corrupted": CORRUPT, "metric": fixture_metric, **kwargs}
+    call = {"corrupted_input": CORRUPT, "metric": fixture_metric, **kwargs}
     with pytest.raises(torchlens.errors.MechInterpError) as caught:
         torchlens.mechinterp.edge_scores(Fixture().eval(), CLEAN, **call)
     assert caught.value.fields["code"] == code

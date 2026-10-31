@@ -413,7 +413,7 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
                 conversions[key] = conversion
             array = tensor.cpu().numpy()
             if dense_target is None:
-                shape = (reader.num_stimuli,) + array.shape[1:]
+                shape = (reader.n_stimuli,) + array.shape[1:]
                 dense_target = np.lib.format.open_memmap(
                     temp / f"{stem}.npy", mode="w+", dtype=array.dtype, shape=shape
                 )
@@ -518,9 +518,9 @@ def _export_hdf5(job: _ExportJob) -> list[dict[str, Any]]:
                 if dataset is None:
                     dataset = handle.create_dataset(
                         stem,
-                        shape=(reader.num_stimuli,) + array.shape[1:],
+                        shape=(reader.n_stimuli,) + array.shape[1:],
                         dtype=array.dtype,
-                        chunks=(min(64, max(1, reader.num_stimuli)),) + array.shape[1:],
+                        chunks=(min(64, max(1, reader.n_stimuli)),) + array.shape[1:],
                     )
                     dataset.attrs["torchlens_key"] = key
                 dataset[cursor : cursor + array.shape[0]] = array
@@ -716,7 +716,7 @@ def _write_contract(
             "manifest_sha256": _sha256_file(source / "manifest.json"),
             "ledger_sha256": _sha256_file(ledger_path) if ledger_path.exists() else None,
             "stimulus_ids_digest": (manifest.get("signature") or {}).get("stimulus_ids_digest"),
-            "n_stimuli": reader.num_stimuli,
+            "n_stimuli": reader.n_stimuli,
             "n_shards": reader.n_shards,
             "unknown_v1_prefix_semantics": bool(manifest.get("unknown_v1_prefix_semantics", False)),
         },

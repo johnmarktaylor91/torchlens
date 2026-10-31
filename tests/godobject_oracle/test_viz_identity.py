@@ -52,7 +52,7 @@ torch.manual_seed({seed})
 trace = tl.trace(VizCNN(), torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4))
 with tempfile.TemporaryDirectory() as tmp:
     source = trace.draw(
-        vis_save_only=True, vis_fileformat="svg", vis_outpath=tmp + "/g"
+        vis_save_only=True, file_format="svg", path=tmp + "/g"
     )
 print(hashlib.sha256(source.encode()).hexdigest())
 """

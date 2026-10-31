@@ -138,7 +138,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
     ),
     SurfaceEntry(
         key="profile",
-        spelling="trace.profile(sort_by=..., top_k=...)",
+        spelling="trace.profile(sort_by=..., k=...)",
         subject="RUN-RESOURCES",
         register="RANK",
         invariants=("truncation_disclosed", "instrumented_time_labeled", "conserves_totals"),

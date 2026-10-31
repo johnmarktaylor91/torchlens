@@ -83,6 +83,12 @@ def _state(stat: Any) -> str:
     return _state_io.state_digest(state_json, tensors)
 
 
+def _final(stat: Any) -> Any:
+    """Return a statistic's final value (``Histogram`` keeps ``result()``; the rest ``compute()``)."""
+
+    return stat.result() if isinstance(stat, tl.stats.Histogram) else stat.compute()
+
+
 def _assert_same(left: Any, right: Any) -> None:
     """Assert two results are identical, NaN equal to NaN."""
 
@@ -128,7 +134,7 @@ def test_resume_matches_uninterrupted(batch_size: int, tmp_path: Path) -> None:
         for batch in batches[half:]:
             resumed.update(batch)
         assert _state(resumed) == _state(whole), name
-        _assert_same(resumed.compute(), whole.compute())
+        _assert_same(_final(resumed), _final(whole))
 
 
 def test_resume_two_input_accumulators(tmp_path: Path) -> None:

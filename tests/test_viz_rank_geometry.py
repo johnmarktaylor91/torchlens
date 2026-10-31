@@ -158,8 +158,8 @@ trace.draw(
     vis_mode="unrolled",
     vis_node_placement="rank",
     vis_save_only=True,
-    vis_fileformat="svg",
-    vis_outpath=str(out),
+    file_format="svg",
+    path=str(out),
     show_containers=False,
 )
 normalized = captured["source"].replace(str(out), "OUT")

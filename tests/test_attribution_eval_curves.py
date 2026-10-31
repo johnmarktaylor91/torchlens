@@ -102,7 +102,7 @@ def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
     assert curve.aopc == expected_aopc
     assert curve.area == pytest.approx(expected_area, abs=1e-12)
     assert curve.settings["features"] == "elements"
-    assert curve.extra["n_features"] == 6
+    assert curve.extra["num_features"] == 6
     assert [step.num_features for step in curve.steps] == list(range(7))
 
 
@@ -214,7 +214,7 @@ def test_patch_and_token_grouping_counts_features() -> None:
     curve = attribution.deletion_curve(
         model, x, target=0, attribution=result, features="patches", patch_size=4, num_steps=6
     )
-    assert curve.extra["n_features"] == 3 * 2
+    assert curve.extra["num_features"] == 3 * 2
     assert curve.settings["patch_size"] == (4, 4)
     assert curve.scores.shape == (7, 2)
     assert len(curve.extra["aopc_per_example"]) == 2
@@ -229,7 +229,7 @@ def test_patch_and_token_grouping_counts_features() -> None:
         tokens, sequence, target=1, attribution=token_result, num_steps=5
     )
     assert token_curve.settings["features"] == "tokens"
-    assert token_curve.extra["n_features"] == 5
+    assert token_curve.extra["num_features"] == 5
     revealed = ~token_curve.steps[2].build_baseline_mask
     assert torch.equal(revealed.all(dim=-1), revealed.any(dim=-1))
     assert int(revealed.all(dim=-1).sum()) == 2
@@ -282,7 +282,7 @@ def test_curve_refuses_misaligned_attribution_and_its_remedy_runs() -> None:
 @pytest.mark.parametrize(
     ("setting", "value"),
     [
-        ("n_steps", 0),
+        ("num_steps", 0),
         ("features", "voxels"),
         ("baseline", "noise"),
         ("patch_size", (0, 2)),

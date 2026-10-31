@@ -539,11 +539,11 @@ class ExtractionReader:
         if row_index < 0 or row_index >= self.n_stimuli:
             raise InvalidArgumentError(
                 f"Row {row_index} is out of range for an artifact with "
-                f"{self.num_stimuli} trusted rows.",
+                f"{self.n_stimuli} trusted rows.",
                 code="extraction_reader_row_out_of_range",
                 remedy="request rows in [0, n_stimuli)",
                 row=row_index,
-                num_stimuli=self.n_stimuli,
+                n_stimuli=self.n_stimuli,
             )
         shard_index = bisect.bisect_right(self._row_starts, row_index) - 1
         return shard_index, row_index - self._row_starts[shard_index]

@@ -233,7 +233,7 @@ def _structure_digest(
 def build_cost_tree(
     trace: Trace,
     *,
-    top_k: int | None = None,
+    k: int | None = None,
     max_depth: int | None = None,
     fold_repeats: bool = True,
     aggregation: ComputeAggregation | None = None,
@@ -244,8 +244,8 @@ def build_cost_tree(
     ----------
     trace:
         Finished trace.
-    top_k:
-        Keep the ``top_k`` largest OWNER/SUBTOTAL rows per parent (by
+    k:
+        Keep the ``k`` largest OWNER/SUBTOTAL rows per parent (by
         subtree mass); hidden siblings collapse into one deterministic
         REMAINDER row per parent. Denominators are unaffected (D6).
     max_depth:
@@ -260,11 +260,11 @@ def build_cost_tree(
         from the trace when omitted.
     """
 
-    if top_k is not None and (not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1):
+    if k is not None and (not isinstance(k, int) or isinstance(k, bool) or k < 1):
         raise InvalidArgumentError(
-            f"top_k must be a positive integer or None; got {top_k!r}.",
+            f"k must be a positive integer or None; got {k!r}.",
             code="cost_tree_top_k_invalid",
-            remedy="Pass top_k >= 1 to keep the k largest rows per parent, or None for all.",
+            remedy="Pass k >= 1 to keep the k largest rows per parent, or None for all.",
         )
     if max_depth is not None and (
         not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0
@@ -279,7 +279,7 @@ def build_cost_tree(
     builder = _TreeBuilder(
         trace,
         agg,
-        top_k=top_k,
+        top_k=k,
         max_depth=max_depth,
         fold_repeats=fold_repeats,
     )

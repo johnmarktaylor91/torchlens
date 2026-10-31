@@ -117,7 +117,7 @@ def prediction_trajectory(  # noqa: PLR0913 -- position/batch/tokenizer/target a
         target_probs=tuple(target_probs) if target_token_id is not None else None,
         target_ranks=tuple(target_ranks) if target_token_id is not None else None,
         lens_source=predictions.lens_source,
-        validated=predictions.validated,
+        validated=predictions.is_validated,
         tie_convention=predictions.tie_convention,
     )
 

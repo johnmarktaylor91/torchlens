@@ -70,6 +70,7 @@ _DRAW_KWARG_SPELLINGS = {
     "engine": "vis_node_placement",
     "intervention_mode": "vis_intervention_mode",
     "show_cone": "vis_show_cone",
+    "show_buffer_layers": "show_buffers",
 }
 
 #: Attention role rows: module-address suffix -> per-layer fact wording.

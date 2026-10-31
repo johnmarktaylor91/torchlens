@@ -1565,7 +1565,7 @@ def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistryS
     Parameters
     ----------
     extra_recipes:
-        Per-trace additive recipes supplied to ``tl.trace(..., recipes=[...])``.
+        Per-trace additive recipes supplied to ``tl.trace(..., facets=[...])``.
 
     Returns
     -------

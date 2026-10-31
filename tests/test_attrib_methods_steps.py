@@ -258,7 +258,7 @@ def test_step_batching_matches_sequential_layer_ig_and_conductance(chunk: int) -
             inputs,
             target=1,
             layer="hidden",
-            n_steps=12,
+            num_steps=12,
             step_batch_size=chunk,
             step_audit_seed=0,
         )

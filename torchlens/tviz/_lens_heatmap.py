@@ -196,7 +196,7 @@ def _footer(
     """Return the heatmap's honesty footer lines, in plain words."""
 
     lens = _LENS_WORDS.get(result.lens_source, f"lens {result.lens_source!r}")
-    if result.validated:
+    if result.is_validated:
         lens_line = f"lens: {lens}, checked against the model's own output scores"
         rows = "the last row reproduces the model's own output scores"
     else:

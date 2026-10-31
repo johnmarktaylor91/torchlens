@@ -80,7 +80,7 @@ def _hand_effects(model: Fixture, clean: Tensor, corrupt: Tensor, reduction: str
 
 def _audit(table: Any, model: Any = None, clean: Tensor = CLEAN, **kwargs: Any):
     model = Fixture().eval() if model is None else model
-    corrupt = kwargs.pop("corrupted", CORRUPT if clean is CLEAN else PAIR_CORRUPT)
+    corrupt = kwargs.pop("corrupted_input", CORRUPT if clean is CLEAN else PAIR_CORRUPT)
     return attribution.causal_audit(
         model, clean, claim=table, corrupted_input=corrupt, metric=fixture_metric, **kwargs
     )
@@ -124,9 +124,9 @@ def test_fixture_measured_effects_equal_the_hand_patch(method: str, reduction: s
     assert audit.extra["claim_kind"] == "edge_table"
     assert audit.extra["claim_method"] == method
     assert audit.extra["example_reduction"] == reduction
-    assert audit.settings["ablation"] == "edge_patch"
+    assert audit.settings["edit"] == "edge_patch"
     assert audit.original_score == _reduced(fixture_metric(model(clean).detach()), reduction)
-    assert [row.unit for row in audit.units] == [(index,) for index in range(5)]
+    assert [row.index for row in audit.units] == [(index,) for index in range(5)]
 
 
 def test_fixture_a_shuffled_claim_scores_below_the_correct_claim() -> None:
@@ -151,7 +151,7 @@ def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
     audit = _audit(table, model, edges=into_logits, k=2, num_random_draws=3)
     assert sorted(row.component for row in audit.units) == sorted(into_logits)
     assert audit.extra["sets_not_measured"] == ()
-    name_of = {row.unit: row.component for row in audit.units}
+    name_of = {row.index: row.component for row in audit.units}
     top = audit.set_of("top")[0]
     with torch.no_grad():
         e_c, e_x = model.embed(CLEAN), model.embed(CORRUPT)
@@ -167,7 +167,7 @@ def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
             patched = patched - sender_clean + sender_corrupt
         want = float(_metric(model, patched)[0]) - float(_metric(model, r)[0])
     assert top.measured_effect == want
-    claimed_of = {row.unit: row.claimed_effect for row in audit.units}
+    claimed_of = {row.index: row.claimed_effect for row in audit.units}
     assert top.claimed_effect == math.fsum(claimed_of[unit] for unit in top.units)
     across = _audit(table, model, k=2, num_random_draws=2)
     assert across.extra["sets_not_measured"] == ()
@@ -177,7 +177,7 @@ def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
 
 
 def _names(audit: Any, item: Any) -> list[str]:
-    name_of = {row.unit: row.component for row in audit.units}
+    name_of = {row.index: row.component for row in audit.units}
     return [name_of[unit] for unit in item.units]
 
 
@@ -194,7 +194,7 @@ def test_fixture_rows_without_a_score_are_reported_apart() -> None:
     )
     audit = _audit(claim, k=1, num_random_draws=2)
     assert audit.extra["rows_not_audited"] == ((rows[1].address[0], "unreachable"),)
-    assert [row.unit for row in audit.units] == [(0,), (2,), (3,), (4,)]
+    assert [row.index for row in audit.units] == [(0,), (2,), (3,), (4,)]
 
 
 @pytest.mark.heavy
@@ -256,7 +256,7 @@ def test_fixture_recorded_patches_replay_to_their_measured_effects() -> None:
     audit = _audit(_table(model), model, edges=["input->logits", "m1->logits"], k=2)
     score = _logits_score(audit, fixture_metric)
     for item in (*audit.units, *audit.sets):
-        replayed = _replayed(audit, item.intervention, score) - audit.original_score
+        replayed = _replayed(audit, item.build_interventions, score) - audit.original_score
         assert replayed == item.measured_effect
 
 
@@ -303,13 +303,13 @@ def test_tiny_gpt2_q_k_v_patches_replay_to_their_measured_effects() -> None:
         k=2,
         num_random_draws=4,
     )
-    assert sorted(row.component for row in audit.indices) == sorted(QKV_EDGES)
-    by_name = {row.component: row for row in audit.indices}
+    assert sorted(row.component for row in audit.units) == sorted(QKV_EDGES)
+    by_name = {row.component: row for row in audit.units}
     assert abs(by_name["b0->m1"].measured_effect) <= 1e-12
     assert by_name["b0->m1"].claimed_effect == 0.0
     score = _logits_score(audit, _logit_difference)
-    for item in (*audit.indices, *audit.sets):
-        replayed = _replayed(audit, item.intervention, score) - audit.original_score
+    for item in (*audit.units, *audit.sets):
+        replayed = _replayed(audit, item.build_interventions, score) - audit.original_score
         assert replayed == item.measured_effect, item
     shared = attribution.causal_audit(
         model,
@@ -358,7 +358,7 @@ def _scope(model: Any, claim: Any, **names: Any) -> dict[str, Any]:
         "model": model,
         "x": CLEAN,
         "claim": claim,
-        "corrupted": CORRUPT,
+        "corrupted_input": CORRUPT,
         "metric": fixture_metric,
         **names,
     }
@@ -370,7 +370,7 @@ def _misaligned_refusal_runs_its_remedy(model: Any, table: Any, call: dict[str, 
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(_remedy(str(excinfo.value)), _scope(model, table))  # noqa: S307
     assert isinstance(fixed, attribution.CausalAudit)
-    assert fixed.extra["claim_kind"] == "edge_table" and len(fixed.indices) == 5
+    assert fixed.extra["claim_kind"] == "edge_table" and len(fixed.units) == 5
 
 
 # One family per cause, each well inside the 5s tier's aggregate family budget.
@@ -379,7 +379,7 @@ def test_edge_missing_corrupted_or_metric_refuses_and_the_remedy_runs(kind: str)
     """No corrupted inputs, or no metric."""
 
     model = Fixture().eval()
-    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
+    call: dict[str, Any] = {"corrupted_input": CORRUPT, "metric": fixture_metric}
     call.pop("corrupted" if kind == "no_corrupted" else "metric")
     _misaligned_refusal_runs_its_remedy(model, _table(model), call)
 
@@ -391,9 +391,9 @@ def test_edge_misaligned_audit_settings_refuse_and_the_remedy_runs(kind: str) ->
     """Corrupted inputs of another shape, a metric that is not per example, a target."""
 
     model = Fixture().eval()
-    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
+    call: dict[str, Any] = {"corrupted_input": CORRUPT, "metric": fixture_metric}
     if kind == "corrupted_other_shape":
-        call["corrupted"] = torch.tensor([[1, 1]])
+        call["corrupted_input"] = torch.tensor([[1, 1]])
     elif kind == "metric_not_per_example":
         call["metric"] = lambda logits: logits[:, -1]
     else:
@@ -418,7 +418,7 @@ def test_edge_misaligned_claim_tables_refuse_and_the_remedy_runs(kind: str) -> N
             trace=table.trace,
         )
     _misaligned_refusal_runs_its_remedy(
-        model, table, {"corrupted": CORRUPT, "metric": fixture_metric}
+        model, table, {"corrupted_input": CORRUPT, "metric": fixture_metric}
     )
 
 
@@ -429,7 +429,7 @@ def test_edge_unsupported_tables_and_settings_refuse_and_the_remedy_runs(kind: s
     model = Fixture().eval()
     table = _table(model)
     code = "attribution_audit_claim_unsupported"
-    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric}
+    call: dict[str, Any] = {"corrupted_input": CORRUPT, "metric": fixture_metric}
     if kind == "mixed_rows":
         act = dataclasses.replace(table.rows()[0], kind="ACT", address=("linear_1_3", 1))
         claim = type(table)(
@@ -456,15 +456,15 @@ def test_edge_unsupported_tables_and_settings_refuse_and_the_remedy_runs(kind: s
     assert isinstance(fixed, attribution.CausalAudit)
 
 
-@pytest.mark.parametrize("kind", ["ablation", "unknown_edges", "k_too_large"])
+@pytest.mark.parametrize("kind", ["edit", "unknown_edges", "k_too_large"])
 def test_edge_bad_settings_refuse_and_the_remedy_runs(kind: str) -> None:
-    """ablation= on an EDGE table, edges= naming no ok row, k above the audited edges."""
+    """edit= on an EDGE table, edges= naming no ok row, k above the audited edges."""
 
     model = Fixture().eval()
     table = _table(model)
-    call: dict[str, Any] = {"corrupted": CORRUPT, "metric": fixture_metric, "k": 1}
-    if kind == "ablation":
-        call["ablation"] = "mean"
+    call: dict[str, Any] = {"corrupted_input": CORRUPT, "metric": fixture_metric, "k": 1}
+    if kind == "edit":
+        call["edit"] = "mean"
     elif kind == "unknown_edges":
         call["edges"] = ["input->m7"]
     else:
@@ -492,4 +492,4 @@ def test_many_edges_warn_once_and_the_named_spelling_runs(monkeypatch) -> None:
     assert "per_unit=False" in str(warning.message)
     spelling = _remedy(str(warning.message)).replace("[:200]])", "[:3]], k=1)")
     fixed = eval(spelling, _scope(model, table))  # noqa: S307
-    assert len(fixed.indices) == 3
+    assert len(fixed.units) == 3
