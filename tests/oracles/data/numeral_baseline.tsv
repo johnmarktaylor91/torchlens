@@ -5358,7 +5358,6 @@ test-docstrings	tests/test_chunk_size.py	10
 test-docstrings	tests/test_ci_packaging_gates.py	10
 test-docstrings	tests/test_ci_packaging_gates.py	13.1
 test-docstrings	tests/test_ci_packaging_gates.py	13.2
-test-docstrings	tests/test_ci_packaging_gates.py	13.3
 test-docstrings	tests/test_ci_packaging_gates.py	13.4
 test-docstrings	tests/test_ci_packaging_gates.py	13.5
 test-docstrings	tests/test_ci_packaging_gates.py	13.7
@@ -5370,9 +5369,7 @@ test-docstrings	tests/test_ci_packaging_gates.py	3.12
 test-docstrings	tests/test_ci_packaging_gates.py	3.12.
 test-docstrings	tests/test_ci_packaging_gates.py	3.13
 test-docstrings	tests/test_ci_packaging_gates.py	3.9
-test-docstrings	tests/test_ci_packaging_gates.py	30
 test-docstrings	tests/test_ci_packaging_gates.py	78
-test-docstrings	tests/test_ci_packaging_gates.py	82
 test-docstrings	tests/test_ci_packaging_gates.py	82,
 test-docstrings	tests/test_ci_packaging_gates.py	85
 test-docstrings	tests/test_classics_corpus.py	256

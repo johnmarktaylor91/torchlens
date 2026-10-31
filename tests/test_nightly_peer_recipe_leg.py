@@ -106,6 +106,7 @@ def test_peer_recipe_job_uploads_the_freeze() -> None:
         step
         for step in _job()["steps"]
         if step.get("uses", "").startswith("actions/upload-artifact@")
+        and "peer-freeze.txt" in str(step.get("with", {}).get("path", ""))
     ]
     assert len(uploads) == 1
     assert uploads[0].get("if") == "always()"
