@@ -26,10 +26,12 @@ from _validation_capture import _capture, _quiet_validate
 from torch import nn
 
 import torchlens as tl
+from torchlens._user_public_impls import _validate_forward_pass_torch
 from torchlens._validation_state_snapshot import (
     restore_snapshot_if_changed,
     snapshot_state_for_restore,
 )
+from torchlens.options import CaptureOptions
 from torchlens.validation.core import _check_perturbation_exemptions, validate_saved_outs
 from torchlens.validation.diagnostics import get_validation_failure
 
@@ -226,6 +228,14 @@ _SHAPE_CHANGING = [
     _SetToStorageView,
     _SetToWholeStorage,
 ]
+# ``set_()`` on a buffer is the one case the pristine re-trace (copy path only)
+# reports as stateful; see test_emptied_buffer_is_reported_by_the_retrace_check.
+_VALIDATING_CASES = [
+    (model_cls, copy_fails)
+    for model_cls in _SHAPE_CHANGING
+    for copy_fails in (False, True)
+    if copy_fails or model_cls is not _SetToNothing
+]
 
 
 def _state_by_name(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -265,8 +275,7 @@ def failing_model_deepcopy(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[typ
     yield failing
 
 
-@pytest.mark.parametrize("model_cls", _SHAPE_CHANGING)
-@pytest.mark.parametrize("copy_fails", [False, True], ids=["copy", "live-fallback"])
+@pytest.mark.parametrize(("model_cls", "copy_fails"), _VALIDATING_CASES)
 def test_set_overloads_validate_and_leave_the_model_restored(
     model_cls: type[nn.Module], copy_fails: bool, failing_model_deepcopy: list[type]
 ) -> None:
@@ -284,6 +293,34 @@ def test_set_overloads_validate_and_leave_the_model_restored(
     objects = _state_by_name(model)
     values = {name: tensor.detach().clone() for name, tensor in objects.items()}
     assert _quiet_validate(model, torch.rand(4)) is True
+    _assert_restored(model, objects, values)
+
+
+def test_emptied_buffer_is_reported_by_the_retrace_check() -> None:
+    """``set_()`` on a buffer returns a verdict; only the stateful-model re-trace objects.
+
+    The re-trace runs the copy again from its post-forward state, where the
+    buffer is already empty: emptying an empty buffer leaves its bytes equal,
+    so that run records the buffer write as an identity and its graph differs
+    from the first one. Replay of the first capture passes; the verdict is the
+    re-trace's documented stateful-model finding, and the caller's buffer is
+    untouched.
+    """
+
+    torch.manual_seed(0)
+    model = _SetToNothing()
+    objects = _state_by_name(model)
+    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
+    traces: list[Any] = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        verdict = _validate_forward_pass_torch(model, torch.rand(4), _trace_observer=traces.append)
+    assert verdict is False
+    (trace,) = traces
+    failure = get_validation_failure(trace)
+    assert failure is not None
+    assert failure.check == "retrace_mismatch"
+    assert "first divergence" in failure.message
     _assert_restored(model, objects, values)
 
 
@@ -320,21 +357,33 @@ def test_default_capture_leaves_a_set_buffer_on_its_own_storage(
     _assert_restored(model, objects, values)
 
 
-def _storage_view_trace(model_cls: type[nn.Module] = _SetToStorageView) -> tuple[Any, Any, Any]:
-    """Capture ``model_cls`` and return the trace, its ground truth and its ``set_`` op."""
+def _storage_view_trace(
+    model_cls: type[nn.Module] = _SetToStorageView,
+) -> tuple[nn.Module, Any, Any, Any]:
+    """Capture a fresh ``model_cls`` and return it, the trace, its ground truth and its ``set_`` op.
 
-    trace, ground_truth = _capture(model_cls(), torch.rand(4))
+    The ground truth runs on a copy, so the capture starts from the model's
+    initial state (``_capture`` runs the model itself first).
+    """
+
+    model = model_cls()
+    x = torch.rand(4)
+    ground_truth = copy.deepcopy(model)(x)
+    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_arg_values=True))
     set_op = next(op for op in trace.layer_list if op.func_name == "set_")
-    return trace, ground_truth, set_op
+    return model, trace, ground_truth, set_op
 
 
 def test_storage_argument_is_saved_by_value_at_the_call() -> None:
     """Replay reads the bytes the storage held at the call, not its later contents."""
 
-    trace, ground_truth, set_op = _storage_view_trace(_SetToStorageViewThenOverwrite)
+    model, trace, ground_truth, set_op = _storage_view_trace(_SetToStorageViewThenOverwrite)
     try:
         saved_storage = set_op.saved_args[1]
         assert isinstance(saved_storage, torch.UntypedStorage)
+        assert saved_storage.data_ptr() != model.src.untyped_storage().data_ptr()
+        with torch.no_grad():
+            model.src.zero_()
         saved_values = torch.frombuffer(bytearray(bytes(saved_storage)), dtype=torch.float32)
         assert torch.equal(saved_values, torch.arange(8, dtype=torch.float32))
         assert torch.equal(set_op.out, torch.arange(2, 6, dtype=torch.float32))
@@ -358,7 +407,7 @@ def test_storage_view_end_to_end_with_a_later_source_write() -> None:
 def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: object) -> None:
     """A replay that reads the wrong offset or size of the saved storage fails."""
 
-    trace, ground_truth, set_op = _storage_view_trace()
+    _model, trace, ground_truth, set_op = _storage_view_trace()
     try:
         assert validate_saved_outs(trace, [ground_truth], validate_metadata=False).state == (
             "passed"
@@ -366,7 +415,7 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
     finally:
         trace.cleanup()
 
-    trace, ground_truth, set_op = _storage_view_trace()
+    _model, trace, ground_truth, set_op = _storage_view_trace()
     try:
         set_op.saved_args[position] = wrong_value
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)

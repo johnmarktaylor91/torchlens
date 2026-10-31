@@ -376,7 +376,12 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         # A storage argument (``Tensor.set_(storage, offset, size, stride)``) is
         # data like a tensor: the copy holds the bytes it had at the call, so a
         # later write to the source storage cannot change what replay reads.
-        return arg.clone()
+        # Paused like a tensor clone: the copy is TorchLens's own work, never a
+        # captured op or a dispatch the completeness witness counts.
+        from .._state import pause_logging
+
+        with pause_logging():
+            return arg.clone()
     arg_id = id(arg)
     existing = _in_progress.get(arg_id)
     if existing is not None:
