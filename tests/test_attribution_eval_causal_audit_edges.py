@@ -358,7 +358,7 @@ def _scope(model: Any, claim: Any, **names: Any) -> dict[str, Any]:
         "model": model,
         "x": CLEAN,
         "claim": claim,
-        "corrupted_input": CORRUPT,
+        "corrupted": CORRUPT,
         "metric": fixture_metric,
         **names,
     }

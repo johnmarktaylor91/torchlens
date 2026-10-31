@@ -1337,7 +1337,7 @@ zero all prompt-token embeddings; encoders with a reliable pad token and special
 pad content tokens while scaffolding specials at their true embeddings
 (`keep_special_tokens=True`); anything unreliable falls back to zeros-all with a NAMED
 disclosure (a missing pad token is never guessed). `n_steps=128` fixed default;
-`n_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
+`num_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
 (residual AND max(L1, L2) successive-grid stability, both <= 1%; rank stability is banned as
 a signal). `converged=False` is a first-class outcome with a footer line the user cannot
 miss. A bare int target is the vocab id at the final non-padding position, warning in the one

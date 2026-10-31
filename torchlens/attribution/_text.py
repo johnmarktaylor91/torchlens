@@ -553,7 +553,7 @@ class TokenAttribution:
         Full target resolution disclosure incl. the decoded token.
     baseline
         The exact resolved baseline disclosure (policy, reason, ids, mask).
-    n_steps
+    num_steps
         The FINAL grid the scores were computed at.
     converged
         ``True``/``False`` under the dual criterion, or ``None`` when a fixed
@@ -612,7 +612,7 @@ class TokenAttribution:
             )
         if self.converged is None:
             lines.append(
-                "convergence: not evaluated (fixed n_steps; pass "
+                "convergence: not evaluated (fixed num_steps; pass "
                 "num_steps='auto' for the dual-criterion certificate)"
             )
         elif self.converged:
@@ -824,7 +824,7 @@ def text(
         ``"auto"`` (task-aware, always resolved to a printed concrete
         baseline), ``"zeros"``, ``"pad_token"``, an embeddings tensor, or
         aligned baseline token ids.
-    n_steps
+    num_steps
         Fixed integer grid (default 128) or ``"auto"`` for the dual-criterion
         ladder 64 -> 128 -> 256 -> 512.
     steps_per_batch

@@ -180,7 +180,7 @@ class TestPerLayerFixture:
         graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
         _assert_against_key(graph, model, transcoders, F1_COUNTS)
         assert graph.error_vectors.abs().max().item() <= EDGE_TOL
-        assert graph.capture_outcome == "COMPLETE"
+        assert graph.capture_status == "COMPLETE"
         assert graph.disclosures == ()
 
     def test_node_order_and_fields(self) -> None:

@@ -152,7 +152,7 @@ def test_two_liner_runs_and_disches_everything() -> None:
     assert any(line.startswith("target:") for line in payload.footer_lines)
     assert any("|target_delta|" in line for line in payload.footer_lines)
     assert any("residual_rel" in line for line in payload.footer_lines)
-    assert any("n_steps='auto'" in line for line in payload.footer_lines)
+    assert any("num_steps='auto'" in line for line in payload.footer_lines)
 
 
 @pytest.mark.smoke
