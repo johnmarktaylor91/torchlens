@@ -12,7 +12,6 @@ from torchlens.utils._torch_compat_table import (
 )
 
 
-@pytest.mark.smoke
 def test_table_rows_match_the_capability_flags_exactly() -> None:
     """Every snapshot flag has exactly one row and every row names a snapshot flag."""
 
@@ -20,7 +19,6 @@ def test_table_rows_match_the_capability_flags_exactly() -> None:
     assert all(row.flag == flag for flag, row in CAPABILITY_ROWS.items())
 
 
-@pytest.mark.smoke
 def test_absent_on_lists_only_measured_versions_in_order() -> None:
     """``absent_on`` is an ordered subset of the measured matrix."""
 
@@ -32,7 +30,6 @@ def test_absent_on_lists_only_measured_versions_in_order() -> None:
             assert row.absent_on == (), row.flag
 
 
-@pytest.mark.smoke
 def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
     """A flag probed from its declared paths reads what those paths resolve to now."""
 
@@ -41,7 +38,6 @@ def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
         assert getattr(tc, flag) is tc._probe_attribute_paths(flag), flag
 
 
-@pytest.mark.smoke
 def test_the_compat_module_does_not_import_the_table() -> None:
     """The measured table is tooling data, kept out of the capture stack's import closure."""
 
@@ -55,7 +51,6 @@ def test_the_compat_module_does_not_import_the_table() -> None:
     assert "_torch_compat_table" not in imported
 
 
-@pytest.mark.smoke
 def test_measured_class_covers_each_shape() -> None:
     """The classification distinguishes constant, varying and unmeasured rows."""
 
@@ -66,7 +61,6 @@ def test_measured_class_covers_each_shape() -> None:
     assert CapabilityRow("HAS_X", measured=False).measured_class == "unmeasured"
 
 
-@pytest.mark.smoke
 def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
     """Missing modules and missing attribute segments resolve to ``None``, never raise."""
 
@@ -77,7 +71,6 @@ def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
     assert tc._resolve_attribute_path("torch._no_such_module:anything") is None
 
 
-@pytest.mark.smoke
 def test_attribute_probe_refuses_flags_without_paths() -> None:
     """A bespoke-probe flag cannot be evaluated declaratively by mistake."""
 
@@ -86,7 +79,6 @@ def test_attribute_probe_refuses_flags_without_paths() -> None:
         tc._probe_attribute_paths(bespoke)
 
 
-@pytest.mark.smoke
 def test_table_getter_flips_its_flag_when_the_surface_disappears(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -99,7 +91,6 @@ def test_table_getter_flips_its_flag_when_the_surface_disappears(
     assert tc.HAS_DEVICE_CONSTRUCTORS is False
 
 
-@pytest.mark.smoke
 def test_snapshot_forces_the_meta_item_and_mha_switch_probes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
