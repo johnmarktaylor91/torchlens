@@ -344,6 +344,40 @@ def _active_forward_op_count_at_trigger() -> int | None:
     return max(0, int(active_state.step_index) - 1)
 
 
+def _register_slot_gradient_prehook(
+    grad_fn_handle: Any,
+    output_nr: int,
+    tensor_hook: Callable[[torch.Tensor | None], None],
+) -> Any:
+    """Register a tensor gradient hook as a node pre-hook on one output slot.
+
+    A tensor hook registered after the tensor was written in place again
+    receives the newer version's gradient; a pre-hook on the node that produced
+    the earlier version receives that version's gradient instead.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Autograd node that produced the tensor version.
+    output_nr:
+        Output slot of that node the tensor version occupies.
+    tensor_hook:
+        Hook taking the gradient of one tensor (``None`` when none arrived).
+
+    Returns
+    -------
+    Any
+        Removable handle of the registered pre-hook.
+    """
+
+    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
+        """Pass the slot's incoming gradient to the tensor hook, unchanged."""
+
+        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+
+    return grad_fn_handle.register_prehook(prehook)
+
+
 def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str | None) -> None:
     """Register a pinned forward grad-fn object for later autograd triggers.
 
