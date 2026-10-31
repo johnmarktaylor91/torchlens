@@ -194,9 +194,11 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 ) -> None:
     """A grad inside another grad's subgraph, and an input that depends on another input.
 
-    The end-to-end validation of these captures stops earlier, on a backward-graph
-    metadata invariant for higher-order grad_fn handles that fails on the base too,
-    so the replay and perturbation checks are pinned on the validator's own capture.
+    The replay and perturbation checks are pinned on the validator's own capture, and
+    the end-to-end verdict must be True: a second-order grad inside forward used to fail
+    the backward-graph metadata invariants (a forward op applied to the first gradient
+    was inferred into order 2 while the nodes its differentiation created kept order 2
+    instead of 3), and the recorded failure was never asserted here.
     """
 
     results: list[tuple[str, Any]] = []
@@ -217,7 +219,9 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 
     torch.manual_seed(0)
     with _tampered_validation(check):
-        _validate(model_factory(), torch.randn(*shape))
+        verdict = _validate(model_factory(), torch.randn(*shape))
+    assert verdict is True, last_validation_failure()
+    assert last_validation_failure() is None
     assert results
     assert {label: r.decision for label, r in results} == {
         label: "validated" for label, _ in results

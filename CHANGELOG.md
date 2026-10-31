@@ -381,6 +381,12 @@
 
 ### Bug Fixes
 
+- **backward**: a second-order `torch.autograd.grad` inside forward (or a forward op applied to
+  a `create_graph` gradient and differentiated again) no longer fails forward validation on
+  `backward_graph_invariants` ("order 2 does not match creator order + 1 (3)"). GradFn order
+  assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
+  created by differentiating an inferred-order node sit one order above it. The invariant is
+  unchanged.
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label
   (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the
