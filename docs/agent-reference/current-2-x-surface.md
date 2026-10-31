@@ -20,7 +20,8 @@
   `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`, `direction`);
   `spec.bind(model)` returns a `tl.intervention.BoundModel`, whose `.recipe` is the bound spec.
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
-  population (`origin=` is required).
+  population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
+  `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
   `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
   `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
@@ -1828,6 +1829,7 @@ object's docstring):
 - `tl.types.ContractCheck`: One contract check recorded in a run report.
 - `tl.types.MergedFinding`: One structured merge finding.
 - `tl.types.ReadinessReport`: Complete non-executing readiness report for a Trace provider.
+- `tl.types.Relationship`: The derived relationship between two Bundle members, returned by `Bundle.comparability` and `Bundle.comparability_table`.
 - `tl.types.RunReport`: Honesty, state, resolution, and contract metadata for one run.
 - `tl.types.RunnableCompatibility`: Producer/runtime versions recorded for readiness diagnostics.
 - `tl.types.RunnableDiagnostic`: Structured diagnostic shared by preflight, readiness, and run reports.

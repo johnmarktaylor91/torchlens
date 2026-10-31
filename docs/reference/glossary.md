@@ -3304,7 +3304,7 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
-| `tl.experiment.read_ledger` | Open a saved experiment ledger for reading without arming it: `.overview`, `.entry(entry_id, page=, page_size=)`, `.evidence(entry_id, index=)` |
+| `tl.experiment.read_ledger` | Open a saved experiment ledger for reading without arming it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
