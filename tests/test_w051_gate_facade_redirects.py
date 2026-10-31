@@ -138,9 +138,27 @@ def test_each_redirect_target_resolves(name: str) -> None:
 
     match = _DOTTED.search(tl._REDIRECTS[name])
     assert match, f"remedy for {name!r} names no torchlens dotted path"
-    module_path, _, attr = match.group(1).rpartition(".")
-    module = importlib.import_module(module_path)
-    assert hasattr(module, attr), f"{match.group(1)} does not resolve"
+    assert _resolve_dotted(match.group(1)), f"{match.group(1)} does not resolve"
+
+
+def _resolve_dotted(dotted: str) -> bool:
+    """Import the longest module prefix of ``dotted``, then walk the rest as attributes."""
+
+    parts = dotted.split(".")
+    for split in range(len(parts), 0, -1):
+        module_path = ".".join(parts[:split])
+        try:
+            if importlib.util.find_spec(module_path) is None:
+                continue
+        except ModuleNotFoundError:  # a parent of module_path is a class, not a package
+            continue
+        target: object = importlib.import_module(module_path)
+        for attr in parts[split:]:
+            if not hasattr(target, attr):
+                return False
+            target = getattr(target, attr)
+        return True
+    return False
 
 
 def test_refusal_rows_if_any_are_typed() -> None:

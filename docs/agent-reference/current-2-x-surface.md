@@ -858,7 +858,7 @@
   `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
   LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.set_affine_coordinates(weight, *,
   bias=None)` is a source verb: under `do(tl.subspace(site, R.T, origin=...),
-  affine_source(W, bias=b))` the new coordinates are `W x + b` of the whole
+  set_affine_coordinates(W, bias=b))` the new coordinates are `W x + b` of the whole
   site value, so the site gets `x + Q^T (W x + b - Q x)`; `weight` shaped
   like the basis rows, else `affine_source_invalid`; outside a subspace it
   refuses `affine_source_needs_subspace`. A `within=tl.units(site, mask)`

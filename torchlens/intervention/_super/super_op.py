@@ -38,7 +38,7 @@ class SuperOp(Super["Op"], _TensorBearing):
             Optional legacy trace-name order.
         members:
             Dict keyed by bundle member name.
-        query:
+        selector:
             Original site query.
         """
 

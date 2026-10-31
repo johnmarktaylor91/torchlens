@@ -2,8 +2,8 @@
 
 | RepE operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Apply a representation direction | `tl.steer(direction, magnitude=...)` | Equivalent for visible activation sites. |
-| Remove a direction | `tl.project_off(direction)` | Equivalent helper. |
+| Apply a representation direction | `tl.steer(direction, strength=...)` | Equivalent for visible activation sites. |
+| Remove a direction | `tl.project_out(direction)` | Equivalent helper. |
 | Project onto a direction | `tl.project_onto(direction)` | Equivalent helper. |
 | Choose layer/token positions | Discover the activation site, then use tensor-shaped directions or custom hooks | Equivalent when shape is visible; no named token abstraction. |
 | Run controlled generations | `torchlens.intervention.steer_generate(model, ids, spec)` steers every decoding step, KV cache included | Equivalent for local generation; see `docs/guides/fast_paths.md`. |

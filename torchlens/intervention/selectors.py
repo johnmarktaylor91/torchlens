@@ -700,7 +700,7 @@ def site(
     module_path:
         Module-site match: the full ``/``-joined site axis or any one
         module address on it.
-    op_type:
+    func:
         TorchLens layer type (``"linear"``, ``"relu"``, ...).
     slot:
         Multi-output slot index (``None`` = single-output ops).
@@ -1511,7 +1511,7 @@ def grad_fn(
 
     Parameters
     ----------
-    type:
+    name:
         Autograd class name or normalized grad_fn type to match.
     label:
         Substring to match against the grad_fn label.

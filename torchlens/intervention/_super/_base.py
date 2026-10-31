@@ -160,7 +160,7 @@ class Super(Generic[T]):
 
         Parameters
         ----------
-        query:
+        selector:
             Original user query.
         members:
             Mapping from bundle member name to resolved object.

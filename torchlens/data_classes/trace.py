@@ -2113,7 +2113,7 @@ class Trace(
 
         Parameters
         ----------
-        query:
+        selector:
             Selector, target spec, frozen target spec, or non-strict bare string.
         strict:
             Whether to reject non-portable query forms.
@@ -2135,7 +2135,7 @@ class Trace(
 
         Parameters
         ----------
-        query:
+        selector:
             Selector, target spec, frozen target spec, or non-strict bare string.
         strict:
             Whether to reject non-portable query forms.
@@ -2519,7 +2519,7 @@ class Trace(
 
         Parameters
         ----------
-        query:
+        selector:
             Layer-label substring or approximate layer name.
         limit:
             Maximum number of labels to return.

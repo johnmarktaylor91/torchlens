@@ -146,11 +146,11 @@ def make_hook_context(
         Hook timing.
     direction:
         Hook direction.
-    layer_log:
+    op:
         Optional Op-like object or mapping to snapshot.
     ctx:
         Per-hook scratch dictionary. A new dictionary is created when omitted.
-    run_ctx:
+    run_context:
         Shared run dictionary. A new dictionary is created when omitted.
     step_index:
         Trace index.

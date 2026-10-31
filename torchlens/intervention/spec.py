@@ -85,7 +85,7 @@ def classify_where(target: Any) -> AddressClass:
 
     Parameters
     ----------
-    where:
+    target:
         Selector or predicate callable naming the rule's target.
 
     Returns

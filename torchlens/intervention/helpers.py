@@ -88,7 +88,7 @@ def mean_ablate(
         When omitted, the mean is computed from the current out at hook fire
         time -- a value that couples every batch row, so the spec derives
         ``batch_independent=False`` and the append gate refuses.
-    over:
+    dim:
         Mean policy. The vocabulary is CLOSED and validated at construction:
         ``"self"`` (the default -- global mean of the fire-time value) is the
         only implemented policy. Unknown tokens refuse typed
@@ -374,9 +374,9 @@ def clamp(
 
     Parameters
     ----------
-    min:
+    low:
         Optional lower bound.
-    max:
+    high:
         Optional upper bound.
     allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
@@ -1012,9 +1012,9 @@ def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
 
     Parameters
     ----------
-    min:
+    low:
         Optional lower bound.
-    max:
+    high:
         Optional upper bound.
 
     Returns

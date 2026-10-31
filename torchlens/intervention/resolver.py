@@ -973,7 +973,7 @@ def resolve_sites(
     ----------
     log:
         Model log whose captured layer-pass records should be searched.
-    query:
+    selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     strict:
         Whether to reject non-portable query forms.

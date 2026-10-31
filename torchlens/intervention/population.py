@@ -424,7 +424,7 @@ class Reference:
 
         Parameters
         ----------
-        over:
+        dim:
             ``None`` for the elementwise across-member mean, or explicit
             member-shape axes (int or tuple of ints) to reduce further with
             ``keepdim=True``. Named axis tokens resolve through the axis

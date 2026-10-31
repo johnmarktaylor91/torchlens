@@ -73,7 +73,7 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "audit_trace": lambda f: debug.audit_trace(f["trace"]),
         "check_determinism": lambda f: debug.check_determinism(f["model"], f["x"]),
         "dtype_range_audit": lambda f: debug.dtype_range_audit(f["trace"]),
-        "flops_vs_dispatch": lambda f: debug.flops_vs_dispatch(f["model"], f["x"]),
+        "flops_vs_dispatch": lambda f: tl.report.flops_vs_dispatch(f["model"], f["x"]),
         "graph_breaks": lambda f: debug.graph_breaks(f["model"], f["x"]),
         "infer_input_shape": lambda f: debug.infer_input_shape(nn.Linear(4, 2)),
         "lineage": lambda f: debug.lineage(f["trace"], f["trace"].output_layers[0]),

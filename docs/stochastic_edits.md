@@ -47,7 +47,7 @@ result:
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import reference, resample_rows_from, sampling_records
+from torchlens.intervention import population, resample_rows_from, sampling_records
 
 
 class Toy(nn.Module):
@@ -64,7 +64,7 @@ trace = tl.trace(
     Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
 )
 site = tl.label("relu_1_2")
-donors = reference(torch.randn(3, 4), origin="three donor rows from another dataset")
+donors = population(torch.randn(3, 4), origin="three donor rows from another dataset")
 
 resampled = trace.fork("resampled")
 resampled.do(site, resample_rows_from(donors, seed=2, axis=0))
@@ -90,7 +90,7 @@ with a warning, and refused under `strict=True`.
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import mean_from, reference, set_direction_mean
+from torchlens.intervention import mean_from, population, set_direction_mean
 
 
 class Toy(nn.Module):
@@ -108,7 +108,7 @@ trace = tl.trace(
 )
 site = tl.label("relu_1_2")
 clean = trace["relu_1_2"].out
-evidence = reference(torch.stack([clean, clean + 2.0]), origin="two evidence runs")
+evidence = population(torch.stack([clean, clean + 2.0]), origin="two evidence runs")
 
 # mean_from: the elementwise mean over the population.
 meaned = trace.fork("meaned")
@@ -144,7 +144,7 @@ it:
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import reference, sample_from
+from torchlens.intervention import population, sample_from
 
 
 class Toy(nn.Module):
@@ -160,7 +160,7 @@ torch.manual_seed(0)
 trace = tl.trace(
     Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
 )
-donors = reference(torch.randn(6, 5, 4), origin="six recorded activations of this site")
+donors = population(torch.randn(6, 5, 4), origin="six recorded activations of this site")
 patched = trace.fork("patched")
 patched.do(tl.label("relu_1_2"), tl.patch_from(sample_from(donors, seed=13)))
 RESULT = any(torch.equal(patched["relu_1_2"].out, member) for member in donors.members)

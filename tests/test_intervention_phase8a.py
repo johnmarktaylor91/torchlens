@@ -258,8 +258,8 @@ def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
     assert frozen_after.records == ()
 
 
-def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
-    """``detach_hooks()`` is a non-mutating no-op unless strict mode is requested."""
+def test_clear_edits_no_site_is_noop_unless_strict() -> None:
+    """``clear_edits()`` is a non-mutating no-op unless strict mode is requested."""
 
     log = _capture()
     initial_revision = log._spec_revision

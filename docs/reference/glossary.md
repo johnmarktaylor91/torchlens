@@ -560,7 +560,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   is the LEACE mean-equalizing erasure.
 
 **torchlens.intervention.set_affine_coordinates(weight, *, bias=None)** — *documented-unstable*
-: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), affine_source(W,
+: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), set_affine_coordinates(W,
   bias=b))` the new coordinates are `W x + b` of the whole site value `x`, so the site gets
   `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`). `weight` is
   a finite real `[k, d]` tensor shaped like the basis rows, `bias` `None` or a finite real `[k]`

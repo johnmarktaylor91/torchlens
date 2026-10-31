@@ -203,7 +203,7 @@ off = tl.trace(
     model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
 ).find_sites(site).first().out
 
-# project_off leaves no component along the direction and keeps the rest.
+# project_out leaves no component along the direction and keeps the rest.
 RESULT = [
     torch.allclose(off @ unit, torch.zeros(2), atol=1e-6),
     torch.allclose(off, clean - (clean @ unit)[:, None] * unit, atol=1e-6),
@@ -300,7 +300,7 @@ loreft = h + (h @ weight.T + bias - h @ rotation) @ rotation.T
 
 RESULT = [
     torch.allclose(fork.push()[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
-    fork.intervention_audit[-1]["edit"] == "affine_source",
+    fork.intervention_audit[-1]["edit"] == "set_affine_coordinates",
 ]
 ```
 

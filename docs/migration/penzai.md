@@ -10,7 +10,7 @@ since August 2026. Existing penzai code keeps working; new work needs another ho
 | Functional model surgery | Capture with `capture=tl.options.CaptureOptions(intervention_ready=True)`; `trace.fork()`, then `.set(site, value)` or `.attach_hooks(site, helper)`, then `.push()` (replay the recorded graph) or `.run()` (run the model again) | TorchLens edits a recorded run, not the model definition. |
 | Inspect intermediate values | `trace.find_sites(selector).first().out`, or `trace[label].out` | Equivalent for captured tensors. |
 | Patch or replace a value | `.set(site, tensor)` or `.attach_hooks(site, helper)` on a forked trace | Equivalent for visible activations. |
-| Declarative named axes | Explicit tensor shapes, plus `feature_axis=` where a helper needs it | No named-axis system. |
+| Declarative named axes | Explicit tensor shapes, plus `dim=` where a helper needs it | No named-axis system. |
 | Transformer-specific layer abstractions | `torchlens.mechinterp` (TransformerLens-style names through `resolve_alias`) and attention facets | Different vocabulary; no penzai layer classes. |
 | Save a modified computation | `trace.save_intervention(path, level="portable")` writes a `.tlspec/` recipe | TorchLens saves recipes, not rewritten model trees. |
 | Compare several variants | `tl.bundle({...})` | Equivalent comparison container. |
