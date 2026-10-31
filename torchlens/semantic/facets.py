@@ -1866,12 +1866,9 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
             if dotted is not None and dotted not in facets:
                 facets[dotted] = spec
     if len(output_records) == 1:
-        facets.setdefault(
-            "out",
-            FacetSpec.from_home(
-                output_records[0], home_kind="op", function_id="structural_outputs"
-            ),
-        )
+        home = output_records[0]
+        out_spec = FacetSpec.from_home(home, home_kind="op", function_id="structural_outputs")
+        facets.setdefault("out", out_spec)
     return facets
 
 

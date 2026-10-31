@@ -9,8 +9,6 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
-from torchlens.backends.registry import BackendUnsupportedError
-
 from ... import _state
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
@@ -42,7 +40,7 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends.registry import BackendName, get_backend_spec
+from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...capture.outcome import StopRequest, stamp_backend_finalized
 from ...fastlog._halt import StopSignal
 from ...fastlog.types import CaptureSpec
