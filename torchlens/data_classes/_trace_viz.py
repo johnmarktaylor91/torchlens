@@ -944,7 +944,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_mode, vis_call_depth, vis_outpath, vis_save_only, vis_fileformat, \
         vis_buffers, vis_direction, vis_theme:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.render_trace_with_dagua`.
+            ``torchlens.experimental.dagua._bridge.render_trace_with_dagua``.
 
         Returns
         -------

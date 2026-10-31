@@ -1335,9 +1335,9 @@
   `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
-- BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
+- BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.neuro` is the
   whole-model extraction planner over the extraction artifact --
-  `extraction_plan(model, probe_inputs, sites=, num_stimuli=, batch_size=, transform=,
+  `plan_extraction(model, probe_inputs, sites=, num_stimuli=, batch_size=, transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
   total-scaled), executes the transform chain LIVE at the probe, and keys the plan to

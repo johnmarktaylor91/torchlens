@@ -1293,7 +1293,6 @@ __all__ = [
     "resolve_export_target",
     "safetensors",
     "speedscope",
-    "svg",
     "tensorboard",
     "to_model_explorer_dict",
     "unregister_export_target",

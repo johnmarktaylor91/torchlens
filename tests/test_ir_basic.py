@@ -13,10 +13,8 @@ import pytest
 
 from torchlens.ir import (
     ArgTemplateRef,
-    BackendSemantics,
     BlobRef,
     CaptureEvents,
-    CapturePolicy,
     ConditionalEvent,
     ContainerSpec,
     DeferredRef,
@@ -43,6 +41,7 @@ from torchlens.ir import (
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens.ir.semantics import BackendSemantics, CapturePolicy
 
 
 def _assert_frozen_and_slotted(instance: object) -> None:

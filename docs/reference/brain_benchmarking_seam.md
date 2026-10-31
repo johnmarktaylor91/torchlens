@@ -10,11 +10,11 @@ spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
 The working surfaces behind the "we supply" column:
 
-- `torchlens.brainpipe.extraction_plan` / `ExtractionPlan.run` -- the
+- `torchlens.neuro.plan_extraction` / `ExtractionPlan.run` -- the
   planned whole-model sweep: two measured probes, a printable plan
   table (measured bytes, peak pairs with backend named, exact pass counts),
   and a run door onto the atomic, resumable extraction artifact.
-- `torchlens.brainpipe.export_npz` -- npz interchange, including
+- `torchlens.neuro.export_npz` -- npz interchange, including
   Net2Brain's per-stimulus layout with their lexicographic file-naming
   contract and a name-to-stimulus-id sidecar.
 - `tl.repgeom.rdm` -- euclidean / manhattan / cosine / correlation RDMs,

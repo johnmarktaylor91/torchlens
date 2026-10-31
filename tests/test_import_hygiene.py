@@ -387,7 +387,6 @@ assert collisions == {
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.
         "xarray",
     ],
-    "brainpipe": [],
     "callbacks": ["lightning"],
     "neuro": [],
     "notebook": ["cards", "cardtree", "frontier"],

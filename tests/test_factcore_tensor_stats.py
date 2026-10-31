@@ -16,9 +16,6 @@ from torchlens.stats import (
     GLYPH_RAMP_ASCII,
     GLYPH_RAMP_UNICODE,
     TensorStats,
-    degrade,
-    format_sig,
-    render_core_line,
     tensor_stats,
 )
 from torchlens.stats._stats_kernel import (
@@ -27,6 +24,7 @@ from torchlens.stats._stats_kernel import (
     identity_seed,
     seeded_sample,
 )
+from torchlens.stats._stats_render import degrade, format_sig, render_core_line
 from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 

@@ -40,7 +40,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from ._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError
 
 __tl_layer__ = "L6"
 
@@ -48,8 +48,7 @@ __all__ = [
     "ExtractionPlan",
     "PlanSite",
     "export_npz",
-    "extraction_plan",
-    "parse_bytes",
+    "plan_extraction",
 ]
 
 
@@ -202,7 +201,7 @@ class PlanSite:
 class ExtractionPlan:
     """Immutable measured plan for one whole-model extraction sweep.
 
-    Produced by :func:`extraction_plan`; consumed by :meth:`run`. The plan
+    Produced by :func:`plan_extraction`; consumed by :meth:`run`. The plan
     is valid ONLY for its input signature (D-15): shapes, dtype, batch
     size, transform identity, and model class all key the plan, and
     :meth:`run` refuses a drifted request typed instead of silently
@@ -427,7 +426,7 @@ class ExtractionPlan:
                 remedy="keep the model referenced, or re-plan with a live model",
             )
         self._check_signature(stimuli)
-        from .dataset_extraction import extract_dataset
+        from ..dataset_extraction import extract_dataset
 
         kwargs: dict[str, Any] = {}
         if stimulus_ids is not None:
@@ -470,8 +469,8 @@ def _probe_once(
         Per-label site facts and the capture's peak pair.
     """
 
-    from . import options as tl_options
-    from .user_funcs import trace
+    from .. import options as tl_options
+    from ..user_funcs import trace
 
     log = trace(model, inputs, capture=tl_options.CaptureOptions(inference_only=True))
     facts: dict[str, dict[str, Any]] = {}
@@ -581,7 +580,7 @@ def _build_plan_sites(
     return plan_sites
 
 
-def extraction_plan(  # noqa: PLR0913 -- the memo-specified public planner surface (brainpipe D-10/D-11/D-15): every kwarg is a named plan input
+def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surface (brainpipe D-10/D-11/D-15): every kwarg is a named plan input
     model: nn.Module,
     probe_inputs: torch.Tensor,
     *,
@@ -828,7 +827,7 @@ def export_npz(
         )
 
     if isinstance(source, (str, Path)):
-        from .dataset_extraction import load_extraction
+        from ..dataset_extraction import load_extraction
 
         loaded = load_extraction(source)
         mapping: Any = loaded.activations

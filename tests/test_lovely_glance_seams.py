@@ -13,14 +13,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.stats import (
-    degrade,
     glance,
     narrate,
-    render_core_line,
-    summary_cell,
     tensor_stats,
-    treescope_card_fields,
 )
+from torchlens.stats._seams import summary_cell, treescope_card_fields
+from torchlens.stats._stats_render import degrade, render_core_line
 
 
 def test_glance_is_the_core_grammar() -> None:

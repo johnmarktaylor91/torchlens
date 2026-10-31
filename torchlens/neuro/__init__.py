@@ -94,7 +94,7 @@ _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
 #: answers ``False`` for it. Access to an unadvertised gated name still
 #: teaches the exact install command (facade step 4 re-probes per access).
 __all__ = (
-    ["compare"]
+    ["ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"]
     + (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else [])
     + (
         ["activations_extractor", "get_activations_fn"]
@@ -108,6 +108,11 @@ __all__.sort()
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     # Ungated: numpy-only, so it needs no extra.
     "compare": ("torchlens.neuro._compare", "compare"),
+    # The extraction planner and the npz handoff (needs no extra).
+    "ExtractionPlan": ("torchlens.neuro._brainpipe", "ExtractionPlan"),
+    "PlanSite": ("torchlens.neuro._brainpipe", "PlanSite"),
+    "export_npz": ("torchlens.neuro._brainpipe", "export_npz"),
+    "plan_extraction": ("torchlens.neuro._brainpipe", "plan_extraction"),
     "datasets": ("torchlens.neuro._datasets", "datasets"),
     "rdms": ("torchlens.neuro._rdms", "rdms"),
     "activations_extractor": ("torchlens.bridge.brain_score", "activations_extractor"),

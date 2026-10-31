@@ -52,7 +52,7 @@ def test_root_budget_is_frozen() -> None:
         "__all__) and tl.utils (the docs teach tl.utils.doctor(); the row was "
         "missing so the taught spelling raised on a cold import; L1, not in "
         "__all__) -- and +1 by F20: the lazy L6 submodule namespace "
-        "tl.brainpipe (brainpipe memo s3 home, the memory-planned extraction "
+        "tl.neuro (brainpipe memo s3 home, the memory-planned extraction "
         "planner; not in __all__, same class as tl.transforms) -- and -1 by "
         "the resample_ablate alias removal (scramble_elements lives in "
         "torchlens.intervention) = 151. Batch-2 SEL briefly added 21 namespace "

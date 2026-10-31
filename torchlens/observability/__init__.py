@@ -80,7 +80,7 @@ from ._native_profile import (
     native_profile,
     register_join_result,
 )
-from ._op_tier import FacetSplitter, OpTierCollector, split_heads
+from ._op_tier import OpTierCollector, split_heads
 from ._overhead import ArmSpec, OverheadMeasurement, RefusalPredicate, measure_overhead
 from ._payloads import histogram_payload, observation_row
 from ._perf_harness import (
@@ -98,7 +98,6 @@ from ._quantiles import (
 )
 from ._region import RegionRecord, region
 from ._render import (
-    RANKING_SCORE,
     HistoryView,
     SeriesPoint,
     color_by_watch,
@@ -143,7 +142,6 @@ __all__ = [
     "PHASES",
     "PRESENCE",
     "RAM_POLICIES",
-    "RANKING_SCORE",
     "STEP_PROVENANCE",
     "STREAMS",
     "ABMeasurement",
@@ -161,7 +159,6 @@ __all__ = [
     "HistorySchemaError",
     "HistoryView",
     "HistoryWriter",
-    "FacetSplitter",
     "JoinCoverage",
     "KinetoJoinResult",
     "LaunchRow",

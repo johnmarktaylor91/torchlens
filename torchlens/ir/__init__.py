@@ -62,7 +62,6 @@ from .predicate import (
     is_deferred_value as is_deferred_value,
 )
 from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
-from .semantics import BackendSemantics, CapturePolicy
 from .workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
@@ -72,13 +71,11 @@ from .workspaces import (
 
 __all__ = [
     "ArgTemplateRef",
-    "BackendSemantics",
     "BackwardPassEnd",
     "BackwardPassStart",
     "BlobRef",
     "BufferWriteEvent",
     "CaptureEvents",
-    "CapturePolicy",
     "ConditionalEvent",
     "ContainerSpec",
     "ContainerLeafOccurrence",

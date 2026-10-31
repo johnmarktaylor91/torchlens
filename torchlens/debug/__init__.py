@@ -32,7 +32,6 @@ from ._graph import (
     compare,
     compare_rows,
     dead_neurons,
-    dead_neurons_rows,
     first_divergence,
     lineage,
 )
@@ -88,7 +87,6 @@ __all__ = [
     "clone_input_tree",
     "count_compiles",
     "dead_neurons",
-    "dead_neurons_rows",
     "dtype_range_audit",
     "first_divergence",
     "flops_vs_dispatch",

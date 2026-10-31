@@ -29,7 +29,7 @@ from ._device_memory import (
 )
 from ._liveness import DEATH_RULES, estimated_liveness
 from ._peaks import PassPeakFacts, format_pass_peak, pass_peak_facts
-from ._svg import render_timeline_svg, write_timeline_svg
+from ._svg import render_timeline_svg
 from ._timeline import SCHEMA_ID, memory_timeline_v2, module_rollup
 
 __all__ = [
@@ -47,5 +47,4 @@ __all__ = [
     "module_rollup",
     "pass_peak_facts",
     "render_timeline_svg",
-    "write_timeline_svg",
 ]

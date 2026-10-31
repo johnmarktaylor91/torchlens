@@ -17,7 +17,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import brainpipe as bp
+from torchlens.neuro import _brainpipe as bp
 
 
 class _BatchInvariantModel(nn.Module):
@@ -41,7 +41,7 @@ def _model() -> nn.Module:
 def _plan(**overrides):
     kwargs = {"n_stimuli": 20, "batch_size": 5}
     kwargs.update(overrides)
-    return bp.extraction_plan(_model(), torch.randn(4, 16), **kwargs)
+    return bp.plan_extraction(_model(), torch.randn(4, 16), **kwargs)
 
 
 @pytest.mark.smoke
@@ -75,7 +75,7 @@ def test_batch_invariant_site_is_detected_not_total_scaled() -> None:
     """D-15: a site whose bytes ignore batch is flagged and priced flat."""
 
     model = _BatchInvariantModel().eval()
-    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=64, batch_size=16)
+    plan = bp.plan_extraction(model, torch.randn(4, 16), num_stimuli=64, batch_size=16)
     invariant = [site for site in plan.sites if site.is_batch_invariant]
     assert invariant, "the broadcast-constant site must be detected"
     site = invariant[0]
@@ -112,7 +112,7 @@ def test_signature_mismatch_refuses_typed() -> None:
     """D-15: a drifted run request refuses; it never silently over-runs."""
 
     model = _model()  # held alive: the signature door is under test here
-    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
+    plan = bp.plan_extraction(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
     with pytest.raises(Exception) as excinfo:
         plan.run(torch.randn(20, 17), progress=False)
     assert excinfo.value.fields["code"] == "extraction_plan_signature_mismatch"
@@ -133,7 +133,7 @@ def test_plan_run_executes_through_the_artifact_runner() -> None:
     """D-8 single-pass-primary: run() extracts every included site once."""
 
     model = _model()
-    plan = bp.extraction_plan(
+    plan = bp.plan_extraction(
         model,
         torch.randn(4, 16),
         num_stimuli=20,
@@ -157,7 +157,7 @@ def test_plan_holds_model_weakly() -> None:
     import weakref
 
     model = _model()
-    plan = bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
+    plan = bp.plan_extraction(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
     assert isinstance(plan._model_ref, weakref.ref)
     assert plan._model_ref() is model
 
@@ -234,11 +234,11 @@ def test_npz_refusals_are_typed(tmp_path) -> None:
 
 
 def test_lazy_facade_reaches_brainpipe() -> None:
-    """tl.brainpipe resolves through the lazy facade (no eager import)."""
+    """tl.neuro resolves through the lazy facade (no eager import)."""
 
     import torchlens as tl
 
-    assert tl.brainpipe.extraction_plan is bp.extraction_plan
+    assert tl.neuro.plan_extraction is bp.plan_extraction
 
 
 def test_probe_invalid_refusals_are_typed() -> None:
@@ -246,10 +246,10 @@ def test_probe_invalid_refusals_are_typed() -> None:
 
     model = _model()
     with pytest.raises(Exception) as excinfo:
-        bp.extraction_plan(model, "not a tensor", num_stimuli=8, batch_size=4)
+        bp.plan_extraction(model, "not a tensor", num_stimuli=8, batch_size=4)
     assert excinfo.value.fields["code"] == "extraction_probe_invalid"
     with pytest.raises(Exception) as excinfo:
-        bp.extraction_plan(model, torch.randn(4, 16), num_stimuli=8, batch_size=0)
+        bp.plan_extraction(model, torch.randn(4, 16), num_stimuli=8, batch_size=0)
     assert excinfo.value.fields["code"] == "extraction_probe_invalid"
 
 

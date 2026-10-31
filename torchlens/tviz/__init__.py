@@ -55,7 +55,7 @@ from ._records import (
     TokenScores,
 )
 from ._render_attention import render_attention, render_attention_atlas
-from ._strip import render_token_strip, token_strip_html, token_strip_svg
+from ._strip import render_token_strip, token_strip_html
 
 __all__ = [
     "ANNOTATION_KINDS",
@@ -98,5 +98,4 @@ __all__ = [
     "score_decomposition",
     "token_metrics",
     "token_strip_html",
-    "token_strip_svg",
 ]
