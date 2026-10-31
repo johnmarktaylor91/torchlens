@@ -1,9 +1,9 @@
-"""Postprocess steps 11 and 11.5: provenance disclosure and source variable names.
+"""Provenance disclosure and source variable names for the postprocess pipeline.
 
-Step 11 ends with :func:`_warn_unattributed_tensor_args`, the one aggregate
-warning for tensor arguments the capture could not attribute to a graph or
-source; step 11.5 is :func:`_populate_var_names`, which resolves assignment
-names from the AST index when code context was kept.
+The lookup-key step ends with :func:`_warn_unattributed_tensor_args`, the one
+aggregate warning for tensor arguments the capture could not attribute to a
+graph or source; the following step is :func:`_populate_var_names`, which
+resolves assignment names from the AST index when code context was kept.
 """
 
 from __future__ import annotations

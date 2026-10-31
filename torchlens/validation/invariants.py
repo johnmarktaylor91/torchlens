@@ -312,6 +312,7 @@ from ._invariants_entry import (  # noqa: E402
     _check_receptive_field_metadata_invariants,
     _check_region_replay_provenance,
     check_func_call_id_invariant,
+    check_metadata_invariants as check_metadata_invariants,
 )
 from ._invariants_equivalence import (  # noqa: E402
     _check_equivalence_symmetry,
