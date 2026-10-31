@@ -643,7 +643,7 @@ def _apply_recurrence_assignments(
             recurrent_labels = recurrent_labels_cached[1]
         node._layer_label_raw = assignment.layer_label
         node.recurrent_ops = recurrent_labels
-        node.pass_index = assignment.pass_index
+        node.pass_number = assignment.pass_index
         node.num_passes = assignment.num_passes
         node.equivalence_class = assignment.equivalence_key
 

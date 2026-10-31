@@ -395,7 +395,7 @@ def _normalize_module_stack(
                 address=str(frame.get("address", "")),
                 module_type=str(frame.get("module_type", "")),
                 module_id=int(frame.get("module_id", 0)),
-                pass_number=int(frame.get("pass_index", 0)),
+                pass_number=int(frame.get("pass_number", 0)),
             )
         )
     return tuple(frames)

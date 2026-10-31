@@ -2401,13 +2401,13 @@ SECTIONS: list[Section] = [
                 label="m3_stack_by",
                 title="stack_by: rank columns from an annotation (the classic timestep diagram)",
                 caption=(
-                    "stack_by=True derives pass_index on multi-pass ops under the LOCKSTEP LICENSE "
+                    "stack_by=True derives pass_number on multi-pass ops under the LOCKSTEP LICENSE "
                     "(globally monotone execution windows -- non-monotone traces refuse "
                     "stack_by_auto_underivable and an explicit field/callable bypasses). Nodes sharing "
                     "an annotation value pin to one rank; with direction='leftright' the ranks read as "
                     "timestep columns. The graph caption and legend disclose the annotation used.\n"
                     "CHECK: each recurrent pass forms one column; the stem/head ops hang free (not "
-                    "pinned to column 1); the caption line 'stacked by: pass_index (auto)' is present."
+                    "pinned to column 1); the caption line 'stacked by: pass_number (auto)' is present."
                 ),
                 panels=[
                     Panel(

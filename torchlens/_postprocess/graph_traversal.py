@@ -434,7 +434,7 @@ def _add_output_layers(
         new_output_node.dropped_edge_tensor_args = ()
 
         # Fix layer equivalence information:
-        new_output_node.pass_index = 1
+        new_output_node.pass_number = 1
         new_output_node.num_passes = 1
         new_output_node.equivalent_ops = {new_output_node._label_raw}
         new_output_node.recurrent_ops = []

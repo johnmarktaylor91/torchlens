@@ -316,7 +316,7 @@ Key entry points:
   funnel drops NodeSpec width/height on image nodes; `scale=` without `size_by` refuses
   `scale_requires_size_by`. Wave-1 rank channel `Trace.draw(stack_by=...)` (UNSTABLE,
   strictly opt-in): annotation -> `rank=same` groups (`newrank=true`); `True`/`"auto"` is
-  licensed by global pass_index monotonicity (else `stack_by_auto_underivable`), explicit
+  licensed by global pass_number monotonicity (else `stack_by_auto_underivable`), explicit
   field/callable bypasses with caption disclosure, rolled refuses
   `stack_by_requires_unrolled`, sibling ordering no-ops while stacking. Checked suppression
   (UNSTABLE `show_redundant_args`, DEFAULT-ON): labels omit constructor args PROVEN equal to

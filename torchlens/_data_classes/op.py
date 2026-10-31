@@ -1449,7 +1449,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         short_layer_label: Any
         type: Any
         type_index: Any
-        pass_index: Any
+        pass_number: Any
         num_passes: Any
         lookup_keys: Any
         out: Any

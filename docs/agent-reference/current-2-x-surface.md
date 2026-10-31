@@ -402,7 +402,7 @@
   `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`halt=`.
   Value-dependent `save=`, streaming, fastlog, and rng_replay stay refused on paddle.
 - All four eager previews (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
-  through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_index`/
+  through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_number`/
   `num_passes`, `recurrent_ops`; `recurrence_detection=False` opts back into the historical
   single-pass layout). The stored `recurrence_detection` flag is the EFFECTIVE value — the TF
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
@@ -447,8 +447,8 @@
 - `Trace.draw(stack_by=...)` (UNSTABLE spelling, keyword-only) is the wave-1 RANK channel
   (stacking split (a)): nodes sharing an annotation value pin to one Graphviz rank — the
   classic unrolled-RNN timestep diagram; STRICTLY OPT-IN. `True`/`"auto"` derives
-  `pass_index` on multi-pass ops only, granted ONLY under the LOCKSTEP LICENSE (the
-  pass_index sequence over all multi-pass ops in raw order must be globally non-decreasing;
+  `pass_number` on multi-pass ops only, granted ONLY under the LOCKSTEP LICENSE (the
+  pass_number sequence over all multi-pass ops in raw order must be globally non-decreasing;
   then "same column = same execution window" — a layer absent from window k has no node in
   that column, disclosed in the caption). Non-monotone traces (chained loops,
   late-resumption skips, non-monotone nested tallies) refuse `stack_by_auto_underivable`;
@@ -1011,7 +1011,7 @@
   selection (`log[label].__selection__()`) is the all-passes spelling.
   Post-hoc `contains`/string addressing accepts pass-qualified needles
   (a needle containing `:` also matches `Op.label`), and the hook-context
-  `layer_log` snapshot carries `label` + `pass_index`. Replay disclosures
+  `layer_log` snapshot carries `label` + `pass_number`. Replay disclosures
   (`last_run` origins/cone, `_replay_frontier` keys) spell multi-pass ops
   pass-qualified and keep bare labels for single-pass layers. The
   param-substitution multi-pass refusal is NARROWED on this engine (tied /

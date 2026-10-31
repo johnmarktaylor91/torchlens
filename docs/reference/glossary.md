@@ -978,7 +978,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **stack_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank (the classic
   unrolled-RNN timestep diagram; strictly opt-in). `True`/`"auto"` derives the annotation
-  (`pass_index` on multi-pass ops only) under the LOCKSTEP LICENSE: granted iff the pass_index
+  (`pass_number` on multi-pass ops only) under the LOCKSTEP LICENSE: granted iff the pass_number
   sequence over all multi-pass ops in raw execution order is globally non-decreasing — then
   "same column = same execution window" is exactly what the figure claims. Non-monotone traces
   refuse (`stack_by_auto_underivable`); an explicit field/callable bypasses the license with the

@@ -1995,7 +1995,7 @@ class JAXBackend:
             op_log.short_label = pass_label
             op_log.layer_label = layer_label
             op_log.short_layer_label = layer_label
-            op_log.pass_index = assignment.pass_index
+            op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key
             op_log.site_key = assignment.site_key
