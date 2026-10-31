@@ -174,7 +174,7 @@ def test_stimulus_ids_in_memory_refuses_typed() -> None:
             progress=False,
         )
     assert excinfo.value.fields["code"] == "extraction_stimulus_ids_in_memory_unsupported"
-    assert "output_dir" in str(excinfo.value)
+    assert "requires path=" in str(excinfo.value)
 
 
 @pytest.mark.smoke

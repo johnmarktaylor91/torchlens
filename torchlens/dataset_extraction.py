@@ -134,7 +134,7 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
     ----------
     kwargs_in_memory:
         ``{option_name: offending_value}`` of the non-default disk-only
-        options the caller passed without ``output_dir``.
+        options the caller passed without ``path``.
 
     Raises
     ------
@@ -239,7 +239,7 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
         )
     if stimulus_ids is not None and output_dir is None:
         raise InvalidArgumentError(
-            "stimulus_ids= requires output_dir: in-memory extraction returns "
+            "stimulus_ids= requires path= (disk mode): in-memory extraction returns "
             "bare tensors with no manifest, so validated identifiers could "
             "neither affect nor accompany the result (a false affordance).",
             code="extraction_stimulus_ids_in_memory_unsupported",
@@ -478,7 +478,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     )
     if input_provenance is not None and path is None:
         raise InvalidArgumentError(
-            "input_provenance= requires output_dir: in-memory extraction "
+            "input_provenance= requires path= (disk mode): in-memory extraction "
             "returns bare tensors with no manifest, so a provenance stamp "
             "could neither affect nor accompany the result (a false "
             "affordance; tvscope B4).",
