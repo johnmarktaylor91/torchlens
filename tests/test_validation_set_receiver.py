@@ -182,6 +182,33 @@ class _GrowBuffer(nn.Module):
         return x + self.b[:4] + self.b[4:]
 
 
+class _SetToWholeStorage(nn.Module):
+    """``set_(storage)`` views a whole storage from offset 0."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+        self.register_buffer("src", torch.arange(8, dtype=torch.float32))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.set_(self.src.untyped_storage())
+        return x + self.b[2:6]
+
+
+class _ResizeBuffer(nn.Module):
+    """``resize_`` grows a buffer in place (same storage, new size)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.resize_(8)
+        return x * 2
+
+
 class _SetToStorageViewThenOverwrite(_SetToStorageView):
     """The storage overload, then a write to the source storage after the read."""
 
@@ -192,7 +219,13 @@ class _SetToStorageViewThenOverwrite(_SetToStorageView):
         return out
 
 
-_SHAPE_CHANGING = [_SetToNothing, _SetParameterToNothing, _GrowBuffer, _SetToStorageView]
+_SHAPE_CHANGING = [
+    _SetToNothing,
+    _SetParameterToNothing,
+    _GrowBuffer,
+    _SetToStorageView,
+    _SetToWholeStorage,
+]
 
 
 def _state_by_name(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -254,7 +287,7 @@ def test_set_overloads_validate_and_leave_the_model_restored(
     _assert_restored(model, objects, values)
 
 
-@pytest.mark.parametrize("model_cls", _SHAPE_CHANGING)
+@pytest.mark.parametrize("model_cls", [*_SHAPE_CHANGING, _ResizeBuffer])
 def test_restore_rebinds_a_moved_tensor_before_loading_values(model_cls: type[nn.Module]) -> None:
     """The snapshot restore puts a ``set_``-moved tensor back on its own storage."""
 

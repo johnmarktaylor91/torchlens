@@ -85,5 +85,7 @@ def rebind_if_moved(tensor: torch.Tensor, binding: torch.Tensor) -> bool:
     if tensor.is_set_to(binding):
         return False
     with torch.no_grad():
-        tensor.set_(binding)
+        tensor.set_(
+            binding.untyped_storage(), binding.storage_offset(), binding.size(), binding.stride()
+        )
     return True
