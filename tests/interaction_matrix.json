@@ -42,8 +42,7 @@
    ],
    "options": [
     "SaveOptions",
-    "StreamingOptions",
-    "to_disk"
+    "StorageOptions"
    ]
   },
   "backward": {
@@ -75,17 +74,17 @@
    "summary": "Capture-time reporting: profile, echo, grouping",
    "trace_kwargs": [
     "profile",
-    "echo",
+    "narrate",
     "grouping"
    ],
    "options": [
-    "EchoOptions"
+    "NarrationOptions"
    ]
   },
   "recipes": {
    "summary": "Recipes applied at capture (recipes=)",
    "trace_kwargs": [
-    "recipes"
+    "facets"
    ],
    "options": []
   },
@@ -126,7 +125,9 @@
   "record": {
    "summary": "Sparse recording path (tl.record, Recording.to_trace)",
    "trace_kwargs": [],
-   "options": []
+   "options": [
+    "RecordingOptions"
+   ]
   },
   "extract": {
    "summary": "Feature extraction path (tl.extract)",
@@ -151,7 +152,9 @@
   "export": {
    "summary": "Tabular and array exports (to_pandas, xarray)",
    "trace_kwargs": [],
-   "options": []
+   "options": [
+    "HtmlReportOptions"
+   ]
   }
  },
  "plain_trace_kwargs": [
@@ -163,7 +166,6 @@
  ],
  "plain_options": [
   "OptionReceiptEntry",
-  "option_receipt",
   "suppress_mutate_warnings"
  ],
  "cells": [

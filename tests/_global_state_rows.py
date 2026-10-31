@@ -1499,6 +1499,9 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/visualization/theme_registry.py", "__all__"),
         ("torchlens/viz/__init__.py", "__all__"),
         ("torchlens/viz/feature_maps.py", "__all__"),
+        ("torchlens/_diagnostics.py", "__all__"),
+        ("torchlens/captured_run.py", "__all__"),
+        ("torchlens/viz/nodes.py", "__all__"),
     }
 )
 

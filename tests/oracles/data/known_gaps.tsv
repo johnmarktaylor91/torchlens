@@ -67,7 +67,6 @@ GAP-064	cache_key_coverage	trace.episode	2026-08-26	A06	capture-semantics field 
 GAP-065	cache_key_coverage	trace.grad_options	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-066	cache_key_coverage	trace.grouping	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-067	cache_key_coverage	trace.jax_static_argnums	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
-GAP-069	cache_key_coverage	trace.recipes	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-070	cache_key_coverage	trace.reconstruction_ready	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-071	cache_key_coverage	trace.storage	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-072	cache_key_coverage	trace.streaming	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)

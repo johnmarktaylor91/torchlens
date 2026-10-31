@@ -18,7 +18,7 @@ OUTSIDE ``torchlens/_data_classes/`` must either
 
 Both directions are exact, so the seeded 36 exemptions are shrink-only: the
 gate is what makes the 37th attachment a reviewed decision. Enrollment edits
-(declaring a field on ``Trace``) belong to the ``data_classes/trace.py`` owner
+(declaring a field on ``Trace``) belong to the ``_data_classes/trace.py`` owner
 lane; this gate ships with the census as its seed and shrinks as they land.
 
 Scope: writes only. Private string READS on a trace (``getattr(trace, "_x",
@@ -48,7 +48,7 @@ from torchlens._data_classes._trace_components import (
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 
 #: The one package allowed to define Trace state: the Trace's own home.
-_OWNER_PACKAGE = "data_classes"
+_OWNER_PACKAGE = "_data_classes"
 
 #: Identifiers that denote a ``Trace``. Kept in sync with the sibling reach-in
 #: gate; a new spelling for the same object belongs here, not outside the gate.
@@ -147,7 +147,7 @@ def _external_writes(tree: ast.AST) -> list[tuple[str, int, str]]:
 
 @lru_cache(maxsize=1)
 def _scan_external_writes() -> dict[str, list[str]]:
-    """Attribute -> sorted ``file:line kind`` write sites outside data_classes/."""
+    """Attribute -> sorted ``file:line kind`` write sites outside _data_classes/."""
 
     found: dict[str, list[str]] = collections.defaultdict(list)
     for path in package_files():
@@ -175,7 +175,7 @@ def test_every_external_private_write_is_declared_or_exempted() -> None:
         if attr not in TRACE_FIELD_OWNERSHIP and attr not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
     }
     assert not undeclared, (
-        "Private Trace attribute(s) written from outside data_classes/ with no "
+        "Private Trace attribute(s) written from outside _data_classes/ with no "
         f"declared owner and no exemption: {undeclared}. Declare the field on "
         "Trace (FIELD_POLICY + a TRACE_FIELD_OWNERSHIP row) so it has a policy "
         "and a schema decision, or -- if it is genuinely transient backend "

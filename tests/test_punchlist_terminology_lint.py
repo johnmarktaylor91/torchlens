@@ -21,7 +21,7 @@ R1. BANNED EXECUTION VERBS. TorchLens intervention engines substitute values;
     carried in the audited allowlist ledger below.
 
 R2. THREE AXES STAY APART. Member settlement/capability (``CaptureStatus``:
-    complete/halted/aborted_nonfinite/failed/unattested/unknown), relation
+    complete/stopped/aborted_nonfinite/failed/unattested/unknown), relation
     claim grade (``RELATION_CLAIM_GRADES``: verified/consistent/disclosed/
     unchecked/divergent), and protocol scope (VERIFIED/ATTESTED/LINKED/
     REFUSE; not yet shipped) are three orthogonal vocabularies that never
@@ -115,7 +115,7 @@ _R1_ALLOWED: dict[str, tuple[frozenset[str], str]] = {
 
 #: R2/R3 closed vocabularies (value strings, case-sensitive).
 _CAPTURE_STATUS_VALUES = frozenset(
-    {"complete", "halted", "aborted_nonfinite", "failed", "unattested", "unknown"}
+    {"complete", "stopped", "aborted_nonfinite", "failed", "unattested", "unknown"}
 )
 _RELATION_CLAIM_GRADE_VALUES = frozenset(
     {"verified", "consistent", "disclosed", "unchecked", "divergent"}
