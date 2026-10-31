@@ -9,6 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens.backends.torch.backward import _assign_grad_fn_orders
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 
@@ -294,6 +296,123 @@ def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> Non
         assert any(
             grad_fn.origin_backward_pass == 2 and grad_fn.order == 3
             for grad_fn in trace.autograd.grad_fns
+        )
+    finally:
+        trace.cleanup()
+
+
+def _order_record(
+    object_id: int,
+    *,
+    creator_object_id: int | None = None,
+    next_ids: tuple[int, ...] = (),
+    has_op: bool = False,
+) -> GradFn:
+    """Build a minimal GradFn record for order-assignment tests."""
+
+    return GradFn(
+        grad_fn_object_id=object_id,
+        class_name="Node",
+        class_qualname="torch.autograd.Node",
+        is_custom=False,
+        label=f"node_{object_id}",
+        type="node",
+        type_index=object_id,
+        ordinal_index=object_id,
+        has_op=has_op,
+        creator_object_id=creator_object_id,
+        next_grad_fn_ids=list(next_ids),
+    )
+
+
+def test_assign_grad_fn_orders_reaches_a_fixed_point_through_inferred_creators() -> None:
+    """A creation of an inferred-order node sits one order above the inferred order.
+
+    Chain: ``root`` (forward, order 1) creates ``first`` (order 2); ``bridge`` is a
+    creator-less, op-less node feeding ``first`` (inferred to 2); ``bridge`` creates
+    ``second``, which must be 3, and ``second`` creates ``third``, which must be 4.
+    Before the fix the creator rule ran once, before inference, and left ``second``
+    at 2 (the base ``backward_graph_invariants`` failure of AGT-1485).
+    """
+
+    root, first, bridge, second, third = 1, 2, 3, 4, 5
+    records = {
+        # Discovery order puts creations after their creators, and the bridge
+        # (discovered at the second pass's root walk) after the first pass's nodes.
+        root: _order_record(root),
+        first: _order_record(first, creator_object_id=root),
+        bridge: _order_record(bridge, next_ids=(first,)),
+        second: _order_record(second, creator_object_id=bridge),
+        third: _order_record(third, creator_object_id=second),
+    }
+    _assign_grad_fn_orders(records)
+    assert {r.label: r.order for r in records.values()} == {
+        "node_1": 1,
+        "node_2": 2,
+        "node_3": 2,
+        "node_4": 3,
+        "node_5": 4,
+    }
+
+
+def test_assign_grad_fn_orders_keeps_paired_forward_nodes_at_order_one() -> None:
+    """Inference never lifts a node paired with a forward op, so its creations stay at 2."""
+
+    root, first, paired, creation = 1, 2, 3, 4
+    records = {
+        root: _order_record(root),
+        first: _order_record(first, creator_object_id=root),
+        paired: _order_record(paired, next_ids=(first,), has_op=True),
+        creation: _order_record(creation, creator_object_id=paired),
+    }
+    _assign_grad_fn_orders(records)
+    assert [r.order for r in records.values()] == [1, 2, 1, 2]
+
+
+def test_forward_op_on_a_first_order_gradient_keeps_creator_orders_consistent() -> None:
+    """Differentiating a forward op applied to a gradient keeps every order at creator + 1.
+
+    ``penalty = (g ** 2).sum()`` applies forward ops to the first-order gradient ``g``;
+    their grad_fn nodes are inferred into order 2, and the nodes the second pass creates
+    by differentiating them must be order 3, or ``check_metadata_invariants`` fails on
+    ``backward_graph_invariants`` (AGT-1485).
+    """
+
+    class TanhSquare(nn.Module):
+        """Scalar nonlinear model with nonzero higher derivatives."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return torch.tanh(x).pow(2).sum()
+
+    torch.manual_seed(0)
+    x = torch.randn(3, requires_grad=True)
+    trace = tl.trace(TanhSquare(), x, capture=tl.options.CaptureOptions(save_grads="all"))
+    try:
+        out = trace[trace.output_layers[0]].out
+        (grad,) = torch.autograd.grad(out, x, create_graph=True, retain_graph=True)
+        penalty = (grad**2).sum()
+        torch.autograd.grad(penalty, x, create_graph=True, retain_graph=True)
+
+        check_metadata_invariants(trace)
+        inferred_ids = {
+            grad_fn.grad_fn_object_id
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.creator_object_id is None and grad_fn.order == 2
+        }
+        assert inferred_ids, "the penalty's forward nodes were not inferred into order 2"
+        creations = [
+            grad_fn
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.creator_object_id in inferred_ids
+        ]
+        assert creations
+        assert {grad_fn.order for grad_fn in creations} == {3}
+        assert all(
+            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
     finally:
         trace.cleanup()

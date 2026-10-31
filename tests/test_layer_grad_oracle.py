@@ -967,6 +967,7 @@ def test_path_e_module_exports_expected_surface() -> None:
         skipped_no_grad_count=0,
         skipped_identity_output_count=0,
         skipped_root_module_count=0,
+        compared_no_grad_count=0,
         mismatched_count=0,
         unexpected_count=0,
         candidate_grad_count=1,
