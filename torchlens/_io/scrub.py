@@ -1244,8 +1244,7 @@ def _scrub_value(
         _apply_source_metadata_policy(scrubbed_state, options)
     # ``ConditionalEvent`` records (in ``conditional_records``) carry the absolute
     # path of the user's forward-defining module in ``source_file``. Dispatch on the
-    # field signature (the ``ConditionalEvent`` name is shared with a capture-time
-    # event class) so only the persisted, spec-bearing record is relativized/dropped.
+    # field signature so only the persisted, spec-bearing record is relativized/dropped.
     elif "source_file" in scrubbed_state and "branch_ranges" in scrubbed_state:
         _apply_conditional_source_policy(scrubbed_state, options, drop_value="")
     # ``Conditional`` records (in the public ``conditionals`` accessor) carry the
