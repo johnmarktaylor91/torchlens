@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import _xdist_groups
 import numpy as np
 import pytest
 import torch
@@ -136,6 +137,9 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("TORCHLENS_COLLAPSE_STRICT", "1")
     config._tl_warn_once_sentinel_specs = _WARN_ONCE_SENTINELS
     _pin_test_threads(config)
+    # pytest 9.2 + xdist 3.8 drop ``xdist_group`` under ``--dist loadgroup``
+    # (tests/_xdist_groups.py); restamp the group on the id pytest reads.
+    _xdist_groups.register(config)
     # Pay PyTorch's one-time RNG and deterministic-mode initialization during
     # session setup, not against whichever smoke test happens to run first.
     torch.random.get_rng_state()
@@ -1015,14 +1019,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     from known_failures import apply_xfail_marks
 
     apply_xfail_marks(items)
-
-    if not __debug__:
-        skip_no_assertions = pytest.mark.skip(
-            reason="requires assertions; the postprocess audit cannot run under python -O"
-        )
-        for item in items:
-            if item.get_closest_marker("requires_assertions") is not None:
-                item.add_marker(skip_no_assertions)
 
     collect_usage_stats = _is_full_usage_stats_run(config)
     _state._collect_usage_stats = collect_usage_stats
