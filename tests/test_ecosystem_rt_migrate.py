@@ -13,11 +13,11 @@ import json
 import os
 import shutil
 import tarfile
-import warnings
 from pathlib import Path
 
 import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._ecosystem import migrate
@@ -51,7 +51,11 @@ def _working_copy(corpus_dir: Path, tmp_path: Path, name: str) -> Path:
     "name", ["art_v2.31.0_portable", "art_v2.33.0_portable", "art_v2.34.1_portable"]
 )
 def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name: str) -> None:
-    """Genuine released artifacts migrate 6 -> current, reload, and validate."""
+    """Genuine released artifacts migrate 6 -> current at the manifest, then refuse typed.
+
+    The manifest migration still runs, but the payload pickles name 2.x package paths,
+    so the migrated artifact refuses at load with the 2.x remedy (3.0 reads no 2.x file).
+    """
 
     from torchlens.validation import validate_tlspec
 
@@ -68,12 +72,8 @@ def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name
     ]
     assert all(step.level == "manifest" for step in report.steps)
     assert report.backup_path is not None and report.backup_path.is_dir()
-    # The migrated artifact loads under main and validates.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(path))
-    assert isinstance(loaded, tl.Trace)
-    assert len(loaded.ops) > 0
+    # The migrated manifest validates; the 2.x payload refuses typed at load.
+    assert_refuses_as_2x(path)
     validate_tlspec(path)
     # Provenance: witness present, origin preserved, disclosures honest.
     witness = read_migration_witness(path)

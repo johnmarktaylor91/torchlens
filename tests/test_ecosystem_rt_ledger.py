@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._ecosystem import compat_window
@@ -59,14 +60,11 @@ def _quiet_load(path: Path) -> object:
 
 
 @pytest.mark.heavy
-def test_remedy_actually_loads_every_current_bridge_reader_golden(corpus_dir: Path) -> None:
-    """Every golden behind a bridge_reader='current' row loads NOW, live.
+def test_every_current_bridge_reader_golden_refuses_as_2x(corpus_dir: Path) -> None:
+    """Every golden behind a bridge_reader='current' row refuses NOW, typed.
 
-    This is the executable form of MEMO 3.1's rule that remedies are DERIVED
-    from the ledger and every named remedy release actually loads its golden.
-    Rows bridged by the current runtime are proven in-process on every run;
-    rows bridged by a historical release carry executed-probe evidence
-    (asserted below in ``test_historical_bridge_reader_rows_carry_evidence``).
+    These goldens were written by 2.x releases. TorchLens 3 reads no 2.x file, so
+    each one refuses at load with the typed 2.x error naming the re-save remedy.
     """
 
     checked = 0
@@ -74,8 +72,7 @@ def test_remedy_actually_loads_every_current_bridge_reader_golden(corpus_dir: Pa
         if row.bridge_reader != "current" or not row.golden_ids:
             continue
         for golden_id in row.golden_ids:
-            loaded = _quiet_load(corpus_dir / golden_id)
-            assert isinstance(loaded, tl.Trace), (row.writer_release, golden_id)
+            assert_refuses_as_2x(corpus_dir / golden_id)
             checked += 1
     assert checked >= 6, "the current-reader golden sweep must cover the harvested corpus"
 
@@ -110,12 +107,11 @@ def test_v216_refusal_names_verified_reader_not_false_range(corpus_dir: Path) ->
 # ---------------------------------------------------------------------------
 
 
-def test_lawful_released_artifacts_load(corpus_dir: Path) -> None:
-    """Defect 4 fixed: genuine v2.31.0/v2.32.4 artifacts load under main."""
+def test_lawful_released_artifacts_refuse_as_2x(corpus_dir: Path) -> None:
+    """Genuine v2.31.0/v2.32.4 artifacts refuse typed: 3.0 reads no 2.x file."""
 
     for name in ("art_v2.31.0_portable", "art_v2.31.0_audit", "art_v2.32.4_portable"):
-        loaded = _quiet_load(corpus_dir / name)
-        assert isinstance(loaded, tl.Trace), name
+        assert_refuses_as_2x(corpus_dir / name)
 
 
 @pytest.mark.smoke
